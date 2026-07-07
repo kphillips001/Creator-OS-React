@@ -1,0 +1,142 @@
+[
+  {
+    "image_path": "C:\\Fanvue-Chatbot\\data\\classification_samples\\free\\00003-3732952606.png",
+    "expected_bucket": "FREE",
+    "nudenet": [
+      {
+        "class": "FACE_FEMALE",
+        "score": 0.8831700086593628,
+        "box": [
+          531,
+          199,
+          242,
+          246
+        ]
+      },
+      {
+        "class": "FEMALE_BREAST_EXPOSED",
+        "score": 0.8463519215583801,
+        "box": [
+          558,
+          673,
+          266,
+          293
+        ]
+      },
+      {
+        "class": "FEMALE_BREAST_EXPOSED",
+        "score": 0.8278615474700928,
+        "box": [
+          296,
+          688,
+          253,
+          292
+        ]
+      },
+      {
+        "class": "ARMPITS_EXPOSED",
+        "score": 0.6287838816642761,
+        "box": [
+          299,
+          626,
+          93,
+          129
+        ]
+      },
+      {
+        "class": "FEMALE_GENITALIA_EXPOSED",
+        "score": 0.5858056545257568,
+        "box": [
+          609,
+          1395,
+          149,
+          144
+        ]
+      },
+      {
+        "class": "BELLY_COVERED",
+        "score": 0.33518433570861816,
+        "box": [
+          448,
+          1013,
+          335,
+          331
+        ]
+      }
+    ],
+    "gpt_vision_raw": {
+      "classification": "PREMIUM",
+      "confidence": 0.95,
+      "detected_themes": [
+        "nudity",
+        "bottomless",
+        "corset",
+        "explicit"
+      ],
+      "suggested_tags": [
+        "nudity",
+        "bottomless",
+        "corset",
+        "explicit"
+      ],
+      "risk_flags": [],
+      "short_safe_summary": "Image depicts a topless woman with no lower clothing in a suggestive pose wearing a corset, indicating explicit adult content.",
+      "reasoning": "The woman is topless with exposed nipples and is bottomless, displaying full nudity below the waist, fitting the PREMIUM classification criteria for highest-value explicit content."
+    },
+    "final_classification_result": {
+      "classification": "PREMIUM",
+      "confidence": 0.95,
+      "detected_themes": [
+        "nudity",
+        "bottomless",
+        "corset",
+        "explicit"
+      ],
+      "suggested_tags": [
+        "nudity",
+        "bottomless",
+        "corset",
+        "explicit"
+      ],
+      "risk_flags": [],
+      "short_safe_summary": "Image depicts a topless woman with no lower clothing in a suggestive pose wearing a corset, indicating explicit adult content.",
+      "reasoning": "The woman is topless with exposed nipples and is bottomless, displaying full nudity below the waist, fitting the PREMIUM classification criteria for highest-value explicit content.",
+      "raw_gpt_classification": "PREMIUM",
+      "final_classification": "PREMIUM",
+      "rule_applied": "explicit_bottomless_or_genital_exposure_force_premium"
+    },
+    "comparison": {
+      "expected_bucket": "FREE",
+      "raw_gpt_classification": "PREMIUM",
+      "final_classification": "PREMIUM",
+      "final_matches_folder": false,
+      "rule_applied": "explicit_bottomless_or_genital_exposure_force_premium",
+      "nudenet_labels": [
+        "FACE_FEMALE",
+        "FEMALE_BREAST_EXPOSED",
+        "FEMALE_BREAST_EXPOSED",
+        "ARMPITS_EXPOSED",
+        "FEMALE_GENITALIA_EXPOSED",
+        "BELLY_COVERED"
+      ],
+      "nudenet_max_score": 0.8831700086593628
+    },
+    "distribution_rules": {
+      "followers": {
+        "allowed": false,
+        "mode": "blocked",
+        "reason": "Premium explicit content should not be sent directly to followers."
+      },
+      "subscribers": {
+        "allowed": true,
+        "mode": "paid_offer",
+        "reason": "Primary paid PPV / premium upsell content."
+      },
+      "whales": {
+        "allowed": true,
+        "mode": "high_value_paid_offer",
+        "reason": "Best used for high-value buyers and whales."
+      }
+    }
+  }
+]

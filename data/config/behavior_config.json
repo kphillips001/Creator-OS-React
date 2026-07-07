@@ -1,0 +1,26 @@
+{
+  "bot_enabled": true,
+  "dashboard_theme": "light",
+  "manual_pause_enabled": false,
+  "modules": {
+    "cms_upload_enabled": true,
+    "classification_enabled": true,
+    "tag_editing_enabled": true,
+    "fanvue_vault_upload_enabled": true,
+    "main_chat_enabled": true,
+    "outreach_enabled": true,
+    "ppv_offers_enabled": true,
+    "reactivation_enabled": true,
+    "mass_ppv_enabled": true,
+    "post_purchase_reactions_enabled": true,
+    "delayed_followups_enabled": true
+  },
+  "media_preview": {
+    "blur_pending_cms_media": true,
+    "blur_explicit_content_preview": true,
+    "blur_strength": 12,
+    "click_to_reveal_enabled": true
+  },
+  "global_automation_enabled": true,
+  "global_sends_enabled": true
+}

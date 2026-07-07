@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual env
+bot/
+
+# Env files (IMPORTANT - never commit secrets)
+.env
+
+# Telegram user-account authorization sessions
+tg_sessions/
+*.session
+*.session-journal
+
+# Playwright browser profiles
+data/playwright/
+
+# VS Code
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db

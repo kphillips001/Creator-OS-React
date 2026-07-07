@@ -1,0 +1,228 @@
+IDENTITY MAPPING FOUNDATION
+
+PURPOSE
+
+The discovery phase is complete.
+
+The identity discovery report confirmed:
+
+Canonical Intelligence Identity
+
+    fanvue_account_id
+            +
+    fanvue_users.id
+
+Canonical Commerce Identity
+
+    fanvue_account_id
+            +
+    fanvue_users.fanvue_user_uuid
+
+Telegram must resolve to the existing canonical user.
+
+Telegram must NOT create separate memory.
+
+Telegram must NOT create separate buyer intelligence.
+
+Telegram must NOT create separate relationship profiles.
+
+The purpose of this task is to create the identity mapping foundation required for Telegram transport integration.
+
+--------------------------------------------------
+OBJECTIVE
+--------------------------------------------------
+
+Create the first implementation layer:
+
+Telegram Identity Mapping
+
+This layer must allow:
+
+telegram_user_id
+        ↓
+canonical user
+        ↓
+Decision Engine
+
+without changing the existing Decision Engine.
+
+--------------------------------------------------
+IMPORTANT CONSTRAINTS
+--------------------------------------------------
+
+This migration supports:
+
+- Ava Blackthorne
+- One Telegram account
+- One Fanvue account
+- One owner/operator
+
+Do NOT implement:
+
+- Multi-creator support
+- Multi-tenant support
+- Creator registry
+- SaaS architecture
+
+--------------------------------------------------
+TASKS
+--------------------------------------------------
+
+1. CREATE TELEGRAM IDENTITY MODEL
+
+Create a transport identity model that maps:
+
+telegram_user_id
+telegram_chat_id
+
+to:
+
+fanvue_account_id
+local_fanvue_user_id
+external_fanvue_user_uuid
+
+--------------------------------------------------
+
+2. CREATE REPOSITORY
+
+Create:
+
+telegram_identity_repository.py
+
+Repository responsibilities:
+
+- lookup by telegram_user_id
+- lookup by local user id
+- create mapping
+- update mapping
+- deactivate mapping
+
+--------------------------------------------------
+
+3. CREATE SERVICE
+
+Create:
+
+telegram_identity_service.py
+
+Service responsibilities:
+
+- resolve telegram identity
+- return canonical user identity
+- validate mappings
+- prevent duplicate mappings
+
+--------------------------------------------------
+
+4. CREATE DATABASE MIGRATION
+
+Create migration script only.
+
+DO NOT APPLY IT.
+
+Create table:
+
+telegram_identity_map
+
+Suggested fields:
+
+id
+telegram_user_id
+telegram_chat_id
+fanvue_account_id
+local_fanvue_user_id
+external_fanvue_user_uuid
+is_active
+created_at
+updated_at
+
+Codex may improve structure if needed.
+
+--------------------------------------------------
+
+5. CREATE DOMAIN MODELS
+
+Create any required models/dataclasses.
+
+Keep implementation minimal.
+
+--------------------------------------------------
+
+6. CREATE TESTS
+
+Create tests for:
+
+- create mapping
+- resolve mapping
+- duplicate prevention
+- inactive mapping handling
+
+--------------------------------------------------
+
+7. DO NOT INTEGRATE YET
+
+Do NOT:
+
+- connect Telethon
+- create Telegram listener
+- modify Decision Engine
+- modify Memory Service
+- modify Buyer Intelligence
+- modify Relationship Services
+
+Identity layer only.
+
+--------------------------------------------------
+DELIVERABLE
+--------------------------------------------------
+
+Implement:
+
+telegram_identity_repository.py
+
+telegram_identity_service.py
+
+database migration
+
+tests
+
+Create:
+
+migration_docs/06_identity_mapping_summary.md
+
+Document:
+
+- files created
+- files modified
+- migration details
+- integration points for future tasks
+
+--------------------------------------------------
+SUCCESS CRITERIA
+--------------------------------------------------
+
+A Telegram user can be resolved to:
+
+fanvue_account_id
+local_fanvue_user_id
+external_fanvue_user_uuid
+
+without modifying existing intelligence systems.
+
+--------------------------------------------------
+IMPORTANT RULES
+--------------------------------------------------
+
+Preserve existing behavior.
+
+No Telegram transport implementation.
+
+No Decision Engine modifications.
+
+No Memory changes.
+
+No Buyer Intelligence changes.
+
+No Relationship changes.
+
+Identity layer only.

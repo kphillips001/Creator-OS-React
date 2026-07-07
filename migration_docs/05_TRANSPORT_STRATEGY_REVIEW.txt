@@ -1,0 +1,114 @@
+TRANSPORT STRATEGY REVIEW
+
+PURPOSE
+
+Previous architecture recommendations assumed a future
+multi-creator SaaS platform.
+
+This assumption is incorrect.
+
+The migration target is a single creator system.
+
+The purpose of this task is to re-evaluate the transport architecture
+under the correct business requirements.
+
+--------------------------------------------------
+ACTUAL BUSINESS REQUIREMENTS
+--------------------------------------------------
+
+This project supports:
+
+- Ava Blackthorne
+- One Telegram account
+- One AI creator persona
+- One Fanvue account
+- One owner/operator
+
+The goal is:
+
+Social Traffic
+    ↓
+Telegram Conversation
+    ↓
+FanvueChatbot Brain
+    ↓
+Fanvue Media Links
+    ↓
+Purchases
+
+--------------------------------------------------
+NON-REQUIREMENTS
+--------------------------------------------------
+
+The system does NOT require:
+
+- Multi-creator support
+- Multi-tenant architecture
+- Creator registry
+- Bot-per-creator architecture
+- Agency support
+- SaaS scalability
+
+These should not influence recommendations.
+
+--------------------------------------------------
+TASKS
+--------------------------------------------------
+
+1. Re-evaluate User Session vs Bot Token.
+
+2. Determine which architecture best matches:
+
+- creator realism
+- relationship building
+- conversational continuity
+- Telegram DM experience
+- Fanvue Media Link sales
+
+3. Compare:
+
+A) Telethon User Session
+
+B) Telegram Bot Token
+
+under the actual requirements.
+
+4. Estimate migration effort for both.
+
+5. Determine which option best reuses:
+
+- existing Telegram repository
+- existing FanvueChatbot brain
+
+6. Determine which option minimizes migration risk.
+
+--------------------------------------------------
+DELIVERABLE
+--------------------------------------------------
+
+Create:
+
+migration_docs/transport_strategy_review.md
+
+Include:
+
+1. Executive Summary
+2. Revised Assumptions
+3. User Session Analysis
+4. Bot Token Analysis
+5. Migration Complexity Comparison
+6. Recommendation
+7. Justification
+8. Recommended Next Implementation Task
+
+--------------------------------------------------
+IMPORTANT RULES
+--------------------------------------------------
+
+DO NOT MODIFY CODE.
+
+DO NOT IMPLEMENT TELEGRAM.
+
+DO NOT CREATE DATABASE CHANGES.
+
+Analysis only.

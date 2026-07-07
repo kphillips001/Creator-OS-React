@@ -1,0 +1,63 @@
+{
+    "user_123": {
+        "name": "Kevin",
+        "interest": "VIP content",
+        "buyer_tier": "hot",
+        "last_offer": "none",
+        "intent_score": 95,
+        "intent_signals": [
+            "buy",
+            "how much",
+            "content",
+            "vip"
+        ],
+        "conversation_mode": "conversion",
+        "last_user_message": "How much is your VIP content? I want to buy.",
+        "last_bot_response": "Straight to the point, Kevin\u2014I like that fire. Tell me, what kind of secret thrill are you craving tonight?",
+        "active_persona": "ava",
+        "last_offer_type": "none",
+        "last_offer_price": 0,
+        "last_offer_description": "Offer suppressed by cooldown",
+        "last_offer_timestamp": "2026-04-14T21:13:38.349636"
+    },
+    "test_user": {
+        "message_count": 3,
+        "exclusive_interest_count": 1,
+        "offers_shown_count": 3,
+        "consecutive_offers_sent": 3,
+        "messages_since_last_offer": 0,
+        "buyer_tier": "medium",
+        "intent_score": 35,
+        "message_score": 25,
+        "behavior_score": 10,
+        "intent_signals": [
+            "more",
+            "show me",
+            "prior_interest"
+        ],
+        "conversation_mode": "tension",
+        "active_persona": "ava",
+        "last_user_message": "show me more",
+        "last_bot_response": "Oh, you want more? I\u2019ve got something that\u2019s not just more\u2014it\u2019s an experience you\u2019ll be buzzing from long after. One of my wildest, darkest moments reserved just for those who dare... Ready to dive in deeper? \ud83d\ude0f\n\nHere\u2019s the link, if you\u2019re feeling bold enough: https://fanvue.com/ava.blackthorne/vip009",
+        "last_offer_type": "vip_offer",
+        "last_offer_price": 60,
+        "last_offer_description": "Escalated VIP offer",
+        "last_offer_timestamp": "2026-04-16T18:24:25.925914",
+        "last_content_tag": "VIP009",
+        "last_content_type": "vip",
+        "last_content_tier": "premium",
+        "last_content_price": 60,
+        "last_content_link": "https://fanvue.com/ava.blackthorne/vip009",
+        "seen_content_tags": [
+            "VIP006",
+            "VIP009"
+        ]
+    },
+    "2:4": {
+        "message_count": 5,
+        "last_user_message": "so what\u2019s the price then",
+        "last_bot_response": "Let\u2019s start a little dangerous, but easy\u2014just $10 for a sneak peek that\u2019s tantalizingly off-limits. A quick taste, some teasing moments that not everyone gets to see. Want me to send you this little secret?",
+        "price_questions_count": 2,
+        "offers_shown_count": 2
+    }
+}

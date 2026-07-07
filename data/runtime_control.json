@@ -1,0 +1,19 @@
+{
+  "2": {
+    "active_conversations": 0,
+    "creator_profile_id": "2",
+    "current_runtime_provider": "telegram",
+    "last_started": "2026-07-07T16:13:13.509043+00:00",
+    "last_stopped": "2026-07-07T16:13:27.896945+00:00",
+    "metadata": {
+      "provider_neutral": true,
+      "source": "RuntimeControlService"
+    },
+    "mode": "OFFLINE",
+    "observed_recommendations": [],
+    "pending_deliveries": 0,
+    "pending_offers": 0,
+    "status": "OFFLINE",
+    "updated_at": "2026-07-07T16:13:27.896945+00:00"
+  }
+}

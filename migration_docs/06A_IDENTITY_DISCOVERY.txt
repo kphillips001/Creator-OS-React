@@ -1,0 +1,89 @@
+IDENTITY DISCOVERY
+
+PURPOSE
+
+Before implementing Telegram identity mapping, determine exactly how user identity is currently represented throughout FanvueChatbot.
+
+This task is analysis only.
+
+No code changes are allowed.
+
+---
+
+## OBJECTIVE
+
+Determine:
+
+* Primary user identifier
+* Secondary identifiers
+* Memory ownership identifiers
+* Buyer intelligence identifiers
+* Relationship intelligence identifiers
+* Conversation ownership identifiers
+
+---
+
+## TASKS
+
+Identify:
+
+1. What identifier is used as the primary key for user identity?
+
+Possible examples:
+
+* fanvue_user_id
+* fanvue_account_id
+* subscriber_id
+* internal_user_id
+* conversation_id
+
+2. What identifier is used by:
+
+* memory services
+* relationship services
+* buyer intelligence services
+* conversation history services
+
+3. Determine:
+
+If a Telegram user were introduced today, what identifier would need to be mapped to preserve:
+
+* memory
+* relationship state
+* purchases
+* ownership
+* engagement history
+
+4. Identify all repositories that depend on Fanvue-specific identity values.
+
+5. Identify the safest insertion point for Telegram identity mapping.
+
+---
+
+## DELIVERABLE
+
+Create:
+
+migration_docs/identity_discovery_report.md
+
+Include:
+
+1. Executive Summary
+2. Primary Identity Model
+3. Memory Identity Model
+4. Buyer Intelligence Identity Model
+5. Repository Dependencies
+6. Recommended Telegram Mapping Strategy
+7. Migration Risks
+
+---
+
+## IMPORTANT RULES
+
+DO NOT MODIFY CODE.
+
+DO NOT CREATE TABLES.
+
+DO NOT IMPLEMENT TELEGRAM.
+
+Analysis only.

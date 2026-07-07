@@ -1,0 +1,156 @@
+DATABASE READINESS AUDIT
+
+PURPOSE
+
+The Telegram Identity Mapping Foundation has been implemented.
+
+Before any database migration is applied and before any Telegram transport code is written, validate the identity assumptions against the actual FanvueChatbot database schema.
+
+This task exists to verify that the new telegram_identity_map migration is compatible with the real system.
+
+---
+
+## OBJECTIVE
+
+Audit:
+
+* fanvue_backup.dump
+* database schema
+* existing repositories
+* existing migrations
+* existing models
+
+Validate that the Telegram identity foundation aligns with the real database.
+
+---
+
+## TASKS
+
+1. SCHEMA VALIDATION
+
+Identify:
+
+* fanvue_accounts table
+* fanvue_users table
+
+Document:
+
+* primary keys
+* foreign keys
+* unique constraints
+* UUID usage
+* account relationships
+
+---
+
+2. IDENTITY VALIDATION
+
+Verify:
+
+Canonical Intelligence Identity:
+
+fanvue_account_id
++
+fanvue_users.id
+
+Canonical Commerce Identity:
+
+fanvue_account_id
++
+fanvue_users.fanvue_user_uuid
+
+Determine if these assumptions are correct.
+
+---
+
+3. MIGRATION REVIEW
+
+Review:
+
+migrations/20260619_001_create_telegram_identity_map.sql
+
+Validate:
+
+* field types
+* foreign keys
+* uniqueness constraints
+* indexes
+* triggers
+
+Identify any incompatibilities.
+
+---
+
+4. REPOSITORY REVIEW
+
+Review:
+
+telegram_identity_repository.py
+
+Validate assumptions against the actual schema.
+
+---
+
+5. SERVICE REVIEW
+
+Review:
+
+telegram_identity_service.py
+
+Validate assumptions against the actual schema.
+
+---
+
+6. RISK ANALYSIS
+
+Identify:
+
+* migration risks
+* schema mismatches
+* naming conflicts
+* identity ambiguity
+* rollback concerns
+
+---
+
+7. READINESS DETERMINATION
+
+Provide one of:
+
+READY
+
+READY WITH CHANGES
+
+NOT READY
+
+---
+
+## DELIVERABLE
+
+Create:
+
+migration_docs/database_readiness_report.md
+
+Include:
+
+1. Executive Summary
+2. Schema Validation
+3. Identity Validation
+4. Migration Review
+5. Repository Review
+6. Service Review
+7. Risk Analysis
+8. Readiness Determination
+9. Recommended Next Task
+
+---
+
+## IMPORTANT RULES
+
+DO NOT APPLY MIGRATIONS.
+
+DO NOT MODIFY DATABASES.
+
+DO NOT MODIFY CODE.
+
+Analysis only.

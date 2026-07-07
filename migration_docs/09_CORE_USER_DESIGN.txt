@@ -1,0 +1,258 @@
+CORE USER DESIGN
+
+PURPOSE
+
+The architecture has been rebased.
+
+Telegram is now the primary conversational channel.
+
+Fanvue is a commerce provider.
+
+DropFans may become a commerce provider.
+
+KVIQA may become the CRM and/or vault provider.
+
+The system must no longer depend on Fanvue users as the canonical identity.
+
+The purpose of this task is to design the platform-neutral core user model.
+
+This is a planning task only.
+
+--------------------------------------------------
+OBJECTIVE
+--------------------------------------------------
+
+Define the future identity architecture.
+
+The design must support:
+
+- Telegram-first users
+- Users with no Fanvue account
+- Users with no DropFans account
+- Users with no KVIQA record
+- Multiple future commerce providers
+- Multiple future communication channels
+
+without changing intelligence ownership.
+
+--------------------------------------------------
+TASKS
+--------------------------------------------------
+
+1. DEFINE CORE USER
+
+Design:
+
+core_user
+
+Define:
+
+- purpose
+- ownership
+- lifecycle
+- creation rules
+- deletion rules
+- merge rules
+- recovery rules
+
+--------------------------------------------------
+
+2. DEFINE EXTERNAL IDENTITIES
+
+Design:
+
+external_identity
+
+Support:
+
+- Telegram
+- Fanvue
+- DropFans
+- KVIQA
+- future providers
+
+Define:
+
+- ownership
+- verification requirements
+- activation
+- deactivation
+
+--------------------------------------------------
+
+3. DEFINE TELEGRAM USER LIFECYCLE
+
+Document:
+
+Telegram user arrives
+        ↓
+core user creation
+        ↓
+memory ownership
+        ↓
+conversation ownership
+
+without requiring Fanvue.
+
+--------------------------------------------------
+
+4. DEFINE MEMORY OWNERSHIP
+
+Determine:
+
+How memory should migrate from:
+
+fanvue_users
+
+to:
+
+core_user
+
+Define:
+
+- ownership model
+- compatibility strategy
+- migration strategy
+
+--------------------------------------------------
+
+5. DEFINE BUYER INTELLIGENCE OWNERSHIP
+
+Determine:
+
+How buyer intelligence should migrate from:
+
+Fanvue-specific identities
+
+to:
+
+core_user
+
+Support:
+
+- Fanvue purchases
+- DropFans purchases
+- future commerce providers
+
+--------------------------------------------------
+
+6. DEFINE CONVERSATION OWNERSHIP
+
+Determine:
+
+How conversations should be owned.
+
+Support:
+
+- Telegram
+- future channels
+
+without channel-specific memory duplication.
+
+--------------------------------------------------
+
+7. DEFINE KVIQA OWNERSHIP
+
+Determine:
+
+What KVIQA should own.
+
+Examples:
+
+- CRM tags
+- notes
+- campaigns
+- tasks
+
+Determine what KVIQA should NOT own.
+
+--------------------------------------------------
+
+8. DEFINE COMMERCE OWNERSHIP
+
+Determine:
+
+What commerce providers should own.
+
+Examples:
+
+- payments
+- refunds
+- checkout state
+
+Determine what commerce providers should NOT own.
+
+--------------------------------------------------
+
+9. INVENTORY CURRENT FANVUE DEPENDENCIES
+
+Identify every repository, service, table, and workflow that currently assumes:
+
+fanvue_user_id
+fanvue_account_id
+fanvue_user_uuid
+
+Determine:
+
+- keep
+- adapt
+- replace
+
+--------------------------------------------------
+
+10. DEFINE TRANSITION STRATEGY
+
+Create a safe migration path from:
+
+Fanvue-first identity
+
+to
+
+Core User identity
+
+without breaking:
+
+- memory
+- buyer intelligence
+- relationship state
+- conversation history
+
+--------------------------------------------------
+
+DELIVERABLE
+
+Create:
+
+migration_docs/core_user_design_report.md
+
+Include:
+
+1. Executive Summary
+2. Core User Design
+3. External Identity Design
+4. Telegram User Lifecycle
+5. Memory Ownership Design
+6. Buyer Intelligence Design
+7. Conversation Ownership Design
+8. KVIQA Ownership Design
+9. Commerce Ownership Design
+10. Fanvue Dependency Inventory
+11. Transition Strategy
+12. Risks
+13. Recommended Next Task
+
+--------------------------------------------------
+
+IMPORTANT RULES
+
+DO NOT MODIFY CODE.
+
+DO NOT MODIFY DATABASES.
+
+DO NOT IMPLEMENT TELEGRAM.
+
+DO NOT IMPLEMENT KVIQA.
+
+DO NOT IMPLEMENT COMMERCE.
+
+Planning only.
