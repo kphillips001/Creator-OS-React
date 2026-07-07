@@ -1,0 +1,201 @@
+IDENTITY FOUNDATION ALIGNMENT
+
+PURPOSE
+
+The database readiness audit determined that the Telegram Identity Foundation architecture is correct, but several implementation details must be aligned with the actual PostgreSQL schema before integration work begins.
+
+This task exists to harden the identity foundation and validate it against a disposable PostgreSQL restore.
+
+---
+
+## OBJECTIVE
+
+Revise the Telegram Identity Foundation so it matches the actual FanvueChatbot database schema.
+
+Do not implement Telegram transport.
+
+Do not modify DecisionEngine.
+
+Do not modify Memory.
+
+Do not modify Buyer Intelligence.
+
+---
+
+## TASKS
+
+1. SCHEMA ALIGNMENT
+
+Review:
+
+telegram_identity_map migration
+
+Modify:
+
+fanvue_account_id
+INTEGER -> BIGINT
+
+local_fanvue_user_id
+INTEGER -> BIGINT
+
+external_fanvue_user_uuid
+TEXT -> UUID
+
+Align all schema definitions with actual database types.
+
+---
+
+2. REPOSITORY ALIGNMENT
+
+Review:
+
+telegram_identity_repository.py
+
+Update:
+
+* UUID handling
+* UUID comparisons
+* joins
+* lookups
+
+Remove text-based UUID assumptions.
+
+---
+
+3. SERVICE ALIGNMENT
+
+Review:
+
+telegram_identity_service.py
+
+Update:
+
+* UUID validation
+* UUID parsing
+* UUID normalization
+
+Ensure compatibility with PostgreSQL UUID fields.
+
+---
+
+4. SCHEMA QUALIFICATION
+
+Review:
+
+migration SQL
+
+Repository queries
+
+Add explicit schema qualification where appropriate.
+
+Examples:
+
+public.telegram_identity_map
+public.fanvue_users
+public.fanvue_accounts
+
+Avoid search_path dependency.
+
+---
+
+5. EXCEPTION TRANSLATION
+
+Convert database integrity violations into domain exceptions.
+
+Examples:
+
+DuplicateTelegramIdentityError
+
+InvalidTelegramIdentityError
+
+Do not expose raw PostgreSQL constraint exceptions.
+
+---
+
+6. ROLLBACK SUPPORT
+
+Create:
+
+rollback migration
+
+or
+
+documented rollback procedure
+
+for telegram_identity_map.
+
+---
+
+7. DISPOSABLE DATABASE VALIDATION
+
+Restore:
+
+fanvue_backup.dump
+
+into a disposable database.
+
+Validate:
+
+* migration apply
+* rollback
+* create mapping
+* resolve mapping
+* duplicate mapping rejection
+* invalid mapping rejection
+* deactivate/reactivate
+* update mapping
+
+---
+
+8. TEST IMPROVEMENTS
+
+Add tests for:
+
+* UUID handling
+* PostgreSQL constraint violations
+* duplicate races
+* rollback behavior
+
+---
+
+## DELIVERABLE
+
+Update:
+
+telegram_identity_repository.py
+
+telegram_identity_service.py
+
+migration SQL
+
+tests
+
+Create:
+
+migration_docs/07A_identity_alignment_summary.md
+
+Document:
+
+* changes made
+* validation results
+* migration results
+* rollback results
+* remaining risks
+
+---
+
+## IMPORTANT RULES
+
+Do NOT implement Telegram transport.
+
+Do NOT create listeners.
+
+Do NOT create senders.
+
+Do NOT modify DecisionEngine.
+
+Do NOT modify Memory.
+
+Do NOT modify Buyer Intelligence.
+
+Identity Foundation only.

@@ -1,0 +1,210 @@
+TELEGRAM MIGRATION PROJECT CONTEXT
+
+PROJECT OVERVIEW
+
+This repository currently contains the FanvueChatbot platform.
+
+The FanvueChatbot platform contains the primary conversational intelligence system including:
+
+* Relationship Intelligence
+* Memory Systems
+* Buyer Intelligence
+* Conversation Continuity
+* Emotional State Tracking
+* Persona Systems
+* Sales Logic
+* Offer Logic
+* Engagement Scoring
+* Decision Engine
+* Long-Term Memory
+* Fan Profiling
+* Conversation Summaries
+
+These systems represent the core intellectual property of the platform and must be preserved.
+
+The goal of this migration is NOT to rebuild the chatbot.
+
+The goal is to migrate the communication transport layer from Fanvue to Telegram while preserving the existing conversational intelligence.
+
+---
+
+## MIGRATION OBJECTIVE
+
+Current Architecture:
+
+Fanvue User
+↓
+Fanvue Chat
+↓
+Fanvue Webhooks
+↓
+FanvueChatbot Brain
+↓
+Fanvue Responses
+
+Target Architecture:
+
+Telegram User
+↓
+Telegram Adapter
+↓
+FanvueChatbot Brain
+↓
+Telegram Responses
+
+Sales Flow:
+
+Telegram User
+↓
+Telegram Conversation
+↓
+FanvueChatbot Sales Logic
+↓
+Fanvue Media Link
+↓
+Purchase
+
+---
+
+## KEY DESIGN PRINCIPLE
+
+The FanvueChatbot brain must remain the primary application.
+
+The Telegram_Chatbot repository is reference material only.
+
+The Telegram_Chatbot repository must not become a dependency.
+
+The Telegram_Chatbot repository should be used only to understand:
+
+* Telegram authentication
+* Telegram message listeners
+* Telegram user identifiers
+* Telegram message sending
+* Telegram media delivery
+* Telegram session handling
+
+New Telegram integration code should be implemented inside FanvueChatbot.
+
+---
+
+## PRESERVE THESE SYSTEMS
+
+Preserve existing:
+
+* Decision Engine
+* Memory Services
+* Relationship Services
+* Buyer Intelligence Services
+* Repositories
+* Personas
+* Conversation Continuity
+* User Profiles
+* Analytics
+* Offer Logic
+* Engagement Logic
+* Long-Term Memory
+* Prompt Systems
+* Retrieval Systems
+
+These systems should be reused whenever possible.
+
+Refactoring should be minimized.
+
+---
+
+## REPLACE THESE SYSTEMS
+
+Replace Fanvue transport-related functionality:
+
+* Fanvue message ingestion
+* Fanvue message delivery
+* Fanvue webhook listeners
+* Fanvue conversation transport
+* Fanvue-specific message routing
+
+These should be replaced with Telegram equivalents.
+
+---
+
+## SALES STRATEGY
+
+Fanvue Chat will no longer be the primary conversation platform.
+
+Telegram will become the primary conversation platform.
+
+Fanvue will remain:
+
+* Checkout platform
+* Media hosting platform
+* Media Link platform
+
+The chatbot should deliver Fanvue Media Links through Telegram when the existing sales engine determines an offer should be presented.
+
+The existing sales logic should remain intact whenever possible.
+
+---
+
+## KVIQA STRATEGY
+
+KVIQA is currently considered a CRM layer.
+
+KVIQ Bot is not part of the migration objective.
+
+The migration should assume:
+
+Telegram = Conversation Layer
+
+FanvueChatbot Brain = Intelligence Layer
+
+Fanvue Media Links = Commerce Layer
+
+KVIQA = CRM Layer
+
+---
+
+## RULES FOR ALL MIGRATION TASKS
+
+Before modifying code:
+
+1. Understand the existing implementation.
+2. Identify dependencies.
+3. Document findings.
+4. Minimize changes.
+5. Preserve behavior.
+
+Do not perform large-scale rewrites.
+
+Prefer adapters over rewrites.
+
+Prefer composition over replacement.
+
+Preserve the FanvueChatbot architecture whenever possible.
+
+---
+
+## SUCCESS CRITERIA
+
+A successful migration will result in:
+
+Telegram User
+↓
+Telegram Message
+↓
+FanvueChatbot Brain
+↓
+Memory Update
+↓
+Decision Engine
+↓
+Telegram Response
+
+while preserving:
+
+* relationship continuity
+* memory continuity
+* sales intelligence
+* fan profiling
+* conversation quality
+* offer logic
+
+with Fanvue Media Links used for monetization.

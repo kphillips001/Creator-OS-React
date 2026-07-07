@@ -1,0 +1,121 @@
+MVP TELEGRAM PATH
+
+PURPOSE
+
+The current architecture work has identified a long-term Core User strategy.
+
+That strategy is valuable but is not required to validate the business hypothesis.
+
+The immediate objective is:
+
+Telegram
+    ↓
+Conversation
+    ↓
+Ava Brain
+    ↓
+Offer
+    ↓
+Media Link
+    ↓
+Sale
+
+The purpose of this task is to identify the minimum implementation required to get Ava chatting and selling inside Telegram using the existing FanvueChatbot intelligence system.
+
+--------------------------------------------------
+OBJECTIVE
+--------------------------------------------------
+
+Determine the fastest path to a working Telegram MVP.
+
+Assume:
+
+- One creator (Ava)
+- One Telegram account
+- Existing FanvueChatbot brain
+- Existing MemoryService
+- Existing DecisionEngine
+- Existing buyer intelligence
+- Existing relationship intelligence
+
+Do NOT redesign the platform.
+
+Do NOT implement Core User migration.
+
+Do NOT implement multi-channel support.
+
+--------------------------------------------------
+TASKS
+--------------------------------------------------
+
+1. Review the current FanvueChatbot architecture.
+
+2. Review the Telegram_Chatbot repository.
+
+3. Determine the minimum components required for:
+
+Telegram Message
+        ↓
+DecisionEngine
+        ↓
+Telegram Reply
+
+4. Identify:
+
+- reusable Telegram code
+- reusable FanvueChatbot code
+- integration points
+
+5. Determine:
+
+What identity model can be used temporarily for MVP.
+
+6. Determine:
+
+What memory model can be used temporarily for MVP.
+
+7. Determine:
+
+How Media Links should be injected into conversations.
+
+8. Estimate implementation effort.
+
+9. Produce a recommended MVP roadmap.
+
+--------------------------------------------------
+DELIVERABLE
+--------------------------------------------------
+
+Create:
+
+migration_docs/mvp_telegram_path_report.md
+
+Include:
+
+1. Executive Summary
+2. Recommended MVP Architecture
+3. Components To Reuse
+4. Components To Build
+5. Temporary Identity Strategy
+6. Temporary Memory Strategy
+7. Media Link Strategy
+8. Implementation Roadmap
+9. Estimated Effort
+10. Risks
+11. Recommendation
+
+--------------------------------------------------
+IMPORTANT RULES
+--------------------------------------------------
+
+DO NOT MODIFY CODE.
+
+DO NOT MODIFY DATABASES.
+
+DO NOT IMPLEMENT TELEGRAM.
+
+DO NOT IMPLEMENT CORE USER.
+
+Analysis only.
+
+The goal is speed to first Telegram sale.

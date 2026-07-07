@@ -1,0 +1,8 @@
+[theme]
+primaryColor="#00C853"        # nice green
+backgroundColor="#0E1117"
+secondaryBackgroundColor="#1E1E1E"
+textColor="#FFFFFF"
+
+[client]
+showSidebarNavigation=false

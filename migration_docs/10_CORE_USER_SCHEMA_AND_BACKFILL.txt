@@ -1,0 +1,255 @@
+CORE USER SCHEMA AND BACKFILL SPECIFICATION
+
+PURPOSE
+
+The Core User design has been approved.
+
+The next step is to define the exact schema and migration strategy required to move from Fanvue-owned identity to platform-neutral identity.
+
+This is a planning-only task.
+
+No code changes.
+
+No database changes.
+
+No migrations should be applied.
+
+---
+
+## OBJECTIVE
+
+Design the implementation plan for introducing:
+
+core_user
+
+as the canonical owner of:
+
+* memory
+* conversations
+* buyer intelligence
+* relationship state
+* entitlements
+
+while preserving all existing intelligence behavior.
+
+---
+
+## TASKS
+
+1. CORE USER SCHEMA
+
+Design:
+
+core_users
+
+Provide:
+
+* columns
+* data types
+* indexes
+* constraints
+* lifecycle fields
+
+Document rationale.
+
+---
+
+2. EXTERNAL IDENTITY SCHEMA
+
+Design:
+
+external_identities
+
+Support:
+
+* Telegram
+* Fanvue
+* DropFans
+* KVIQA
+* future providers
+
+Provide:
+
+* columns
+* data types
+* indexes
+* constraints
+
+Document rationale.
+
+---
+
+3. TELEGRAM IDENTITY SCHEMA
+
+Design:
+
+telegram_identities
+
+Provide:
+
+* columns
+* data types
+* indexes
+* constraints
+
+Support:
+
+* Telegram user
+* Telegram chat destination
+* activation/deactivation
+
+---
+
+4. MEMORY MIGRATION DESIGN
+
+Review:
+
+user_memory
+
+Design:
+
+* additive migration
+* backfill strategy
+* rollback strategy
+
+Determine:
+
+How core_user_id will be introduced.
+
+---
+
+5. CONVERSATION MIGRATION DESIGN
+
+Review:
+
+chat_threads
+chat_messages
+
+Design:
+
+* additive migration
+* backfill strategy
+* rollback strategy
+
+Determine:
+
+How conversation ownership migrates to core_user_id.
+
+---
+
+6. BUYER INTELLIGENCE MIGRATION DESIGN
+
+Review:
+
+buyer_intelligence
+
+Design:
+
+* additive migration
+* backfill strategy
+* rollback strategy
+
+Determine:
+
+How buyer ownership migrates to core_user_id.
+
+---
+
+7. FANVUE BACKFILL PLAN
+
+Design:
+
+fanvue_users
+↓
+core_users
+
+Provide:
+
+* deterministic mapping rules
+* conflict detection
+* orphan detection
+* validation queries
+
+---
+
+8. USER CONTEXT CONTRACT
+
+Design:
+
+UserContext
+
+Provide:
+
+required fields for:
+
+* DecisionEngine
+* MemoryService
+* Buyer Intelligence
+* Relationship Services
+
+The goal is to remove Fanvue-specific identity assumptions.
+
+---
+
+9. FEATURE FLAG STRATEGY
+
+Design:
+
+safe rollout sequence.
+
+Support:
+
+* dual read
+* dual write
+* rollback
+
+without intelligence loss.
+
+---
+
+10. VALIDATION PLAN
+
+Provide:
+
+* preflight checks
+* migration validation
+* rollback validation
+* parity validation
+
+---
+
+DELIVERABLE
+
+Create:
+
+migration_docs/core_user_schema_backfill_report.md
+
+Include:
+
+1. Executive Summary
+2. Core User Schema
+3. External Identity Schema
+4. Telegram Identity Schema
+5. Memory Migration Design
+6. Conversation Migration Design
+7. Buyer Intelligence Migration Design
+8. Fanvue Backfill Plan
+9. UserContext Contract
+10. Feature Flag Strategy
+11. Validation Plan
+12. Risks
+13. Recommended Next Task
+
+---
+
+IMPORTANT RULES
+
+DO NOT MODIFY CODE.
+
+DO NOT MODIFY DATABASES.
+
+DO NOT IMPLEMENT TELEGRAM.
+
+DO NOT IMPLEMENT COMMERCE.
+
+Planning only.

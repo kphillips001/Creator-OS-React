@@ -1,0 +1,250 @@
+TELEGRAM REFERENCE AUDIT
+
+PURPOSE
+
+The Telegram_Chatbot repository exists as a legacy implementation and reference source.
+
+It is NOT the target architecture.
+
+It is NOT to be merged into FanvueChatbot.
+
+It is NOT to become a dependency.
+
+This task exists to identify which Telegram-specific implementation patterns should be reused and which application-level logic should be discarded.
+
+---
+
+## OBJECTIVE
+
+Perform a complete audit of the Telegram_Chatbot repository.
+
+Determine:
+
+1. Which Telegram transport components are useful.
+2. Which Telegram transport components should be recreated.
+3. Which Telegram business logic should NOT be migrated.
+4. Which Telegram implementation patterns should be referenced during migration.
+
+---
+
+## FILES TO REVIEW
+
+Review all relevant Telegram repository files including:
+
+* listener_amanda.py
+* login_amanda.py
+* database.py
+* logic.py
+* timing.py
+* gpt.py
+* grok.py
+* config.py
+* bot/
+* any Telegram session handling
+* any Telegram authentication logic
+* any Telegram media handling
+
+---
+
+## TASKS
+
+1. TELEGRAM AUTHENTICATION
+
+Determine:
+
+* Authentication mechanism
+* Telethon usage
+* Session storage
+* Login flow
+* Credential requirements
+
+Document:
+
+* What should be reused
+* What should be rewritten
+* Risks
+
+---
+
+2. TELEGRAM LISTENER FLOW
+
+Determine:
+
+* Incoming message listener
+* Event registration
+* Message filtering
+* User identification
+* Chat identification
+
+Document:
+
+* Message lifecycle
+* Useful patterns
+* Risks
+
+---
+
+3. TELEGRAM IDENTITY MODEL
+
+Determine:
+
+* sender.id usage
+* chat identifiers
+* username usage
+* conversation identifiers
+
+Document:
+
+* Stable identifiers
+* Unstable identifiers
+* Recommended identifiers for migration
+
+---
+
+4. TELEGRAM MESSAGE DELIVERY
+
+Determine:
+
+* Text message sending
+* Reply handling
+* Typing indicators
+* Message formatting
+* Error handling
+
+Document:
+
+* Useful implementation patterns
+* Recommended migration approach
+
+---
+
+5. TELEGRAM MEDIA DELIVERY
+
+Determine:
+
+* Media sending capabilities
+* Photo sending
+* Video sending
+* File sending
+* Media references
+
+Document:
+
+* Existing implementation
+* Missing implementation
+* Recommended approach
+
+---
+
+6. TELEGRAM DATABASE USAGE
+
+Determine:
+
+* What database models exist
+* What user storage exists
+* What message storage exists
+
+Classify:
+
+REUSE
+REPLACE
+IGNORE
+
+---
+
+7. TELEGRAM BUSINESS LOGIC
+
+Identify all logic that overlaps with FanvueChatbot.
+
+Examples:
+
+* CTA logic
+* Emotional logic
+* Funnel logic
+* GPT response logic
+* Timing logic
+* Sales logic
+* Memory logic
+
+Document:
+
+DO NOT MIGRATE
+
+for all overlapping intelligence systems.
+
+---
+
+8. TELEGRAM TRANSPORT EXTRACTION
+
+Identify the minimum Telegram feature set required for FanvueChatbot.
+
+Document only:
+
+* authentication
+* session management
+* listener
+* message send
+* typing actions
+* media send
+* disconnect handling
+* reconnect handling
+* error handling
+
+---
+
+9. TELEGRAM ADAPTER REQUIREMENTS
+
+Based on findings, propose:
+
+app/integrations/telegram/
+
+Recommended files.
+
+Document:
+
+* telegram_adapter.py
+* telegram_listener.py
+* telegram_sender.py
+* telegram_user_mapper.py
+* telegram_media_service.py
+
+or better alternatives.
+
+---
+
+## DELIVERABLE
+
+Create:
+
+migration_docs/telegram_reference_audit_report.md
+
+The report must include:
+
+1. Executive Summary
+2. Telegram Architecture Overview
+3. Authentication Analysis
+4. Listener Analysis
+5. Identity Analysis
+6. Message Delivery Analysis
+7. Media Analysis
+8. Business Logic Rejection List
+9. Telegram Adapter Recommendations
+10. Migration Guidance
+
+---
+
+## IMPORTANT RULES
+
+DO NOT MODIFY CODE.
+
+DO NOT CREATE FUNCTIONALITY.
+
+DO NOT IMPLEMENT TELEGRAM.
+
+DO NOT MERGE REPOSITORIES.
+
+DO NOT IMPORT TELEGRAM CODE INTO FANVUECHATBOT.
+
+Analysis only.
+
+The purpose of this task is understanding Telegram transport mechanics and identifying what should and should not be migrated.

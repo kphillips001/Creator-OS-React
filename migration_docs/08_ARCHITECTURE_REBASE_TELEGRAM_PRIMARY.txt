@@ -1,0 +1,105 @@
+ARCHITECTURE REBASE
+
+PURPOSE
+
+The migration roadmap was originally built around the assumption that Fanvue remained the primary identity platform.
+
+That assumption is no longer valid.
+
+The target architecture has changed.
+
+Telegram will become the primary communication channel and primary user identity.
+
+Fanvue will be used only as a payment processor and potentially a media-link provider.
+
+KVIQA may become the primary CRM and vault.
+
+Future payment providers may include:
+
+- Fanvue
+- DropFans
+- Other checkout providers
+
+The architecture must avoid dependency on any specific payment platform.
+
+--------------------------------------------------
+OBJECTIVE
+--------------------------------------------------
+
+Re-evaluate the migration architecture using:
+
+Telegram = Primary Identity
+
+Payment Platforms = Replaceable Commerce Layer
+
+--------------------------------------------------
+TASKS
+--------------------------------------------------
+
+1. Review all migration reports.
+
+2. Review identity foundation work.
+
+3. Determine:
+
+Should Telegram User ID become the canonical identity?
+
+4. Determine:
+
+Which portions of the Telegram Identity Foundation remain useful?
+
+5. Determine:
+
+Which portions should be revised?
+
+6. Define:
+
+Recommended canonical identity model.
+
+7. Define:
+
+Recommended commerce abstraction model.
+
+8. Define:
+
+Recommended vault abstraction model.
+
+9. Define:
+
+Recommended CRM ownership model.
+
+10. Produce an updated migration roadmap.
+
+--------------------------------------------------
+DELIVERABLE
+--------------------------------------------------
+
+Create:
+
+migration_docs/architecture_rebase_report.md
+
+Include:
+
+1. Executive Summary
+2. Revised Identity Architecture
+3. Revised Commerce Architecture
+4. Revised Vault Architecture
+5. KVIQA Integration Strategy
+6. Fanvue Integration Strategy
+7. DropFans Integration Strategy
+8. Components To Keep
+9. Components To Revise
+10. Updated Migration Roadmap
+11. Recommended Next Task
+
+--------------------------------------------------
+IMPORTANT RULES
+--------------------------------------------------
+
+DO NOT MODIFY CODE.
+
+DO NOT MODIFY DATABASES.
+
+DO NOT IMPLEMENT TELEGRAM.
+
+Analysis only.

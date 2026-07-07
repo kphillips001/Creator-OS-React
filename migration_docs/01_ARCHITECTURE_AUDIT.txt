@@ -1,0 +1,203 @@
+ARCHITECTURE AUDIT
+
+PURPOSE
+
+Before implementing Telegram support, a complete understanding of the FanvueChatbot architecture is required.
+
+This task is analysis only.
+
+No code changes are allowed.
+
+No files should be modified.
+
+No new functionality should be added.
+
+---
+
+## OBJECTIVE
+
+Produce a complete architecture map of the FanvueChatbot platform.
+
+The goal is to understand exactly how messages enter the system, how the intelligence layer operates, and how responses are generated and delivered.
+
+---
+
+## TASKS
+
+Identify and document:
+
+1. MESSAGE INGESTION
+
+Determine:
+
+* Where Fanvue messages enter the system
+* Entry point files
+* Webhook handlers
+* Message processors
+* Queue systems
+* Event routing
+
+Create a flow diagram.
+
+---
+
+2. USER IDENTITY FLOW
+
+Determine:
+
+* How users are identified
+* User models
+* Fan models
+* Repository structure
+* Identity persistence
+
+Document:
+
+* Primary user identifier
+* Secondary identifiers
+* Relationship between users and conversations
+
+---
+
+3. DECISION ENGINE FLOW
+
+Determine:
+
+* Primary decision engine entry points
+* Message processing pipeline
+* Intent routing
+* Service orchestration
+
+Document:
+
+* Execution order
+* Service dependencies
+* Decision ownership
+
+---
+
+4. MEMORY SYSTEM
+
+Determine:
+
+* Long-term memory services
+* Short-term memory services
+* Retrieval systems
+* Memory repositories
+
+Document:
+
+* Memory write path
+* Memory read path
+* Memory update triggers
+
+---
+
+5. RELATIONSHIP INTELLIGENCE
+
+Determine:
+
+* Relationship services
+* Buyer intelligence services
+* Emotional intelligence services
+* Conversation continuity services
+
+Document:
+
+* Major service groups
+* Dependencies
+* Responsibilities
+
+---
+
+6. RESPONSE GENERATION
+
+Determine:
+
+* Response creation path
+* Prompt generation
+* Model orchestration
+* Response validation
+
+Document:
+
+* Full response pipeline
+
+---
+
+7. MESSAGE DELIVERY
+
+Determine:
+
+* How responses leave the system
+* Fanvue delivery services
+* Message sending services
+* Retry systems
+
+Document:
+
+* Delivery pipeline
+
+---
+
+8. FANVUE DEPENDENCIES
+
+Identify all Fanvue-specific components.
+
+Classify:
+
+LOW COUPLING
+MEDIUM COUPLING
+HIGH COUPLING
+
+Document:
+
+* file path
+* responsibility
+* migration complexity
+
+---
+
+9. TELEGRAM MIGRATION READINESS
+
+Based on findings, estimate:
+
+* reusable systems
+* transport-specific systems
+* migration risk areas
+* recommended adapter locations
+
+---
+
+## DELIVERABLE
+
+Create:
+
+migration_docs/architecture_audit_report.md
+
+The report must include:
+
+1. Executive Summary
+2. System Diagram
+3. Message Flow Diagram
+4. Decision Engine Diagram
+5. Memory Architecture Diagram
+6. Fanvue Dependency Map
+7. Telegram Migration Recommendations
+8. Estimated Migration Difficulty
+
+---
+
+## IMPORTANT RULES
+
+DO NOT MODIFY CODE.
+
+DO NOT CREATE FUNCTIONALITY.
+
+DO NOT REFACTOR.
+
+DO NOT IMPLEMENT TELEGRAM.
+
+Analysis only.
+
+The purpose of this task is understanding the existing architecture before migration begins.

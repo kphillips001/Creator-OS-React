@@ -1,0 +1,286 @@
+MIGRATION MAP
+
+PURPOSE
+
+The architecture audit and Telegram reference audit have been completed.
+
+The purpose of this task is to create a complete migration map showing exactly:
+
+* what will be preserved
+* what will be replaced
+* what will be adapted
+* what will be removed
+
+This task is planning only.
+
+No code changes are allowed.
+
+---
+
+## OBJECTIVE
+
+Using:
+
+* architecture_audit_report.md
+* telegram_reference_audit_report.md
+
+Create a complete migration plan for moving from Fanvue chat transport to Telegram chat transport while preserving the FanvueChatbot intelligence platform.
+
+---
+
+## PRIMARY ARCHITECTURE GOAL
+
+Target Architecture:
+
+Telegram User
+↓
+Telegram Transport Layer
+↓
+Identity Mapper
+↓
+Internal User
+↓
+Decision Engine
+↓
+Memory
+↓
+Buyer Intelligence
+↓
+Offer Logic
+↓
+Telegram Response
+
+Commerce Flow:
+
+Telegram User
+↓
+Fanvue Media Link
+↓
+Fanvue Purchase
+↓
+Fanvue Webhook
+↓
+Buyer Intelligence Update
+↓
+Memory Update
+
+---
+
+## IDENTITY MODEL
+
+IMPORTANT:
+
+The migration will use a unified identity model.
+
+DO NOT create Telegram-only users.
+
+DO NOT create separate memory systems.
+
+DO NOT create separate buyer intelligence systems.
+
+Required model:
+
+Telegram User
+↓
+Internal User
+↓
+Fanvue Commerce Identity
+
+All intelligence must remain attached to the Internal User.
+
+---
+
+## TASKS
+
+1. SYSTEM CLASSIFICATION
+
+Classify every major subsystem:
+
+KEEP
+ADAPT
+REPLACE
+REMOVE
+
+Examples:
+
+Decision Engine
+Memory
+Repositories
+Webhook Services
+Fanvue API Services
+Content Services
+Offer Services
+Buyer Intelligence
+Relationship Intelligence
+Telegram Listener
+Telegram Sender
+
+---
+
+2. IDENTITY STRATEGY
+
+Design:
+
+Telegram User
+↓
+Internal User
+↓
+Fanvue User
+
+Document:
+
+* required mappings
+* required database changes
+* required repositories
+* migration risks
+
+---
+
+3. MESSAGE FLOW MIGRATION
+
+Document:
+
+CURRENT FLOW
+
+and
+
+TARGET FLOW
+
+for:
+
+* inbound messages
+* outbound messages
+* memory updates
+* purchases
+* ownership updates
+
+---
+
+4. TRANSPORT BOUNDARY
+
+Determine exactly where:
+
+Telegram begins
+
+and
+
+Decision Engine begins.
+
+Document:
+
+Recommended adapter boundary.
+
+---
+
+5. TELEGRAM INTEGRATION PLAN
+
+Identify:
+
+New components required.
+
+Examples:
+
+telegram_listener
+telegram_sender
+telegram_identity_mapper
+telegram_delivery_tracker
+
+or better alternatives.
+
+---
+
+6. FANVUE COMMERCE PRESERVATION
+
+Document:
+
+What Fanvue systems remain active.
+
+Examples:
+
+* media links
+* ownership
+* purchases
+* subscriptions
+* unlocks
+* tips
+* buyer intelligence
+
+---
+
+7. DATABASE IMPACT
+
+Document:
+
+Required new tables.
+
+Required new columns.
+
+Required mappings.
+
+Required indexes.
+
+DO NOT IMPLEMENT.
+
+Planning only.
+
+---
+
+8. IMPLEMENTATION PHASES
+
+Produce an ordered implementation plan.
+
+Each phase must be independently testable.
+
+Each phase must be reversible.
+
+Each phase must minimize risk.
+
+---
+
+9. RISK ANALYSIS
+
+Identify:
+
+Highest risk areas.
+
+Provide mitigation strategies.
+
+---
+
+## DELIVERABLE
+
+Create:
+
+migration_docs/migration_map_report.md
+
+Include:
+
+1. Executive Summary
+2. System Classification Matrix
+3. Identity Architecture
+4. Current vs Target Message Flow
+5. Transport Boundary Design
+6. Telegram Integration Components
+7. Fanvue Commerce Preservation Plan
+8. Database Impact Analysis
+9. Phased Implementation Plan
+10. Risk Analysis
+11. Recommended Next Implementation Task
+
+---
+
+## IMPORTANT RULES
+
+DO NOT MODIFY CODE.
+
+DO NOT IMPLEMENT TELEGRAM.
+
+DO NOT CREATE DATABASE TABLES.
+
+DO NOT REFACTOR.
+
+DO NOT CHANGE APPLICATION BEHAVIOR.
+
+Planning only.
+
+The purpose of this task is to create the final migration blueprint before implementation begins.
