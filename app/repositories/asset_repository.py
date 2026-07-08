@@ -1,6 +1,8 @@
-"""Read-only access to legacy content through the normalized Asset model."""
+"""Access to legacy content through the normalized Asset model."""
 
+import json
 from collections.abc import Callable, Iterable
+from typing import Any, Mapping
 
 from app.database import get_db_connection
 from app.models.asset import ASSET_OWNED_FIELDS, Asset
@@ -183,6 +185,7 @@ class AssetRepository:
         publishing_status: str | None = None,
         has_local_vault_original: bool | None = None,
         has_derivative_preview: bool | None = None,
+        is_reference_image: bool | None = None,
         legacy_content_id: int | None = None,
     ) -> list[Asset]:
         filters = []
@@ -293,6 +296,14 @@ class AssetRepository:
                 "AND NOT (media_metadata->'derivatives' ? 'blur')"
                 ")"
             )
+        if is_reference_image is True:
+            filters.append(
+                "COALESCE(media_metadata->'reference_library'->>'is_reference', 'false') = 'true'"
+            )
+        elif is_reference_image is False:
+            filters.append(
+                "COALESCE(media_metadata->'reference_library'->>'is_reference', 'false') <> 'true'"
+            )
         where = f"WHERE {' AND '.join(filters)}" if filters else ""
         params.append(limit)
         with self._connection_factory() as conn:
@@ -308,6 +319,48 @@ class AssetRepository:
                 )
                 rows = cursor.fetchall()
         return [Asset.from_row(row) for row in rows]
+
+    def update_media_metadata(
+        self,
+        asset_id: int,
+        media_metadata: Mapping[str, Any],
+        *,
+        connection=None,
+    ) -> None:
+        query = """
+            UPDATE public.content_items
+            SET media_metadata = %s::jsonb
+            WHERE id = %s
+        """
+        payload = json.dumps(dict(media_metadata or {}), default=str)
+        if connection is not None:
+            with connection.cursor() as cursor:
+                cursor.execute(query, (payload, asset_id))
+            return
+        with self._connection_factory() as conn:
+            self.update_media_metadata(
+                asset_id,
+                media_metadata,
+                connection=conn,
+            )
+
+    def update_reference_metadata(
+        self,
+        asset_id: int,
+        reference_metadata: Mapping[str, Any],
+        *,
+        connection=None,
+    ) -> None:
+        asset = self.get_by_id(asset_id, connection=connection)
+        if not asset:
+            return
+        media_metadata = dict(asset.media_metadata or {})
+        media_metadata["reference_library"] = dict(reference_metadata or {})
+        self.update_media_metadata(
+            asset_id,
+            media_metadata,
+            connection=connection,
+        )
 
     def archive_assets(
         self,

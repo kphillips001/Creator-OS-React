@@ -1,2 +1,1 @@
-"""Provider integration boundaries."""
-
+"""External provider adapters for Creator OS."""
