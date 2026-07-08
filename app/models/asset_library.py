@@ -25,6 +25,7 @@ class AssetLibraryFilter:
     publishing_status: str | None = None
     has_local_vault_original: bool | None = None
     has_derivative_preview: bool | None = None
+    is_reference_image: bool | None = None
     legacy_content_id: int | None = None
 
 
@@ -101,6 +102,7 @@ class AssetLibraryItem:
     ready_for_rotation: bool
     relationship: AssetRelationshipSummary
     publishing: AssetPublishingSummary
+    is_reference_image: bool = False
 
 
 @dataclass(frozen=True)

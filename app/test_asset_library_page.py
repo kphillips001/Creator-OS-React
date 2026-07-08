@@ -1,5 +1,27 @@
 import unittest
+import sys
+import types
 from pathlib import Path
+
+if "streamlit" not in sys.modules:
+    streamlit = types.ModuleType("streamlit")
+    sys.modules["streamlit"] = streamlit
+
+if "psycopg" not in sys.modules:
+    psycopg = types.ModuleType("psycopg")
+    rows = types.ModuleType("psycopg.rows")
+    psycopg_types = types.ModuleType("psycopg.types")
+    json_types = types.ModuleType("psycopg.types.json")
+    errors = types.ModuleType("psycopg.errors")
+    psycopg.connect = lambda *args, **kwargs: None
+    rows.dict_row = object()
+    json_types.Json = lambda value: value
+    errors.UniqueViolation = type("UniqueViolation", (Exception,), {})
+    sys.modules["psycopg"] = psycopg
+    sys.modules["psycopg.rows"] = rows
+    sys.modules["psycopg.types"] = psycopg_types
+    sys.modules["psycopg.types.json"] = json_types
+    sys.modules["psycopg.errors"] = errors
 
 from app.dashboard.navigation import (
     DASHBOARD_NAVIGATION_GROUPS,

@@ -23,6 +23,7 @@ from app.dashboard.pages.module_switches import render_module_switches
 from app.dashboard.pages.creator_profile import render_creator_profile
 from app.dashboard.pages.asset_library import render_asset_library
 from app.dashboard.pages.cms_upload import render_cms_upload
+from app.dashboard.pages.content_studio import render_content_studio_page
 from app.dashboard.pages.relationship_sync import render as render_relationship_sync
 from app.dashboard.pages.fanvue_auth import render_fanvue_auth
 from app.dashboard.pages.chat_console import render_chat_console
@@ -796,6 +797,29 @@ elif (
     == "CMS Upload"
 ):
     render_cms_upload()
+
+elif (
+    st.session_state.dashboard_page
+    in {
+        "Social Studio",
+        "Premium Studio",
+        "Reference Library",
+        "Creative Director",
+        "Generation Workspace",
+        "Generation Library",
+        "Photoshoot Queue",
+        "Social Publishing",
+        "Caption Studio",
+        "Edit Studio",
+        "Prompt History",
+        "Settings",
+    }
+):
+    render_content_studio_page(
+        st.session_state.dashboard_page,
+        creator_profile=active_creator_profile or {},
+        active_account=st.session_state.get("active_fanvue_account", {}),
+    )
 
 elif (
     st.session_state.dashboard_page

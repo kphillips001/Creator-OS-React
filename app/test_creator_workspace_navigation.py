@@ -94,8 +94,8 @@ class CreatorWorkspaceNavigationTests(unittest.TestCase):
             group_labels,
             [
                 "Creator HQ",
-                "AI",
                 "Assets",
+                "Content Studio",
                 "Experiences",
                 "Products",
                 "Publishing",
@@ -103,16 +103,28 @@ class CreatorWorkspaceNavigationTests(unittest.TestCase):
                 "Activity",
                 "Notifications",
                 "Administration",
+                "Agents",
             ],
         )
 
         labels = grouped_navigation_labels()
         self.assertEqual(labels.count("Creator HQ"), 1)
-        self.assertIn("AI", labels)
+        self.assertIn("Agents", labels)
+        self.assertEqual(group_labels[-1], "Agents")
         self.assertIn("  Creator Agent", labels)
         self.assertIn("  Developer Agent", labels)
         self.assertIn("Assets", labels)
         self.assertIn("  CMS Upload", labels)
+        self.assertIn("Content Studio", labels)
+        self.assertIn("  Social Studio", labels)
+        self.assertIn("  Premium Studio", labels)
+        self.assertIn("  Reference Library", labels)
+        self.assertIn("  Creative Director", labels)
+        self.assertIn("  Photoshoot Queue", labels)
+        self.assertIn("  Social Publishing", labels)
+        self.assertIn("  Edit Studio", labels)
+        self.assertIn("  Prompt History", labels)
+        self.assertIn("  Settings", labels)
         self.assertIn("Experiences", labels)
         self.assertIn("  Experience Overview (Coming Soon)", labels)
         self.assertIn("  Activity Feed", labels)
@@ -123,6 +135,7 @@ class CreatorWorkspaceNavigationTests(unittest.TestCase):
         icons = {group.label: group.icon for group in DASHBOARD_NAVIGATION_GROUPS}
         self.assertEqual(icons["Creator HQ"], "HQ")
         self.assertEqual(icons["Assets"], "AS")
+        self.assertEqual(icons["Content Studio"], "CS")
         self.assertEqual(icons["Publishing"], "PB")
 
     def test_existing_routes_remain_reachable_from_grouped_navigation(self):

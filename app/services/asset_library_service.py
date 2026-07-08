@@ -99,6 +99,7 @@ class AssetLibraryService:
             publishing_status=filters.publishing_status,
             has_local_vault_original=filters.has_local_vault_original,
             has_derivative_preview=filters.has_derivative_preview,
+            is_reference_image=filters.is_reference_image,
             legacy_content_id=filters.legacy_content_id,
         )
         items = tuple(self.build_item(asset) for asset in assets)
@@ -265,6 +266,7 @@ class AssetLibraryService:
             ready_for_rotation=bool(getattr(asset, "ready_for_rotation", False)),
             relationship=relationship,
             publishing=publishing,
+            is_reference_image=self._is_reference_image(asset),
         )
 
     def _safe_asset_understanding(self, asset: Asset) -> Any | None:
@@ -602,3 +604,11 @@ class AssetLibraryService:
     @staticmethod
     def _coerce_mapping(value: Any) -> Mapping[str, Any]:
         return value if isinstance(value, Mapping) else {}
+
+    @classmethod
+    def _is_reference_image(cls, asset: Asset) -> bool:
+        media_metadata = cls._coerce_mapping(asset.media_metadata)
+        reference_metadata = cls._coerce_mapping(
+            media_metadata.get("reference_library")
+        )
+        return bool(reference_metadata.get("is_reference"))

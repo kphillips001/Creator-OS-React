@@ -42,6 +42,7 @@ def build_asset_library_filter(
     publishing_status: str | None = None,
     has_local_vault_original: bool | None = None,
     has_derivative_preview: bool | None = None,
+    is_reference_image: bool | None = None,
     legacy_content_id: int | None = None,
     created_after: str | None = None,
     created_before: str | None = None,
@@ -61,6 +62,7 @@ def build_asset_library_filter(
         publishing_status=(publishing_status or "").strip() or None,
         has_local_vault_original=has_local_vault_original,
         has_derivative_preview=has_derivative_preview,
+        is_reference_image=is_reference_image,
         legacy_content_id=legacy_content_id,
         created_after=_parse_date_filter(created_after),
         created_before=_parse_date_filter(created_before),
@@ -359,6 +361,7 @@ def _render_details(
         st.caption(f"Media Type: {item.media_type}")
         st.caption(f"Status: {item.status or '-'}")
         st.caption(f"Active: {'Yes' if item.is_active else 'No'}")
+        st.caption(f"Reference Image: {'Yes' if item.is_reference_image else 'No'}")
         st.caption(f"Imported: {_format_date(item.created_at)}")
         st.metric("Classification", item.classification or "-")
         st.metric("Confidence", "-" if details.confidence is None else f"{details.confidence:.2f}")
@@ -453,7 +456,7 @@ def render_asset_library(
             ("Any", "Yes", "No"),
             key="asset_library_derivative_filter",
         )
-        f16, f17, f18 = st.columns(3)
+        f16, f17, f18, f19 = st.columns(4)
         legacy_content_id_raw = f16.number_input(
             "Legacy Content ID",
             min_value=0,
@@ -461,12 +464,17 @@ def render_asset_library(
             step=1,
             key="asset_library_legacy_content_id",
         )
-        created_after = f17.text_input(
+        reference_filter = f17.selectbox(
+            "Reference Image",
+            ("Any", "Yes", "No"),
+            key="asset_library_reference_filter",
+        )
+        created_after = f18.text_input(
             "Created After",
             placeholder="YYYY-MM-DD",
             key="asset_library_created_after",
         )
-        created_before = f18.text_input(
+        created_before = f19.text_input(
             "Created Before",
             placeholder="YYYY-MM-DD",
             key="asset_library_created_before",
@@ -489,6 +497,7 @@ def render_asset_library(
         publishing_status=publishing_status,
         has_local_vault_original=_optional_bool_filter(vault_filter),
         has_derivative_preview=_optional_bool_filter(derivative_filter),
+        is_reference_image=_optional_bool_filter(reference_filter),
         legacy_content_id=(
             int(legacy_content_id_raw) if legacy_content_id_raw else None
         ),
