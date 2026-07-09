@@ -4,6 +4,7 @@ import types
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
 
 if "streamlit" not in sys.modules:
     streamlit = types.ModuleType("streamlit")
@@ -102,13 +103,22 @@ class FakeCreativeDirector:
             plan_id=f"prompt_plan_premium_{len(self.calls)}",
             session_id=f"creative_session_premium_{len(self.calls)}",
             creator_profile_id=int(creator_profile["id"]),
-            prompt_text="Premium provider-neutral prompt",
+            prompt_text="\n\n".join(
+                f"Prompt {index}: Premium provider-neutral prompt {index}"
+                for index in range(1, int(prompt_count or 1) + 1)
+            ),
             creative_mode=creative_mode,
             creative_tags=self.normalize_tags(creative_tags),
             reference_asset_id=55,
             reference_asset_path="C:/Creator-OS/data/cms/vault/originals/images/55.png",
             creative_rationale="Created for Premium Studio.",
-            prompt_metadata={"provider_neutral": True},
+            prompt_metadata={
+                "provider_neutral": True,
+                "prompt_variations": tuple(
+                    f"Premium provider-neutral prompt {index}"
+                    for index in range(1, int(prompt_count or 1) + 1)
+                ),
+            },
         )
 
 
@@ -146,9 +156,16 @@ class FakeGenerationEngine:
         )
         return GenerationJob(job_id="generation_job_premium", request=request)
 
-    def dispatch_job(self, job_id):
+    def dispatch_job(self, job_id, progress_callback=None):
         self.dispatched.append(job_id)
         request = self.queue_prompt_plan(**self.calls[-1]).request
+        if progress_callback:
+            progress_callback(
+                current=1,
+                total=request.image_count,
+                message="Image 1 of 1 completed",
+                output_references=("https://cdn.test/premium-output.png",),
+            )
         result = GenerationResult(
             result_id="generation_result_premium",
             request_id=request.request_id,
@@ -228,6 +245,7 @@ class PremiumStudioTests(unittest.TestCase):
         self.assertEqual(engine.calls[0]["image_count"], 6)
         self.assertEqual(engine.calls[0]["metadata"]["source"], "premium_studio")
         self.assertTrue(engine.calls[0]["metadata"]["premium_workflow"])
+        self.assertEqual(len(engine.calls[0]["metadata"]["prompt_variations"]), 6)
 
     def test_premium_submit_can_execute_and_sync_generation_library(self):
         references = FakeReferenceLibrary(reference_asset())
@@ -304,15 +322,32 @@ class PremiumStudioTests(unittest.TestCase):
         self.assertIn("Prompt Count", source)
         self.assertIn("Provider", source)
         self.assertIn("Prompt Preview", source)
+        self.assertIn("expanded=False", source)
+        self.assertIn("Copy Prompt Batch", source)
+        self.assertIn("Regenerate Premium Prompt Preview", source)
+        self.assertIn("Advanced Details", source)
+        self.assertIn("prompt_variations", source)
         self.assertIn("Generate Premium Images", source)
         self.assertIn("Start Premium Photoshoot", source)
         self.assertIn("Generation Status", source)
         self.assertIn("Generation Library", source)
+        self.assertIn("Open Generation Library", source)
+        self.assertIn("Live Generated Images", source)
+        self.assertIn("Generation Complete", source)
+        self.assertIn("complete_preview", source)
+        self.assertIn("time.sleep(5)", source)
+        self.assertIn("Reset Session", source)
+        self.assertIn("content_studio_reset_requested", source)
+        self.assertIn("Resume Previous Generation?", source)
+        self.assertIn("No active Premium Studio generation session.", source)
+        self.assertIn("remaining", source)
         self.assertIn("Creative Director Tools", source)
         self.assertIn("Enhance Premium Tags", source)
         self.assertIn("Surprise Me", source)
         self.assertIn("Enhanced Explicit Tags", source)
         self.assertIn("Ask Grok / Prompt Assistant", source)
+        self.assertIn("Ask Grok Anything", source)
+        self.assertIn("premium_grok_anything_history", source)
         self.assertIn("Ask Grok for Shot Cards", source)
         self.assertIn("Apply to Premium Tags", source)
         self.assertIn("Prompt Archive", source)
@@ -320,6 +355,7 @@ class PremiumStudioTests(unittest.TestCase):
         self.assertIn("generation_library.sync_jobs", source)
         self.assertIn("premium_studio", source)
         self.assertIn('"Premium Studio"', navigation)
+        self.assertNotIn("Premium generated images will appear here", source)
         for mode in PREMIUM_CREATIVE_MODE_LABELS:
             self.assertIn(mode, source)
         self.assertNotIn("generate_premium_images(", source)
@@ -327,45 +363,67 @@ class PremiumStudioTests(unittest.TestCase):
         self.assertNotIn("upload_to_imgbb", source)
         self.assertNotIn("submit_wavespeed_task", source)
 
-    def test_creative_director_premium_enhanced_tags_and_surprise_workflow(self):
+    def test_creative_director_premium_helpers_delegate_to_wavespeed_brain(self):
         service = CreativeDirectorService(storage_dir=tempfile.mkdtemp())
         profile = {"id": 7, "display_name": "Ava"}
 
-        enhanced = service.enhance_premium_tags(
-            simple_tags="hotel mirror, black lace",
-            creator_profile=profile,
-        )
-        surprise = service.surprise_premium_tags(
-            simple_tags="hotel mirror",
-            creator_profile=profile,
-        )
-        explicit = service.enhance_premium_tags(
-            simple_tags="shower, topless",
-            creator_profile=profile,
-            explicit=True,
-        )
-        lucky = service.premium_lucky_tags(
-            creator_profile=profile,
-            prompt_count=2,
-        )
+        with patch(
+            "app.services.creative_director_service.wavespeed_enhance_premium_tags",
+            return_value="enhanced hotel mirror with black lace and medium-close creator framing",
+        ):
+            enhanced = service.enhance_premium_tags(
+                simple_tags="hotel mirror, black lace",
+                creator_profile=profile,
+            )
+        with patch(
+            "app.services.creative_director_service.wavespeed_surprise_premium_tags",
+            return_value="surprise premium hotel window seat variation",
+        ):
+            surprise = service.surprise_premium_tags(
+                simple_tags="hotel mirror",
+                creator_profile=profile,
+            )
+        with patch(
+            "app.services.creative_director_service.enhance_explicit_tags",
+            return_value="explicit shower topless prompt direction",
+        ):
+            explicit = service.enhance_premium_tags(
+                simple_tags="shower, topless",
+                creator_profile=profile,
+                explicit=True,
+            )
+        with patch(
+            "app.services.creative_director_service.generate_lucky_premium_tags",
+            return_value="premium lucky one\npremium lucky two",
+        ):
+            lucky = service.premium_lucky_tags(
+                creator_profile=profile,
+                prompt_count=2,
+            )
 
-        self.assertIn("hotel mirror", enhanced)
-        self.assertIn("premium teaser", enhanced)
-        self.assertIn("same reference identity", enhanced)
-        self.assertIn("unexpected premium variation", surprise)
-        self.assertIn("explicit-ready premium", explicit)
+        self.assertIn("medium-close creator framing", enhanced)
+        self.assertEqual(surprise, "surprise premium hotel window seat variation")
+        self.assertEqual(explicit, "explicit shower topless prompt direction")
         self.assertEqual(len(lucky.splitlines()), 2)
 
     def test_ask_grok_prompt_assistant_archive_and_apply_contract(self):
         service = CreativeDirectorService(storage_dir=tempfile.mkdtemp())
         profile = {"id": 7, "display_name": "Ava"}
 
-        batch = service.ask_prompt_assistant(
-            creator_profile=profile,
-            request_text="hotel mirror lingerie",
-            lane="premium",
-            prompt_count=3,
-        )
+        with patch(
+            "app.services.creative_director_service.ask_grok_for_prompt_candidates",
+            return_value=[
+                "hotel mirror lingerie shot card 1",
+                "hotel mirror lingerie shot card 2",
+                "hotel mirror lingerie shot card 3",
+            ],
+        ):
+            batch = service.ask_prompt_assistant(
+                creator_profile=profile,
+                request_text="hotel mirror lingerie",
+                lane="premium",
+                prompt_count=3,
+            )
         service.mark_prompt_assistant_used(batch.batch_id, 2)
         history = service.prompt_assistant_history(creator_profile_id=7)
 
@@ -374,22 +432,31 @@ class PremiumStudioTests(unittest.TestCase):
         self.assertEqual(history[0].batch_id, batch.batch_id)
         self.assertIn(2, history[0].used_prompt_numbers)
 
-    def test_premium_prompt_plan_contains_old_premium_guidance(self):
+    def test_premium_prompt_plan_uses_wavespeed_premium_builder(self):
         service = CreativeDirectorService(
             storage_dir=tempfile.mkdtemp(),
             reference_library_service=FakeReferenceLibrary(reference_asset()),
         )
 
-        plan = service.create_prompt_plan(
-            creator_profile={"id": 7, "display_name": "Ava"},
-            creative_tags="hotel mirror, black lace",
-            creative_mode="premium_teaser",
-            prompt_count=2,
-        )
+        with patch(
+            "app.services.creative_director_service.generate_premium_prompts",
+            return_value=[
+                "premium hotel mirror prompt with medium-close creator framing",
+                "premium black lace prompt with head-to-hips crop",
+            ],
+        ):
+            plan = service.create_prompt_plan(
+                creator_profile={"id": 7, "display_name": "Ava"},
+                creative_tags="hotel mirror, black lace",
+                creative_mode="premium_teaser",
+                prompt_count=2,
+            )
 
-        self.assertIn("Premium guidance", plan.prompt_text)
-        self.assertIn("active reference", plan.prompt_text.lower())
-        self.assertIn("premium_guidance", plan.prompt_metadata)
+        self.assertIn("premium hotel mirror prompt", plan.prompt_text)
+        self.assertEqual(plan.prompt_metadata["generation_brain"], "wavespeed_canonical")
+        self.assertEqual(plan.prompt_metadata["prompt_builder"], "wavespeed_premium_prompt_builder")
+        self.assertEqual(plan.prompt_metadata["reference_conditioning"], "wavespeed")
+        self.assertIn("medium-close creator framing", plan.prompt_text)
 
 
 if __name__ == "__main__":

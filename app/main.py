@@ -47,23 +47,48 @@ ppv_targeting_service = PPVTargetingService()
 ppv_broadcast_service = PPVBroadcastService()
 outreach_runner = OutreachRunner()
 
-print("OPENAI KEY PREFIX:", settings.OPENAI_API_KEY[:12])
-gpt_service = GPTService(settings.OPENAI_API_KEY)
 mode_engine = ModeEngine()
 
-decision_engine = DecisionEngine(
-    memory_service,
-    intent_service,
-    user_value_service,
-    mode_engine,
-    offer_service,
-    content_service,
+def get_gpt_service():
+    if not settings.OPENAI_API_KEY:
+        raise RuntimeError("OpenAI API key is not configured.")
+
+    return GPTService(settings.OPENAI_API_KEY)
+
+
+def create_decision_engine():
+    gpt_service = get_gpt_service()
+
+    return DecisionEngine(
+        memory_service,
+        intent_service,
+        user_value_service,
+        mode_engine,
+        offer_service,
+        content_service,
     post_offer_service,  # ✅ NEW (IMPORTANT)
-    timing_engine,
-    gpt_service,
-    settings,
-    logger,
-)
+        timing_engine,
+        gpt_service,
+        settings,
+        logger,
+    )
+
+
+class LazyDecisionEngine:
+    def __init__(self):
+        self._instance = None
+
+    def _get_instance(self):
+        if self._instance is None:
+            self._instance = create_decision_engine()
+
+        return self._instance
+
+    def __getattr__(self, name):
+        return getattr(self._get_instance(), name)
+
+
+decision_engine = LazyDecisionEngine()
 
 
 def start_app():

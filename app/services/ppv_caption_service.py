@@ -2,6 +2,8 @@ import os
 from dotenv import load_dotenv
 from openai import OpenAI
 
+from app.services.caption_prompt_guidance import natural_emoji_instruction_bullet
+
 
 class PPVCaptionService:
 
@@ -76,7 +78,7 @@ CRITICAL:
 
 RULES:
 - 1 sentence ONLY
-- No emoji spam (1 max if needed)
+{natural_emoji_instruction_bullet()}
 - No explicit descriptions
 - No hashtags
 - No long sentences

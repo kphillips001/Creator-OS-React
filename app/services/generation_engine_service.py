@@ -10,7 +10,7 @@ import json
 from dataclasses import asdict, replace
 from pathlib import Path
 from time import perf_counter
-from typing import Any, Mapping
+from typing import Any, Callable, Mapping
 
 from app.models.creative_director import PromptPlan
 from app.models.generation_engine import (
@@ -237,9 +237,14 @@ class GenerationEngineService:
         self._replace_job(updated)
         return updated
 
-    def dispatch_job(self, job_id: str) -> GenerationJob:
+    def dispatch_job(
+        self,
+        job_id: str,
+        progress_callback: Callable[..., None] | None = None,
+    ) -> GenerationJob:
         job = self.start_job(job_id)
-        if self.provider_registry.get(job.request.provider_id) is None:
+        provider = self.provider_registry.get(job.request.provider_id)
+        if provider is None:
             return self.fail_job(
                 job_id,
                 GenerationFailure(
@@ -250,7 +255,20 @@ class GenerationEngineService:
 
         started = perf_counter()
         try:
-            result = self.provider_registry.dispatch(job.request)
+            if progress_callback and hasattr(provider, "execute_with_progress"):
+                result = provider.execute_with_progress(
+                    job.request,
+                    progress_callback=progress_callback,
+                )
+            else:
+                if progress_callback:
+                    progress_callback(
+                        current=0,
+                        total=job.request.image_count,
+                        message="Provider is running",
+                        output_references=(),
+                    )
+                result = self.provider_registry.dispatch(job.request)
         except Exception as exc:  # pragma: no cover - defensive adapter boundary
             return self.fail_job(
                 job_id,

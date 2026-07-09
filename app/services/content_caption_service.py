@@ -2,10 +2,26 @@ import json
 from openai import OpenAI
 from dotenv import load_dotenv
 
+from app.config import settings
+from app.services.caption_prompt_guidance import natural_emoji_instruction_bullet
+
 
 load_dotenv()
 
-client = OpenAI()
+_client = None
+
+
+def get_openai_client():
+    global _client
+
+    if _client is None:
+        api_key = getattr(settings, "OPENAI_API_KEY", None)
+        if not api_key:
+            raise RuntimeError("OpenAI API key is not configured.")
+
+        _client = OpenAI(api_key=api_key)
+
+    return _client
 
 
 def _normalize_json_field(value):
@@ -71,7 +87,7 @@ STYLE:
 RULES:
 - 4 to 12 words only
 - 1 sentence only
-- 0 or 1 emoji max
+{natural_emoji_instruction_bullet()}
 - no hashtags
 - no sales language
 - no mention of AI
@@ -101,7 +117,7 @@ BAD EXAMPLES:
 Return only the caption.
 """
 
-    response = client.responses.create(
+    response = get_openai_client().responses.create(
         model="gpt-4.1-mini",
         input=prompt,
     )
@@ -159,7 +175,7 @@ STYLE:
 RULES:
 - 4 to 12 words only
 - 1 sentence only
-- use 0 or 1 emoji max
+{natural_emoji_instruction_bullet()}
 - no hashtags
 - no sales language
 - no explicit sexual acts
@@ -195,7 +211,7 @@ BAD EXAMPLES:
 Return only the opener.
 """
 
-    response = client.responses.create(
+    response = get_openai_client().responses.create(
         model="gpt-4.1-mini",
         input=prompt,
     )
@@ -236,7 +252,7 @@ STYLE:
 RULES:
 - 5 to 10 words
 - 1 sentence only
-- no emojis
+{natural_emoji_instruction_bullet()}
 - no hashtags
 - no AI mention
 - no poetic language
@@ -256,7 +272,7 @@ GOOD EXAMPLES:
 Return only the caption.
 """
 
-    response = client.responses.create(
+    response = get_openai_client().responses.create(
         model="gpt-4.1-mini",
         input=prompt,
     )
@@ -297,7 +313,7 @@ STYLE:
 RULES:
 - 5 to 10 words
 - 1 sentence only
-- no emojis
+{natural_emoji_instruction_bullet()}
 - no hashtags
 - no AI mention
 - no poetic language
@@ -317,7 +333,7 @@ GOOD EXAMPLES:
 Return only the caption.
 """
 
-    response = client.responses.create(
+    response = get_openai_client().responses.create(
         model="gpt-4.1-mini",
         input=prompt,
     )

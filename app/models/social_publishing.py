@@ -11,6 +11,7 @@ from app.models.generation_engine import utc_now
 
 class SocialPlatform(str, Enum):
     X = "x"
+    TELEGRAM = "telegram"
     INSTAGRAM = "instagram"
     THREADS = "threads"
     FACEBOOK = "facebook"

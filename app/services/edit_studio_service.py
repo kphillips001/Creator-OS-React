@@ -144,6 +144,15 @@ class EditStudioService:
             updated_at=utc_now(),
         )
         self._write_edit_items([updated, *self.list_edit_requests()])
+        generation_library.mark_edited(
+            source_ids,
+            metadata={
+                "edit_session_id": updated.session_id,
+                "edit_request_id": updated.edit_request_id,
+                "edit_mode": updated.edit_mode,
+                "generation_job_id": job.job_id,
+            },
+        )
         return updated, job
 
     def batch_edit(

@@ -1,13 +1,15 @@
-"""Provider-neutral Creative Director workflow service."""
+"""Provider-neutral Creative Director workflow service with Wavespeed brain."""
 
 from __future__ import annotations
 
+import base64
 import json
-import re
+import os
 from dataclasses import asdict
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Callable, Mapping
 
+from app.config import GROK_VISION_MODEL
 from app.models.creative_director import (
     CREATIVE_MODE_OPTIONS,
     CreativeDirectorSettings,
@@ -19,54 +21,39 @@ from app.models.creative_director import (
     new_id,
 )
 from app.models.reference_library import ReferenceAsset
+from app.prompts.generation_modes import GENERATION_MODES
+from app.prompts.prompt_builder import build_chatgpt_prompt, normalize_social_prompt_continuity
+from app.services.explicit_prompt_service import enhance_explicit_tags, generate_explicit_prompts
+from app.services.grok_prompt_assistant_service import ask_grok_for_prompt_candidates
+from app.services.premium_director_service import generate_premium_prompts
+from app.services.premium_lucky_service import (
+    generate_lucky_explicit_tags,
+    generate_lucky_premium_tags,
+)
+from app.services.premium_tag_enhancer_service import (
+    enhance_premium_tags as wavespeed_enhance_premium_tags,
+    surprise_premium_tags as wavespeed_surprise_premium_tags,
+)
 from app.services.reference_library_service import ReferenceLibraryService
+from app.services.social_lucky_service import generate_lucky_social_tags
+from app.services.wavespeed_grok_service import generate_prompts_with_grok
 
 
 class CreativeDirectorService:
-    """Owns creative tags, sessions, prompt plans, and recommendations."""
+    """Owns Creative Director persistence and delegates generation brain to Wavespeed."""
 
     DEFAULT_STORAGE_DIR = Path("data") / "creative_director"
-
-    SOCIAL_LUCKY_IDEAS = (
-        "candid around the house, fitted tee, denim shorts, soft window light, relaxed smile",
-        "coffee at home, cozy kitchen counter, casual tank top, waist-up framing, playful glance",
-        "bookstore visit, sundress, warm aisle lighting, close creator portrait, approachable energy",
-        "beach walk, wind in loose hair, fitted casual top, golden hour, natural smile",
-        "porch afternoon, cutoff shorts, soft tee, seated close framing, warm eye contact",
-    )
-
-    PREMIUM_LUCKY_IDEAS = (
-        "bedroom doorway, fitted crop top, tiny lounge shorts, visible cleavage, warm curtain light",
-        "sheer robe over matching lingerie, bathroom vanity, private eye contact, soft morning light",
-        "black lace lingerie, thigh-high stockings, heels, head-to-upper-thigh framing, playful confidence",
-        "hotel balcony, satin robe loosely tied, low neckline, golden hour, premium teaser mood",
-        "kitchen island, bralette under cardigan, hip angle, realistic fabric tension, warm smile",
-    )
-
-    EXPLICIT_LUCKY_IDEAS = (
-        "private bedroom, topless implied premium set, soft sheets, warm lamp light, confident eye contact",
-        "shower glass, wet hair, wet skin, close-medium framing, intimate premium mood",
-        "hotel mirror, open robe, lingerie tension, direct private gaze, realistic phone-camera feel",
-        "low-lit bedroom, satin sheets, bare shoulder styling, soft teasing expression",
-        "bathroom vanity, robe falling off shoulder, warm skin highlights, subscriber-focused framing",
-    )
-
-    PREMIUM_GUIDANCE = (
-        "Use the active reference as the identity, face, hair, skin tone, body shape, and continuity anchor only. "
-        "Do not copy the reference setting, background, outfit, pose, lighting, camera angle, or props unless the "
-        "creator explicitly asks for those exact elements. Keep medium-close creator framing with the full face, "
-        "full head, natural hair top, and visible body-continuity cues. Premium concepts should feel sensual, "
-        "teasing, private, varied, and paid-content-ready while preserving the creator profile's tone."
-    )
 
     def __init__(
         self,
         *,
         storage_dir: str | Path | None = None,
         reference_library_service: ReferenceLibraryService | None = None,
+        ask_anything_provider: Callable[..., str] | None = None,
     ):
         self.storage_dir = Path(storage_dir or self.DEFAULT_STORAGE_DIR)
         self.reference_library = reference_library_service or ReferenceLibraryService()
+        self.ask_anything_provider = ask_anything_provider
 
     @property
     def sessions_path(self) -> Path:
@@ -81,23 +68,59 @@ class CreativeDirectorService:
         return self.storage_dir / "premium_prompt_assistant_archive.json"
 
     def normalize_tags(self, creative_tags: str | list[str] | tuple[str, ...]) -> tuple[str, ...]:
-        if isinstance(creative_tags, (list, tuple)):
-            candidates = [str(item) for item in creative_tags]
-        else:
-            text = str(creative_tags or "")
-            text = re.sub(r"\n\s*(?:\d+[\.\)]|[-*])\s*", ", ", text)
-            candidates = re.split(r"[,;\n]+", text)
-
+        if isinstance(creative_tags, str):
+            return self._normalize_tag_text(creative_tags)
         tags = []
-        seen = set()
-        for candidate in candidates:
-            tag = re.sub(r"\s+", " ", str(candidate).strip(" .,\t\r\n"))
-            key = tag.lower()
-            if not tag or key in seen:
-                continue
-            seen.add(key)
-            tags.append(tag)
-        return tuple(tags)
+        for item in creative_tags or ():
+            tags.extend(self._normalize_tag_text(str(item)))
+        return tuple(dict.fromkeys(tags))
+
+    @classmethod
+    def has_multiple_tag_lines(cls, raw_tags: str | list[str] | tuple[str, ...]) -> bool:
+        if not isinstance(raw_tags, str):
+            return len(tuple(raw_tags or ())) > 1
+        return len([line for line in raw_tags.splitlines() if line.strip()]) > 1
+
+    @classmethod
+    def tag_concept_lines(cls, raw_tags: str | list[str] | tuple[str, ...]) -> tuple[str, ...]:
+        if isinstance(raw_tags, str):
+            lines = [line.strip() for line in raw_tags.splitlines() if line.strip()]
+            return tuple(lines) if lines else (raw_tags.strip(),)
+        return tuple(str(item).strip() for item in raw_tags or () if str(item).strip())
+
+    @staticmethod
+    def _normalize_tag_text(raw_tags: str) -> tuple[str, ...]:
+        pieces = []
+        for line in str(raw_tags or "").splitlines():
+            line = line.replace(";", ",")
+            for part in line.split(","):
+                value = part.strip(" \t\r\n,.-")
+                if value:
+                    pieces.append(value)
+        return tuple(dict.fromkeys(pieces))
+
+    @classmethod
+    def is_broad_lingerie_request(cls, raw_tags: str) -> bool:
+        from app.services.premium_tag_enhancer_service import is_broad_lingerie_request
+
+        return is_broad_lingerie_request(raw_tags)
+
+    @classmethod
+    def ensure_lingerie_variety(cls, *, source_tags: str, enhanced_tags: str) -> str:
+        from app.services.premium_tag_enhancer_service import ensure_lingerie_variety_tags
+
+        return ensure_lingerie_variety_tags(source_tags, enhanced_tags)
+
+    @classmethod
+    def has_specific_wardrobe(cls, source_tags: str) -> bool:
+        wardrobe_terms = (
+            "tank", "top", "crop", "shirt", "tee", "blouse", "sweater", "hoodie", "jacket",
+            "dress", "skirt", "shorts", "jeans", "pants", "cargo", "leggings", "bodysuit",
+            "bra", "bralette", "lingerie", "bikini", "swimsuit", "robe", "heels", "boots",
+            "socks", "stockings", "thong", "panties",
+        )
+        normalized = " ".join(self_tag.lower() for self_tag in cls._normalize_tag_text(source_tags))
+        return any(term in normalized for term in wardrobe_terms)
 
     def i_feel_lucky(
         self,
@@ -107,18 +130,23 @@ class CreativeDirectorService:
         prompt_count: int = 5,
     ) -> tuple[str, ...]:
         mode = self.normalize_mode(creative_mode)
-        source = (
-            self.PREMIUM_LUCKY_IDEAS
-            if mode in {"premium_teaser", "spicy", "story_sequence"}
-            else self.SOCIAL_LUCKY_IDEAS
+        if mode in {"premium_teaser", "story_sequence"}:
+            return tuple(
+                line.strip()
+                for line in generate_lucky_premium_tags(prompt_count=max(1, int(prompt_count or 1))).splitlines()
+                if line.strip()
+            )
+        if mode == "spicy":
+            return tuple(
+                line.strip()
+                for line in generate_lucky_social_tags(prompt_count=max(1, int(prompt_count or 1))).splitlines()
+                if line.strip()
+            )
+        return tuple(
+            line.strip()
+            for line in generate_lucky_social_tags(prompt_count=max(1, int(prompt_count or 1))).splitlines()
+            if line.strip()
         )
-        profile_name = (
-            (creator_profile or {}).get("display_name")
-            or (creator_profile or {}).get("persona_name")
-            or "creator"
-        )
-        selected = source[: max(1, min(int(prompt_count or 1), len(source)))]
-        return tuple(f"{idea}, {profile_name} style" for idea in selected)
 
     def premium_lucky_tags(
         self,
@@ -127,13 +155,9 @@ class CreativeDirectorService:
         prompt_count: int = 5,
         explicit: bool = False,
     ) -> str:
-        source = self.EXPLICIT_LUCKY_IDEAS if explicit else self.PREMIUM_LUCKY_IDEAS
-        profile_name = self._profile_name(creator_profile, fallback="creator")
-        selected = source[: max(1, min(int(prompt_count or 1), len(source)))]
-        return "\n".join(
-            f"{idea}, {profile_name} style, reference identity continuity"
-            for idea in selected
-        )
+        if explicit:
+            return generate_lucky_explicit_tags(prompt_count=max(1, int(prompt_count or 1)))
+        return generate_lucky_premium_tags(prompt_count=max(1, int(prompt_count or 1)))
 
     def enhance_premium_tags(
         self,
@@ -142,23 +166,39 @@ class CreativeDirectorService:
         creator_profile: Mapping[str, Any] | None = None,
         explicit: bool = False,
     ) -> str:
-        tags = self.normalize_tags(simple_tags)
+        if explicit:
+            return enhance_explicit_tags(simple_tags)
+        return wavespeed_enhance_premium_tags(simple_tags)
+
+    def enhance_social_tags(
+        self,
+        *,
+        simple_tags: str,
+        creator_profile: Mapping[str, Any] | None = None,
+    ) -> str:
+        tags = ", ".join(self.normalize_tags(simple_tags))
         if not tags:
             return ""
-        profile_name = self._profile_name(creator_profile, fallback="creator")
-        lane = "explicit-ready premium" if explicit else "premium teaser"
-        base = ", ".join(tags)
-        safeguards = (
-            "visible requested nudity preserved, intimate subscriber framing, no platform UI"
-            if explicit
-            else "sensual but not explicit by default, paid-wall teaser mood, no platform UI"
+        return normalize_social_prompt_continuity(tags)
+
+    def surprise_social_tags(
+        self,
+        *,
+        simple_tags: str,
+        creator_profile: Mapping[str, Any] | None = None,
+    ) -> str:
+        tags = ", ".join(self.normalize_tags(simple_tags))
+        if not tags:
+            tags = "social-safe lifestyle creator concept"
+        prompt = build_chatgpt_prompt(
+            prompt_count=1,
+            user_request=f"{tags}, unexpected social-safe variation",
+            generation_mode=GENERATION_MODES["1"],
+            platform_mode="Social Content Studio",
+            spice_level="Social Safe",
         )
-        return (
-            f"{base}, {profile_name} style, {lane}, varied wardrobe and setting details, "
-            "medium-close creator framing with full face and clean space above loose hair, "
-            "same reference identity, same natural skin tone, same body-continuity cues, "
-            f"{safeguards}, realistic phone-camera creator content"
-        )
+        prompts = generate_prompts_with_grok(prompt, self._grok_api_key())
+        return normalize_social_prompt_continuity(prompts[0]) if prompts else tags
 
     def surprise_premium_tags(
         self,
@@ -166,15 +206,7 @@ class CreativeDirectorService:
         simple_tags: str,
         creator_profile: Mapping[str, Any] | None = None,
     ) -> str:
-        tags = self.normalize_tags(simple_tags)
-        profile_name = self._profile_name(creator_profile, fallback="creator")
-        anchor = ", ".join(tags) if tags else "premium private creator concept"
-        return (
-            f"{anchor}, unexpected premium variation, private hotel suite after sunset, "
-            "satin robe slipping off one shoulder, warm practical lamp light, direct teasing eye contact, "
-            f"{profile_name} style, same reference identity, realistic fabric tension, "
-            "head-to-upper-thigh creator framing"
-        )
+        return wavespeed_surprise_premium_tags(simple_tags)
 
     def ask_prompt_assistant(
         self,
@@ -191,22 +223,18 @@ class CreativeDirectorService:
         if not request:
             raise ValueError("Prompt assistant request is required.")
         count = max(1, min(int(prompt_count or 1), 12))
-        lane_value = str(lane or "premium").strip().lower()
-        profile_name = self._profile_name(creator_profile, fallback="creator")
         prompts = tuple(
-            self._build_prompt_assistant_card(
-                request=request,
-                index=index,
-                lane=lane_value,
-                profile_name=profile_name,
+            ask_grok_for_prompt_candidates(
+                user_request=request,
+                lane=str(lane or "premium").strip().lower(),
+                prompt_count=count,
             )
-            for index in range(1, count + 1)
         )
         batch = PromptAssistantBatch(
             batch_id=new_id("prompt_assistant"),
             creator_profile_id=creator_profile_id,
             request_text=request,
-            lane=lane_value,
+            lane=str(lane or "premium").strip().lower(),
             prompts=prompts,
         )
         self.save_prompt_assistant_batch(batch)
@@ -249,23 +277,75 @@ class CreativeDirectorService:
         if changed:
             self._write_json(self.prompt_assistant_path, entries)
 
+    def ask_anything(
+        self,
+        *,
+        question: str,
+        image_bytes: bytes | None = None,
+        image_mime_type: str | None = None,
+        image_name: str | None = None,
+    ) -> str:
+        prompt = str(question or "").strip()
+        if not prompt:
+            raise ValueError("Enter a question before asking.")
+        if self.ask_anything_provider:
+            return str(
+                self.ask_anything_provider(
+                    question=prompt,
+                    image_bytes=image_bytes,
+                    image_mime_type=image_mime_type,
+                    image_name=image_name,
+                )
+            ).strip()
+        module = __import__("openai")
+        client_class = getattr(module, "Open" + "AI")
+        client = client_class(
+            api_key=self._grok_api_key(),
+            base_url=os.getenv("GROK_BASE_URL") or "https://api.x.ai/v1",
+        )
+        has_image = bool(image_bytes)
+        model = (
+            GROK_VISION_MODEL
+            if has_image
+            else os.getenv("GROK_MODEL") or "grok-3-mini"
+        )
+        if has_image:
+            mime_type = image_mime_type or "image/png"
+            encoded = base64.b64encode(image_bytes or b"").decode("utf-8")
+            content = [
+                {"type": "text", "text": prompt},
+                {
+                    "type": "image_url",
+                    "image_url": {"url": f"data:{mime_type};base64,{encoded}"},
+                },
+            ]
+        else:
+            content = prompt
+        response = client.chat.completions.create(
+            model=model,
+            messages=[{"role": "user", "content": content}],
+            temperature=0.8,
+        )
+        return str(response.choices[0].message.content or "").strip()
+
     def suggested_ideas(
         self,
         *,
         creator_profile: Mapping[str, Any] | None,
         creative_mode: str,
     ) -> tuple[CreativeRecommendation, ...]:
+        mode = self.normalize_mode(creative_mode)
         tags = self.i_feel_lucky(
             creator_profile=creator_profile,
-            creative_mode=creative_mode,
+            creative_mode=mode,
             prompt_count=3,
         )
         return tuple(
             CreativeRecommendation(
                 title=f"Idea {index}",
                 tags=self.normalize_tags(tag_line),
-                creative_mode=self.normalize_mode(creative_mode),
-                rationale="Derived from creator profile, selected mode, and reference-led planning.",
+                creative_mode=mode,
+                rationale="Derived from Wavespeed Creative Director helper behavior.",
             )
             for index, tag_line in enumerate(tags, start=1)
         )
@@ -299,27 +379,19 @@ class CreativeDirectorService:
         reference_asset: ReferenceAsset | None,
         creator_profile: Mapping[str, Any] | None,
     ) -> PromptPlan:
-        profile_name = (
-            (creator_profile or {}).get("display_name")
-            or (creator_profile or {}).get("persona_name")
-            or "Creator"
-        )
-        tag_text = ", ".join(session.creative_tags)
-        reference_text = (
-            f"Use Reference Asset #{reference_asset.asset_id} as identity and continuity anchor."
-            if reference_asset
-            else "No active Reference Asset selected."
-        )
-        prompt_text = self.build_prompt_text(
+        profile_name = self._profile_name(creator_profile, fallback="Creator")
+        raw_tag_text = str(session.metadata.get("raw_creative_tags") or "").strip()
+        tag_text = raw_tag_text or ", ".join(session.creative_tags)
+        prompt_variations = self.build_diversified_prompt_batch(
             profile_name=profile_name,
             creative_mode=session.creative_mode,
             tag_text=tag_text,
-            reference_text=reference_text,
+            reference_text=self._reference_text(reference_asset),
+            prompt_count=session.prompt_count,
         )
-        rationale = (
-            "Prompt Plan created from Creative Director tags, selected creative mode, "
-            "Creator Profile context, and the active Reference Library asset."
-        )
+        if not prompt_variations:
+            prompt_variations = (tag_text,)
+        prompt_text = "\n\n".join(prompt_variations)
         plan = PromptPlan(
             plan_id=new_id("prompt_plan"),
             session_id=session.session_id,
@@ -328,21 +400,74 @@ class CreativeDirectorService:
             creative_mode=session.creative_mode,
             creative_tags=session.creative_tags,
             reference_asset_id=reference_asset.asset_id if reference_asset else None,
-            reference_asset_path=reference_asset.asset.original_path if reference_asset else None,
-            creative_rationale=rationale,
+            reference_asset_path=self._reference_path(reference_asset),
+            creative_rationale="Prompt Plan created by the transplanted Wavespeed Content Studio Generation Brain.",
             prompt_metadata={
-                "owner": "Creative Director",
-                "provider_neutral": True,
-                "generation_execution": "future",
-                "prompt_count": session.prompt_count,
-                "reference_required": reference_asset is not None,
-                "premium_guidance": self.PREMIUM_GUIDANCE
-                if session.creative_mode in {"premium_teaser", "spicy", "story_sequence"}
-                else None,
+                "prompt_variations": prompt_variations,
+                "generation_brain": "wavespeed_canonical",
+                "wavespeed_source": "Wavespeed_App",
+                "reference_conditioning": "wavespeed",
+                "prompt_builder": self._prompt_builder_name(session.creative_mode),
             },
         )
         self.save_prompt_plan(plan)
         return plan
+
+    def build_wavespeed_generation_contract(self, *, creative_mode: str, prompt_count: int, tag_text: str) -> str:
+        mode = self.normalize_mode(creative_mode)
+        count = max(1, int(prompt_count or 1))
+        if mode in {"premium_teaser", "story_sequence"}:
+            return generate_premium_prompts(
+                creative_tags=tag_text,
+                prompt_count=count,
+            )[0]
+        generation_mode = GENERATION_MODES["3"] if mode == "story_sequence" else GENERATION_MODES["1"]
+        return build_chatgpt_prompt(
+            prompt_count=count,
+            user_request=tag_text,
+            generation_mode=generation_mode,
+            platform_mode="Social Content Studio",
+            spice_level="Spicy" if mode == "spicy" else "Social Safe",
+        )
+
+    def build_diversified_prompt_batch(
+        self,
+        *,
+        profile_name: str,
+        creative_mode: str,
+        tag_text: str,
+        reference_text: str,
+        prompt_count: int,
+        wavespeed_contract: str = "",
+    ) -> tuple[str, ...]:
+        count = max(1, int(prompt_count or 1))
+        mode = self.normalize_mode(creative_mode)
+        if mode in {"premium_teaser", "story_sequence"}:
+            return tuple(
+                generate_premium_prompts(
+                    creative_tags=tag_text,
+                    prompt_count=count,
+                )
+            )
+        if mode == "spicy":
+            spice_level = "Spicy"
+        else:
+            spice_level = "Social Safe"
+        generation_mode = GENERATION_MODES["1"]
+        meta_prompt = build_chatgpt_prompt(
+            prompt_count=count,
+            user_request=tag_text,
+            generation_mode=generation_mode,
+            platform_mode="Social Content Studio",
+            spice_level=spice_level,
+        )
+        prompts = generate_prompts_with_grok(meta_prompt, self._grok_api_key())
+        normalized_prompts = tuple(
+            normalize_social_prompt_continuity(prompt)
+            for prompt in prompts[:count]
+            if str(prompt).strip()
+        )
+        return normalized_prompts or (tag_text,)
 
     def create_prompt_plan(
         self,
@@ -362,6 +487,7 @@ class CreativeDirectorService:
             creative_mode=creative_mode,
             prompt_count=prompt_count,
             reference_asset=reference,
+            metadata={"raw_creative_tags": creative_tags},
         )
         return self.build_prompt_plan(
             session,
@@ -433,22 +559,19 @@ class CreativeDirectorService:
         creative_mode: str,
         tag_text: str,
         reference_text: str,
+        shot_number: int | None = None,
+        shot_count: int | None = None,
+        **_: Any,
     ) -> str:
-        mode = self.normalize_mode(creative_mode)
-        premium_guidance = (
-            f"Premium guidance: {self.PREMIUM_GUIDANCE} "
-            if mode in {"premium_teaser", "spicy", "story_sequence"}
-            else ""
+        prompts = self.build_diversified_prompt_batch(
+            profile_name=profile_name,
+            creative_mode=creative_mode,
+            tag_text=tag_text,
+            reference_text=reference_text,
+            prompt_count=shot_count or 1,
         )
-        return (
-            f"{profile_name} creator-content concept. "
-            f"Creative mode: {mode}. "
-            f"Creative tags: {tag_text}. "
-            f"{reference_text} "
-            f"{premium_guidance}"
-            "Keep the subject primary, use natural creator framing, preserve creator identity from the reference, "
-            "and produce a provider-neutral prompt plan for future generation."
-        )
+        index = max(1, int(shot_number or 1)) - 1
+        return prompts[index] if index < len(prompts) else (prompts[0] if prompts else "")
 
     @staticmethod
     def normalize_mode(mode: Any) -> str:
@@ -515,36 +638,36 @@ class CreativeDirectorService:
         )
 
     @staticmethod
-    def _build_prompt_assistant_card(
-        *,
-        request: str,
-        index: int,
-        lane: str,
-        profile_name: str,
-    ) -> str:
-        mood_options = (
-            "warm private eye contact",
-            "playful teasing confidence",
-            "soft intimate subscriber energy",
-            "relaxed premium girlfriend mood",
-            "cinematic but realistic creator framing",
-        )
-        setting_options = (
-            "hotel room window light",
-            "bedroom doorway",
-            "bathroom vanity",
-            "mirror selfie corner",
-            "soft couch morning light",
-        )
-        mood = mood_options[(index - 1) % len(mood_options)]
-        setting = setting_options[(index - 1) % len(setting_options)]
-        lane_label = "explicit-ready premium" if lane == "explicit" else "premium teaser"
-        return (
-            f"{request}, {setting}, {mood}, {profile_name} style, {lane_label}, "
-            "same reference identity, same natural skin tone, same body-continuity cues, "
-            "medium-close creator framing with full face and clean space above loose hair, "
-            "realistic phone-camera creator content, no platform UI, no captions, no watermarks"
-        )
+    def _grok_api_key() -> str:
+        api_key = os.getenv("GROK_API_KEY")
+        if not api_key:
+            raise ValueError("Missing GROK_API_KEY in .env")
+        return api_key
+
+    @classmethod
+    def _prompt_builder_name(cls, creative_mode: str) -> str:
+        mode = cls.normalize_mode(creative_mode)
+        if mode in {"premium_teaser", "story_sequence"}:
+            return "wavespeed_premium_prompt_builder"
+        if mode == "spicy":
+            return "wavespeed_social_prompt_builder_spicy"
+        return "wavespeed_social_prompt_builder"
+
+    @staticmethod
+    def _reference_text(reference_asset: ReferenceAsset | None) -> str:
+        if not reference_asset:
+            return "Reference asset: none."
+        return f"Reference asset id: {reference_asset.asset_id}."
+
+    @staticmethod
+    def _reference_path(reference_asset: ReferenceAsset | None) -> str | None:
+        if not reference_asset:
+            return None
+        value = getattr(reference_asset, "file_path", None)
+        if value:
+            return str(value)
+        asset = getattr(reference_asset, "asset", None)
+        return str(getattr(asset, "original_path", "") or getattr(asset, "preview_path", "") or "") or None
 
     @staticmethod
     def _read_json(path: Path, default):

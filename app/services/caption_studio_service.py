@@ -3,10 +3,16 @@
 from __future__ import annotations
 
 import json
+import base64
+import os
 from dataclasses import asdict, replace
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Callable, Mapping
+from urllib.parse import urlparse
 
+import requests
+
+from app.config import GROK_VISION_MODEL
 from app.models.caption_studio import (
     CaptionHistory,
     CaptionPlatform,
@@ -17,7 +23,9 @@ from app.models.caption_studio import (
     CaptionTemplate,
 )
 from app.models.generation_engine import new_generation_id, utc_now
+from app.services.caption_prompt_guidance import NATURAL_EMOJI_INSTRUCTION
 from app.services.generation_library_service import GenerationLibraryService
+from app.services.llm_json_parser import parse_llm_json
 from app.services.social_publishing_service import SocialPublishingService
 
 
@@ -26,8 +34,16 @@ class CaptionStudioService:
 
     DEFAULT_STORAGE_DIR = Path("data") / "caption_studio"
 
-    def __init__(self, *, storage_dir: str | Path | None = None):
+    def __init__(
+        self,
+        *,
+        storage_dir: str | Path | None = None,
+        grok_vision_provider: Callable[..., Mapping[str, Any]] | None = None,
+        http_client=None,
+    ):
         self.storage_dir = Path(storage_dir or self.DEFAULT_STORAGE_DIR)
+        self.grok_vision_provider = grok_vision_provider
+        self.http_client = http_client or requests
 
     @property
     def sessions_path(self) -> Path:
@@ -253,6 +269,231 @@ class CaptionStudioService:
         social_publishing.assign_caption(queue_item.queue_item_id, caption_id=result.caption_result_id)
         return result
 
+    def generate_x_engagement_themes(
+        self,
+        *,
+        generated_image_id: str,
+        image_reference: str,
+        creator_profile_id: int,
+        creator_profile: Mapping[str, Any] | None = None,
+        creative_mode: str | None = None,
+        prompt_text: str | None = None,
+        prompt_metadata: Mapping[str, Any] | None = None,
+        generation_metadata: Mapping[str, Any] | None = None,
+        theme_count: int = 2,
+        captions_per_theme: int = 5,
+        idea_seed: int = 0,
+    ) -> CaptionResult:
+        """Create Grok Vision-powered X caption personas for a generated image."""
+
+        grok_response = self._generate_grok_vision_x_captions(
+            image_reference=image_reference,
+            creator_profile=creator_profile,
+            creative_mode=creative_mode,
+            prompt_text=prompt_text,
+            prompt_metadata=prompt_metadata,
+            generation_metadata=generation_metadata,
+            idea_seed=idea_seed,
+        )
+        vision = dict(grok_response.get("image_analysis") or {})
+        themes = (
+            {
+                "theme": "❤️ Girlfriend Energy",
+                "persona": "girlfriend_energy",
+                "captions": tuple(grok_response["girlfriend_energy"]),
+            },
+            {
+                "theme": "😈 Teasing / Naughty",
+                "persona": "teasing_naughty",
+                "captions": tuple(grok_response["teasing_naughty"]),
+            },
+        )
+        variations = tuple(
+            caption
+            for theme in themes
+            for caption in tuple(theme.get("captions") or ())
+        )
+        creator_name = str((creator_profile or {}).get("name") or (creator_profile or {}).get("display_name") or "")
+        source_text = " | ".join(
+            value
+            for value in (
+                str(vision.get("summary") or ""),
+                creator_name,
+                str(creative_mode or ""),
+                str(prompt_text or ""),
+            )
+            if value
+        )
+        item = self.create_caption_request(
+            creator_profile_id=creator_profile_id,
+            platform=CaptionPlatform.X.value,
+            style=CaptionStyle.PLAYFUL.value,
+            tone="grok vision girlfriend energy and teasing naughty",
+            source_text=source_text,
+            variation_count=len(variations),
+            source_generated_image_id=generated_image_id,
+            metadata={
+                "workflow": "x_engagement_publish",
+                "vision_primary": True,
+                "vision_provider": "grok",
+                "context_priority": (
+                    "grok_vision_image_analysis",
+                    "creator_profile",
+                    "creative_mode",
+                    "prompt_context",
+                ),
+                "image_reference": image_reference,
+                "creative_mode": creative_mode,
+                "prompt_metadata": dict(prompt_metadata or {}),
+                "generation_metadata": dict(generation_metadata or {}),
+                "theme_count": 2,
+                "captions_per_theme": 5,
+                "idea_seed": idea_seed,
+            },
+        )
+        result = CaptionResult(
+            caption_result_id=new_generation_id("caption_result"),
+            caption_request_id=item.caption_request_id,
+            session_id=item.session_id,
+            platform=CaptionPlatform.X.value,
+            variations=variations,
+            selected_text=None,
+            formatter_metadata={
+                "provider_neutral": True,
+                "formatter": "CaptionStudioService",
+                "workflow": "x_engagement_publish",
+                "vision_primary": True,
+                "vision_provider": "grok",
+                "vision": vision,
+                "themes": themes,
+                "personas": {
+                    "girlfriend_energy": "❤️ Girlfriend Energy",
+                    "teasing_naughty": "😈 Teasing / Naughty",
+                },
+                "engagement_goals": (
+                    "replies",
+                    "conversations",
+                    "creator selects preferred caption",
+                ),
+            },
+        )
+        results = list(self.list_results())
+        results.insert(0, result)
+        self._write_results(results)
+        self._append_history(item, result)
+        return result
+
+    def generate_telegram_vision_themes(
+        self,
+        *,
+        generated_image_id: str,
+        image_reference: str,
+        creator_profile_id: int,
+        creator_profile: Mapping[str, Any] | None = None,
+        creative_mode: str | None = None,
+        prompt_text: str | None = None,
+        prompt_metadata: Mapping[str, Any] | None = None,
+        generation_metadata: Mapping[str, Any] | None = None,
+        idea_seed: int = 0,
+    ) -> CaptionResult:
+        """Create Grok Vision-powered Telegram caption personas for a generated image."""
+
+        grok_response = self._generate_grok_vision_telegram_captions(
+            image_reference=image_reference,
+            creator_profile=creator_profile,
+            creative_mode=creative_mode,
+            prompt_text=prompt_text,
+            prompt_metadata=prompt_metadata,
+            generation_metadata=generation_metadata,
+            idea_seed=idea_seed,
+        )
+        vision = dict(grok_response.get("image_analysis") or {})
+        themes = (
+            {
+                "theme": "❤️ Girlfriend Energy",
+                "persona": "girlfriend_energy",
+                "captions": tuple(grok_response["girlfriend_energy"]),
+            },
+            {
+                "theme": "😈 Naughty",
+                "persona": "naughty",
+                "captions": tuple(grok_response["naughty"]),
+            },
+        )
+        variations = tuple(
+            caption
+            for theme in themes
+            for caption in tuple(theme.get("captions") or ())
+        )
+        creator_name = str((creator_profile or {}).get("name") or (creator_profile or {}).get("display_name") or "")
+        source_text = " | ".join(
+            value
+            for value in (
+                str(vision.get("summary") or ""),
+                creator_name,
+                str(creative_mode or ""),
+                str(prompt_text or ""),
+            )
+            if value
+        )
+        item = self.create_caption_request(
+            creator_profile_id=creator_profile_id,
+            platform=CaptionPlatform.TELEGRAM.value,
+            style=CaptionStyle.DIRECT.value,
+            tone="grok vision girlfriend energy and naughty",
+            source_text=source_text or "Grok Vision Telegram caption set",
+            variation_count=len(variations),
+            source_generated_image_id=generated_image_id,
+            metadata={
+                "workflow": "telegram_publish",
+                "vision_primary": True,
+                "vision_provider": "grok",
+                "context_priority": (
+                    "grok_vision_image_analysis",
+                    "creator_profile",
+                    "creative_mode",
+                    "prompt_context",
+                ),
+                "image_reference": image_reference,
+                "creative_mode": creative_mode,
+                "prompt_metadata": dict(prompt_metadata or {}),
+                "generation_metadata": dict(generation_metadata or {}),
+                "theme_count": 2,
+                "captions_per_theme": 5,
+                "idea_seed": idea_seed,
+            },
+        )
+        result = CaptionResult(
+            caption_result_id=new_generation_id("caption_result"),
+            caption_request_id=item.caption_request_id,
+            session_id=item.session_id,
+            platform=CaptionPlatform.TELEGRAM.value,
+            variations=variations,
+            selected_text=None,
+            formatter_metadata={
+                "provider_neutral": True,
+                "formatter": "CaptionStudioService",
+                "workflow": "telegram_publish",
+                "vision_primary": True,
+                "vision_provider": "grok",
+                "vision": vision,
+                "themes": themes,
+                "personas": {
+                    "girlfriend_energy": "❤️ Girlfriend Energy",
+                    "naughty": "😈 Naughty",
+                },
+                "engagement_goals": (
+                    "creator selects preferred caption",
+                    "telegram publishing",
+                ),
+            },
+        )
+        results = list(self.list_results())
+        results.insert(0, result)
+        self._write_results(results)
+        self._append_history(item, result)
+        return result
+
     def save_template(self, template: CaptionTemplate) -> CaptionTemplate:
         templates = [item for item in self.list_templates() if item.template_id != template.template_id]
         templates.insert(0, template)
@@ -371,6 +612,594 @@ class CaptionStudioService:
         if platform == CaptionPlatform.STORY.value:
             return f"{text}. Built as a story description."
         return f"{text}. Marketing copy direction: {tone}."
+
+    def _generate_grok_vision_x_captions(
+        self,
+        *,
+        image_reference: str,
+        creator_profile: Mapping[str, Any] | None,
+        creative_mode: str | None,
+        prompt_text: str | None,
+        prompt_metadata: Mapping[str, Any] | None,
+        generation_metadata: Mapping[str, Any] | None,
+        idea_seed: int,
+    ) -> dict[str, Any]:
+        prompt = self._grok_vision_caption_prompt(
+            creator_profile=creator_profile,
+            creative_mode=creative_mode,
+            prompt_text=prompt_text,
+            prompt_metadata=prompt_metadata,
+            generation_metadata=generation_metadata,
+            idea_seed=idea_seed,
+        )
+        if self.grok_vision_provider is not None:
+            raw = self.grok_vision_provider(
+                image_reference=image_reference,
+                prompt=prompt,
+                creator_profile=creator_profile or {},
+                creative_mode=creative_mode,
+                prompt_text=prompt_text,
+                prompt_metadata=dict(prompt_metadata or {}),
+                generation_metadata=dict(generation_metadata or {}),
+                idea_seed=idea_seed,
+            )
+            return self._normalize_grok_vision_caption_response(raw)
+        return self._call_grok_vision_caption_api(
+            image_reference=image_reference,
+            prompt=prompt,
+        )
+
+    def _generate_grok_vision_telegram_captions(
+        self,
+        *,
+        image_reference: str,
+        creator_profile: Mapping[str, Any] | None,
+        creative_mode: str | None,
+        prompt_text: str | None,
+        prompt_metadata: Mapping[str, Any] | None,
+        generation_metadata: Mapping[str, Any] | None,
+        idea_seed: int,
+    ) -> dict[str, Any]:
+        prompt = self._grok_vision_telegram_caption_prompt(
+            creator_profile=creator_profile,
+            creative_mode=creative_mode,
+            prompt_text=prompt_text,
+            prompt_metadata=prompt_metadata,
+            generation_metadata=generation_metadata,
+            idea_seed=idea_seed,
+        )
+        if self.grok_vision_provider is not None:
+            raw = self.grok_vision_provider(
+                image_reference=image_reference,
+                prompt=prompt,
+                creator_profile=creator_profile or {},
+                creative_mode=creative_mode,
+                prompt_text=prompt_text,
+                prompt_metadata=dict(prompt_metadata or {}),
+                generation_metadata=dict(generation_metadata or {}),
+                idea_seed=idea_seed,
+                platform=CaptionPlatform.TELEGRAM.value,
+            )
+            return self._normalize_grok_vision_caption_response(raw, second_key="naughty", second_label="Naughty")
+        return self._call_grok_vision_caption_api(
+            image_reference=image_reference,
+            prompt=prompt,
+            second_key="naughty",
+            second_label="Naughty",
+        )
+
+    @staticmethod
+    def _grok_vision_caption_prompt(
+        *,
+        creator_profile: Mapping[str, Any] | None,
+        creative_mode: str | None,
+        prompt_text: str | None,
+        prompt_metadata: Mapping[str, Any] | None,
+        generation_metadata: Mapping[str, Any] | None,
+        idea_seed: int,
+    ) -> str:
+        creator_name = str(
+            (creator_profile or {}).get("name")
+            or (creator_profile or {}).get("display_name")
+            or "Ava"
+        )
+        return f"""
+You are Grok Vision writing X captions for {creator_name}.
+
+First analyze the attached image. The image is the primary source of truth.
+Identify only what is actually visible:
+- location
+- wardrobe
+- expression
+- body language
+- lighting
+- mood
+- environment
+- activity
+
+Do not hallucinate. Prompt metadata is secondary context only.
+
+Secondary context:
+Creative mode: {creative_mode or ""}
+Prompt text: {prompt_text or ""}
+Prompt metadata: {json.dumps(dict(prompt_metadata or {}), default=str)}
+Generation metadata: {json.dumps(dict(generation_metadata or {}), default=str)}
+Idea seed: {int(idea_seed or 0)}
+
+Return exactly valid JSON with this shape:
+{{
+  "image_analysis": {{
+    "location": "",
+    "wardrobe": "",
+    "expression": "",
+    "body_language": "",
+    "lighting": "",
+    "mood": "",
+    "environment": "",
+    "activity": ""
+  }},
+  "girlfriend_energy": ["", "", "", "", ""],
+  "teasing_naughty": ["", "", "", "", ""]
+}}
+
+❤️ Girlfriend Energy rules:
+- exactly 5 captions
+- write like a girlfriend
+- affectionate, warm, playful, flirty, intimate, feminine, cozy
+- "wish you were here" energy
+- emotionally engaging
+- never explicit
+
+😈 Teasing / Naughty rules:
+- exactly 5 captions
+- confident, teasing, mischievous, suggestive, flirty, cheeky, sexy
+- never graphic
+- never pornographic
+
+All captions:
+- must be based on what you see in the image
+- short enough for X
+- no hashtags
+- no mention of AI or generated images
+- no labels inside the caption text
+- make each caption feel like Ava is speaking directly to one guy
+- {NATURAL_EMOJI_INSTRUCTION}
+""".strip()
+
+    @staticmethod
+    def _grok_vision_telegram_caption_prompt(
+        *,
+        creator_profile: Mapping[str, Any] | None,
+        creative_mode: str | None,
+        prompt_text: str | None,
+        prompt_metadata: Mapping[str, Any] | None,
+        generation_metadata: Mapping[str, Any] | None,
+        idea_seed: int,
+    ) -> str:
+        creator_name = str(
+            (creator_profile or {}).get("name")
+            or (creator_profile or {}).get("display_name")
+            or "Ava"
+        )
+        return f"""
+You are Grok Vision writing Telegram captions for {creator_name}.
+
+First analyze the attached image. The image is the primary source of truth.
+Identify only what is actually visible:
+- location
+- wardrobe
+- expression
+- body language
+- lighting
+- mood
+- environment
+- activity
+
+Do not hallucinate. Prompt metadata is secondary context only.
+
+Secondary context:
+Creative mode: {creative_mode or ""}
+Prompt text: {prompt_text or ""}
+Prompt metadata: {json.dumps(dict(prompt_metadata or {}), default=str)}
+Generation metadata: {json.dumps(dict(generation_metadata or {}), default=str)}
+Idea seed: {int(idea_seed or 0)}
+
+Return exactly valid JSON with this shape:
+{{
+  "image_analysis": {{
+    "location": "",
+    "wardrobe": "",
+    "expression": "",
+    "body_language": "",
+    "lighting": "",
+    "mood": "",
+    "environment": "",
+    "activity": ""
+  }},
+  "girlfriend_energy": ["", "", "", "", ""],
+  "naughty": ["", "", "", "", ""]
+}}
+
+❤️ Girlfriend Energy rules:
+- exactly 5 captions
+- affectionate, warm, playful, girlfriend experience, intimate, emotionally engaging
+- short and natural
+- not explicit
+- not open-ended
+- not engagement bait
+
+😈 Naughty rules:
+- exactly 5 captions
+- teasing, confident, suggestive, sexy, playful, direct
+- intended to be consumed, not replied to
+- short and natural
+- not graphic
+- not pornographic
+- not open-ended
+- not engagement bait
+
+All captions:
+- must be based on what you see in the image
+- no hashtags
+- no mention of AI or generated images
+- no labels inside the caption text
+- {NATURAL_EMOJI_INSTRUCTION}
+""".strip()
+
+    def _call_grok_vision_caption_api(
+        self,
+        *,
+        image_reference: str,
+        prompt: str,
+        second_key: str = "teasing_naughty",
+        second_label: str = "Teasing / Naughty",
+    ) -> dict[str, Any]:
+        api_key = os.getenv("GROK_API_KEY", "").strip()
+        if not api_key:
+            raise ValueError("GROK_API_KEY is required for Grok Vision caption generation.")
+        try:
+            from openai import OpenAI
+        except ImportError as exc:
+            raise ValueError("openai package is required for Grok Vision caption generation.") from exc
+        client = OpenAI(
+            api_key=api_key,
+            base_url=os.getenv("GROK_BASE_URL", "https://api.x.ai/v1"),
+        )
+        response = client.responses.create(
+            model=GROK_VISION_MODEL,
+            input=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "input_text", "text": prompt},
+                        {
+                            "type": "input_image",
+                            "image_url": self._image_reference_for_grok(image_reference),
+                        },
+                    ],
+                }
+            ],
+            temperature=0.85,
+        )
+        raw_text = getattr(response, "output_text", "") or ""
+        payload = parse_llm_json(
+            raw_text,
+            model_name=GROK_VISION_MODEL,
+            caller="CaptionStudioService._call_grok_vision_caption_api",
+        )
+        return self._normalize_grok_vision_caption_response(
+            payload,
+            second_key=second_key,
+            second_label=second_label,
+        )
+
+    def _image_reference_for_grok(self, image_reference: str) -> str:
+        reference = str(image_reference or "").strip()
+        if not reference:
+            raise ValueError("Image reference is required for Grok Vision caption generation.")
+        parsed = urlparse(reference)
+        if parsed.scheme in {"http", "https", "data"}:
+            return reference
+        path = Path(reference).expanduser()
+        if not path.exists():
+            raise ValueError(f"Image file was not found for Grok Vision caption generation: {reference}")
+        suffix = path.suffix.lower()
+        mime_type = {
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".png": "image/png",
+            ".webp": "image/webp",
+        }.get(suffix, "image/jpeg")
+        return f"data:{mime_type};base64,{base64.b64encode(path.read_bytes()).decode('utf-8')}"
+
+    @staticmethod
+    def _normalize_grok_vision_caption_response(
+        raw: Mapping[str, Any],
+        *,
+        second_key: str = "teasing_naughty",
+        second_label: str = "Teasing / Naughty",
+    ) -> dict[str, Any]:
+        if not isinstance(raw, Mapping):
+            raise ValueError("Grok Vision caption response must be a mapping.")
+        girlfriend = CaptionStudioService._clean_caption_bucket(raw.get("girlfriend_energy"))
+        teasing = CaptionStudioService._clean_caption_bucket(raw.get(second_key))
+        if len(girlfriend) != 5:
+            raise ValueError("Grok Vision must return exactly 5 Girlfriend Energy captions.")
+        if len(teasing) != 5:
+            raise ValueError(f"Grok Vision must return exactly 5 {second_label} captions.")
+        analysis = raw.get("image_analysis") if isinstance(raw.get("image_analysis"), Mapping) else {}
+        return {
+            "image_analysis": dict(analysis or {}),
+            "girlfriend_energy": tuple(girlfriend),
+            second_key: tuple(teasing),
+        }
+
+    @staticmethod
+    def _clean_caption_bucket(value: Any) -> tuple[str, ...]:
+        if not isinstance(value, (list, tuple)):
+            return ()
+        cleaned = []
+        for caption in value:
+            text = " ".join(str(caption or "").split()).strip()
+            if not text:
+                continue
+            if text not in cleaned:
+                cleaned.append(text[:280])
+        return tuple(cleaned)
+
+    @staticmethod
+    def _infer_x_image_vision(
+        *,
+        image_reference: str,
+        creative_mode: str | None,
+        prompt_text: str | None,
+        prompt_metadata: Mapping[str, Any] | None,
+        generation_metadata: Mapping[str, Any] | None,
+        idea_seed: int,
+    ) -> dict[str, Any]:
+        reference_text = Path(str(image_reference or "")).stem.replace("_", " ").replace("-", " ")
+        prompt_hint = " ".join(
+            str(value)
+            for value in (
+                prompt_text or "",
+                " ".join(str(tag) for tag in (prompt_metadata or {}).get("creative_tags") or ()),
+                str((generation_metadata or {}).get("workflow_type") or ""),
+                str(creative_mode or ""),
+            )
+            if value
+        )
+        searchable = f"{reference_text} {prompt_hint}".lower()
+        scene_signals = (
+            ("mirror", "mirror selfie energy", "the kind of look that makes him answer too fast"),
+            ("window", "soft window light", "a quiet moment with a little trouble in it"),
+            ("door", "doorway moment", "walking in right when the room gets interesting"),
+            ("bed", "bedroom softness", "lazy confidence with a teasing edge"),
+            ("couch", "cozy lounge scene", "comfortable enough to stay awhile"),
+            ("kitchen", "kitchen-at-home moment", "casual enough to feel real"),
+            ("coffee", "coffee-date warmth", "morning banter made personal"),
+            ("beach", "sunny outdoor glow", "vacation confidence with a wink"),
+            ("lake", "lake-day glow", "sunlight and playful eye contact"),
+            ("boat", "boat-day glow", "sunlight and playful eye contact"),
+            ("pool", "poolside glow", "sunlight and playful eye contact"),
+            ("car", "car-shot spontaneity", "caught-between-plans energy"),
+            ("truck", "truck-shot spontaneity", "caught-between-plans energy"),
+            ("hotel", "hotel-room polish", "a getaway scene with a secret-smile mood"),
+            ("balcony", "balcony view", "fresh-air flirtation"),
+            ("camera", "camera-ready moment", "playful photographer energy"),
+        )
+        scene = "photo moment"
+        mood = "confident, feminine, teasing, approachable"
+        scene_key = "default"
+        for key, candidate_scene, candidate_mood in scene_signals:
+            if key in searchable:
+                scene_key = key
+                scene = candidate_scene
+                mood = candidate_mood
+                break
+        focus = "her expression, pose, setting, and the visible little story in the image"
+        return {
+            "summary": f"{scene}; {mood}",
+            "scene": scene,
+            "scene_key": scene_key,
+            "mood": mood,
+            "focus": focus,
+            "image_reference": image_reference,
+            "vision_primary": True,
+            "idea_seed": int(idea_seed or 0),
+        }
+
+    @staticmethod
+    def _build_x_engagement_themes(
+        *,
+        vision: Mapping[str, Any],
+        theme_count: int,
+        captions_per_theme: int,
+        idea_seed: int,
+    ) -> tuple[dict[str, Any], ...]:
+        scene = str(vision.get("scene") or "photo moment")
+        mood = str(vision.get("mood") or "confident and teasing")
+        scene_key = str(vision.get("scene_key") or "default")
+        pools = (
+            {
+                "theme": "Make Him Answer",
+                "captions": (
+                    f"Be honest... what would you say if you walked into this {scene}?",
+                    "You get one sentence to impress me. What is it?",
+                    "I feel like you have something clever to say here. Prove me right.",
+                    "First thought, no overthinking.",
+                ),
+            },
+            {
+                "theme": "Playful Challenge",
+                "captions": (
+                    "Caption this like you are trying to make me laugh.",
+                    "Wrong answers only... what is happening here?",
+                    "You can look, but can you keep up?",
+                    "Tell me the move. Smooth or dangerous?",
+                ),
+            },
+            {
+                "theme": "One-on-One Tease",
+                "captions": (
+                    f"This feels like I caught you staring at the {mood} part.",
+                    "I know exactly what you noticed first.",
+                    "Careful. I might ask what you are thinking.",
+                    "This is me pretending I do not know you paused.",
+                ),
+            },
+            {
+                "theme": "Conversation Starter",
+                "captions": (
+                    "Pick the vibe: sweet, trouble, or both?",
+                    "Would you stay quiet here or say something bold?",
+                    "Tell me what this moment needs next.",
+                    "What song is playing in this scene?",
+                ),
+            },
+            {
+                "theme": "Bookmark Energy",
+                "captions": (
+                    "Saving this mood for later feels reasonable.",
+                    "This is your reminder to enjoy the view.",
+                    "A little confidence, a little softness, and a very good reason to linger.",
+                    "Keep this one where you can find it again.",
+                ),
+            },
+            {
+                "theme": "Quote Post Bait",
+                "captions": (
+                    "Quote this with the line you would use.",
+                    "Quote this with the most honest thought you had.",
+                    "Quote this like you are trying not to flirt.",
+                    "Quote this with your best excuse for being distracted.",
+                ),
+            },
+        )
+        start = int(idea_seed or 0) % len(pools)
+        ordered = pools[start:] + pools[:start]
+        selected = []
+        for theme in ordered[:theme_count]:
+            captions = tuple(
+                CaptionStudioService._decorate_x_engagement_caption(
+                    caption=str(caption),
+                    theme=str(theme["theme"]),
+                    scene_key=scene_key,
+                    scene=scene,
+                )
+                for caption in theme["captions"][:captions_per_theme]
+            )
+            selected.append(
+                {
+                    "theme": theme["theme"],
+                    "vision_signal": scene,
+                    "emoji_context": scene_key,
+                    "captions": captions,
+                }
+            )
+        return tuple(selected)
+
+    @staticmethod
+    def _decorate_x_engagement_caption(
+        *,
+        caption: str,
+        theme: str,
+        scene_key: str,
+        scene: str,
+    ) -> str:
+        clean = " ".join(str(caption or "").split()).strip()
+        if not clean:
+            return ""
+        emojis = CaptionStudioService._x_engagement_emojis(
+            caption=clean,
+            theme=theme,
+            scene_key=scene_key,
+            scene=scene,
+        )
+        if not emojis:
+            return clean[:280]
+        text = f"{clean} {''.join(emojis)}"
+        return text[:280].rstrip()
+
+    @staticmethod
+    def _x_engagement_emojis(
+        *,
+        caption: str,
+        theme: str,
+        scene_key: str,
+        scene: str,
+    ) -> tuple[str, ...]:
+        text = f"{caption} {theme} {scene} {scene_key}".lower()
+        setting = {
+            "beach": "🌊",
+            "lake": "🌊",
+            "boat": "🚤",
+            "pool": "☀️",
+            "coffee": "☕",
+            "kitchen": "☕",
+            "couch": "🛋️",
+            "bed": "🌙",
+            "mirror": "🫣",
+            "window": "☀️",
+            "door": "😏",
+            "balcony": "🌅",
+            "car": "🛻",
+            "truck": "🛻",
+            "camera": "📸",
+            "hotel": "🌙",
+        }.get(scene_key)
+        selected: list[str] = []
+        if setting:
+            selected.append(setting)
+        if any(word in text for word in ("photographer", "camera", "shot", "smile")) and "📸" not in selected:
+            selected.append("📸")
+        if any(word in text for word in ("laugh", "wrong answers", "caption this", "snacks")):
+            selected.append("😂" if "😂" not in selected else "🤭")
+        elif any(word in text for word in ("be honest", "staring", "paused", "careful", "come in", "walked into")):
+            selected.append("👀" if "👀" not in selected else "😏")
+        elif any(word in text for word in ("impress", "bold", "say", "thinking", "flirt")):
+            selected.append("😉" if "😉" not in selected else "😏")
+        elif any(word in text for word in ("sweet", "softness", "saving", "view")):
+            selected.append("☺️" if "☺️" not in selected else "💕")
+        if CaptionStudioService._should_add_reply_cue(caption=caption, theme=theme):
+            cue = "👇"
+            if any(emoji in selected for emoji in ("👀", "😏", "😂")):
+                cue = "👇"
+            if cue not in selected:
+                selected.append(cue)
+        deduped = []
+        for emoji in selected:
+            if emoji and emoji not in deduped:
+                deduped.append(emoji)
+            if len(deduped) == 3:
+                break
+        if not deduped:
+            deduped = ["👀", "👇"]
+        return tuple(deduped[:3])
+
+    @staticmethod
+    def _should_add_reply_cue(*, caption: str, theme: str) -> bool:
+        text = f"{caption} {theme}".lower()
+        return (
+            "?" in caption
+            or any(
+                phrase in text
+                for phrase in (
+                    "make him answer",
+                    "playful challenge",
+                    "one-on-one tease",
+                    "conversation starter",
+                    "quote post bait",
+                    "be honest",
+                    "tell me",
+                    "pick",
+                    "quote this",
+                    "caption this",
+                    "first thought",
+                    "one sentence",
+                    "wrong answers",
+                )
+            )
+        )
 
     @staticmethod
     def _session_from_dict(data: Mapping[str, Any]) -> CaptionSession:

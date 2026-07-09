@@ -16,6 +16,7 @@ from app.models.generation_library import (
     GenerationLibraryFilter,
     GenerationLibraryResult,
 )
+from app.services.content_archive_service import ContentArchiveService
 from app.services.generation_engine_service import GenerationEngineService
 from app.services.generation_result_ingestion_service import GenerationResultIngestionService
 
@@ -25,8 +26,14 @@ class GenerationLibraryService:
 
     DEFAULT_STORAGE_DIR = Path("data") / "generation_library"
 
-    def __init__(self, *, storage_dir: str | Path | None = None):
+    def __init__(
+        self,
+        *,
+        storage_dir: str | Path | None = None,
+        archive_service: ContentArchiveService | None = None,
+    ):
         self.storage_dir = Path(storage_dir or self.DEFAULT_STORAGE_DIR)
+        self.archive_service = archive_service or ContentArchiveService()
 
     @property
     def records_path(self) -> Path:
@@ -40,12 +47,28 @@ class GenerationLibraryService:
             (record.generation_job_id, record.output_reference)
             for record in records
         }
+        existing_source_keys = {
+            (
+                record.generation_job_id,
+                str(record.generation_metadata.get("original_output_reference") or record.output_reference),
+            )
+            for record in records
+        }
+        archived_output_references = {
+            record.original_output_reference
+            for record in self.archive_service.list_records()
+        }
         created = []
         for output_reference in job.result.output_references:
             key = (job.job_id, output_reference)
-            if key in existing_keys:
+            if (
+                key in existing_keys
+                or key in existing_source_keys
+                or output_reference in archived_output_references
+            ):
                 continue
             record = self._record_from_job(job, output_reference)
+            record = self.archive_service.materialize_generation(record)
             records.append(record)
             created.append(record)
         if created:
@@ -66,11 +89,12 @@ class GenerationLibraryService:
         search = str(filters.search or "").strip().lower()
         records = []
         for record in self.list_records():
+            target_status = filters.status if filters.status is not None else "active"
             if filters.creator_profile_id is not None and record.creator_profile_id != int(filters.creator_profile_id):
                 continue
             if filters.provider_id and record.provider_id != filters.provider_id:
                 continue
-            if filters.status and record.status != filters.status:
+            if target_status and record.status != target_status:
                 continue
             if filters.creative_mode and record.creative_mode != filters.creative_mode:
                 continue
@@ -118,19 +142,89 @@ class GenerationLibraryService:
         return self.select(tuple(record.image_id for record in result.records), selected=True)
 
     def move_to_junk(self, image_ids: Iterable[str]) -> GenerationLibraryActionResult:
-        return self._set_status(image_ids, status="junk", message="Generated image(s) moved to Junk.")
+        return self.delete(image_ids)
 
     def archive(self, image_ids: Iterable[str]) -> GenerationLibraryActionResult:
-        return self._set_status(image_ids, status="archived", message="Generated image(s) archived.")
+        ids = tuple(str(image_id) for image_id in image_ids)
+        records_by_id = {record.image_id: record for record in self.list_records()}
+        archived = []
+        errors = []
+        for image_id in ids:
+            record = records_by_id.get(image_id)
+            if not record:
+                errors.append(f"Generated image not found: {image_id}")
+                continue
+            try:
+                self.archive_service.archive_record(
+                    record,
+                    archive_type="archived",
+                    destination=self.archive_service.content_paths()["archive_junk"],
+                    metadata={"archive_reason": "manual_archive"},
+                )
+                archived.append(image_id)
+            except Exception as exc:
+                errors.append(str(exc))
+        if archived:
+            self._remove_records(archived)
+        return GenerationLibraryActionResult(
+            success=not errors,
+            message="Generated image(s) archived." if not errors else "Some generated images could not be archived.",
+            image_ids=tuple(archived),
+            errors=tuple(errors),
+        )
 
     def restore(self, image_ids: Iterable[str]) -> GenerationLibraryActionResult:
-        return self._set_status(image_ids, status="active", message="Generated image(s) restored.")
+        ids = tuple(str(image_id) for image_id in image_ids)
+        restored = []
+        errors = []
+        records = list(self.list_records())
+        existing_ids = {record.image_id for record in records}
+        for image_id in ids:
+            if image_id in existing_ids:
+                records = [
+                    replace(record, status="active", review_state="restored", selected=False, updated_at=utc_now())
+                    if record.image_id == image_id else record
+                    for record in records
+                ]
+                restored.append(image_id)
+                continue
+            try:
+                records.append(self.archive_service.restore_junk(image_id))
+                restored.append(image_id)
+            except Exception as exc:
+                errors.append(str(exc))
+        if restored:
+            self._write_records(records)
+        return GenerationLibraryActionResult(
+            success=not errors,
+            message="Generated image(s) restored.",
+            image_ids=tuple(restored),
+            errors=tuple(errors),
+        )
 
     def delete(self, image_ids: Iterable[str]) -> GenerationLibraryActionResult:
         ids = tuple(str(image_id) for image_id in image_ids)
-        records = [record for record in self.list_records() if record.image_id not in ids]
-        self._write_records(records)
-        return GenerationLibraryActionResult(True, "Generated image record(s) deleted.", ids)
+        records_by_id = {record.image_id: record for record in self.list_records()}
+        junked = []
+        errors = []
+        for image_id in ids:
+            record = records_by_id.get(image_id)
+            if not record:
+                errors.append(f"Generated image not found: {image_id}")
+                continue
+            try:
+                self.archive_service.archive_junk(record, metadata={"archive_reason": "delete"})
+                junked.append(image_id)
+            except Exception as exc:
+                errors.append(str(exc))
+        if junked:
+            self._remove_records(junked)
+        return GenerationLibraryActionResult(
+            success=not errors,
+            message="Generated image(s) moved to Archive/Junk.",
+            image_ids=tuple(junked),
+            errors=tuple(errors),
+        )
 
     def regenerate(
         self,
@@ -215,15 +309,15 @@ class GenerationLibraryService:
                     raise RuntimeError("; ".join(ingestion.errors) or "Generation output was not imported.")
                 asset_id = int(ingestion.imported_asset_ids[0])
                 imported_asset_ids.append(asset_id)
-                self._replace_record(
-                    replace(
-                        record,
-                        status="added_to_creator_os",
-                        review_state="added_to_creator_os",
-                        imported_asset_id=asset_id,
-                        updated_at=utc_now(),
-                    )
+                archived_record = replace(
+                    record,
+                    status="added_to_creator_os",
+                    review_state="added_to_creator_os",
+                    imported_asset_id=asset_id,
+                    updated_at=utc_now(),
                 )
+                self.archive_service.archive_imported(archived_record, imported_asset_id=asset_id)
+                self._remove_records((record.image_id,))
             except Exception as exc:
                 errors.append(str(exc))
         return GenerationLibraryActionResult(
@@ -231,6 +325,65 @@ class GenerationLibraryService:
             message="Generated image(s) added to Creator OS." if not errors else "Some generated images could not be added.",
             image_ids=selected_ids,
             imported_asset_ids=tuple(imported_asset_ids),
+            errors=tuple(errors),
+        )
+
+    def mark_published(
+        self,
+        image_id: str,
+        *,
+        platform: str,
+        caption: str | None = None,
+        metadata: Mapping[str, Any] | None = None,
+    ) -> GenerationLibraryActionResult:
+        try:
+            record = self.get(image_id)
+            self.archive_service.archive_published(
+                record,
+                platform=platform,
+                caption=caption,
+                metadata=metadata,
+            )
+            self._remove_records((image_id,))
+        except Exception as exc:
+            return GenerationLibraryActionResult(
+                success=False,
+                message="Generated image could not be archived after publish.",
+                image_ids=(str(image_id),),
+                errors=(str(exc),),
+            )
+        return GenerationLibraryActionResult(
+            success=True,
+            message="Published image moved to Archive.",
+            image_ids=(str(image_id),),
+        )
+
+    def mark_edited(
+        self,
+        image_ids: Iterable[str],
+        *,
+        metadata: Mapping[str, Any] | None = None,
+    ) -> GenerationLibraryActionResult:
+        ids = tuple(str(image_id) for image_id in image_ids)
+        records_by_id = {record.image_id: record for record in self.list_records()}
+        archived = []
+        errors = []
+        for image_id in ids:
+            record = records_by_id.get(image_id)
+            if not record:
+                errors.append(f"Generated image not found: {image_id}")
+                continue
+            try:
+                self.archive_service.archive_edited(record, metadata=metadata)
+                archived.append(image_id)
+            except Exception as exc:
+                errors.append(str(exc))
+        if archived:
+            self._remove_records(archived)
+        return GenerationLibraryActionResult(
+            success=not errors,
+            message="Edited original image(s) moved to Archive.",
+            image_ids=tuple(archived),
             errors=tuple(errors),
         )
 
@@ -263,6 +416,10 @@ class GenerationLibraryService:
     def _replace_record(self, updated: GeneratedImageRecord) -> None:
         records = [updated if record.image_id == updated.image_id else record for record in self.list_records()]
         self._write_records(records)
+
+    def _remove_records(self, image_ids: Iterable[str]) -> None:
+        ids = set(str(image_id) for image_id in image_ids)
+        self._write_records([record for record in self.list_records() if record.image_id not in ids])
 
     @staticmethod
     def _record_from_job(job: GenerationJob, output_reference: str) -> GeneratedImageRecord:

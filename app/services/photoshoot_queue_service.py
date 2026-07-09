@@ -91,7 +91,17 @@ class PhotoshootQueueService:
             creator_notes=creator_notes,
             creative_continuity={
                 "prompt_count": len(plans),
-                "continuity": "preserve reference identity and creative direction across ordered prompts",
+                "generation_mode_behavior": "photoshoot_queue",
+                "wavespeed_generation_mode_key": "photoshoot_set",
+                "continuity": (
+                    "Wavespeed Photoshoot Queue Mode: preserve the same selected-shot or requested location, "
+                    "wardrobe, lighting, mood, story, environment, camera style, and creative concept across "
+                    "ordered prompts. Vary only pose, camera angle, framing, crop, expression, hand placement, "
+                    "posture, distance from camera, eye contact, and body orientation."
+                ),
+                "normal_generation_boundary": (
+                    "Do not use normal generation scene-hopping here. Photoshoot Queue is the continuity workflow."
+                ),
                 **dict(creative_continuity or {}),
             },
             request_ids=tuple(request.request_id for request in requests),
@@ -134,6 +144,13 @@ class PhotoshootQueueService:
             metadata={
                 "source": "photoshoot_queue",
                 "workflow_type": "photoshoot",
+                "generation_mode_behavior": "photoshoot_queue",
+                "wavespeed_generation_mode_key": "photoshoot_set",
+                "wavespeed_mode_decision": (
+                    "Photoshoot Queue uses Wavespeed Photoshoot Set Mode: same environment, same wardrobe, "
+                    "same lighting, same mood, ordered progression. It must not use normal generation "
+                    "scene-hopping."
+                ),
                 "photoshoot_session_id": session.session_id,
                 "photoshoot_request_id": next_request.request_id,
                 "photoshoot_sequence_index": next_request.sequence_index,
@@ -411,6 +428,13 @@ class PhotoshootQueueService:
             creative_rationale="Prompt Plan queued by Photoshoot Queue for ordered session generation.",
             prompt_metadata={
                 "provider_neutral": True,
+                "generation_mode_behavior": "photoshoot_queue",
+                "wavespeed_generation_mode_key": "photoshoot_set",
+                "photoshoot_continuity": (
+                    "Maintain one continuous photoshoot: same location, same wardrobe, same lighting, same story, "
+                    "same environment, same mood; vary only pose, camera, framing, crop, expression, hand placement, "
+                    "posture, distance, eye contact, and body orientation."
+                ),
                 "photoshoot_session_id": request.session_id,
                 "photoshoot_request_id": request.request_id,
                 **dict(request.metadata.get("prompt_metadata") or {}),

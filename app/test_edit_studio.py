@@ -36,6 +36,7 @@ from app.models.generation_engine import (
     GenerationStatus,
 )
 from app.models.generation_library import GeneratedImageRecord
+from app.services.content_archive_service import ContentArchiveService
 from app.services.edit_studio_service import EditStudioService
 from app.services.generation_library_service import GenerationLibraryService
 
@@ -138,12 +139,32 @@ class FakeGenerationEngine:
         )
 
 
+class FakeArchiveResponse:
+    content = b"fake-image"
+
+    def raise_for_status(self):
+        return None
+
+
+class FakeArchiveHttp:
+    def get(self, url, **kwargs):
+        return FakeArchiveResponse()
+
+
 class EditStudioTests(unittest.TestCase):
     def make_services(self):
         temp_dir = tempfile.TemporaryDirectory()
         self.addCleanup(temp_dir.cleanup)
         edit_studio = EditStudioService(storage_dir=Path(temp_dir.name) / "edit")
-        generation_library = GenerationLibraryService(storage_dir=Path(temp_dir.name) / "library")
+        archive = ContentArchiveService(
+            storage_dir=Path(temp_dir.name) / "archive_data",
+            content_root=Path(temp_dir.name) / "Content",
+            http_client=FakeArchiveHttp(),
+        )
+        generation_library = GenerationLibraryService(
+            storage_dir=Path(temp_dir.name) / "library",
+            archive_service=archive,
+        )
         generation_library._write_records(
             [
                 generated_record("generated_image_1", output_reference="https://cdn.test/source.png"),
@@ -174,6 +195,9 @@ class EditStudioTests(unittest.TestCase):
         self.assertEqual(engine.calls[0]["metadata"]["edit_request_id"], edit_item.edit_request_id)
         self.assertEqual(engine.calls[0]["prompt_plan"].prompt_metadata["source_image_ids"], ("generated_image_1",))
         self.assertEqual(len(edit_studio.history(creator_profile_id=7)), 1)
+        with self.assertRaises(KeyError):
+            generation_library.get("generated_image_1")
+        self.assertEqual(len(generation_library.archive_service.list_records(archive_type="edited_original")), 1)
 
     def test_multi_edit_uses_reference_generated_image(self):
         edit_studio, generation_library = self.make_services()
@@ -247,8 +271,14 @@ class EditStudioTests(unittest.TestCase):
         records = generation_library.browse().records
 
         self.assertEqual(len(created), 1)
-        self.assertTrue(any(record.output_reference == "https://cdn.test/edited.png" for record in records))
-        edited = next(record for record in records if record.output_reference == "https://cdn.test/edited.png")
+        self.assertTrue(any("Generation" in record.output_reference for record in records))
+        edited = next(
+            record
+            for record in records
+            if record.generation_metadata.get("original_output_reference") == "https://cdn.test/edited.png"
+        )
+        self.assertTrue(Path(edited.output_reference).exists())
+        self.assertEqual(edited.generation_metadata["original_output_reference"], "https://cdn.test/edited.png")
         self.assertEqual(edited.generation_metadata["request_metadata"]["source"], "edit_studio")
 
     def test_edit_execution_returns_results_to_generation_library(self):
@@ -274,7 +304,9 @@ class EditStudioTests(unittest.TestCase):
 
         self.assertEqual(executed.status, GenerationStatus.SUCCEEDED.value)
         self.assertEqual(len(records), 1)
-        self.assertEqual(records[0].output_reference, "https://cdn.test/edited-live.png")
+        self.assertTrue(Path(records[0].output_reference).exists())
+        self.assertIn("Generation", records[0].output_reference)
+        self.assertEqual(records[0].generation_metadata["original_output_reference"], "https://cdn.test/edited-live.png")
         self.assertEqual(records[0].generation_metadata["workflow_type"], "edit")
 
     def test_edit_studio_ui_contract(self):
