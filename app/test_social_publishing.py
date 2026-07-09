@@ -37,7 +37,10 @@ from app.models.generation_library import GeneratedImageRecord
 from app.models.social_publishing import SocialPlatform, SocialPublishStatus
 from PIL import Image
 
+from app.providers.social import telegram_provider as telegram_provider_module
+from app.providers.social.telegram_provider import TelegramPublishingProvider
 from app.providers.social.x_provider import XPublishResult, XPublishingProvider
+from app.services.content_archive_service import ContentArchiveService
 from app.services.generation_library_service import GenerationLibraryService
 from app.services.social_publishing_service import SocialPublishingService
 
@@ -135,6 +138,54 @@ class FakeXProvider:
         )
 
 
+class FakeTelegramProvider:
+    def __init__(self, *, fail=False):
+        self.fail = fail
+        self.calls = []
+
+    def publish(
+        self,
+        *,
+        image_reference,
+        caption,
+        post_to="main",
+        cta_enabled=False,
+        cta_label="",
+        cta_url="",
+    ):
+        self.calls.append(
+            {
+                "image_reference": image_reference,
+                "caption": caption,
+                "post_to": post_to,
+                "cta_enabled": cta_enabled,
+                "cta_label": cta_label,
+                "cta_url": cta_url,
+            }
+        )
+        if self.fail:
+            raise RuntimeError("Telegram provider failed")
+        return SimpleNamespace(
+            success=True,
+            post_to=post_to,
+            provider_post_id="telegram_message_123",
+            message="Posted to Telegram.",
+            metadata={"status_code": 200},
+        )
+
+
+class FakeArchiveResponse:
+    content = b"fake-image"
+
+    def raise_for_status(self):
+        return None
+
+
+class FakeArchiveHttp:
+    def get(self, url, **kwargs):
+        return FakeArchiveResponse()
+
+
 class FakeTweepy:
     class OAuth1UserHandler:
         def __init__(self, *args):
@@ -155,15 +206,44 @@ class FakeTweepy:
             return SimpleNamespace(data={"id": "tweet_456", "text": text, "media_ids": media_ids})
 
 
+class FakeTelegramResponse:
+    status_code = 200
+    text = '{"ok": true}'
+
+    def json(self):
+        return {"ok": True, "result": {"message_id": 789}}
+
+
+class FakeTelegramHttp:
+    def __init__(self):
+        self.posts = []
+
+    def post(self, url, **kwargs):
+        self.posts.append((url, kwargs))
+        return FakeTelegramResponse()
+
+    def get(self, url, **kwargs):
+        return FakeArchiveResponse()
+
+
 class SocialPublishingTests(unittest.TestCase):
-    def make_services(self, *, x_provider=None):
+    def make_services(self, *, x_provider=None, telegram_provider=None):
         temp_dir = tempfile.TemporaryDirectory()
         self.addCleanup(temp_dir.cleanup)
-        generation_library = GenerationLibraryService(storage_dir=Path(temp_dir.name) / "library")
+        archive = ContentArchiveService(
+            storage_dir=Path(temp_dir.name) / "archive_data",
+            content_root=Path(temp_dir.name) / "Content",
+            http_client=FakeArchiveHttp(),
+        )
+        generation_library = GenerationLibraryService(
+            storage_dir=Path(temp_dir.name) / "library",
+            archive_service=archive,
+        )
         generation_library._write_records([generated_record()])
         social_publishing = SocialPublishingService(
             storage_dir=Path(temp_dir.name) / "social",
             x_provider=x_provider,
+            telegram_provider=telegram_provider,
         )
         return social_publishing, generation_library
 
@@ -216,17 +296,20 @@ class SocialPublishingTests(unittest.TestCase):
             generation_engine=FakeGenerationEngine(),
             ingestion_service=FakeIngestionService(),
         )
-        record = generation_library.get("generated_image_social_1")
 
         self.assertTrue(result.success)
         self.assertEqual(result.imported_asset_ids, (901,))
-        self.assertEqual(record.imported_asset_id, 901)
+        with self.assertRaises(KeyError):
+            generation_library.get("generated_image_social_1")
+        imported = generation_library.archive_service.list_records(archive_type="imported")[0]
+        self.assertEqual(imported.imported_asset_id, 901)
         self.assertTrue(any(entry.status == "sent_to_creator_os" for entry in social_publishing.list_history()))
 
     def test_platform_selection_and_session_models(self):
         social_publishing, generation_library = self.make_services()
         self.assertIn(SocialPlatform.BLUESKY.value, social_publishing.platform_options())
         self.assertIn(SocialPlatform.TIKTOK.value, social_publishing.platform_options())
+        self.assertIn(SocialPlatform.TELEGRAM.value, social_publishing.platform_options())
 
         item = social_publishing.create_queue_item(
             generated_image_id="generated_image_social_1",
@@ -303,6 +386,107 @@ class SocialPublishingTests(unittest.TestCase):
         self.assertTrue(result.success)
         self.assertEqual(result.provider_post_id, "tweet_456")
         self.assertEqual(result.provider_media_id, "media_456")
+
+    def test_telegram_provider_prepares_image_and_sends_photo_with_cta(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            image_path = Path(temp_dir) / "transparent.png"
+            Image.new("RGBA", (5000, 3000), (255, 0, 0, 128)).save(image_path)
+            http = FakeTelegramHttp()
+            provider = TelegramPublishingProvider(http_client=http)
+            values = {
+                "TELEGRAM_BOT_TOKEN_AVA": "bot-token",
+                "TELEGRAM_CHAT_ID_AVA": "main-chat",
+                "TELEGRAM_VAULT_CHANNEL_ID": "vault-chat",
+            }
+            old = {key: getattr(telegram_provider_module.settings, key) for key in values}
+            try:
+                for key, value in values.items():
+                    setattr(telegram_provider_module.settings, key, value)
+                result = provider.publish(
+                    image_reference=str(image_path),
+                    caption="Manual Telegram caption",
+                    post_to="vault",
+                    cta_enabled=True,
+                    cta_label="Open",
+                    cta_url="https://example.test",
+                )
+            finally:
+                for key, value in old.items():
+                    setattr(telegram_provider_module.settings, key, value)
+
+        self.assertTrue(result.success)
+        self.assertEqual(result.post_to, "vault")
+        url, kwargs = http.posts[0]
+        self.assertIn("/sendPhoto", url)
+        self.assertEqual(kwargs["data"]["chat_id"], "vault-chat")
+        self.assertEqual(kwargs["data"]["caption"], "Manual Telegram caption")
+        self.assertIn("reply_markup", kwargs["data"])
+        self.assertIn("photo", kwargs["files"])
+
+    def test_telegram_provider_reports_friendly_missing_configuration(self):
+        provider = TelegramPublishingProvider(http_client=FakeTelegramHttp())
+        old_token = telegram_provider_module.settings.TELEGRAM_BOT_TOKEN_AVA
+        try:
+            telegram_provider_module.settings.TELEGRAM_BOT_TOKEN_AVA = ""
+            with self.assertRaises(Exception) as caught:
+                provider.publish(caption="Manual Telegram caption")
+        finally:
+            telegram_provider_module.settings.TELEGRAM_BOT_TOKEN_AVA = old_token
+
+        self.assertIn("Telegram bot token is not configured.", str(caught.exception))
+
+    def test_telegram_cta_validation(self):
+        provider = TelegramPublishingProvider(http_client=FakeTelegramHttp())
+
+        with self.assertRaises(Exception):
+            provider.build_inline_keyboard(
+                cta_enabled=True,
+                cta_label="Open",
+                cta_url="not-a-url",
+            )
+
+    def test_telegram_publish_success_history_and_retry(self):
+        fake_telegram = FakeTelegramProvider()
+        social_publishing, generation_library = self.make_services(telegram_provider=fake_telegram)
+        item = social_publishing.create_queue_item(
+            generated_image_id="generated_image_social_1",
+            generation_library=generation_library,
+            platform=SocialPlatform.TELEGRAM.value,
+        )
+
+        posted = social_publishing.publish_now(
+            item.queue_item_id,
+            caption_text="Manual Telegram caption",
+            telegram_post_to="vault",
+            telegram_cta_enabled=True,
+            telegram_cta_label="Open",
+            telegram_cta_url="https://example.test",
+        )
+        archive = generation_library.mark_published(
+            item.generated_image_id,
+            platform=SocialPlatform.TELEGRAM.value,
+            caption="Manual Telegram caption",
+            metadata={"post_to": "vault", "social_queue_item_id": item.queue_item_id},
+        )
+        failed_service, failed_library = self.make_services(telegram_provider=FakeTelegramProvider(fail=True))
+        failed_item = failed_service.create_queue_item(
+            generated_image_id="generated_image_social_1",
+            generation_library=failed_library,
+            platform=SocialPlatform.TELEGRAM.value,
+        )
+        failed = failed_service.publish_now(failed_item.queue_item_id, caption_text="Manual Telegram caption")
+        retried = failed_service.retry_queue_item(failed_item.queue_item_id)
+
+        self.assertEqual(posted.status, SocialPublishStatus.POSTED.value)
+        self.assertEqual(fake_telegram.calls[0]["post_to"], "vault")
+        self.assertEqual(social_publishing.list_publish_items()[0].metadata["telegram_post_to"], "vault")
+        self.assertEqual(social_publishing.list_history()[0].status, SocialPublishStatus.POSTED.value)
+        self.assertTrue(archive.success)
+        archive_record = generation_library.archive_service.list_records(archive_type="published_telegram")[0]
+        self.assertIn("Telegram", archive_record.current_file_path)
+        self.assertIn("Vault", archive_record.current_file_path)
+        self.assertEqual(failed.status, SocialPublishStatus.FAILED.value)
+        self.assertEqual(retried.status, SocialPublishStatus.QUEUED.value)
 
     def test_x_publish_failure_and_retry(self):
         social_publishing, generation_library = self.make_services(x_provider=FakeXProvider(fail=True))

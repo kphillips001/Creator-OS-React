@@ -3,21 +3,25 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import os
+import re
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Any, Mapping, Protocol
+from typing import Any, Callable, Mapping, Protocol
 from urllib.parse import urlparse
 
 import requests
 
+from app.prompts.prompt_builder import SOCIAL_CLOSE_FRAMING_RENDER_LOCK
 from app.models.generation_engine import (
     GenerationRequest,
     GenerationResult,
     GenerationStatus,
     new_generation_id,
 )
+from app.services.wavespeed_premium_render_locks import enforce_premium_render_body_lock
 
 
 class GenerationProviderError(RuntimeError):
@@ -109,6 +113,87 @@ class WaveSpeedProviderBase(GenerationProvider):
     result_url_template = "https://api.wavespeed.ai/api/v3/predictions/{request_id}/result"
     api_key_env = "WAVESPEED_API_KEY"
     image_host_api_key_env = "IMGBB_API_KEY"
+    SOCIAL_RENDER_LOCK = SOCIAL_CLOSE_FRAMING_RENDER_LOCK
+    PREMIUM_RENDER_BODY_LOCK = """
+FINAL REFERENCE BODY LOCK - NON-NEGOTIABLE:
+Use the reference image as the identity, face, hair, skin-tone, body-size, body-shape, and bust-size source of truth only.
+Preserve the exact same woman, face, long dark loose hair, same natural sun-kissed skin tone as the reference image, body size, body weight, and recognizable silhouette.
+Hair must be worn down with a soft center part or natural side part, smooth flat natural top, and loose flowing dark hair over her shoulders or down her back.
+Keep the scalp area natural and low-profile, with no lifted tied hairstyle and no tall hair shape.
+Do not create a bun, hairbun, topknot, ponytail, updo, tied-up hair, piled hair, messy crown, lifted hair knot, or any tall hair shape.
+The top of her hair must remain smooth, flat, natural, and low-profile, with no raised tied silhouette.
+Do NOT copy the reference setting, location, background, water, boat, dock, railings, trees, cabin, rocks, room, furniture, props, lighting, outfit, pose, or camera angle unless the written prompt explicitly asks for those exact elements.
+The written prompt is the source of truth for generated scene, wardrobe, nudity state, shower/pool/bedroom/hotel/indoor/outdoor setting, pose, lighting, and background.
+If the prompt asks for shower, bathroom, bedroom, hotel, couch, pool, or any non-boat scene, do not include boat, lake, dock, marina, railing, cabin, natural-water background, or outdoor boat-deck elements from the reference image.
+If the written prompt asks for nude/topless/shower content, do not preserve clothing from the reference image.
+Preserve visibly large natural D-cup breasts with full volume, upper and lower fullness, rounded natural shape, bust projection, and natural cleavage when clothing or framing allows it.
+Do not reduce breast size, flatten the chest, hide bust volume, or make her appear smaller-busted.
+Preserve feminine hourglass body, same waist-to-hip proportions, hip width, thigh proportions, shoulder width, and bust-to-waist ratio.
+Preserve the reference skin tone exactly across face, chest, arms, waist, hips, and legs when visible; keep it natural, even, sun-kissed, and photorealistic.
+Use medium-close creator framing: close-medium, waist-up, head-to-hips, head-to-upper-thigh, upper-thigh, or intimate seated portrait framing.
+Keep her full face and full head inside frame with smooth natural hair top visible and clean headroom above hair.
+If the composition cannot fit face, smooth hair top, bust, waist, and hips at the requested crop distance, pull the camera back slightly.
+Reject wide bed shots, wide room shots, distant mattress compositions, distant full-body shots, scenery-dominant lake/pool/landscape shots, and any framing where environment dominates the creator.
+Unless the prompt explicitly asks for a wide shot, do not create a wide shot.
+Avoid cropped-off forehead, missing top of head, face pressed against the top edge, hair touching the border, tall hair shapes, and body cues cropped away.
+Do not use side/rear all-fours angles that hide or minimize the bust; if using side/rear body orientation, keep the chest, bust, face, and upper torso still visible and prominent.
+Preserve exact facial identity, facial structure, eyes, nose, lips, jawline, cheekbones, smile shape, and natural facial proportions.
+Keep the face photorealistic, natural, anatomically correct, and consistent with the selected expression variation.
+Avoid goofy, silly, cartoonish, distorted, uncanny, melted, asymmetrical, cross-eyed, or over-exaggerated facial expressions.
+""".strip()
+    WAN_BUST_VISIBILITY_LOCK = """
+WAN BUST VISIBILITY LOCK:
+Preserve visibly full natural D-cup breast volume, not a petite or minimized bust.
+Do not reduce, flatten, minimize, shrink, hide, or soften her bust size.
+When wearing bikini, lingerie, bra, crop top, fitted shirt, dress, bodysuit, swimwear, or tight clothing, show realistic fabric tension from full D-cup volume.
+Make cleavage, bust projection, rounded lower-breast fullness, upper-breast fullness, and cup fill clearly visible whenever framing and wardrobe allow it.
+Use torso angle, chest-forward posture, side angle, three-quarter angle, seated lean, or close upper-body crop to make bust size obvious.
+""".strip()
+    CLOTHED_PREMIUM_WARDROBE_LOCK = """
+CLOTHED PREMIUM WARDROBE LOCK - NON-NEGOTIABLE:
+This is a clothed premium teaser request, not a nude or topless request.
+The written outfit, clothing, lingerie, or wardrobe in the prompt is the source of truth and must remain visibly worn on the body.
+Do not remove the clothing. Do not replace the requested outfit with nudity, topless styling, bare breasts, visible nipples, robe-only styling, towel-only styling, sheets, censor objects, or a different garment category.
+If the prompt asks for a crop tank, skirt, shirt, dress, shorts, pants, bikini, lingerie, robe, or any other garment, render that garment clearly and consistently.
+Premium sensuality must come from pose, expression, camera distance, fabric fit, fabric texture, lighting, hand placement, and creator confidence while preserving the specified wardrobe.
+Bust volume may be visible only through realistic clothing fit, neckline, fabric tension, or cleavage allowed by the requested garment. Do not expose breasts unless the written prompt explicitly asks for topless, nude, or bare breasts.
+""".strip()
+    TOPLESS_RENDER_LOCK = """
+TOPLESS RENDER LOCK - NON-NEGOTIABLE:
+The requested image is topless. Do not add a bikini top, bra, lingerie top, swimsuit top, crop top, shirt, robe, towel, dress, or any upper-body clothing.
+Bare breasts and natural nipples must be clearly visible and unobstructed.
+Do not cover breasts with hair, arms, hands, furniture, sheets, pillows, props, water surface, fabric, shadows, or camera crop.
+Preserve visibly full natural D-cup breast volume with rounded upper and lower fullness, natural projection, visible cleavage, and consistent nipple placement in medium-close creator portrait crop.
+""".strip()
+    NUDE_GROOMING_RENDER_LOCK = """
+NUDE GROOMING LOCK - NON-NEGOTIABLE:
+If pubic area or lower nude body is visible, there must be no pubic hair.
+The pubic area must be fully smooth, hairless, and clean-shaven.
+Do not render a landing strip, stubble, trimmed pubic hair, shadow hair, peach fuzz, or visible pubic hair texture.
+""".strip()
+    WAVESPEED_SCENE_CAMERA_LOCK = """
+WAVESPEED SCENE AND CAMERA PARITY LOCK:
+The user's written prompt is the source of truth for scene, wardrobe, body state, pose, lighting, and background.
+Required user tags must remain mandatory; be creative only with pose, camera angle, framing, expression, lighting, environment detail, mood, and micro-action.
+Every generated image should feel like a real creator moment: candid timing, natural weight shift, imperfect posture, slight movement where natural, close creator-photo framing, handheld realism, realistic social-media crop, natural depth of field, and strong subject-background separation.
+Do not create fashion catalog, runway, studio glamour, professional campaign, luxury real-estate, scenery-first, architecture-first, travel-poster, distant full-body, or tiny-subject compositions.
+If a broad location is present, expand it into related micro-locations and interaction points; if a concrete location/body-state/time anchor is present, keep that anchor visible.
+Scene families available from Wavespeed include lake, beach, boat, dock, pool, porch, backyard, country roads, mountains, bookstore, coffee shop, brunch, bedroom, bathroom, kitchen, living room, couch, hotel, downtown, balcony, mirror area, gym, travel, seasonal, cabin, fireplace, window seat, garden path, field, trail overlook, private vacation room, and hotel lounge.
+""".strip()
+    EXPRESSION_PROFILES = (
+        (20, "relaxed natural smile, authentic creator smile, subtle warmth, relaxed cheeks, natural eye contact"),
+        (15, "neutral relaxed face, calm expression, direct eye contact, candid portrait energy"),
+        (15, "playful expression, teasing grin, amused smile, casual creator-photo energy"),
+        (10, "laughing naturally, caught mid-laugh, genuine happiness, spontaneous camera-roll moment"),
+        (10, "looking away thoughtfully, soft smile while looking off-camera, candid private moment"),
+        (10, "confident expression, confident eye contact, slight smile, relaxed self-assured presence"),
+        (10, "intimate bedroom eyes, soft seductive look, subtle intimacy, restrained private mood"),
+        (5, "parted lips, intimate expression, quiet close-camera connection"),
+        (5, "playful lower-lip bite, amused eyes, casual teasing energy"),
+    )
+    EXPLICIT_TERMS = ("explicit", "nude", "naked", "topless", "bare breasts", "visible nipples", "masturbation", "touching her vagina", "vulva", "clit", "pussy", "dildo", "toy", "insertion")
+    TOPLESS_TERMS = ("topless", "bare breasts", "bare breast", "no bra", "no bikini top", "no upper-body clothing", "upper body uncovered")
+    NUDE_LOWER_TERMS = ("nude", "naked", "fully nude", "completely nude", "bare body", "pubic area", "vulva", "clit", "pussy", "touching her vagina")
 
     def __init__(
         self,
@@ -153,18 +238,61 @@ class WaveSpeedProviderBase(GenerationProvider):
         self._api_key()
 
     def execute(self, request: GenerationRequest) -> GenerationResult:
+        return self.execute_with_progress(request)
+
+    def execute_with_progress(
+        self,
+        request: GenerationRequest,
+        progress_callback: Callable[..., None] | None = None,
+    ) -> GenerationResult:
         self.validate_request(request)
         submissions: list[ProviderSubmission] = []
         poll_results: list[ProviderPollResult] = []
         output_references: list[str] = []
-        for _index in range(max(1, int(request.image_count or 1))):
-            submission = self.submit_generation(request)
+        total = max(1, int(request.image_count or 1))
+        prompt_variations = self._prompt_variations(request)
+        for index in range(total):
+            request_for_image = replace(
+                request,
+                prompt_text=prompt_variations[index % len(prompt_variations)],
+                image_count=1,
+            )
+            if progress_callback:
+                progress_callback(
+                    current=index,
+                    total=total,
+                    message=f"Submitting image {index + 1} of {total}",
+                    output_references=tuple(output_references),
+                )
+            submission = self.submit_generation(request_for_image)
             submissions.append(submission)
+            if progress_callback:
+                progress_callback(
+                    current=index,
+                    total=total,
+                    message=f"Waiting for image {index + 1} of {total}",
+                    output_references=tuple(output_references),
+                )
             poll_result = self.poll_status(submission)
             poll_results.append(poll_result)
             if poll_result.status != GenerationStatus.SUCCEEDED.value:
-                return self.retrieve_result(request, submission, poll_result)
+                if progress_callback:
+                    progress_callback(
+                        current=len(output_references),
+                        total=total,
+                        message=poll_result.failure_reason or f"Image {index + 1} failed",
+                        output_references=tuple(output_references),
+                        failed=True,
+                    )
+                return self.retrieve_result(request_for_image, submission, poll_result)
             output_references.extend(poll_result.output_references)
+            if progress_callback:
+                progress_callback(
+                    current=min(index + 1, total),
+                    total=total,
+                    message=f"Image {index + 1} of {total} completed",
+                    output_references=tuple(output_references),
+                )
 
         first_submission = submissions[0]
         merged_poll = ProviderPollResult(
@@ -275,10 +403,151 @@ class WaveSpeedProviderBase(GenerationProvider):
 
     def build_payload(self, request: GenerationRequest) -> Mapping[str, Any]:
         return {
-            "prompt": request.prompt_text,
+            "prompt": self._render_prompt_text(request),
             "images": [self._provider_reference_image(request)],
             "output_format": str(request.metadata.get("output_format") or "png"),
         }
+
+    def _render_prompt_text(self, request: GenerationRequest) -> str:
+        prompt = str(request.prompt_text or "").strip()
+        metadata = request.metadata or {}
+        workflow = str(metadata.get("workflow_type") or metadata.get("source") or "").lower()
+        creative_mode = str(metadata.get("creative_mode") or "").lower()
+        locks = []
+        if "premium" in workflow or creative_mode in {"premium_teaser", "spicy", "story_sequence"}:
+            return enforce_premium_render_body_lock(prompt)
+        else:
+            locks.append(self.SOCIAL_RENDER_LOCK)
+        return f"{prompt}\n\n" + "\n\n".join(locks)
+
+    @staticmethod
+    def _prompt_variations(request: GenerationRequest) -> tuple[str, ...]:
+        prompt_metadata = request.metadata.get("prompt_metadata") or {}
+        candidates = (
+            request.metadata.get("prompt_variations")
+            or (prompt_metadata.get("prompt_variations") if isinstance(prompt_metadata, Mapping) else ())
+            or ()
+        )
+        prompts = tuple(str(prompt).strip() for prompt in candidates if str(prompt).strip())
+        return prompts or (request.prompt_text.strip(),)
+
+    @classmethod
+    def _contains_any(cls, prompt: str, terms: tuple[str, ...]) -> bool:
+        text = str(prompt or "").lower()
+        return any(term in text for term in terms)
+
+    @classmethod
+    def _references_explicit(cls, prompt: str) -> bool:
+        text = str(prompt or "").lower()
+        negated_phrases = (
+            "not explicit",
+            "non-explicit",
+            "no explicit",
+            "no nudity",
+            "no nude",
+            "no topless",
+            "no bare breasts",
+            "no visible nipples",
+            "without nudity",
+            "without topless",
+            "unless nudity was explicitly requested",
+            "unless they explicitly ask",
+            "unless the creator explicitly asks",
+            "unless the written prompt explicitly asks",
+        )
+        for phrase in negated_phrases:
+            text = text.replace(phrase, " ")
+        positive_patterns = (
+            r"(?<!no )(?<!not )(?<!without )\bnude\b",
+            r"(?<!no )(?<!not )(?<!without )\bnaked\b",
+            r"(?<!no )(?<!not )(?<!without )\btopless\b",
+            r"(?<!no )(?<!not )(?<!without )\bbare breasts?\b",
+            r"(?<!no )(?<!not )(?<!without )\bvisible nipples?\b",
+            r"\bmasturbation\b",
+            r"\btouching her vagina\b",
+            r"\bvulva\b",
+            r"\bclit\b",
+            r"\bpussy\b",
+            r"\bdildo\b",
+            r"\bsex toy\b",
+            r"\binsertion\b",
+        )
+        return any(re.search(pattern, text) for pattern in positive_patterns)
+
+    @classmethod
+    def _references_topless(cls, prompt: str) -> bool:
+        text = str(prompt or "").lower()
+        for phrase in (
+            "no topless",
+            "not topless",
+            "without topless",
+            "no bare breasts",
+            "no visible nipples",
+            "do not generate nudity, topless styling, bare breasts",
+            "unless the written prompt explicitly asks for topless",
+        ):
+            text = text.replace(phrase, " ")
+        return any(
+            re.search(pattern, text)
+            for pattern in (
+                r"(?<!no )(?<!not )(?<!without )\btopless\b",
+                r"(?<!no )(?<!not )(?<!without )\bbare breasts?\b",
+                r"(?<!no )(?<!not )(?<!without )\bvisible nipples?\b",
+                r"\bno upper-body clothing\b",
+                r"\bupper body uncovered\b",
+            )
+        )
+
+    @classmethod
+    def _references_nude_lower(cls, prompt: str) -> bool:
+        text = str(prompt or "").lower()
+        for phrase in (
+            "no nudity",
+            "no nude",
+            "not nude",
+            "without nudity",
+            "unless nudity was explicitly requested",
+            "unless they explicitly ask for nude",
+            "unless the written prompt explicitly asks",
+        ):
+            text = text.replace(phrase, " ")
+        return any(
+            re.search(pattern, text)
+            for pattern in (
+                r"(?<!no )(?<!not )(?<!without )\bnude\b",
+                r"(?<!no )(?<!not )(?<!without )\bnaked\b",
+                r"\bfully nude\b",
+                r"\bcompletely nude\b",
+                r"\bbare body\b",
+                r"\bpubic area\b",
+                r"\bvulva\b",
+                r"\bclit\b",
+                r"\bpussy\b",
+                r"\btouching her vagina\b",
+            )
+        )
+
+    @classmethod
+    def _explicit_expression_directive(cls, prompt: str) -> str:
+        digest = hashlib.sha256(str(prompt or "").strip().encode("utf-8")).digest()
+        bucket = int.from_bytes(digest[:8], "big") % 100
+        running = 0
+        selected = cls.EXPRESSION_PROFILES[-1][1]
+        for weight, profile in cls.EXPRESSION_PROFILES:
+            running += weight
+            if bucket < running:
+                selected = profile
+                break
+        return (
+            "EXPLICIT EXPRESSION VARIATION:\n"
+            f"Use this single selected expression profile only: {selected}.\n"
+            "Render it like a real creator camera-roll photo: candid, emotionally alive, slightly asymmetrical, "
+            "natural muscle tension, believable human expression, and creator taking her own photos. Avoid mannequin "
+            "face, pageant smile, frozen expression, identical smile repetition, plastic symmetry, and overacted performance.\n\n"
+            "EXPLICIT HAIR SHAPE LOCK:\n"
+            "Hair must be worn down naturally with a smooth flat natural top and loose dark hair flowing around her face, "
+            "over her shoulders, or down her back. No bun, topknot, ponytail, updo, tied-up hair, messy crown, or tall hair shape."
+        )
 
     def _api_key(self) -> str:
         api_key = self.api_key or os.getenv(self.api_key_env)

@@ -1,0 +1,178 @@
+[
+  {
+    "publish_request_id": "social_publish_item_698c75bd39a940e7a52461b85afa19ef",
+    "queue_item_id": "social_queue_item_d53a205869a34201879bc97b9f14074c",
+    "platform": "telegram",
+    "caption_id": "caption_result_5aa643274e9a4f71bf978e5454703df0",
+    "scheduled_for": null,
+    "status": "posted",
+    "created_at": "2026-07-09T00:22:25.413858",
+    "metadata": {
+      "posting_implemented": true,
+      "account_name": null,
+      "telegram_post_to": "main",
+      "provider_post_id": "80",
+      "provider_media_id": null,
+      "provider_output_url": null,
+      "provider_metadata": {
+        "status_code": 200,
+        "message_id": 80,
+        "response": {
+          "ok": true,
+          "result": {
+            "message_id": 80,
+            "sender_chat": {
+              "id": -1002507455539,
+              "title": "Ava Blackthorne",
+              "type": "channel"
+            },
+            "chat": {
+              "id": -1002507455539,
+              "title": "Ava Blackthorne",
+              "type": "channel"
+            },
+            "date": 1783556548,
+            "photo": [
+              {
+                "file_id": "AgACAgEAAyEGAASVdLwzAANQak7pw6_SMqhfwA5RF6oJfQ-tS2wAAuAMaxs5IXhGQyBYw78ZlLUBAAMCAANzAAM8BA",
+                "file_unique_id": "AQAD4AxrGzkheEZ4",
+                "file_size": 1663,
+                "width": 72,
+                "height": 90
+              },
+              {
+                "file_id": "AgACAgEAAyEGAASVdLwzAANQak7pw6_SMqhfwA5RF6oJfQ-tS2wAAuAMaxs5IXhGQyBYw78ZlLUBAAMCAANtAAM8BA",
+                "file_unique_id": "AQAD4AxrGzkheEZy",
+                "file_size": 18370,
+                "width": 255,
+                "height": 320
+              },
+              {
+                "file_id": "AgACAgEAAyEGAASVdLwzAANQak7pw6_SMqhfwA5RF6oJfQ-tS2wAAuAMaxs5IXhGQyBYw78ZlLUBAAMCAAN4AAM8BA",
+                "file_unique_id": "AQAD4AxrGzkheEZ9",
+                "file_size": 71550,
+                "width": 638,
+                "height": 800
+              },
+              {
+                "file_id": "AgACAgEAAyEGAASVdLwzAANQak7pw6_SMqhfwA5RF6oJfQ-tS2wAAuAMaxs5IXhGQyBYw78ZlLUBAAMCAAN5AAM8BA",
+                "file_unique_id": "AQAD4AxrGzkheEZ-",
+                "file_size": 142641,
+                "width": 1021,
+                "height": 1280
+              },
+              {
+                "file_id": "AgACAgEAAyEGAASVdLwzAANQak7pw6_SMqhfwA5RF6oJfQ-tS2wAAuAMaxs5IXhGQyBYw78ZlLUBAAMCAAN3AAM8BA",
+                "file_unique_id": "AQAD4AxrGzkheEZ8",
+                "file_size": 471034,
+                "width": 1888,
+                "height": 2368
+              }
+            ],
+            "caption": "Leaning over this counter in nothing but an open shirt \ud83d\ude0f sunlight does all the talking"
+          }
+        },
+        "post_to": "main"
+      }
+    }
+  },
+  {
+    "publish_request_id": "social_publish_item_d01c710a15c64ac6a85a9e5be94ab534",
+    "queue_item_id": "social_queue_item_d53a205869a34201879bc97b9f14074c",
+    "platform": "telegram",
+    "caption_id": "caption_result_d8d6a03d52f24338a38208a3e91950e2",
+    "scheduled_for": null,
+    "status": "failed",
+    "created_at": "2026-07-08T22:22:26.249033",
+    "metadata": {
+      "posting_implemented": true,
+      "account_name": null,
+      "caption_id": "caption_result_d8d6a03d52f24338a38208a3e91950e2",
+      "telegram_post_to": "main",
+      "exception_type": "TelegramPublishError",
+      "error": "Missing TELEGRAM_BOT_TOKEN_AVA in .env.",
+      "traceback": "Traceback (most recent call last):\n  File \"C:\\Creator-OS\\app\\services\\social_publishing_service.py\", line 297, in publish_now\n    result = self.telegram_provider.publish(\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Creator-OS\\app\\providers\\social\\telegram_provider.py\", line 60, in publish\n    raise TelegramPublishError(str(result.get(\"error\") or \"Unknown Telegram API error.\"))\napp.providers.social.telegram_provider.TelegramPublishError: Missing TELEGRAM_BOT_TOKEN_AVA in .env.\n"
+    }
+  },
+  {
+    "publish_request_id": "social_publish_item_2d64dc3dd6824f5285b7a5c58751ba93",
+    "queue_item_id": "social_queue_item_6a01e7b410934c1393edd19274e1cb72",
+    "platform": "x",
+    "caption_id": "caption_result_6894593ef13742ad8f119a378154479d",
+    "scheduled_for": null,
+    "status": "posted",
+    "created_at": "2026-07-08T18:28:37.409451",
+    "metadata": {
+      "posting_implemented": true,
+      "account_name": "AvaBlackthorne",
+      "provider_post_id": "2074923633110122924",
+      "provider_media_id": "2074923629658222592",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2074923633110122924",
+      "provider_metadata": {
+        "tweet_data": {
+          "edit_history_tweet_ids": [
+            "2074923633110122924"
+          ],
+          "text": "Creator-OS live publish check 182837 ???? https://t.co/DSOZ3KJm0u",
+          "id": "2074923633110122924"
+        }
+      }
+    }
+  },
+  {
+    "publish_request_id": "social_publish_item_f2237ccc3762445f8f35df43141f1f60",
+    "queue_item_id": "social_queue_item_6a01e7b410934c1393edd19274e1cb72",
+    "platform": "x",
+    "caption_id": "caption_result_6894593ef13742ad8f119a378154479d",
+    "scheduled_for": null,
+    "status": "failed",
+    "created_at": "2026-07-08T18:25:22.116989",
+    "metadata": {
+      "posting_implemented": true,
+      "account_name": "AvaBlackthorne",
+      "error": "tweepy is required for X publishing."
+    }
+  },
+  {
+    "publish_request_id": "social_publish_item_0ed97f121d464257b3a3859f9ca22020",
+    "queue_item_id": "social_queue_item_84f08af533ed42a3a53582ddb06c808a",
+    "platform": "x",
+    "caption_id": "caption_result_ccb708a35d724c6c9a920d294e8a0c20",
+    "scheduled_for": null,
+    "status": "failed",
+    "created_at": "2026-07-08T17:43:57.642075",
+    "metadata": {
+      "posting_implemented": true,
+      "account_name": "AvaBlackthorne",
+      "error": "tweepy is required for X publishing."
+    }
+  },
+  {
+    "publish_request_id": "social_publish_item_6cb0d0c347ae427fa868e2f0b212069f",
+    "queue_item_id": "social_queue_item_84f08af533ed42a3a53582ddb06c808a",
+    "platform": "x",
+    "caption_id": "caption_result_197592876ef34f308f15832dbef988b2",
+    "scheduled_for": null,
+    "status": "failed",
+    "created_at": "2026-07-08T16:17:03.079901",
+    "metadata": {
+      "posting_implemented": true,
+      "account_name": "AvaBlackthorne",
+      "error": "tweepy is required for X publishing."
+    }
+  },
+  {
+    "publish_request_id": "social_publish_item_0a55eb553e9446bba5a151764d1cfe14",
+    "queue_item_id": "social_queue_item_84f08af533ed42a3a53582ddb06c808a",
+    "platform": "x",
+    "caption_id": "caption_result_40644a06d9af4382aa9f0a637d287c7d",
+    "scheduled_for": null,
+    "status": "failed",
+    "created_at": "2026-07-08T16:14:51.736261",
+    "metadata": {
+      "posting_implemented": true,
+      "account_name": "AvaBlackthorne",
+      "error": "tweepy is required for X publishing."
+    }
+  }
+]

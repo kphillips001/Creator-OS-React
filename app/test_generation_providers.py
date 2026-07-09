@@ -137,9 +137,139 @@ class GenerationProviderTests(unittest.TestCase):
         self.assertEqual(completed.status, GenerationStatus.SUCCEEDED.value)
         self.assertEqual(http.posts[0][0], provider.endpoint)
         self.assertEqual(http.posts[0][1]["headers"]["Authorization"], "Bearer test-key")
-        self.assertEqual(http.posts[0][1]["json"]["prompt"], "Provider-neutral prompt text")
+        self.assertIn("Provider-neutral prompt text", http.posts[0][1]["json"]["prompt"])
+        self.assertIn("SOCIAL CLOSE-FRAMING LOCK", http.posts[0][1]["json"]["prompt"])
         self.assertEqual(http.posts[0][1]["json"]["images"], ["https://cdn.test/reference.png"])
         self.assertEqual(completed.result.output_references, ("https://cdn.test/output.png",))
+
+    def test_provider_submits_prompt_variation_per_image(self):
+        http = FakeHttpClient(
+            get_payloads=[
+                {"data": {"status": "completed", "outputs": ["https://cdn.test/output-1.png"]}},
+                {"data": {"status": "completed", "outputs": ["https://cdn.test/output-2.png"]}},
+            ]
+        )
+        provider = Seedream45Provider(
+            api_key="test-key",
+            http_client=http,
+            poll_interval_seconds=0,
+            max_poll_attempts=1,
+        )
+        registry = ProviderRegistry({provider.provider_id: provider})
+        engine = self.make_engine(registry)
+        plan = prompt_plan()
+        plan = type(plan)(
+            **{
+                **plan.__dict__,
+                "prompt_text": "Prompt 1: varied shot one\n\nPrompt 2: varied shot two",
+                "prompt_metadata": {
+                    **dict(plan.prompt_metadata),
+                    "prompt_variations": ("varied shot one", "varied shot two"),
+                },
+            }
+        )
+        job = engine.queue_prompt_plan(
+            creator_profile={"id": 7},
+            prompt_plan=plan,
+            provider_id=provider.provider_id,
+            image_count=2,
+        )
+
+        completed = engine.dispatch_job(job.job_id)
+
+        payloads = [post[1]["json"]["prompt"] for post in http.posts]
+        self.assertIn("varied shot one", payloads[0])
+        self.assertIn("varied shot two", payloads[1])
+        self.assertIn("SOCIAL CLOSE-FRAMING LOCK", payloads[0])
+        self.assertIn("SOCIAL CLOSE-FRAMING LOCK", payloads[1])
+        self.assertIn("Avoid visible phone/cellphone/selfie-device poses", payloads[0])
+        self.assertNotIn("varied shot two", payloads[0])
+        self.assertNotIn("varied shot one", payloads[1])
+        self.assertEqual(completed.result.output_references, ("https://cdn.test/output-1.png", "https://cdn.test/output-2.png"))
+
+    def test_premium_payload_applies_body_and_topless_render_locks(self):
+        http = FakeHttpClient()
+        provider = WanImageEditProvider(
+            api_key="test-key",
+            http_client=http,
+            poll_interval_seconds=0,
+            max_poll_attempts=1,
+        )
+        registry = ProviderRegistry({provider.provider_id: provider})
+        engine = self.make_engine(registry)
+        plan = prompt_plan()
+        plan = type(plan)(
+            **{
+                **plan.__dict__,
+                "prompt_text": "topless private premium prompt, bare breasts visible",
+                "creative_mode": "premium_teaser",
+                "prompt_metadata": {
+                    **dict(plan.prompt_metadata),
+                    "prompt_variations": ("topless private premium prompt, bare breasts visible",),
+                },
+            }
+        )
+        job = engine.queue_prompt_plan(
+            creator_profile={"id": 7},
+            prompt_plan=plan,
+            provider_id=provider.provider_id,
+            metadata={"workflow_type": "premium", "creative_mode": "premium_teaser"},
+        )
+
+        completed = engine.dispatch_job(job.job_id)
+        prompt_payload = http.posts[0][1]["json"]["prompt"]
+
+        self.assertEqual(completed.status, GenerationStatus.SUCCEEDED.value)
+        self.assertIn("FINAL REFERENCE BODY LOCK", prompt_payload)
+        self.assertIn("Keep the scalp area natural and low-profile", prompt_payload)
+        self.assertIn("Unless the prompt explicitly asks for a wide shot", prompt_payload)
+        self.assertIn("TOPLESS RENDER LOCK", prompt_payload)
+        self.assertIn("EXPLICIT EXPRESSION VARIATION", prompt_payload)
+
+    def test_premium_clothed_teaser_payload_preserves_requested_wardrobe(self):
+        http = FakeHttpClient()
+        provider = Seedream45Provider(
+            api_key="test-key",
+            http_client=http,
+            poll_interval_seconds=0,
+            max_poll_attempts=1,
+        )
+        registry = ProviderRegistry({provider.provider_id: provider})
+        engine = self.make_engine(registry)
+        plan = prompt_plan()
+        prompt_text = (
+            "Ribbed or Mesh Crop Tank + Low-Rise Cargo Mini Skirt, premium teaser, "
+            "non-explicit wardrobe lock, no nudity, no topless result, no bare breasts, "
+            "unless nudity was explicitly requested"
+        )
+        plan = type(plan)(
+            **{
+                **plan.__dict__,
+                "prompt_text": prompt_text,
+                "creative_mode": "premium_teaser",
+                "prompt_metadata": {
+                    **dict(plan.prompt_metadata),
+                    "prompt_variations": (prompt_text,),
+                },
+            }
+        )
+        job = engine.queue_prompt_plan(
+            creator_profile={"id": 7},
+            prompt_plan=plan,
+            provider_id=provider.provider_id,
+            metadata={"workflow_type": "premium", "creative_mode": "premium_teaser"},
+        )
+
+        completed = engine.dispatch_job(job.job_id)
+        prompt_payload = http.posts[0][1]["json"]["prompt"]
+
+        self.assertEqual(completed.status, GenerationStatus.SUCCEEDED.value)
+        self.assertIn("FINAL REFERENCE BODY LOCK", prompt_payload)
+        self.assertIn("Crop Tank", prompt_payload)
+        self.assertIn("Mini Skirt", prompt_payload)
+        self.assertIn("TOPLESS RENDER LOCK", prompt_payload)
+        self.assertNotIn("WAN BUST VISIBILITY LOCK", prompt_payload)
+        self.assertIn("EXPLICIT EXPRESSION VARIATION", prompt_payload)
 
     def test_local_reference_uploads_before_provider_submit(self):
         with tempfile.TemporaryDirectory() as temp_dir:

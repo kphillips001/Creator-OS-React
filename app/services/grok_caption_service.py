@@ -4,6 +4,8 @@ import re
 from dotenv import load_dotenv
 from openai import OpenAI
 
+from app.services.caption_prompt_guidance import natural_emoji_instruction_bullet
+
 
 class GrokCaptionService:
     def __init__(self):
@@ -26,7 +28,7 @@ class GrokCaptionService:
         chat_history: list,
         content_metadata: dict,
     ) -> str:
-        system_prompt = """
+        system_prompt = f"""
 You are writing the NEXT paid PPV message in a private Fanvue conversation.
 
 CRITICAL:
@@ -43,6 +45,7 @@ RULES:
 - Do NOT give away the content for free.
 - Do NOT mention AI.
 - Slightly bolder and more tempting than GPT, but still controlled.
+{natural_emoji_instruction_bullet()}
 """
 
         metadata_prompt = f"""
@@ -78,7 +81,7 @@ Write one strong paid PPV message that continues the conversation and makes the 
         content_metadata: dict,
         image_url: str,
     ) -> str:
-        system_prompt = """
+        system_prompt = f"""
 You are writing a high-converting mass PPV caption for Fanvue.
 
 GOAL:
@@ -98,6 +101,7 @@ RULES:
 - Do NOT give everything away
 - Create curiosity and desire
 - Make them feel like they need to open it
+{natural_emoji_instruction_bullet()}
 - 1–2 sentences max
 """
 
@@ -140,7 +144,7 @@ Write a bold mass PPV caption that makes users want to unlock this immediately.
         content_metadata: dict,
         image_url: str,
     ) -> list[str]:
-        system_prompt = """
+        system_prompt = f"""
 You are generating spicy, flirty social media captions for a Fanvue creator.
 
 GOAL:
@@ -156,11 +160,7 @@ STYLE:
 RULES:
 - Generate EXACTLY 5 different captions (no more, no less)
 - Each caption must be 1–2 sentences max
-- Include 2–4 spicy emojis in EACH caption
-- Emojis MUST be naturally spread throughout the sentence (beginning, middle, or end)
-- Do NOT stack all emojis at the end
-- Vary emoji placement across captions for natural flow
-- Blend emojis into the wording for a flirty, human feel
+{natural_emoji_instruction_bullet()}
 - Do NOT describe explicit sexual acts
 - Do NOT sound robotic or repetitive
 - Make each caption feel natural and unique

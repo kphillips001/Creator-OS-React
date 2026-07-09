@@ -7,9 +7,11 @@ from dotenv import load_dotenv
 from nudenet import NudeDetector
 from openai import OpenAI
 
+from app.config import settings
 from app.repositories.content_repository import (
     insert_content_item,
 )
+from app.services.llm_json_parser import parse_llm_json
 from app.services.publishing_service import PublishingService
 
 
@@ -17,12 +19,25 @@ load_dotenv()
 
 SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 
-client = OpenAI()
+_client = None
 detector = NudeDetector()
 _PUBLISHING_SERVICE = PublishingService()
 
 _ANALYSIS_MODEL = "gpt-4.1-mini"
 _ANALYSIS_VERSION = "phase_2c_ai_product_drafting_v1"
+
+
+def get_openai_client():
+    global _client
+
+    if _client is None:
+        api_key = getattr(settings, "OPENAI_API_KEY", None)
+        if not api_key:
+            raise RuntimeError("OpenAI API key is not configured.")
+
+        _client = OpenAI(api_key=api_key)
+
+    return _client
 
 
 def encode_image_to_base64(image_path: Path) -> str:
@@ -211,7 +226,7 @@ IMPORTANT:
 """
 
     try:
-        response = client.responses.create(
+        response = get_openai_client().responses.create(
             model="gpt-4.1-mini",
             input=[
                 {
@@ -268,7 +283,11 @@ IMPORTANT:
             },
         )
 
-        return json.loads(response.output_text)
+        return parse_llm_json(
+            response.output_text,
+            model_name=_ANALYSIS_MODEL,
+            caller="content_classification_service.classify_content_image",
+        )
 
     except Exception as e:
         return {"error": str(e)}

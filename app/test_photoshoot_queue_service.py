@@ -115,6 +115,10 @@ class PhotoshootQueueServiceTests(unittest.TestCase):
 
         self.assertEqual(session.creator_profile_id, 7)
         self.assertEqual(session.provider_id, "seedream_4_5")
+        self.assertEqual(session.creative_continuity["generation_mode_behavior"], "photoshoot_queue")
+        self.assertEqual(session.creative_continuity["wavespeed_generation_mode_key"], "photoshoot_set")
+        self.assertIn("preserve the same selected-shot", session.creative_continuity["continuity"])
+        self.assertIn("Do not use normal generation scene-hopping", session.creative_continuity["normal_generation_boundary"])
         self.assertEqual(tuple(request.sequence_index for request in requests), (1, 2, 3))
         self.assertEqual(tuple(request.prompt_plan_id for request in requests), ("prompt_plan_1", "prompt_plan_2", "prompt_plan_3"))
         self.assertEqual(service.next_queued_request(session.session_id).prompt_plan_id, "prompt_plan_1")
@@ -142,6 +146,10 @@ class PhotoshootQueueServiceTests(unittest.TestCase):
         self.assertIsNone(blocked_job)
         self.assertEqual(len(engine.list_jobs()), 1)
         self.assertEqual(first_job.request.metadata["source"], "photoshoot_queue")
+        self.assertEqual(first_job.request.metadata["generation_mode_behavior"], "photoshoot_queue")
+        self.assertEqual(first_job.request.metadata["wavespeed_generation_mode_key"], "photoshoot_set")
+        self.assertIn("same environment", first_job.request.metadata["wavespeed_mode_decision"])
+        self.assertIn("scene-hopping", first_job.request.metadata["wavespeed_mode_decision"])
         self.assertEqual(first_job.request.metadata["photoshoot_session_id"], session.session_id)
         self.assertEqual(first_job.request.metadata["photoshoot_sequence_index"], 1)
 

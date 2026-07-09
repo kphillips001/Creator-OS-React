@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import traceback
 from dataclasses import asdict, replace
 from pathlib import Path
 from typing import Any, Iterable, Mapping
@@ -16,6 +17,7 @@ from app.models.social_publishing import (
     SocialPublishingSession,
     SocialQueueItem,
 )
+from app.providers.social.telegram_provider import TelegramPublishingProvider
 from app.providers.social.x_provider import XPublishingProvider
 from app.services.generation_engine_service import GenerationEngineService
 from app.services.generation_library_service import GenerationLibraryService
@@ -32,9 +34,11 @@ class SocialPublishingService:
         *,
         storage_dir: str | Path | None = None,
         x_provider: XPublishingProvider | None = None,
+        telegram_provider: TelegramPublishingProvider | None = None,
     ):
         self.storage_dir = Path(storage_dir or self.DEFAULT_STORAGE_DIR)
         self.x_provider = x_provider or XPublishingProvider()
+        self.telegram_provider = telegram_provider or TelegramPublishingProvider()
 
     @property
     def queue_path(self) -> Path:
@@ -216,7 +220,10 @@ class SocialPublishingService:
             platform=self.normalize_platform(platform),
             caption_id=caption_id,
             scheduled_for=scheduled_for,
-            metadata={"posting_implemented": self.normalize_platform(platform) == SocialPlatform.X.value},
+            metadata={
+                "posting_implemented": self.normalize_platform(platform)
+                in {SocialPlatform.X.value, SocialPlatform.TELEGRAM.value}
+            },
         )
         items = list(self.list_publish_items())
         items.insert(0, publish_item)
@@ -254,6 +261,10 @@ class SocialPublishingService:
         caption_text: str,
         account_name: str | None = None,
         caption_id: str | None = None,
+        telegram_post_to: str = "main",
+        telegram_cta_enabled: bool = False,
+        telegram_cta_label: str = "",
+        telegram_cta_url: str = "",
     ) -> SocialQueueItem:
         item = self.get_queue_item(queue_item_id)
         publish_item = self.create_publish_item(
@@ -261,7 +272,7 @@ class SocialPublishingService:
             platform=item.platform,
             caption_id=caption_id or item.caption_id,
         )
-        if item.platform != SocialPlatform.X.value:
+        if item.platform not in {SocialPlatform.X.value, SocialPlatform.TELEGRAM.value}:
             updated = replace(item, status=SocialPublishStatus.FAILED.value, updated_at=utc_now())
             self._replace_queue_item(updated)
             self._replace_publish_item(
@@ -270,24 +281,42 @@ class SocialPublishingService:
                     status=SocialPublishStatus.FAILED.value,
                     metadata={
                         **dict(publish_item.metadata or {}),
-                        "error": f"Publishing is only implemented for X. Platform: {item.platform}",
+                        "error": f"Publishing is only implemented for X and Telegram. Platform: {item.platform}",
                     },
                 )
             )
             self._append_history(
                 updated,
                 status=SocialPublishStatus.FAILED.value,
-                message=f"Publishing is only implemented for X. Platform: {item.platform}",
+                message=f"Publishing is only implemented for X and Telegram. Platform: {item.platform}",
                 metadata={"caption_id": caption_id or item.caption_id},
             )
             return updated
         try:
-            result = self.x_provider.publish(
-                image_reference=item.output_reference or "",
-                caption=caption_text,
-                account_name=account_name,
-            )
+            if item.platform == SocialPlatform.TELEGRAM.value:
+                result = self.telegram_provider.publish(
+                    image_reference=item.output_reference or "",
+                    caption=caption_text,
+                    post_to=telegram_post_to,
+                    cta_enabled=telegram_cta_enabled,
+                    cta_label=telegram_cta_label,
+                    cta_url=telegram_cta_url,
+                )
+            else:
+                result = self.x_provider.publish(
+                    image_reference=item.output_reference or "",
+                    caption=caption_text,
+                    account_name=account_name,
+                )
         except Exception as exc:
+            error_metadata = {
+                "account_name": account_name,
+                "caption_id": caption_id or item.caption_id,
+                "telegram_post_to": telegram_post_to,
+                "exception_type": exc.__class__.__name__,
+                "error": str(exc),
+                "traceback": traceback.format_exc(),
+            }
             updated = replace(item, status=SocialPublishStatus.FAILED.value, updated_at=utc_now())
             self._replace_queue_item(updated)
             self._replace_publish_item(
@@ -296,8 +325,7 @@ class SocialPublishingService:
                     status=SocialPublishStatus.FAILED.value,
                     metadata={
                         **dict(publish_item.metadata or {}),
-                        "account_name": account_name,
-                        "error": str(exc),
+                        **error_metadata,
                     },
                 )
             )
@@ -305,7 +333,7 @@ class SocialPublishingService:
                 updated,
                 status=SocialPublishStatus.FAILED.value,
                 message=str(exc),
-                metadata={"account_name": account_name, "caption_id": caption_id or item.caption_id},
+                metadata=error_metadata,
             )
             return updated
 
@@ -317,10 +345,11 @@ class SocialPublishingService:
                 status=SocialPublishStatus.POSTED.value,
                 metadata={
                     **dict(publish_item.metadata or {}),
-                    "account_name": result.account_name,
+                    "account_name": getattr(result, "account_name", None),
+                    "telegram_post_to": getattr(result, "post_to", None),
                     "provider_post_id": result.provider_post_id,
-                    "provider_media_id": result.provider_media_id,
-                    "provider_output_url": result.provider_output_url,
+                    "provider_media_id": getattr(result, "provider_media_id", None),
+                    "provider_output_url": getattr(result, "provider_output_url", None),
                     "provider_metadata": dict(result.metadata or {}),
                 },
             )
@@ -328,13 +357,14 @@ class SocialPublishingService:
         self._append_history(
             updated,
             status=SocialPublishStatus.POSTED.value,
-            message=result.message or "Posted to X.",
+            message=result.message or ("Posted to Telegram." if item.platform == SocialPlatform.TELEGRAM.value else "Posted to X."),
             metadata={
-                "account_name": result.account_name,
+                "account_name": getattr(result, "account_name", None),
+                "telegram_post_to": getattr(result, "post_to", None),
                 "caption_id": caption_id or item.caption_id,
                 "provider_post_id": result.provider_post_id,
-                "provider_media_id": result.provider_media_id,
-                "provider_output_url": result.provider_output_url,
+                "provider_media_id": getattr(result, "provider_media_id", None),
+                "provider_output_url": getattr(result, "provider_output_url", None),
             },
         )
         return updated

@@ -23,6 +23,7 @@ if "psycopg" not in sys.modules:
     sys.modules["psycopg.types.json"] = json_types
     sys.modules["psycopg.errors"] = errors
 
+import app.dashboard.pages.content_studio as content_studio_page
 from app.dashboard.pages.content_studio import (
     SOCIAL_PROVIDER_LABELS,
     create_social_studio_generation_request,
@@ -90,13 +91,22 @@ class FakeCreativeDirector:
             plan_id="prompt_plan_social",
             session_id="creative_session_social",
             creator_profile_id=int(creator_profile["id"]),
-            prompt_text="Social-safe provider-neutral prompt",
+            prompt_text="\n\n".join(
+                f"Prompt {index}: Social-safe provider-neutral prompt {index}"
+                for index in range(1, int(prompt_count or 1) + 1)
+            ),
             creative_mode=creative_mode,
             creative_tags=tuple(tag.strip() for tag in creative_tags.split(",") if tag.strip()),
             reference_asset_id=55,
             reference_asset_path="C:/Creator-OS/data/cms/vault/originals/images/55.png",
             creative_rationale="Created for Social Studio.",
-            prompt_metadata={"provider_neutral": True},
+            prompt_metadata={
+                "provider_neutral": True,
+                "prompt_variations": tuple(
+                    f"Social-safe provider-neutral prompt {index}"
+                    for index in range(1, int(prompt_count or 1) + 1)
+                ),
+            },
         )
 
 
@@ -133,9 +143,16 @@ class FakeGenerationEngine:
         )
         return GenerationJob(job_id="generation_job_social", request=request)
 
-    def dispatch_job(self, job_id):
+    def dispatch_job(self, job_id, progress_callback=None):
         self.dispatched.append(job_id)
         request = self.queue_prompt_plan(**self.calls[-1]).request
+        if progress_callback:
+            progress_callback(
+                current=1,
+                total=request.image_count,
+                message="Image 1 of 1 completed",
+                output_references=("https://cdn.test/social-output.png",),
+            )
         result = GenerationResult(
             result_id="generation_result_social",
             request_id=request.request_id,
@@ -206,6 +223,7 @@ class SocialStudioTests(unittest.TestCase):
         self.assertEqual(engine.calls[0]["provider_id"], "seedream_4_5")
         self.assertEqual(engine.calls[0]["image_count"], 4)
         self.assertEqual(engine.calls[0]["metadata"]["source"], "social_studio")
+        self.assertEqual(len(engine.calls[0]["metadata"]["prompt_variations"]), 4)
 
     def test_social_submit_can_execute_and_sync_generation_library(self):
         references = FakeReferenceLibrary(reference_asset())
@@ -256,13 +274,33 @@ class SocialStudioTests(unittest.TestCase):
         self.assertIn("def _render_social_studio", source)
         self.assertIn("Active Reference", source)
         self.assertIn("Creative Tags", source)
+        self.assertIn("Creative Director Tools", source)
+        self.assertIn("Enhance Social Tags", source)
+        self.assertIn("Surprise Me Tags", source)
+        self.assertIn("social_studio_selected_tag_source", source)
         self.assertIn("I Feel Lucky", source)
         self.assertIn("Creative Mode", source)
         self.assertIn("Prompt Count", source)
         self.assertIn("Provider", source)
         self.assertIn("Prompt Preview", source)
+        self.assertIn("expanded=False", source)
+        self.assertIn("Copy Prompt Batch", source)
+        self.assertIn("Regenerate Prompt Preview", source)
+        self.assertIn("Advanced Details", source)
+        self.assertIn("prompt_variations", source)
         self.assertIn('"Generate"', source)
         self.assertIn("Generation Progress", source)
+        self.assertIn("Live Generated Images", source)
+        self.assertIn("Generation Complete", source)
+        self.assertIn("complete_preview", source)
+        self.assertIn("time.sleep(5)", source)
+        self.assertIn("Reset Session", source)
+        self.assertIn("reset_content_studio_session_state", source)
+        self.assertIn("content_studio_reset_requested", source)
+        self.assertIn("Resume Previous Generation?", source)
+        self.assertIn("No active Social Studio generation session.", source)
+        self.assertIn("0 of", source)
+        self.assertIn("remaining", source)
         self.assertIn("Imported Assets", source)
         self.assertIn("Generation Workspace", source)
         self.assertIn("Open Asset Library", source)
@@ -272,6 +310,35 @@ class SocialStudioTests(unittest.TestCase):
         self.assertNotIn("poll_wavespeed_result", source)
         self.assertNotIn("upload_to_imgbb", source)
         self.assertNotIn("save_generated_image_now", source)
+
+    def test_content_studio_reset_clears_temporary_state_only(self):
+        content_studio_page.st.session_state = {
+            "social_studio_creative_tags": "temporary tags",
+            "social_studio_latest_generation_job_id": "job_social",
+            "premium_studio_prompt_batch": ("temporary prompt",),
+            "premium_grok_anything_history": [{"answer": "temporary"}],
+            "content_studio_active_photoshoot_session_id": "photoshoot_session",
+            "content_studio_creator_review_asset_ids": (1, 2),
+            "generation_library_selected_ids": ("generated_image",),
+            "dashboard_page": "Social Studio",
+            "active_creator_profile_id": 7,
+        }
+
+        cleared = content_studio_page.reset_content_studio_session_state()
+
+        self.assertIn("social_studio_creative_tags", cleared)
+        self.assertIn("premium_studio_prompt_batch", cleared)
+        self.assertIn("premium_grok_anything_history", cleared)
+        self.assertIn("content_studio_active_photoshoot_session_id", cleared)
+        self.assertNotIn("social_studio_creative_tags", content_studio_page.st.session_state)
+        self.assertNotIn("premium_studio_prompt_batch", content_studio_page.st.session_state)
+        self.assertNotIn("content_studio_creator_review_asset_ids", content_studio_page.st.session_state)
+        self.assertEqual(
+            content_studio_page.st.session_state["generation_library_selected_ids"],
+            ("generated_image",),
+        )
+        self.assertEqual(content_studio_page.st.session_state["dashboard_page"], "Social Studio")
+        self.assertEqual(content_studio_page.st.session_state["active_creator_profile_id"], 7)
 
 
 if __name__ == "__main__":

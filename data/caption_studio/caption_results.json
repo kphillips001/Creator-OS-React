@@ -1,0 +1,567 @@
+[
+  {
+    "caption_result_id": "caption_result_5aa643274e9a4f71bf978e5454703df0",
+    "caption_request_id": "caption_request_78bfe10449e048d4a6dac00907ecc614",
+    "session_id": "caption_session_7d348c92fe974e789ff9f4226224c7af",
+    "platform": "telegram",
+    "variations": [
+      "Caught me lingering in the kitchen \u2600\ufe0f this soft morning light just feels too good to waste",
+      "Just leaning here in your shirt \ud83e\udd0d thinking about you and how quiet the house is",
+      "Sunshine on my skin and this easy smile for you \u2728 kitchen mornings like this feel so ours",
+      "I love these unhurried moments with you \ud83d\ude0c warm light, soft shirt, nothing else needed",
+      "This glow through the window made me pause and think of you \u2600\ufe0f stay with me in it",
+      "Leaning over this counter in nothing but an open shirt \ud83d\ude0f sunlight does all the talking",
+      "Tied it loose on purpose so you get the full view \ud83e\udd0d kitchen just got more interesting",
+      "Soft light, bare skin, and this look just for you \ud83d\udd25 come closer",
+      "Hands on the wood and eyes locked on you \ud83d\ude09 this shirt barely holds anything back",
+      "Morning light hits different when the buttons are open \u2600\ufe0f catch me leaning like this"
+    ],
+    "selected_text": "Leaning over this counter in nothing but an open shirt \ud83d\ude0f sunlight does all the talking",
+    "formatter_metadata": {
+      "provider_neutral": true,
+      "formatter": "CaptionStudioService",
+      "workflow": "telegram_publish",
+      "vision_primary": true,
+      "vision_provider": "grok",
+      "vision": {
+        "location": "modern kitchen with white cabinets and wooden countertop",
+        "wardrobe": "white oversized button-down shirt tied at the waist with open collar and rolled sleeves, white thong underwear",
+        "expression": "warm soft smile with direct teasing eye contact",
+        "body_language": "leaning forward over the counter with both hands resting on the wooden surface, hips tilted slightly",
+        "lighting": "warm golden sunlight casting soft highlights and shadows across skin and fabric",
+        "mood": "intimate, sunlit, candid, teasing",
+        "environment": "bright clean apartment kitchen with stove, sink area, and soft window light",
+        "activity": "leaning on the kitchen counter looking at the viewer"
+      },
+      "themes": [
+        {
+          "theme": "\u2764\ufe0f Girlfriend Energy",
+          "persona": "girlfriend_energy",
+          "captions": [
+            "Caught me lingering in the kitchen \u2600\ufe0f this soft morning light just feels too good to waste",
+            "Just leaning here in your shirt \ud83e\udd0d thinking about you and how quiet the house is",
+            "Sunshine on my skin and this easy smile for you \u2728 kitchen mornings like this feel so ours",
+            "I love these unhurried moments with you \ud83d\ude0c warm light, soft shirt, nothing else needed",
+            "This glow through the window made me pause and think of you \u2600\ufe0f stay with me in it"
+          ]
+        },
+        {
+          "theme": "\ud83d\ude08 Naughty",
+          "persona": "naughty",
+          "captions": [
+            "Leaning over this counter in nothing but an open shirt \ud83d\ude0f sunlight does all the talking",
+            "Tied it loose on purpose so you get the full view \ud83e\udd0d kitchen just got more interesting",
+            "Soft light, bare skin, and this look just for you \ud83d\udd25 come closer",
+            "Hands on the wood and eyes locked on you \ud83d\ude09 this shirt barely holds anything back",
+            "Morning light hits different when the buttons are open \u2600\ufe0f catch me leaning like this"
+          ]
+        }
+      ],
+      "personas": {
+        "girlfriend_energy": "\u2764\ufe0f Girlfriend Energy",
+        "naughty": "\ud83d\ude08 Naughty"
+      },
+      "engagement_goals": [
+        "creator selects preferred caption",
+        "telegram publishing"
+      ]
+    },
+    "created_at": "2026-07-09T00:21:56.293128"
+  },
+  {
+    "caption_result_id": "caption_result_d8d6a03d52f24338a38208a3e91950e2",
+    "caption_request_id": "caption_request_db2a0dd78cf94f7c980b40b4039499da",
+    "session_id": "caption_session_00128e756a1645369b7e4233eb6b253d",
+    "platform": "telegram",
+    "variations": [
+      "Morning light in the kitchen and I\u2019m already thinking about you \u2600\ufe0f soft smile just for us",
+      "Caught me hanging out by the counter in nothing but this shirt \ud83e\udd0d feels like home with you",
+      "Sun\u2019s up and I decided this is the only outfit I need today \ud83d\ude0c come keep me company",
+      "Leaning here waiting for you to walk in and wrap your arms around me \u2600\ufe0f",
+      "This golden kitchen light makes everything feel slower and sweeter with you \ud83d\udc9b",
+      "Tied this shirt just enough so you can\u2019t look away \ud83e\udd0d kitchen\u2019s all mine right now",
+      "Leaning over the counter like this\u2026 you already know what I\u2019m thinking \ud83d\ude09",
+      "Barely anything underneath and the sun is doing the rest of the work \u2600\ufe0f",
+      "This view over the counter is reserved for you \ud83d\udd25 don\u2019t keep me waiting",
+      "Shirt open, hips out, eyes locked\u2026 morning just got a lot more interesting \ud83d\ude0f"
+    ],
+    "selected_text": "Tied this shirt just enough so you can\u2019t look away \ud83e\udd0d kitchen\u2019s all mine right now",
+    "formatter_metadata": {
+      "provider_neutral": true,
+      "formatter": "CaptionStudioService",
+      "workflow": "telegram_publish",
+      "vision_primary": true,
+      "vision_provider": "grok",
+      "vision": {
+        "location": "modern bright kitchen",
+        "wardrobe": "oversized white button-down shirt tied in a knot at the waist with top buttons open, white thong bottoms",
+        "expression": "warm soft closed-mouth smile with direct teasing eye contact",
+        "body_language": "leaning forward over wooden kitchen counter with both hands resting on the surface, hips slightly angled, chest forward",
+        "lighting": "bright natural sunlight streaming from the left creating warm golden highlights and soft shadows",
+        "mood": "intimate, relaxed, sun-drenched, candid and flirtatious",
+        "environment": "clean white kitchen cabinets, wooden countertop island with built-in stovetop, soft morning light on walls",
+        "activity": "leaning casually on the kitchen counter looking at the viewer"
+      },
+      "themes": [
+        {
+          "theme": "\u2764\ufe0f Girlfriend Energy",
+          "persona": "girlfriend_energy",
+          "captions": [
+            "Morning light in the kitchen and I\u2019m already thinking about you \u2600\ufe0f soft smile just for us",
+            "Caught me hanging out by the counter in nothing but this shirt \ud83e\udd0d feels like home with you",
+            "Sun\u2019s up and I decided this is the only outfit I need today \ud83d\ude0c come keep me company",
+            "Leaning here waiting for you to walk in and wrap your arms around me \u2600\ufe0f",
+            "This golden kitchen light makes everything feel slower and sweeter with you \ud83d\udc9b"
+          ]
+        },
+        {
+          "theme": "\ud83d\ude08 Naughty",
+          "persona": "naughty",
+          "captions": [
+            "Tied this shirt just enough so you can\u2019t look away \ud83e\udd0d kitchen\u2019s all mine right now",
+            "Leaning over the counter like this\u2026 you already know what I\u2019m thinking \ud83d\ude09",
+            "Barely anything underneath and the sun is doing the rest of the work \u2600\ufe0f",
+            "This view over the counter is reserved for you \ud83d\udd25 don\u2019t keep me waiting",
+            "Shirt open, hips out, eyes locked\u2026 morning just got a lot more interesting \ud83d\ude0f"
+          ]
+        }
+      ],
+      "personas": {
+        "girlfriend_energy": "\u2764\ufe0f Girlfriend Energy",
+        "naughty": "\ud83d\ude08 Naughty"
+      },
+      "engagement_goals": [
+        "creator selects preferred caption",
+        "telegram publishing"
+      ]
+    },
+    "created_at": "2026-07-08T22:22:08.306792"
+  },
+  {
+    "caption_result_id": "caption_result_307ad7d89dbb423bb908b8171734eea7",
+    "caption_request_id": "caption_request_542de2bc7bd84346b70262817e6aa17d",
+    "session_id": "caption_session_595247d06c0e44b8b7f9766a9c2c7d8c",
+    "platform": "telegram",
+    "variations": [
+      "Caught me in the kitchen looking for you \u2600\ufe0f this shirt feels better with you around",
+      "Morning light and this little smile just for you \ud83e\udd0d",
+      "Come lean with me\u2026 the counter\u2019s warm and so am I \ud83d\ude0a",
+      "I saved this sunny spot and this look only for us \u2600\ufe0f",
+      "Woke up like this and immediately thought of you \ud83d\ude0c",
+      "Just a white shirt and that look that says I know exactly what I\u2019m doing \ud83d\ude0f",
+      "Leaning over the counter so you don\u2019t miss a thing \ud83e\udd0d",
+      "This little knot is the only thing holding me together right now \ud83d\udd25",
+      "Sun\u2019s out and so is most of me\u2026 you\u2019re welcome \u2600\ufe0f",
+      "Kitchen counter, open collar, and me waiting for your eyes \ud83d\ude09"
+    ],
+    "selected_text": null,
+    "formatter_metadata": {
+      "provider_neutral": true,
+      "formatter": "CaptionStudioService",
+      "workflow": "telegram_publish",
+      "vision_primary": true,
+      "vision_provider": "grok",
+      "vision": {
+        "location": "modern kitchen",
+        "wardrobe": "oversized white button-down shirt tied at the midriff with top buttons undone revealing deep cleavage, white high-cut bottoms",
+        "expression": "warm relaxed soft smile with direct teasing eye contact",
+        "body_language": "leaning forward over a wooden counter with both hands resting on the surface, chest-forward posture, hips slightly angled",
+        "lighting": "bright golden sunlight casting strong highlights and soft shadows across skin and fabric",
+        "mood": "intimate, sun-drenched, confident, candid, warm",
+        "environment": "clean bright apartment kitchen with white cabinets, wooden countertop, stove, and soft natural light",
+        "activity": "leaning on the kitchen island while looking at the viewer"
+      },
+      "themes": [
+        {
+          "theme": "\u2764\ufe0f Girlfriend Energy",
+          "persona": "girlfriend_energy",
+          "captions": [
+            "Caught me in the kitchen looking for you \u2600\ufe0f this shirt feels better with you around",
+            "Morning light and this little smile just for you \ud83e\udd0d",
+            "Come lean with me\u2026 the counter\u2019s warm and so am I \ud83d\ude0a",
+            "I saved this sunny spot and this look only for us \u2600\ufe0f",
+            "Woke up like this and immediately thought of you \ud83d\ude0c"
+          ]
+        },
+        {
+          "theme": "\ud83d\ude08 Naughty",
+          "persona": "naughty",
+          "captions": [
+            "Just a white shirt and that look that says I know exactly what I\u2019m doing \ud83d\ude0f",
+            "Leaning over the counter so you don\u2019t miss a thing \ud83e\udd0d",
+            "This little knot is the only thing holding me together right now \ud83d\udd25",
+            "Sun\u2019s out and so is most of me\u2026 you\u2019re welcome \u2600\ufe0f",
+            "Kitchen counter, open collar, and me waiting for your eyes \ud83d\ude09"
+          ]
+        }
+      ],
+      "personas": {
+        "girlfriend_energy": "\u2764\ufe0f Girlfriend Energy",
+        "naughty": "\ud83d\ude08 Naughty"
+      },
+      "engagement_goals": [
+        "creator selects preferred caption",
+        "telegram publishing"
+      ]
+    },
+    "created_at": "2026-07-08T22:15:03.100353"
+  },
+  {
+    "caption_result_id": "caption_result_161f88b5b8c34b43837526a05af3b2c4",
+    "caption_request_id": "caption_request_db314a7643eb4e3aa9640a077dd4a345",
+    "session_id": "caption_session_05ea76ba2cd54beebccd73e8ea2e51d2",
+    "platform": "telegram",
+    "variations": [
+      "Morning light hits just right when you're the first thing I think about.",
+      "Caught me hanging out in the kitchen\u2026 this one's for you.",
+      "Soft smile, sunny kitchen, missing you a little extra today.",
+      "Just me, golden hour, and that look I save for you.",
+      "Home feels warmer when I get to share moments like this with you.",
+      "Leaning over the counter just for you\u2026 shirt barely holding on.",
+      "This view comes with the kitchen, and I'm not complaining.",
+      "Tied the shirt extra low today. Hope you like the preview.",
+      "Sun's out, shirt's open, and I've got my eyes on you.",
+      "Kitchen counter never looked this good with me on it."
+    ],
+    "selected_text": null,
+    "formatter_metadata": {
+      "provider_neutral": true,
+      "formatter": "CaptionStudioService",
+      "workflow": "telegram_publish",
+      "vision_primary": true,
+      "vision_provider": "grok",
+      "vision": {
+        "location": "modern kitchen with wooden countertop",
+        "wardrobe": "oversized white button-down shirt tied under the bust with top buttons undone, deep cleavage, paired with white high-cut bottoms",
+        "expression": "warm relaxed smirk with direct eye contact",
+        "body_language": "leaning forward with both hands resting on the wooden counter, body angled toward the camera",
+        "lighting": "bright natural sunlight casting warm highlights and soft shadows",
+        "mood": "intimate, confident, inviting, sun-drenched",
+        "environment": "bright clean modern kitchen with white cabinets, stove, and wooden island",
+        "activity": "leaning casually over the kitchen counter"
+      },
+      "themes": [
+        {
+          "theme": "\u2764\ufe0f Girlfriend Energy",
+          "persona": "girlfriend_energy",
+          "captions": [
+            "Morning light hits just right when you're the first thing I think about.",
+            "Caught me hanging out in the kitchen\u2026 this one's for you.",
+            "Soft smile, sunny kitchen, missing you a little extra today.",
+            "Just me, golden hour, and that look I save for you.",
+            "Home feels warmer when I get to share moments like this with you."
+          ]
+        },
+        {
+          "theme": "\ud83d\ude08 Naughty",
+          "persona": "naughty",
+          "captions": [
+            "Leaning over the counter just for you\u2026 shirt barely holding on.",
+            "This view comes with the kitchen, and I'm not complaining.",
+            "Tied the shirt extra low today. Hope you like the preview.",
+            "Sun's out, shirt's open, and I've got my eyes on you.",
+            "Kitchen counter never looked this good with me on it."
+          ]
+        }
+      ],
+      "personas": {
+        "girlfriend_energy": "\u2764\ufe0f Girlfriend Energy",
+        "naughty": "\ud83d\ude08 Naughty"
+      },
+      "engagement_goals": [
+        "creator selects preferred caption",
+        "telegram publishing"
+      ]
+    },
+    "created_at": "2026-07-08T22:00:23.899055"
+  },
+  {
+    "caption_result_id": "caption_result_6894593ef13742ad8f119a378154479d",
+    "caption_request_id": "caption_request_3865a92bb55b45caa9d2416ba7a54e14",
+    "session_id": "caption_session_487ac26dac744decb4b352ce4f92c25f",
+    "platform": "x",
+    "variations": [
+      "Be honest... what would you say if you walked into this mirror selfie energy? \ud83e\udee3\ud83d\udc40\ud83d\udc47",
+      "You get one sentence to impress me. What is it? \ud83e\udee3\ud83d\ude09\ud83d\udc47",
+      "I feel like you have something clever to say here. Prove me right. \ud83e\udee3\ud83d\ude09\ud83d\udc47",
+      "Caption this like you are trying to make me laugh. \ud83e\udee3\ud83d\ude02\ud83d\udc47",
+      "Wrong answers only... what is happening here? \ud83e\udee3\ud83d\ude02\ud83d\udc47",
+      "You can look, but can you keep up? \ud83e\udee3\ud83d\udc47",
+      "This feels like I caught you staring at the the kind of look that makes him answer too fast part. \ud83e\udee3\ud83d\udc40\ud83d\udc47",
+      "I know exactly what you noticed first. \ud83e\udee3\ud83d\udc47",
+      "Careful. I might ask what you are thinking. \ud83e\udee3\ud83d\udc40\ud83d\udc47",
+      "Pick the vibe: sweet, trouble, or both? \ud83e\udee3\u263a\ufe0f\ud83d\udc47",
+      "Would you stay quiet here or say something bold? \ud83e\udee3\ud83d\ude09\ud83d\udc47",
+      "Tell me what this moment needs next. \ud83e\udee3\ud83d\udc47"
+    ],
+    "selected_text": "I feel like you have something clever to say here. Prove me right. \ud83e\udee3\ud83d\ude09\ud83d\udc47",
+    "formatter_metadata": {
+      "provider_neutral": true,
+      "formatter": "CaptionStudioService",
+      "workflow": "x_engagement_publish",
+      "vision_primary": true,
+      "vision": {
+        "summary": "mirror selfie energy; the kind of look that makes him answer too fast",
+        "scene": "mirror selfie energy",
+        "scene_key": "mirror",
+        "mood": "the kind of look that makes him answer too fast",
+        "focus": "her expression, pose, setting, and the visible little story in the image",
+        "image_reference": "https://d2h7xmz5gqybh9.cloudfront.net/output/ec77fa5b-4fa6-45d6-82db-530122e3b4cc.jpeg",
+        "vision_primary": true,
+        "idea_seed": 0
+      },
+      "themes": [
+        {
+          "theme": "Make Him Answer",
+          "vision_signal": "mirror selfie energy",
+          "emoji_context": "mirror",
+          "captions": [
+            "Be honest... what would you say if you walked into this mirror selfie energy? \ud83e\udee3\ud83d\udc40\ud83d\udc47",
+            "You get one sentence to impress me. What is it? \ud83e\udee3\ud83d\ude09\ud83d\udc47",
+            "I feel like you have something clever to say here. Prove me right. \ud83e\udee3\ud83d\ude09\ud83d\udc47"
+          ]
+        },
+        {
+          "theme": "Playful Challenge",
+          "vision_signal": "mirror selfie energy",
+          "emoji_context": "mirror",
+          "captions": [
+            "Caption this like you are trying to make me laugh. \ud83e\udee3\ud83d\ude02\ud83d\udc47",
+            "Wrong answers only... what is happening here? \ud83e\udee3\ud83d\ude02\ud83d\udc47",
+            "You can look, but can you keep up? \ud83e\udee3\ud83d\udc47"
+          ]
+        },
+        {
+          "theme": "One-on-One Tease",
+          "vision_signal": "mirror selfie energy",
+          "emoji_context": "mirror",
+          "captions": [
+            "This feels like I caught you staring at the the kind of look that makes him answer too fast part. \ud83e\udee3\ud83d\udc40\ud83d\udc47",
+            "I know exactly what you noticed first. \ud83e\udee3\ud83d\udc47",
+            "Careful. I might ask what you are thinking. \ud83e\udee3\ud83d\udc40\ud83d\udc47"
+          ]
+        },
+        {
+          "theme": "Conversation Starter",
+          "vision_signal": "mirror selfie energy",
+          "emoji_context": "mirror",
+          "captions": [
+            "Pick the vibe: sweet, trouble, or both? \ud83e\udee3\u263a\ufe0f\ud83d\udc47",
+            "Would you stay quiet here or say something bold? \ud83e\udee3\ud83d\ude09\ud83d\udc47",
+            "Tell me what this moment needs next. \ud83e\udee3\ud83d\udc47"
+          ]
+        }
+      ],
+      "engagement_goals": [
+        "replies",
+        "reposts",
+        "quote_posts",
+        "bookmarks",
+        "conversations"
+      ]
+    },
+    "created_at": "2026-07-08T18:25:00.983991"
+  },
+  {
+    "caption_result_id": "caption_result_231d192728b2482eaec6e029c44a421f",
+    "caption_request_id": "caption_request_db81fdd796554408a8baa673d94117a1",
+    "session_id": "caption_session_e51f1e150d26403f9dd0f5974961d5c5",
+    "platform": "x",
+    "variations": [
+      "Be honest... what would you say if you walked into this mirror selfie energy?",
+      "You get one sentence to impress me. What is it?",
+      "I feel like you have something clever to say here. Prove me right.",
+      "Caption this like you are trying to make me laugh.",
+      "Wrong answers only... what is happening here?",
+      "You can look, but can you keep up?",
+      "This feels like I caught you staring at the the kind of look that makes him answer too fast part.",
+      "I know exactly what you noticed first.",
+      "Careful. I might ask what you are thinking.",
+      "Pick the vibe: sweet, trouble, or both?",
+      "Would you stay quiet here or say something bold?",
+      "Tell me what this moment needs next."
+    ],
+    "selected_text": null,
+    "formatter_metadata": {
+      "provider_neutral": true,
+      "formatter": "CaptionStudioService",
+      "workflow": "x_engagement_publish",
+      "vision_primary": true,
+      "vision": {
+        "summary": "mirror selfie energy; the kind of look that makes him answer too fast",
+        "scene": "mirror selfie energy",
+        "mood": "the kind of look that makes him answer too fast",
+        "focus": "her expression, pose, setting, and the visible little story in the image",
+        "image_reference": "https://d2h7xmz5gqybh9.cloudfront.net/output/ec77fa5b-4fa6-45d6-82db-530122e3b4cc.jpeg",
+        "vision_primary": true,
+        "idea_seed": 0
+      },
+      "themes": [
+        {
+          "theme": "Make Him Answer",
+          "vision_signal": "mirror selfie energy",
+          "captions": [
+            "Be honest... what would you say if you walked into this mirror selfie energy?",
+            "You get one sentence to impress me. What is it?",
+            "I feel like you have something clever to say here. Prove me right."
+          ]
+        },
+        {
+          "theme": "Playful Challenge",
+          "vision_signal": "mirror selfie energy",
+          "captions": [
+            "Caption this like you are trying to make me laugh.",
+            "Wrong answers only... what is happening here?",
+            "You can look, but can you keep up?"
+          ]
+        },
+        {
+          "theme": "One-on-One Tease",
+          "vision_signal": "mirror selfie energy",
+          "captions": [
+            "This feels like I caught you staring at the the kind of look that makes him answer too fast part.",
+            "I know exactly what you noticed first.",
+            "Careful. I might ask what you are thinking."
+          ]
+        },
+        {
+          "theme": "Conversation Starter",
+          "vision_signal": "mirror selfie energy",
+          "captions": [
+            "Pick the vibe: sweet, trouble, or both?",
+            "Would you stay quiet here or say something bold?",
+            "Tell me what this moment needs next."
+          ]
+        }
+      ],
+      "engagement_goals": [
+        "replies",
+        "reposts",
+        "quote_posts",
+        "bookmarks",
+        "conversations"
+      ]
+    },
+    "created_at": "2026-07-08T18:16:53.867995"
+  },
+  {
+    "caption_result_id": "caption_result_ccb708a35d724c6c9a920d294e8a0c20",
+    "caption_request_id": "caption_request_975764e9a18647a2a313072c17d07949",
+    "session_id": "caption_session_36955dc4a4e34f7b95009ecd03f47b7b",
+    "platform": "x",
+    "variations": [
+      "Be honest... what would you say if you walked into this mirror selfie energy?",
+      "You get one sentence to impress me. What is it?",
+      "I feel like you have something clever to say here. Prove me right.",
+      "Caption this like you are trying to make me laugh.",
+      "Wrong answers only... what is happening here?",
+      "You can look, but can you keep up?",
+      "This feels like I caught you staring at the the kind of look that makes him answer too fast part.",
+      "I know exactly what you noticed first.",
+      "Careful. I might ask what you are thinking.",
+      "Pick the vibe: sweet, trouble, or both?",
+      "Would you stay quiet here or say something bold?",
+      "Tell me what this moment needs next."
+    ],
+    "selected_text": "You get one sentence to impress me. What is it?",
+    "formatter_metadata": {
+      "provider_neutral": true,
+      "formatter": "CaptionStudioService",
+      "workflow": "x_engagement_publish",
+      "vision_primary": true,
+      "vision": {
+        "summary": "mirror selfie energy; the kind of look that makes him answer too fast",
+        "scene": "mirror selfie energy",
+        "mood": "the kind of look that makes him answer too fast",
+        "focus": "her expression, pose, setting, and the visible little story in the image",
+        "image_reference": "https://d2h7xmz5gqybh9.cloudfront.net/output/cf5a071a-20eb-41c2-bad9-5b7e7fa39d78.jpeg",
+        "vision_primary": true,
+        "idea_seed": 0
+      },
+      "themes": [
+        {
+          "theme": "Make Him Answer",
+          "vision_signal": "mirror selfie energy",
+          "captions": [
+            "Be honest... what would you say if you walked into this mirror selfie energy?",
+            "You get one sentence to impress me. What is it?",
+            "I feel like you have something clever to say here. Prove me right."
+          ]
+        },
+        {
+          "theme": "Playful Challenge",
+          "vision_signal": "mirror selfie energy",
+          "captions": [
+            "Caption this like you are trying to make me laugh.",
+            "Wrong answers only... what is happening here?",
+            "You can look, but can you keep up?"
+          ]
+        },
+        {
+          "theme": "One-on-One Tease",
+          "vision_signal": "mirror selfie energy",
+          "captions": [
+            "This feels like I caught you staring at the the kind of look that makes him answer too fast part.",
+            "I know exactly what you noticed first.",
+            "Careful. I might ask what you are thinking."
+          ]
+        },
+        {
+          "theme": "Conversation Starter",
+          "vision_signal": "mirror selfie energy",
+          "captions": [
+            "Pick the vibe: sweet, trouble, or both?",
+            "Would you stay quiet here or say something bold?",
+            "Tell me what this moment needs next."
+          ]
+        }
+      ],
+      "engagement_goals": [
+        "replies",
+        "reposts",
+        "quote_posts",
+        "bookmarks",
+        "conversations"
+      ]
+    },
+    "created_at": "2026-07-08T17:42:23.671885"
+  },
+  {
+    "caption_result_id": "caption_result_197592876ef34f308f15832dbef988b2",
+    "caption_request_id": "caption_request_6b52f9a4e3634852a7530ee2dfa99b74",
+    "session_id": "caption_session_da4b0b1ae2fa4ce694cb41b970cd35d2",
+    "platform": "x",
+    "variations": [
+      "A little moment worth saving. Prompt 1: Ava Blackthorne creator-content concept. Ava Blackthorne is hot girl next door, funny, approachable, flirty, playful, confident, coastal, country roots, outdoorsy, classy, feminine, sexy but not arrogant. Creat",
+      "A little moment worth saving. Variation 2. Prompt 1: Ava Blackthorne creator-content concept. Ava Blackthorne is hot girl next door, funny, approachable, flirty, playful, confident, coastal, country roots, outdoorsy, classy, feminine, sexy but not arrogant. Creat",
+      "A little moment worth saving. Variation 3. Prompt 1: Ava Blackthorne creator-content concept. Ava Blackthorne is hot girl next door, funny, approachable, flirty, playful, confident, coastal, country roots, outdoorsy, classy, feminine, sexy but not arrogant. Creat"
+    ],
+    "selected_text": "A little moment worth saving. Prompt 1: Ava Blackthorne creator-content concept. Ava Blackthorne is hot girl next door, funny, approachable, flirty, playful, confident, coastal, country roots, outdoorsy, classy, feminine, sexy but not arrogant. Creat",
+    "formatter_metadata": {
+      "provider_neutral": true,
+      "formatter": "CaptionStudioService",
+      "style": "social_safe",
+      "tone": "confident"
+    },
+    "created_at": "2026-07-08T16:17:03.075613"
+  },
+  {
+    "caption_result_id": "caption_result_40644a06d9af4382aa9f0a637d287c7d",
+    "caption_request_id": "caption_request_e9939617bbc34433acc61befe9647023",
+    "session_id": "caption_session_20a36f85fb224309a0b0a6b4fded0375",
+    "platform": "x",
+    "variations": [
+      "A little moment worth saving. Prompt 1: Ava Blackthorne creator-content concept. Ava Blackthorne is hot girl next door, funny, approachable, flirty, playful, confident, coastal, country roots, outdoorsy, classy, feminine, sexy but not arrogant. Creat",
+      "A little moment worth saving. Variation 2. Prompt 1: Ava Blackthorne creator-content concept. Ava Blackthorne is hot girl next door, funny, approachable, flirty, playful, confident, coastal, country roots, outdoorsy, classy, feminine, sexy but not arrogant. Creat",
+      "A little moment worth saving. Variation 3. Prompt 1: Ava Blackthorne creator-content concept. Ava Blackthorne is hot girl next door, funny, approachable, flirty, playful, confident, coastal, country roots, outdoorsy, classy, feminine, sexy but not arrogant. Creat"
+    ],
+    "selected_text": "A little moment worth saving. Prompt 1: Ava Blackthorne creator-content concept. Ava Blackthorne is hot girl next door, funny, approachable, flirty, playful, confident, coastal, country roots, outdoorsy, classy, feminine, sexy but not arrogant. Creat",
+    "formatter_metadata": {
+      "provider_neutral": true,
+      "formatter": "CaptionStudioService",
+      "style": "social_safe",
+      "tone": "confident"
+    },
+    "created_at": "2026-07-08T16:14:51.732260"
+  }
+]

@@ -1,0 +1,33 @@
+[
+  {
+    "session_id": "photoshoot_session_7915f0db10d84e35a8188cdcbbb88f12",
+    "creator_profile_id": 2,
+    "title": "Premium Photoshoot",
+    "reference_asset_id": 84,
+    "creative_mode": "premium_teaser",
+    "status": "queued",
+    "provider_id": "seedream_4_5",
+    "creator_notes": "Started from Premium Studio.",
+    "creative_continuity": {
+      "prompt_count": 5,
+      "continuity": "preserve reference identity and creative direction across ordered prompts",
+      "source": "premium_studio",
+      "creative_tags": [
+        "A barely-there crochet crop top paired with a matching micro-mini skirt or short-shorts. The open-weave lets skin peek through",
+        "and the neutral sand or white color keeps it light for daytime"
+      ],
+      "premium_workflow": true
+    },
+    "request_ids": [
+      "photoshoot_request_b79acd5d317f4e10ac1a452843337cd5",
+      "photoshoot_request_00a2c09afd4441a8b2cc24468aa2dbcc",
+      "photoshoot_request_41a94257da3242a1bf4ad5b0d8feb5f1",
+      "photoshoot_request_06d932ddd0334c00a0e3a29305a73fe2",
+      "photoshoot_request_26c011520ede4c0692365cf585d2c0cf"
+    ],
+    "current_request_id": null,
+    "created_at": "2026-07-08T00:48:56.518931",
+    "updated_at": null,
+    "metadata": {}
+  }
+]
