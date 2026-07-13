@@ -24,8 +24,10 @@ class ContentIntelligenceService:
         self,
         *,
         asset_understanding_service: Any | None = None,
+        profile_repository: Any | None = None,
     ) -> None:
         self._asset_understanding = asset_understanding_service
+        self._profiles = profile_repository
 
     @property
     def asset_understanding(self) -> Any:
@@ -36,6 +38,56 @@ class ContentIntelligenceService:
 
             self._asset_understanding = AssetUnderstandingService()
         return self._asset_understanding
+
+    @property
+    def profiles(self) -> Any:
+        if self._profiles is None:
+            from app.repositories.content_intelligence_repository import (
+                ContentIntelligenceProfileRepository,
+            )
+
+            self._profiles = ContentIntelligenceProfileRepository()
+        return self._profiles
+
+    def get_asset_profile(self, asset_id: int) -> Any | None:
+        """Load the canonical persisted Content Intelligence profile."""
+
+        getter = getattr(self.profiles, "get_by_asset_id", None)
+        if not callable(getter):
+            return None
+        return getter(asset_id)
+
+    def get_asset_readiness(self, asset_id: int) -> Mapping[str, Any]:
+        """Return profile lifecycle readiness without triggering re-analysis."""
+
+        profile = self.get_asset_profile(asset_id)
+        if profile is None:
+            return {
+                "asset_id": asset_id,
+                "status": "PENDING",
+                "ready": False,
+                "missing_components": ("content_intelligence_profile",),
+            }
+        return {
+            "asset_id": profile.asset_id,
+            "status": profile.status.value,
+            "ready": profile.ready,
+            "missing_components": profile.missing_components,
+            "error_code": profile.error_code,
+            "error_message": profile.error_message,
+        }
+
+    def search_profiles(
+        self,
+        *,
+        query: str | None = None,
+        status: str | None = None,
+        limit: int = 100,
+    ) -> tuple[Any, ...]:
+        searcher = getattr(self.profiles, "search_profiles", None)
+        if not callable(searcher):
+            return ()
+        return searcher(query=query, status=status, limit=limit)
 
     def get_asset_intelligence(self, asset_id: int) -> ContentIntelligence | None:
         """Load existing AI understanding for an Asset without re-analysis."""

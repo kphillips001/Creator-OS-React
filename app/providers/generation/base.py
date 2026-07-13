@@ -248,6 +248,7 @@ Scene families available from Wavespeed include lake, beach, boat, dock, pool, p
         self.validate_request(request)
         submissions: list[ProviderSubmission] = []
         poll_results: list[ProviderPollResult] = []
+        failures: list[Mapping[str, Any]] = []
         output_references: list[str] = []
         total = max(1, int(request.image_count or 1))
         prompt_variations = self._prompt_variations(request)
@@ -263,8 +264,33 @@ Scene families available from Wavespeed include lake, beach, boat, dock, pool, p
                     total=total,
                     message=f"Submitting image {index + 1} of {total}",
                     output_references=tuple(output_references),
+                    completed_count=len(output_references),
+                    failed_count=len(failures),
+                    processed_count=index,
                 )
-            submission = self.submit_generation(request_for_image)
+            try:
+                submission = self.submit_generation(request_for_image)
+            except Exception as exc:
+                failures.append(
+                    {
+                        "index": index + 1,
+                        "stage": "submit",
+                        "reason": str(exc),
+                        "provider_error": exc.__class__.__name__,
+                    }
+                )
+                if progress_callback:
+                    progress_callback(
+                        current=len(output_references),
+                        total=total,
+                        message=f"Image {index + 1} of {total} failed",
+                        output_references=tuple(output_references),
+                        completed_count=len(output_references),
+                        failed_count=len(failures),
+                        processed_count=index + 1,
+                        failed=True,
+                    )
+                continue
             submissions.append(submission)
             if progress_callback:
                 progress_callback(
@@ -272,39 +298,130 @@ Scene families available from Wavespeed include lake, beach, boat, dock, pool, p
                     total=total,
                     message=f"Waiting for image {index + 1} of {total}",
                     output_references=tuple(output_references),
+                    completed_count=len(output_references),
+                    failed_count=len(failures),
+                    processed_count=index,
                 )
-            poll_result = self.poll_status(submission)
+            try:
+                poll_result = self.poll_status(submission)
+            except Exception as exc:
+                failures.append(
+                    {
+                        "index": index + 1,
+                        "stage": "poll",
+                        "reason": str(exc),
+                        "provider_request_id": submission.provider_request_id,
+                        "provider_error": exc.__class__.__name__,
+                    }
+                )
+                if progress_callback:
+                    progress_callback(
+                        current=len(output_references),
+                        total=total,
+                        message=f"Image {index + 1} of {total} failed",
+                        output_references=tuple(output_references),
+                        completed_count=len(output_references),
+                        failed_count=len(failures),
+                        processed_count=index + 1,
+                        failed=True,
+                    )
+                continue
             poll_results.append(poll_result)
             if poll_result.status != GenerationStatus.SUCCEEDED.value:
+                failures.append(
+                    {
+                        "index": index + 1,
+                        "stage": "provider_result",
+                        "reason": poll_result.failure_reason or f"Image {index + 1} failed",
+                        "provider_request_id": submission.provider_request_id,
+                        "status": poll_result.status,
+                    }
+                )
                 if progress_callback:
                     progress_callback(
                         current=len(output_references),
                         total=total,
                         message=poll_result.failure_reason or f"Image {index + 1} failed",
                         output_references=tuple(output_references),
+                        completed_count=len(output_references),
+                        failed_count=len(failures),
+                        processed_count=index + 1,
                         failed=True,
                     )
-                return self.retrieve_result(request_for_image, submission, poll_result)
+                continue
             output_references.extend(poll_result.output_references)
             if progress_callback:
                 progress_callback(
-                    current=min(index + 1, total),
+                    current=len(output_references),
                     total=total,
                     message=f"Image {index + 1} of {total} completed",
                     output_references=tuple(output_references),
+                    completed_count=len(output_references),
+                    failed_count=len(failures),
+                    processed_count=index + 1,
                 )
+
+        failure_reason = None
+        if failures:
+            failure_reason = "; ".join(str(item.get("reason") or "Generation failed") for item in failures)
+        if not submissions:
+            return GenerationResult(
+                result_id=new_generation_id("generation_result"),
+                request_id=request.request_id,
+                job_id="provider_pending",
+                provider_id=self.provider_id,
+                status=GenerationStatus.FAILED.value,
+                generation_metadata={
+                    "provider_family": self.provider_family,
+                    "endpoint": self.endpoint,
+                    "partial_success": False,
+                },
+                execution_metadata={"failures": tuple(dict(item) for item in failures)},
+                image_metadata={
+                    "requested_image_count": total,
+                    "output_count": 0,
+                    "completed_count": 0,
+                    "failed_count": len(failures),
+                    "processed_count": total,
+                    "reference_asset_id": request.reference_asset_id,
+                },
+                output_references=(),
+                failure_reason=failure_reason or "Generation failed. No requested images completed.",
+            )
 
         first_submission = submissions[0]
         merged_poll = ProviderPollResult(
             provider_request_id=first_submission.provider_request_id,
-            status=GenerationStatus.SUCCEEDED.value,
+            status=GenerationStatus.SUCCEEDED.value if output_references else GenerationStatus.FAILED.value,
             raw_response={
                 "provider_request_ids": tuple(item.provider_request_id for item in submissions),
                 "poll_responses": tuple(item.raw_response for item in poll_results),
+                "failures": tuple(dict(item) for item in failures),
             },
             output_references=tuple(output_references),
+            failure_reason=None if output_references else failure_reason,
         )
-        return self.retrieve_result(request, first_submission, merged_poll)
+        result = self.retrieve_result(request, first_submission, merged_poll)
+        return replace(
+            result,
+            generation_metadata={
+                **dict(result.generation_metadata or {}),
+                "partial_success": bool(output_references and failures),
+            },
+            execution_metadata={
+                **dict(result.execution_metadata or {}),
+                "failures": tuple(dict(item) for item in failures),
+            },
+            image_metadata={
+                **dict(result.image_metadata or {}),
+                "requested_image_count": total,
+                "output_count": len(output_references),
+                "completed_count": len(output_references),
+                "failed_count": len(failures),
+                "processed_count": total,
+            },
+            failure_reason=failure_reason if output_references and failures else result.failure_reason,
+        )
 
     def submit_generation(self, request: GenerationRequest) -> ProviderSubmission:
         response = self.http_client.post(

@@ -6,7 +6,7 @@ closes the context, and exits.
 
 Example:
 
-    .\\bot\\Scripts\\python.exe -m app.tools.playwright_firefox_minimal_test --profile-dir "C:\\Fanvue-Chatbot\\data\\playwright\\fanvue_playwright_profile" --firefox-executable "C:\\Program Files\\Mozilla Firefox\\firefox.exe"
+    .\\bot\\Scripts\\python.exe -m app.tools.playwright_firefox_minimal_test --profile-dir "data\\playwright\\fanvue_playwright_profile" --firefox-executable "C:\\Program Files\\Mozilla Firefox\\firefox.exe"
 """
 
 from __future__ import annotations

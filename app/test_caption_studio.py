@@ -63,6 +63,7 @@ def generated_record(image_id="generated_image_caption_1"):
 def grok_vision_payload(**overrides):
     payload = {
         "image_analysis": {
+            "setting": "cozy kitchen",
             "location": "cozy kitchen",
             "wardrobe": "soft casual top",
             "expression": "warm smile",
@@ -71,53 +72,37 @@ def grok_vision_payload(**overrides):
             "mood": "affectionate and playful",
             "environment": "home",
             "activity": "making coffee",
+            "time_of_day": "morning",
         },
-        "girlfriend_energy": [
-        "I made coffee... would you rather spend the morning with me? 👇",
-        "This morning would be better if you were here, right? 👀",
-        "Home feels softer when I am thinking about you, agree? 😉",
-        "I saved you the good seat next to me, taking it? 👇",
-        "Morning light and one little wish you were here moment, yes? 👀",
-        ],
-        "teasing_naughty": [
-        "You keep looking... I am not complaining, are you? 😏",
-        "I know exactly what caught your attention, don't I? 👀",
-        "You would probably get distracted if you were here, wouldn't you? 😉",
-        "Careful, I might ask what you are thinking 👇",
-        "This is me pretending I did not notice you paused, did you? 👀",
+        "captions": [
+            "You walk in while I’m making coffee... what’s the first thing you say? 👀👇",
+            "Be honest... are we having coffee here or sneaking out for breakfast? ☕👇",
+            "Help me decide: slow morning in, or take this energy somewhere cute? 😉👇",
+            "Finish the sentence: this kitchen needs more ____. ☕",
+            "If I saved you the good seat, are you behaving or distracting me? 😏👇",
+            "What song are you putting on while I make the coffee? 🎶👇",
+            "You get one line to make me laugh before the coffee’s done. What is it? ☕",
+            "Choose one: coffee first, conversation first, or trouble first? 👀",
+            "What kind of morning does this feel like to you? ☀️👇",
+            "If we had one hour here, what are we talking about first? ☕👇",
         ],
     }
-    payload["girlfriend_energy"] = [
-        "I made coffee... but I would rather spend the morning with you 👇",
-        "This morning would be better if you were here with me 👀",
-        "Home feels softer when I am thinking about you 😉",
-        "I saved you the good seat next to me 👇",
-        "Morning light and one little wish you were here moment 👀",
-    ]
-    payload["teasing_naughty"] = [
-        "You keep looking... I am not complaining 😏",
-        "I know exactly what caught your attention 👀",
-        "You would probably get distracted if you were here 😉",
-        "Careful, I might ask what you are thinking 👇",
-        "This is me pretending I did not notice you paused 👀",
-    ]
     payload.update(overrides)
-    if "girlfriend_energy" not in overrides:
-        payload["girlfriend_energy"] = [
-            "I made coffee... would you rather spend the morning with me? 👇",
-            "This morning would be better if you were here, right? 👀",
-            "Home feels softer when I am thinking about you, agree? 😉",
-            "I saved you the good seat next to me, taking it? 👇",
-            "Morning light and one little wish you were here moment, yes? 👀",
-        ]
-    if "teasing_naughty" not in overrides:
-        payload["teasing_naughty"] = [
-            "You keep looking... I am not complaining, are you? 😏",
-            "I know exactly what caught your attention, don't I? 👀",
-            "You would probably get distracted if you were here, wouldn't you? 😉",
-            "Careful, I might ask what you are thinking 👇",
-            "This is me pretending I did not notice you paused, did you? 👀",
-        ]
+    if "captions" in overrides and len(payload["captions"]) < 10:
+        payload["captions"] = [
+            *payload["captions"],
+            *[
+                caption
+                for caption in (
+                    "Be honest... what would you say first? 👀👇",
+                    "Choose one: stay here, go out, or make this interesting? 😉",
+                    "Help me settle this... is this a quiet moment or a trouble moment? 👇",
+                    "Finish this sentence: this needs more ____. 👇",
+                    "What would you do if you walked in right now? 👀",
+                )
+                if caption not in payload["captions"]
+            ],
+        ][:10]
     return payload
 
 
@@ -133,14 +118,14 @@ def telegram_grok_vision_payload(**overrides):
             "environment": "home",
             "activity": "quiet evening moment",
         },
-        "girlfriend_energy": [
+        "romantic": [
             "I saved this quiet little moment for you",
             "This would feel better if you were here",
             "Soft lights and a little thought of you",
             "I like when it feels this close",
             "Come stay in this mood with me",
         ],
-        "naughty": [
+        "teasing_naughty": [
             "You noticed the look, didn't you",
             "I know exactly where your eyes went",
             "Careful, this mood gets distracting",
@@ -331,17 +316,34 @@ class CaptionStudioTests(unittest.TestCase):
         self.assertEqual(result.formatter_metadata["vision_provider"], "grok")
         self.assertEqual(calls[0]["image_reference"], "https://cdn.test/window-mirror-caption.png")
         self.assertIn("analyze the attached image", calls[0]["prompt"])
-        self.assertEqual(len(themes), 2)
-        self.assertEqual(themes[0]["theme"], "❤️ Girlfriend Energy")
-        self.assertEqual(themes[1]["theme"], "😈 Teasing / Naughty")
-        self.assertTrue(all(len(theme["captions"]) == 5 for theme in themes))
+        self.assertEqual(len(themes), 1)
+        self.assertEqual(themes[0]["theme"], "Creator OS Engagement")
+        self.assertTrue(all(len(theme["captions"]) == 10 for theme in themes))
         self.assertEqual(len(result.variations), 10)
+        self.assertGreaterEqual(len(set(result.variations)), 10)
         self.assertLessEqual(max(len(caption) for caption in result.variations), 280)
         self.assertIn("grok_vision_image_analysis", caption_studio.get_caption_request(result.caption_request_id).metadata["context_priority"])
+        self.assertIsNone(result.selected_text)
         self.assertEqual(
             themes[0]["theme"],
             different.formatter_metadata["themes"][0]["theme"],
         )
+
+    def test_x_engagement_captions_are_reply_oriented_and_not_descriptive(self):
+        caption_studio, _, _ = self.make_services(grok_vision_provider=lambda **kwargs: grok_vision_payload())
+
+        result = caption_studio.generate_x_engagement_themes(
+            generated_image_id="generated_image_caption_1",
+            image_reference="https://cdn.test/window-mirror-caption.png",
+            creator_profile_id=7,
+        )
+
+        captions = result.variations
+        reply_cues = ("?", "Be honest", "Help me decide", "Finish the sentence", "Choose one", "what")
+        blocked_openings = ("Golden light", "Warm light", "Soft smile", "This bikini", "My shirt", "This view")
+        self.assertEqual(len(captions), 10)
+        self.assertGreaterEqual(sum(any(cue in caption for cue in reply_cues) for caption in captions), 8)
+        self.assertFalse(any(caption.startswith(blocked_openings) for caption in captions))
 
     def test_x_engagement_captions_use_context_aware_emojis_without_spam(self):
         caption_studio, _, _ = self.make_services(grok_vision_provider=lambda **kwargs: grok_vision_payload())
@@ -377,14 +379,14 @@ class CaptionStudioTests(unittest.TestCase):
         def fake_setting_grok(**kwargs):
             image_reference = kwargs.get("image_reference", "")
             if "boat" in image_reference:
-                return grok_vision_payload(girlfriend_energy=[
+                return grok_vision_payload(captions=[
                     "Boat morning with you would be better 🚤",
                     "Lake light feels softer with you here 🌊",
                     "Saved you a spot by the water 🌊",
                     "This would be our quiet little escape 🚤",
                     "Wish you were here for this view 🌊",
                 ])
-                return grok_vision_payload(girlfriend_energy=[
+                return grok_vision_payload(captions=[
                     "Boat morning with you would be better ðŸš¤",
                     "Lake light feels softer with you here ðŸŒŠ",
                     "Saved you a spot by the water ðŸŒŠ",
@@ -392,28 +394,28 @@ class CaptionStudioTests(unittest.TestCase):
                     "Wish you were here for this view ðŸŒŠ",
                 ])
             if "coffee" in image_reference:
-                return grok_vision_payload(girlfriend_energy=[
+                return grok_vision_payload(captions=[
                     "Coffee is ready and I saved you a seat ☕",
                     "Couch mornings are better with you 🛋️",
                     "I made coffee but wanted you here ☕",
                     "This corner feels made for two 🛋️",
                     "Morning softness and your missing spot ☕",
                 ])
-                return grok_vision_payload(girlfriend_energy=[
+                return grok_vision_payload(captions=[
                     "Coffee is ready and I saved you a seat â˜•",
                     "Couch mornings are better with you ðŸ›‹ï¸",
                     "I made coffee but wanted you here â˜•",
                     "This corner feels made for two ðŸ›‹ï¸",
                     "Morning softness and your missing spot â˜•",
                 ])
-            return grok_vision_payload(girlfriend_energy=[
+            return grok_vision_payload(captions=[
                 "Okay photographer... tell me when to smile 📸",
                 "This shot needed your opinion 📸",
                 "Camera caught me thinking about you 📸",
                 "You would probably ask for one more 📸",
                 "I saved the good angle for you 📸",
             ])
-            return grok_vision_payload(girlfriend_energy=[
+            return grok_vision_payload(captions=[
                 "Okay photographer... tell me when to smile ðŸ“¸",
                 "This shot needed your opinion ðŸ“¸",
                 "Camera caught me thinking about you ðŸ“¸",
@@ -492,9 +494,9 @@ class CaptionStudioTests(unittest.TestCase):
         self.assertEqual(calls[0]["image_reference"], "https://cdn.test/telegram-bedroom-evening.png")
         self.assertEqual(calls[0]["platform"], CaptionPlatform.TELEGRAM.value)
         self.assertIn("writing Telegram captions", calls[0]["prompt"])
-        self.assertIn('"naughty"', calls[0]["prompt"])
-        self.assertEqual(themes[0]["theme"], "❤️ Girlfriend Energy")
-        self.assertEqual(themes[1]["theme"], "😈 Naughty")
+        self.assertIn('"teasing_naughty"', calls[0]["prompt"])
+        self.assertEqual(themes[0]["theme"], "💛 Romantic")
+        self.assertEqual(themes[1]["theme"], "😈 Teasing / Naughty")
         self.assertEqual(len(themes[0]["captions"]), 5)
         self.assertEqual(len(themes[1]["captions"]), 5)
         self.assertEqual(len(result.variations), 10)
@@ -506,9 +508,9 @@ class CaptionStudioTests(unittest.TestCase):
 
         self.assertIn("generate_telegram_vision_themes", source)
         self.assertIn("generation_library_telegram_selected_caption", source)
-        self.assertIn("Generate Different Ideas", source)
-        self.assertIn("Caption Editor", source)
-        self.assertIn("Select a generated caption above or write your own.", source)
+        self.assertIn("✨ Regenerate Captions", source)
+        self.assertIn("Enter Your Own Caption", source)
+        self.assertIn("Type or paste your own Telegram caption here.", source)
         self.assertIn('selected_caption = str(st.session_state.get(caption_key) or "").strip()', source)
         self.assertIn("caption_text=selected_caption", source)
         self.assertIn("social_publishing.assign_caption", source)
@@ -525,8 +527,8 @@ class CaptionStudioTests(unittest.TestCase):
         self.assertIn("↺ Restore Original", source)
         self.assertIn("caption_was_edited", source)
         self.assertIn('"caption_source": "edited_generated" if caption_was_edited else "generated" if selected_generated_caption else "custom"', source)
-        self.assertIn("Custom caption will be published.", source)
-        self.assertIn("Select a generated caption or write one before publishing.", source)
+        self.assertIn("If this field contains text", source)
+        self.assertIn("it will be published instead of generating or selecting an AI caption", source)
         self.assertIn("selected_generated_caption = str(st.session_state.get(selected_key) or \"\").strip()", source)
         self.assertIn("disabled=not selected_caption", source)
         self.assertIn('"selected_generated_caption": selected_generated_caption', source)
@@ -571,6 +573,7 @@ class CaptionStudioTests(unittest.TestCase):
         self.assertIn("Style", source)
         self.assertIn("Generate Text", source)
         self.assertIn("Regenerate Captions", source)
+        self.assertIn("Creator OS Engagement", Path("app/services/caption_studio_service.py").read_text(encoding="utf-8"))
         self.assertIn("Select Caption", source)
         self.assertIn("Caption History", source)
         self.assertIn('"Caption Studio"', navigation)

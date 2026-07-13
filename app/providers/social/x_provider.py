@@ -6,9 +6,15 @@ SocialPublishingService owns queue state and publish history.
 
 from __future__ import annotations
 
+import inspect
+import json
 import os
+import sys
 import tempfile
-from dataclasses import dataclass, field
+import traceback
+from dataclasses import asdict, dataclass, field
+from importlib import import_module
+from importlib import metadata
 from pathlib import Path
 from typing import Any, Mapping
 from urllib.parse import urlparse
@@ -17,8 +23,82 @@ import requests
 from PIL import Image, ImageOps
 
 
+X_PUBLISH_DIALOG_DEBUG_LOG = Path("logs") / "x_publish_dialog_debug.log"
+
+
+def _debug_x_provider_event(event: str, *, diagnostic: Any = None, value: Any = None) -> None:
+    try:
+        frame = inspect.currentframe()
+        caller = frame.f_back if frame is not None else None
+        payload = {
+            "event": event,
+            "file": __file__,
+            "function": caller.f_code.co_name if caller is not None else None,
+            "line": caller.f_lineno if caller is not None else None,
+            "source": "provider diagnostic",
+            "variable_name": "diagnostic",
+            "value": str(value),
+            "diagnostic": asdict(diagnostic) if diagnostic is not None else None,
+            "diagnostic_repr": repr(diagnostic),
+            "stack": traceback.format_stack(limit=16),
+        }
+        X_PUBLISH_DIALOG_DEBUG_LOG.parent.mkdir(parents=True, exist_ok=True)
+        with open(X_PUBLISH_DIALOG_DEBUG_LOG, "a", encoding="utf-8") as file:
+            file.write(json.dumps(payload, default=str) + "\n")
+    except Exception:
+        pass
+
+
 class XPublishError(RuntimeError):
     """Raised when X publishing cannot complete."""
+
+
+@dataclass(frozen=True)
+class XDependencyDiagnostic:
+    runtime_interpreter: str
+    tweepy_installed: bool
+    tweepy_version: str | None = None
+    tweepy_path: str | None = None
+    error: str | None = None
+
+    def missing_dependency_message(self) -> str | None:
+        if self.tweepy_installed:
+            return None
+        runtime = self.runtime_interpreter or "the active Python runtime"
+        message = (
+            "X publishing dependency missing.\n\n"
+            "Runtime interpreter:\n"
+            f"{runtime}\n\n"
+            "Install using:\n"
+            "python -m pip install tweepy==4.15.0\n\n"
+            "or\n\n"
+            f"{runtime} -m pip install tweepy==4.15.0"
+        )
+        _debug_x_provider_event(
+            "x_missing_dependency_message_generated",
+            diagnostic=self,
+            value=message,
+        )
+        return message
+
+    def format(self) -> str:
+        lines = [
+            "Python Runtime",
+            f"[OK] {self.runtime_interpreter}" if self.runtime_interpreter else "[MISSING]",
+            "",
+            "tweepy",
+        ]
+        if self.tweepy_installed:
+            lines.append("[OK] Installed")
+            if self.tweepy_version:
+                lines.append(f"Version: {self.tweepy_version}")
+            if self.tweepy_path:
+                lines.append(f"Path: {self.tweepy_path}")
+        else:
+            lines.append("[MISSING] Not Installed")
+            if self.error:
+                lines.append(f"Details: {self.error}")
+        return "\n".join(lines)
 
 
 @dataclass(frozen=True)
@@ -155,11 +235,88 @@ class XPublishingProvider:
     def _load_tweepy(self):
         if self._tweepy is not None:
             return self._tweepy
+        diagnostic = self.runtime_dependency_diagnostic()
+        if not diagnostic.tweepy_installed:
+            raise XPublishError(diagnostic.missing_dependency_message() or "X publishing dependency missing.")
         try:
-            import tweepy  # type: ignore
+            return import_module("tweepy")
+        except ModuleNotFoundError as exc:
+            if exc.name != "tweepy":
+                raise XPublishError(
+                    "X publishing could not load a tweepy dependency. "
+                    f"Runtime Python: {sys.executable}. Details: {exc}"
+                ) from exc
+            raise XPublishError(self._missing_tweepy_message()) from exc
         except ImportError as exc:
-            raise XPublishError("tweepy is required for X publishing.") from exc
-        return tweepy
+            raise XPublishError(
+                "X publishing could not import tweepy in the current runtime "
+                f"({sys.executable}). Details: {exc}"
+            ) from exc
+
+    @classmethod
+    def runtime_dependency_diagnostic(cls) -> XDependencyDiagnostic:
+        runtime = sys.executable
+        try:
+            tweepy = import_module("tweepy")
+        except ModuleNotFoundError as exc:
+            if exc.name == "tweepy":
+                diagnostic = XDependencyDiagnostic(
+                    runtime_interpreter=runtime,
+                    tweepy_installed=False,
+                    error="tweepy is not installed in this runtime.",
+                )
+                _debug_x_provider_event(
+                    "runtime_dependency_diagnostic_return",
+                    diagnostic=diagnostic,
+                    value=diagnostic,
+                )
+                return diagnostic
+            diagnostic = XDependencyDiagnostic(
+                runtime_interpreter=runtime,
+                tweepy_installed=False,
+                error=f"tweepy dependency could not be loaded: {exc}",
+            )
+            _debug_x_provider_event(
+                "runtime_dependency_diagnostic_return",
+                diagnostic=diagnostic,
+                value=diagnostic,
+            )
+            return diagnostic
+        except ImportError as exc:
+            diagnostic = XDependencyDiagnostic(
+                runtime_interpreter=runtime,
+                tweepy_installed=False,
+                error=f"tweepy import failed: {exc}",
+            )
+            _debug_x_provider_event(
+                "runtime_dependency_diagnostic_return",
+                diagnostic=diagnostic,
+                value=diagnostic,
+            )
+            return diagnostic
+        version = getattr(tweepy, "__version__", None)
+        if not version:
+            try:
+                version = metadata.version("tweepy")
+            except metadata.PackageNotFoundError:
+                version = None
+        diagnostic = XDependencyDiagnostic(
+            runtime_interpreter=runtime,
+            tweepy_installed=True,
+            tweepy_version=version,
+            tweepy_path=str(getattr(tweepy, "__file__", "") or "") or None,
+        )
+        _debug_x_provider_event(
+            "runtime_dependency_diagnostic_return",
+            diagnostic=diagnostic,
+            value=diagnostic,
+        )
+        return diagnostic
+
+    @staticmethod
+    def _missing_tweepy_message() -> str:
+        diagnostic = XPublishingProvider.runtime_dependency_diagnostic()
+        return diagnostic.missing_dependency_message() or "X publishing dependency missing."
 
     def _materialize_image_reference(self, image_reference: str) -> Path:
         reference = str(image_reference or "").strip()

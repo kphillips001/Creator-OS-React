@@ -41,8 +41,17 @@ class ContentArchiveService:
     def content_paths(self) -> dict[str, Path]:
         root = self.content_root
         return {
+            "generation_active": root / "Generation" / "Active",
             "generation_social": root / "Generation" / "Social",
             "generation_premium": root / "Generation" / "Premium",
+            "generation_photoshoot_active": root / "Generation" / "Photoshoot" / "Active",
+            "generation_photoshoot_gallery": root / "Generation" / "Photoshoot" / "Gallery",
+            "generation_photoshoot_junk": root / "Generation" / "Photoshoot" / "Junk",
+            "pending_edit": root / "Pending_Edit",
+            "pending_photoshoot": root / "Pending_Photoshoot",
+            "pending_video": root / "Pending_Video",
+            "edited_originals": root / "Edited" / "Originals",
+            "edited_approved": root / "Edited" / "Approved",
             "posted_x_main": root / "Posted" / "X" / "Main",
             "posted_telegram_main": root / "Posted" / "Telegram" / "Main",
             "posted_telegram_vault": root / "Posted" / "Telegram" / "Vault",
@@ -149,6 +158,49 @@ class ContentArchiveService:
             destination=self.content_paths()["archive_edited"],
             metadata=metadata,
         )
+
+    def move_to_pending_edit(self, record: GeneratedImageRecord) -> Path:
+        return self._move_or_materialize(
+            record.output_reference,
+            self.content_paths()["pending_edit"],
+            record.image_id,
+        )
+
+    def move_to_pending_workflow(self, record: GeneratedImageRecord, *, workflow: str) -> Path:
+        normalized = str(workflow or "").strip().lower()
+        destination_key = {
+            "edit": "pending_edit",
+            "photoshoot": "pending_photoshoot",
+            "video": "pending_video",
+        }.get(normalized)
+        if not destination_key:
+            raise ValueError(f"Unsupported pending workflow: {workflow}")
+        return self._move_or_materialize(
+            record.output_reference,
+            self.content_paths()[destination_key],
+            record.image_id,
+        )
+
+    def move_to_generation_active(self, record: GeneratedImageRecord) -> Path:
+        return self._move_or_materialize(
+            record.output_reference,
+            self.content_paths()["generation_active"],
+            record.image_id,
+        )
+
+    def copy_edit_history(
+        self,
+        record: GeneratedImageRecord,
+        *,
+        history_type: str,
+    ) -> Path:
+        paths = self.content_paths()
+        destination = (
+            paths["edited_approved"]
+            if str(history_type or "").strip().lower() == "approved"
+            else paths["edited_originals"]
+        )
+        return self._copy_or_materialize(record.output_reference, destination, record.image_id)
 
     def archive_imported(
         self,
@@ -281,10 +333,10 @@ class ContentArchiveService:
         return self._generation_destination_for_workflow(archive_record.workflow)
 
     def _generation_destination_for_workflow(self, workflow_value: Any) -> Path:
-        workflow = str(workflow_value or "").lower()
-        if "premium" in workflow:
-            return self.content_paths()["generation_premium"]
-        return self.content_paths()["generation_social"]
+        workflow = str(workflow_value or "").strip().lower()
+        if "photoshoot" in workflow:
+            return self.content_paths()["generation_photoshoot_active"]
+        return self.content_paths()["generation_active"]
 
     def _move_or_materialize(self, source_reference: str, destination: Path, image_id: str) -> Path:
         destination.mkdir(parents=True, exist_ok=True)
@@ -302,6 +354,25 @@ class ContentArchiveService:
             if source_path.resolve() == target.resolve():
                 return target
             shutil.move(str(source_path), str(target))
+            return target
+        return Path(source or target)
+
+    def _copy_or_materialize(self, source_reference: str, destination: Path, image_id: str) -> Path:
+        destination.mkdir(parents=True, exist_ok=True)
+        source = str(source_reference or "").strip()
+        suffix = Path(urlparse(source).path).suffix or Path(source).suffix or ".jpg"
+        target = self._unique_path(destination / f"{image_id}{suffix}")
+        parsed = urlparse(source)
+        if parsed.scheme in {"http", "https"}:
+            response = self.http_client.get(source, timeout=120, headers={"User-Agent": "Creator-OS"})
+            response.raise_for_status()
+            target.write_bytes(response.content)
+            return target
+        source_path = Path(source).expanduser()
+        if source_path.exists():
+            if source_path.resolve() == target.resolve():
+                return target
+            shutil.copy2(str(source_path), str(target))
             return target
         return Path(source or target)
 

@@ -1,4 +1,8 @@
 from app.database import get_db_connection
+from app.models.asset_provenance import (
+    ASSET_PROVENANCE_METADATA_KEY,
+    administrative_import_context,
+)
 from app.services.asset_ingestion_service import AssetIngestionService
 import json
 
@@ -92,6 +96,17 @@ def _get_existing_content_item_columns(conn) -> set[str]:
 
 
 def insert_content_item(data: dict):
+    data = dict(data or {})
+    media_metadata = data.get("media_metadata") or {}
+    if isinstance(media_metadata, str):
+        media_metadata = json.loads(media_metadata)
+    if isinstance(media_metadata, dict) and ASSET_PROVENANCE_METADATA_KEY not in media_metadata:
+        media_metadata[ASSET_PROVENANCE_METADATA_KEY] = administrative_import_context(
+            source="ContentRepository.insert_content_item",
+            source_workflow="legacy_content_repository",
+            metadata={"explicit_non_commerce_path": True},
+        )
+        data["media_metadata"] = media_metadata
     with get_db_connection() as conn:
         existing_columns = _get_existing_content_item_columns(conn)
         values = {}

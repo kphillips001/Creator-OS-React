@@ -6,10 +6,14 @@ from importlib.util import find_spec
 fake_psycopg = types.ModuleType("psycopg")
 fake_psycopg_types = types.ModuleType("psycopg.types")
 fake_psycopg_json = types.ModuleType("psycopg.types.json")
+fake_psycopg_rows = types.ModuleType("psycopg.rows")
+fake_psycopg.connect = lambda *args, **kwargs: None
 fake_psycopg_json.Jsonb = lambda value: value
+fake_psycopg_rows.dict_row = object()
 sys.modules.setdefault("psycopg", fake_psycopg)
 sys.modules.setdefault("psycopg.types", fake_psycopg_types)
 sys.modules.setdefault("psycopg.types.json", fake_psycopg_json)
+sys.modules.setdefault("psycopg.rows", fake_psycopg_rows)
 
 from app.contracts.cms import (
     AvailableProduct,

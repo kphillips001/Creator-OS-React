@@ -112,7 +112,7 @@ class GenerationProviderTests(unittest.TestCase):
         self.assertIn("nano_banana_pro", provider_ids)
         self.assertIn("wan_2_7_image_edit", provider_ids)
         self.assertIn("seedream_4_5", provider_ids)
-        self.assertIn("seedream_5_0_lite", provider_ids)
+        self.assertIn("seedream_5_0_pro", provider_ids)
         self.assertIn("flux", provider_ids)
         self.assertFalse(registry.require("flux").metadata().enabled)
 

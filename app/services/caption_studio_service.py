@@ -33,6 +33,7 @@ class CaptionStudioService:
     """Owns provider-neutral writing workflow and text history."""
 
     DEFAULT_STORAGE_DIR = Path("data") / "caption_studio"
+    X_CAPTION_COUNT = 10
 
     def __init__(
         self,
@@ -229,7 +230,7 @@ class CaptionStudioService:
             platform=platform,
             style=style,
             tone=tone,
-            source_text=source_text,
+            source_text=source_text or "Grok Vision X caption set",
             variation_count=variation_count,
             source_generated_image_id=record.image_id,
             metadata={
@@ -280,11 +281,11 @@ class CaptionStudioService:
         prompt_text: str | None = None,
         prompt_metadata: Mapping[str, Any] | None = None,
         generation_metadata: Mapping[str, Any] | None = None,
-        theme_count: int = 2,
-        captions_per_theme: int = 5,
+        theme_count: int = 1,
+        captions_per_theme: int = X_CAPTION_COUNT,
         idea_seed: int = 0,
     ) -> CaptionResult:
-        """Create Grok Vision-powered X caption personas for a generated image."""
+        """Create Grok Vision-powered X engagement captions for a generated image."""
 
         grok_response = self._generate_grok_vision_x_captions(
             image_reference=image_reference,
@@ -298,14 +299,9 @@ class CaptionStudioService:
         vision = dict(grok_response.get("image_analysis") or {})
         themes = (
             {
-                "theme": "❤️ Girlfriend Energy",
-                "persona": "girlfriend_energy",
-                "captions": tuple(grok_response["girlfriend_energy"]),
-            },
-            {
-                "theme": "😈 Teasing / Naughty",
-                "persona": "teasing_naughty",
-                "captions": tuple(grok_response["teasing_naughty"]),
+                "theme": "Creator OS Engagement",
+                "persona": "creator_os_engagement",
+                "captions": tuple(grok_response["captions"]),
             },
         )
         variations = tuple(
@@ -328,8 +324,8 @@ class CaptionStudioService:
             creator_profile_id=creator_profile_id,
             platform=CaptionPlatform.X.value,
             style=CaptionStyle.PLAYFUL.value,
-            tone="grok vision girlfriend energy and teasing naughty",
-            source_text=source_text,
+            tone="creator os x engagement",
+            source_text=source_text or "Grok Vision X caption set",
             variation_count=len(variations),
             source_generated_image_id=generated_image_id,
             metadata={
@@ -346,8 +342,8 @@ class CaptionStudioService:
                 "creative_mode": creative_mode,
                 "prompt_metadata": dict(prompt_metadata or {}),
                 "generation_metadata": dict(generation_metadata or {}),
-                "theme_count": 2,
-                "captions_per_theme": 5,
+                "theme_count": 1,
+                "captions_per_theme": self.X_CAPTION_COUNT,
                 "idea_seed": idea_seed,
             },
         )
@@ -367,13 +363,14 @@ class CaptionStudioService:
                 "vision": vision,
                 "themes": themes,
                 "personas": {
-                    "girlfriend_energy": "❤️ Girlfriend Energy",
-                    "teasing_naughty": "😈 Teasing / Naughty",
+                    "creator_os_engagement": "Creator OS Engagement",
                 },
                 "engagement_goals": (
                     "replies",
-                    "conversations",
-                    "creator selects preferred caption",
+                    "reposts",
+                    "likes",
+                    "profile visits",
+                    "follows",
                 ),
             },
         )
@@ -410,14 +407,14 @@ class CaptionStudioService:
         vision = dict(grok_response.get("image_analysis") or {})
         themes = (
             {
-                "theme": "❤️ Girlfriend Energy",
-                "persona": "girlfriend_energy",
-                "captions": tuple(grok_response["girlfriend_energy"]),
+                "theme": "💛 Romantic",
+                "persona": "romantic",
+                "captions": tuple(grok_response["romantic"]),
             },
             {
-                "theme": "😈 Naughty",
-                "persona": "naughty",
-                "captions": tuple(grok_response["naughty"]),
+                "theme": "😈 Teasing / Naughty",
+                "persona": "teasing_naughty",
+                "captions": tuple(grok_response["teasing_naughty"]),
             },
         )
         variations = tuple(
@@ -440,7 +437,7 @@ class CaptionStudioService:
             creator_profile_id=creator_profile_id,
             platform=CaptionPlatform.TELEGRAM.value,
             style=CaptionStyle.DIRECT.value,
-            tone="grok vision girlfriend energy and naughty",
+            tone="grok vision romantic and teasing naughty",
             source_text=source_text or "Grok Vision Telegram caption set",
             variation_count=len(variations),
             source_generated_image_id=generated_image_id,
@@ -479,8 +476,8 @@ class CaptionStudioService:
                 "vision": vision,
                 "themes": themes,
                 "personas": {
-                    "girlfriend_energy": "❤️ Girlfriend Energy",
-                    "naughty": "😈 Naughty",
+                    "romantic": "💛 Romantic",
+                    "teasing_naughty": "😈 Teasing / Naughty",
                 },
                 "engagement_goals": (
                     "creator selects preferred caption",
@@ -643,10 +640,11 @@ class CaptionStudioService:
                 generation_metadata=dict(generation_metadata or {}),
                 idea_seed=idea_seed,
             )
-            return self._normalize_grok_vision_caption_response(raw)
+            return self._normalize_grok_vision_x_engagement_response(raw)
         return self._call_grok_vision_caption_api(
             image_reference=image_reference,
             prompt=prompt,
+            response_kind="x_engagement",
         )
 
     def _generate_grok_vision_telegram_captions(
@@ -680,12 +678,10 @@ class CaptionStudioService:
                 idea_seed=idea_seed,
                 platform=CaptionPlatform.TELEGRAM.value,
             )
-            return self._normalize_grok_vision_caption_response(raw, second_key="naughty", second_label="Naughty")
+            return self._normalize_grok_vision_caption_response(raw)
         return self._call_grok_vision_caption_api(
             image_reference=image_reference,
             prompt=prompt,
-            second_key="naughty",
-            second_label="Naughty",
         )
 
     @staticmethod
@@ -706,8 +702,11 @@ class CaptionStudioService:
         return f"""
 You are Grok Vision writing X captions for {creator_name}.
 
-First analyze the attached image. The image is the primary source of truth.
+First analyze the attached image. The image is context, not the caption goal.
 Identify only what is actually visible:
+- setting
+- activity
+- time of day
 - location
 - wardrobe
 - expression
@@ -729,40 +728,63 @@ Idea seed: {int(idea_seed or 0)}
 Return exactly valid JSON with this shape:
 {{
   "image_analysis": {{
+    "setting": "",
+    "activity": "",
+    "time_of_day": "",
     "location": "",
     "wardrobe": "",
     "expression": "",
     "body_language": "",
     "lighting": "",
     "mood": "",
-    "environment": "",
-    "activity": ""
+    "environment": ""
   }},
-  "girlfriend_energy": ["", "", "", "", ""],
-  "teasing_naughty": ["", "", "", "", ""]
+  "captions": ["", "", "", "", "", "", "", "", "", ""]
 }}
 
-❤️ Girlfriend Energy rules:
-- exactly 5 captions
-- write like a girlfriend
-- affectionate, warm, playful, flirty, intimate, feminine, cozy
-- "wish you were here" energy
-- emotionally engaging
-- never explicit
+Primary objective:
+- generate exactly 10 X captions
+- maximize replies, reposts, likes, profile visits, and follows
+- think like a successful organic X creator
+- make someone want to reply
 
-😈 Teasing / Naughty rules:
-- exactly 5 captions
-- confident, teasing, mischievous, suggestive, flirty, cheeky, sexy
-- never graphic
-- never pornographic
+Creator OS voice:
+- playful
+- flirty
+- teasing
+- approachable
+- feminine
+- confident
+- conversational
+
+Writing strategy:
+- write TO the audience, not ABOUT the image
+- use the image as the setting for a conversation
+- ask engaging questions
+- create curiosity
+- invite opinions
+- make the audience imagine themselves there
+- create "what would you do?" moments
+- create "choose one" moments
+- create "be honest..." moments
+- create "help me decide..." moments
+- use the image to decide whether the caption naturally leans sweeter or more teasing
+
+Variation requirements:
+- the 10 captions must feel substantially different
+- include a mix of questions, playful polls, help-me-decide prompts, be-honest prompts, finish-the-sentence prompts, hypotheticals, choose-one prompts, short storytelling, and playful teasing
+- do not generate 10 versions of the same caption
 
 All captions:
-- must be based on what you see in the image
-- short enough for X
+- must be short enough for X
+- must encourage replies
+- must be specific to the image setting without simply describing it
 - no hashtags
 - no mention of AI or generated images
 - no labels inside the caption text
-- make each caption feel like Ava is speaking directly to one guy
+- do not list clothing
+- do not repeatedly mention bikinis, body parts, or generic thirst hooks
+- avoid repetitive openings such as "Golden light", "Warm light", "Soft smile", "This bikini", "My shirt", or "This view"
 - {NATURAL_EMOJI_INSTRUCTION}
 """.strip()
 
@@ -816,19 +838,19 @@ Return exactly valid JSON with this shape:
     "environment": "",
     "activity": ""
   }},
-  "girlfriend_energy": ["", "", "", "", ""],
-  "naughty": ["", "", "", "", ""]
+  "romantic": ["", "", "", "", ""],
+  "teasing_naughty": ["", "", "", "", ""]
 }}
 
-❤️ Girlfriend Energy rules:
+💛 Romantic rules:
 - exactly 5 captions
-- affectionate, warm, playful, girlfriend experience, intimate, emotionally engaging
+- affectionate, warm, playful, intimate, emotionally engaging
 - short and natural
 - not explicit
 - not open-ended
 - not engagement bait
 
-😈 Naughty rules:
+😈 Teasing / Naughty rules:
 - exactly 5 captions
 - teasing, confident, suggestive, sexy, playful, direct
 - intended to be consumed, not replied to
@@ -853,6 +875,7 @@ All captions:
         prompt: str,
         second_key: str = "teasing_naughty",
         second_label: str = "Teasing / Naughty",
+        response_kind: str = "themed",
     ) -> dict[str, Any]:
         api_key = os.getenv("GROK_API_KEY", "").strip()
         if not api_key:
@@ -887,6 +910,8 @@ All captions:
             model_name=GROK_VISION_MODEL,
             caller="CaptionStudioService._call_grok_vision_caption_api",
         )
+        if response_kind == "x_engagement":
+            return self._normalize_grok_vision_x_engagement_response(payload)
         return self._normalize_grok_vision_caption_response(
             payload,
             second_key=second_key,
@@ -913,6 +938,19 @@ All captions:
         return f"data:{mime_type};base64,{base64.b64encode(path.read_bytes()).decode('utf-8')}"
 
     @staticmethod
+    def _normalize_grok_vision_x_engagement_response(raw: Mapping[str, Any]) -> dict[str, Any]:
+        if not isinstance(raw, Mapping):
+            raise ValueError("Grok Vision caption response must be a mapping.")
+        captions = CaptionStudioService._clean_caption_bucket(raw.get("captions"))
+        if len(captions) != CaptionStudioService.X_CAPTION_COUNT:
+            raise ValueError("Grok Vision must return exactly 10 X engagement captions.")
+        analysis = raw.get("image_analysis") if isinstance(raw.get("image_analysis"), Mapping) else {}
+        return {
+            "image_analysis": dict(analysis or {}),
+            "captions": tuple(captions),
+        }
+
+    @staticmethod
     def _normalize_grok_vision_caption_response(
         raw: Mapping[str, Any],
         *,
@@ -921,16 +959,16 @@ All captions:
     ) -> dict[str, Any]:
         if not isinstance(raw, Mapping):
             raise ValueError("Grok Vision caption response must be a mapping.")
-        girlfriend = CaptionStudioService._clean_caption_bucket(raw.get("girlfriend_energy"))
+        romantic = CaptionStudioService._clean_caption_bucket(raw.get("romantic"))
         teasing = CaptionStudioService._clean_caption_bucket(raw.get(second_key))
-        if len(girlfriend) != 5:
-            raise ValueError("Grok Vision must return exactly 5 Girlfriend Energy captions.")
+        if len(romantic) != 5:
+            raise ValueError("Grok Vision must return exactly 5 Romantic captions.")
         if len(teasing) != 5:
             raise ValueError(f"Grok Vision must return exactly 5 {second_label} captions.")
         analysis = raw.get("image_analysis") if isinstance(raw.get("image_analysis"), Mapping) else {}
         return {
             "image_analysis": dict(analysis or {}),
-            "girlfriend_energy": tuple(girlfriend),
+            "romantic": tuple(romantic),
             second_key: tuple(teasing),
         }
 

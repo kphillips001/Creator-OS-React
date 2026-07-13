@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
+import shutil
 from dataclasses import asdict, replace
 from pathlib import Path
 from typing import Any, Iterable, Mapping
@@ -17,6 +19,7 @@ from app.models.generation_library import (
     GenerationLibraryResult,
 )
 from app.services.content_archive_service import ContentArchiveService
+from app.services.creator_approval_service import CreatorApprovalService
 from app.services.generation_engine_service import GenerationEngineService
 from app.services.generation_result_ingestion_service import GenerationResultIngestionService
 
@@ -31,45 +34,56 @@ class GenerationLibraryService:
         *,
         storage_dir: str | Path | None = None,
         archive_service: ContentArchiveService | None = None,
+        creator_approval_service: CreatorApprovalService | None = None,
     ):
         self.storage_dir = Path(storage_dir or self.DEFAULT_STORAGE_DIR)
         self.archive_service = archive_service or ContentArchiveService()
+        self.creator_approval = creator_approval_service or CreatorApprovalService(
+            storage_dir=self.storage_dir / "creator_approvals"
+        )
 
     @property
     def records_path(self) -> Path:
         return self.storage_dir / "generated_images.json"
 
+    @property
+    def reviewed_edit_outputs_path(self) -> Path:
+        return self.storage_dir / "reviewed_edit_outputs.json"
+
+    @property
+    def video_queue_path(self) -> Path:
+        return self.storage_dir / "video_queue.json"
+
+    @property
+    def photoshoot_root(self) -> Path:
+        return self.archive_service.content_paths()["generation_active"].parent / "Photoshoot"
+
     def sync_job(self, job: GenerationJob) -> tuple[GeneratedImageRecord, ...]:
         if job.status != GenerationStatus.SUCCEEDED.value or job.result is None:
             return ()
         records = list(self.list_records())
+        existing_image_ids = {record.image_id for record in records}
         existing_keys = {
-            (record.generation_job_id, record.output_reference)
+            (record.generation_job_id, reference)
             for record in records
+            for reference in self._record_output_references(record)
         }
-        existing_source_keys = {
-            (
-                record.generation_job_id,
-                str(record.generation_metadata.get("original_output_reference") or record.output_reference),
-            )
-            for record in records
-        }
-        archived_output_references = {
-            record.original_output_reference
-            for record in self.archive_service.list_records()
-        }
+        archived_output_references = self._archived_output_references()
+        archived_image_ids = self._archived_image_ids()
         created = []
         for output_reference in job.result.output_references:
             key = (job.job_id, output_reference)
+            record = self._record_from_job(job, output_reference)
             if (
                 key in existing_keys
-                or key in existing_source_keys
                 or output_reference in archived_output_references
+                or record.image_id in existing_image_ids
+                or record.image_id in archived_image_ids
             ):
                 continue
-            record = self._record_from_job(job, output_reference)
             record = self.archive_service.materialize_generation(record)
             records.append(record)
+            existing_image_ids.add(record.image_id)
             created.append(record)
         if created:
             self._write_records(records)
@@ -90,6 +104,10 @@ class GenerationLibraryService:
         records = []
         for record in self.list_records():
             target_status = filters.status if filters.status is not None else "active"
+            if target_status == "active":
+                record = self._active_record_with_valid_file(record)
+                if record is None:
+                    continue
             if filters.creator_profile_id is not None and record.creator_profile_id != int(filters.creator_profile_id):
                 continue
             if filters.provider_id and record.provider_id != filters.provider_id:
@@ -125,6 +143,17 @@ class GenerationLibraryService:
         else:
             records.sort(key=lambda record: record.generation_date or record.created_at, reverse=reverse)
         return GenerationLibraryResult(records=tuple(records), filters=filters, total=len(records))
+
+    def resolve_publishable_image_reference(self, image_id: str) -> str | None:
+        """Return a currently publishable image reference for an active library item."""
+        try:
+            record = self.get(image_id)
+        except KeyError:
+            return None
+        active_record = self._active_record_with_valid_file(record)
+        if active_record is None:
+            return None
+        return active_record.output_reference
 
     def select(self, image_ids: Iterable[str], *, selected: bool = True) -> GenerationLibraryActionResult:
         ids = tuple(str(image_id) for image_id in image_ids)
@@ -297,17 +326,16 @@ class GenerationLibraryService:
                 imported_asset_ids.append(record.imported_asset_id)
                 continue
             try:
-                job = generation_engine.get_job(record.generation_job_id)
-                if job.result is None:
-                    raise RuntimeError("Generation Job has no result.")
-                partial_job = replace(
-                    job,
-                    result=replace(job.result, output_references=(record.output_reference,)),
+                approval = self._approve_record_as_creator_asset(
+                    record,
+                    source_workflow="generation_library",
+                    generation_engine=generation_engine,
+                    ingestion_service=ingestion_service,
+                    source_metadata={"approval_entrypoint": "generation_library_add_to_creator_os"},
                 )
-                ingestion = ingestion_service.ingest_job(partial_job)
-                if not ingestion.success or not ingestion.imported_asset_ids:
-                    raise RuntimeError("; ".join(ingestion.errors) or "Generation output was not imported.")
-                asset_id = int(ingestion.imported_asset_ids[0])
+                if not approval.success or approval.asset_id is None:
+                    raise RuntimeError("; ".join(approval.errors) or "Generated image was not approved into Creator OS.")
+                asset_id = int(approval.asset_id)
                 imported_asset_ids.append(asset_id)
                 archived_record = replace(
                     record,
@@ -326,6 +354,98 @@ class GenerationLibraryService:
             image_ids=selected_ids,
             imported_asset_ids=tuple(imported_asset_ids),
             errors=tuple(errors),
+        )
+
+    def approve_creator_content(
+        self,
+        image_ids: Iterable[str],
+        *,
+        source_workflow: str,
+        generation_engine: GenerationEngineService,
+        ingestion_service: GenerationResultIngestionService,
+        source_session_id: str | None = None,
+        source_metadata: Mapping[str, Any] | None = None,
+    ) -> GenerationLibraryActionResult:
+        imported_asset_ids = []
+        approved_ids = []
+        errors = []
+        records_by_id = {record.image_id: record for record in self.list_records()}
+        selected_ids = tuple(str(value) for value in image_ids)
+        updated_records = []
+        for record in self.list_records():
+            if record.image_id not in selected_ids:
+                updated_records.append(record)
+                continue
+            try:
+                if record.imported_asset_id is not None:
+                    asset_id = int(record.imported_asset_id)
+                else:
+                    approval = self._approve_record_as_creator_asset(
+                        record,
+                        source_workflow=source_workflow,
+                        generation_engine=generation_engine,
+                        ingestion_service=ingestion_service,
+                        source_session_id=source_session_id,
+                        source_metadata=source_metadata,
+                    )
+                    if not approval.success or approval.asset_id is None:
+                        raise RuntimeError("; ".join(approval.errors) or "Generated image was not approved into Creator OS.")
+                    asset_id = int(approval.asset_id)
+                imported_asset_ids.append(asset_id)
+                approved_ids.append(record.image_id)
+                updated_records.append(
+                    replace(
+                        record,
+                        imported_asset_id=asset_id,
+                        generation_metadata={
+                            **dict(record.generation_metadata or {}),
+                            "creator_approval_asset_id": asset_id,
+                            "creator_approval_source_workflow": source_workflow,
+                            "creator_approved_at": utc_now(),
+                        },
+                        updated_at=utc_now(),
+                    )
+                )
+            except Exception as exc:
+                errors.append(f"{record.image_id}: {exc}")
+                updated_records.append(record)
+        missing = tuple(image_id for image_id in selected_ids if image_id not in records_by_id)
+        errors.extend(f"Generated image not found: {image_id}" for image_id in missing)
+        if approved_ids:
+            self._write_records(updated_records)
+        return GenerationLibraryActionResult(
+            success=not errors,
+            message="Content approved into Creator OS." if not errors else "Some content could not be approved into Creator OS.",
+            image_ids=tuple(approved_ids),
+            imported_asset_ids=tuple(imported_asset_ids),
+            errors=tuple(errors),
+        )
+
+    def _approve_record_as_creator_asset(
+        self,
+        record: GeneratedImageRecord,
+        *,
+        source_workflow: str,
+        generation_engine: GenerationEngineService,
+        ingestion_service: GenerationResultIngestionService,
+        source_session_id: str | None = None,
+        source_metadata: Mapping[str, Any] | None = None,
+    ):
+        job = generation_engine.get_job(record.generation_job_id)
+        if job.result is None:
+            raise RuntimeError("Generation Job has no result.")
+        return self.creator_approval.approve_generated_record(
+            record,
+            generation_job=job,
+            ingestion_service=ingestion_service,
+            source_workflow=source_workflow,
+            source_session_id=source_session_id,
+            source_metadata={
+                "prompt_plan_id": record.prompt_plan_id,
+                "photoshoot_session_id": source_session_id or record.photoshoot_session_id,
+                "photoshoot_request_id": record.photoshoot_request_id,
+                **dict(source_metadata or {}),
+            },
         )
 
     def mark_published(
@@ -387,6 +507,866 @@ class GenerationLibraryService:
             errors=tuple(errors),
         )
 
+    def send_to_pending_edit(self, image_id: str) -> GeneratedImageRecord:
+        record = self.get(image_id)
+        if record.status == "pending_edit":
+            return record
+        pending_path = self.archive_service.move_to_pending_edit(record)
+        updated = replace(
+            record,
+            output_reference=str(pending_path),
+            status="pending_edit",
+            review_state="pending_edit",
+            selected=False,
+            generation_metadata={
+                **dict(record.generation_metadata or {}),
+                "pending_edit_started_at": utc_now(),
+                "pending_edit_original_output_reference": record.output_reference,
+                "output_reference": str(pending_path),
+            },
+            updated_at=utc_now(),
+        )
+        self._replace_record(updated)
+        return updated
+
+    def send_to_pending_video(self, image_id: str) -> GeneratedImageRecord:
+        return self._send_to_pending_creative_workflow(
+            image_id,
+            workflow="video",
+            status="pending_video",
+            queue_path=self.video_queue_path,
+        )
+
+    def send_to_pending_photoshoot(self, image_id: str) -> GeneratedImageRecord:
+        record = self.get(image_id)
+        if record.status == "pending_photoshoot":
+            return record
+        pending_path = self.archive_service.move_to_pending_workflow(record, workflow="photoshoot")
+        updated = replace(
+            record,
+            output_reference=str(pending_path),
+            status="pending_photoshoot",
+            review_state="pending_photoshoot",
+            selected=False,
+            generation_metadata={
+                **dict(record.generation_metadata or {}),
+                "pending_photoshoot_started_at": utc_now(),
+                "pending_photoshoot_original_output_reference": record.output_reference,
+                "output_reference": str(pending_path),
+            },
+            updated_at=utc_now(),
+        )
+        self._replace_record(updated)
+        return updated
+
+    def mark_photoshoot_session_records(
+        self,
+        image_ids: Iterable[str],
+        *,
+        session_id: str,
+        session_title: str | None = None,
+    ) -> GenerationLibraryActionResult:
+        ids = tuple(dict.fromkeys(str(image_id) for image_id in image_ids if str(image_id)))
+        if not ids:
+            return GenerationLibraryActionResult(True, "No Photoshoot images to isolate.", ())
+        now = utc_now()
+        updated = []
+        marked = []
+        errors = []
+        session_dir = self._photoshoot_session_dir("active", session_id=session_id, session_title=session_title)
+        for record in self.list_records():
+            if record.image_id in ids:
+                try:
+                    candidate_path = self._move_record_file(
+                        record,
+                        session_dir,
+                        f"Candidate_{record.image_id}",
+                    )
+                    updated.append(
+                        replace(
+                            record,
+                            output_reference=str(candidate_path),
+                            status="photoshoot_session",
+                            review_state="photoshoot_candidate",
+                            selected=False,
+                            photoshoot_session_id=record.photoshoot_session_id or str(session_id),
+                            generation_metadata={
+                                **dict(record.generation_metadata or {}),
+                                "photoshoot_session_id": str(session_id),
+                                "photoshoot_session_name": session_dir.name,
+                                "photoshoot_storage_state": "active_candidate",
+                                "photoshoot_session_path": str(session_dir),
+                                "photoshoot_session_isolated_at": now,
+                                "pre_photoshoot_output_reference": record.output_reference,
+                                "output_reference": str(candidate_path),
+                            },
+                            updated_at=now,
+                        )
+                    )
+                    marked.append(record.image_id)
+                except Exception as exc:
+                    errors.append(f"{record.image_id}: {exc}")
+                    updated.append(record)
+            else:
+                updated.append(record)
+        if marked:
+            self._write_records(updated)
+        return GenerationLibraryActionResult(
+            success=not errors,
+            message=(
+                "Photoshoot image(s) moved into the active session."
+                if not errors
+                else "Some Photoshoot images could not be moved into the active session."
+            ),
+            image_ids=tuple(marked),
+            errors=tuple(errors),
+        )
+
+    def approve_photoshoot_records(
+        self,
+        image_ids: Iterable[str],
+        *,
+        session_id: str,
+        session_title: str | None = None,
+    ) -> GenerationLibraryActionResult:
+        ids = tuple(dict.fromkeys(str(image_id) for image_id in image_ids if str(image_id)))
+        if not ids:
+            return GenerationLibraryActionResult(True, "No Photoshoot images selected for approval.", ())
+        now = utc_now()
+        session_dir = self._photoshoot_session_dir("active", session_id=session_id, session_title=session_title)
+        records_by_id = {record.image_id: record for record in self.list_records()}
+        approved = []
+        errors = []
+        for image_id in ids:
+            record = records_by_id.get(image_id)
+            if record is None:
+                errors.append(f"Generated image not found: {image_id}")
+                continue
+            try:
+                shot_number = self._next_photoshoot_shot_number(session_id=session_id, excluding_ids=ids)
+                shot_path = self._move_record_file(record, session_dir, f"Shot_{shot_number:03d}", replace_existing=False)
+                updated_record = replace(
+                    record,
+                    output_reference=str(shot_path),
+                    status="photoshoot_session",
+                    review_state="photoshoot_approved",
+                    selected=False,
+                    photoshoot_session_id=record.photoshoot_session_id or str(session_id),
+                    generation_metadata={
+                        **dict(record.generation_metadata or {}),
+                        "photoshoot_session_id": str(session_id),
+                        "photoshoot_session_name": session_dir.name,
+                        "photoshoot_storage_state": "active_approved",
+                        "photoshoot_session_path": str(session_dir),
+                        "photoshoot_shot_number": shot_number,
+                        "photoshoot_approved_at": now,
+                        "output_reference": str(shot_path),
+                    },
+                    updated_at=now,
+                )
+                self._replace_record(updated_record)
+                self._write_photoshoot_sidecar(shot_path, updated_record)
+                approved.append(image_id)
+            except Exception as exc:
+                errors.append(f"{image_id}: {exc}")
+        return GenerationLibraryActionResult(
+            success=not errors,
+            message="Photoshoot image(s) approved into the active session." if not errors else "Some Photoshoot images could not be approved.",
+            image_ids=tuple(approved),
+            errors=tuple(errors),
+        )
+
+    def finish_photoshoot_session(
+        self,
+        *,
+        session_id: str,
+        approved_image_ids: Iterable[str],
+        session_title: str | None = None,
+    ) -> GenerationLibraryActionResult:
+        ids = tuple(dict.fromkeys(str(image_id) for image_id in approved_image_ids if str(image_id)))
+        if not ids:
+            return GenerationLibraryActionResult(True, "No approved Photoshoot images to complete.", ())
+        records_by_id = {record.image_id: record for record in self.list_records()}
+        updated_records = []
+        completed = []
+        errors = []
+        now = utc_now()
+        active_dir = self._photoshoot_session_dir("active", session_id=session_id, session_title=session_title)
+        gallery_dir = self._photoshoot_session_dir("gallery", session_id=session_id, session_title=session_title)
+        if active_dir.exists():
+            gallery_dir.parent.mkdir(parents=True, exist_ok=True)
+            gallery_dir = self._unique_path(gallery_dir) if gallery_dir.exists() else gallery_dir
+            shutil.move(str(active_dir), str(gallery_dir))
+        else:
+            gallery_dir.mkdir(parents=True, exist_ok=True)
+        for record in self.list_records():
+            if record.image_id not in ids:
+                updated_records.append(record)
+                continue
+            try:
+                output_reference = self._reference_after_session_move(record.output_reference, active_dir, gallery_dir)
+                updated_records.append(
+                    replace(
+                        record,
+                        output_reference=output_reference,
+                        status="photoshoot_completed",
+                        review_state="photoshoot_completed",
+                        selected=False,
+                        photoshoot_session_id=record.photoshoot_session_id or str(session_id),
+                        generation_metadata={
+                            **dict(record.generation_metadata or {}),
+                            "photoshoot_session_id": str(session_id),
+                            "photoshoot_session_name": gallery_dir.name,
+                            "photoshoot_storage_state": "gallery",
+                            "photoshoot_gallery_path": str(gallery_dir),
+                            "photoshoot_finished_at": now,
+                            "output_reference": output_reference,
+                        },
+                        updated_at=now,
+                    )
+                )
+                completed.append(record.image_id)
+            except Exception as exc:
+                errors.append(f"{record.image_id}: {exc}")
+                updated_records.append(record)
+        missing = tuple(image_id for image_id in ids if image_id not in records_by_id)
+        errors.extend(f"Generated image not found: {image_id}" for image_id in missing)
+        if completed:
+            self._write_records(updated_records)
+            self._write_photoshoot_session_manifest(gallery_dir, session_id=session_id, records=updated_records)
+        return GenerationLibraryActionResult(
+            success=not errors,
+            message=(
+                "Photoshoot approved image(s) moved into Photoshoot Gallery."
+                if not errors
+                else "Some Photoshoot images could not be completed."
+            ),
+            image_ids=tuple(completed),
+            errors=tuple(errors),
+        )
+
+    def move_completed_photoshoot_session_to_junk(
+        self,
+        *,
+        session_id: str,
+        approved_image_ids: Iterable[str],
+        session_title: str | None = None,
+        reason: str = "completed_session_junk",
+    ) -> GenerationLibraryActionResult:
+        ids = tuple(dict.fromkeys(str(image_id) for image_id in approved_image_ids if str(image_id)))
+        if not ids:
+            return GenerationLibraryActionResult(True, "No completed Photoshoot images selected for junk.", ())
+        records_by_id = {record.image_id: record for record in self.list_records()}
+        updated_records = []
+        junked = []
+        errors = []
+        now = utc_now()
+        gallery_dir = self._photoshoot_session_dir("gallery", session_id=session_id, session_title=session_title)
+        junk_dir = self._photoshoot_session_dir("junk", session_id=session_id, session_title=session_title)
+        if gallery_dir.exists():
+            junk_dir.parent.mkdir(parents=True, exist_ok=True)
+            if junk_dir.exists():
+                for child in gallery_dir.iterdir():
+                    target = junk_dir / child.name
+                    if target.exists():
+                        target = self._unique_path(target)
+                    shutil.move(str(child), str(target))
+                gallery_dir.rmdir()
+            else:
+                shutil.move(str(gallery_dir), str(junk_dir))
+        else:
+            junk_dir.mkdir(parents=True, exist_ok=True)
+        for record in self.list_records():
+            if record.image_id not in ids:
+                updated_records.append(record)
+                continue
+            try:
+                output_reference = self._reference_after_session_move(record.output_reference, gallery_dir, junk_dir)
+                updated_records.append(
+                    replace(
+                        record,
+                        output_reference=output_reference,
+                        status="photoshoot_junk",
+                        review_state=reason,
+                        selected=False,
+                        photoshoot_session_id=record.photoshoot_session_id or str(session_id),
+                        generation_metadata={
+                            **dict(record.generation_metadata or {}),
+                            "photoshoot_session_id": str(session_id),
+                            "photoshoot_session_name": junk_dir.name,
+                            "photoshoot_storage_state": "junk",
+                            "photoshoot_junk_path": str(junk_dir),
+                            "photoshoot_junked_at": now,
+                            "photoshoot_junk_reason": reason,
+                            "output_reference": output_reference,
+                        },
+                        updated_at=now,
+                    )
+                )
+                junked.append(record.image_id)
+            except Exception as exc:
+                errors.append(f"{record.image_id}: {exc}")
+                updated_records.append(record)
+        missing = tuple(image_id for image_id in ids if image_id not in records_by_id)
+        errors.extend(f"Generated image not found: {image_id}" for image_id in missing)
+        if junked:
+            self._write_records(updated_records)
+            self._write_photoshoot_session_manifest(junk_dir, session_id=session_id, records=updated_records)
+        return GenerationLibraryActionResult(
+            success=not errors,
+            message=(
+                "Completed Photoshoot moved to Photoshoot Junk."
+                if not errors
+                else "Some completed Photoshoot images could not be moved to Junk."
+            ),
+            image_ids=tuple(junked),
+            errors=tuple(errors),
+        )
+
+    def _send_to_pending_creative_workflow(
+        self,
+        image_id: str,
+        *,
+        workflow: str,
+        status: str,
+        queue_path: Path,
+    ) -> GeneratedImageRecord:
+        record = self.get(image_id)
+        if record.status == status:
+            return record
+        pending_path = self.archive_service.move_to_pending_workflow(record, workflow=workflow)
+        now = utc_now()
+        queue = list(self._read_json(queue_path, []))
+        if not any(str(item.get("image_id")) == record.image_id for item in queue if isinstance(item, Mapping)):
+            queue.insert(
+                0,
+                {
+                    "queue_id": f"{workflow}_queue_{hashlib.sha256((record.image_id + now).encode('utf-8')).hexdigest()[:16]}",
+                    "workflow": workflow,
+                    "image_id": record.image_id,
+                    "creator_profile_id": record.creator_profile_id,
+                    "source_output_reference": record.output_reference,
+                    "pending_output_reference": str(pending_path),
+                    "provider_id": record.provider_id,
+                    "prompt_plan_id": record.prompt_plan_id,
+                    "prompt_text": record.prompt_text,
+                    "status": status,
+                    "created_at": now,
+                },
+            )
+            self._write_json(queue_path, queue)
+        updated = replace(
+            record,
+            output_reference=str(pending_path),
+            status=status,
+            review_state=status,
+            selected=False,
+            generation_metadata={
+                **dict(record.generation_metadata or {}),
+                f"{status}_started_at": now,
+                f"{status}_original_output_reference": record.output_reference,
+                "pending_workflow": workflow,
+                "output_reference": str(pending_path),
+            },
+            updated_at=now,
+        )
+        self._replace_record(updated)
+        return updated
+
+    def return_pending_edit_to_library(self, image_id: str) -> GenerationLibraryActionResult:
+        try:
+            record = self.get(image_id)
+            if record.status != "pending_edit":
+                raise ValueError("Generated image is not pending edit.")
+            active_path = self.archive_service.move_to_generation_active(record)
+            updated = replace(
+                record,
+                output_reference=str(active_path),
+                status="active",
+                review_state="returned_from_edit",
+                selected=False,
+                generation_metadata={
+                    **{
+                        key: value
+                        for key, value in dict(record.generation_metadata or {}).items()
+                        if key not in {"latest_edit_candidate_id"}
+                    },
+                    "pending_edit_returned_at": utc_now(),
+                    "output_reference": str(active_path),
+                },
+                updated_at=utc_now(),
+            )
+            self._replace_record(updated)
+        except Exception as exc:
+            return GenerationLibraryActionResult(
+                success=False,
+                message="Pending edit could not be returned to Generation Library.",
+                image_ids=(str(image_id),),
+                errors=(str(exc),),
+            )
+        return GenerationLibraryActionResult(
+            success=True,
+            message="Pending edit returned to Generation Library.",
+            image_ids=(str(image_id),),
+        )
+
+    def return_photoshoot_seed_to_library(self, image_id: str) -> GenerationLibraryActionResult:
+        try:
+            record = self.get(image_id)
+            if record.status == "active":
+                return GenerationLibraryActionResult(
+                    success=True,
+                    message="Photoshoot seed is already active in Generation Library.",
+                    image_ids=(record.image_id,),
+                )
+            active_path = self.archive_service.move_to_generation_active(record)
+            updated = replace(
+                record,
+                output_reference=str(active_path),
+                status="active",
+                review_state="returned_from_photoshoot",
+                selected=False,
+                generation_metadata={
+                    **dict(record.generation_metadata or {}),
+                    "photoshoot_returned_at": utc_now(),
+                    "output_reference": str(active_path),
+                },
+                updated_at=utc_now(),
+            )
+            self._replace_record(updated)
+        except Exception as exc:
+            return GenerationLibraryActionResult(
+                success=False,
+                message="Photoshoot seed could not be returned to Generation Library.",
+                image_ids=(str(image_id),),
+                errors=(str(exc),),
+            )
+        return GenerationLibraryActionResult(
+            success=True,
+            message="Photoshoot seed returned to Generation Library.",
+            image_ids=(str(image_id),),
+        )
+
+    def discard_temporary_records(self, image_ids: Iterable[str]) -> GenerationLibraryActionResult:
+        ids = tuple(dict.fromkeys(str(image_id) for image_id in image_ids if str(image_id)))
+        if not ids:
+            return GenerationLibraryActionResult(True, "No temporary generated images to remove.", ())
+        records_by_id = {record.image_id: record for record in self.list_records()}
+        removed = []
+        errors = []
+        for image_id in ids:
+            record = records_by_id.get(image_id)
+            if record is None:
+                continue
+            try:
+                self._delete_local_file(record.output_reference)
+                removed.append(image_id)
+            except Exception as exc:
+                errors.append(str(exc))
+        if removed:
+            self._remove_records(removed)
+        return GenerationLibraryActionResult(
+            success=not errors,
+            message="Temporary generated image(s) removed.",
+            image_ids=tuple(removed),
+            errors=tuple(errors),
+        )
+
+    def move_photoshoot_records_to_junk(
+        self,
+        image_ids: Iterable[str],
+        *,
+        session_id: str,
+        session_title: str | None = None,
+        reason: str = "photoshoot_junk",
+    ) -> GenerationLibraryActionResult:
+        ids = tuple(dict.fromkeys(str(image_id) for image_id in image_ids if str(image_id)))
+        if not ids:
+            return GenerationLibraryActionResult(True, "No Photoshoot images selected for junk.", ())
+        records_by_id = {record.image_id: record for record in self.list_records()}
+        junked = []
+        errors = []
+        junk_dir = self._photoshoot_session_dir("junk", session_id=session_id, session_title=session_title)
+        now = utc_now()
+        for image_id in ids:
+            record = records_by_id.get(image_id)
+            if not record:
+                errors.append(f"Generated image not found: {image_id}")
+                continue
+            try:
+                junk_path = self._move_record_file(
+                    record,
+                    junk_dir,
+                    self._photoshoot_junk_file_stem(record),
+                    replace_existing=False,
+                )
+                self._replace_record(
+                    replace(
+                        record,
+                        output_reference=str(junk_path),
+                        status="photoshoot_junk",
+                        review_state=reason,
+                        selected=False,
+                        photoshoot_session_id=record.photoshoot_session_id or str(session_id),
+                        generation_metadata={
+                            **dict(record.generation_metadata or {}),
+                            "photoshoot_session_id": str(session_id),
+                            "photoshoot_session_name": junk_dir.name,
+                            "photoshoot_storage_state": "junk",
+                            "photoshoot_junk_path": str(junk_dir),
+                            "photoshoot_junked_at": now,
+                            "photoshoot_junk_reason": reason,
+                            "output_reference": str(junk_path),
+                        },
+                        updated_at=now,
+                    )
+                )
+                self._write_photoshoot_sidecar(junk_path, record, metadata={"archive_reason": reason})
+                junked.append(image_id)
+            except Exception as exc:
+                errors.append(str(exc))
+        return GenerationLibraryActionResult(
+            success=not errors,
+            message="Photoshoot image(s) moved to Photoshoot Junk.",
+            image_ids=tuple(junked),
+            errors=tuple(errors),
+        )
+
+    def pending_edit_record(self, *, creator_profile_id: int | None = None) -> GeneratedImageRecord | None:
+        records = [
+            record
+            for record in self.list_records()
+            if record.status == "pending_edit"
+            and (creator_profile_id is None or record.creator_profile_id == int(creator_profile_id))
+            and Path(record.output_reference).expanduser().exists()
+        ]
+        if not records:
+            return None
+        return sorted(records, key=lambda record: record.updated_at or record.created_at or "", reverse=True)[0]
+
+    def _photoshoot_session_dir(
+        self,
+        bucket: str,
+        *,
+        session_id: str,
+        session_title: str | None = None,
+    ) -> Path:
+        bucket_name = {
+            "active": "Active",
+            "gallery": "Gallery",
+            "junk": "Junk",
+        }.get(str(bucket or "").strip().lower())
+        if not bucket_name:
+            raise ValueError(f"Unsupported Photoshoot storage bucket: {bucket}")
+        return self.photoshoot_root / bucket_name / self._photoshoot_session_folder_name(
+            session_id=session_id,
+            session_title=session_title,
+        )
+
+    def _photoshoot_session_folder_name(self, *, session_id: str, session_title: str | None = None) -> str:
+        title = str(session_title or "").strip()
+        generic_titles = {"", "photoshoot studio", "photoshoot session", "generation library photoshoot"}
+        if title.lower() not in generic_titles:
+            return self._safe_storage_name(title)
+        for record in self.list_records():
+            if record.photoshoot_session_id != str(session_id):
+                continue
+            name = str(dict(record.generation_metadata or {}).get("photoshoot_session_name") or "").strip()
+            if name:
+                return self._safe_storage_name(name)
+        digest = hashlib.sha256(str(session_id).encode("utf-8")).hexdigest()[:3]
+        return f"Photoshoot_{utc_now()[:10]}_{digest}"
+
+    @staticmethod
+    def _safe_storage_name(value: str) -> str:
+        cleaned = re.sub(r"[<>:\"/\\|?*\x00-\x1f]+", " ", str(value or "")).strip()
+        cleaned = re.sub(r"\s+", " ", cleaned)
+        return cleaned[:120].strip(" .") or "Photoshoot Session"
+
+    def _move_record_file(
+        self,
+        record: GeneratedImageRecord,
+        destination: Path,
+        stem: str,
+        *,
+        replace_existing: bool = False,
+    ) -> Path:
+        destination.mkdir(parents=True, exist_ok=True)
+        source = str(record.output_reference or "").strip()
+        suffix = Path(source).suffix or ".jpg"
+        target = destination / f"{self._safe_storage_name(stem)}{suffix}"
+        if not replace_existing:
+            target = self._unique_path(target)
+        source_path = Path(source).expanduser()
+        if source_path.exists() and source_path.is_file():
+            if source_path.resolve() == target.resolve():
+                return target
+            shutil.move(str(source_path), str(target))
+            return target
+        return Path(source or target)
+
+    def _next_photoshoot_shot_number(self, *, session_id: str, excluding_ids: Iterable[str] = ()) -> int:
+        excluded = {str(image_id) for image_id in excluding_ids}
+        numbers = []
+        for record in self.list_records():
+            if record.image_id in excluded:
+                continue
+            if record.photoshoot_session_id != str(session_id):
+                continue
+            metadata = dict(record.generation_metadata or {})
+            if record.status != "photoshoot_session":
+                continue
+            try:
+                numbers.append(int(metadata.get("photoshoot_shot_number") or 0))
+            except (TypeError, ValueError):
+                pass
+        return max(numbers or [0]) + 1
+
+    @staticmethod
+    def _photoshoot_junk_file_stem(record: GeneratedImageRecord) -> str:
+        metadata = dict(record.generation_metadata or {})
+        shot_number = metadata.get("photoshoot_shot_number")
+        if shot_number:
+            try:
+                return f"Shot_{int(shot_number):03d}"
+            except (TypeError, ValueError):
+                pass
+        return f"Rejected_{record.image_id}"
+
+    @staticmethod
+    def _reference_after_session_move(reference: str, source_dir: Path, destination_dir: Path) -> str:
+        value = str(reference or "")
+        try:
+            source_path = Path(value).expanduser()
+            relative = source_path.relative_to(source_dir)
+            return str(destination_dir / relative)
+        except (ValueError, OSError):
+            return value
+
+    def _write_photoshoot_sidecar(
+        self,
+        image_path: Path,
+        record: GeneratedImageRecord,
+        *,
+        metadata: Mapping[str, Any] | None = None,
+    ) -> None:
+        if not image_path:
+            return
+        sidecar = Path(image_path).with_suffix(".json")
+        self._write_json(
+            sidecar,
+            {
+                "image_id": record.image_id,
+                "photoshoot_session_id": record.photoshoot_session_id,
+                "photoshoot_request_id": record.photoshoot_request_id,
+                "prompt_text": record.prompt_text,
+                "provider_id": record.provider_id,
+                "creative_mode": record.creative_mode,
+                "provider_metadata": dict(record.provider_metadata or {}),
+                "prompt_metadata": dict(record.prompt_metadata or {}),
+                "generation_metadata": dict(record.generation_metadata or {}),
+                "metadata": dict(metadata or {}),
+                "updated_at": utc_now(),
+            },
+        )
+
+    def _write_photoshoot_session_manifest(
+        self,
+        session_dir: Path,
+        *,
+        session_id: str,
+        records: Iterable[GeneratedImageRecord],
+    ) -> None:
+        session_records = [
+            asdict(record)
+            for record in records
+            if record.photoshoot_session_id == str(session_id)
+        ]
+        self._write_json(
+            session_dir / "session.json",
+            {
+                "session_id": str(session_id),
+                "records": session_records,
+                "updated_at": utc_now(),
+            },
+        )
+
+    @staticmethod
+    def _unique_path(path: Path) -> Path:
+        if not path.exists():
+            return path
+        stem = path.stem
+        suffix = path.suffix
+        digest = hashlib.sha256(str(path).encode("utf-8")).hexdigest()[:8]
+        for index in range(1, 1000):
+            candidate = path.with_name(f"{stem}_{digest}_{index}{suffix}")
+            if not candidate.exists():
+                return candidate
+        return path.with_name(f"{stem}_{digest}{suffix}")
+
+    def latest_edit_candidate_for_source(self, source_image_id: str) -> GeneratedImageRecord | None:
+        try:
+            source = self.get(source_image_id)
+        except KeyError:
+            source = None
+        latest_id = dict((source.generation_metadata if source else {}) or {}).get("latest_edit_candidate_id")
+        if latest_id:
+            try:
+                candidate = self.get(str(latest_id))
+                if candidate.status == "edit_candidate":
+                    return candidate
+            except KeyError:
+                pass
+        candidates = [
+            record
+            for record in self.list_records()
+            if record.status == "edit_candidate"
+            and dict(record.generation_metadata or {}).get("edit_pending_source_image_id") == source_image_id
+        ]
+        if not candidates:
+            return None
+        return sorted(candidates, key=lambda record: record.updated_at or record.created_at or "", reverse=True)[0]
+
+    def mark_edit_candidate(
+        self,
+        image_id: str,
+        *,
+        pending_source_image_id: str | None = None,
+    ) -> GeneratedImageRecord:
+        record = self.get(image_id)
+        source_id = str(pending_source_image_id or "").strip() or None
+        updated = replace(
+            record,
+            status="edit_candidate",
+            review_state="pending_edit_approval",
+            selected=False,
+            generation_metadata={
+                **dict(record.generation_metadata or {}),
+                "edit_pending_source_image_id": source_id,
+                "output_reference": record.output_reference,
+            },
+            updated_at=utc_now(),
+        )
+        self._replace_record(updated)
+        if source_id:
+            try:
+                source = self.get(source_id)
+                self._replace_record(
+                    replace(
+                        source,
+                        generation_metadata={
+                            **dict(source.generation_metadata or {}),
+                            "latest_edit_candidate_id": updated.image_id,
+                        },
+                        updated_at=utc_now(),
+                    )
+                )
+            except KeyError:
+                pass
+        return updated
+
+    def approve_edit_candidate(
+        self,
+        *,
+        source_image_id: str,
+        edited_image_id: str,
+        metadata: Mapping[str, Any] | None = None,
+    ) -> GenerationLibraryActionResult:
+        try:
+            source_record = self.get(source_image_id)
+            edited_record = self.get(edited_image_id)
+            original_history_path = self.archive_service.copy_edit_history(
+                source_record,
+                history_type="original",
+            )
+            approved_history_path = self.archive_service.copy_edit_history(
+                edited_record,
+                history_type="approved",
+            )
+            active_approved_path = self.archive_service.move_to_generation_active(edited_record)
+            merged_generation_metadata = {
+                **dict(source_record.generation_metadata or {}),
+                "workflow_type": "edit",
+                "edit_approved_at": utc_now(),
+                "edit_original_output_reference": source_record.output_reference,
+                "original_output_reference": (
+                    dict(edited_record.generation_metadata or {}).get("original_output_reference")
+                    or edited_record.output_reference
+                ),
+                "output_reference": str(active_approved_path),
+                "edit_original_history_path": str(original_history_path),
+                "edit_approved_history_path": str(approved_history_path),
+                "edit_candidate_image_id": edited_record.image_id,
+                "edit_candidate_generation_job_id": edited_record.generation_job_id,
+                "previous_generation_metadata": dict(source_record.generation_metadata or {}),
+                "approved_edit_generation_metadata": dict(edited_record.generation_metadata or {}),
+                **dict(metadata or {}),
+            }
+            updated_source = replace(
+                source_record,
+                generation_job_id=edited_record.generation_job_id,
+                generation_request_id=edited_record.generation_request_id,
+                generation_result_id=edited_record.generation_result_id,
+                output_reference=str(active_approved_path),
+                provider_id=edited_record.provider_id,
+                prompt_plan_id=edited_record.prompt_plan_id,
+                prompt_text=edited_record.prompt_text,
+                creative_mode=edited_record.creative_mode,
+                reference_asset_id=edited_record.reference_asset_id,
+                generation_date=edited_record.generation_date,
+                status="active",
+                review_state="approved_edit",
+                provider_metadata=dict(edited_record.provider_metadata or {}),
+                prompt_metadata={
+                    **dict(source_record.prompt_metadata or {}),
+                    "previous_prompt_metadata": dict(source_record.prompt_metadata or {}),
+                    "approved_edit_prompt_metadata": dict(edited_record.prompt_metadata or {}),
+                },
+                generation_metadata=merged_generation_metadata,
+                updated_at=utc_now(),
+            )
+            records = []
+            for record in self.list_records():
+                if record.image_id == source_record.image_id:
+                    records.append(updated_source)
+                elif record.image_id != edited_record.image_id:
+                    records.append(record)
+            self._write_records(records)
+            self._record_reviewed_edit_output(edited_record, action="approved")
+            self._delete_local_file(source_record.output_reference)
+            self._delete_local_file(edited_record.output_reference)
+        except Exception as exc:
+            return GenerationLibraryActionResult(
+                success=False,
+                message="Edited image could not be approved.",
+                image_ids=(str(source_image_id), str(edited_image_id)),
+                errors=(str(exc),),
+            )
+        return GenerationLibraryActionResult(
+            success=True,
+            message="Edited image approved.",
+            image_ids=(str(source_image_id),),
+        )
+
+    def discard_edit_candidate(self, edited_image_id: str) -> GenerationLibraryActionResult:
+        try:
+            edited_record = self.get(edited_image_id)
+            self._remove_records((edited_record.image_id,))
+            self._record_reviewed_edit_output(edited_record, action="discarded")
+            self._delete_local_file(edited_record.output_reference)
+        except Exception as exc:
+            return GenerationLibraryActionResult(
+                success=False,
+                message="Edited image could not be discarded.",
+                image_ids=(str(edited_image_id),),
+                errors=(str(exc),),
+            )
+        return GenerationLibraryActionResult(
+            success=True,
+            message="Edited image discarded.",
+            image_ids=(str(edited_image_id),),
+        )
+
     def get(self, image_id: str) -> GeneratedImageRecord:
         for record in self.list_records():
             if record.image_id == image_id:
@@ -395,6 +1375,146 @@ class GenerationLibraryService:
 
     def list_records(self) -> tuple[GeneratedImageRecord, ...]:
         return tuple(self._record_from_dict(item) for item in self._read_json(self.records_path, []))
+
+    def _archived_output_references(self) -> set[str]:
+        references = self._reviewed_edit_output_references()
+        for record in self.archive_service.list_records():
+            for value in (record.original_output_reference, record.current_file_path):
+                if value:
+                    references.add(str(value))
+            generation_record = dict(record.generation_record or {})
+            for value in (
+                generation_record.get("output_reference"),
+                dict(generation_record.get("generation_metadata") or {}).get("output_reference"),
+                dict(generation_record.get("generation_metadata") or {}).get("original_output_reference"),
+            ):
+                if value:
+                    references.add(str(value))
+            archive_metadata = dict(record.metadata or {})
+            for value in (
+                dict(archive_metadata.get("generation_metadata") or {}).get("output_reference"),
+                dict(archive_metadata.get("generation_metadata") or {}).get("original_output_reference"),
+            ):
+                if value:
+                    references.add(str(value))
+        return references
+
+    def _archived_image_ids(self) -> set[str]:
+        image_ids = set()
+        for record in self.archive_service.list_records():
+            if record.image_id:
+                image_ids.add(str(record.image_id))
+            generation_record = dict(record.generation_record or {})
+            if generation_record.get("image_id"):
+                image_ids.add(str(generation_record.get("image_id")))
+        return image_ids
+
+    @staticmethod
+    def _record_output_references(record: GeneratedImageRecord) -> set[str]:
+        references = {str(record.output_reference)}
+        metadata = dict(record.generation_metadata or {})
+        request_metadata = dict(metadata.get("request_metadata") or {})
+        for value in (
+            metadata.get("output_reference"),
+            metadata.get("original_output_reference"),
+            metadata.get("pending_edit_original_output_reference"),
+            metadata.get("pending_photoshoot_original_output_reference"),
+            metadata.get("pending_video_original_output_reference"),
+            metadata.get("pending_story_original_output_reference"),
+            metadata.get("edit_original_output_reference"),
+            metadata.get("edit_source_output_reference"),
+            metadata.get("edit_reference_output_reference"),
+            request_metadata.get("reference_image_url"),
+            request_metadata.get("edit_source_output_reference"),
+            request_metadata.get("edit_reference_output_reference"),
+        ):
+            if value:
+                references.add(str(value))
+        return references
+
+    def _active_record_with_valid_file(self, record: GeneratedImageRecord) -> GeneratedImageRecord | None:
+        if record.status != "active":
+            return None
+        if self._image_reference_available(record.output_reference):
+            return record
+        replacement = self._valid_active_replacement_reference(record)
+        if not replacement:
+            return None
+        repaired = replace(
+            record,
+            output_reference=replacement,
+            generation_metadata={
+                **dict(record.generation_metadata or {}),
+                "output_reference": replacement,
+                "active_path_repaired_at": utc_now(),
+                "stale_output_reference": record.output_reference,
+            },
+            updated_at=utc_now(),
+        )
+        self._replace_record(repaired)
+        return repaired
+
+    def _valid_active_replacement_reference(self, record: GeneratedImageRecord) -> str | None:
+        metadata = dict(record.generation_metadata or {})
+        request_metadata = dict(metadata.get("request_metadata") or {})
+        candidates = (
+            metadata.get("output_reference"),
+            request_metadata.get("output_reference"),
+            metadata.get("original_output_reference"),
+        )
+        for candidate in candidates:
+            reference = str(candidate or "").strip()
+            if reference == str(record.output_reference or "").strip():
+                continue
+            if reference.startswith(("http://", "https://", "data:")):
+                continue
+            if not self._image_reference_available(reference):
+                continue
+            if self._is_archive_or_posted_reference(reference):
+                continue
+            return reference
+        return None
+
+    @staticmethod
+    def _image_reference_available(reference: str | None) -> bool:
+        source = str(reference or "").strip()
+        if not source:
+            return False
+        if source.startswith(("http://", "https://", "data:")):
+            return True
+        return Path(source).expanduser().is_file()
+
+    @staticmethod
+    def _is_archive_or_posted_reference(reference: str | None) -> bool:
+        normalized = str(reference or "").replace("/", "\\").lower()
+        return "\\posted\\" in normalized or "\\archive\\" in normalized
+
+    def _reviewed_edit_output_references(self) -> set[str]:
+        references = set()
+        for item in self._read_json(self.reviewed_edit_outputs_path, []):
+            for value in (
+                item.get("output_reference"),
+                item.get("original_output_reference"),
+            ):
+                if value:
+                    references.add(str(value))
+        return references
+
+    def _record_reviewed_edit_output(self, record: GeneratedImageRecord, *, action: str) -> None:
+        reviewed = list(self._read_json(self.reviewed_edit_outputs_path, []))
+        generation_metadata = dict(record.generation_metadata or {})
+        reviewed.insert(
+            0,
+            {
+                "image_id": record.image_id,
+                "generation_job_id": record.generation_job_id,
+                "action": str(action),
+                "output_reference": record.output_reference,
+                "original_output_reference": generation_metadata.get("original_output_reference"),
+                "reviewed_at": utc_now(),
+            },
+        )
+        self._write_json(self.reviewed_edit_outputs_path, reviewed)
 
     def _set_status(
         self,
@@ -420,6 +1540,12 @@ class GenerationLibraryService:
     def _remove_records(self, image_ids: Iterable[str]) -> None:
         ids = set(str(image_id) for image_id in image_ids)
         self._write_records([record for record in self.list_records() if record.image_id not in ids])
+
+    @staticmethod
+    def _delete_local_file(output_reference: str) -> None:
+        path = Path(str(output_reference or "")).expanduser()
+        if path.exists() and path.is_file():
+            path.unlink()
 
     @staticmethod
     def _record_from_job(job: GenerationJob, output_reference: str) -> GeneratedImageRecord:

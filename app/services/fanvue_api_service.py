@@ -8,6 +8,11 @@ from app.services.global_automation_safety_service import (
     GlobalAutomationSafetyService,
 )
 from app.repositories.content_usage_repository import log_content_usage
+from app.services.fanvue_upload_trace import (
+    fanvue_response_payload,
+    fanvue_upload_exception,
+    fanvue_upload_trace,
+)
 
 load_dotenv()
 
@@ -595,22 +600,61 @@ class FanvueAPIService:
 
         url = f"{self.base_url}/vault/folders"
 
-        response = requests.get(
-            url,
-            headers=self._headers(),
-            timeout=20,
+        fanvue_upload_trace(
+            "fanvue_api.list_vault_folders_request",
+            endpoint=url,
+            method="GET",
+            fanvue_account_id=self.fanvue_account_id,
+            stage="folder_lookup_http_request",
         )
+        try:
+            response = requests.get(
+                url,
+                headers=self._headers(),
+                timeout=20,
+            )
+        except Exception as exc:
+            fanvue_upload_exception(
+                "fanvue_api.list_vault_folders_exception",
+                exc,
+                endpoint=url,
+                method="GET",
+                fanvue_account_id=self.fanvue_account_id,
+                stage="folder_lookup_http_request",
+            )
+            raise
 
         print(
             f"[FANVUE LIST VAULT FOLDERS RESPONSE] "
             f"status={response.status_code}"
+        )
+        fanvue_upload_trace(
+            "fanvue_api.list_vault_folders_response",
+            endpoint=url,
+            method="GET",
+            fanvue_account_id=self.fanvue_account_id,
+            status_code=response.status_code,
+            response=fanvue_response_payload(response),
+            stage="folder_lookup_http_response",
         )
 
         if response.status_code >= 400:
             print("[FANVUE LIST VAULT FOLDERS FAILED]", response.text)
             return {"success": False}
 
-        data = response.json()
+        try:
+            data = response.json()
+        except Exception as exc:
+            fanvue_upload_exception(
+                "fanvue_api.list_vault_folders_parse_exception",
+                exc,
+                endpoint=url,
+                method="GET",
+                fanvue_account_id=self.fanvue_account_id,
+                response=fanvue_response_payload(response),
+                stage="http_response_parsing",
+            )
+            raise
 
         return {
             "success": True,

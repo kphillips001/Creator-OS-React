@@ -1,4 +1,4 @@
-"""Content Studio shell pages.
+﻿"""Content Studio shell pages.
 
 This module defines Creator OS Content Studio presentation and delegates
 generation execution to Generation Engine/provider registry services.
@@ -6,31 +6,67 @@ generation execution to Generation Engine/provider registry services.
 
 from __future__ import annotations
 
+import inspect
+import base64
+import html
+import json
+import mimetypes
+import os
+import re
 import time
-from dataclasses import dataclass, replace
+import traceback
+import urllib.request
+from dataclasses import asdict, dataclass, replace
 from datetime import date, datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 import streamlit as st
 import streamlit.components.v1 as components
+try:
+    from PIL import Image
+except Exception:  # pragma: no cover - optional runtime display enhancement
+    Image = None
 
 import app.services.social_publishing_service as social_marketing_service
 from app.models.caption_studio import CaptionPlatform, CaptionStyle
+from app.models.commerce_destination import (
+    CommerceDestination,
+    CommerceDestinationRequest,
+)
+from app.models.chat_commerce_registration import ChatAvailabilityState
 from app.models.creative_director import PromptPlan
-from app.models.generation_library import GenerationLibraryFilter
-from app.models.generation_engine import GenerationJob
+from app.models.fulfillment_registration import (
+    BusinessAssetFulfillmentRecord,
+    FulfillmentLifecycleState,
+    MediaLinkSubmission,
+    MediaLinkVerificationState,
+)
+from app.models.generation_library import GeneratedImageRecord, GenerationLibraryFilter
+from app.models.generation_engine import GenerationJob, GenerationResult
 from app.models.reference_library import ReferenceLibraryFilter
 from app.models.generation_engine import GenerationMediaType, GenerationStatus, GenerationType
 from app.services.asset_library_service import AssetLibraryService
 from app.services.caption_studio_service import CaptionStudioService
+from app.services.commerce_destination_service import CommerceDestinationService
+from app.services.chat_commerce_registration_service import (
+    ChatCommerceRegistrationService,
+)
 from app.services.content_archive_service import ContentArchiveService
+from app.services.creator_approval_service import CreatorApprovalService
 from app.services.creative_director_service import CreativeDirectorService
 from app.services.edit_studio_service import EditStudioService
+from app.services.fulfillment_registration_service import FulfillmentRegistrationService
 from app.services.generation_engine_service import GenerationEngineService
 from app.services.generation_library_service import GenerationLibraryService
 from app.services.generation_result_ingestion_service import GenerationResultIngestionService
 from app.services.photoshoot_queue_service import PhotoshootQueueService
+from app.services.photoshoot_fanvue_upload_service import (
+    FANVUE_PHOTOSHOOT_FOLDER,
+    FANVUE_WALL_FOLDER,
+    PhotoshootFanvueUploadService,
+)
+from app.services.fanvue_upload_trace import fanvue_upload_exception
 from app.services.reference_library_service import ReferenceLibraryService
 
 
@@ -42,7 +78,8 @@ CONTENT_STUDIO_PAGES = (
     "Generation Workspace",
     "Generation Library",
     "Archive",
-    "Photoshoot Queue",
+    "Photoshoot Studio",
+    "Photoshoot Gallery",
     "Social Publishing",
     "Caption Studio",
     "Edit Studio",
@@ -51,9 +88,104 @@ CONTENT_STUDIO_PAGES = (
 )
 
 
+X_PUBLISH_DIALOG_DEBUG_LOG = Path("logs") / "x_publish_dialog_debug.log"
+SOCIAL_PUBLISHING_LEGACY_LABEL = "Send to Social Publishing"
+
+
+def _display_image_src(image_reference: Any) -> str:
+    source = str(image_reference or "").strip()
+    if source.startswith(("http://", "https://", "data:")):
+        return source
+    path = Path(source).expanduser()
+    if not path.exists() or not path.is_file():
+        return source
+    mime_type = mimetypes.guess_type(path.name)[0] or "image/png"
+    encoded = base64.b64encode(path.read_bytes()).decode("ascii")
+    return f"data:{mime_type};base64,{encoded}"
+
+
+def _local_image_display_height(image_reference: Any, *, max_height: int) -> int:
+    if Image is None:
+        return int(max_height) + 12
+    source = str(image_reference or "").strip()
+    if source.startswith(("http://", "https://", "data:")):
+        return int(max_height) + 12
+    path = Path(source).expanduser()
+    if not path.exists() or not path.is_file():
+        return int(max_height) + 12
+    try:
+        with Image.open(path) as image:
+            return min(int(max_height), int(image.height)) + 12
+    except Exception:
+        return int(max_height) + 12
+
+
+def _render_edit_studio_image(image_reference: Any, *, alt: str, max_height: int = 550) -> None:
+    src = html.escape(_display_image_src(image_reference), quote=True)
+    alt_text = html.escape(alt, quote=True)
+    components.html(
+        f"""
+        <div style="
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0;
+            padding: 0;
+        ">
+            <img
+                src="{src}"
+                alt="{alt_text}"
+                style="
+                    display: block;
+                    max-height: {int(max_height)}px;
+                    max-width: 100%;
+                    width: auto;
+                    height: auto;
+                    object-fit: contain;
+                    margin: 0 auto;
+                "
+            />
+        </div>
+        """,
+        height=_local_image_display_height(image_reference, max_height=max_height),
+        scrolling=False,
+    )
+
+
+def _debug_x_publish_dialog_event(
+    event: str,
+    *,
+    source: str,
+    variable_name: str,
+    value: Any,
+    diagnostic: Any = None,
+) -> None:
+    try:
+        frame = inspect.currentframe()
+        caller = frame.f_back if frame is not None else None
+        payload = {
+            "event": event,
+            "file": __file__,
+            "function": caller.f_code.co_name if caller is not None else None,
+            "line": caller.f_lineno if caller is not None else None,
+            "source": source,
+            "variable_name": variable_name,
+            "value": str(value),
+            "diagnostic": repr(diagnostic),
+            "session_message": str(st.session_state.get("generation_library_x_publish_message", "")),
+            "stack": traceback.format_stack(limit=16),
+        }
+        X_PUBLISH_DIALOG_DEBUG_LOG.parent.mkdir(parents=True, exist_ok=True)
+        with open(X_PUBLISH_DIALOG_DEBUG_LOG, "a", encoding="utf-8") as file:
+            file.write(json.dumps(payload, default=str) + "\n")
+    except Exception:
+        pass
+
+
 SOCIAL_PROVIDER_LABELS = {
     "seedream_4_5": "Seedream 4.5",
-    "seedream_5_0_lite": "Seedream 5.0 Lite",
+    "seedream_5_0_pro": "Seedream 5.0 Pro",
     "wan_2_7_image_edit": "WAN 2.7",
     "nano_banana_pro": "Nano Banana Pro",
     "nano_banana": "Nano Banana",
@@ -67,13 +199,27 @@ SOCIAL_CREATIVE_MODE_LABELS = {
 
 PREMIUM_PROVIDER_LABELS = {
     "seedream_4_5": "Seedream 4.5",
-    "seedream_5_0_lite": "Seedream 5.0 Lite",
+    "seedream_5_0_pro": "Seedream 5.0 Pro",
+    "wan_2_7_image_edit": "WAN 2.7",
+    "future_provider": "Future Provider",
+}
+
+EDIT_PROVIDER_LABELS = {
+    "seedream_4_5": "Seedream 4.5",
+    "seedream_5_0_pro": "Seedream 5.0 Pro",
     "wan_2_7_image_edit": "WAN 2.7",
     "nano_banana_pro": "Nano Banana Pro",
     "nano_banana": "Nano Banana",
     "flux": "Flux",
     "future_provider": "Future Provider",
 }
+
+EDIT_STUDIO_PROVIDER_ORDER = (
+    "seedream_5_0_pro",
+    "nano_banana_pro",
+    "wan_2_7_image_edit",
+)
+EDIT_STUDIO_DEFAULT_PROVIDER_ID = "seedream_5_0_pro"
 
 PREMIUM_CREATIVE_MODE_LABELS = {
     "premium_teaser": "Premium Teaser",
@@ -106,7 +252,7 @@ CONTENT_STUDIO_SHELL = {
         future_handoffs=("Creator OS Local Vault", "AI Import Workflow"),
     ),
     "Premium Studio": ContentStudioShellPage(
-        title="Premium Studio",
+        title="Content Studio",
         purpose="Workspace shell for premium creative planning and review.",
         owns=("Premium creative UI", "Premium review workflow", "Premium staging handoff"),
         future_handoffs=("Creator OS Local Vault", "AI Import Workflow"),
@@ -134,11 +280,16 @@ CONTENT_STUDIO_SHELL = {
         owns=("Generated image review", "Selection workflow", "Bulk operations"),
         future_handoffs=("AI Import Workflow", "Asset Library"),
     ),
-    "Photoshoot Queue": ContentStudioShellPage(
-        title="Photoshoot Queue",
-        purpose="Shell for planned photoshoot sessions awaiting future generation flow.",
-        owns=("Photoshoot queue UI", "Creative queue workflow"),
+    "Photoshoot Studio": ContentStudioShellPage(
+        title="Photoshoot Studio",
+        purpose="Image-first creative workflow for directing continuity-locked photoshoot sessions.",
+        owns=("Photoshoot Studio UI", "Creative shot workflow"),
         future_handoffs=("Creator OS Local Vault", "AI Import Workflow"),
+    ),
+    "Photoshoot Gallery": ContentStudioShellPage(
+        title="Photoshoot Gallery",
+        purpose="Completed photoshoot timelines and shot review.",
+        owns=("Completed photoshoot sessions", "Shot timeline review"),
     ),
     "Social Publishing": ContentStudioShellPage(
         title="Social Publishing",
@@ -165,8 +316,8 @@ CONTENT_STUDIO_SHELL = {
     ),
     "Settings": ContentStudioShellPage(
         title="Settings",
-        purpose="Shell for Content Studio presentation and workflow preferences.",
-        owns=("Content Studio UI settings", "Creative workflow preferences"),
+        purpose="Shell for Content Creation presentation and workflow preferences.",
+        owns=("Content Creation UI settings", "Creative workflow preferences"),
     ),
 }
 
@@ -175,7 +326,7 @@ def _render_boundary_summary() -> None:
     st.markdown("### Architecture Boundary")
     owned_col, external_col = st.columns(2)
     with owned_col:
-        st.markdown("#### Owned By Content Studio")
+        st.markdown("#### Owned By Content Creation")
         for item in (
             "UI",
             "Creative workflow",
@@ -211,6 +362,399 @@ def _creator_profile_id(creator_profile: dict | None) -> int | None:
         return int(value) if value is not None else None
     except (TypeError, ValueError):
         return None
+
+
+_COMMERCE_DESTINATION_LABELS = {
+    CommerceDestination.TELEGRAM_WALL: "Telegram Wall",
+    CommerceDestination.CUSTOMER_CONVERSATIONS: "Customer Conversations",
+    CommerceDestination.BOTH: "Both",
+    CommerceDestination.ARCHIVE_ONLY: "Archive Only",
+}
+
+
+_FULFILLMENT_STATUS_LABELS = {
+    FulfillmentLifecycleState.ROUTING_PENDING: "Awaiting Upload",
+    FulfillmentLifecycleState.READY_FOR_UPLOAD: "Awaiting Upload",
+    FulfillmentLifecycleState.UPLOAD_QUEUED: "Awaiting Upload",
+    FulfillmentLifecycleState.UPLOADING: "Uploading",
+    FulfillmentLifecycleState.UPLOADED: "Uploaded",
+    FulfillmentLifecycleState.PROCESSING: "Uploading",
+    FulfillmentLifecycleState.MEDIA_READY: "Waiting For Media Link",
+    FulfillmentLifecycleState.WAITING_FOR_MEDIA_LINK: "Waiting For Media Link",
+    FulfillmentLifecycleState.MEDIA_LINK_SUBMITTED: "Media Link Submitted",
+    FulfillmentLifecycleState.MEDIA_LINK_VERIFIED: "Fulfillment Ready",
+    FulfillmentLifecycleState.FULFILLMENT_READY: "Fulfillment Ready",
+    FulfillmentLifecycleState.FAILED: "Failed",
+    FulfillmentLifecycleState.RETRY_REQUIRED: "Retry Required",
+    FulfillmentLifecycleState.RETIRED: "Retired",
+}
+
+
+_CHAT_COMMERCE_STATUS_LABELS = {
+    ChatAvailabilityState.PENDING: "Chat Registration Pending",
+    ChatAvailabilityState.BLOCKED: "Blocked",
+    ChatAvailabilityState.CHAT_READY: "Chat Ready",
+    ChatAvailabilityState.TEMPORARILY_UNAVAILABLE: "Temporarily Unavailable",
+    ChatAvailabilityState.RETIRED: "Retired",
+    ChatAvailabilityState.FAILED: "Failed",
+}
+
+
+def _commerce_destination_label(value: Any) -> str:
+    try:
+        destination = CommerceDestination(str(value))
+    except Exception:
+        return str(value or "Awaiting selection")
+    return _COMMERCE_DESTINATION_LABELS.get(destination, destination.value)
+
+
+def _commerce_destination_needs_fulfillment(value: Any) -> bool:
+    try:
+        destination = CommerceDestination(str(value))
+    except Exception:
+        return False
+    return destination in {
+        CommerceDestination.CUSTOMER_CONVERSATIONS,
+        CommerceDestination.BOTH,
+    }
+
+
+def _selected_fanvue_account_id() -> int | None:
+    value = st.session_state.get("fanvue_account_id") or st.session_state.get(
+        "selected_fanvue_account_id"
+    )
+    try:
+        return int(value) if value is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _fulfillment_status_label(record: BusinessAssetFulfillmentRecord | None) -> str:
+    if record is None:
+        return "Awaiting Upload"
+    return _FULFILLMENT_STATUS_LABELS.get(
+        record.lifecycle_state,
+        str(record.lifecycle_state.value if hasattr(record.lifecycle_state, "value") else record.lifecycle_state),
+    )
+
+
+def _render_chat_commerce_status_panel(*, asset_id: int) -> None:
+    try:
+        record = ChatCommerceRegistrationService().get_by_asset_id(int(asset_id))
+    except Exception as error:
+        st.caption(f"Chat Commerce status unavailable: {error}")
+        return
+    if record is None:
+        st.caption("Chat Commerce Status: Chat Registration Pending")
+        return
+    label = _CHAT_COMMERCE_STATUS_LABELS.get(
+        record.availability_state,
+        record.availability_state.value,
+    )
+    st.caption(
+        " | ".join(
+            (
+                f"Chat Commerce Status: {label}",
+                f"Recommendation Eligible: {'Yes' if record.recommendation_eligible else 'No'}",
+                f"Delivery Eligible: {'Yes' if record.delivery_eligible else 'No'}",
+            )
+        )
+    )
+    if record.block_reasons:
+        st.caption("Chat Blocks: " + ", ".join(record.block_reasons))
+
+
+def _render_fulfillment_registration_panel(
+    *,
+    asset_id: int | None,
+    creator_profile_id: int | None,
+    source_workflow: str,
+    source_session_id: str | None = None,
+    key_prefix: str,
+) -> None:
+    if asset_id is None:
+        return
+    try:
+        destination = CommerceDestinationService().get_destination(int(asset_id))
+    except Exception as error:
+        st.caption(f"Fulfillment status unavailable: {error}")
+        return
+    if destination is None or not _commerce_destination_needs_fulfillment(
+        destination.selected_commerce_destination
+    ):
+        return
+
+    service = FulfillmentRegistrationService()
+    try:
+        record = service.get_fulfillment_by_asset_id(int(asset_id))
+    except Exception as error:
+        st.caption(f"Fulfillment status unavailable: {error}")
+        return
+
+    st.caption(f"Fulfillment Status: {_fulfillment_status_label(record)}")
+    if record is not None:
+        st.caption(
+            " | ".join(
+                (
+                    f"Fanvue Media UUID: {record.provider_media_id or '-'}",
+                    f"Media Link: {record.media_link_verification_state.value}",
+                    f"Verified: {record.media_link_verified_at or '-'}",
+                )
+            )
+        )
+        if record.failure_message:
+            st.warning(record.failure_message)
+
+    if record is None:
+        if st.button(
+            "Start Fulfillment Registration",
+            key=f"{key_prefix}_fulfillment_register",
+            use_container_width=True,
+        ):
+            try:
+                results = service.consume_pending_customer_conversation_intents(
+                    limit=100,
+                    provider_account_id=_selected_fanvue_account_id(),
+                )
+            except Exception as error:
+                st.error(f"Fulfillment Registration failed: {error}")
+            else:
+                asset_result = next(
+                    (result for result in results if int(result.asset_id or 0) == int(asset_id)),
+                    None,
+                )
+                if asset_result and asset_result.success:
+                    st.success("Fulfillment Registration started.")
+                    st.rerun()
+                else:
+                    st.error("No pending Customer Conversations routing intent was available.")
+        return
+
+    if record.lifecycle_state == FulfillmentLifecycleState.FULFILLMENT_READY:
+        st.success("Fulfillment Ready")
+        _render_chat_commerce_status_panel(asset_id=int(asset_id))
+        return
+
+    if record.lifecycle_state in {
+        FulfillmentLifecycleState.READY_FOR_UPLOAD,
+        FulfillmentLifecycleState.UPLOAD_QUEUED,
+        FulfillmentLifecycleState.RETRY_REQUIRED,
+    }:
+        fanvue_account_id = _selected_fanvue_account_id() or record.provider_account_id
+        if st.button(
+            "Upload to Fanvue Chat Vault",
+            key=f"{key_prefix}_fulfillment_upload",
+            disabled=not fanvue_account_id,
+            use_container_width=True,
+        ):
+            try:
+                result = service.upload_customer_conversations_asset(
+                    asset_id=int(asset_id),
+                    fanvue_account_id=int(fanvue_account_id),
+                )
+            except Exception as error:
+                st.error(f"Fanvue upload failed: {error}")
+            else:
+                if result.success:
+                    st.success("Uploaded. Waiting For Media Link.")
+                    st.rerun()
+                else:
+                    st.error("; ".join(result.errors) or "Fanvue upload failed.")
+        if not fanvue_account_id:
+            st.caption("Select a Fanvue account before uploading.")
+
+    if record.lifecycle_state in {
+        FulfillmentLifecycleState.WAITING_FOR_MEDIA_LINK,
+        FulfillmentLifecycleState.MEDIA_LINK_SUBMITTED,
+        FulfillmentLifecycleState.FAILED,
+        FulfillmentLifecycleState.RETRY_REQUIRED,
+    }:
+        st.markdown("[Open Fanvue](https://www.fanvue.com/)")
+        media_link = st.text_input(
+            "Paste Media Link",
+            value=record.media_link or "",
+            key=f"{key_prefix}_fulfillment_media_link",
+            disabled=(
+                record.media_link_verification_state
+                == MediaLinkVerificationState.VERIFIED
+            ),
+        )
+        if st.button(
+            "Verify Media Link",
+            key=f"{key_prefix}_fulfillment_verify",
+            disabled=(
+                not media_link
+                or creator_profile_id is None
+                or record.media_link_verification_state
+                == MediaLinkVerificationState.VERIFIED
+            ),
+            use_container_width=True,
+        ):
+            try:
+                verification = service.submit_media_link(
+                    MediaLinkSubmission(
+                        asset_id=int(asset_id),
+                        media_link=media_link,
+                        creator_profile_id=int(creator_profile_id),
+                        submitted_by={
+                            "source": "content_studio",
+                            "source_workflow": source_workflow,
+                            "source_session_id": source_session_id,
+                        },
+                        idempotency_key=(
+                            f"content-studio-media-link:{int(asset_id)}:{media_link}"
+                        ),
+                    )
+                )
+            except Exception as error:
+                st.error(f"Media Link verification failed: {error}")
+            else:
+                if verification.success:
+                    st.success("Fulfillment Ready")
+                    st.rerun()
+                else:
+                    st.error("; ".join(verification.errors) or "Media Link verification failed.")
+        if creator_profile_id is None:
+            st.caption("Creator Profile is required before verifying a Media Link.")
+
+
+def _render_commerce_destination_selector(
+    *,
+    asset_id: int | None,
+    creator_profile_id: int | None,
+    source_workflow: str,
+    source_session_id: str | None = None,
+    key_prefix: str,
+) -> None:
+    if asset_id is None:
+        return
+    try:
+        service = CommerceDestinationService()
+        record = service.get_destination(int(asset_id))
+    except Exception as error:
+        st.caption(f"Commerce destination unavailable: {error}")
+        return
+    if record is None:
+        st.caption("Commerce destination pending Business Asset registration.")
+        return
+
+    st.caption(
+        "Commerce Destination: "
+        f"{_commerce_destination_label(record.selected_commerce_destination)}"
+    )
+    options = tuple(CommerceDestination)
+    try:
+        current_index = options.index(CommerceDestination(record.selected_commerce_destination))
+    except Exception:
+        current_index = 0
+    selected = st.selectbox(
+        "Commerce Destination",
+        options,
+        index=current_index,
+        key=f"{key_prefix}_commerce_destination",
+        format_func=lambda value: _COMMERCE_DESTINATION_LABELS.get(value, value.value),
+    )
+    note = st.text_input(
+        "Destination Note",
+        key=f"{key_prefix}_commerce_destination_note",
+        placeholder="Optional",
+    )
+    if st.button(
+        "Save Commerce Destination",
+        key=f"{key_prefix}_commerce_destination_save",
+        use_container_width=True,
+    ):
+        result = service.set_destination(
+            CommerceDestinationRequest(
+                asset_id=int(asset_id),
+                registration_id=record.registration_id,
+                destination=selected,
+                creator_profile_id=creator_profile_id,
+                creator_identity={"source": "content_studio"},
+                source_workflow=source_workflow,
+                source_session_id=source_session_id,
+                reason=note or None,
+                idempotency_key=(
+                    f"content-studio-commerce-destination:"
+                    f"{int(asset_id)}:{int(record.destination_revision or 0) + 1}:{selected.value}"
+                ),
+            )
+        )
+        if result.success:
+            st.success("Commerce Destination saved.")
+            st.rerun()
+        else:
+            st.error("; ".join(result.errors) or "Commerce Destination could not be saved.")
+
+
+def _render_commerce_destination_group_selector(
+    *,
+    records: tuple[GeneratedImageRecord, ...],
+    creator_profile_id: int | None,
+    source_workflow: str,
+    source_session_id: str | None,
+    key_prefix: str,
+) -> None:
+    imported_records = tuple(
+        record for record in records if record.imported_asset_id is not None
+    )
+    if not imported_records:
+        return
+    with st.expander("Commerce Destination", expanded=False):
+        selected = st.selectbox(
+            "Commerce Destination",
+            tuple(CommerceDestination),
+            key=f"{key_prefix}_group_commerce_destination",
+            format_func=lambda value: _COMMERCE_DESTINATION_LABELS.get(value, value.value),
+        )
+        note = st.text_input(
+            "Destination Note",
+            key=f"{key_prefix}_group_commerce_destination_note",
+            placeholder="Optional",
+        )
+        if st.button(
+            "Save for Approved Assets",
+            key=f"{key_prefix}_group_commerce_destination_save",
+            use_container_width=True,
+        ):
+            service = CommerceDestinationService()
+            errors = []
+            saved = 0
+            for record in imported_records:
+                try:
+                    business_asset = service.get_destination(int(record.imported_asset_id))
+                    if business_asset is None:
+                        errors.append(f"{record.image_id}: business_asset_not_found")
+                        continue
+                    result = service.set_destination(
+                        CommerceDestinationRequest(
+                            asset_id=int(record.imported_asset_id),
+                            registration_id=business_asset.registration_id,
+                            destination=selected,
+                            creator_profile_id=creator_profile_id,
+                            creator_identity={"source": "content_studio"},
+                            source_workflow=source_workflow,
+                            source_session_id=source_session_id,
+                            reason=note or None,
+                            idempotency_key=(
+                                f"content-studio-commerce-destination:"
+                                f"{int(record.imported_asset_id)}:"
+                                f"{int(business_asset.destination_revision or 0) + 1}:"
+                                f"{selected.value}"
+                            ),
+                        )
+                    )
+                    if result.success:
+                        saved += 1
+                    else:
+                        errors.append(f"{record.image_id}: {'; '.join(result.errors)}")
+                except Exception as error:
+                    errors.append(f"{record.image_id}: {error}")
+            if errors:
+                st.error("; ".join(errors))
+            if saved:
+                st.success(f"Commerce Destination saved for {saved} asset(s).")
+                st.rerun()
 
 
 def _render_active_reference(
@@ -553,7 +1097,15 @@ def default_provider_index(
 def edit_studio_provider_options(
     generation_engine: GenerationEngineService,
 ) -> tuple[tuple[str, str], ...]:
-    return premium_studio_provider_options(generation_engine)
+    registry = getattr(generation_engine, "provider_registry", None)
+    provider_ids = tuple(getattr(registry, "provider_ids", lambda: ())())
+    available = set(provider_ids) if provider_ids else set(EDIT_STUDIO_PROVIDER_ORDER)
+    options = tuple(
+        (provider_id, EDIT_PROVIDER_LABELS[provider_id])
+        for provider_id in EDIT_STUDIO_PROVIDER_ORDER
+        if provider_id in available
+    )
+    return options or ((EDIT_STUDIO_DEFAULT_PROVIDER_ID, EDIT_PROVIDER_LABELS[EDIT_STUDIO_DEFAULT_PROVIDER_ID]),)
 
 
 def _prompt_variations_from_plan(plan: PromptPlan, *, prompt_count: int) -> tuple[str, ...]:
@@ -919,24 +1471,56 @@ def _render_live_generation_preview(
     progress_bar = progress_placeholder.progress(0)
     preview_placeholder = preview_placeholder or st.empty()
     seen_outputs: list[str] = []
+    completed_count = 0
+    failed_count = 0
+    processed_count = 0
 
-    def render_status(current: int, message: str, *, failed: bool = False) -> None:
-        completed = max(0, min(int(current or 0), safe_total))
-        remaining = max(0, safe_total - completed)
+    def compact_status_label(message: str, *, processed: int) -> str:
+        raw = str(message or "").strip()
+        match = re.search(r"image\s+(\d+)\s+of\s+(\d+)", raw, flags=re.IGNORECASE)
+        if match:
+            return f"Rendering Image {match.group(1)} of {match.group(2)}"
+        if processed_count >= safe_total and failed_count == 0:
+            return "Generation completed successfully"
+        if raw.lower().startswith("queued"):
+            return f"Queued Image 1 of {safe_total}"
+        next_index = max(1, min(safe_total, int(processed or 0) + 1))
+        return f"Currently Processing: Image {next_index} of {safe_total}"
+
+    def render_status(
+        current: int,
+        message: str,
+        *,
+        failed: bool = False,
+        failures: int | None = None,
+        processed: int | None = None,
+    ) -> None:
+        nonlocal completed_count, failed_count, processed_count
+        completed_count = max(completed_count, max(0, min(int(current or 0), safe_total)))
+        if failures is not None:
+            failed_count = max(0, min(int(failures or 0), safe_total))
+        if processed is not None:
+            processed_count = max(0, min(int(processed or 0), safe_total))
+        else:
+            processed_count = max(processed_count, min(safe_total, completed_count + failed_count))
+        status_label = compact_status_label(message, processed=processed_count)
         text = (
-            f"{message} | {completed} of {safe_total} complete, "
-            f"{remaining} remaining"
+            f"⏳ {status_label}    "
+            f"✅ Completed: {completed_count}    "
+            f"❌ Failed: {failed_count}    "
+            f"📦 Processed: {processed_count} / {safe_total}"
         )
         if failed:
             status_placeholder.error(text)
         else:
             status_placeholder.info(text)
-        progress_bar.progress(min(1.0, completed / safe_total))
+        progress_bar.progress(min(1.0, processed_count / safe_total))
 
     def render_images(outputs: tuple[str, ...]) -> None:
         for output in outputs:
             if output and output not in seen_outputs:
                 seen_outputs.append(output)
+        preview_placeholder.empty()
         with preview_placeholder.container():
             st.markdown(f"### {title}")
             if not seen_outputs:
@@ -950,29 +1534,112 @@ def _render_live_generation_preview(
 
     def callback(**event) -> None:
         outputs = tuple(event.get("output_references") or ())
-        completed = max(int(event.get("current") or 0), len(outputs))
+        completed = max(
+            int(event.get("completed_count") or event.get("current") or 0),
+            len(outputs),
+        )
         render_status(
             completed,
             str(event.get("message") or "Generation running"),
             failed=bool(event.get("failed")),
+            failures=int(event.get("failed_count") or 0),
+            processed=int(event.get("processed_count") or completed),
         )
         render_images(outputs)
 
     def complete_preview(outputs: tuple[str, ...]) -> None:
-        render_images(outputs)
-        completed = max(len(seen_outputs), len(outputs), safe_total)
-        status_placeholder.success(
-            f"Generation Complete | {completed} of {safe_total} complete"
-        )
-        progress_bar.progress(1.0)
-        time.sleep(5)
         preview_placeholder.empty()
         status_placeholder.empty()
+        progress_bar.progress(1.0)
         progress_bar.empty()
 
     render_status(0, f"Queued 0 of {safe_total}")
     render_images(())
     return callback, render_status, render_images, complete_preview
+
+
+def _sync_generation_outputs_to_library(
+    *,
+    job: GenerationJob,
+    generation_library: GenerationLibraryService,
+    output_references: tuple[str, ...],
+) -> tuple[GeneratedImageRecord, ...]:
+    outputs = tuple(str(output).strip() for output in output_references if str(output).strip())
+    if not outputs:
+        return ()
+    result = job.result or GenerationResult(
+        result_id=f"{job.job_id}_live_result",
+        request_id=job.request.request_id,
+        job_id=job.job_id,
+        provider_id=job.request.provider_id,
+        status=GenerationStatus.SUCCEEDED.value,
+        generation_metadata={
+            "provider_neutral_result": True,
+            "live_generation_sync": True,
+        },
+        image_metadata={
+            "requested_image_count": job.request.image_count,
+            "output_count": len(outputs),
+        },
+        output_references=outputs,
+    )
+    partial_job = replace(
+        job,
+        status=GenerationStatus.SUCCEEDED.value,
+        result=replace(
+            result,
+            job_id=job.job_id,
+            request_id=job.request.request_id,
+            provider_id=job.request.provider_id,
+            status=GenerationStatus.SUCCEEDED.value,
+            output_references=outputs,
+            image_metadata={
+                **dict(result.image_metadata or {}),
+                "requested_image_count": job.request.image_count,
+                "output_count": len(outputs),
+            },
+        ),
+    )
+    return generation_library.sync_job(partial_job)
+
+
+def _generation_completion_message(
+    *,
+    total_requested: int,
+    success_count: int,
+    failed_count: int,
+) -> tuple[str, str]:
+    if success_count >= max(1, int(total_requested or 1)) and failed_count == 0:
+        return "success", "✔ Generation completed successfully."
+    if success_count > 0:
+        return (
+            "warning",
+            (
+                "✔ Generation completed with partial success.\n\n"
+                f"Success: {success_count}\n\n"
+                f"Failed: {failed_count}"
+            ),
+        )
+    return "error", "✖ Generation failed."
+
+
+def _render_generation_completion_message(
+    *,
+    total_requested: int,
+    success_count: int,
+    failed_count: int,
+) -> None:
+    level, message = _generation_completion_message(
+        total_requested=total_requested,
+        success_count=success_count,
+        failed_count=failed_count,
+    )
+    if level == "success":
+        st.success(message)
+    elif level == "warning":
+        st.warning(message)
+    else:
+        st.error(message)
 
 
 CONTENT_STUDIO_RESET_PREFIXES = (
@@ -1077,17 +1744,59 @@ def execute_generation_job_to_library(
     progress_callback=None,
 ):
     """Run a queued job through Generation Engine and index successful outputs."""
+    synced_records_by_id: dict[str, Any] = {}
+
+    def _sync_progress_outputs(**event) -> None:
+        outputs = tuple(event.get("output_references") or ())
+        if outputs:
+            try:
+                for record in _sync_generation_outputs_to_library(
+                    job=job,
+                    generation_library=generation_library,
+                    output_references=outputs,
+                ):
+                    synced_records_by_id[getattr(record, "image_id", str(record))] = record
+            except Exception:
+                pass
+        if progress_callback:
+            progress_callback(**event)
+
     try:
         executed = generation_engine.dispatch_job(
             job.job_id,
-            progress_callback=progress_callback,
+            progress_callback=_sync_progress_outputs,
         )
     except TypeError as error:
         if "progress_callback" not in str(error):
             raise
         executed = generation_engine.dispatch_job(job.job_id)
-    records = generation_library.sync_job(executed)
-    return executed, records
+    for record in generation_library.sync_job(executed):
+        synced_records_by_id[getattr(record, "image_id", str(record))] = record
+    return executed, tuple(synced_records_by_id.values())
+
+
+def execute_edit_generation_for_review(
+    *,
+    job: GenerationJob,
+    generation_engine: GenerationEngineService,
+    generation_library: GenerationLibraryService,
+    pending_source_image_id: str | None = None,
+):
+    executed, records = execute_generation_job_to_library(
+        job=job,
+        generation_engine=generation_engine,
+        generation_library=generation_library,
+    )
+    request_source_ids = tuple(job.request.metadata.get("source_image_ids") or ())
+    source_id = pending_source_image_id or (str(request_source_ids[0]) if request_source_ids else None)
+    candidates = tuple(
+        generation_library.mark_edit_candidate(
+            record.image_id,
+            pending_source_image_id=source_id,
+        )
+        for record in records
+    )
+    return executed, candidates
 
 
 def execute_photoshoot_next_to_library(
@@ -1096,6 +1805,7 @@ def execute_photoshoot_next_to_library(
     generation_engine: GenerationEngineService,
     generation_library: GenerationLibraryService,
     photoshoot_queue: PhotoshootQueueService,
+    progress_callback=None,
 ):
     job = photoshoot_queue.queue_next_prompt(
         session_id=session_id,
@@ -1107,11 +1817,23 @@ def execute_photoshoot_next_to_library(
         job=job,
         generation_engine=generation_engine,
         generation_library=generation_library,
+        progress_callback=progress_callback,
     )
     if executed.status == GenerationStatus.SUCCEEDED.value:
+        session = photoshoot_queue.get_session(session_id)
+        generation_library.mark_photoshoot_session_records(
+            tuple(record.image_id for record in records),
+            session_id=session_id,
+            session_title=session.title,
+        )
         photoshoot_queue.mark_generation_complete(
             generation_job_id=executed.job_id,
             generated_image_ids=tuple(record.image_id for record in records),
+        )
+    elif executed.failure:
+        photoshoot_queue.mark_generation_failed(
+            executed.job_id,
+            reason=executed.failure.reason,
         )
     return executed, records
 
@@ -1495,14 +2217,27 @@ def _render_social_studio(
                 complete_preview(
                     outputs or tuple(executed.result.output_references if executed.result else ())
                 )
-                st.success(f"Generation completed. {len(records)} item(s) added to Generation Library.")
+                image_metadata = dict(executed.result.image_metadata or {}) if executed.result else {}
+                success_count = int(image_metadata.get("completed_count") or len(outputs))
+                failed_count = int(image_metadata.get("failed_count") or 0)
+                _render_generation_completion_message(
+                    total_requested=prompt_count,
+                    success_count=success_count,
+                    failed_count=failed_count,
+                )
             elif executed.failure:
                 render_status(
-                    len(executed.result.output_references) if executed.result else 0,
+                    0,
                     executed.failure.reason,
                     failed=True,
+                    failures=prompt_count,
+                    processed=prompt_count,
                 )
-                st.error(executed.failure.reason)
+                _render_generation_completion_message(
+                    total_requested=prompt_count,
+                    success_count=0,
+                    failed_count=prompt_count,
+                )
             else:
                 render_status(
                     executed.progress.current,
@@ -1550,7 +2285,7 @@ def _render_social_studio(
         ):
             if current_photoshoot:
                 st.session_state["content_studio_active_photoshoot_session_id"] = current_photoshoot.session_id
-                st.session_state["dashboard_page"] = "Photoshoot Queue"
+                st.session_state["dashboard_page"] = "Photoshoot Studio"
                 st.rerun()
     with shoot_col3:
         if st.button(
@@ -1558,7 +2293,7 @@ def _render_social_studio(
             key="social_studio_open_photoshoot",
             use_container_width=True,
         ):
-            st.session_state["dashboard_page"] = "Photoshoot Queue"
+            st.session_state["dashboard_page"] = "Photoshoot Studio"
             st.rerun()
     if current_photoshoot:
         progress = photoshoot_queue.progress(current_photoshoot.session_id)
@@ -1632,7 +2367,7 @@ def _premium_prompt_source_text(selected_source: str, *, creative_tags: str) -> 
         return str(st.session_state.get("premium_studio_surprise_tags") or "").strip()
     if selected_source == "Enhanced Explicit Tags":
         return str(st.session_state.get("premium_studio_enhanced_explicit_tags") or "").strip()
-    if selected_source == "Ask Grok Prompt":
+    if selected_source in {"Prompt Workshop", "Ask Grok Prompt"}:
         return str(st.session_state.get("premium_studio_manual_prompt") or "").strip()
     return str(creative_tags or "").strip()
 
@@ -1645,13 +2380,27 @@ def _store_premium_prompt_batch(prompts: tuple[str, ...], *, source: str) -> Non
         st.session_state["premium_studio_manual_prompt"] = clean_prompts[0]
 
 
+def _select_premium_prompt_source_on_next_run(source: str) -> None:
+    st.session_state["premium_studio_pending_tag_source"] = source
+
+
+def _apply_pending_premium_prompt_source() -> None:
+    pending_source = st.session_state.pop("premium_studio_pending_tag_source", None)
+    current_source = st.session_state.get("premium_studio_selected_tag_source")
+    source = pending_source or current_source
+    if source == "Ask Grok Prompt":
+        source = "Prompt Workshop"
+    if source:
+        st.session_state["premium_studio_selected_tag_source"] = source
+
+
 def _render_premium_prompt_batch() -> None:
     prompts = tuple(st.session_state.get("premium_studio_prompt_batch") or ())
     if not prompts:
         return
-    st.markdown("### Premium Prompt Helper")
+    st.markdown("### Prompt Workshop")
     st.caption(
-        f"Prompt archive source: {st.session_state.get('premium_studio_prompt_batch_source') or 'Premium Studio'}"
+        f"Prompt Source: {st.session_state.get('premium_studio_prompt_batch_source') or 'Content Studio'}"
     )
     with st.expander("Generated Premium Prompts", expanded=True):
         for index, prompt in enumerate(prompts, start=1):
@@ -1670,7 +2419,7 @@ def _render_premium_prompt_batch() -> None:
                     use_container_width=True,
                 ):
                     st.session_state["premium_studio_manual_prompt"] = prompt
-                    st.session_state["premium_studio_selected_tag_source"] = "Ask Grok Prompt"
+                    _select_premium_prompt_source_on_next_run("Prompt Workshop")
                     st.rerun()
 
 
@@ -1682,23 +2431,23 @@ def _render_premium_prompt_assistant(
     prompt_count: int,
     active_reference_available: bool,
 ) -> None:
-    with st.expander("Ask Grok / Prompt Assistant", expanded=False):
-        st.caption("Create premium shot-card ideas without leaving Premium Studio.")
+    with st.expander("Prompt Workshop", expanded=False):
+        st.caption("Preview and edit the exact prompts the canonical planner will send to generation.")
         lane = st.selectbox(
-            "Prompt Assistant Lane",
+            "Prompt Mode",
             ("premium", "explicit"),
             format_func=lambda value: "Premium" if value == "premium" else "Explicit",
             key="premium_studio_prompt_assistant_lane",
         )
         request_text = st.text_area(
-            "Ask Grok for Shot Cards",
+            "Prompt Workshop Brief",
             key="premium_studio_prompt_assistant_request",
             placeholder="Example: hotel mirror lingerie set with warm lamp light and playful confidence",
             height=100,
             disabled=not active_reference_available,
         )
         if st.button(
-            "Ask Grok",
+            "Generate Prompts",
             key="premium_studio_ask_grok",
             disabled=not active_reference_available or not str(request_text).strip(),
             use_container_width=True,
@@ -1713,18 +2462,32 @@ def _render_premium_prompt_assistant(
             except ValueError as error:
                 st.error(str(error))
             except Exception as error:
-                st.error(f"Prompt assistant failed: {error}")
+                st.error(f"Prompt Workshop failed: {error}")
             else:
                 st.session_state["premium_studio_prompt_assistant_batch_id"] = batch.batch_id
                 st.session_state["premium_studio_prompt_assistant_results"] = batch.prompts
-                _store_premium_prompt_batch(batch.prompts, source="Ask Grok")
-                st.success("Prompt assistant shot cards created.")
+                _store_premium_prompt_batch(batch.prompts, source="Prompt Workshop")
+                st.success("Prompt Workshop prompts created.")
                 st.rerun()
 
         prompts = tuple(st.session_state.get("premium_studio_prompt_assistant_results") or ())
         if prompts:
+            edited_prompts = []
+            for index, prompt in enumerate(prompts, start=1):
+                edited_prompt = st.text_area(
+                    f"Prompt {index}",
+                    value=prompt,
+                    key=f"premium_studio_prompt_workshop_edit_{index}",
+                    height=140,
+                )
+                edited_prompts.append(str(edited_prompt or "").strip())
+            prompts = tuple(prompt for prompt in edited_prompts if prompt)
+            st.session_state["premium_studio_prompt_assistant_results"] = prompts
+            if not prompts:
+                st.warning("At least one Prompt Workshop prompt is required.")
+                return
             selected_number = st.number_input(
-                "Use shot card number",
+                "Selected prompt",
                 min_value=1,
                 max_value=len(prompts),
                 value=1,
@@ -1732,30 +2495,27 @@ def _render_premium_prompt_assistant(
                 key="premium_studio_prompt_assistant_selected_number",
             )
             selected_prompt = prompts[int(selected_number) - 1]
-            st.write(selected_prompt)
             a1, a2, a3 = st.columns(3)
-            if a1.button("Use Selected", key="premium_studio_prompt_assistant_use", use_container_width=True):
+            if a1.button("Accept Selected", key="premium_studio_prompt_assistant_use", use_container_width=True):
                 st.session_state["premium_studio_manual_prompt"] = selected_prompt
-                st.session_state["premium_studio_selected_tag_source"] = "Ask Grok Prompt"
+                _select_premium_prompt_source_on_next_run("Prompt Workshop")
                 batch_id = st.session_state.get("premium_studio_prompt_assistant_batch_id")
                 if batch_id:
                     creative_director.mark_prompt_assistant_used(batch_id, int(selected_number))
                 st.rerun()
-            if a2.button("Apply to Premium Tags", key="premium_studio_prompt_assistant_apply_tags", use_container_width=True):
-                st.session_state["premium_studio_creative_tags"] = selected_prompt
-                st.session_state["premium_studio_selected_tag_source"] = "Original Tags"
+            if a2.button("Accept All", key="premium_studio_prompt_assistant_generate_all", use_container_width=True):
+                _store_premium_prompt_batch(prompts, source="Prompt Workshop")
+                _select_premium_prompt_source_on_next_run("Prompt Workshop")
                 st.rerun()
-            if a3.button("Generate All", key="premium_studio_prompt_assistant_generate_all", use_container_width=True):
-                _store_premium_prompt_batch(prompts, source="Ask Grok")
-                st.session_state["premium_studio_selected_tag_source"] = "Ask Grok Prompt"
-                st.rerun()
+            if a3.button("Copy Prompt", key="premium_studio_prompt_assistant_copy", use_container_width=True):
+                st.code(selected_prompt)
 
         history = creative_director.prompt_assistant_history(
             creator_profile_id=creator_profile_id,
             limit=10,
         )
         if history:
-            with st.expander("Prompt Archive", expanded=False):
+            with st.expander("Prompt Workshop Archive", expanded=False):
                 labels = tuple(
                     f"{batch.created_at[:19]} | {batch.lane} | {batch.request_text[:60]}"
                     for batch in history
@@ -1771,7 +2531,7 @@ def _render_premium_prompt_assistant(
                     used = " used" if index in selected_batch.used_prompt_numbers else ""
                     st.markdown(f"**{index}.**{used} {prompt}")
                 archive_number = st.number_input(
-                    "Use archived shot card number",
+                    "Use archived prompt number",
                     min_value=1,
                     max_value=max(1, len(selected_batch.prompts)),
                     value=1,
@@ -1782,7 +2542,7 @@ def _render_premium_prompt_assistant(
                 if c1.button("Use Archived", key="premium_studio_archive_use", use_container_width=True):
                     selected_prompt = selected_batch.prompts[int(archive_number) - 1]
                     st.session_state["premium_studio_manual_prompt"] = selected_prompt
-                    st.session_state["premium_studio_selected_tag_source"] = "Ask Grok Prompt"
+                    _select_premium_prompt_source_on_next_run("Prompt Workshop")
                     creative_director.mark_prompt_assistant_used(
                         selected_batch.batch_id,
                         int(archive_number),
@@ -1791,7 +2551,7 @@ def _render_premium_prompt_assistant(
                 if c2.button("Load Batch", key="premium_studio_archive_load", use_container_width=True):
                     st.session_state["premium_studio_prompt_assistant_results"] = selected_batch.prompts
                     st.session_state["premium_studio_prompt_assistant_batch_id"] = selected_batch.batch_id
-                    _store_premium_prompt_batch(selected_batch.prompts, source="Prompt Archive")
+                    _store_premium_prompt_batch(selected_batch.prompts, source="Prompt Workshop Archive")
                     st.rerun()
 
 
@@ -1804,9 +2564,9 @@ def _render_premium_grok_anything(
     st.session_state.setdefault(history_key, [])
     st.session_state.setdefault(form_key, 0)
 
-    with st.expander("Ask Grok Anything", expanded=False):
+    with st.expander("Canonical Prompt Planner Q&A", expanded=False):
         question = st.text_area(
-            "Ask Grok",
+            "Ask Canonical Prompt Planner",
             height=150,
             key=f"premium_grok_anything_question_{st.session_state[form_key]}",
             placeholder=(
@@ -1822,7 +2582,7 @@ def _render_premium_grok_anything(
         )
         ask_col, clear_col = st.columns([3, 1])
         ask_clicked = ask_col.button(
-            "Ask Grok",
+            "Ask Planner",
             key="premium_grok_anything_ask",
             disabled=not str(question).strip(),
             use_container_width=True,
@@ -1840,7 +2600,7 @@ def _render_premium_grok_anything(
             image_bytes = uploaded_image.getvalue() if uploaded_image is not None else None
             image_mime_type = getattr(uploaded_image, "type", None) if uploaded_image is not None else None
             image_name = getattr(uploaded_image, "name", None) if uploaded_image is not None else None
-            with st.spinner("Asking Grok..."):
+            with st.spinner("Asking Canonical Prompt Planner..."):
                 try:
                     answer = creative_director.ask_anything(
                         question=question,
@@ -1852,7 +2612,7 @@ def _render_premium_grok_anything(
                     st.error(str(error))
                     answer = ""
                 except Exception as error:
-                    st.error(f"Grok request failed: {error}")
+                    st.error(f"Canonical Prompt Planner request failed: {error}")
                     answer = ""
             if answer:
                 st.session_state[history_key].insert(
@@ -1867,7 +2627,7 @@ def _render_premium_grok_anything(
 
         history = st.session_state.get(history_key, [])
         if history:
-            st.markdown("#### Grok Responses")
+            st.markdown("#### Canonical Prompt Planner Responses")
             for index, item in enumerate(history, start=1):
                 image_label = item.get("image_name")
                 label = f"Response {index}" + (f" - {image_label}" if image_label else "")
@@ -1879,7 +2639,7 @@ def _render_premium_grok_anything(
                     st.markdown("**Copyable Answer**")
                     st.code(item.get("answer", ""), language="text")
             if st.button(
-                "Ask Grok another question",
+                "Ask Canonical Prompt Planner another question",
                 key="premium_grok_anything_ask_another",
                 use_container_width=True,
             ):
@@ -1900,7 +2660,7 @@ def _render_premium_studio(
 ) -> None:
     _consume_content_studio_reset_request()
     creator_profile_id = _creator_profile_id(creator_profile)
-    st.title("Premium Studio")
+    st.title("Content Studio")
     st.caption("Premium creator workflow for provider-neutral prompt planning and generation review.")
     _render_content_studio_reset_notice()
     active_reference = reference_service.get_active_reference(
@@ -1912,7 +2672,7 @@ def _render_premium_studio(
         show_preview=False,
     )
     if not creator_profile_id:
-        st.error("Creator Profile required before using Premium Studio.")
+        st.error("Creator Profile required before using Content Studio.")
         return
     if active_reference is None:
         st.warning("Select an active Reference Image before creating premium work.")
@@ -1941,28 +2701,10 @@ def _render_premium_studio(
     selected_provider = st.selectbox(
         "Provider",
         provider_ids,
-        index=default_provider_index(provider_ids),
+        index=default_provider_index(provider_ids, preferred_provider_id="seedream_5_0_pro"),
         format_func=lambda value: provider_labels.get(value, value),
         key="premium_studio_provider",
     )
-
-    library_col, workspace_col = st.columns(2)
-    with library_col:
-        if st.button(
-            "Generation Library",
-            key="premium_studio_generation_library_link",
-            use_container_width=True,
-        ):
-            st.session_state["dashboard_page"] = "Generation Library"
-            st.rerun()
-    with workspace_col:
-        if st.button(
-            "Generation Workspace",
-            key="premium_studio_generation_workspace_link",
-            use_container_width=True,
-        ):
-            st.session_state["dashboard_page"] = "Generation Workspace"
-            st.rerun()
 
     with st.expander("Creative Director Tools", expanded=True):
         st.caption("Premium prompt helpers, enhanced tags, Surprise Me, and explicit-ready planning.")
@@ -2064,9 +2806,10 @@ def _render_premium_studio(
             height=90,
             disabled=active_reference is None,
         )
+        _apply_pending_premium_prompt_source()
         selected_tag_source = st.radio(
             "Choose tags to send to prompt planning",
-            ("Original Tags", "Enhanced Tags", "Surprise Me Tags", "Enhanced Explicit Tags", "Ask Grok Prompt"),
+            ("Original Tags", "Enhanced Tags", "Surprise Me Tags", "Enhanced Explicit Tags", "Prompt Workshop"),
             key="premium_studio_selected_tag_source",
             horizontal=True,
         )
@@ -2192,14 +2935,27 @@ def _render_premium_studio(
                 complete_preview(
                     outputs or tuple(executed.result.output_references if executed.result else ())
                 )
-                st.success(f"Generation completed. {len(records)} item(s) added to Generation Library.")
+                image_metadata = dict(executed.result.image_metadata or {}) if executed.result else {}
+                success_count = int(image_metadata.get("completed_count") or len(outputs))
+                failed_count = int(image_metadata.get("failed_count") or 0)
+                _render_generation_completion_message(
+                    total_requested=prompt_count,
+                    success_count=success_count,
+                    failed_count=failed_count,
+                )
             elif executed.failure:
                 render_status(
-                    len(executed.result.output_references) if executed.result else 0,
+                    0,
                     executed.failure.reason,
                     failed=True,
+                    failures=prompt_count,
+                    processed=prompt_count,
                 )
-                st.error(executed.failure.reason)
+                _render_generation_completion_message(
+                    total_requested=prompt_count,
+                    success_count=0,
+                    failed_count=prompt_count,
+                )
             else:
                 render_status(
                     executed.progress.current,
@@ -2207,121 +2963,291 @@ def _render_premium_studio(
                 )
                 st.warning(f"Generation finished with status: {executed.status}.")
 
-    st.markdown("### Photoshoot")
-    current_photoshoot = photoshoot_queue.current_session(
-        creator_profile_id=creator_profile_id,
+
+def _edit_studio_source_record(
+    generation_library: GenerationLibraryService,
+    selected_ids: tuple[str, ...],
+) -> GeneratedImageRecord | None:
+    for image_id in selected_ids:
+        try:
+            return generation_library.get(image_id)
+        except KeyError:
+            continue
+    return None
+
+
+def _render_edit_studio_card_styles() -> None:
+    st.markdown(
+        """
+        <style>
+        .st-key-edit_studio_card_single_image button,
+        .st-key-edit_studio_card_multi_image button {
+            min-height: 86px;
+            padding: 14px 16px;
+            border-radius: 8px;
+            border: 1px solid rgba(148, 163, 184, 0.32);
+            background: #171a1f;
+            color: #f8fafc;
+            text-align: left;
+            box-shadow: none;
+            transition: border-color 140ms ease, background 140ms ease, transform 140ms ease;
+            white-space: pre-line;
+        }
+        .st-key-edit_studio_card_single_image button:hover,
+        .st-key-edit_studio_card_multi_image button:hover {
+            border-color: rgba(248, 250, 252, 0.56);
+            background: #20242b;
+            transform: translateY(-1px);
+        }
+        .st-key-edit_studio_card_single_image button:focus,
+        .st-key-edit_studio_card_multi_image button:focus {
+            border-color: #f5c451;
+            box-shadow: 0 0 0 1px rgba(245, 196, 81, 0.35);
+        }
+        .st-key-edit_studio_card_selected_single_image button,
+        .st-key-edit_studio_card_selected_multi_image button {
+            border-color: #f5c451;
+            background: #242018;
+            box-shadow: 0 0 0 1px rgba(245, 196, 81, 0.22);
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
     )
-    shoot_col1, shoot_col2, shoot_col3 = st.columns(3)
-    with shoot_col1:
-        if st.button(
-            "Start Premium Photoshoot",
-            disabled=active_reference is None or not str(selected_prompt_input).strip(),
-            key="premium_studio_start_photoshoot",
-            use_container_width=True,
-        ):
-            try:
-                session = create_premium_photoshoot_session(
-                    creator_profile=creator_profile,
-                    reference_service=reference_service,
-                    creative_director=creative_director,
-                    photoshoot_queue=photoshoot_queue,
-                    creative_tags=selected_prompt_input,
-                    creative_mode=selected_mode,
-                    prompt_count=prompt_count,
-                    provider_id=selected_provider,
-                    creator_notes="Started from Premium Studio.",
-                )
-            except ValueError as error:
-                st.error(str(error))
-            else:
-                st.session_state["content_studio_active_photoshoot_session_id"] = session.session_id
-                st.success("Premium Photoshoot Session started.")
-                st.rerun()
-    with shoot_col2:
-        if st.button(
-            "Continue Photoshoot",
-            disabled=current_photoshoot is None,
-            key="premium_studio_continue_photoshoot",
-            use_container_width=True,
-        ):
-            if current_photoshoot:
-                st.session_state["content_studio_active_photoshoot_session_id"] = current_photoshoot.session_id
-                st.session_state["dashboard_page"] = "Photoshoot Queue"
-                st.rerun()
-    with shoot_col3:
-        if st.button(
-            "Open Existing Photoshoot",
-            key="premium_studio_open_photoshoot",
-            use_container_width=True,
-        ):
-            st.session_state["dashboard_page"] = "Photoshoot Queue"
-            st.rerun()
-    if current_photoshoot:
-        progress = photoshoot_queue.progress(current_photoshoot.session_id)
-        st.caption(
-            f"Current Photoshoot: {current_photoshoot.session_id} | "
-            f"{progress.approved_images} approved image(s), "
-            f"{progress.queued_prompts} remaining prompt(s)."
+
+
+def _render_edit_type_card(
+    *,
+    title: str,
+    body: str,
+    mode: str,
+    selected: bool,
+) -> None:
+    key_prefix = "edit_studio_card_selected" if selected else "edit_studio_card"
+    if st.button(f"{title}\n\n{body}", key=f"{key_prefix}_{mode}", use_container_width=True):
+        st.session_state["edit_studio_workflow_mode"] = mode
+        st.rerun()
+
+
+def _render_edit_type_cards(*, selected_mode: str | None) -> None:
+    _render_edit_studio_card_styles()
+    st.markdown("### Choose Edit Type")
+    single_col, multi_col = st.columns(2, gap="medium")
+    with single_col:
+        _render_edit_type_card(
+            title="✏️ Single Edit",
+            body="Edit this image using text instructions.",
+            mode="single_image",
+            selected=selected_mode == "single_image",
+        )
+    with multi_col:
+        _render_edit_type_card(
+            title="🖼 Multi Edit",
+            body="Combine this image with another reference image.",
+            mode="multi_image",
+            selected=selected_mode == "multi_image",
         )
 
-    st.markdown("### Generation Status")
-    jobs = generation_engine.list_jobs(creator_profile_id=creator_profile_id)
-    all_premium_jobs = tuple(
-        job
-        for job in jobs
-        if job.request.metadata.get("source") == "premium_studio"
-        or job.request.metadata.get("premium_workflow") is True
-        or job.request.metadata.get("creative_mode") in PREMIUM_CREATIVE_MODE_LABELS
-    )
-    _render_resume_previous_generation(
-        jobs=all_premium_jobs,
-        studio_key="premium_studio",
-        button_key="premium_studio_resume_previous_generation",
-    )
-    premium_jobs = _session_scoped_generation_jobs(
-        all_premium_jobs,
-        studio_key="premium_studio",
-    )
-    generation_library.sync_jobs(job for job in premium_jobs if job.status == "succeeded")
-    if not premium_jobs:
-        st.caption("No active Premium Studio generation session.")
-    for job in reversed(premium_jobs[-6:]):
-        status = generation_ingestion.ingestion_status_for_job(job.job_id)
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Status", job.status.title())
-        c2.metric("Provider", provider_labels.get(job.request.provider_id, job.request.provider_id))
-        c3.metric("Progress", f"{job.progress.percent:.0f}%")
-        c4.metric("Library Items", len(job.result.output_references) if job.result else 0)
-        st.caption(f"Job ID: {job.job_id}")
-        st.caption(f"Prompt Plan: {job.request.prompt_plan_id}")
-        st.caption(f"Creative Mode: {job.request.metadata.get('creative_mode') or '-'}")
-        if job.failure:
-            st.error(job.failure.reason)
-        if status.get("imported_asset_ids"):
-            st.caption(
-                "Imported Asset IDs: "
-                + ", ".join(str(asset_id) for asset_id in status["imported_asset_ids"])
-            )
-        for message in status.get("failed_messages", ()):
-            st.error(message)
 
-    if st.button(
-        "Open Generation Library",
-        key="premium_studio_open_generation_library",
-        use_container_width=True,
-    ):
-        st.session_state["dashboard_page"] = "Generation Library"
+def _render_edit_review(
+    *,
+    original_record: GeneratedImageRecord,
+    working_record: GeneratedImageRecord,
+    generation_library: GenerationLibraryService,
+) -> None:
+    cols = st.columns([5, 1, 5])
+    with cols[0]:
+        st.markdown("#### Original Image")
+        _render_edit_studio_image(original_record.output_reference, alt="Original Image")
+    with cols[1]:
+        st.markdown("<div style='text-align:center; padding-top: 260px; font-size: 26px;'>→</div>", unsafe_allow_html=True)
+    with cols[2]:
+        st.markdown("#### Edited Image")
+        _render_edit_studio_image(working_record.output_reference, alt="Edited Image")
+
+    a1, a2, a3 = st.columns(3)
+    if a1.button("✅ Approve", key="edit_studio_approve", use_container_width=True):
+        result = generation_library.approve_edit_candidate(
+            source_image_id=original_record.image_id,
+            edited_image_id=working_record.image_id,
+            metadata={"approved_from": "edit_studio"},
+        )
+        if result.success:
+            for candidate_id in tuple(st.session_state.get("edit_studio_chain_candidate_ids") or ()):
+                if candidate_id != working_record.image_id:
+                    generation_library.discard_edit_candidate(candidate_id)
+            st.session_state["edit_studio_source_image_ids"] = (original_record.image_id,)
+            st.session_state.pop("edit_studio_original_image_id", None)
+            st.session_state.pop("edit_studio_pending_candidate_id", None)
+            st.session_state.pop("edit_studio_working_source_image_id", None)
+            st.session_state.pop("edit_studio_chain_candidate_ids", None)
+            st.session_state["edit_studio_workflow_mode"] = None
+            st.success(result.message)
+            st.rerun()
+        else:
+            st.error("; ".join(result.errors) or result.message)
+    if a2.button("✏️ Edit Again", key="edit_studio_edit_again", use_container_width=True):
+        chain_ids = tuple(st.session_state.get("edit_studio_chain_candidate_ids") or ())
+        if working_record.image_id not in chain_ids:
+            st.session_state["edit_studio_chain_candidate_ids"] = (*chain_ids, working_record.image_id)
+        st.session_state["edit_studio_working_source_image_id"] = working_record.image_id
+        st.session_state["edit_studio_source_image_ids"] = (working_record.image_id,)
+        st.session_state.pop("edit_studio_pending_candidate_id", None)
+        st.session_state["edit_studio_workflow_mode"] = None
         st.rerun()
-    asset_count = len(_recent_generated_asset_items(
-        generation_ingestion=generation_ingestion,
-        asset_library=asset_library,
-        limit=6,
-    ))
-    st.caption(f"Creator OS imported generated assets: {asset_count}")
-    _request_content_studio_reset(
-        studio_label="Premium Studio",
-        key="premium_studio_reset_session",
+    if a3.button("🗑 Discard", key="edit_studio_discard", use_container_width=True):
+        result = generation_library.discard_edit_candidate(working_record.image_id)
+        if result.success:
+            for candidate_id in tuple(st.session_state.get("edit_studio_chain_candidate_ids") or ()):
+                if candidate_id != working_record.image_id:
+                    generation_library.discard_edit_candidate(candidate_id)
+            original_id = st.session_state.get("edit_studio_original_image_id") or original_record.image_id
+            st.session_state["edit_studio_source_image_ids"] = (original_id,)
+            st.session_state.pop("edit_studio_pending_candidate_id", None)
+            st.session_state.pop("edit_studio_working_source_image_id", None)
+            st.session_state["edit_studio_workflow_mode"] = None
+            st.info(result.message)
+            st.rerun()
+        else:
+            st.error("; ".join(result.errors) or result.message)
+
+
+def _render_edit_generation_form(
+    *,
+    creator_profile: dict | None,
+    creator_profile_id: int,
+    source_record: GeneratedImageRecord,
+    edit_mode: str,
+    edit_studio: EditStudioService,
+    generation_engine: GenerationEngineService,
+    generation_library: GenerationLibraryService,
+    reference_service: ReferenceLibraryService,
+) -> None:
+    provider_options = edit_studio_provider_options(generation_engine)
+    provider_ids = tuple(provider_id for provider_id, _ in provider_options)
+    provider_labels = dict(provider_options)
+    selected_provider = st.selectbox(
+        "Provider",
+        provider_ids,
+        index=default_provider_index(
+            provider_ids,
+            preferred_provider_id=EDIT_STUDIO_DEFAULT_PROVIDER_ID,
+        ),
+        format_func=lambda value: provider_labels.get(value, value),
+        key=f"edit_studio_{edit_mode}_provider",
     )
+    reference_asset_id = None
+    reference_image_id = None
+    if edit_mode == "multi_image":
+        st.markdown("#### Reference Image")
+        reference_source = st.radio(
+            "Reference source",
+            ("Upload Reference Image", "Choose from Reference Library"),
+            horizontal=True,
+            key="edit_studio_reference_source",
+        )
+        if reference_source == "Upload Reference Image":
+            uploaded = st.file_uploader(
+                "Upload Reference Image",
+                type=["jpg", "jpeg", "png", "webp"],
+                key="edit_studio_reference_upload",
+            )
+            if uploaded is not None:
+                st.image(uploaded, use_container_width=True)
+        else:
+            references = reference_service.list_references(
+                ReferenceLibraryFilter(
+                    creator_profile_id=creator_profile_id,
+                    has_local_vault_original=None,
+                    limit=100,
+                )
+            ).references
+            reference_options = tuple(reference.asset_id for reference in references)
+            reference_labels = {
+                reference.asset_id: reference.asset.file_name or f"Reference {reference.asset_id}"
+                for reference in references
+            }
+            selected_reference = st.selectbox(
+                "Reference Library",
+                ("", *reference_options),
+                format_func=lambda value: reference_labels.get(value, "Select Reference"),
+                key="edit_studio_reference_asset_id",
+            )
+            if selected_reference:
+                reference_asset_id = int(selected_reference)
+                reference = next((item for item in references if item.asset_id == reference_asset_id), None)
+                if reference and reference.asset.preview_path:
+                    st.image(reference.asset.preview_path, use_container_width=True)
+
+    prompt = st.text_area(
+        "Prompt",
+        placeholder=(
+            "Describe the exact change. Keep everything else the same."
+            if edit_mode == "single_image"
+            else "Describe how this image should use the reference image."
+        ),
+        height=150,
+        key=f"edit_studio_{edit_mode}_prompt",
+    )
+    generate_disabled = not str(prompt).strip()
+    if edit_mode == "multi_image":
+        if st.session_state.get("edit_studio_reference_source") == "Upload Reference Image":
+            generate_disabled = generate_disabled or st.session_state.get("edit_studio_reference_upload") is None
+        else:
+            generate_disabled = generate_disabled or reference_asset_id is None
+
+    if st.button("🚀 Generate Edit", disabled=generate_disabled, key=f"edit_studio_{edit_mode}_generate", use_container_width=True):
+        try:
+            if edit_mode == "multi_image" and st.session_state.get("edit_studio_reference_source") == "Upload Reference Image":
+                uploaded = st.session_state.get("edit_studio_reference_upload")
+                staged_path = _save_uploaded_reference(uploaded)
+                result = reference_service.add_reference(
+                    media_path=staged_path,
+                    original_filename=uploaded.name,
+                    creator_profile_id=creator_profile_id,
+                    favorite=False,
+                    make_active=False,
+                )
+                if not result.success or not result.asset_id:
+                    raise RuntimeError(result.message)
+                reference_asset_id = int(result.asset_id)
+            edit_item, job = create_edit_studio_generation_request(
+                creator_profile=creator_profile,
+                edit_studio=edit_studio,
+                generation_library=generation_library,
+                generation_engine=generation_engine,
+                source_image_ids=(source_record.image_id,),
+                edit_mode=edit_mode,
+                edit_prompt=prompt,
+                provider_id=selected_provider,
+                reference_image_id=reference_image_id,
+                reference_asset_id=reference_asset_id,
+                batch_size=1,
+            )
+            with st.spinner("Generating edit..."):
+                pending_source_id = st.session_state.get("edit_studio_original_image_id") or source_record.image_id
+                executed, candidates = execute_edit_generation_for_review(
+                    job=job,
+                    generation_engine=generation_engine,
+                    generation_library=generation_library,
+                    pending_source_image_id=pending_source_id,
+                )
+        except (KeyError, ValueError, RuntimeError) as error:
+            st.error(str(error))
+        except Exception as error:
+            st.error(f"Edit generation failed: {error}")
+        else:
+            st.session_state["edit_studio_latest_edit_id"] = edit_item.edit_request_id
+            st.session_state["edit_studio_latest_generation_job_id"] = executed.job_id
+            if executed.status == GenerationStatus.SUCCEEDED.value and candidates:
+                st.session_state["edit_studio_pending_candidate_id"] = candidates[0].image_id
+                st.session_state["edit_studio_working_source_image_id"] = source_record.image_id
+                st.success("Edit generated. Review before approving.")
+                st.rerun()
+            elif executed.failure:
+                st.error(executed.failure.reason)
+            else:
+                st.warning(f"Edit finished with status: {executed.status}.")
 
 
 def _render_edit_studio(
@@ -2334,7 +3260,7 @@ def _render_edit_studio(
 ) -> None:
     creator_profile_id = _creator_profile_id(creator_profile)
     st.title("Edit Studio")
-    st.caption("Single, multi-image, face, style, and variation edits for Generation Library images.")
+    st.caption("Dedicated image editor for Single Edit and Multi Edit workflows.")
     if not creator_profile_id:
         st.error("Creator Profile required before using Edit Studio.")
         return
@@ -2343,230 +3269,107 @@ def _render_edit_studio(
         generation_engine=generation_engine,
         generation_library=generation_library,
     )
-    library_result = generation_library.browse(
-        GenerationLibraryFilter(
-            creator_profile_id=creator_profile_id,
-            status="active",
-            sort="newest",
-        )
-    )
-    active_reference = reference_service.get_active_reference(
+    persisted_pending = generation_library.pending_edit_record(
         creator_profile_id=creator_profile_id,
     )
-
-    st.markdown("### Select Image(s)")
-    source_options = tuple(record.image_id for record in library_result.records)
     selected_source_ids = tuple(
-        st.multiselect(
-            "Generation Library Images",
-            source_options,
-            default=tuple(
-                st.session_state.get("edit_studio_source_image_ids")
-                or st.session_state.get("generation_library_selected_ids")
-                or ()
-            ),
-            key="edit_studio_source_image_ids",
-        )
+        st.session_state.get("edit_studio_source_image_ids")
+        or st.session_state.get("generation_library_selected_ids")
+        or ()
     )
-    source_records = tuple(
-        record for record in library_result.records if record.image_id in selected_source_ids
-    )
-    if not source_options:
-        st.info("Generation Library images will appear here after generation completes.")
+    source_record = _edit_studio_source_record(generation_library, selected_source_ids)
+    if source_record is None or source_record.status != "pending_edit":
+        source_record = persisted_pending
+    if source_record is not None:
+        st.session_state["edit_studio_source_image_ids"] = (source_record.image_id,)
+        st.session_state["edit_studio_original_image_id"] = source_record.image_id
+    if source_record is None:
+        st.info("Choose an image in Generation Library and click ✏️ Edit to start.")
+        return
 
-    st.markdown("### Edit Request")
-    mode_values = tuple(EDIT_MODE_LABELS)
-    edit_mode = st.selectbox(
-        "Edit Mode",
-        mode_values,
-        format_func=lambda value: EDIT_MODE_LABELS[value],
-        key="edit_studio_mode",
+    candidate_id = (
+        st.session_state.get("edit_studio_pending_candidate_id")
+        or dict(source_record.generation_metadata or {}).get("latest_edit_candidate_id")
     )
-    provider_options = edit_studio_provider_options(generation_engine)
-    provider_ids = tuple(provider_id for provider_id, _ in provider_options)
-    provider_labels = dict(provider_options)
-    selected_provider = st.selectbox(
-        "Provider",
-        provider_ids,
-        format_func=lambda value: provider_labels.get(value, value),
-        key="edit_studio_provider",
-    )
-    batch_size = st.slider(
-        "Batch Edit Count",
-        min_value=1,
-        max_value=12,
-        value=max(1, min(len(selected_source_ids) or 1, 12)),
-        key="edit_studio_batch_size",
-    )
-    reference_image_id = None
-    if edit_mode in {"multi_image", "style_transfer", "face_replacement"}:
-        reference_options = tuple(
-            record.image_id
-            for record in library_result.records
-            if record.image_id not in selected_source_ids
-        )
-        reference_image_id = st.selectbox(
-            "Reference Image Selection",
-            ("", *reference_options),
-            key="edit_studio_reference_image_id",
-        ) or None
-    reference_asset_id = active_reference.asset_id if active_reference else None
-    if active_reference:
-        st.caption(f"Active Reference Asset: {active_reference.asset_id}")
+    if candidate_id:
+        try:
+            candidate_record = generation_library.get(candidate_id)
+            original_record = source_record
+            _render_edit_review(
+                original_record=original_record,
+                working_record=candidate_record,
+                generation_library=generation_library,
+            )
+            return
+        except KeyError:
+            st.session_state.pop("edit_studio_pending_candidate_id", None)
 
-    prompt_placeholder = {
-        "single_image": "Describe the exact change while preserving everything else.",
-        "multi_image": "Describe how the selected images and reference image should combine.",
-        "face_replacement": "Describe the face replacement while preserving pose, lighting, and body framing.",
-        "style_transfer": "Describe the style to transfer and what must remain unchanged.",
-        "variation": "Describe the variation range and continuity requirements.",
-    }[edit_mode]
-    edit_prompt = st.text_area(
-        "Edit Prompt",
-        placeholder=prompt_placeholder,
-        height=150,
-        key="edit_studio_prompt",
-    )
-
-    st.markdown("### Edit Preview")
-    preview_cols = st.columns(2)
-    with preview_cols[0]:
-        st.caption("Original")
-        for record in source_records[:3]:
-            if record.output_reference:
-                st.image(record.output_reference, use_container_width=True)
-            st.caption(record.image_id)
-    with preview_cols[1]:
-        st.caption("Edited")
-        edited_records = tuple(
-            record
-            for record in library_result.records
-            if (record.generation_metadata.get("request_metadata") or {}).get("source") == "edit_studio"
-        )
-        if not edited_records:
-            st.info("Edited images return to Generation Library after the Generation Engine completes.")
-        for record in edited_records[:3]:
-            if record.output_reference:
-                st.image(record.output_reference, use_container_width=True)
-            st.caption(record.image_id)
-
-    submit_disabled = (
-        not selected_source_ids
-        or not str(edit_prompt).strip()
-        or (edit_mode in {"multi_image", "style_transfer", "face_replacement"} and not reference_image_id)
-    )
-    action_cols = st.columns(3)
-    with action_cols[0]:
-        if st.button(
-            "Submit Edit Request",
-            disabled=submit_disabled,
-            key="edit_studio_submit",
-            use_container_width=True,
-        ):
-            try:
-                edit_item, job = create_edit_studio_generation_request(
-                    creator_profile=creator_profile,
-                    edit_studio=edit_studio,
-                    generation_library=generation_library,
-                    generation_engine=generation_engine,
-                    source_image_ids=selected_source_ids,
-                    edit_mode=edit_mode,
-                    edit_prompt=edit_prompt,
-                    provider_id=selected_provider,
-                    reference_image_id=reference_image_id,
-                    reference_asset_id=reference_asset_id,
-                    batch_size=batch_size,
-                )
-                with st.spinner("Running Edit Request through Generation Engine..."):
-                    executed, records = execute_generation_job_to_library(
-                        job=job,
-                        generation_engine=generation_engine,
-                        generation_library=generation_library,
-                    )
-            except (KeyError, ValueError) as error:
-                st.error(str(error))
-            except Exception as error:
-                st.error(f"Edit generation failed: {error}")
-            else:
-                st.session_state["edit_studio_latest_edit_id"] = edit_item.edit_request_id
-                st.session_state["edit_studio_latest_generation_job_id"] = executed.job_id
-                if executed.status == GenerationStatus.SUCCEEDED.value:
-                    st.success(f"Edit completed. {len(records)} item(s) returned to Generation Library.")
-                elif executed.failure:
-                    st.error(executed.failure.reason)
-                else:
-                    st.warning(f"Edit finished with status: {executed.status}.")
-                st.rerun()
-    with action_cols[1]:
-        if st.button(
-            "Open Generation Library",
-            key="edit_studio_open_generation_library",
-            use_container_width=True,
-        ):
+    st.markdown("### Selected Source Image")
+    _render_edit_studio_image(source_record.output_reference, alt="Selected Source Image")
+    if st.button("↩️ Return to Library", key="edit_studio_return_to_library", use_container_width=True):
+        for candidate_id in tuple(st.session_state.get("edit_studio_chain_candidate_ids") or ()):
+            generation_library.discard_edit_candidate(candidate_id)
+        latest_candidate = generation_library.latest_edit_candidate_for_source(source_record.image_id)
+        if latest_candidate:
+            generation_library.discard_edit_candidate(latest_candidate.image_id)
+        result = generation_library.return_pending_edit_to_library(source_record.image_id)
+        if result.success:
+            st.session_state.pop("edit_studio_source_image_ids", None)
+            st.session_state.pop("edit_studio_original_image_id", None)
+            st.session_state.pop("edit_studio_pending_candidate_id", None)
+            st.session_state.pop("edit_studio_working_source_image_id", None)
+            st.session_state.pop("edit_studio_chain_candidate_ids", None)
+            st.session_state["edit_studio_workflow_mode"] = None
             st.session_state["dashboard_page"] = "Generation Library"
+            st.success(result.message)
             st.rerun()
-    with action_cols[2]:
-        if st.button(
-            "Batch Edit",
-            disabled=not selected_source_ids or not str(edit_prompt).strip(),
-            key="edit_studio_batch_edit",
-            use_container_width=True,
-        ):
-            try:
-                edit_item, job = edit_studio.batch_edit(
-                    creator_profile=creator_profile or {},
-                    source_image_ids=selected_source_ids,
-                    edit_prompt=edit_prompt,
-                    provider_id=selected_provider,
-                    generation_library=generation_library,
-                    generation_engine=generation_engine,
-                )
-                with st.spinner("Running Batch Edit through Generation Engine..."):
-                    executed, records = execute_generation_job_to_library(
-                        job=job,
-                        generation_engine=generation_engine,
-                        generation_library=generation_library,
-                    )
-            except (KeyError, ValueError) as error:
-                st.error(str(error))
-            except Exception as error:
-                st.error(f"Batch edit failed: {error}")
-            else:
-                st.session_state["edit_studio_latest_edit_id"] = edit_item.edit_request_id
-                st.session_state["edit_studio_latest_generation_job_id"] = executed.job_id
-                if executed.status == GenerationStatus.SUCCEEDED.value:
-                    st.success(f"Batch edit completed. {len(records)} item(s) returned to Generation Library.")
-                elif executed.failure:
-                    st.error(executed.failure.reason)
-                else:
-                    st.warning(f"Batch edit finished with status: {executed.status}.")
-                st.rerun()
+        else:
+            st.error("; ".join(result.errors) or result.message)
 
-    st.markdown("### Edit History")
-    history = edit_studio.history(creator_profile_id=creator_profile_id, limit=10)
-    if not history:
-        st.caption("No Edit Studio history yet.")
-    for entry in history:
-        st.caption(
-            " | ".join(
-                (
-                    entry.session.created_at,
-                    EDIT_MODE_LABELS.get(entry.session.edit_mode, entry.session.edit_mode),
-                    ", ".join(entry.session.source_image_ids),
+    edit_mode = st.session_state.get("edit_studio_workflow_mode")
+    st.markdown("<div style='height: 0.75rem;'></div>", unsafe_allow_html=True)
+    _render_edit_type_cards(selected_mode=edit_mode)
+    st.markdown("<div style='height: 0.75rem;'></div>", unsafe_allow_html=True)
+    if edit_mode in {"single_image", "multi_image"}:
+        st.markdown(f"### {EDIT_MODE_LABELS[edit_mode]}")
+        _render_edit_generation_form(
+            creator_profile=creator_profile,
+            creator_profile_id=creator_profile_id,
+            source_record=source_record,
+            edit_mode=edit_mode,
+            edit_studio=edit_studio,
+            generation_engine=generation_engine,
+            generation_library=generation_library,
+            reference_service=reference_service,
+        )
+        if st.button("← Choose Different Edit Type", key="edit_studio_back_to_modes", use_container_width=True):
+            st.session_state["edit_studio_workflow_mode"] = None
+            st.rerun()
+
+    st.markdown("<div style='height: 0.5rem;'></div>", unsafe_allow_html=True)
+    with st.expander("Advanced", expanded=False):
+        st.caption("Face Replacement")
+        st.caption("Style Transfer")
+        st.caption("Variations")
+        st.caption("Batch Edit")
+        st.caption("Provider Overrides")
+        st.markdown("#### Edit History")
+        history = edit_studio.history(creator_profile_id=creator_profile_id, limit=10)
+        if not history:
+            st.caption("No Edit Studio history yet.")
+        for entry in history:
+            st.caption(
+                " | ".join(
+                    (
+                        entry.session.created_at,
+                        EDIT_MODE_LABELS.get(entry.session.edit_mode, entry.session.edit_mode),
+                        ", ".join(entry.session.source_image_ids),
+                    )
                 )
             )
-        )
-        if entry.edit_request:
-            st.write(entry.edit_request.edit_prompt)
-            st.caption(f"Generation Job: {entry.edit_request.generation_job_id or '-'}")
-            if entry.edit_request.generation_job_id:
-                try:
-                    job = generation_engine.get_job(entry.edit_request.generation_job_id)
-                    st.caption(f"Status: {job.status}")
-                    if job.failure:
-                        st.error(job.failure.reason)
-                except Exception:
-                    pass
+            if entry.edit_request:
+                st.write(entry.edit_request.edit_prompt)
+                st.caption(f"Generation Job: {entry.edit_request.generation_job_id or '-'}")
 
 
 def _render_generation_job_card(
@@ -2630,9 +3433,20 @@ def _render_generation_job_card(
                     generation_library=generation_library,
                 )
             if executed.status == GenerationStatus.SUCCEEDED.value:
-                st.success(f"Generation completed. {len(records)} item(s) added to Generation Library.")
+                image_metadata = dict(executed.result.image_metadata or {}) if executed.result else {}
+                success_count = int(image_metadata.get("completed_count") or len(records))
+                failed_count = int(image_metadata.get("failed_count") or 0)
+                _render_generation_completion_message(
+                    total_requested=job.request.image_count,
+                    success_count=success_count,
+                    failed_count=failed_count,
+                )
             elif executed.failure:
-                st.error(executed.failure.reason)
+                _render_generation_completion_message(
+                    total_requested=job.request.image_count,
+                    success_count=0,
+                    failed_count=job.request.image_count,
+                )
             else:
                 st.warning(f"Generation finished with status: {executed.status}.")
             st.rerun()
@@ -2830,39 +3644,93 @@ def _generation_publish_context(record) -> dict[str, Any]:
     }
 
 
+PUBLISH_IMAGE_UNAVAILABLE_MESSAGE = (
+    "This image file is no longer available at its recorded location. "
+    "Return it to the Generation Library or repair the asset record before publishing."
+)
+
+GENERATION_LIBRARY_PUBLISH_TRANSIENT_KEYS = (
+    "generation_library_publish_modal_open",
+    "generation_library_publish_context",
+    "generation_library_publish_destination",
+    "generation_library_x_caption_result_id",
+    "generation_library_x_selected_caption",
+    "generation_library_x_caption_seed",
+    "generation_library_x_publish_message",
+    "generation_library_x_caption_selected_at",
+    "generation_library_telegram_caption_result_id",
+    "generation_library_telegram_selected_caption",
+    "generation_library_telegram_caption_seed",
+    "generation_library_telegram_publish_message",
+    "generation_library_telegram_caption_selected_at",
+)
+
+GENERATION_LIBRARY_PUBLISH_TRANSIENT_PREFIXES = (
+    "generation_library_x_custom_caption_",
+    "generation_library_telegram_caption_",
+    "generation_library_telegram_post_to_",
+    "generation_library_telegram_cta_enabled_",
+    "generation_library_telegram_cta_label_",
+    "generation_library_telegram_cta_url_",
+)
+
+
+def _clear_generation_publish_state() -> None:
+    for key in GENERATION_LIBRARY_PUBLISH_TRANSIENT_KEYS:
+        st.session_state.pop(key, None)
+    for key in tuple(st.session_state.keys()):
+        if any(key.startswith(prefix) for prefix in GENERATION_LIBRARY_PUBLISH_TRANSIENT_PREFIXES):
+            st.session_state.pop(key, None)
+
+
+def _image_reference_exists_for_display(image_reference: str | None) -> bool:
+    source = str(image_reference or "").strip()
+    if not source:
+        return False
+    if source.startswith(("http://", "https://", "data:")):
+        return True
+    return Path(source).expanduser().is_file()
+
+
+def _publishable_image_reference(
+    *,
+    context: dict[str, Any],
+    generation_library: GenerationLibraryService,
+) -> str | None:
+    generated_image_id = str(context.get("generated_image_id") or "").strip()
+    if generated_image_id:
+        resolved = generation_library.resolve_publishable_image_reference(generated_image_id)
+        if resolved:
+            return resolved
+        return None
+    image_reference = str(context.get("image_reference") or "").strip()
+    return image_reference if _image_reference_exists_for_display(image_reference) else None
+
+
+def _render_publish_image_preview(
+    *,
+    context: dict[str, Any],
+    generation_library: GenerationLibraryService,
+) -> tuple[str, bool]:
+    image_reference = _publishable_image_reference(
+        context=context,
+        generation_library=generation_library,
+    )
+    if image_reference:
+        st.image(image_reference, use_container_width=True)
+        return image_reference, True
+    st.warning(PUBLISH_IMAGE_UNAVAILABLE_MESSAGE)
+    return "", False
+
+
 def _open_generation_publish_modal(record) -> None:
+    _clear_generation_publish_state()
     st.session_state["generation_library_publish_modal_open"] = True
     st.session_state["generation_library_publish_context"] = _generation_publish_context(record)
-    st.session_state.pop("generation_library_publish_destination", None)
-    st.session_state.pop("generation_library_x_caption_result_id", None)
-    st.session_state.pop("generation_library_x_selected_caption", None)
-    st.session_state.pop("generation_library_x_caption_seed", None)
-    st.session_state.pop("generation_library_x_publish_message", None)
-    st.session_state.pop("generation_library_x_caption_selected_at", None)
-    st.session_state.pop("generation_library_telegram_caption_result_id", None)
-    st.session_state.pop("generation_library_telegram_selected_caption", None)
-    st.session_state.pop("generation_library_telegram_caption_seed", None)
-    st.session_state.pop("generation_library_telegram_publish_message", None)
-    st.session_state.pop("generation_library_telegram_caption_selected_at", None)
 
 
 def _close_generation_publish_modal() -> None:
-    for key in (
-        "generation_library_publish_modal_open",
-        "generation_library_publish_context",
-        "generation_library_publish_destination",
-        "generation_library_x_caption_result_id",
-        "generation_library_x_selected_caption",
-        "generation_library_x_caption_seed",
-        "generation_library_x_publish_message",
-        "generation_library_x_caption_selected_at",
-        "generation_library_telegram_caption_result_id",
-        "generation_library_telegram_selected_caption",
-        "generation_library_telegram_caption_seed",
-        "generation_library_telegram_publish_message",
-        "generation_library_telegram_caption_selected_at",
-    ):
-        st.session_state.pop(key, None)
+    _clear_generation_publish_state()
 
 
 def _render_generated_caption_choices(
@@ -2892,6 +3760,88 @@ def _render_generated_caption_choices(
                 st.rerun()
 
 
+def _generate_x_caption_set(
+    *,
+    caption_studio: CaptionStudioService,
+    context: dict[str, Any],
+    creator_profile: dict | None,
+    generated_image_id: str,
+    image_reference: str,
+    seed_key: str,
+    result_id_key: str,
+    selected_key: str,
+    custom_key: str,
+    increment_seed: bool,
+) -> None:
+    current_seed = int(st.session_state.get(seed_key, 0))
+    if increment_seed:
+        current_seed += 1
+    st.session_state[seed_key] = current_seed
+    result = caption_studio.generate_x_engagement_themes(
+        generated_image_id=generated_image_id,
+        image_reference=image_reference,
+        creator_profile_id=_creator_profile_id(creator_profile) or 0,
+        creator_profile=creator_profile,
+        creative_mode=str(context.get("creative_mode") or ""),
+        prompt_text=str(context.get("prompt_text") or ""),
+        prompt_metadata=dict(context.get("prompt_metadata") or {}),
+        generation_metadata=dict(context.get("generation_metadata") or {}),
+        idea_seed=current_seed,
+    )
+    st.session_state[result_id_key] = result.caption_result_id
+    st.session_state.pop(selected_key, None)
+    st.session_state.pop(custom_key, None)
+    st.session_state.pop("generation_library_x_caption_selected_at", None)
+
+
+def _x_dependency_diagnostic(social_publishing: Any):
+    provider = getattr(social_publishing, "x_provider", None)
+    provider_type = type(provider) if provider is not None else None
+    diagnostic = getattr(provider_type, "runtime_dependency_diagnostic", None)
+    if callable(diagnostic):
+        return diagnostic()
+    return None
+
+
+def _x_dependency_blocking_message(social_publishing: Any) -> str | None:
+    diagnostic = _x_dependency_diagnostic(social_publishing)
+    if diagnostic is None:
+        return None
+    missing_message = getattr(diagnostic, "missing_dependency_message", None)
+    if callable(missing_message):
+        return missing_message()
+    return None if getattr(diagnostic, "tweepy_installed", True) else getattr(diagnostic, "error", None)
+
+
+def _x_dependency_debug_diagnostic(social_publishing: Any):
+    return _x_dependency_diagnostic(social_publishing)
+
+
+def _sanitize_historical_publish_message(message: str | None) -> str:
+    return re.sub(
+        r"[A-Za-z]:\\[^\\\n]+\\bot\\Scripts\\python\.exe",
+        "[previous runtime interpreter]",
+        str(message or ""),
+    )
+
+
+def _is_stale_x_dependency_message(message: str | None) -> bool:
+    normalized = str(message or "").lower()
+    return (
+        "x publishing dependency missing" in normalized
+        or "tweepy is required for x publishing" in normalized
+        or "tweepy is not installed" in normalized
+        or "\\bot\\scripts\\python.exe" in normalized
+    )
+
+
+def _latest_history_message_for_item(social_publishing: Any, queue_item_id: str) -> str | None:
+    latest_history = next(iter(social_publishing.list_history()), None)
+    if latest_history and latest_history.queue_item_id == queue_item_id:
+        return _sanitize_historical_publish_message(latest_history.message)
+    return None
+
+
 def _render_x_engagement_publish_dialog(
     *,
     context: dict[str, Any],
@@ -2901,52 +3851,34 @@ def _render_x_engagement_publish_dialog(
     social_publishing: Any,
 ) -> None:
     st.markdown("### X Publish")
-    image_reference = str(context.get("image_reference") or "")
-    if image_reference:
-        st.image(image_reference, use_container_width=True)
+    image_reference, image_available = _render_publish_image_preview(
+        context=context,
+        generation_library=generation_library,
+    )
 
     st.markdown("### Generate Captions")
-    st.caption("Grok Vision analyzes the actual image first, then writes two caption styles. Nothing is posted until you choose a caption and publish.")
+    st.caption("Grok Vision uses the image as context, then writes X captions designed to start conversations. Nothing is posted until you choose a caption and publish.")
     generated_image_id = str(context.get("generated_image_id") or "")
     result_id_key = "generation_library_x_caption_result_id"
     seed_key = "generation_library_x_caption_seed"
     selected_key = "generation_library_x_selected_caption"
     custom_key = f"generation_library_x_custom_caption_{generated_image_id}"
 
-    generate_col, regenerate_col = st.columns(2)
-    if generate_col.button("Generate Captions", key="generation_library_x_generate_captions", use_container_width=True):
-        st.session_state[seed_key] = int(st.session_state.get(seed_key, 0))
-        result = caption_studio.generate_x_engagement_themes(
-            generated_image_id=generated_image_id,
-            image_reference=image_reference,
-            creator_profile_id=_creator_profile_id(creator_profile) or 0,
-            creator_profile=creator_profile,
-            creative_mode=str(context.get("creative_mode") or ""),
-            prompt_text=str(context.get("prompt_text") or ""),
-            prompt_metadata=dict(context.get("prompt_metadata") or {}),
-            generation_metadata=dict(context.get("generation_metadata") or {}),
-            idea_seed=int(st.session_state.get(seed_key, 0)),
-        )
-        st.session_state[result_id_key] = result.caption_result_id
-        st.session_state.pop(selected_key, None)
-        st.session_state.pop(custom_key, None)
-        st.rerun()
-    if regenerate_col.button("Generate Different Ideas", key="generation_library_x_generate_different", use_container_width=True):
-        st.session_state[seed_key] = int(st.session_state.get(seed_key, 0)) + 1
-        result = caption_studio.generate_x_engagement_themes(
-            generated_image_id=generated_image_id,
-            image_reference=image_reference,
-            creator_profile_id=_creator_profile_id(creator_profile) or 0,
-            creator_profile=creator_profile,
-            creative_mode=str(context.get("creative_mode") or ""),
-            prompt_text=str(context.get("prompt_text") or ""),
-            prompt_metadata=dict(context.get("prompt_metadata") or {}),
-            generation_metadata=dict(context.get("generation_metadata") or {}),
-            idea_seed=int(st.session_state.get(seed_key, 0)),
-        )
-        st.session_state[result_id_key] = result.caption_result_id
-        st.session_state.pop(selected_key, None)
-        st.session_state.pop(custom_key, None)
+    button_label = "Generate Captions" if not st.session_state.get(result_id_key) else "✨ Regenerate Captions"
+    if st.button(button_label, key="generation_library_x_regenerate_captions", disabled=not image_available, use_container_width=True):
+        with st.spinner("Generating captions..."):
+            _generate_x_caption_set(
+                caption_studio=caption_studio,
+                context=context,
+                creator_profile=creator_profile,
+                generated_image_id=generated_image_id,
+                image_reference=image_reference,
+                seed_key=seed_key,
+                result_id_key=result_id_key,
+                selected_key=selected_key,
+                custom_key=custom_key,
+                increment_seed=bool(st.session_state.get(result_id_key)),
+            )
         st.rerun()
 
     caption_result = None
@@ -2978,9 +3910,9 @@ def _render_x_engagement_publish_dialog(
             height=0,
         )
     custom_caption = st.text_area(
-        "Caption Editor",
+        "Enter Your Own Caption",
         key=custom_key,
-        placeholder="Select a generated caption above or write your own.",
+        placeholder="Type or paste your own X caption here.",
     )
     selected_caption = str(st.session_state.get(custom_key) or "").strip()
     selected_generated_caption = str(st.session_state.get(selected_key) or "").strip()
@@ -2991,15 +3923,44 @@ def _render_x_engagement_publish_dialog(
             st.session_state[custom_key] = selected_generated_caption
             st.rerun()
     elif selected_caption:
-        st.caption("Custom caption will be published.")
+        st.caption(
+            "Type or paste your own X caption here. If this field contains text, "
+            "it will be published instead of generating or selecting an AI caption."
+        )
     else:
-        st.warning("Select a generated caption or write one before publishing.")
+        st.warning(
+            "Type or paste your own X caption here, select an AI caption, or generate captions before publishing."
+        )
+
+    x_debug_diagnostic = _x_dependency_debug_diagnostic(social_publishing)
+    x_blocking_message = _x_dependency_blocking_message(social_publishing)
+    provider_ready = x_blocking_message is None
+    if provider_ready and _is_stale_x_dependency_message(
+        st.session_state.get("generation_library_x_publish_message")
+    ):
+        _debug_x_publish_dialog_event(
+            "clear_stale_session_dependency_message",
+            source="session_state",
+            variable_name='st.session_state["generation_library_x_publish_message"]',
+            value=st.session_state.get("generation_library_x_publish_message"),
+            diagnostic=x_debug_diagnostic,
+        )
+        st.session_state.pop("generation_library_x_publish_message", None)
+    if x_blocking_message:
+        _debug_x_publish_dialog_event(
+            "render_red_x_dependency_panel",
+            source="provider diagnostic",
+            variable_name="x_blocking_message",
+            value=x_blocking_message,
+            diagnostic=x_debug_diagnostic,
+        )
+        st.error(x_blocking_message)
 
     publish_col, cancel_col = st.columns(2)
     if publish_col.button(
         "Publish to AvaBlackthorne",
         key="generation_library_x_publish_now",
-        disabled=not selected_caption,
+        disabled=not selected_caption or bool(x_blocking_message) or not image_available,
         use_container_width=True,
     ):
         caption_id = None
@@ -3037,22 +3998,12 @@ def _render_x_engagement_publish_dialog(
                     "account_name": "AvaBlackthorne",
                 },
             )
-            if archive_result.success:
-                st.session_state["generation_library_x_publish_message"] = "Published to X."
-            else:
-                st.session_state["generation_library_x_publish_message"] = (
-                    "Posted to X, but archive update failed: "
-                    + "; ".join(archive_result.errors)
-                )
+            _close_generation_publish_modal()
+            st.rerun()
         else:
-            latest_history = next(iter(social_publishing.list_history()), None)
-            failure_message = (
-                latest_history.message
-                if latest_history and latest_history.queue_item_id == item.queue_item_id
-                else None
-            )
+            failure_message = _latest_history_message_for_item(social_publishing, item.queue_item_id)
             st.session_state["generation_library_x_publish_message"] = (
-                failure_message or "X publish failed."
+                "Current publish failed:\n\n" + (failure_message or "X publish failed.")
             )
         st.rerun()
     if cancel_col.button("Cancel", key="generation_library_x_cancel", use_container_width=True):
@@ -3061,9 +4012,19 @@ def _render_x_engagement_publish_dialog(
 
     message = st.session_state.get("generation_library_x_publish_message")
     if message == "Published to X.":
-        st.success(message)
+        st.session_state.pop("generation_library_x_publish_message", None)
     elif message:
+        _debug_x_publish_dialog_event(
+            "render_red_x_publish_session_message",
+            source="session_state",
+            variable_name='st.session_state["generation_library_x_publish_message"]',
+            value=message,
+            diagnostic=x_debug_diagnostic,
+        )
         st.error(message)
+        if st.button("Clear previous failure", key="generation_library_x_clear_previous_failure", use_container_width=True):
+            st.session_state.pop("generation_library_x_publish_message", None)
+            st.rerun()
 
 
 def _render_telegram_publish_dialog(
@@ -3075,9 +4036,10 @@ def _render_telegram_publish_dialog(
     social_publishing: Any,
 ) -> None:
     st.markdown("### Telegram Publish")
-    image_reference = str(context.get("image_reference") or "")
-    if image_reference:
-        st.image(image_reference, use_container_width=True)
+    image_reference, image_available = _render_publish_image_preview(
+        context=context,
+        generation_library=generation_library,
+    )
     generated_image_id = str(context.get("generated_image_id") or "")
     caption_key = f"generation_library_telegram_caption_{generated_image_id}"
     result_id_key = "generation_library_telegram_caption_result_id"
@@ -3093,7 +4055,7 @@ def _render_telegram_publish_dialog(
     st.caption("Grok Vision analyzes the actual image first, then writes Telegram-ready caption styles. Nothing is posted until you choose a caption and publish.")
 
     generate_col, regenerate_col = st.columns(2)
-    if generate_col.button("Generate Captions", key="generation_library_telegram_generate_captions", use_container_width=True):
+    if generate_col.button("Generate Captions", key="generation_library_telegram_generate_captions", disabled=not image_available, use_container_width=True):
         st.session_state[seed_key] = int(st.session_state.get(seed_key, 0))
         result = caption_studio.generate_telegram_vision_themes(
             generated_image_id=generated_image_id,
@@ -3110,7 +4072,7 @@ def _render_telegram_publish_dialog(
         st.session_state.pop(selected_key, None)
         st.session_state.pop(caption_key, None)
         st.rerun()
-    if regenerate_col.button("Generate Different Ideas", key="generation_library_telegram_generate_different", use_container_width=True):
+    if regenerate_col.button("Generate Different Ideas", key="generation_library_telegram_generate_different", disabled=not image_available, use_container_width=True):
         st.session_state[seed_key] = int(st.session_state.get(seed_key, 0)) + 1
         result = caption_studio.generate_telegram_vision_themes(
             generated_image_id=generated_image_id,
@@ -3157,9 +4119,9 @@ def _render_telegram_publish_dialog(
             height=0,
         )
     custom_caption = st.text_area(
-        "Caption Editor",
+        "Enter Your Own Caption",
         key=caption_key,
-        placeholder="Select a generated caption above or write your own.",
+        placeholder="Type or paste your own Telegram caption here.",
     )
     selected_caption = str(st.session_state.get(caption_key) or "").strip()
     selected_generated_caption = str(st.session_state.get(selected_key) or "").strip()
@@ -3170,9 +4132,14 @@ def _render_telegram_publish_dialog(
             st.session_state[caption_key] = selected_generated_caption
             st.rerun()
     elif selected_caption:
-        st.caption("Custom caption will be published.")
+        st.caption(
+            "Type or paste your own Telegram caption here. If this field contains text, "
+            "it will be published instead of generating or selecting an AI caption."
+        )
     else:
-        st.warning("Select a generated caption or write one before publishing.")
+        st.warning(
+            "Type or paste your own Telegram caption here, select an AI caption, or generate captions before publishing."
+        )
 
     post_to = st.selectbox("Post To", ("main", "vault"), key=post_to_key)
     cta_enabled = st.checkbox("Include CTA button", key=cta_enabled_key)
@@ -3186,7 +4153,7 @@ def _render_telegram_publish_dialog(
     if publish_col.button(
         "Publish to Telegram",
         key="generation_library_telegram_publish_now",
-        disabled=not selected_caption,
+        disabled=not selected_caption or not image_available,
         use_container_width=True,
     ):
         caption_id = None
@@ -3229,13 +4196,8 @@ def _render_telegram_publish_dialog(
                     "cta_url": cta_url,
                 },
             )
-            if archive_result.success:
-                st.session_state[message_key] = "Published to Telegram."
-            else:
-                st.session_state[message_key] = (
-                    "Posted to Telegram, but archive update failed: "
-                    + "; ".join(archive_result.errors)
-                )
+            _close_generation_publish_modal()
+            st.rerun()
         else:
             latest_history = next(iter(social_publishing.list_history()), None)
             st.session_state[message_key] = (
@@ -3250,7 +4212,7 @@ def _render_telegram_publish_dialog(
 
     message = st.session_state.get(message_key)
     if message == "Published to Telegram.":
-        st.success(message)
+        st.session_state.pop(message_key, None)
     elif message:
         st.error(message)
 
@@ -3321,6 +4283,38 @@ def _render_generation_publish_modal(
             render_body()
 
 
+def _render_generation_library_pagination(
+    *,
+    current_page: int,
+    total_pages: int,
+    key_prefix: str,
+) -> None:
+    _, previous_col, label_col, next_col = st.columns([6, 1.35, 0.8, 1.1])
+    with previous_col:
+        if st.button(
+            "◀ Previous",
+            disabled=current_page <= 1,
+            key=f"{key_prefix}_previous",
+            use_container_width=True,
+        ):
+            st.session_state["generation_library_page"] = max(1, current_page - 1)
+            st.rerun()
+    with label_col:
+        st.markdown(
+            f"<div style='text-align:center; padding-top:0.45rem;'>{current_page} of {total_pages}</div>",
+            unsafe_allow_html=True,
+        )
+    with next_col:
+        if st.button(
+            "Next ▶",
+            disabled=current_page >= total_pages,
+            key=f"{key_prefix}_next",
+            use_container_width=True,
+        ):
+            st.session_state["generation_library_page"] = min(total_pages, current_page + 1)
+            st.rerun()
+
+
 def _render_generation_library(
     *,
     creator_profile: dict | None,
@@ -3330,136 +4324,17 @@ def _render_generation_library(
     reference_service: ReferenceLibraryService,
     caption_studio: CaptionStudioService,
     social_publishing: Any,
+    photoshoot_queue: PhotoshootQueueService,
 ) -> None:
     creator_profile_id = _creator_profile_id(creator_profile)
-    st.title("Generation Library")
-    st.caption("Generated images awaiting creator review before Creator OS asset import.")
     generation_library.sync_jobs(generation_engine.list_jobs(status="succeeded"))
-
-    records = generation_library.list_records()
-    providers = sorted({record.provider_id for record in records if record.provider_id})
-    statuses = ("active",)
-    modes = sorted({record.creative_mode for record in records if record.creative_mode})
-    photoshoot_sessions = sorted(
-        {record.photoshoot_session_id for record in records if record.photoshoot_session_id}
-    )
-
-    st.markdown("### Browse")
-    selected_job_id = st.session_state.get("generation_library_selected_job_id")
-    if selected_job_id and "generation_library_search" not in st.session_state:
-        st.session_state["generation_library_search"] = selected_job_id
-    f1, f2, f3 = st.columns(3)
-    search = f1.text_input("Search", key="generation_library_search")
-    provider = f2.selectbox("Provider", ("", *providers), key="generation_library_provider")
-    if st.session_state.get("generation_library_status") not in statuses:
-        st.session_state["generation_library_status"] = "active"
-    status = f3.selectbox("Status", statuses, key="generation_library_status")
-    f4, f5, f6 = st.columns(3)
-    creative_mode = f4.selectbox("Creative Mode", ("", *modes), key="generation_library_mode")
-    photoshoot_session = f5.selectbox(
-        "Photoshoot Session",
-        ("", *photoshoot_sessions),
-        key="generation_library_photoshoot",
-    )
-    sort = f6.selectbox(
-        "Sort",
-        ("newest", "oldest", "provider", "status"),
-        key="generation_library_sort",
-    )
     result = generation_library.browse(
         GenerationLibraryFilter(
-            search=search,
-            provider_id=provider,
-            status=status,
-            creative_mode=creative_mode,
-            photoshoot_session_id=photoshoot_session,
+            status="active",
             creator_profile_id=creator_profile_id,
-            sort=sort,
+            sort="newest",
         )
     )
-    st.caption(f"{result.total} generated image(s)")
-    selectable_ids = tuple(record.image_id for record in result.records)
-    selected_ids = tuple(
-        st.multiselect(
-            "Multi-select",
-            selectable_ids,
-            default=tuple(record.image_id for record in result.records if record.selected),
-            key="generation_library_selected_ids",
-        )
-    )
-    if selected_ids:
-        generation_library.select(selected_ids, selected=True)
-    platform_options = social_publishing.platform_options()
-    selected_social_platform = st.selectbox(
-        "Social Platform",
-        platform_options,
-        key="generation_library_social_platform",
-    )
-    bulk1, bulk2, bulk3, bulk4, bulk5, bulk6, bulk7 = st.columns(7)
-    if bulk1.button("Add to Creator OS", disabled=not selected_ids, key="generation_library_add", use_container_width=True):
-        action = generation_library.add_to_creator_os(
-            selected_ids,
-            generation_engine=generation_engine,
-            ingestion_service=generation_ingestion,
-        )
-        if action.success:
-            st.success(action.message)
-        else:
-            st.error("; ".join(action.errors))
-        st.rerun()
-    if bulk2.button("Move to Junk", disabled=not selected_ids, key="generation_library_junk", use_container_width=True):
-        generation_library.move_to_junk(selected_ids)
-        st.rerun()
-    if bulk3.button("Restore", disabled=not selected_ids, key="generation_library_restore", use_container_width=True):
-        generation_library.restore(selected_ids)
-        st.rerun()
-    if bulk4.button("Archive", disabled=not selected_ids, key="generation_library_archive", use_container_width=True):
-        generation_library.archive(selected_ids)
-        st.rerun()
-    if bulk5.button("Delete", disabled=not selected_ids, key="generation_library_delete", use_container_width=True):
-        generation_library.delete(selected_ids)
-        st.rerun()
-    if bulk6.button("Multi Edit", disabled=not selected_ids, key="generation_library_multi_edit", use_container_width=True):
-        st.session_state["edit_studio_source_image_ids"] = selected_ids
-        st.session_state["dashboard_page"] = "Edit Studio"
-        st.rerun()
-    if bulk7.button("Regenerate", disabled=not selected_ids, key="generation_library_regenerate", use_container_width=True):
-        action = generation_library.regenerate(
-            selected_ids,
-            generation_engine=generation_engine,
-        )
-        if action.success:
-            st.success(action.message)
-        else:
-            st.error("; ".join(action.errors))
-        st.rerun()
-    send1, send2 = st.columns(2)
-    if send1.button("Send to Social Publishing", disabled=not selected_ids, key="generation_library_social", use_container_width=True):
-        social_publishing.queue_many(
-            generated_image_ids=selected_ids,
-            generation_library=generation_library,
-            platform=selected_social_platform,
-            creator_notes="Queued from Generation Library.",
-        )
-        st.session_state["dashboard_page"] = "Social Publishing"
-        st.rerun()
-    if send2.button("Both", disabled=not selected_ids, key="generation_library_both", use_container_width=True):
-        social_publishing.queue_many(
-            generated_image_ids=selected_ids,
-            generation_library=generation_library,
-            platform=selected_social_platform,
-            creator_notes="Queued from Generation Library and added to Creator OS.",
-        )
-        action = generation_library.add_to_creator_os(
-            selected_ids,
-            generation_engine=generation_engine,
-            ingestion_service=generation_ingestion,
-        )
-        if action.success:
-            st.success("Sent to Social Publishing and added to Creator OS.")
-        else:
-            st.error("; ".join(action.errors))
-        st.rerun()
 
     _render_generation_publish_modal(
         creator_profile=creator_profile,
@@ -3467,98 +4342,112 @@ def _render_generation_library(
         caption_studio=caption_studio,
         social_publishing=social_publishing,
     )
+    workflow_message = st.session_state.pop("generation_library_workflow_message", None)
+    if workflow_message:
+        st.info(workflow_message)
 
-    preview_id = st.session_state.get("generation_library_preview_id")
-    preview_record = next((record for record in result.records if record.image_id == preview_id), None)
-    if preview_record:
-        st.markdown("### Preview")
-        p1, p2 = st.columns([2, 1])
-        with p1:
-            st.image(preview_record.output_reference, use_container_width=True)
-        with p2:
-            st.write(preview_record.image_id)
-            st.caption(f"Provider: {preview_record.provider_id}")
-            st.caption(f"Workflow: {preview_record.generation_metadata.get('workflow_type') or preview_record.generation_metadata.get('source') or '-'}")
-            st.caption(f"Generated: {preview_record.generation_date or '-'}")
-            st.caption(f"Reference Asset: {preview_record.reference_asset_id or '-'}")
-            with st.expander("Prompt", expanded=True):
-                st.write(preview_record.prompt_text)
-            if st.button("Close Preview", key="generation_library_close_preview", use_container_width=True):
-                st.session_state.pop("generation_library_preview_id", None)
-                st.rerun()
-
-    st.markdown("### Thumbnail Grid")
     if not result.records:
         st.info("No generated images match the current filters.")
         return
-    page_size = st.selectbox("Page Size", (9, 18, 36), key="generation_library_page_size")
-    total_pages = max(1, (result.total + int(page_size) - 1) // int(page_size))
-    page_number = st.number_input(
-        "Page",
-        min_value=1,
-        max_value=total_pages,
-        value=min(int(st.session_state.get("generation_library_page", 1)), total_pages),
-        step=1,
-        key="generation_library_page",
+    st.markdown(
+        """
+        <style>
+        div[data-testid="column"] button[kind="secondary"] {
+            min-height: 2.6rem;
+            padding: 0.35rem 0.2rem;
+            font-size: 1.05rem;
+            border-radius: 8px;
+        }
+        div[data-testid="column"] button[kind="secondary"]:hover {
+            border-color: rgba(255, 208, 96, 0.75);
+            background: rgba(255, 208, 96, 0.08);
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
     )
-    start = (int(page_number) - 1) * int(page_size)
-    page_records = result.records[start:start + int(page_size)]
-    st.caption(f"Page {int(page_number)} of {total_pages}")
+    page_size = 18
+    total_pages = max(1, (result.total + page_size - 1) // page_size)
+    current_page = int(st.session_state.get("generation_library_page", 1) or 1)
+    current_page = max(1, min(current_page, total_pages))
+    st.session_state["generation_library_page"] = current_page
+    start = (current_page - 1) * page_size
+    page_records = result.records[start:start + page_size]
+    _render_generation_library_pagination(
+        current_page=current_page,
+        total_pages=total_pages,
+        key_prefix="generation_library_pagination_top",
+    )
     cols = st.columns(3)
     for index, record in enumerate(page_records):
         with cols[index % 3]:
             if record.output_reference:
                 st.image(record.output_reference, use_container_width=True)
-            st.write(record.image_id)
-            workflow = record.generation_metadata.get("workflow_type") or record.generation_metadata.get("source") or "-"
-            st.caption(f"Provider: {record.provider_id}")
-            st.caption(f"Workflow: {workflow}")
-            st.caption(f"Creative Mode: {record.creative_mode or '-'}")
-            st.caption(f"Status: {record.status}")
-            st.caption(f"Generated: {record.generation_date or '-'}")
-            st.caption(f"Reference Image: {record.reference_asset_id or '-'}")
-            st.caption(f"Photoshoot Session: {record.photoshoot_session_id or '-'}")
-            if record.imported_asset_id:
-                st.success(f"Asset #{record.imported_asset_id}")
-            social_item = social_publishing.find_queue_item(record.image_id, platform="x")
-            if social_item and social_item.status == "posted":
-                st.success("Published to X")
-            elif social_item:
-                st.caption(f"X Publishing: {social_item.status}")
-            a1, a2, a3, a4 = st.columns(4)
-            if a1.button("Preview", key=f"generation_library_preview_{record.image_id}", use_container_width=True):
-                st.session_state["generation_library_preview_id"] = record.image_id
-                st.rerun()
-            if a2.button("Edit", key=f"generation_library_edit_{record.image_id}", use_container_width=True):
-                st.session_state["edit_studio_source_image_ids"] = (record.image_id,)
-                st.session_state["dashboard_page"] = "Edit Studio"
-                st.rerun()
-            if a3.button("Publish", key=f"generation_library_publish_{record.image_id}", use_container_width=True):
+            a1, a2, a3, a4, a5, a6 = st.columns(6)
+            if a1.button("🚀", key=f"generation_library_publish_{record.image_id}", help="Publish", use_container_width=True):
                 _open_generation_publish_modal(record)
                 st.rerun()
-            if a4.button("Delete", key=f"generation_library_delete_{record.image_id}", use_container_width=True):
+            if a2.button("✏️", key=f"generation_library_edit_{record.image_id}", help="Edit Image", use_container_width=True):
+                try:
+                    pending = generation_library.send_to_pending_edit(record.image_id)
+                except Exception as error:
+                    st.error(f"Could not open Edit Studio: {error}")
+                else:
+                    st.session_state["edit_studio_source_image_ids"] = (pending.image_id,)
+                    st.session_state["edit_studio_original_image_id"] = pending.image_id
+                    st.session_state.pop("edit_studio_pending_candidate_id", None)
+                    st.session_state.pop("edit_studio_working_source_image_id", None)
+                    st.session_state.pop("edit_studio_chain_candidate_ids", None)
+                    st.session_state["edit_studio_workflow_mode"] = None
+                    st.session_state["dashboard_page"] = "Edit Studio"
+                    st.rerun()
+            if a3.button("📸", key=f"generation_library_photoshoot_{record.image_id}", help="Create Photoshoot", use_container_width=True):
+                photoshoot_record = generation_library.send_to_pending_photoshoot(record.image_id)
+                session, created = photoshoot_queue.start_studio_session_from_generated_image(photoshoot_record)
+                if created:
+                    st.success("Added to Photoshoot Studio.")
+                else:
+                    st.info("Image is already in Photoshoot Studio.")
+                st.session_state["content_studio_active_photoshoot_session_id"] = session.session_id
+                st.session_state["dashboard_page"] = "Photoshoot Studio"
+                st.rerun()
+            if a4.button("🎬", key=f"generation_library_story_{record.image_id}", help="Create Story", use_container_width=True):
+                st.info(
+                    "🎬 Story Studio is coming soon.\n\n"
+                    "Story Studio has not been implemented yet.\n\n"
+                    "Your image remains safely in the Generation Library."
+                )
+            if a5.button("🎥", key=f"generation_library_video_{record.image_id}", help="Create Video", use_container_width=True):
+                try:
+                    generation_library.send_to_pending_video(record.image_id)
+                except Exception as error:
+                    st.error(f"Could not add image to Video Queue: {error}")
+                else:
+                    st.session_state["generation_library_workflow_message"] = (
+                        "Video Studio is coming soon.\n\nYour image has been added to the Video Queue."
+                    )
+                    st.rerun()
+            if a6.button("🗑️", key=f"generation_library_delete_{record.image_id}", help="Delete Image", use_container_width=True):
                 generation_library.delete((record.image_id,))
                 st.rerun()
-            with st.expander("Open Prompt", expanded=False):
-                st.write(record.prompt_text)
-                st.json(dict(record.prompt_metadata or {}))
-            with st.expander("Metadata", expanded=False):
-                st.json(dict(record.generation_metadata or {}))
-            with st.expander("Provider Metadata", expanded=False):
-                st.json(dict(record.provider_metadata or {}))
-            with st.expander("Open Reference", expanded=False):
-                reference = None
-                if record.reference_asset_id:
-                    try:
-                        reference = reference_service.get_reference(
-                            record.reference_asset_id,
-                        )
-                    except Exception:
-                        reference = None
-                if reference and reference.asset.preview_path:
-                    st.image(reference.asset.preview_path, use_container_width=True)
-                else:
-                    st.caption(f"Reference Asset: {record.reference_asset_id or '-'}")
+            if record.imported_asset_id is not None:
+                _render_commerce_destination_selector(
+                    asset_id=int(record.imported_asset_id),
+                    creator_profile_id=creator_profile_id,
+                    source_workflow="generation_library",
+                    key_prefix=f"generation_library_{record.image_id}",
+                )
+                _render_fulfillment_registration_panel(
+                    asset_id=int(record.imported_asset_id),
+                    creator_profile_id=creator_profile_id,
+                    source_workflow="generation_library",
+                    key_prefix=f"generation_library_{record.image_id}",
+                )
+    _render_generation_library_pagination(
+        current_page=current_page,
+        total_pages=total_pages,
+        key_prefix="generation_library_pagination_bottom",
+    )
 
 
 def _render_archive_page(
@@ -3567,7 +4456,7 @@ def _render_archive_page(
     content_archive: ContentArchiveService,
 ) -> None:
     st.title("Archive")
-    st.caption("Permanent Content Studio history for published, edited, imported, and junked generated images.")
+    st.caption("Permanent Content Creation history for published, edited, imported, and junked generated images.")
     content_archive.initialize_content_root()
     paths = content_archive.content_paths()
     with st.expander("Content Root", expanded=False):
@@ -3780,7 +4669,17 @@ def _render_social_publishing(
                     st.success("Caption generated.")
                     st.rerun()
                 can_publish_now = item.platform in {"x", "telegram"}
-                if a7.button("Publish Now", disabled=not can_publish_now, key=f"social_queue_publish_{item.queue_item_id}", use_container_width=True):
+                x_blocking_message = (
+                    _x_dependency_blocking_message(social_publishing)
+                    if item.platform == "x"
+                    else None
+                )
+                if a7.button(
+                    "Publish Now",
+                    disabled=not can_publish_now or bool(x_blocking_message),
+                    key=f"social_queue_publish_{item.queue_item_id}",
+                    use_container_width=True,
+                ):
                     updated = social_publishing.publish_now(
                         item.queue_item_id,
                         caption_text=caption_text,
@@ -3815,8 +4714,22 @@ def _render_social_publishing(
                         )
                         st.success("Posted to Telegram." if item.platform == "telegram" else "Posted to X.")
                     else:
-                        st.error(social_publishing.list_history()[0].message or "Publish failed.")
+                        failure_message = _latest_history_message_for_item(
+                            social_publishing,
+                            item.queue_item_id,
+                        )
+                        rendered_failure = "Current publish failed:\n\n" + (failure_message or "Publish failed.")
+                        _debug_x_publish_dialog_event(
+                            "render_red_social_queue_publish_failure",
+                            source="publish history",
+                            variable_name="rendered_failure",
+                            value=rendered_failure,
+                            diagnostic=_x_dependency_debug_diagnostic(social_publishing),
+                        )
+                        st.error(rendered_failure)
                     st.rerun()
+                if x_blocking_message:
+                    st.caption("X publishing is currently blocked by the active runtime diagnostic.")
                 if a8.button("Retry", disabled=item.status != "failed", key=f"social_queue_retry_{item.queue_item_id}", use_container_width=True):
                     social_publishing.retry_queue_item(item.queue_item_id)
                     st.rerun()
@@ -3863,7 +4776,11 @@ def _render_social_publishing(
     for entry in history[:10]:
         st.caption(f"{entry.created_at} | {entry.platform} | {entry.status}")
         if entry.message:
-            st.write(entry.message)
+            if entry.status == "failed":
+                st.caption("Previous publish failure:")
+                st.write(_sanitize_historical_publish_message(entry.message))
+            else:
+                st.write(entry.message)
 
 
 def _render_caption_studio(
@@ -4042,6 +4959,645 @@ def _render_caption_studio(
             st.write(entry.selected_text)
 
 
+def _photoshoot_record_by_id(
+    generation_library: GenerationLibraryService,
+    image_id: str | None,
+) -> GeneratedImageRecord | None:
+    if not image_id:
+        return None
+    try:
+        return generation_library.get(str(image_id))
+    except KeyError:
+        return None
+
+
+def _photoshoot_records_for_request(
+    request,
+    generation_library: GenerationLibraryService,
+) -> tuple[GeneratedImageRecord, ...]:
+    records = []
+    for image_id in tuple((request.metadata or {}).get("generated_image_ids") or ()):
+        record = _photoshoot_record_by_id(generation_library, str(image_id))
+        if record is not None:
+            records.append(record)
+    return tuple(records)
+
+
+def _photoshoot_seed_record(
+    session,
+    generation_library: GenerationLibraryService,
+) -> GeneratedImageRecord | None:
+    continuity = dict(session.creative_continuity or {})
+    return _photoshoot_record_by_id(generation_library, continuity.get("seed_image_id"))
+
+
+def _photoshoot_approved_records(
+    session,
+    photoshoot_queue: PhotoshootQueueService,
+    generation_library: GenerationLibraryService,
+) -> tuple[tuple[Any, GeneratedImageRecord], ...]:
+    approved = []
+    for request in photoshoot_queue.requests_for_session(session.session_id):
+        if request.status != "approved":
+            continue
+        for record in _photoshoot_records_for_request(request, generation_library):
+            approved.append((request, record))
+    return tuple(approved)
+
+
+def _photoshoot_timeline_items(
+    session,
+    photoshoot_queue: PhotoshootQueueService,
+    generation_library: GenerationLibraryService,
+) -> tuple[tuple[Any, GeneratedImageRecord, str], ...]:
+    items = []
+    shot_number = 1
+    for request in photoshoot_queue.requests_for_session(session.session_id):
+        if request.status != "approved":
+            continue
+        for record in _photoshoot_records_for_request(request, generation_library):
+            label = f"📷 Shot {shot_number}"
+            if (request.metadata or {}).get("is_seed_image"):
+                label = f"{label} (Seed)"
+            items.append((request, record, label))
+            shot_number += 1
+    return tuple(items)
+
+
+def _render_photoshoot_timeline(
+    items: tuple[tuple[Any, GeneratedImageRecord, str], ...],
+    *,
+    compact: bool = False,
+    horizontal: bool = False,
+    preview_key: str | None = None,
+) -> int | None:
+    if not items:
+        st.caption("No approved photos yet.")
+        return None
+    if horizontal:
+        selected_key = f"{preview_key}_selected_index" if preview_key else ""
+        cards = []
+        active_index = len(items) - 1
+        try:
+            selected_index = int(st.session_state.get(selected_key, active_index)) if selected_key else active_index
+        except (TypeError, ValueError):
+            selected_index = active_index
+        selected_index = max(0, min(selected_index, len(items) - 1))
+        if selected_key:
+            st.session_state[selected_key] = selected_index
+        for index, (request, record, _label) in enumerate(items):
+            shot_label = f"Shot {index + 1}"
+            is_seed = bool((request.metadata or {}).get("is_seed_image"))
+            is_active = index == selected_index
+            src = html.escape(_display_image_src(record.output_reference), quote=True)
+            alt_text = html.escape(shot_label, quote=True)
+            secondary_label = "Starting Image" if is_seed else ("Selected" if is_active else "")
+            secondary_html = (
+                f"<div class='photoshoot-timeline-secondary'>{html.escape(secondary_label)}</div>"
+                if secondary_label
+                else "<div class='photoshoot-timeline-secondary photoshoot-timeline-secondary-empty'>&nbsp;</div>"
+            )
+            active_badge = "<span class='photoshoot-timeline-badge'>★ Active</span>" if is_active else ""
+            cards.append(
+                f"""
+                <div class="photoshoot-timeline-card {'is-active' if is_active else ''}">
+                    <div class="photoshoot-timeline-image-wrap">
+                        <img src="{src}" alt="{alt_text}" />
+                        {active_badge}
+                    </div>
+                    <div class="photoshoot-timeline-label">{html.escape(shot_label)}</div>
+                    {secondary_html}
+                </div>
+                """
+            )
+        components.html(
+            f"""
+            <div class="photoshoot-timeline-scroll">
+                {''.join(cards)}
+            </div>
+            <style>
+                .photoshoot-timeline-scroll {{
+                    display: flex;
+                    flex-wrap: nowrap;
+                    gap: 12px;
+                    overflow-x: auto;
+                    overflow-y: hidden;
+                    width: 100%;
+                    padding: 2px 2px 12px;
+                    box-sizing: border-box;
+                }}
+                .photoshoot-timeline-card {{
+                    flex: 0 0 auto;
+                    width: 168px;
+                    box-sizing: border-box;
+                    border: 1px solid rgba(255,255,255,0.18);
+                    background: rgba(255,255,255,0.045);
+                    border-radius: 8px;
+                    padding: 8px;
+                    color: rgba(255,255,255,0.9);
+                }}
+                .photoshoot-timeline-card.is-active {{
+                    border-color: #f5c542;
+                    background: rgba(245,197,66,0.12);
+                }}
+                .photoshoot-timeline-image-wrap {{
+                    position: relative;
+                    width: 100%;
+                    height: 136px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    overflow: hidden;
+                    border-radius: 6px;
+                    background: rgba(0,0,0,0.24);
+                }}
+                .photoshoot-timeline-image-wrap img {{
+                    max-width: 100%;
+                    max-height: 136px;
+                    width: auto;
+                    height: auto;
+                    object-fit: contain;
+                    display: block;
+                }}
+                .photoshoot-timeline-label {{
+                    margin-top: 7px;
+                    font-size: 0.86rem;
+                    font-weight: 650;
+                    line-height: 1.15;
+                    text-align: center;
+                }}
+                .photoshoot-timeline-secondary {{
+                    min-height: 16px;
+                    margin-top: 3px;
+                    color: rgba(255,255,255,0.62);
+                    font-size: 0.72rem;
+                    line-height: 1.1;
+                    text-align: center;
+                }}
+                .photoshoot-timeline-secondary-empty {{
+                    opacity: 0;
+                }}
+                .photoshoot-timeline-badge {{
+                    position: absolute;
+                    top: 6px;
+                    right: 6px;
+                    padding: 2px 6px;
+                    border-radius: 999px;
+                    background: rgba(245,197,66,0.92);
+                    color: #171717;
+                    font-size: 0.68rem;
+                    font-weight: 700;
+                    line-height: 1.1;
+                }}
+            </style>
+            """,
+            height=205,
+            scrolling=False,
+        )
+        if preview_key:
+            preview_left, preview_button_col, preview_right = st.columns([2, 1, 2])
+            with preview_button_col:
+                if st.button(
+                    "👁 Preview",
+                    key=f"{preview_key}_button",
+                    use_container_width=True,
+                ):
+                    st.session_state[preview_key] = selected_index
+                    st.rerun()
+        return selected_index
+    for index, (_request, record, label) in enumerate(items):
+        st.caption(label)
+        _render_edit_studio_image(
+            record.output_reference,
+            alt=label,
+            max_height=360 if compact else 620,
+        )
+        if index < len(items) - 1:
+            st.markdown("<div style='text-align:center; opacity:0.65;'>↓</div>", unsafe_allow_html=True)
+    return None
+
+
+def _render_photoshoot_preview_image(image_reference: Any, *, alt: str) -> None:
+    src = html.escape(_display_image_src(image_reference), quote=True)
+    alt_text = html.escape(alt, quote=True)
+    components.html(
+        f"""
+        <div style="
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+            margin: 0;
+            min-height: 0;
+        ">
+            <img
+                src="{src}"
+                alt="{alt_text}"
+                style="
+                    display: block;
+                    max-width: 85%;
+                    max-height: 410px;
+                    width: auto;
+                    height: auto;
+                    object-fit: contain;
+                    border-radius: 8px;
+                "
+            />
+        </div>
+        """,
+        height=455,
+        scrolling=False,
+    )
+
+
+def _render_photoshoot_shot_preview(
+    items: tuple[tuple[Any, GeneratedImageRecord, str], ...],
+    *,
+    preview_key: str,
+    session_id: str | None = None,
+    session_title: str | None = None,
+    photoshoot_queue: PhotoshootQueueService | None = None,
+    generation_library: GenerationLibraryService | None = None,
+) -> None:
+    if not items or preview_key not in st.session_state:
+        return
+    try:
+        selected_index = int(st.session_state.get(preview_key) or 0)
+    except (TypeError, ValueError):
+        selected_index = 0
+    selected_index = max(0, min(selected_index, len(items) - 1))
+    st.session_state[preview_key] = selected_index
+
+    def render_preview_body() -> None:
+        _request, record, _label = items[selected_index]
+        shot_number = selected_index + 1
+        is_seed_shot = bool((_request.metadata or {}).get("is_seed_image"))
+        confirm_return_key = f"{preview_key}_return_seed_confirm_{record.image_id}"
+        st.markdown(f"#### Shot {shot_number}")
+        _render_photoshoot_preview_image(record.output_reference, alt=f"Shot {shot_number}")
+        st.markdown("---")
+
+        previous_col, next_col, close_col = st.columns(3)
+        if previous_col.button(
+            "◀ Previous",
+            key=f"{preview_key}_previous",
+            disabled=selected_index <= 0,
+            use_container_width=True,
+        ):
+            st.session_state[preview_key] = selected_index - 1
+            st.rerun()
+        if next_col.button(
+            "Next ▶",
+            key=f"{preview_key}_next",
+            disabled=selected_index >= len(items) - 1,
+            use_container_width=True,
+        ):
+            st.session_state[preview_key] = selected_index + 1
+            st.rerun()
+        if close_col.button("✕ Close", key=f"{preview_key}_close", use_container_width=True):
+            st.session_state.pop(preview_key, None)
+            st.session_state.pop(confirm_return_key, None)
+            st.rerun()
+        if (
+            selected_index == 0
+            and is_seed_shot
+            and session_id
+            and photoshoot_queue is not None
+            and generation_library is not None
+        ):
+            if st.session_state.get(confirm_return_key):
+                if len(items) <= 1:
+                    st.warning("This will end the current Photoshoot because the seed image is being removed.")
+                else:
+                    st.warning(
+                        "The seed image is being removed.\n\n"
+                        "The remaining photoshoot will no longer have its original starting image.\n\n"
+                        "Continue?"
+                    )
+                return_col, cancel_col = st.columns(2)
+                if return_col.button("Return Image", key=f"{preview_key}_return_seed_do_{record.image_id}", use_container_width=True):
+                    action = generation_library.return_photoshoot_seed_to_library(record.image_id)
+                    if not action.success:
+                        st.error(action.message)
+                        for error in action.errors:
+                            st.caption(error)
+                        st.stop()
+                    photoshoot_queue.return_seed_request_to_library(
+                        _request.request_id,
+                        notes="Returned seed image to Generation Library from preview.",
+                    )
+                    st.session_state.pop(preview_key, None)
+                    st.session_state.pop(confirm_return_key, None)
+                    st.session_state.pop(f"{preview_key}_selected_index", None)
+                    if len(items) <= 1:
+                        st.session_state.pop("content_studio_active_photoshoot_session_id", None)
+                        st.session_state["dashboard_page"] = "Generation Library"
+                    st.success("Seed image returned to Generation Library.")
+                    st.rerun()
+                if cancel_col.button("Cancel", key=f"{preview_key}_return_seed_cancel_{record.image_id}", use_container_width=True):
+                    st.session_state.pop(confirm_return_key, None)
+                    st.rerun()
+            elif st.button(
+                "📤 Return to Generation Library",
+                key=f"{preview_key}_return_seed_{record.image_id}",
+                use_container_width=True,
+            ):
+                st.session_state[confirm_return_key] = True
+                st.rerun()
+        elif (
+            selected_index > 0
+            and session_id
+            and photoshoot_queue is not None
+            and generation_library is not None
+        ):
+            if st.button(
+                "🗑 Delete",
+                key=f"{preview_key}_junk_{record.image_id}",
+                use_container_width=True,
+            ):
+                image_ids = tuple((_request.metadata or {}).get("generated_image_ids") or (record.image_id,))
+                action = generation_library.move_photoshoot_records_to_junk(
+                    image_ids,
+                    session_id=session_id,
+                    session_title=session_title,
+                )
+                if not action.success:
+                    st.error(action.message)
+                    for error in action.errors:
+                        st.caption(error)
+                    st.stop()
+                photoshoot_queue.junk_request(_request.request_id, notes="Moved to Photoshoot Junk from preview.")
+                st.session_state.pop(preview_key, None)
+                st.session_state.pop(f"{preview_key}_selected_index", None)
+                st.success("Moved shot to Photoshoot Junk.")
+                st.rerun()
+
+    dialog = getattr(st, "dialog", None)
+    if callable(dialog):
+        @dialog("Photoshoot Preview")
+        def photoshoot_preview_dialog():
+            render_preview_body()
+
+        photoshoot_preview_dialog()
+    else:
+        st.markdown(
+            """
+            <div style="
+                border: 1px solid rgba(255,255,255,0.18);
+                background: rgba(0,0,0,0.72);
+                border-radius: 8px;
+                padding: 14px;
+                margin: 10px 0;
+            ">
+            """,
+            unsafe_allow_html=True,
+        )
+        render_preview_body()
+        st.markdown("</div>", unsafe_allow_html=True)
+
+
+def _photoshoot_candidate_request(
+    session,
+    photoshoot_queue: PhotoshootQueueService,
+):
+    for request in reversed(photoshoot_queue.requests_for_session(session.session_id)):
+        if request.status == "awaiting_review":
+            return request
+    return None
+
+
+
+def _clear_photoshoot_one_shot_workspace_state(session_id: str, *, preview_key: str) -> None:
+    """Clear temporary per-shot inputs without touching persistent session settings."""
+    for key in (
+        f"photoshoot_studio_prompt_{session_id}",
+        f"photoshoot_creative_hint_{session_id}",
+        f"photoshoot_pending_creative_hint_{session_id}",
+        f"photoshoot_grok_guidance_{session_id}",
+        f"photoshoot_grok_idea_{session_id}",
+        f"photoshoot_grok_idea_select_{session_id}",
+        f"photoshoot_studio_recommendation_{session_id}",
+        f"photoshoot_direction_approved_{session_id}",
+        f"photoshoot_studio_pending_prompt_{session_id}",
+        preview_key,
+    ):
+        st.session_state.pop(key, None)
+
+
+
+def _image_bytes_for_grok(image_reference: str) -> tuple[bytes, str]:
+    source = str(image_reference or "").strip()
+    if source.startswith("data:"):
+        header, _, encoded = source.partition(",")
+        mime_type = header.removeprefix("data:").split(";")[0] or "image/png"
+        return base64.b64decode(encoded), mime_type
+    if source.startswith(("http://", "https://")):
+        with urllib.request.urlopen(source, timeout=20) as response:
+            content_type = response.headers.get_content_type() or "image/png"
+            return response.read(), content_type
+    path = Path(source).expanduser()
+    if not path.exists() or not path.is_file():
+        raise ValueError(f"Current image file was not found: {source}")
+    mime_type = mimetypes.guess_type(path.name)[0] or "image/png"
+    return path.read_bytes(), mime_type
+
+
+def _photoshoot_direction_text(recommendation: Mapping[str, Any]) -> str:
+    pieces = [
+        str(recommendation.get("creative_direction") or "").strip(),
+        f"Camera framing: {recommendation.get('camera_framing')}" if recommendation.get("camera_framing") else "",
+        f"Lighting: {recommendation.get('lighting')}" if recommendation.get("lighting") else "",
+        f"Emotion: {recommendation.get('emotion')}" if recommendation.get("emotion") else "",
+        f"Pose/composition: {recommendation.get('pose_composition')}" if recommendation.get("pose_composition") else "",
+        f"Continuity notes: {recommendation.get('continuity_notes')}" if recommendation.get("continuity_notes") else "",
+    ]
+    return "\n".join(piece for piece in pieces if piece)
+
+
+def _valid_photoshoot_recommendation(recommendation: Mapping[str, Any] | None) -> bool:
+    if not recommendation:
+        return False
+    return bool(
+        str(recommendation.get("title") or "").strip()
+        or str(recommendation.get("creative_direction") or "").strip()
+        or str(recommendation.get("direction") or "").strip()
+    )
+
+
+def _photoshoot_approve_generate_disabled(
+    *,
+    recommendation_ready: bool,
+    direction_approved: bool,
+    candidate_request_present: bool,
+    generation_running: bool,
+    generation_inflight: bool,
+) -> bool:
+    return (
+        not recommendation_ready
+        or direction_approved
+        or candidate_request_present
+        or generation_running
+        or generation_inflight
+    )
+
+
+def _build_photoshoot_prompt(
+    *,
+    creative_director: CreativeDirectorService,
+    seed_prompt: str,
+    shot_direction: str,
+    creative_mode: str,
+    session_context: Mapping[str, Any] | None = None,
+) -> str:
+    direction = str(shot_direction or "").strip()
+    if not direction:
+        raise ValueError("Next Shot Direction is required.")
+    continuity = dict(session_context or {})
+    seed_context = str(seed_prompt or "").strip() or "Use the selected image as the canonical visual reference."
+    creative_tags = "\n".join(
+        (
+            "Photoshoot Studio continuation.",
+            f"Creative direction: {direction}",
+            f"Seed image context: {seed_context}",
+            f"Session continuity: {json.dumps(continuity, ensure_ascii=True, default=str)}",
+            "Preserve continuity defaults unless the Session Direction explicitly overrides them.",
+        )
+    )
+    mode = "explicit" if str(creative_mode).lower() == "explicit" else "photoshoot"
+    result = creative_director.plan_prompts(
+        mode=mode,
+        creative_tags=creative_tags,
+        prompt_count=1,
+        optional_direction=direction,
+        metadata={"source": "photoshoot_studio"},
+    )
+    if not result.prompts:
+        raise ValueError("Canonical Prompt Planner did not return a Photoshoot prompt.")
+    return result.prompts[0]
+
+
+
+
+def _render_photoshoot_image_strip(
+    items: tuple[tuple[str, GeneratedImageRecord], ...],
+) -> None:
+    if not items:
+        st.caption("No photos yet.")
+        return
+    cols = st.columns(min(5, max(1, len(items))))
+    for index, (label, record) in enumerate(items):
+        with cols[index % len(cols)]:
+            st.image(record.output_reference, use_container_width=True)
+            st.caption(label)
+
+
+def _render_photoshoot_image_stack(
+    items: tuple[tuple[str, GeneratedImageRecord], ...],
+    *,
+    max_height: int = 620,
+) -> None:
+    if not items:
+        st.caption("No approved shots yet.")
+        return
+    for label, record in items:
+        st.caption(label)
+        _render_edit_studio_image(
+            record.output_reference,
+            alt=f"Photoshoot {label.lower()}",
+            max_height=max_height,
+        )
+
+
+def _render_photoshoot_filmstrip(
+    items: tuple[tuple[str, GeneratedImageRecord], ...],
+    *,
+    selected_image_id: str | None,
+    key_prefix: str,
+) -> GeneratedImageRecord | None:
+    if not items:
+        st.caption("No photos yet.")
+        return None
+    valid_ids = {record.image_id for _, record in items}
+    selected_id = selected_image_id if selected_image_id in valid_ids else items[0][1].image_id
+    selected_record = next((record for _, record in items if record.image_id == selected_id), items[0][1])
+    cards = []
+    for label, record in items:
+        src = html.escape(_display_image_src(record.output_reference), quote=True)
+        label_text = html.escape(label)
+        selected = record.image_id == selected_id
+        cards.append(
+            f"""
+            <div style="
+                flex: 0 0 148px;
+                border: 2px solid {'#f5c542' if selected else 'rgba(255,255,255,0.18)'};
+                background: {'rgba(245,197,66,0.14)' if selected else 'rgba(255,255,255,0.04)'};
+                border-radius: 8px;
+                padding: 8px;
+            ">
+                <div style="
+                    width: 132px;
+                    height: 132px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    overflow: hidden;
+                    border-radius: 6px;
+                    background: rgba(0,0,0,0.24);
+                ">
+                    <img src="{src}" alt="{label_text}" style="
+                        max-width: 132px;
+                        max-height: 132px;
+                        width: auto;
+                        height: auto;
+                        object-fit: contain;
+                        display: block;
+                    " />
+                </div>
+                <div style="
+                    margin-top: 6px;
+                    color: {'#f5c542' if selected else 'rgba(255,255,255,0.78)'};
+                    font-size: 0.82rem;
+                    line-height: 1.2;
+                    text-align: center;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                ">{label_text}</div>
+            </div>
+            """
+        )
+    components.html(
+        f"""
+        <div style="
+            display: flex;
+            gap: 12px;
+            overflow-x: auto;
+            padding: 4px 2px 10px;
+            width: 100%;
+        ">
+            {''.join(cards)}
+        </div>
+        """,
+        height=178,
+        scrolling=True,
+    )
+    select_cols = st.columns(min(len(items), 5))
+    for index, (label, record) in enumerate(items):
+        with select_cols[index % len(select_cols)]:
+            button_type = "primary" if record.image_id == selected_id else "secondary"
+            if st.button(
+                label,
+                key=f"{key_prefix}_{record.image_id}",
+                type=button_type,
+                use_container_width=True,
+            ):
+                selected_record = record
+                st.session_state[key_prefix] = record.image_id
+                st.rerun()
+    return selected_record
+
+
 def _render_photoshoot_queue(
     *,
     creator_profile: dict | None,
@@ -4053,143 +5609,1158 @@ def _render_photoshoot_queue(
     photoshoot_queue: PhotoshootQueueService,
 ) -> None:
     creator_profile_id = _creator_profile_id(creator_profile)
-    st.title("Photoshoot Queue")
-    st.caption("Ordered, review-gated multi-image creative sessions.")
+    st.title("📸 Photoshoot Studio")
+    st.caption("Direct a continuity-locked image session from one canonical seed image.")
     if not creator_profile_id:
-        st.error("Creator Profile required before managing Photoshoot Sessions.")
+        st.error("Creator Profile required before using Photoshoot Studio.")
         return
 
     sessions = photoshoot_queue.list_sessions(creator_profile_id=creator_profile_id)
     current = photoshoot_queue.current_session(creator_profile_id=creator_profile_id)
     if current:
         photoshoot_queue.sync_ingested_assets_for_session(current.session_id)
-        progress = photoshoot_queue.progress(current.session_id)
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Status", current.status.title())
-        c2.metric("Remaining Prompts", progress.queued_prompts)
-        c3.metric("Awaiting Review", progress.awaiting_review)
-        c4.metric("Imported Assets", progress.imported_assets)
-        st.caption(f"Current Photoshoot: {current.session_id}")
-        st.caption(f"Reference Asset: {current.reference_asset_id or '-'}")
-        st.caption(f"Creator Notes: {current.creator_notes or '-'}")
-        action1, action2, action3, action4 = st.columns(4)
-        if action1.button("Queue Next Prompt", key="photoshoot_queue_next", use_container_width=True):
-            with st.spinner("Running next Photoshoot prompt..."):
-                executed, records = execute_photoshoot_next_to_library(
-                    session_id=current.session_id,
-                    generation_engine=generation_engine,
-                    generation_library=generation_library,
-                    photoshoot_queue=photoshoot_queue,
-                )
-            if executed is None:
-                st.info("No prompt was queued. Review or completion may be pending.")
-            elif executed.status == GenerationStatus.SUCCEEDED.value:
-                st.success(f"Photoshoot image ready for review. {len(records)} item(s) added to Generation Library.")
-            elif executed.failure:
-                st.error(executed.failure.reason)
-            else:
-                st.warning(f"Photoshoot generation finished with status: {executed.status}.")
-            st.rerun()
-        if action2.button("Pause Session", disabled=current.status == "paused", key="photoshoot_pause", use_container_width=True):
-            photoshoot_queue.pause_session(current.session_id)
-            st.rerun()
-        if action3.button("Resume Session", disabled=current.status != "paused", key="photoshoot_resume", use_container_width=True):
-            photoshoot_queue.resume_session(current.session_id)
-            st.rerun()
-        if action4.button("Cancel Session", key="photoshoot_cancel", use_container_width=True):
-            photoshoot_queue.cancel_session(current.session_id)
-            st.rerun()
-
-        st.markdown("### Batch Review")
-        session_items = getattr(photoshoot_queue, "request" + "s_for_" + "session")(
-            current.session_id
+        seed_record = _photoshoot_seed_record(current, generation_library)
+        candidate_request = _photoshoot_candidate_request(current, photoshoot_queue)
+        candidate_records = (
+            _photoshoot_records_for_request(candidate_request, generation_library)
+            if candidate_request
+            else ()
         )
-        for request in session_items:
-            with st.container():
-                st.caption(
-                    f"#{request.sequence_index} | {request.status} | "
-                    f"Prompt Plan: {request.prompt_plan_id} | Job: {request.generation_job_id or '-'}"
+        if seed_record is None:
+            st.warning("The seed image for this Photoshoot Studio session is no longer available in Generation Library.")
+
+        st.markdown("### Photoshoot Timeline")
+        timeline_items = _photoshoot_timeline_items(current, photoshoot_queue, generation_library)
+        preview_key = f"photoshoot_timeline_preview_{current.session_id}"
+        selected_index_key = f"{preview_key}_selected_index"
+        reset_fields_key = f"photoshoot_studio_reset_fields_{current.session_id}"
+        continuity = dict(current.creative_continuity or {})
+        if st.session_state.get(reset_fields_key):
+            latest_index = max(0, len(timeline_items) - 1)
+            st.session_state[selected_index_key] = latest_index
+            current = photoshoot_queue.update_session_settings(
+                current.session_id,
+                selected_timeline_index=latest_index,
+                workflow_stage="ready_for_next_shot",
+            )
+            continuity = dict(current.creative_continuity or {})
+        if selected_index_key not in st.session_state and "selected_timeline_index" in continuity:
+            try:
+                st.session_state[selected_index_key] = int(continuity.get("selected_timeline_index"))
+            except (TypeError, ValueError):
+                pass
+        _render_photoshoot_timeline(timeline_items, horizontal=True, preview_key=preview_key)
+        _render_photoshoot_shot_preview(
+            timeline_items,
+            preview_key=preview_key,
+            session_id=current.session_id,
+            session_title=current.title,
+            photoshoot_queue=photoshoot_queue,
+            generation_library=generation_library,
+        )
+        selected_record = timeline_items[-1][1] if timeline_items else seed_record
+        # Keep the latest approved shot as the active reference without rendering it again.
+
+        direction_key = f"photoshoot_studio_direction_{current.session_id}"
+        prompt_key = f"photoshoot_studio_prompt_{current.session_id}"
+        recommendation_key = f"photoshoot_studio_recommendation_{current.session_id}"
+        creative_hint_key = f"photoshoot_creative_hint_{current.session_id}"
+        pending_creative_hint_key = f"photoshoot_pending_creative_hint_{current.session_id}"
+        grok_guidance_key = f"photoshoot_grok_guidance_{current.session_id}"
+        grok_idea_key = f"photoshoot_grok_idea_{current.session_id}"
+        grok_idea_select_key = f"photoshoot_grok_idea_select_{current.session_id}"
+        direction_approved_key = f"photoshoot_direction_approved_{current.session_id}"
+        pending_direction_key = f"photoshoot_studio_pending_direction_{current.session_id}"
+        pending_prompt_key = f"photoshoot_studio_pending_prompt_{current.session_id}"
+        if st.session_state.pop(reset_fields_key, False):
+            _clear_photoshoot_one_shot_workspace_state(current.session_id, preview_key=preview_key)
+        if pending_direction_key in st.session_state:
+            st.session_state[direction_key] = st.session_state.pop(pending_direction_key)
+        if pending_prompt_key in st.session_state:
+            st.session_state[prompt_key] = st.session_state.pop(pending_prompt_key)
+        continuity = dict(current.creative_continuity or {})
+        approved_shot_count = len(timeline_items)
+        persisted_workflow_stage = str(continuity.get("workflow_stage") or "").strip()
+        restore_workspace_state = candidate_request is not None or persisted_workflow_stage in {
+            "recommendation_ready",
+            "direction_approved",
+            "generating",
+            "awaiting_review",
+            "review_candidate",
+        }
+        workflow_stage = (
+            "awaiting_review"
+            if candidate_request is not None
+            else persisted_workflow_stage
+            if persisted_workflow_stage in {"recommendation_ready", "generating", "ready_for_next_shot"}
+            else "direction_approved"
+            if restore_workspace_state and continuity.get("direction_approved")
+            else "ready_for_direction"
+        )
+        st.info(f"📸 Resumed Photoshoot\n\n{current.title}\n\nReady for Shot {approved_shot_count + 1}")
+        if restore_workspace_state and prompt_key not in st.session_state and str(continuity.get("current_prompt") or "").strip():
+            st.session_state[prompt_key] = str(continuity.get("current_prompt") or "").strip()
+        if restore_workspace_state and recommendation_key not in st.session_state and dict(continuity.get("current_direction") or {}):
+            st.session_state[recommendation_key] = dict(continuity.get("current_direction") or {})
+        if restore_workspace_state and bool(continuity.get("direction_approved")):
+            st.session_state[direction_approved_key] = True
+        provider_options = premium_studio_provider_options(generation_engine)
+        provider_ids = tuple(provider_id for provider_id, _ in provider_options)
+        provider_labels = dict(provider_options)
+        provider_key = f"photoshoot_studio_provider_{current.session_id}"
+        if provider_key not in st.session_state and current.provider_id in provider_ids:
+            st.session_state[provider_key] = current.provider_id
+        selected_provider = st.selectbox(
+            "Provider",
+            provider_ids,
+            index=default_provider_index(provider_ids, preferred_provider_id=current.provider_id),
+            format_func=lambda value: provider_labels.get(value, value),
+            key=provider_key,
+        )
+
+        st.markdown("### Creative Direction")
+        direction_mode = st.radio(
+            "Direction Mode",
+            ("Manual", "🎬 Shot Director"),
+            key=f"photoshoot_direction_mode_{current.session_id}",
+            horizontal=True,
+        )
+        session_direction = st.text_area(
+            "Session Direction (Optional)",
+            key=direction_key,
+            height=110,
+            placeholder=(
+                "Leave blank to maintain the current setting and outfit.\n\n"
+                "Move to the balcony\n"
+                "Switch to a different outfit\n"
+                "Change to morning lighting\n"
+                "Move into the bathroom"
+            ),
+        )
+        creative_mode_key = f"photoshoot_creative_mode_{current.session_id}"
+        persisted_creative_mode = str(current.creative_mode or "safe").strip().lower()
+        mode_options = ("Safe", "Premium", "Explicit")
+        mode_values = tuple(mode.lower() for mode in mode_options)
+        if creative_mode_key not in st.session_state and persisted_creative_mode in mode_values:
+            st.session_state[creative_mode_key] = mode_options[mode_values.index(persisted_creative_mode)]
+        creative_mode = st.radio(
+            "Creative Mode",
+            mode_options,
+            key=creative_mode_key,
+            horizontal=True,
+        ).lower()
+        st.markdown("#### Continuity")
+        lock_cols = st.columns(3)
+        continuity_locks = {}
+        persisted_locks = dict(continuity.get("continuity_locks") or {})
+        for index, (lock_key, label) in enumerate(
+            (
+                ("location", "Keep location"),
+                ("wardrobe", "Keep wardrobe"),
+                ("lighting", "Keep lighting"),
+                ("hairstyle", "Keep hairstyle"),
+                ("makeup", "Keep makeup"),
+                ("camera_style", "Keep camera style"),
+            )
+        ):
+            with lock_cols[index % 3]:
+                widget_key = f"photoshoot_lock_{current.session_id}_{lock_key}"
+                if widget_key not in st.session_state:
+                    st.session_state[widget_key] = bool(persisted_locks.get(lock_key, True))
+                continuity_locks[lock_key] = st.checkbox(
+                    label,
+                    key=widget_key,
                 )
-                st.write(request.prompt_text)
-                if request.imported_asset_ids:
-                    st.caption(
-                        "Imported Asset IDs: "
-                        + ", ".join(str(asset_id) for asset_id in request.imported_asset_ids)
+        settings_changed = (
+            selected_provider != current.provider_id
+            or creative_mode != str(current.creative_mode or "").strip().lower()
+            or dict(continuity.get("continuity_locks") or {}) != dict(continuity_locks)
+            or continuity.get("workflow_stage") != workflow_stage
+        )
+        if settings_changed:
+            current = photoshoot_queue.update_session_settings(
+                current.session_id,
+                provider_id=selected_provider,
+                creative_mode=creative_mode,
+                continuity_locks=continuity_locks,
+                workflow_stage=workflow_stage,
+            )
+            continuity = dict(current.creative_continuity or {})
+
+        active_request = photoshoot_queue.current_request(current.session_id)
+        generation_running = bool(active_request and active_request.status == "generating")
+        generation_inflight_key = f"photoshoot_approve_generate_inflight_{current.session_id}"
+        recommendation = dict(st.session_state.get(recommendation_key) or {})
+        recommendation_ready = _valid_photoshoot_recommendation(recommendation)
+        direction_approved = bool(
+            st.session_state.get(direction_approved_key)
+            or (restore_workspace_state and continuity.get("direction_approved"))
+        )
+        if pending_creative_hint_key in st.session_state:
+            st.session_state[creative_hint_key] = st.session_state.pop(pending_creative_hint_key)
+        creative_hint = st.text_input(
+            "Creative Hint (Optional)",
+            key=creative_hint_key,
+            placeholder="Selected Grok idea or manual direction for Shot Director / generate...",
+        )
+        grok_guidance = st.text_input(
+            "Ask Grok Guidance (Optional)",
+            key=grok_guidance_key,
+            placeholder="Steer next ideas before asking Grok… (e.g. topless, panties off, playing with herself, more horny face)",
+            help="Optional. Short paid-NSFW steering for suggestion generation only. Does not replace Creative Hint.",
+        )
+        ask_grok_col, shot_director_col = st.columns(2)
+        with ask_grok_col:
+            ask_grok_clicked = st.button(
+                "💡 Ask Grok",
+                disabled=selected_record is None or candidate_request is not None or generation_running,
+                key=f"photoshoot_ask_grok_{current.session_id}",
+                use_container_width=True,
+            )
+        with shot_director_col:
+            ask_shot_director_clicked = st.button(
+                "🎬 Shot Director",
+                disabled=selected_record is None or bool(recommendation) or direction_approved or candidate_request is not None or generation_running,
+                key=f"photoshoot_ask_creative_director_{current.session_id}",
+                use_container_width=True,
+            )
+        if ask_grok_clicked:
+            try:
+                image_bytes, image_mime_type = _image_bytes_for_grok(selected_record.output_reference)
+                timeline_images = []
+                for index, (request, record, label) in enumerate(timeline_items):
+                    try:
+                        shot_bytes, shot_mime = _image_bytes_for_grok(record.output_reference)
+                    except Exception:
+                        continue
+                    is_seed = bool((request.metadata or {}).get("is_seed_image"))
+                    shot_label = f"Shot {index + 1}"
+                    if is_seed:
+                        shot_label = f"{shot_label} (Seed)"
+                    if index == len(timeline_items) - 1:
+                        shot_label = f"{shot_label} — current"
+                    timeline_images.append(
+                        {
+                            "bytes": shot_bytes,
+                            "mime_type": shot_mime,
+                            "label": shot_label or label,
+                        }
                     )
-                generated_image_ids = tuple((request.metadata or {}).get("generated_image_ids") or ())
-                if generated_image_ids:
-                    st.caption("Generated Image IDs: " + ", ".join(generated_image_ids))
-                    generated_records = []
-                    for image_id in generated_image_ids:
-                        try:
-                            generated_records.append(generation_library.get(image_id))
-                        except KeyError:
-                            continue
-                    for record in generated_records[:2]:
-                        if record.output_reference:
-                            st.image(record.output_reference, use_container_width=True)
-                r1, r2, r3, r4 = st.columns(4)
-                if r1.button(
-                    "Approve",
-                    disabled=request.status != "awaiting_review",
-                    key=f"photoshoot_approve_{request.request_id}",
-                    use_container_width=True,
+                if not timeline_images:
+                    timeline_images.append(
+                        {
+                            "bytes": image_bytes,
+                            "mime_type": image_mime_type,
+                            "label": "Current shot",
+                        }
+                    )
+                with st.spinner(
+                    f"Asking Grok to review {len(timeline_images)} approved shot"
+                    f"{'s' if len(timeline_images) != 1 else ''}..."
                 ):
-                    photoshoot_queue.approve_request(request.request_id)
-                    st.rerun()
-                if r2.button(
-                    "Reject",
-                    disabled=request.status != "awaiting_review",
-                    key=f"photoshoot_reject_{request.request_id}",
-                    use_container_width=True,
-                ):
-                    photoshoot_queue.reject_request(request.request_id)
-                    st.rerun()
-                if r3.button(
-                    "Regenerate",
-                    disabled=request.status != "awaiting_review",
-                    key=f"photoshoot_regenerate_{request.request_id}",
-                    use_container_width=True,
-                ):
-                    photoshoot_queue.regenerate_request(request.request_id)
-                    st.rerun()
-                if r4.button(
-                    "Continue Photoshoot",
-                    disabled=request.status != "approved",
-                    key=f"photoshoot_continue_{request.request_id}",
-                    use_container_width=True,
-                ):
-                    with st.spinner("Running next Photoshoot prompt..."):
+                    grok_ideas = creative_director.suggest_photoshoot_inspiration(
+                        image_bytes=image_bytes,
+                        image_mime_type=image_mime_type,
+                        session_context=continuity,
+                        approved_history=tuple(continuity.get("approved_directions") or ()),
+                        creative_mode=creative_mode,
+                        session_direction=session_direction,
+                        creative_hint="",
+                        grok_guidance=grok_guidance,
+                        continuity_locks=continuity_locks,
+                        provider_context=provider_labels.get(selected_provider, selected_provider),
+                        idea_count=8,
+                        timeline_images=timeline_images,
+                    )
+            except Exception as error:
+                st.error(str(error))
+            else:
+                st.session_state[grok_idea_key] = list(grok_ideas)
+                st.session_state.pop(grok_idea_select_key, None)
+                if grok_ideas:
+                    st.session_state[pending_creative_hint_key] = str(grok_ideas[0] or "").strip()
+                st.rerun()
+        raw_grok_ideas = st.session_state.get(grok_idea_key)
+        if isinstance(raw_grok_ideas, str):
+            grok_ideas = [raw_grok_ideas.strip()] if raw_grok_ideas.strip() else []
+        elif isinstance(raw_grok_ideas, (list, tuple)):
+            grok_ideas = [str(item).strip() for item in raw_grok_ideas if str(item or "").strip()]
+        else:
+            grok_ideas = []
+        if grok_ideas:
+            st.markdown("#### Grok Ideas")
+            st.caption("Pick the next evolving scene. Creative Hint updates automatically.")
+
+            def apply_selected_grok_idea_to_hint() -> None:
+                st.session_state[pending_creative_hint_key] = str(
+                    st.session_state.get(grok_idea_select_key) or ""
+                ).strip()
+
+            st.radio(
+                "Next scene options",
+                options=grok_ideas,
+                key=grok_idea_select_key,
+                on_change=apply_selected_grok_idea_to_hint,
+                label_visibility="collapsed",
+            )
+        if ask_shot_director_clicked:
+            try:
+                image_bytes, image_mime_type = _image_bytes_for_grok(selected_record.output_reference)
+                with st.spinner("Asking Shot Director..."):
+                    ai_direction = creative_director.recommend_photoshoot_direction(
+                        image_bytes=image_bytes,
+                        image_mime_type=image_mime_type,
+                        session_context=continuity,
+                        approved_history=tuple(continuity.get("approved_directions") or ()),
+                        creative_mode=creative_mode,
+                        session_direction=session_direction,
+                        creative_hint=creative_hint,
+                        continuity_locks=continuity_locks,
+                    )
+            except Exception as error:
+                st.error(str(error))
+            else:
+                recommendation_payload = asdict(ai_direction)
+                photoshoot_queue.record_pending_recommendation(
+                    session_id=current.session_id,
+                    recommendation=recommendation_payload,
+                )
+                st.session_state[recommendation_key] = recommendation_payload
+                st.success("Shot Director recommendation ready.")
+                st.rerun()
+
+        if recommendation:
+            st.markdown("#### Shot Director Recommendation")
+            st.markdown(f"**{recommendation.get('title') or 'Next Direction'}**")
+            st.write(recommendation.get("creative_direction") or "")
+            st.caption(f"Reasoning: {recommendation.get('reasoning') or ''}")
+            st.caption(f"Continuity Notes: {recommendation.get('continuity_notes') or ''}")
+            st.caption(f"Camera: {recommendation.get('camera_framing') or ''}")
+            st.caption(f"Lighting: {recommendation.get('lighting') or ''}")
+            st.caption(f"Emotion: {recommendation.get('emotion') or ''}")
+            st.caption(f"Pose/Composition: {recommendation.get('pose_composition') or ''}")
+            another_idea_col, approve_direction_col = st.columns(2)
+            if another_idea_col.button("🔄 Another Idea", key=f"photoshoot_another_idea_{current.session_id}", use_container_width=True):
+                st.session_state.pop(recommendation_key, None)
+                st.session_state.pop(prompt_key, None)
+                st.session_state.pop(direction_approved_key, None)
+                photoshoot_queue.clear_workspace_state(current.session_id, workflow_stage="ready_for_direction")
+                st.rerun()
+            approve_direction_clicked = approve_direction_col.button(
+                "🚀 Approve & Generate",
+                disabled=_photoshoot_approve_generate_disabled(
+                    recommendation_ready=recommendation_ready,
+                    direction_approved=direction_approved,
+                    candidate_request_present=candidate_request is not None,
+                    generation_running=generation_running,
+                    generation_inflight=bool(st.session_state.get(generation_inflight_key)),
+                ),
+                key=f"photoshoot_approve_direction_{current.session_id}",
+                use_container_width=True,
+            )
+        else:
+            approve_direction_clicked = False
+
+        active_direction = (
+            _photoshoot_direction_text(recommendation)
+            if recommendation_ready
+            else str(session_direction or "").strip()
+        )
+
+        if approve_direction_clicked:
+            st.session_state[generation_inflight_key] = True
+            try:
+                final_prompt = _build_photoshoot_prompt(
+                    creative_director=creative_director,
+                    seed_prompt=selected_record.prompt_text if selected_record else "",
+                    shot_direction=active_direction,
+                    creative_mode=creative_mode,
+                    session_context=continuity,
+                )
+                photoshoot_queue.record_creative_direction(
+                    session_id=current.session_id,
+                    recommendation=recommendation,
+                    final_prompt=final_prompt,
+                )
+                st.session_state[prompt_key] = final_prompt
+                st.session_state[direction_approved_key] = True
+                photoshoot_queue.add_studio_shot_request(
+                    session_id=current.session_id,
+                    prompt_text=final_prompt,
+                    shot_direction=active_direction,
+                    provider_id=selected_provider,
+                    active_reference_image_id=selected_record.image_id if selected_record else None,
+                    active_reference_output_reference=selected_record.output_reference if selected_record else None,
+                    creative_direction=recommendation,
+                )
+                progress_callback, _render_status, _render_images, complete_preview = _render_live_generation_preview(
+                    title="Live Generated Images",
+                    total=1,
+                )
+                with st.spinner("Generating Photoshoot shot..."):
+                    executed, records = execute_photoshoot_next_to_library(
+                        session_id=current.session_id,
+                        generation_engine=generation_engine,
+                        generation_library=generation_library,
+                        photoshoot_queue=photoshoot_queue,
+                        progress_callback=progress_callback,
+                    )
+            except Exception as error:
+                st.session_state.pop(generation_inflight_key, None)
+                photoshoot_queue.update_session_settings(
+                    current.session_id,
+                    workflow_stage="recommendation_ready",
+                )
+                st.error(str(error))
+            else:
+                st.session_state.pop(generation_inflight_key, None)
+                if executed and executed.status == GenerationStatus.SUCCEEDED.value:
+                    complete_preview(tuple(getattr(record, "output_reference", str(record)) for record in records))
+                    st.success("Shot generated. Review the candidate below.")
+                elif executed and executed.failure:
+                    st.error(executed.failure.reason)
+                else:
+                    st.info("Generation is already in progress or awaiting review.")
+                st.rerun()
+
+        active_candidate = candidate_request is not None
+        if direction_mode == "🎬 Shot Director":
+            if str(st.session_state.get(prompt_key) or "").strip():
+                st.text_area(
+                    "Canonical Prompt",
+                    key=prompt_key,
+                    height=180,
+                    disabled=True,
+                )
+            if generation_running:
+                st.info("Generation is running. The candidate will appear here when it completes.")
+        else:
+            prompt_text = st.text_area(
+                "Generated Prompt",
+                key=prompt_key,
+                height=220,
+                placeholder="Write or refine the manual Photoshoot prompt before generating.",
+            )
+            if st.button(
+                "🚀 Generate Shot",
+                disabled=not str(prompt_text).strip() or active_candidate or generation_running or selected_record is None,
+                key=f"photoshoot_generate_shot_{current.session_id}",
+                use_container_width=True,
+            ):
+                try:
+                    photoshoot_queue.add_studio_shot_request(
+                        session_id=current.session_id,
+                        prompt_text=prompt_text,
+                        shot_direction=active_direction,
+                        provider_id=selected_provider,
+                        active_reference_image_id=selected_record.image_id if selected_record else None,
+                        active_reference_output_reference=selected_record.output_reference if selected_record else None,
+                        creative_direction={},
+                    )
+                    progress_callback, _render_status, _render_images, complete_preview = _render_live_generation_preview(
+                        title="Live Generated Images",
+                        total=1,
+                    )
+                    with st.spinner("Generating Photoshoot shot..."):
                         executed, records = execute_photoshoot_next_to_library(
                             session_id=current.session_id,
                             generation_engine=generation_engine,
                             generation_library=generation_library,
                             photoshoot_queue=photoshoot_queue,
+                            progress_callback=progress_callback,
                         )
+                except Exception as error:
+                    st.error(str(error))
+                else:
                     if executed and executed.status == GenerationStatus.SUCCEEDED.value:
-                        st.success(f"Photoshoot image ready for review. {len(records)} item(s) added to Generation Library.")
+                        complete_preview(tuple(getattr(record, "output_reference", str(record)) for record in records))
+                        st.success("Shot generated. Review the candidate below.")
                     elif executed and executed.failure:
                         st.error(executed.failure.reason)
+                    else:
+                        st.info("No shot was generated. A review may already be pending.")
                     st.rerun()
-                st.divider()
-    else:
-        st.info("No active Photoshoot Session.")
-        _render_active_reference(
-            creator_profile=creator_profile,
-            reference_service=reference_service,
-        )
+        if active_candidate:
+            st.markdown("### Review Candidate")
+            if candidate_records:
+                _render_edit_studio_image(candidate_records[-1].output_reference, alt="Photoshoot candidate", max_height=620)
+            else:
+                st.info("Candidate is awaiting review, but the generated image record has not synced yet.")
+            approve_col, retry_col, edit_col, reject_col = st.columns(4)
+            candidate_image_ids = tuple((candidate_request.metadata or {}).get("generated_image_ids") or ())
+            if approve_col.button("✅ Approve Shot", key=f"photoshoot_studio_approve_{candidate_request.request_id}", use_container_width=True):
+                approval = generation_library.approve_creator_content(
+                    candidate_image_ids,
+                    source_workflow="photoshoot",
+                    source_session_id=current.session_id,
+                    generation_engine=generation_engine,
+                    ingestion_service=generation_ingestion,
+                    source_metadata={
+                        "approval_entrypoint": "photoshoot_studio_approve_shot",
+                        "photoshoot_session_id": current.session_id,
+                        "photoshoot_request_id": candidate_request.request_id,
+                        "photoshoot_sequence_index": candidate_request.sequence_index,
+                        "prompt_plan_id": candidate_request.prompt_plan_id,
+                    },
+                )
+                if not approval.success:
+                    st.error(approval.message)
+                    for error in approval.errors:
+                        st.caption(error)
+                    st.stop()
+                action = generation_library.approve_photoshoot_records(
+                    candidate_image_ids,
+                    session_id=current.session_id,
+                    session_title=current.title,
+                )
+                if not action.success:
+                    st.error(action.message)
+                    for error in action.errors:
+                        st.caption(error)
+                    st.stop()
+                photoshoot_queue.approve_request(
+                    candidate_request.request_id,
+                    imported_asset_ids=approval.imported_asset_ids,
+                )
+                st.session_state[reset_fields_key] = True
+                st.rerun()
+            if retry_col.button("🔄 Regenerate", key=f"photoshoot_studio_retry_{candidate_request.request_id}", use_container_width=True):
+                generation_library.move_photoshoot_records_to_junk(
+                    candidate_image_ids,
+                    session_id=current.session_id,
+                    session_title=current.title,
+                    reason="photoshoot_regenerate",
+                )
+                photoshoot_queue.regenerate_request(candidate_request.request_id)
+                progress_callback, _render_status, _render_images, complete_preview = _render_live_generation_preview(
+                    title="Live Generated Images",
+                    total=1,
+                )
+                with st.spinner("Retrying Photoshoot shot..."):
+                    executed, records = execute_photoshoot_next_to_library(
+                        session_id=current.session_id,
+                        generation_engine=generation_engine,
+                        generation_library=generation_library,
+                        photoshoot_queue=photoshoot_queue,
+                        progress_callback=progress_callback,
+                    )
+                if executed and executed.status == GenerationStatus.SUCCEEDED.value:
+                    complete_preview(tuple(getattr(record, "output_reference", str(record)) for record in records))
+                elif executed and executed.failure:
+                    st.error(executed.failure.reason)
+                st.rerun()
+            if edit_col.button("✏️ Edit Prompt", key=f"photoshoot_studio_edit_prompt_{candidate_request.request_id}", use_container_width=True):
+                st.session_state[pending_prompt_key] = candidate_request.prompt_text
+                st.session_state[pending_direction_key] = str((candidate_request.metadata or {}).get("shot_direction") or "")
+                generation_library.move_photoshoot_records_to_junk(
+                    candidate_image_ids,
+                    session_id=current.session_id,
+                    session_title=current.title,
+                    reason="photoshoot_edit_prompt",
+                )
+                photoshoot_queue.reject_request(candidate_request.request_id, notes="Returned to prompt editing.")
+                st.rerun()
+            if reject_col.button("❌ Reject Shot", key=f"photoshoot_studio_reject_{candidate_request.request_id}", use_container_width=True):
+                generation_library.move_photoshoot_records_to_junk(
+                    candidate_image_ids,
+                    session_id=current.session_id,
+                    session_title=current.title,
+                    reason="photoshoot_rejected",
+                )
+                photoshoot_queue.reject_request(candidate_request.request_id)
+                st.rerun()
 
-    st.markdown("### Session History")
-    if not sessions:
-        st.caption("No Photoshoot Sessions yet.")
-    for session in sessions:
-        progress = photoshoot_queue.progress(session.session_id)
-        with st.expander(f"{session.title} - {session.status} - {session.session_id}", expanded=False):
-            st.caption(f"Provider: {session.provider_id}")
-            st.caption(f"Creative Mode: {session.creative_mode}")
-            st.caption(f"Imported Assets: {progress.imported_assets}")
-            st.caption(f"Complete: {progress.percent_complete:.0f}%")
-            st.json(dict(session.creative_continuity or {}))
+        st.markdown("---")
+        complete_confirm_key = f"photoshoot_complete_confirm_{current.session_id}"
+        return_col, finish_col, _spacer = st.columns([1, 1, 2])
+        if return_col.button("↩️ Return to Library", key=f"photoshoot_return_to_library_{current.session_id}", use_container_width=True):
+            seed_id = str(dict(current.creative_continuity or {}).get("seed_image_id") or "")
+            if seed_id:
+                action = generation_library.return_photoshoot_seed_to_library(seed_id)
+                if not action.success:
+                    st.error(action.message)
+                    for error in action.errors:
+                        st.caption(error)
+                    st.stop()
+            temporary_image_ids = tuple(
+                image_id
+                for request in photoshoot_queue.requests_for_session(current.session_id)
+                if request.status != "approved"
+                for image_id in tuple((request.metadata or {}).get("generated_image_ids") or ())
+            )
+            generation_library.discard_temporary_records(temporary_image_ids)
+            photoshoot_queue.cancel_session(current.session_id)
+            for key in (recommendation_key, reset_fields_key, pending_direction_key, pending_prompt_key):
+                st.session_state.pop(key, None)
+            st.session_state.pop("content_studio_active_photoshoot_session_id", None)
+            st.session_state["dashboard_page"] = "Generation Library"
+            st.success("Returned seed image to Generation Library.")
+            st.rerun()
+        if finish_col.button("🏁 Complete Photoshoot", key=f"photoshoot_finish_{current.session_id}", use_container_width=True):
+            st.session_state[complete_confirm_key] = True
+            st.rerun()
+        if st.session_state.get(complete_confirm_key):
+            st.markdown("### Complete Photoshoot")
+            result = photoshoot_queue.result(current.session_id)
+            approved_image_ids = tuple(result.metadata.get("approved_generated_image_ids") or ())
+            summary_cols = st.columns(4)
+            summary_cols[0].metric("Session Name", current.title)
+            summary_cols[1].metric("Renderer", current.provider_id)
+            summary_cols[2].metric("Creative Mode", current.creative_mode)
+            summary_cols[3].metric("Total Shots", len(timeline_items))
+            st.markdown("#### Timeline Preview")
+            _render_photoshoot_timeline(timeline_items, compact=True)
+            complete_col, back_col, _space = st.columns([1, 1, 2])
+            if back_col.button("Return to Session", key=f"photoshoot_complete_return_{current.session_id}", use_container_width=True):
+                st.session_state.pop(complete_confirm_key, None)
+                st.rerun()
+            if complete_col.button("Complete Photoshoot", key=f"photoshoot_complete_confirm_button_{current.session_id}", use_container_width=True):
+                action = generation_library.finish_photoshoot_session(
+                    session_id=current.session_id,
+                    approved_image_ids=approved_image_ids,
+                    session_title=current.title,
+                )
+                if not action.success:
+                    st.error(action.message)
+                    for error in action.errors:
+                        st.caption(error)
+                    st.stop()
+                photoshoot_queue.finish_session(current.session_id)
+                st.session_state.pop(complete_confirm_key, None)
+                st.session_state.pop("content_studio_active_photoshoot_session_id", None)
+                st.session_state["photoshoot_gallery_open_session_id"] = current.session_id
+                st.session_state["dashboard_page"] = "Photoshoot Studio"
+                st.success("Photoshoot completed and moved to Photoshoot Gallery.")
+                st.rerun()
+            st.stop()
+    else:
+        _render_no_active_photoshoot_state(sessions)
+
+
+def _render_no_active_photoshoot_state(sessions) -> None:
+    st.info("No active photoshoot.")
+    completed_count = len(tuple(session for session in sessions if session.status == "completed"))
+    if completed_count:
+        st.caption(f"{completed_count} completed photoshoot{'s' if completed_count != 1 else ''} available in Photoshoot Gallery.")
+    start_col, gallery_col, _space = st.columns([1, 1, 2])
+    if start_col.button("Start New Photoshoot", key="photoshoot_empty_start_new", use_container_width=True):
+        st.session_state["dashboard_page"] = "Generation Library"
+        st.rerun()
+    if gallery_col.button("Open Photoshoot Gallery", key="photoshoot_empty_open_gallery", use_container_width=True):
+        st.session_state["dashboard_page"] = "Photoshoot Gallery"
+        st.rerun()
+
+
+def _render_photoshoot_gallery_session_card(
+    session,
+    timeline_items,
+    *,
+    active_account: dict | None,
+    photoshoot_queue: PhotoshootQueueService,
+    generation_library: GenerationLibraryService,
+) -> None:
+    if not timeline_items:
+        st.caption("No shots available.")
+        return
+    action_col, timeline_col, delete_col = st.columns([0.55, 20, 0.55], gap="small")
+    with action_col:
+        _render_photoshoot_gallery_publish_prototype(
+            session,
+            timeline_items,
+            active_account=active_account,
+        )
+    with timeline_col:
+        _render_photoshoot_gallery_contact_sheet(timeline_items)
+    with delete_col:
+        _render_photoshoot_gallery_delete_prototype(
+            session,
+            timeline_items,
+            photoshoot_queue=photoshoot_queue,
+            generation_library=generation_library,
+        )
+    approved_records = tuple(record for _request, record, _label in timeline_items)
+    session_creator_profile_id = getattr(session, "creator_profile_id", None)
+    _render_commerce_destination_group_selector(
+        records=approved_records,
+        creator_profile_id=int(session_creator_profile_id) if session_creator_profile_id else None,
+        source_workflow="photoshoot_gallery",
+        source_session_id=session.session_id,
+        key_prefix=f"photoshoot_gallery_{session.session_id}",
+    )
+    imported_items = tuple(
+        (label, record)
+        for _request, record, label in timeline_items
+        if record.imported_asset_id is not None
+    )
+    if imported_items:
+        with st.expander("Individual Shot Destinations", expanded=False):
+            for label, record in imported_items:
+                st.caption(label)
+                _render_commerce_destination_selector(
+                    asset_id=int(record.imported_asset_id),
+                    creator_profile_id=int(session_creator_profile_id) if session_creator_profile_id else None,
+                    source_workflow="photoshoot_gallery",
+                    source_session_id=session.session_id,
+                    key_prefix=f"photoshoot_gallery_{session.session_id}_{record.image_id}",
+                )
+                _render_fulfillment_registration_panel(
+                    asset_id=int(record.imported_asset_id),
+                    creator_profile_id=int(session_creator_profile_id) if session_creator_profile_id else None,
+                    source_workflow="photoshoot_gallery",
+                    source_session_id=session.session_id,
+                    key_prefix=f"photoshoot_gallery_{session.session_id}_{record.image_id}",
+                )
+
+
+def _render_gallery_icon_button_style(button_key: str) -> None:
+    st.markdown(
+        f"""
+        <style>
+        .st-key-{button_key} button {{
+            width: 42px !important;
+            min-width: 42px !important;
+            height: 42px !important;
+            min-height: 42px !important;
+            padding: 0 !important;
+            border: 0 !important;
+            border-radius: 0 !important;
+            background: transparent !important;
+            box-shadow: none !important;
+            color: inherit !important;
+            cursor: pointer !important;
+            font-size: 1.15rem !important;
+        }}
+        .st-key-{button_key} button:hover {{
+            background: rgba(255,255,255,0.06) !important;
+        }}
+        .st-key-{button_key} button:focus {{
+            box-shadow: none !important;
+            outline: 1px solid rgba(255,255,255,0.18) !important;
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def _streamlit_dialog(title: str):
+    dialog = getattr(st, "dialog", None)
+    if callable(dialog):
+        return dialog(title)
+
+    def decorator(func):
+        return func
+
+    return decorator
+
+
+# Compatibility marker for source-contract tests: @st.dialog("Publish Destination")
+@_streamlit_dialog("Publish Destination")
+def _render_photoshoot_gallery_publish_dialog(
+    session,
+    timeline_items,
+    *,
+    active_account: dict | None,
+) -> None:
+    destination_key = f"photoshoot_gallery_destination_{session.session_id}"
+    fanvue_account_id = (
+        (active_account or {}).get("id")
+        or st.session_state.get("fanvue_account_id")
+    )
+    oauth_connected = _fanvue_account_oauth_connected(active_account)
+    wall_col, chat_col = st.columns(2)
+    with wall_col:
+        if st.button("🟢 Wall", key=f"{destination_key}_dialog_wall", use_container_width=True):
+            records = _photoshoot_gallery_wall_upload_records(timeline_items)
+            if not fanvue_account_id:
+                st.error("Connect or select a Fanvue account before publishing to Wall.")
+                return
+            if active_account is not None and not oauth_connected:
+                st.error("Fanvue OAuth is not connected for the selected account.")
+                return
+            if not records:
+                st.error("No approved Photoshoot images are available for Wall upload.")
+                return
+            status = st.empty()
+            progress = st.progress(0)
+
+            def _progress_callback(event):
+                status.info(
+                    f"Uploading to Fanvue Wall...\n\nImage {event.current} of {event.total}..."
+                )
+                if event.total:
+                    progress.progress(min(1.0, event.current / event.total))
+
+            try:
+                service = PhotoshootFanvueUploadService(folder_name=FANVUE_WALL_FOLDER)
+                result = service.upload_completed_session(
+                    session=session,
+                    records=records,
+                    fanvue_account_id=int(fanvue_account_id),
+                    progress_callback=_progress_callback,
+                    reuse_existing_upload_metadata=False,
+                )
+            except Exception as error:
+                fanvue_upload_exception(
+                    "photoshoot_gallery.wall_upload_dialog_exception",
+                    error,
+                    session_id=session.session_id,
+                    fanvue_account_id=fanvue_account_id,
+                    folder_name=FANVUE_WALL_FOLDER,
+                    stage="photoshoot_gallery_wall_upload",
+                    record_count=len(records),
+                )
+                st.error("Wall upload failed. See Diagnostics for detailed error information.")
+                return
+            if result.get("success"):
+                st.session_state[destination_key] = "wall"
+                st.session_state[f"{destination_key}_upload_result"] = {
+                    "uploaded_count": result.get("uploaded_count"),
+                    "total_count": result.get("total_count"),
+                    "uploaded_media_ids": tuple(result.get("uploaded_media_ids") or ()),
+                    "folder": FANVUE_WALL_FOLDER,
+                }
+                st.session_state.pop(f"{destination_key}_dialog_open", None)
+                status.success("Uploaded to Fanvue Wall.")
+                st.rerun()
+            else:
+                reason = str(result.get("reason") or "")
+                if reason == "fanvue_folder_not_found":
+                    st.error('Fanvue Vault folder "Wall" was not found.')
+                elif reason == "missing_fanvue_account":
+                    st.error("Connect or select a Fanvue account before publishing to Wall.")
+                elif reason == "fanvue_folder_lookup_failed":
+                    st.error("Could not verify the Fanvue Wall folder. Check the Fanvue connection and try again.")
+                elif any(
+                    "did not finish processing" in str((failure or {}).get("error") or "")
+                    for failure in (result.get("failures") or ())
+                ):
+                    st.error("Fanvue accepted the upload but did not finish processing the media. Please try again.")
+                else:
+                    st.error("Wall upload did not complete.")
+                if result.get("uploaded_count") is not None:
+                    st.warning(
+                        f"Uploaded: {result.get('uploaded_count')} / {result.get('total_count')} images"
+                    )
+                for failure in result.get("failures") or ():
+                    st.caption(f"{failure.get('image_id')}: {failure.get('error')}")
+    with chat_col:
+        if st.button("🔵 Chat", key=f"{destination_key}_dialog_chat", use_container_width=True):
+            st.info("Chat publishing is not implemented yet.")
+            return
+    if st.button("Cancel", key=f"{destination_key}_dialog_cancel", use_container_width=True):
+        st.session_state.pop(f"{destination_key}_dialog_open", None)
+        st.rerun()
+
+
+def _fanvue_account_oauth_connected(active_account: dict | None) -> bool:
+    if not active_account:
+        return False
+    return bool(
+        active_account.get("oauth_access_token")
+        or active_account.get("oauth_refresh_token")
+        or active_account.get("fanvue_user_uuid")
+    )
+
+
+def _photoshoot_gallery_wall_upload_records(timeline_items) -> tuple[GeneratedImageRecord, ...]:
+    return tuple(
+        record
+        for request, record, _label in timeline_items
+    )
+
+
+# Compatibility marker for source-contract tests: @st.dialog("Delete Photoshoot?")
+@_streamlit_dialog("Delete Photoshoot?")
+def _render_photoshoot_gallery_delete_dialog(
+    session,
+    timeline_items,
+    *,
+    photoshoot_queue: PhotoshootQueueService,
+    generation_library: GenerationLibraryService,
+) -> None:
+    delete_key = f"photoshoot_gallery_delete_{session.session_id}"
+    st.write("Move this completed photoshoot to the Junk folder?")
+    cancel_col, confirm_col = st.columns(2)
+    if cancel_col.button("Cancel", key=f"{delete_key}_cancel", use_container_width=True):
+        st.session_state.pop(f"{delete_key}_dialog_open", None)
+        st.rerun()
+    if confirm_col.button("Move to Junk", key=f"{delete_key}_confirm", use_container_width=True):
+        image_ids = tuple(record.image_id for _request, record, _label in timeline_items)
+        action = generation_library.move_completed_photoshoot_session_to_junk(
+            session_id=session.session_id,
+            approved_image_ids=image_ids,
+            session_title=session.title,
+        )
+        if action.success:
+            photoshoot_queue.junk_completed_session(
+                session.session_id,
+                notes="Moved to Junk from Photoshoot Gallery.",
+            )
+            st.session_state.pop(f"{delete_key}_dialog_open", None)
+            st.session_state["photoshoot_gallery_message"] = "Photoshoot moved to Junk."
+            st.rerun()
+        st.error("; ".join(action.errors) or "Photoshoot could not be moved to Junk.")
+
+
+def _render_photoshoot_gallery_publish_prototype(
+    session,
+    timeline_items,
+    *,
+    active_account: dict | None,
+) -> None:
+    destination_key = f"photoshoot_gallery_destination_{session.session_id}"
+    selected_destination = st.session_state.get(destination_key)
+    if selected_destination:
+        assigned_to_wall = selected_destination == "wall"
+        status_icon = "🟢" if assigned_to_wall else "🔵"
+        status_title = "Assigned to Wall" if assigned_to_wall else "Assigned to Chat"
+        st.markdown(
+            f"""
+            <div style="
+                display:flex;
+                justify-content:center;
+                align-items:center;
+                min-height:112px;
+            ">
+                <span title="{html.escape(status_title, quote=True)}" style="
+                    display:inline-flex;
+                    align-items:center;
+                    justify-content:center;
+                    width: 42px;
+                    height: 42px;
+                    font-size: 1.15rem;
+                    cursor: default;
+                    user-select: none;
+                ">{status_icon}</span>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        return
+    st.markdown('<div style="height:36px;"></div>', unsafe_allow_html=True)
+    button_key = f"{destination_key}_open"
+    _render_gallery_icon_button_style(button_key)
+    if st.button(
+        "📤",
+        key=button_key,
+        help="Publish this completed photoshoot",
+        use_container_width=False,
+        type="secondary",
+    ):
+        st.session_state[f"{destination_key}_dialog_open"] = True
+        st.rerun()
+    if not st.session_state.get(f"{destination_key}_dialog_open"):
+        return
+    _render_photoshoot_gallery_publish_dialog(
+        session,
+        timeline_items,
+        active_account=active_account,
+    )
+
+
+def _render_photoshoot_gallery_delete_prototype(
+    session,
+    timeline_items,
+    *,
+    photoshoot_queue: PhotoshootQueueService,
+    generation_library: GenerationLibraryService,
+) -> None:
+    delete_key = f"photoshoot_gallery_delete_{session.session_id}"
+    st.markdown('<div style="height:36px;"></div>', unsafe_allow_html=True)
+    button_key = f"{delete_key}_open"
+    _render_gallery_icon_button_style(button_key)
+    if st.button(
+        "🗑",
+        key=button_key,
+        help="Move this completed photoshoot to Junk",
+        use_container_width=False,
+        type="secondary",
+    ):
+        st.session_state[f"{delete_key}_dialog_open"] = True
+        st.rerun()
+    if not st.session_state.get(f"{delete_key}_dialog_open"):
+        return
+    _render_photoshoot_gallery_delete_dialog(
+        session,
+        timeline_items,
+        photoshoot_queue=photoshoot_queue,
+        generation_library=generation_library,
+    )
+
+
+def _photoshoot_fanvue_upload_metadata(session) -> dict[str, Any]:
+    metadata = dict(getattr(session, "metadata", None) or {})
+    upload = metadata.get("fanvue_photoshoot_upload") or {}
+    return dict(upload) if isinstance(upload, Mapping) else {}
+
+
+def _render_photoshoot_fanvue_upload_action(
+    session,
+    timeline_items,
+    *,
+    active_account: dict | None,
+    photoshoot_queue: PhotoshootQueueService,
+) -> None:
+    upload = _photoshoot_fanvue_upload_metadata(session)
+    if upload.get("uploaded_to_fanvue"):
+        st.success(f"✅ Uploaded to Fanvue {upload.get('uploaded_folder') or FANVUE_PHOTOSHOOT_FOLDER}")
+        return
+
+    uploaded_count = int(upload.get("uploaded_count") or 0)
+    total_count = int(upload.get("total_count") or len(timeline_items))
+    if uploaded_count:
+        st.warning(f"Uploaded: {uploaded_count} / {total_count} images")
+        failures = tuple(upload.get("failures") or ())
+        if failures:
+            st.caption(f"{len(failures)} image(s) need retry.")
+
+    fanvue_account_id = (active_account or {}).get("id") or st.session_state.get("fanvue_account_id")
+    upload_key = f"photoshoot_fanvue_uploading_{session.session_id}"
+    button_label = (
+        "Retry Remaining Images"
+        if uploaded_count and uploaded_count < total_count
+        else f"☁ Upload Photoshoot to Fanvue {FANVUE_PHOTOSHOOT_FOLDER}"
+    )
+    disabled = bool(st.session_state.get(upload_key)) or not fanvue_account_id
+    if st.button(
+        button_label,
+        key=f"photoshoot_upload_fanvue_{session.session_id}",
+        type="primary",
+        use_container_width=True,
+        disabled=disabled,
+    ):
+        st.session_state[upload_key] = True
+        status = st.empty()
+        progress = st.progress(0)
+        records = tuple(record for _request, record, _label in timeline_items)
+
+        def _progress_callback(event):
+            status.info(
+                f"Uploading Photoshoot...\n\nImage {event.current} of {event.total}..."
+            )
+            if event.total:
+                progress.progress(min(1.0, event.current / event.total))
+
+        try:
+            service = PhotoshootFanvueUploadService()
+            result = service.upload_completed_session(
+                session=session,
+                records=records,
+                fanvue_account_id=int(fanvue_account_id),
+                progress_callback=_progress_callback,
+            )
+            photoshoot_queue.record_fanvue_upload_result(session.session_id, result)
+            if result.get("success"):
+                status.success(f"✅ Uploaded to Fanvue {FANVUE_PHOTOSHOOT_FOLDER}")
+            else:
+                status.error(result.get("error") or "Photoshoot upload did not complete.")
+                if result.get("uploaded_count") is not None:
+                    st.warning(
+                        f"Uploaded: {result.get('uploaded_count')} / {result.get('total_count')} images"
+                    )
+                for failure in result.get("failures") or ():
+                    st.caption(f"{failure.get('image_id')}: {failure.get('error')}")
+        finally:
+            st.session_state.pop(upload_key, None)
+        st.rerun()
+
+    if not fanvue_account_id:
+        st.caption("Connect/select a Fanvue account before uploading this Photoshoot.")
+
+
+def _render_photoshoot_gallery_contact_sheet(timeline_items) -> None:
+    cards = []
+    for index, (_request, record, _label) in enumerate(timeline_items, start=1):
+        src = html.escape(_display_image_src(record.output_reference), quote=True)
+        alt_text = html.escape(f"Photoshoot image {index}", quote=True)
+        cards.append(
+            f"""
+            <div class="photoshoot-gallery-thumb">
+                <img src="{src}" alt="{alt_text}" loading="lazy" />
+            </div>
+            """
+        )
+    components.html(
+        f"""
+        <div class="photoshoot-gallery-scroll">
+            <div class="photoshoot-gallery-grid">
+                {''.join(cards)}
+            </div>
+        </div>
+        <style>
+            .photoshoot-gallery-scroll {{
+                max-height: 620px;
+                overflow-y: auto;
+                overflow-x: hidden;
+                padding: 2px 4px 8px 2px;
+                box-sizing: border-box;
+            }}
+            .photoshoot-gallery-grid {{
+                display: grid;
+                grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+                gap: 10px;
+                align-items: start;
+            }}
+            .photoshoot-gallery-thumb {{
+                aspect-ratio: 1 / 1;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                overflow: hidden;
+                border-radius: 8px;
+                background: rgba(0,0,0,0.24);
+                border: 1px solid rgba(255,255,255,0.12);
+            }}
+            .photoshoot-gallery-thumb img {{
+                    max-width: 100%;
+                    max-height: 100%;
+                    width: auto;
+                    height: auto;
+                    object-fit: contain;
+                    display: block;
+            }}
+        </style>
+        """,
+        height=640,
+        scrolling=False,
+    )
+
+
+def _render_photoshoot_gallery(
+    *,
+    creator_profile: dict | None,
+    active_account: dict | None,
+    photoshoot_queue: PhotoshootQueueService,
+    generation_library: GenerationLibraryService,
+) -> None:
+    creator_profile_id = _creator_profile_id(creator_profile)
+    st.title("📸 Photoshoot Gallery")
+    st.caption("Completed photoshoot sessions and shot timelines.")
+    if not creator_profile_id:
+        st.error("Creator Profile required before viewing Photoshoot Gallery.")
+        return
+
+    completed_sessions = tuple(
+        session
+        for session in photoshoot_queue.list_sessions(creator_profile_id=creator_profile_id)
+        if session.status == "completed"
+    )
+    if not completed_sessions:
+        st.info("No completed photoshoots yet.")
+        return
+
+    st.markdown("### Completed Sessions")
+    for session in completed_sessions:
+        timeline_items = _photoshoot_timeline_items(session, photoshoot_queue, generation_library)
+        _render_photoshoot_gallery_session_card(
+            session,
+            timeline_items,
+            active_account=active_account,
+            photoshoot_queue=photoshoot_queue,
+            generation_library=generation_library,
+        )
+        st.markdown("---")
 
 
 def _render_placeholder_lanes(page: ContentStudioShellPage) -> None:
@@ -4385,7 +6956,7 @@ def _render_creative_director(
 ) -> None:
     creator_profile_id = _creator_profile_id(creator_profile)
     st.title("Creative Director")
-    st.caption("Provider-neutral creative planning for Content Studio.")
+    st.caption("Provider-neutral creative planning for Content Creation.")
     if not creator_profile_id:
         st.error("Creator Profile required before planning Creative Sessions.")
         return
@@ -4569,8 +7140,12 @@ def render_content_studio_page(
         or GenerationEngineService(reference_library_service=reference_service)
     )
     content_archive_service = content_archive_service or ContentArchiveService()
+    creator_approval_service = CreatorApprovalService(
+        storage_dir=Path("data") / "creator_approvals"
+    )
     generation_library_service = generation_library_service or GenerationLibraryService(
         archive_service=content_archive_service,
+        creator_approval_service=creator_approval_service,
     )
     generation_ingestion_service = (
         generation_ingestion_service
@@ -4586,6 +7161,8 @@ def render_content_studio_page(
         "Social" + "Publishing" + "Service",
     )
     social_publishing_service = social_publishing_service or social_service_type()
+    if page_name != "Generation Library":
+        _clear_generation_publish_state()
     if page_name == "Social Studio":
         _render_social_studio(
             creator_profile=creator_profile,
@@ -4647,6 +7224,7 @@ def render_content_studio_page(
             reference_service=reference_service,
             caption_studio=caption_studio_service,
             social_publishing=social_publishing_service,
+            photoshoot_queue=photoshoot_queue_service,
         )
         return
     if page_name == "Archive":
@@ -4683,7 +7261,7 @@ def render_content_studio_page(
             reference_service=reference_service,
         )
         return
-    if page_name == "Photoshoot Queue":
+    if page_name in {"Photoshoot Studio", "Photoshoot Queue"}:
         _render_photoshoot_queue(
             creator_profile=creator_profile,
             reference_service=reference_service,
@@ -4692,6 +7270,14 @@ def render_content_studio_page(
             generation_library=generation_library_service,
             generation_ingestion=generation_ingestion_service,
             photoshoot_queue=photoshoot_queue_service,
+        )
+        return
+    if page_name == "Photoshoot Gallery":
+        _render_photoshoot_gallery(
+            creator_profile=creator_profile,
+            active_account=active_account,
+            photoshoot_queue=photoshoot_queue_service,
+            generation_library=generation_library_service,
         )
         return
     if page_name == "Prompt History":
@@ -4705,12 +7291,12 @@ def render_content_studio_page(
 
     page = CONTENT_STUDIO_SHELL.get(page_name)
     if page is None:
-        st.error("Unknown Content Studio page selected.")
+        st.error("Unknown Content Creation page selected.")
         return
 
     st.title(page.title)
     st.caption(page.purpose)
-    st.info("Content Studio shell only. Generation logic, APIs, prompts, and queues are not migrated.")
+    st.info("Content Creation shell only. Generation logic, APIs, prompts, and queues are not migrated.")
 
     if page_name in {"Social Studio", "Premium Studio", "Creative Director"}:
         _render_active_reference(

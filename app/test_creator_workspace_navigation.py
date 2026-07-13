@@ -1,4 +1,4 @@
-import unittest
+﻿import unittest
 import sys
 import types
 from datetime import datetime, timedelta, timezone
@@ -18,6 +18,7 @@ if "psycopg" not in sys.modules:
     psycopg.connect = lambda *args, **kwargs: None
     rows.dict_row = object()
     json_types.Json = lambda value: value
+    json_types.Jsonb = lambda value: value
     errors.UniqueViolation = type("UniqueViolation", (Exception,), {})
     sys.modules["psycopg"] = psycopg
     sys.modules["psycopg.rows"] = rows
@@ -95,7 +96,7 @@ class CreatorWorkspaceNavigationTests(unittest.TestCase):
             [
                 "Creator HQ",
                 "Assets",
-                "Content Studio",
+                "Content Creation",
                 "Experiences",
                 "Products",
                 "Publishing",
@@ -115,16 +116,18 @@ class CreatorWorkspaceNavigationTests(unittest.TestCase):
         self.assertIn("  Developer Agent", labels)
         self.assertIn("Assets", labels)
         self.assertIn("  CMS Upload", labels)
-        self.assertIn("Content Studio", labels)
-        self.assertIn("  Social Studio", labels)
-        self.assertIn("  Premium Studio", labels)
+        self.assertIn("Content Creation", labels)
+        self.assertIn("  Content Studio", labels)
+        self.assertNotIn("  Social Studio", labels)
+        self.assertNotIn("  Premium Studio", labels)
         self.assertIn("  Reference Library", labels)
-        self.assertIn("  Creative Director", labels)
-        self.assertIn("  Photoshoot Queue", labels)
-        self.assertIn("  Social Publishing", labels)
+        self.assertNotIn("  Creative Director", labels)
+        self.assertIn("  📸 Photoshoot Studio", labels)
+        self.assertIn("  📸 Photoshoot Gallery", labels)
+        self.assertNotIn("  Social Publishing", labels)
         self.assertIn("  Edit Studio", labels)
-        self.assertIn("  Prompt History", labels)
-        self.assertIn("  Settings", labels)
+        self.assertNotIn("  Prompt History", labels)
+        self.assertNotIn("  Settings", labels)
         self.assertIn("Experiences", labels)
         self.assertIn("  Experience Overview (Coming Soon)", labels)
         self.assertIn("  Activity Feed", labels)
@@ -133,10 +136,17 @@ class CreatorWorkspaceNavigationTests(unittest.TestCase):
         self.assertIn("  Notifications (Coming Soon)", labels)
 
         icons = {group.label: group.icon for group in DASHBOARD_NAVIGATION_GROUPS}
-        self.assertEqual(icons["Creator HQ"], "HQ")
-        self.assertEqual(icons["Assets"], "AS")
-        self.assertEqual(icons["Content Studio"], "CS")
-        self.assertEqual(icons["Publishing"], "PB")
+        self.assertEqual(icons["Creator HQ"], "🏠")
+        self.assertEqual(icons["Assets"], "🗂️")
+        self.assertEqual(icons["Content Creation"], "📸")
+        self.assertEqual(icons["Experiences"], "🎭")
+        self.assertEqual(icons["Products"], "🛍️")
+        self.assertEqual(icons["Publishing"], "📢")
+        self.assertEqual(icons["Customer Conversations"], "💬")
+        self.assertEqual(icons["Activity"], "📈")
+        self.assertEqual(icons["Notifications"], "🔔")
+        self.assertEqual(icons["Administration"], "⚙️")
+        self.assertEqual(icons["Agents"], "🤖")
 
     def test_existing_routes_remain_reachable_from_grouped_navigation(self):
         reachable_pages = {
@@ -145,8 +155,9 @@ class CreatorWorkspaceNavigationTests(unittest.TestCase):
         }
         reachable_pages.discard(None)
 
-        self.assertEqual(reachable_pages, set(DASHBOARD_PAGE_OPTIONS))
-        for page in DASHBOARD_PAGE_OPTIONS:
+        self.assertTrue(reachable_pages.issubset(set(DASHBOARD_PAGE_OPTIONS)))
+        self.assertIn("Premium Studio", reachable_pages)
+        for page in reachable_pages:
             label = grouped_navigation_label_for_page(page)
             self.assertEqual(page_for_grouped_navigation_label(label), page)
 
@@ -1023,8 +1034,27 @@ class CreatorWorkspaceNavigationTests(unittest.TestCase):
         self.assertIn("### Creator Workflow", source)
         self.assertIn("### Recommended Actions", source)
         self.assertIn("### Publishing Operations", source)
+        self.assertIn("### Commerce Performance", source)
+        self.assertIn("### Recommendation Insights", source)
         self.assertIn("### Telegram Operations", source)
         self.assertIn("### Business Learning", source)
+        self.assertIn("_render_commerce_performance_center", source)
+        self.assertIn("_render_recommendation_insights", source)
+        self.assertIn("_render_commerce_learning_timeline", source)
+        self.assertIn("Total Business Assets", source)
+        self.assertIn("Recommendation Ready Assets", source)
+        self.assertIn("Recommendations Today", source)
+        self.assertIn("Deliveries Today", source)
+        self.assertIn("Purchases Today", source)
+        self.assertIn("Revenue Today", source)
+        self.assertIn("Conversion Rate", source)
+        self.assertIn("Recommendation Health", source)
+        self.assertIn("Learning Health", source)
+        self.assertIn("Chat Inventory Health", source)
+        self.assertIn("Top Revenue Assets", source)
+        self.assertIn("Lowest Conversion", source)
+        self.assertIn("Business Learning evidence", source)
+        self.assertIn("ContentCommerceLearningService", source)
         render_source = source[source.index("def render_creator_workspace") :]
         self.assertLess(
             render_source.index("### Creator Agent"),

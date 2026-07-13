@@ -6,6 +6,10 @@ from pathlib import Path
 if "streamlit" not in sys.modules:
     streamlit = types.ModuleType("streamlit")
     sys.modules["streamlit"] = streamlit
+if "streamlit.components" not in sys.modules:
+    sys.modules["streamlit.components"] = types.ModuleType("streamlit.components")
+if "streamlit.components.v1" not in sys.modules:
+    sys.modules["streamlit.components.v1"] = types.ModuleType("streamlit.components.v1")
 
 if "psycopg" not in sys.modules:
     psycopg = types.ModuleType("psycopg")
@@ -291,9 +295,9 @@ class SocialStudioTests(unittest.TestCase):
         self.assertIn('"Generate"', source)
         self.assertIn("Generation Progress", source)
         self.assertIn("Live Generated Images", source)
-        self.assertIn("Generation Complete", source)
         self.assertIn("complete_preview", source)
-        self.assertIn("time.sleep(5)", source)
+        self.assertIn("preview_placeholder.empty()", source)
+        self.assertNotIn("time.sleep(5)", source)
         self.assertIn("Reset Session", source)
         self.assertIn("reset_content_studio_session_state", source)
         self.assertIn("content_studio_reset_requested", source)
@@ -306,6 +310,7 @@ class SocialStudioTests(unittest.TestCase):
         self.assertIn("Open Asset Library", source)
         self.assertIn("Creator Review", source)
         self.assertIn('"Social Studio"', navigation)
+        self.assertNotIn('DashboardNavigationItem("Social Studio", "Social Studio")', navigation)
         self.assertNotIn("submit_wavespeed_task", source)
         self.assertNotIn("poll_wavespeed_result", source)
         self.assertNotIn("upload_to_imgbb", source)

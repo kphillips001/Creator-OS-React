@@ -194,6 +194,37 @@ def engine_result(**overrides):
     return values
 
 
+def chat_delivery_engine_result(**overrides):
+    values = engine_result()
+    content = values["offer"]["content"]
+    prepared_payload = {
+        "delivery_id": "delivery-101",
+        "asset_id": 101,
+        "product_id": "product-chat",
+        "experience_id": "experience-chat",
+        "media_link": "https://fanvue.example/media/chat-101",
+        "fanvue_media_link": "https://fanvue.example/media/chat-101",
+        "provider_media_uuid": "media-chat-101",
+        "fulfillment_id": "fulfillment-101",
+        "recommendation_id": "rec-101",
+        "delivery_type": "PAID",
+        "delivery_method": "paid_media_link",
+        "delivery_ready": True,
+    }
+    content.update(
+        {
+            "chat_delivery_payload": prepared_payload,
+            "chat_delivery_result": {
+                "delivery_id": "delivery-101",
+                "success": True,
+                "payload": prepared_payload,
+            },
+        }
+    )
+    values.update(overrides)
+    return values
+
+
 class TelegramCommerceServiceTests(unittest.TestCase):
     def build_service(
         self,
@@ -343,6 +374,9 @@ class TelegramCommerceServiceTests(unittest.TestCase):
             {
                 "correlation_id": "telegram:1:2",
                 "engine_user_id": "7:-123456789",
+                "delivery_id": None,
+                "recommendation_id": None,
+                "asset_id": None,
             },
         )
         self.assertEqual(
@@ -365,6 +399,34 @@ class TelegramCommerceServiceTests(unittest.TestCase):
             result.diagnostic_metadata["telegram_delivery_execution_status"],
             "deferred",
         )
+
+    def test_execute_consumes_chat_commerce_delivery_payload(self):
+        delivery_executor = FakeDeliveryExecutor()
+        service = self.build_service(
+            FakeDecisionEngine(chat_delivery_engine_result()),
+            delivery_executor=delivery_executor,
+        )
+
+        result = service.execute(
+            engine_user_id="7:-123456789",
+            message_text="show me",
+            correlation_id="telegram:1:2",
+        )
+
+        self.assertEqual(result.delivery_decision.current_product_id, "product-chat")
+        self.assertEqual(
+            result.delivery_decision.paid_media_link,
+            "https://fanvue.example/media/chat-101",
+        )
+        self.assertEqual(result.delivery_payload.product_reference, "product-chat")
+        self.assertEqual(result.delivery_payload.experience_reference, "experience-chat")
+        self.assertEqual(
+            result.delivery_payload.metadata["provider_media_uuid"],
+            "media-chat-101",
+        )
+        runtime_context = delivery_executor.calls[0]["context"]
+        self.assertEqual(runtime_context["delivery_id"], "delivery-101")
+        self.assertEqual(runtime_context["recommendation_id"], "rec-101")
 
     def test_process_message_preserves_conversation_gateway_compatibility(self):
         original = engine_result(response="Gateway sees this")

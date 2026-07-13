@@ -1,5 +1,296 @@
 [
   {
+    "history_id": "social_publish_history_ff97a5875ca54e7396a4b9c50f7b933e",
+    "queue_item_id": "social_queue_item_e6c93c80b53f4ebf8e0351fb52103d55",
+    "platform": "x",
+    "status": "posted",
+    "message": "Posted to X.",
+    "created_at": "2026-07-13T15:27:16.446796",
+    "metadata": {
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "caption_id": null,
+      "provider_post_id": "2076689926708474265",
+      "provider_media_id": "2076689923965382656",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2076689926708474265"
+    }
+  },
+  {
+    "history_id": "social_publish_history_dd4f320c01f64215a0f2b9dc98403409",
+    "queue_item_id": "social_queue_item_9c487cb3346b493ca45b8730e1762cff",
+    "platform": "x",
+    "status": "posted",
+    "message": "Posted to X.",
+    "created_at": "2026-07-12T14:55:05.438779",
+    "metadata": {
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "caption_id": null,
+      "provider_post_id": "2076319439637590149",
+      "provider_media_id": "2076319436961726464",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2076319439637590149"
+    }
+  },
+  {
+    "history_id": "social_publish_history_e050a435a97d4d999842dea06c5de1d9",
+    "queue_item_id": "social_queue_item_34a379fdf6cd4a53857a09db78580b45",
+    "platform": "x",
+    "status": "posted",
+    "message": "Posted to X.",
+    "created_at": "2026-07-11T17:13:49.383763",
+    "metadata": {
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "caption_id": null,
+      "provider_post_id": "2075991964881727569",
+      "provider_media_id": "2075991962298048512",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2075991964881727569"
+    }
+  },
+  {
+    "history_id": "social_publish_history_8fc0dfd70a104ee0a56c9a6c1857699d",
+    "queue_item_id": "social_queue_item_37ed91865d454b37a10664010ae8e2b9",
+    "platform": "x",
+    "status": "posted",
+    "message": "Posted to X.",
+    "created_at": "2026-07-11T02:40:56.833924",
+    "metadata": {
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "caption_id": "caption_result_badc52c138d544e1b1a7e914999e516e",
+      "provider_post_id": "2075772298468954268",
+      "provider_media_id": "2075772295847550976",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2075772298468954268"
+    }
+  },
+  {
+    "history_id": "social_publish_history_c0559d640a6f48d6bfabc08dc092a20f",
+    "queue_item_id": "social_queue_item_37ed91865d454b37a10664010ae8e2b9",
+    "platform": "x",
+    "status": "caption_attached",
+    "message": "Caption Studio result attached to Social Queue item.",
+    "created_at": "2026-07-11T02:40:55.638544",
+    "metadata": {
+      "caption_id": "caption_result_badc52c138d544e1b1a7e914999e516e"
+    }
+  },
+  {
+    "history_id": "social_publish_history_f8ce7536e27643afa4e57bd3b7b60f92",
+    "queue_item_id": "social_queue_item_c45561bcfe5c40fc80104cce78dda106",
+    "platform": "telegram",
+    "status": "posted",
+    "message": "Posted to Telegram.",
+    "created_at": "2026-07-10T15:13:15.138191",
+    "metadata": {
+      "account_name": null,
+      "telegram_post_to": "main",
+      "caption_id": "caption_result_31b0b1beb6964155bb6432a9f033e718",
+      "provider_post_id": "82",
+      "provider_media_id": null,
+      "provider_output_url": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_047777fa2c2140e6940ba3f597e3b229",
+    "queue_item_id": "social_queue_item_c45561bcfe5c40fc80104cce78dda106",
+    "platform": "telegram",
+    "status": "caption_attached",
+    "message": "Caption Studio result attached to Social Queue item.",
+    "created_at": "2026-07-10T15:13:12.987326",
+    "metadata": {
+      "caption_id": "caption_result_31b0b1beb6964155bb6432a9f033e718"
+    }
+  },
+  {
+    "history_id": "social_publish_history_1c1525563cdd495e875c43ebc63cbe25",
+    "queue_item_id": "social_queue_item_2df6dbdd9189481b8771f288e95c592d",
+    "platform": "x",
+    "status": "posted",
+    "message": "Posted to X.",
+    "created_at": "2026-07-10T14:45:00.954346",
+    "metadata": {
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "caption_id": "caption_result_e679abc01427488fae826379565d0fd9",
+      "provider_post_id": "2075592128319639719",
+      "provider_media_id": "2075592125580771328",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2075592128319639719"
+    }
+  },
+  {
+    "history_id": "social_publish_history_375919c0af3443759199534d012182e3",
+    "queue_item_id": "social_queue_item_2df6dbdd9189481b8771f288e95c592d",
+    "platform": "x",
+    "status": "caption_attached",
+    "message": "Caption Studio result attached to Social Queue item.",
+    "created_at": "2026-07-10T14:44:59.683879",
+    "metadata": {
+      "caption_id": "caption_result_e679abc01427488fae826379565d0fd9"
+    }
+  },
+  {
+    "history_id": "social_publish_history_7728c5d6b9ba417bb415bd6516f85112",
+    "queue_item_id": "social_queue_item_d52517f6e861486ca5ebed82249fc92b",
+    "platform": "x",
+    "status": "posted",
+    "message": "Posted to X.",
+    "created_at": "2026-07-10T14:23:32.548027",
+    "metadata": {
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "caption_id": "caption_result_ffc9d1d0cc0b426e8fa89ed1f9ef1d39",
+      "provider_post_id": "2075586724483236338",
+      "provider_media_id": "2075586721824034816",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2075586724483236338"
+    }
+  },
+  {
+    "history_id": "social_publish_history_b77a89cb533546b8b178869e881b760f",
+    "queue_item_id": "social_queue_item_d52517f6e861486ca5ebed82249fc92b",
+    "platform": "x",
+    "status": "caption_attached",
+    "message": "Caption Studio result attached to Social Queue item.",
+    "created_at": "2026-07-10T14:23:31.342938",
+    "metadata": {
+      "caption_id": "caption_result_ffc9d1d0cc0b426e8fa89ed1f9ef1d39"
+    }
+  },
+  {
+    "history_id": "social_publish_history_62d450737b72458c80d3f74c1925c0fd",
+    "queue_item_id": "social_queue_item_4c1c64f504d448de96baa66db6f435c5",
+    "platform": "telegram",
+    "status": "posted",
+    "message": "Posted to Telegram.",
+    "created_at": "2026-07-09T21:05:58.911860",
+    "metadata": {
+      "account_name": null,
+      "telegram_post_to": "main",
+      "caption_id": "caption_result_049866bf13f64f7f88c3159205f75910",
+      "provider_post_id": "81",
+      "provider_media_id": null,
+      "provider_output_url": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_9cd9b33709da47a9886c9d43688527c9",
+    "queue_item_id": "social_queue_item_4c1c64f504d448de96baa66db6f435c5",
+    "platform": "telegram",
+    "status": "caption_attached",
+    "message": "Caption Studio result attached to Social Queue item.",
+    "created_at": "2026-07-09T21:05:56.903500",
+    "metadata": {
+      "caption_id": "caption_result_049866bf13f64f7f88c3159205f75910"
+    }
+  },
+  {
+    "history_id": "social_publish_history_5b503b0f6d3d4fc08f85a11710792f3a",
+    "queue_item_id": "social_queue_item_d8d605c6b4344e0fb9dcafaa4b969c25",
+    "platform": "x",
+    "status": "posted",
+    "message": "Posted to X.",
+    "created_at": "2026-07-09T18:03:42.543195",
+    "metadata": {
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "caption_id": "caption_result_c2fc2391b1354ae0a4345c577ff60476",
+      "provider_post_id": "2075279742568124510",
+      "provider_media_id": "2075279738537385984",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2075279742568124510"
+    }
+  },
+  {
+    "history_id": "social_publish_history_e480e83b783c4de79e3b842a8921aa41",
+    "queue_item_id": "social_queue_item_d8d605c6b4344e0fb9dcafaa4b969c25",
+    "platform": "x",
+    "status": "caption_attached",
+    "message": "Caption Studio result attached to Social Queue item.",
+    "created_at": "2026-07-09T18:03:40.714924",
+    "metadata": {
+      "caption_id": "caption_result_c2fc2391b1354ae0a4345c577ff60476"
+    }
+  },
+  {
+    "history_id": "social_publish_history_def1794825214801baf21828c45ac394",
+    "queue_item_id": "social_queue_item_d8d605c6b4344e0fb9dcafaa4b969c25",
+    "platform": "x",
+    "status": "failed",
+    "message": "X publishing dependency missing.\n\nRuntime interpreter:\nC:\\Fanvue-Chatbot\\bot\\Scripts\\python.exe\n\nInstall using:\npython -m pip install tweepy==4.15.0\n\nor\n\nC:\\Fanvue-Chatbot\\bot\\Scripts\\python.exe -m pip install tweepy==4.15.0",
+    "created_at": "2026-07-09T16:51:36.305004",
+    "metadata": {
+      "account_name": "AvaBlackthorne",
+      "caption_id": "caption_result_031e9b27746c443a993bd1747a9c6427",
+      "telegram_post_to": "main",
+      "exception_type": "XPublishError",
+      "error": "X publishing dependency missing.\n\nRuntime interpreter:\nC:\\Fanvue-Chatbot\\bot\\Scripts\\python.exe\n\nInstall using:\npython -m pip install tweepy==4.15.0\n\nor\n\nC:\\Fanvue-Chatbot\\bot\\Scripts\\python.exe -m pip install tweepy==4.15.0",
+      "traceback": "Traceback (most recent call last):\n  File \"C:\\Creator-OS\\app\\providers\\social\\x_provider.py\", line 190, in _load_tweepy\n    return import_module(\"tweepy\")\n           ^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\knphi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\importlib\\__init__.py\", line 90, in import_module\n    return _bootstrap._gcd_import(name[level:], package, level)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<frozen importlib._bootstrap>\", line 1387, in _gcd_import\n  File \"<frozen importlib._bootstrap>\", line 1360, in _find_and_load\n  File \"<frozen importlib._bootstrap>\", line 1324, in _find_and_load_unlocked\nModuleNotFoundError: No module named 'tweepy'\n\nThe above exception was the direct cause of the following exception:\n\nTraceback (most recent call last):\n  File \"C:\\Creator-OS\\app\\services\\social_publishing_service.py\", line 306, in publish_now\n    result = self.x_provider.publish(\n             ^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Creator-OS\\app\\providers\\social\\x_provider.py\", line 149, in publish\n    tweepy = self._load_tweepy()\n             ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Creator-OS\\app\\providers\\social\\x_provider.py\", line 197, in _load_tweepy\n    raise XPublishError(self._missing_tweepy_message()) from exc\napp.providers.social.x_provider.XPublishError: X publishing dependency missing.\n\nRuntime interpreter:\nC:\\Fanvue-Chatbot\\bot\\Scripts\\python.exe\n\nInstall using:\npython -m pip install tweepy==4.15.0\n\nor\n\nC:\\Fanvue-Chatbot\\bot\\Scripts\\python.exe -m pip install tweepy==4.15.0\n"
+    }
+  },
+  {
+    "history_id": "social_publish_history_95c2c801e9d24d96960eeafa149f21a7",
+    "queue_item_id": "social_queue_item_d8d605c6b4344e0fb9dcafaa4b969c25",
+    "platform": "x",
+    "status": "caption_attached",
+    "message": "Caption Studio result attached to Social Queue item.",
+    "created_at": "2026-07-09T16:51:36.295670",
+    "metadata": {
+      "caption_id": "caption_result_031e9b27746c443a993bd1747a9c6427"
+    }
+  },
+  {
+    "history_id": "social_publish_history_6169800c4713406482c7016c6dfcc521",
+    "queue_item_id": "social_queue_item_d8d605c6b4344e0fb9dcafaa4b969c25",
+    "platform": "x",
+    "status": "failed",
+    "message": "X publishing is not available because tweepy is not installed for the runtime Python interpreter: C:\\Fanvue-Chatbot\\bot\\Scripts\\python.exe.",
+    "created_at": "2026-07-09T16:35:05.106763",
+    "metadata": {
+      "account_name": "AvaBlackthorne",
+      "caption_id": "caption_result_7ea69091e29346acb9b2de4516f5cd8c",
+      "telegram_post_to": "main",
+      "exception_type": "XPublishError",
+      "error": "X publishing is not available because tweepy is not installed for the runtime Python interpreter: C:\\Fanvue-Chatbot\\bot\\Scripts\\python.exe.",
+      "traceback": "Traceback (most recent call last):\n  File \"C:\\Creator-OS\\app\\providers\\social\\x_provider.py\", line 161, in _load_tweepy\n    return import_module(\"tweepy\")\n           ^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\knphi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\importlib\\__init__.py\", line 90, in import_module\n    return _bootstrap._gcd_import(name[level:], package, level)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<frozen importlib._bootstrap>\", line 1387, in _gcd_import\n  File \"<frozen importlib._bootstrap>\", line 1360, in _find_and_load\n  File \"<frozen importlib._bootstrap>\", line 1324, in _find_and_load_unlocked\nModuleNotFoundError: No module named 'tweepy'\n\nThe above exception was the direct cause of the following exception:\n\nTraceback (most recent call last):\n  File \"C:\\Creator-OS\\app\\services\\social_publishing_service.py\", line 306, in publish_now\n    result = self.x_provider.publish(\n             ^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Creator-OS\\app\\providers\\social\\x_provider.py\", line 120, in publish\n    tweepy = self._load_tweepy()\n             ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Creator-OS\\app\\providers\\social\\x_provider.py\", line 168, in _load_tweepy\n    raise XPublishError(\napp.providers.social.x_provider.XPublishError: X publishing is not available because tweepy is not installed for the runtime Python interpreter: C:\\Fanvue-Chatbot\\bot\\Scripts\\python.exe.\n"
+    }
+  },
+  {
+    "history_id": "social_publish_history_284508a91578440087c8922d42607035",
+    "queue_item_id": "social_queue_item_d8d605c6b4344e0fb9dcafaa4b969c25",
+    "platform": "x",
+    "status": "caption_attached",
+    "message": "Caption Studio result attached to Social Queue item.",
+    "created_at": "2026-07-09T16:35:05.096590",
+    "metadata": {
+      "caption_id": "caption_result_7ea69091e29346acb9b2de4516f5cd8c"
+    }
+  },
+  {
+    "history_id": "social_publish_history_49e513aa923f4abf88852ac59f291525",
+    "queue_item_id": "social_queue_item_d8d605c6b4344e0fb9dcafaa4b969c25",
+    "platform": "x",
+    "status": "failed",
+    "message": "tweepy is required for X publishing.",
+    "created_at": "2026-07-09T16:09:23.223298",
+    "metadata": {
+      "account_name": "AvaBlackthorne",
+      "caption_id": "caption_result_00cfc71c388f45e2b740843631e7da80",
+      "telegram_post_to": "main",
+      "exception_type": "XPublishError",
+      "error": "tweepy is required for X publishing.",
+      "traceback": "Traceback (most recent call last):\n  File \"C:\\Creator-OS\\app\\providers\\social\\x_provider.py\", line 159, in _load_tweepy\n    import tweepy  # type: ignore\n    ^^^^^^^^^^^^^\nModuleNotFoundError: No module named 'tweepy'\n\nThe above exception was the direct cause of the following exception:\n\nTraceback (most recent call last):\n  File \"C:\\Creator-OS\\app\\services\\social_publishing_service.py\", line 306, in publish_now\n    result = self.x_provider.publish(\n             ^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Creator-OS\\app\\providers\\social\\x_provider.py\", line 118, in publish\n    tweepy = self._load_tweepy()\n             ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Creator-OS\\app\\providers\\social\\x_provider.py\", line 161, in _load_tweepy\n    raise XPublishError(\"tweepy is required for X publishing.\") from exc\napp.providers.social.x_provider.XPublishError: tweepy is required for X publishing.\n"
+    }
+  },
+  {
+    "history_id": "social_publish_history_bb0e4fe95752425f90c94cc85fdef32b",
+    "queue_item_id": "social_queue_item_d8d605c6b4344e0fb9dcafaa4b969c25",
+    "platform": "x",
+    "status": "caption_attached",
+    "message": "Caption Studio result attached to Social Queue item.",
+    "created_at": "2026-07-09T16:09:23.214306",
+    "metadata": {
+      "caption_id": "caption_result_00cfc71c388f45e2b740843631e7da80"
+    }
+  },
+  {
     "history_id": "social_publish_history_35fd9decd7a0445eb2a180d348c6ecfc",
     "queue_item_id": "social_queue_item_d53a205869a34201879bc97b9f14074c",
     "platform": "telegram",

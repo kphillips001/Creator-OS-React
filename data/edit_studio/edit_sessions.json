@@ -1,0 +1,19 @@
+[
+  {
+    "session_id": "edit_session_d09fa35a462341c5a592c788cd9d1b50",
+    "creator_profile_id": 2,
+    "source_image_ids": [
+      "generated_image_6c46062f4270d88711ad211a"
+    ],
+    "edit_mode": "multi_image",
+    "title": "Multi Image Edit",
+    "status": "active",
+    "created_at": "2026-07-10T14:55:18.075580",
+    "updated_at": null,
+    "metadata": {
+      "owner": "Edit Studio",
+      "reference_image_id": null,
+      "reference_asset_id": 85
+    }
+  }
+]

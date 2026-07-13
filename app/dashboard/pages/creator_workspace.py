@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Any, Mapping
 
 import streamlit as st
 
@@ -28,9 +29,27 @@ from app.models.workspace_dashboard import (
     WorkspaceTelegramOperationItem,
     WorkspaceWorkflowItem,
 )
+from app.models.fulfillment_registration import (
+    BusinessAssetFulfillmentRecord,
+    FulfillmentLifecycleState,
+    MediaLinkSubmission,
+)
+from app.models.chat_commerce_registration import (
+    ChatAvailabilityState,
+    ChatCommerceAssetRecord,
+)
 from app.models.product_review import ProductReviewSummary
 from app.services.creator_workspace_service import CreatorWorkspaceService
+from app.services.fulfillment_registration_service import FulfillmentRegistrationService
+from app.services.chat_commerce_registration_service import (
+    ChatCommerceRegistrationService,
+)
+from app.services.chat_commerce_inventory_service import ChatCommerceInventoryService
+from app.services.content_commerce_learning_service import (
+    ContentCommerceLearningService,
+)
 from app.services.runtime_control_service import RuntimeControlService
+from app.services.system_health_service import SystemHealthService
 
 
 @dataclass(frozen=True)
@@ -107,6 +126,7 @@ WORKSPACE_SECTIONS = (
         description="Configure creator profile, safety controls, modules, and providers.",
         primary_target="Creator Profile",
         secondary_targets=(
+            ("Health", "System Health"),
             ("System", "System Overview"),
             ("Modules", "Module Switches"),
             ("Provider Connections", "Fanvue Auth"),
@@ -118,6 +138,603 @@ WORKSPACE_SECTIONS = (
 def _navigate(target: str) -> None:
     st.session_state["dashboard_page"] = target
     st.rerun()
+
+
+def _creator_profile_id(creator_profile: dict | None) -> int | None:
+    value = (creator_profile or {}).get("id")
+    try:
+        return int(value) if value is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _active_fanvue_account_id(active_account: dict | None) -> int | None:
+    value = (active_account or {}).get("id") or st.session_state.get("fanvue_account_id")
+    try:
+        return int(value) if value is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _fulfillment_service() -> FulfillmentRegistrationService:
+    return FulfillmentRegistrationService()
+
+
+def _chat_commerce_service() -> ChatCommerceRegistrationService:
+    return ChatCommerceRegistrationService()
+
+
+def _chat_commerce_inventory_service() -> ChatCommerceInventoryService:
+    return ChatCommerceInventoryService()
+
+
+def _content_commerce_learning_service() -> ContentCommerceLearningService:
+    return ContentCommerceLearningService()
+
+
+def _creator_hq_commerce_projection() -> dict[str, Any]:
+    inventory = None
+    inventory_summary = None
+    inventory_items = ()
+    learning_service = _content_commerce_learning_service()
+    learning_profiles = ()
+    learning_events = ()
+    business_outcomes = ()
+    failed_learning = ()
+    try:
+        inventory = _chat_commerce_inventory_service().build_inventory(limit=500)
+        inventory_summary = inventory.summary
+        inventory_items = tuple(inventory.items)
+    except Exception:
+        inventory = None
+    try:
+        learning_profiles = tuple(learning_service.list_asset_learning_profiles())
+    except Exception:
+        learning_profiles = ()
+    repository = getattr(learning_service, "repository", None)
+    try:
+        getter = getattr(repository, "list_recommendation_events", None)
+        learning_events = tuple(getter()) if callable(getter) else ()
+    except Exception:
+        learning_events = ()
+    try:
+        getter = getattr(repository, "list_business_outcomes", None)
+        business_outcomes = tuple(getter()) if callable(getter) else ()
+    except Exception:
+        business_outcomes = ()
+    try:
+        failed_learning = tuple(learning_service.list_failed_learning_events())
+    except Exception:
+        failed_learning = ()
+
+    today = datetime.now().date().isoformat()
+    recommendations_today = sum(
+        1
+        for event in learning_events
+        if event.get("event_state") == "GENERATED"
+        and _date_prefix(event.get("event_timestamp")) == today
+    )
+    deliveries_today = sum(
+        1
+        for event in learning_events
+        if event.get("event_state") in {"DELIVERED", "DELIVERY_PREPARED"}
+        and _date_prefix(event.get("event_timestamp")) == today
+    )
+    purchases_today = sum(
+        1
+        for outcome in business_outcomes
+        if outcome.get("outcome_type") == "PRODUCT_PURCHASED"
+        and _date_prefix(outcome.get("occurred_at") or outcome.get("timestamp"))
+        == today
+    )
+    revenue_today = sum(
+        int(outcome.get("value_cents") or 0)
+        for outcome in business_outcomes
+        if outcome.get("outcome_type") == "PRODUCT_PURCHASED"
+        and _date_prefix(outcome.get("occurred_at") or outcome.get("timestamp"))
+        == today
+    )
+    recommendation_failures = sum(
+        1
+        for event in learning_events
+        if event.get("event_state") in {"REJECTED", "SUPPRESSED", "EXPIRED"}
+    )
+    delivery_failures = sum(
+        1
+        for event in learning_events
+        if event.get("event_state") in {"DELIVERY_FAILED", "DELIVERY_BLOCKED"}
+    )
+    conversion = (
+        purchases_today / recommendations_today
+        if recommendations_today
+        else getattr(inventory_summary, "overall_conversion", 0.0) or 0.0
+    )
+    return {
+        "inventory": inventory,
+        "summary": inventory_summary,
+        "items": inventory_items,
+        "profiles": learning_profiles,
+        "events": learning_events,
+        "outcomes": business_outcomes,
+        "failed_learning": failed_learning,
+        "recommendations_today": recommendations_today,
+        "deliveries_today": deliveries_today,
+        "purchases_today": purchases_today,
+        "revenue_today_cents": revenue_today,
+        "conversion_rate": conversion,
+        "recommendation_failures": recommendation_failures,
+        "delivery_failures": delivery_failures,
+    }
+
+
+def _date_prefix(value: Any) -> str | None:
+    if value in (None, ""):
+        return None
+    return str(value)[:10]
+
+
+def _currency(cents: int | float | None) -> str:
+    return f"${(float(cents or 0) / 100):,.2f}"
+
+
+def _creator_fulfillment_attention_records(
+    *,
+    limit: int = 25,
+) -> tuple[BusinessAssetFulfillmentRecord, ...]:
+    try:
+        service = _fulfillment_service()
+        waiting = service.list_waiting_for_media_link(limit=limit)
+        failed = service.list_failed_or_retry_required(limit=limit)
+    except Exception:
+        return ()
+    seen: set[int] = set()
+    records: list[BusinessAssetFulfillmentRecord] = []
+    for record in (*waiting, *failed):
+        if int(record.asset_id) in seen:
+            continue
+        seen.add(int(record.asset_id))
+        records.append(record)
+    return tuple(records[:limit])
+
+
+def _creator_fulfillment_attention_count() -> int:
+    return len(_creator_fulfillment_attention_records(limit=100))
+
+
+def _creator_chat_registration_attention_records(
+    *,
+    limit: int = 25,
+) -> tuple[ChatCommerceAssetRecord, ...]:
+    try:
+        service = _chat_commerce_service()
+        blocked = service.list_blocked_assets(limit=limit)
+        unavailable = service.list_temporarily_unavailable_assets(limit=limit)
+        retired = service.list_retired_assets(limit=limit)
+    except Exception:
+        return ()
+    seen: set[int] = set()
+    records: list[ChatCommerceAssetRecord] = []
+    for record in (*blocked, *unavailable, *retired):
+        if int(record.asset_id) in seen:
+            continue
+        seen.add(int(record.asset_id))
+        records.append(record)
+    return tuple(records[:limit])
+
+
+def _creator_chat_registration_attention_count() -> int:
+    return len(_creator_chat_registration_attention_records(limit=100))
+
+
+def _fulfillment_status_label(record: BusinessAssetFulfillmentRecord) -> str:
+    labels = {
+        FulfillmentLifecycleState.READY_FOR_UPLOAD: "Awaiting Upload",
+        FulfillmentLifecycleState.UPLOAD_QUEUED: "Awaiting Upload",
+        FulfillmentLifecycleState.UPLOADING: "Uploading",
+        FulfillmentLifecycleState.UPLOADED: "Uploaded",
+        FulfillmentLifecycleState.PROCESSING: "Uploading",
+        FulfillmentLifecycleState.MEDIA_READY: "Waiting For Media Link",
+        FulfillmentLifecycleState.WAITING_FOR_MEDIA_LINK: "Waiting For Media Link",
+        FulfillmentLifecycleState.MEDIA_LINK_SUBMITTED: "Media Link Submitted",
+        FulfillmentLifecycleState.FULFILLMENT_READY: "Fulfillment Ready",
+        FulfillmentLifecycleState.FAILED: "Failed",
+        FulfillmentLifecycleState.RETRY_REQUIRED: "Retry Required",
+    }
+    return labels.get(record.lifecycle_state, record.lifecycle_state.value)
+
+
+def _render_fulfillment_media_link_queue(
+    *,
+    active_account: dict | None,
+    creator_profile: dict | None,
+) -> None:
+    records = _creator_fulfillment_attention_records(limit=50)
+    ready_count = 0
+    try:
+        ready_count = len(_fulfillment_service().list_fulfillment_ready(limit=100))
+    except Exception:
+        pass
+
+    metrics = st.columns(4)
+    metrics[0].metric("Waiting For Media Links", str(len(records)))
+    metrics[1].metric("Fulfillment Ready", str(ready_count))
+    metrics[2].metric("Destination", "Customer Conversations")
+    metrics[3].metric("Owner", "Creator")
+
+    if not records:
+        st.success("No Business Assets are waiting for Fanvue Media Links.")
+        return
+
+    st.warning("Creator action required: paste and verify Fanvue Media Links.")
+    service = _fulfillment_service()
+    creator_profile_id = _creator_profile_id(creator_profile)
+    for index, record in enumerate(records, start=1):
+        with st.container():
+            source_workflow = str((record.provenance or {}).get("source_workflow") or "-")
+            st.caption(
+                " | ".join(
+                    (
+                        f"Asset #{record.asset_id}",
+                        f"Source Workflow: {source_workflow}",
+                        "Destination: Customer Conversations",
+                        f"Upload Status: {_fulfillment_status_label(record)}",
+                    )
+                )
+            )
+            st.write(f"Business Asset #{record.asset_id}")
+            st.caption(
+                " | ".join(
+                    (
+                        f"Fanvue Media UUID: {record.provider_media_id or '-'}",
+                        f"Media Link Status: {record.media_link_verification_state.value}",
+                        f"Verification: {record.media_link_verified_at or '-'}",
+                    )
+                )
+            )
+            if record.failure_message:
+                st.warning(record.failure_message)
+
+            st.markdown("[Open Fanvue](https://www.fanvue.com/)")
+            media_link = st.text_input(
+                "Paste Media Link",
+                value=record.media_link or "",
+                key=f"creator_hq_fulfillment_media_link_{record.asset_id}_{index}",
+            )
+            c1, c2 = st.columns(2)
+            if c1.button(
+                "Verify Media Link",
+                key=f"creator_hq_fulfillment_verify_{record.asset_id}_{index}",
+                disabled=not media_link or creator_profile_id is None,
+                use_container_width=True,
+            ):
+                try:
+                    result = service.submit_media_link(
+                        MediaLinkSubmission(
+                            asset_id=int(record.asset_id),
+                            media_link=media_link,
+                            creator_profile_id=int(creator_profile_id),
+                            submitted_by={
+                                "source": "creator_hq",
+                                "source_workflow": source_workflow,
+                            },
+                            idempotency_key=(
+                                f"creator-hq-media-link:{int(record.asset_id)}:{media_link}"
+                            ),
+                        )
+                    )
+                except Exception as error:
+                    st.error(f"Media Link verification failed: {error}")
+                else:
+                    if result.success:
+                        st.success("Fulfillment Ready")
+                        st.rerun()
+                    else:
+                        st.error("; ".join(result.errors) or "Media Link verification failed.")
+            fanvue_account_id = _active_fanvue_account_id(active_account) or record.provider_account_id
+            if c2.button(
+                "Retry Upload",
+                key=f"creator_hq_fulfillment_retry_upload_{record.asset_id}_{index}",
+                disabled=(
+                    not fanvue_account_id
+                    or record.lifecycle_state
+                    not in {
+                        FulfillmentLifecycleState.READY_FOR_UPLOAD,
+                        FulfillmentLifecycleState.UPLOAD_QUEUED,
+                        FulfillmentLifecycleState.RETRY_REQUIRED,
+                    }
+                ),
+                use_container_width=True,
+            ):
+                try:
+                    upload = service.upload_customer_conversations_asset(
+                        asset_id=int(record.asset_id),
+                        fanvue_account_id=int(fanvue_account_id),
+                    )
+                except Exception as error:
+                    st.error(f"Fanvue upload failed: {error}")
+                else:
+                    if upload.success:
+                        st.success("Upload queued. Waiting For Media Link.")
+                        st.rerun()
+                    else:
+                        st.error("; ".join(upload.errors) or "Fanvue upload failed.")
+            if creator_profile_id is None:
+                st.caption("Creator Profile is required before verification.")
+        if index < len(records):
+            st.divider()
+
+
+def _chat_commerce_status_label(record: ChatCommerceAssetRecord) -> str:
+    labels = {
+        ChatAvailabilityState.PENDING: "Chat Registration Pending",
+        ChatAvailabilityState.BLOCKED: "Blocked",
+        ChatAvailabilityState.CHAT_READY: "Chat Ready",
+        ChatAvailabilityState.TEMPORARILY_UNAVAILABLE: "Temporarily Unavailable",
+        ChatAvailabilityState.RETIRED: "Retired",
+        ChatAvailabilityState.FAILED: "Failed",
+    }
+    return labels.get(record.availability_state, record.availability_state.value)
+
+
+def _render_chat_commerce_registration_exceptions() -> None:
+    records = _creator_chat_registration_attention_records(limit=50)
+    try:
+        ready_count = len(_chat_commerce_service().list_chat_ready_assets(limit=100))
+    except Exception:
+        ready_count = 0
+    metrics = st.columns(3)
+    metrics[0].metric("Chat Ready", str(ready_count))
+    metrics[1].metric("Chat Exceptions", str(len(records)))
+    metrics[2].metric("Owner", "Creator OS")
+    if not records:
+        st.success("No Chat Commerce registration exceptions need attention.")
+        return
+    st.warning("Chat Commerce registration exceptions are excluded from runtime inventory.")
+    for index, record in enumerate(records, start=1):
+        st.caption(
+            " | ".join(
+                (
+                    f"Asset #{record.asset_id}",
+                    f"Status: {_chat_commerce_status_label(record)}",
+                    f"Destination: {record.commerce_destination or '-'}",
+                    f"Fulfillment Ready: {'Yes' if record.fulfillment_ready else 'No'}",
+                )
+            )
+        )
+        st.write(f"Business Asset #{record.asset_id}")
+        if record.block_reasons:
+            st.caption("Blocks: " + ", ".join(record.block_reasons))
+        if record.error_message:
+            st.warning(record.error_message)
+        if index < len(records):
+            st.divider()
+
+
+def _render_chat_commerce_inventory_summary() -> None:
+    try:
+        inventory = _chat_commerce_inventory_service().build_inventory(limit=250)
+    except Exception as error:
+        st.warning(f"Chat Commerce Inventory is unavailable: {error}")
+        return
+    summary = inventory.summary
+    metrics = st.columns(4)
+    metrics[0].metric("Chat Ready", str(summary.chat_ready))
+    metrics[1].metric("Waiting For Media Link", str(summary.waiting_for_media_link))
+    metrics[2].metric("Awaiting Destination", str(summary.awaiting_destination))
+    metrics[3].metric("Blocked", str(summary.blocked))
+
+    more = st.columns(4)
+    more[0].metric("Top Performing Assets", str(len(summary.top_performing_asset_ids)))
+    more[1].metric("Underperforming", str(len(summary.underperforming_asset_ids)))
+    more[2].metric("Disabled", str(len(summary.disabled_asset_ids)))
+    more[3].metric("Retired", str(len(summary.retired_asset_ids)))
+
+    if summary.attention_asset_ids:
+        st.warning(
+            "Assets needing creator attention: "
+            + ", ".join(f"#{asset_id}" for asset_id in summary.attention_asset_ids[:12])
+        )
+    else:
+        st.success("No Chat Commerce inventory items currently require creator action.")
+
+    if summary.top_performing_asset_ids:
+        st.caption(
+            "Top performers: "
+            + ", ".join(f"#{asset_id}" for asset_id in summary.top_performing_asset_ids)
+        )
+    if summary.underperforming_asset_ids:
+        st.caption(
+            "Underperforming: "
+            + ", ".join(f"#{asset_id}" for asset_id in summary.underperforming_asset_ids[:12])
+        )
+    if st.button(
+        "Open Asset Library",
+        key="creator_hq_open_asset_library_from_inventory",
+        use_container_width=True,
+    ):
+        _navigate("Asset Library")
+
+
+def _render_commerce_performance_center() -> None:
+    commerce = _creator_hq_commerce_projection()
+    profiles = tuple(commerce.get("profiles") or ())
+    if not profiles:
+        st.caption("Business Learning has not recorded Asset performance yet.")
+        return
+
+    top_revenue = sorted(
+        profiles,
+        key=lambda item: int(getattr(item, "net_revenue_cents", 0) or 0),
+        reverse=True,
+    )
+    top_conversion = sorted(
+        profiles,
+        key=lambda item: float(getattr(item, "conversion_rate", 0.0) or 0.0),
+        reverse=True,
+    )
+    most_recommended = sorted(
+        profiles,
+        key=lambda item: int(getattr(item, "recommendation_count", 0) or 0),
+        reverse=True,
+    )
+    highest_confidence = sorted(
+        profiles,
+        key=lambda item: float(getattr(item, "confidence", 0.0) or 0.0),
+        reverse=True,
+    )
+    fastest = sorted(
+        profiles,
+        key=lambda item: float(
+            getattr(item, "average_purchase_delay_seconds", 10**12) or 10**12
+        ),
+    )
+    underperforming = sorted(
+        profiles,
+        key=lambda item: float(getattr(item, "score", 0.0) or 0.0),
+    )
+
+    st.markdown("#### Top Performers")
+    rows = (
+        ("Top Revenue Assets", top_revenue, "net_revenue_cents"),
+        ("Top Conversion Assets", top_conversion, "conversion_rate"),
+        ("Most Recommended Assets", most_recommended, "recommendation_count"),
+        ("Highest Confidence Assets", highest_confidence, "confidence"),
+        ("Fastest Converting Assets", fastest, "average_purchase_delay_seconds"),
+        ("Highest Customer Satisfaction", highest_confidence, "confidence"),
+    )
+    for row in range(0, len(rows), 3):
+        columns = st.columns(3)
+        for column, (label, values, field) in zip(columns, rows[row : row + 3]):
+            profile = values[0] if values else None
+            column.metric(label, _profile_metric(profile, field))
+            if profile is not None:
+                column.caption(f"Asset #{profile.asset_id}")
+
+    st.markdown("#### Underperformers")
+    weak = (
+        ("Lowest Conversion", top_conversion[-1:] if top_conversion else (), "conversion_rate"),
+        ("Most Rejected", sorted(profiles, key=lambda item: getattr(item, "rejected_count", 0), reverse=True), "rejected_count"),
+        ("Highest Suppression", sorted(profiles, key=lambda item: getattr(item, "suppressed_count", 0), reverse=True), "suppressed_count"),
+        ("Lowest Revenue", sorted(profiles, key=lambda item: getattr(item, "net_revenue_cents", 0)), "net_revenue_cents"),
+        ("Oldest Never Recommended", tuple(profile for profile in profiles if not getattr(profile, "recommendation_count", 0)), "sample_size"),
+        ("Stale Assets", sorted(profiles, key=lambda item: str(getattr(item, "evidence_freshness", "") or "")), "evidence_freshness"),
+    )
+    for row in range(0, len(weak), 3):
+        columns = st.columns(3)
+        for column, (label, values, field) in zip(columns, weak[row : row + 3]):
+            profile = values[0] if values else None
+            column.metric(label, _profile_metric(profile, field))
+            if profile is not None:
+                column.caption(f"Asset #{profile.asset_id}")
+
+
+def _profile_metric(profile: Any | None, field: str) -> str:
+    if profile is None:
+        return "-"
+    value = getattr(profile, field, None)
+    if field.endswith("_cents"):
+        return _currency(int(value or 0))
+    if field.endswith("_rate") or field == "confidence":
+        return f"{float(value or 0.0):.1%}"
+    if field.endswith("_seconds"):
+        if value in (None, ""):
+            return "Unknown"
+        return f"{float(value):.0f}s"
+    return str(value if value not in (None, "") else "-")
+
+
+def _render_recommendation_insights() -> None:
+    commerce = _creator_hq_commerce_projection()
+    profiles = tuple(commerce.get("profiles") or ())
+    events = tuple(commerce.get("events") or ())
+    if not profiles and not events:
+        st.caption("Recommendation insights will appear after recommendations run.")
+        return
+    ranked = sorted(
+        profiles,
+        key=lambda item: float(getattr(item, "score", 0.0) or 0.0),
+        reverse=True,
+    )
+    for profile in ranked[:5]:
+        st.caption(
+            " | ".join(
+                (
+                    f"Asset #{profile.asset_id}",
+                    f"Score: {profile.score:.2f}",
+                    f"Confidence: {profile.confidence:.2f}",
+                    f"Sample: {profile.sample_size}",
+                )
+            )
+        )
+        st.write("Business Learning evidence")
+        st.caption(
+            " | ".join(
+                (
+                    f"Recommendations: {profile.recommendation_count}",
+                    f"Purchases: {profile.purchase_count}",
+                    f"Revenue: {_currency(profile.net_revenue_cents)}",
+                    f"Suppression: {profile.suppressed_count}",
+                    f"Failures: {profile.delivery_failure_count}",
+                )
+            )
+        )
+    suppressed = tuple(
+        event
+        for event in events
+        if event.get("event_state") in {"SUPPRESSED", "REJECTED"}
+    )
+    if suppressed:
+        st.markdown("#### Suppression And Rejection Reasons")
+        for event in suppressed[:5]:
+            reasons = event.get("suppression_reasons") or event.get(
+                "rejected_candidate_reasons"
+            ) or ()
+            st.caption(
+                f"Asset #{event.get('asset_id')} | {event.get('event_state')} | "
+                + ", ".join(str(reason) for reason in reasons)
+            )
+
+
+def _render_commerce_learning_timeline() -> None:
+    commerce = _creator_hq_commerce_projection()
+    events = [
+        {
+            "timestamp": event.get("event_timestamp"),
+            "source": "Content Commerce Learning",
+            "title": event.get("event_state"),
+            "detail": (
+                f"Asset #{event.get('asset_id')} | "
+                f"Recommendation {event.get('recommendation_id') or '-'}"
+            ),
+        }
+        for event in commerce.get("events", ())
+    ]
+    events.extend(
+        {
+            "timestamp": outcome.get("occurred_at") or outcome.get("timestamp"),
+            "source": "Business Learning",
+            "title": outcome.get("outcome_type"),
+            "detail": (
+                f"Asset #{outcome.get('subject_id')} | "
+                f"Value {_currency(outcome.get('value_cents'))}"
+            ),
+        }
+        for outcome in commerce.get("outcomes", ())
+    )
+    ordered = sorted(
+        events,
+        key=lambda item: str(item.get("timestamp") or ""),
+        reverse=True,
+    )
+    if not ordered:
+        st.caption("Recommendation, delivery, purchase, and learning activity will appear here.")
+        return
+    for index, event in enumerate(ordered[:8]):
+        st.caption(f"{event['source']} | {event.get('timestamp') or '-'}")
+        st.write(event["title"] or "Commerce activity")
+        st.caption(event["detail"])
+        if index < min(len(ordered), 8) - 1:
+            st.divider()
 
 
 def _creator_display_name(creator_profile: dict | None) -> str:
@@ -261,8 +878,48 @@ def _render_creator_agent_entry(active_account: dict | None = None) -> None:
 
 def _render_business_health(dashboard) -> None:
     optimization = dashboard.summary("Business Optimization")
+    commerce = _creator_hq_commerce_projection()
+    summary = commerce.get("summary")
+    failed_learning = len(commerce.get("failed_learning", ()))
+    delivery_failures = int(commerce.get("delivery_failures") or 0)
+    recommendation_failures = int(commerce.get("recommendation_failures") or 0)
+    learning_profiles = tuple(commerce.get("profiles") or ())
+    learning_health = "OK" if not failed_learning else "Attention"
+    recommendation_health = "OK" if not recommendation_failures else "Attention"
+    fulfillment_health = (
+        "OK"
+        if not getattr(summary, "waiting_for_media_link", 0)
+        and not delivery_failures
+        else "Attention"
+    )
+    inventory_health = (
+        "OK"
+        if summary is not None and not getattr(summary, "blocked", 0)
+        else "Attention"
+    )
+    avg_confidence = (
+        sum(float(getattr(profile, "confidence", 0.0) or 0.0) for profile in learning_profiles)
+        / len(learning_profiles)
+        if learning_profiles
+        else 0.0
+    )
+    freshness = max(
+        (
+            str(getattr(profile, "evidence_freshness", "") or "")
+            for profile in learning_profiles
+        ),
+        default="-",
+    )
     rows = (
         ("Overall Business Health", _metric_value(optimization, "Overall Business Health")),
+        ("Recommendation Health", recommendation_health),
+        ("Learning Health", learning_health),
+        ("Fulfillment Health", fulfillment_health),
+        ("Publishing Health", _metric_value(optimization, "Publishing Readiness")),
+        ("Chat Inventory Health", inventory_health),
+        ("Revenue Trend", _currency(commerce.get("revenue_today_cents"))),
+        ("Recommendation Confidence", f"{avg_confidence:.2f}"),
+        ("Learning Freshness", freshness or "-"),
         ("Publishing Health", _metric_value(optimization, "Publishing Readiness")),
         ("Product Health", _metric_value(optimization, "Product Health")),
         ("Customer Health", _metric_value(optimization, "Customer Health")),
@@ -452,6 +1109,7 @@ def _render_creator_attention(dashboard) -> None:
     categories = (
         "Publishing",
         "Products",
+        "Customer Conversations",
         "Customers",
         "Telegram",
         "AI Review",
@@ -518,6 +1176,8 @@ def _creator_attention_items(dashboard) -> tuple[dict[str, str], ...]:
     customer_business = dashboard.summary("Customer Business")
     telegram = dashboard.summary("Telegram Operations")
     optimization = dashboard.summary("Business Optimization")
+    commerce = _creator_hq_commerce_projection()
+    summary = commerce.get("summary")
     items: list[dict[str, str]] = []
 
     def add(
@@ -555,6 +1215,66 @@ def _creator_attention_items(dashboard) -> tuple[dict[str, str], ...]:
         action="Review Media Links",
         target="Publishing Queue",
         source="Publishing",
+    )
+    add(
+        category="Customer Conversations",
+        title="Business Assets waiting for Fanvue Media Links",
+        count=str(_creator_fulfillment_attention_count()),
+        detail="Approved Business Assets need creator-submitted Fanvue Media Links before fulfillment can become ready.",
+        severity="warning",
+        action="Review Fulfillment Queue",
+        target="Creator HQ",
+        source="Fulfillment Registration",
+    )
+    add(
+        category="Customer Conversations",
+        title="Chat Commerce registration exceptions",
+        count=str(_creator_chat_registration_attention_count()),
+        detail="Blocked, unavailable, or retired Chat Commerce registrations are excluded from runtime inventory.",
+        severity="warning",
+        action="Review Chat Commerce",
+        target="Creator HQ",
+        source="Chat Commerce Registration",
+    )
+    add(
+        category="Customer Conversations",
+        title="Assets awaiting commerce destination",
+        count=str(getattr(summary, "awaiting_destination", 0)),
+        detail="Approved Business Assets need a creator-selected commerce destination.",
+        severity="warning",
+        action="Change Destination",
+        target="Asset Library",
+        source="Commerce Destination",
+    )
+    add(
+        category="Customer Conversations",
+        title="Delivery failures",
+        count=str(commerce.get("delivery_failures", 0)),
+        detail="Chat Commerce Delivery has blocked or failed delivery events.",
+        severity="critical",
+        action="Review Delivery Timeline",
+        target="Creator HQ",
+        source="Chat Commerce Delivery",
+    )
+    add(
+        category="AI Review",
+        title="Recommendation exceptions",
+        count=str(commerce.get("recommendation_failures", 0)),
+        detail="Recommendations were rejected, suppressed, or expired and should be reviewed for business learning signals.",
+        severity="warning",
+        action="Review Recommendation Insights",
+        target="Creator HQ",
+        source="Content Recommendation",
+    )
+    add(
+        category="Business Risks",
+        title="Learning failures",
+        count=str(len(commerce.get("failed_learning", ()))),
+        detail="Content Commerce Learning recorded failed learning events that remain retryable.",
+        severity="critical",
+        action="Review Learning Health",
+        target="Creator HQ",
+        source="Business Learning",
     )
     add(
         category="Publishing",
@@ -707,10 +1427,26 @@ def _render_opportunities(dashboard) -> None:
         if recommendations:
             optimization_opportunity = recommendations[0].recommended_action
         revenue_opportunity = optimization_card.revenue_readiness
+    commerce = _creator_hq_commerce_projection()
+    summary = commerce.get("summary")
+    profiles = tuple(commerce.get("profiles") or ())
+    weak_profiles = tuple(
+        profile for profile in profiles if float(getattr(profile, "score", 0.0) or 0.0) < 0
+    )
+    high_demand = tuple(
+        profile
+        for profile in profiles
+        if int(getattr(profile, "purchase_count", 0) or 0) > 0
+        and int(getattr(profile, "recommendation_count", 0) or 0) > 0
+    )
     rows = (
         ("Best Product opportunity", product_opportunity),
         ("Customer growth opportunity", customer_opportunity),
         ("Publishing opportunity", _metric_value(publishing, "Waiting For Media Link")),
+        ("Assets needing Media Links", str(getattr(summary, "waiting_for_media_link", 0))),
+        ("High-demand themes", str(len(high_demand))),
+        ("Products needing expansion", str(len(weak_profiles))),
+        ("Strong upsell opportunities", str(len(getattr(summary, "top_performing_asset_ids", ())))),
         ("Revenue opportunity", revenue_opportunity),
         ("Business Optimization recommendation", optimization_opportunity),
     )
@@ -740,14 +1476,55 @@ def _render_quick_navigation() -> None:
             _navigate(target)
 
 
+def _render_system_health_widget() -> None:
+    report = SystemHealthService().build_report()
+    runtime = report.section("Runtime")
+    providers = report.section("Provider Connectivity")
+    storage = report.section("Storage")
+    dependencies = report.section("Dependencies")
+
+    def section_status(section):
+        return "OK" if section and section.status == "healthy" else "Attention"
+
+    with st.container(border=True):
+        left, right = st.columns([3, 1])
+        with left:
+            st.markdown("**System Health**")
+            st.caption(f"Runtime: {section_status(runtime)}")
+            st.caption(f"Providers: {section_status(providers)}")
+            st.caption(f"Storage: {section_status(storage)}")
+            st.caption(f"Dependencies: {section_status(dependencies)}")
+            st.metric("Overall", f"{report.score}%")
+        with right:
+            st.caption(report.headline)
+            if st.button("Open System Health", key="creator_hq_open_system_health", use_container_width=True):
+                _navigate("System Health")
+
+
 def _render_dashboard_snapshot(dashboard) -> None:
     assets = dashboard.summary("Assets")
     experiences = dashboard.summary("Experiences")
     products = dashboard.summary("Products")
     publishing = dashboard.summary("Publishing")
     notifications = dashboard.summary("Notifications")
+    commerce = _creator_hq_commerce_projection()
+    summary = commerce.get("summary")
     rows = (
         ("Assets", _metric_value(assets, "Total Assets")),
+        ("Total Business Assets", str(getattr(summary, "total_business_assets", 0))),
+        ("Chat Ready Assets", str(getattr(summary, "chat_ready", 0))),
+        ("Recommendation Ready Assets", str(getattr(summary, "recommendation_ready", 0))),
+        ("Fulfillment Ready Assets", str(getattr(summary, "fulfillment_ready", 0))),
+        ("Waiting For Media Links", str(getattr(summary, "waiting_for_media_link", 0))),
+        ("Awaiting Destination", str(getattr(summary, "awaiting_destination", 0))),
+        ("Blocked Assets", str(getattr(summary, "blocked", 0))),
+        ("Temporarily Unavailable", str(getattr(summary, "temporarily_unavailable", 0))),
+        ("Retired Assets", str(getattr(summary, "retired", 0))),
+        ("Recommendations Today", str(commerce.get("recommendations_today", 0))),
+        ("Deliveries Today", str(commerce.get("deliveries_today", 0))),
+        ("Purchases Today", str(commerce.get("purchases_today", 0))),
+        ("Revenue Today", _currency(commerce.get("revenue_today_cents"))),
+        ("Conversion Rate", f"{float(commerce.get('conversion_rate') or 0.0):.1%}"),
         ("Experiences", _metric_value(experiences, "Total Experiences")),
         ("Products", _metric_value(products, "Total Products")),
         ("Ready To Publish", _metric_value(publishing, "Ready To Publish")),
@@ -1770,6 +2547,8 @@ def render_creator_workspace(
         else:
             st.warning("Creator profile is missing.")
 
+    _render_system_health_widget()
+
     _render_runtime_control_panel(
         dashboard,
         creator_profile=creator_profile,
@@ -1813,6 +2592,24 @@ def render_creator_workspace(
     st.markdown("### Publishing Operations")
     _render_publishing_operations(dashboard)
 
+    st.markdown("### Waiting For Media Links")
+    _render_fulfillment_media_link_queue(
+        active_account=active_account,
+        creator_profile=creator_profile,
+    )
+
+    st.markdown("### Chat Commerce Registration")
+    _render_chat_commerce_registration_exceptions()
+
+    st.markdown("### Chat Commerce Inventory")
+    _render_chat_commerce_inventory_summary()
+
+    st.markdown("### Commerce Performance")
+    _render_commerce_performance_center()
+
+    st.markdown("### Recommendation Insights")
+    _render_recommendation_insights()
+
     st.markdown("### Telegram Operations")
     _render_telegram_operations(dashboard)
 
@@ -1826,7 +2623,8 @@ def render_creator_workspace(
     _render_content_opportunity_center(dashboard)
 
     st.markdown("### Business Learning")
-    st.caption("Business Learning evidence is consumed through Business Optimization and Creator Agent read models.")
+    st.caption("Business Learning evidence powers autonomous commerce visibility and future recommendation ranking.")
+    _render_commerce_learning_timeline()
 
     st.markdown("### Creator Workflow")
     _render_creator_workflow(dashboard.workflow_items)

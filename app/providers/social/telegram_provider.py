@@ -25,6 +25,13 @@ class TelegramPublishError(RuntimeError):
 
 
 @dataclass(frozen=True)
+class TelegramDependencyDiagnostic:
+    configured: bool
+    status: str
+    missing: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
 class TelegramPublishResult:
     success: bool
     post_to: str
@@ -82,6 +89,22 @@ class TelegramPublishingProvider:
             "dmgate_url": str(settings.DMGATE_URL_AVA or "").strip(),
             "fanvue_url": str(settings.AVA_FANVUE_URL or "").strip(),
         }
+
+    @classmethod
+    def runtime_dependency_diagnostic(cls, config: Mapping[str, str] | None = None) -> TelegramDependencyDiagnostic:
+        values = dict(config or cls.load_telegram_env())
+        required = {
+            "bot_token": values.get("bot_token", ""),
+            "main_chat_id": values.get("main_chat_id", ""),
+        }
+        missing = tuple(key for key, value in required.items() if not str(value or "").strip())
+        if missing:
+            return TelegramDependencyDiagnostic(
+                configured=False,
+                status="Authentication Required",
+                missing=missing,
+            )
+        return TelegramDependencyDiagnostic(configured=True, status="Ready")
 
     @staticmethod
     def get_chat_id(config: Mapping[str, str], post_to: str | None) -> str:

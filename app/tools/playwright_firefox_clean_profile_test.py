@@ -18,7 +18,7 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright
 
 
-DEFAULT_PROFILE_DIR = Path(r"C:\Fanvue-Chatbot\data\playwright\fanvue_playwright_profile")
+DEFAULT_PROFILE_DIR = Path("data/playwright/fanvue_playwright_profile")
 DEFAULT_FIREFOX_EXECUTABLE = Path(
     r"C:\Program Files\Mozilla Firefox\firefox.exe"
 )

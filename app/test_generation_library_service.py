@@ -35,6 +35,7 @@ from app.models.generation_ingestion import GenerationResultIngestionResult
 from app.models.generation_library import GenerationLibraryFilter
 from app.services.content_archive_service import ContentArchiveService
 from app.services.generation_library_service import GenerationLibraryService
+from app.services.photoshoot_queue_service import PhotoshootQueueService
 
 
 def successful_job(
@@ -164,7 +165,7 @@ class GenerationLibraryServiceTests(unittest.TestCase):
         self.assertEqual(result.records[0].photoshoot_session_id, "photoshoot_1")
         self.assertTrue(Path(result.records[0].output_reference).exists())
         self.assertIn("Generation", result.records[0].output_reference)
-        self.assertIn("Social", result.records[0].output_reference)
+        self.assertIn("Active", result.records[0].output_reference)
         original_references = {
             record.generation_metadata["original_output_reference"]
             for record in result.records
@@ -190,7 +191,7 @@ class GenerationLibraryServiceTests(unittest.TestCase):
 
         self.assertEqual(searched.total, 2)
         self.assertTrue(all(record.creative_mode == "premium_editorial" for record in searched.records))
-        self.assertTrue(all("Premium" in record.output_reference for record in searched.records))
+        self.assertTrue(all("Active" in record.output_reference for record in searched.records))
         self.assertEqual(provider.total, 2)
         self.assertEqual(photoshoot.total, 2)
         self.assertEqual(sorted_result.records[0].provider_id, "flux")
@@ -252,6 +253,33 @@ class GenerationLibraryServiceTests(unittest.TestCase):
         self.assertIn("Archive", archive_record.destination)
         self.assertIn("Imported", archive_record.destination)
 
+    def test_creator_approval_wrapper_is_idempotent_without_removing_record(self):
+        job = successful_job()
+        service = self.make_service()
+        record = service.sync_job(job)[0]
+        engine = FakeGenerationEngine(job)
+        ingestion = FakeIngestionService()
+
+        first = service.approve_creator_content(
+            (record.image_id,),
+            source_workflow="generation_library",
+            generation_engine=engine,
+            ingestion_service=ingestion,
+        )
+        second = service.approve_creator_content(
+            (record.image_id,),
+            source_workflow="generation_library",
+            generation_engine=engine,
+            ingestion_service=ingestion,
+        )
+
+        self.assertTrue(first.success)
+        self.assertTrue(second.success)
+        self.assertEqual(first.imported_asset_ids, (501,))
+        self.assertEqual(second.imported_asset_ids, (501,))
+        self.assertEqual(len(ingestion.jobs), 1)
+        self.assertEqual(service.get(record.image_id).imported_asset_id, 501)
+
     def test_failed_add_to_creator_os_preserves_library_record(self):
         job = successful_job()
         service = self.make_service()
@@ -305,6 +333,11 @@ class GenerationLibraryServiceTests(unittest.TestCase):
         self.assertIn("Posted", archive_record.current_file_path)
         self.assertIn("X", archive_record.current_file_path)
         self.assertIn("Main", archive_record.current_file_path)
+        self.assertEqual(
+            Path(archive_record.current_file_path).parent,
+            service.archive_service.content_root / "Posted" / "X" / "Main",
+        )
+        self.assertTrue(Path(archive_record.current_file_path).exists())
         self.assertEqual(archive_record.provider_id, "seedream_4_5")
         self.assertEqual(archive_record.prompt_text, record.prompt_text)
 
@@ -330,14 +363,180 @@ class GenerationLibraryServiceTests(unittest.TestCase):
 
     def test_telegram_publish_moves_to_posted_telegram(self):
         service = self.make_service()
-        record = service.sync_job(successful_job())[0]
+        job = successful_job(output_references=("https://cdn.test/generated-telegram.png",))
+        record = service.sync_job(job)[0]
+        active_path = Path(record.output_reference)
 
         action = service.mark_published(record.image_id, platform="telegram", caption="Telegram caption")
+        recreated = service.sync_job(job)
+        result = service.browse(GenerationLibraryFilter(status="active"))
 
         self.assertTrue(action.success)
         archive_record = service.archive_service.list_records(archive_type="published_telegram")[0]
         self.assertEqual(archive_record.platform, "Telegram")
         self.assertIn("Telegram", archive_record.current_file_path)
+        self.assertIn("Main", archive_record.current_file_path)
+        self.assertEqual(
+            Path(archive_record.current_file_path).parent,
+            service.archive_service.content_root / "Posted" / "Telegram" / "Main",
+        )
+        self.assertTrue(Path(archive_record.current_file_path).exists())
+        self.assertFalse(active_path.exists())
+        self.assertEqual(recreated, ())
+        self.assertEqual(result.total, 0)
+        with self.assertRaises(KeyError):
+            service.get(record.image_id)
+
+    def test_telegram_vault_publish_moves_to_posted_telegram_vault(self):
+        service = self.make_service()
+        job = successful_job(
+            job_id="telegram_vault_job",
+            output_references=("https://cdn.test/generated-telegram-vault.png",),
+        )
+        record = service.sync_job(job)[0]
+
+        action = service.mark_published(
+            record.image_id,
+            platform="telegram",
+            caption="Telegram vault caption",
+            metadata={"post_to": "vault"},
+        )
+
+        self.assertTrue(action.success)
+        archive_record = service.archive_service.list_records(archive_type="published_telegram")[0]
+        self.assertEqual(archive_record.platform, "Telegram")
+        self.assertEqual(
+            Path(archive_record.current_file_path).parent,
+            service.archive_service.content_root / "Posted" / "Telegram" / "Vault",
+        )
+        self.assertTrue(Path(archive_record.current_file_path).exists())
+
+    def test_generation_library_image_can_be_added_to_photoshoot_queue_once(self):
+        service = self.make_service()
+        queue_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(queue_dir.cleanup)
+        photoshoot_queue = PhotoshootQueueService(storage_dir=queue_dir.name)
+        record = service.sync_job(successful_job(output_references=("https://cdn.test/photoshoot-source.png",)))[0]
+
+        request, created = photoshoot_queue.queue_generated_image(record)
+        duplicate_request, duplicate_created = photoshoot_queue.queue_generated_image(record)
+        result = service.browse(GenerationLibraryFilter(status="active"))
+
+        self.assertTrue(created)
+        self.assertFalse(duplicate_created)
+        self.assertEqual(request.request_id, duplicate_request.request_id)
+        self.assertEqual(len(photoshoot_queue.list_sessions()), 1)
+        self.assertEqual(len(photoshoot_queue.list_requests()), 1)
+        self.assertEqual(request.status, "awaiting_review")
+        self.assertEqual(request.metadata["generated_image_ids"], (record.image_id,))
+        self.assertEqual(result.total, 1)
+        self.assertEqual(result.records[0].image_id, record.image_id)
+
+    def test_video_queue_moves_asset_to_pending_video(self):
+        service = self.make_service()
+        record = service.sync_job(successful_job(output_references=("https://cdn.test/video-source.png",)))[0]
+
+        pending = service.send_to_pending_video(record.image_id)
+        active = service.browse(GenerationLibraryFilter(status="active"))
+        video_queue = service._read_json(service.video_queue_path, [])
+
+        self.assertEqual(pending.status, "pending_video")
+        self.assertEqual(pending.review_state, "pending_video")
+        self.assertIn("Pending_Video", pending.output_reference)
+        self.assertTrue(Path(pending.output_reference).exists())
+        self.assertEqual(active.total, 0)
+        self.assertEqual(len(video_queue), 1)
+        self.assertEqual(video_queue[0]["image_id"], record.image_id)
+        self.assertEqual(video_queue[0]["workflow"], "video")
+
+    def test_missing_active_file_is_hidden_and_not_publishable(self):
+        service = self.make_service()
+        record = service.sync_job(successful_job(output_references=("https://cdn.test/missing-active.png",)))[0]
+        Path(record.output_reference).unlink()
+
+        active = service.browse(GenerationLibraryFilter(status="active"))
+        publishable = service.resolve_publishable_image_reference(record.image_id)
+
+        self.assertEqual(active.total, 0)
+        self.assertIsNone(publishable)
+
+    def test_pending_photoshoot_sync_does_not_recreate_active_record_and_return_restores_publishable_path(self):
+        service = self.make_service()
+        job = successful_job(output_references=("https://cdn.test/photoshoot-pending.png",))
+        record = service.sync_job(job)[0]
+
+        pending = service.send_to_pending_photoshoot(record.image_id)
+        recreated = service.sync_job(job)
+        active_while_pending = service.browse(GenerationLibraryFilter(status="active"))
+        publishable_while_pending = service.resolve_publishable_image_reference(record.image_id)
+        returned = service.return_photoshoot_seed_to_library(record.image_id)
+        active_after_return = service.browse(GenerationLibraryFilter(status="active"))
+        publishable_after_return = service.resolve_publishable_image_reference(record.image_id)
+
+        self.assertEqual(pending.status, "pending_photoshoot")
+        self.assertEqual(recreated, ())
+        self.assertEqual(active_while_pending.total, 0)
+        self.assertIsNone(publishable_while_pending)
+        self.assertTrue(returned.success)
+        self.assertEqual(active_after_return.total, 1)
+        self.assertIsNotNone(publishable_after_return)
+        self.assertTrue(Path(publishable_after_return).exists())
+
+    def test_photoshoot_session_records_stay_hidden_after_completion(self):
+        service = self.make_service()
+        seed, shot = service.sync_job(
+            successful_job(
+                output_references=(
+                    "https://cdn.test/photoshoot-seed.png",
+                    "https://cdn.test/photoshoot-shot.png",
+                )
+            )
+        )
+
+        pending_seed = service.send_to_pending_photoshoot(seed.image_id)
+        isolated = service.mark_photoshoot_session_records((shot.image_id,), session_id="photoshoot_1")
+        active_before_finish = service.browse(GenerationLibraryFilter(status="active"))
+        finish = service.finish_photoshoot_session(
+            session_id="photoshoot_1",
+            approved_image_ids=(pending_seed.image_id, shot.image_id),
+        )
+        active_after_finish = service.browse(GenerationLibraryFilter(status="active"))
+
+        self.assertEqual(pending_seed.status, "pending_photoshoot")
+        self.assertIn("Pending_Photoshoot", pending_seed.output_reference)
+        self.assertTrue(isolated.success)
+        self.assertEqual(active_before_finish.total, 0)
+        self.assertTrue(finish.success)
+        completed = {record.image_id: record for record in service.list_records() if record.image_id in {seed.image_id, shot.image_id}}
+
+        self.assertEqual(set(finish.image_ids), {seed.image_id, shot.image_id})
+        self.assertEqual(active_after_finish.total, 0)
+        self.assertEqual({record.status for record in completed.values()}, {"photoshoot_completed"})
+        self.assertTrue(all(record.photoshoot_session_id == "photoshoot_1" for record in completed.values()))
+
+    def test_return_photoshoot_seed_keeps_active_image_once_and_discards_candidate(self):
+        service = self.make_service()
+        created = service.sync_job(
+            successful_job(
+                output_references=(
+                    "https://cdn.test/photoshoot-seed.png",
+                    "https://cdn.test/photoshoot-candidate.png",
+                )
+            )
+        )
+        seed, candidate = created
+
+        returned = service.return_photoshoot_seed_to_library(seed.image_id)
+        discarded = service.discard_temporary_records((candidate.image_id,))
+        active = service.browse(GenerationLibraryFilter(status="active"))
+
+        self.assertTrue(returned.success)
+        self.assertTrue(discarded.success)
+        self.assertEqual(discarded.image_ids, (candidate.image_id,))
+        self.assertEqual(active.total, 1)
+        self.assertEqual(active.records[0].image_id, seed.image_id)
+        with self.assertRaises(KeyError):
+            service.get(candidate.image_id)
 
     def test_edit_original_moves_to_archive_edited(self):
         service = self.make_service()
@@ -357,10 +556,25 @@ class GenerationLibraryServiceTests(unittest.TestCase):
         source = Path("app/dashboard/pages/content_studio.py").read_text(encoding="utf-8")
         navigation = Path("app/dashboard/navigation.py").read_text(encoding="utf-8")
         main = Path("app/dashboard/main.py").read_text(encoding="utf-8")
+        content_studio_navigation = navigation.split(
+            'DashboardNavigationGroup(\n        "Content Creation"',
+            1,
+        )[1].split(
+            'DashboardNavigationGroup(\n        "Experiences"',
+            1,
+        )[0]
 
         self.assertIn("Generation Library", source)
+        generation_library_source = source.split("def _render_generation_library(", 1)[1].split(
+            "def _render_archive_page",
+            1,
+        )[0]
+        gallery_source = source.split("page_size = 18", 1)[1].split(
+            "def _render_archive_page",
+            1,
+        )[0]
         self.assertIn("Archive", source)
-        self.assertIn("Permanent Content Studio history", source)
+        self.assertIn("Permanent Content Creation history", source)
         self.assertIn("_render_archive_page", source)
         self.assertIn("Published - X", source)
         self.assertIn("Published - Telegram", source)
@@ -368,21 +582,79 @@ class GenerationLibraryServiceTests(unittest.TestCase):
         self.assertIn("Imported", source)
         self.assertIn("Junk", source)
         self.assertIn("Permanent Delete", source)
-        self.assertIn("Thumbnail Grid", source)
         self.assertIn("Preview", source)
-        self.assertIn("Page Size", source)
-        self.assertIn("Page {int(page_number)}", source)
-        self.assertIn("Multi-select", source)
-        self.assertIn("Add to Creator OS", source)
-        self.assertIn("Both", source)
-        self.assertIn("Move to Junk", source)
-        self.assertIn("Restore", source)
-        self.assertIn("Delete", source)
-        self.assertIn("Archive", source)
-        self.assertIn("Multi Edit", source)
-        self.assertIn("Regenerate", source)
+        self.assertNotIn("Preview", generation_library_source)
+        self.assertIn("page_size = 18", generation_library_source)
+        self.assertIn("generation_library_pagination_top", generation_library_source)
+        self.assertIn("generation_library_pagination_bottom", generation_library_source)
+        self.assertIn("◀ Previous", source)
+        self.assertIn("Next ▶", source)
+        self.assertIn("current_page <= 1", source)
+        self.assertIn("current_page >= total_pages", source)
+        self.assertNotIn("Thumbnail Grid", generation_library_source)
+        self.assertNotIn("Page Size", generation_library_source)
+        self.assertNotIn("number_input", generation_library_source)
+        self.assertNotIn("Page {int(page_number)}", generation_library_source)
+        for removed_control in (
+            'text_input("Search"',
+            'selectbox("Provider"',
+            'selectbox("Status"',
+            'selectbox("Creative Mode"',
+            '"Photoshoot Session"',
+            '"Sort"',
+            "generated image(s)",
+            '"Multi-select"',
+            '"Social Platform"',
+            '"Add to Creator OS"',
+            '"Move to Junk"',
+            '"Restore"',
+            '"Archive"',
+            '"Multi Edit"',
+            '"Regenerate"',
+            '"Send to Social Publishing"',
+            '"Both"',
+        ):
+            self.assertNotIn(removed_control, generation_library_source)
+        self.assertNotIn('key="generation_library_delete"', generation_library_source)
+        self.assertIn('a1.button("🚀"', generation_library_source)
+        self.assertIn('help="Publish"', generation_library_source)
+        self.assertIn('a2.button("✏️"', generation_library_source)
+        self.assertIn('help="Edit Image"', generation_library_source)
+        self.assertIn('a3.button("📸"', generation_library_source)
+        self.assertIn('help="Create Photoshoot"', generation_library_source)
+        self.assertIn('a4.button("🎬"', generation_library_source)
+        self.assertIn('help="Create Story"', generation_library_source)
+        self.assertIn('a5.button("🎥"', generation_library_source)
+        self.assertIn('help="Create Video"', generation_library_source)
+        self.assertIn('a6.button("🗑️"', generation_library_source)
+        self.assertIn('help="Delete Image"', generation_library_source)
+        self.assertIn("generation_library.send_to_pending_photoshoot(record.image_id)", generation_library_source)
+        self.assertIn("photoshoot_queue.start_studio_session_from_generated_image(photoshoot_record)", generation_library_source)
+        self.assertNotIn("generation_library.send_to_pending_story(record.image_id)", generation_library_source)
+        self.assertIn("Story Studio has not been implemented yet.", generation_library_source)
+        self.assertIn("Your image remains safely in the Generation Library.", generation_library_source)
+        self.assertIn("generation_library.send_to_pending_video(record.image_id)", generation_library_source)
+        self.assertIn("Added to Photoshoot Studio.", generation_library_source)
+        self.assertIn("Image is already in Photoshoot Studio.", generation_library_source)
+        self.assertIn('st.session_state["dashboard_page"] = "Photoshoot Studio"', generation_library_source)
+        self.assertIn("PUBLISH_IMAGE_UNAVAILABLE_MESSAGE", source)
+        self.assertIn("_render_publish_image_preview(", source)
+        self.assertIn("generation_library.resolve_publishable_image_reference", source)
+        self.assertIn("disabled=not image_available", source)
+        self.assertIn("disabled=not selected_caption or bool(x_blocking_message) or not image_available", source)
+        self.assertIn("disabled=not selected_caption or not image_available", source)
+        self.assertLess(generation_library_source.index('a1.button("🚀"'), generation_library_source.index('a2.button("✏️"'))
+        self.assertLess(generation_library_source.index('a2.button("✏️"'), generation_library_source.index('a3.button("📸"'))
+        self.assertLess(generation_library_source.index('a3.button("📸"'), generation_library_source.index('a4.button("🎬"'))
+        self.assertLess(generation_library_source.index('a4.button("🎬"'), generation_library_source.index('a5.button("🎥"'))
+        self.assertLess(generation_library_source.index('a5.button("🎥"'), generation_library_source.index('a6.button("🗑️"'))
         self.assertIn("_render_generation_publish_modal", source)
         self.assertIn("_open_generation_publish_modal", source)
+        self.assertIn("GENERATION_LIBRARY_PUBLISH_TRANSIENT_KEYS", source)
+        self.assertIn("GENERATION_LIBRARY_PUBLISH_TRANSIENT_PREFIXES", source)
+        self.assertIn("def _clear_generation_publish_state", source)
+        self.assertIn("_clear_generation_publish_state()", source)
+        self.assertIn('if page_name != "Generation Library":', source)
         self.assertIn("Where would you like to publish this image?", source)
         self.assertIn("Publish to X", source)
         self.assertIn("Publish to Telegram", source)
@@ -390,14 +662,15 @@ class GenerationLibraryServiceTests(unittest.TestCase):
         self.assertIn("_render_telegram_publish_dialog", source)
         self.assertIn("Publish to Telegram", source)
         self.assertIn("generate_telegram_vision_themes", source)
-        self.assertIn("Caption Editor", source)
-        self.assertIn("Select a generated caption above or write your own.", source)
+        self.assertIn("Enter Your Own Caption", source)
+        self.assertIn("Type or paste your own Telegram caption here.", source)
         self.assertIn("_render_x_engagement_publish_dialog", source)
         self.assertIn("X Publish", source)
         self.assertIn("Generate Captions", source)
-        self.assertIn("Grok Vision analyzes the actual image first", source)
-        self.assertIn("Generate Different Ideas", source)
-        self.assertIn("Caption Editor", source)
+        self.assertIn("Grok Vision uses the image as context", source)
+        self.assertIn("Regenerate Captions", source)
+        self.assertIn("Enter Your Own Caption", source)
+        self.assertIn("Type or paste your own X caption here.", source)
         self.assertIn("Publish to AvaBlackthorne", source)
         self.assertIn('account_name="AvaBlackthorne"', source)
         self.assertIn("generate_x_engagement_themes", source)
@@ -408,11 +681,19 @@ class GenerationLibraryServiceTests(unittest.TestCase):
         self.assertIn("generation_library_publish_context", source)
         self.assertIn("generation_library_publish_destination", source)
         self.assertIn("generation_library_x_selected_caption", source)
+        self.assertIn('"generation_library_x_custom_caption_"', source)
+        self.assertIn('"generation_library_telegram_caption_"', source)
+        self.assertIn('"generation_library_telegram_post_to_"', source)
+        self.assertIn('"generation_library_telegram_cta_enabled_"', source)
+        self.assertIn('"generation_library_telegram_cta_label_"', source)
+        self.assertIn('"generation_library_telegram_cta_url_"', source)
+        self.assertIn('st.session_state.pop("generation_library_x_publish_message", None)', source)
+        self.assertIn("st.session_state.pop(message_key, None)", source)
         self.assertIn("generated_image_id", source)
         self.assertIn("image_reference", source)
         self.assertIn("prompt_metadata", source)
         self.assertIn("generation_metadata", source)
-        self.assertIn('a3.button("Publish"', source)
+        self.assertIn('a1.button("🚀"', generation_library_source)
         self.assertNotIn("Generated Image: {context", source)
         self.assertNotIn("Provider: {context", source)
         self.assertNotIn("Workflow: {context", source)
@@ -422,12 +703,40 @@ class GenerationLibraryServiceTests(unittest.TestCase):
         self.assertNotIn("Quick published from Generation Library.", source)
         self.assertNotIn("caption_studio.generate_for_social_queue(\n                    queue_item_id=item.queue_item_id", source)
         self.assertIn("Published to X", source)
-        self.assertIn("Open Prompt", source)
-        self.assertIn("Open Reference", source)
-        self.assertIn("Metadata", source)
-        self.assertIn("Provider Metadata", source)
+        self.assertNotIn("filename = (", gallery_source)
+        self.assertNotIn("st.write(filename)", gallery_source)
+        self.assertNotIn("st.write(record.image_id)", gallery_source)
+        self.assertNotIn("Open Prompt", gallery_source)
+        self.assertNotIn("Open Reference", gallery_source)
+        self.assertNotIn("Provider Metadata", gallery_source)
+        self.assertNotIn('with st.expander("Metadata"', gallery_source)
         self.assertIn("Generation Library", navigation)
         self.assertIn("Archive", navigation)
+        self.assertIn("Content Creation", navigation)
+        self.assertIn("📸", navigation)
+        expected_navigation_order = (
+            "Content Studio",
+            "Generation Library",
+            "Edit Studio",
+            "Photoshoot Studio",
+            "Reference Library",
+            "Archive",
+            "Diagnostics",
+        )
+        last_index = -1
+        for page_name in expected_navigation_order:
+            current_index = content_studio_navigation.index(page_name)
+            self.assertGreater(current_index, last_index)
+            last_index = current_index
+        for hidden_page_name in (
+            "Creative Director",
+            "Social Studio",
+            "Social Publishing",
+            "Caption Studio",
+            "Prompt History",
+            "Settings",
+        ):
+            self.assertNotIn(hidden_page_name, content_studio_navigation)
         self.assertIn("Generation Library", main)
 
 

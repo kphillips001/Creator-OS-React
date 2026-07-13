@@ -29,6 +29,7 @@ from app.models.publishing_automation import (
 )
 
 if TYPE_CHECKING:
+    from app.models.chat_commerce_registration import ChatCommerceAssetRecord
     from app.services.creator_review_optimization_service import (
         CreatorReviewOptimizationService,
     )
@@ -99,6 +100,7 @@ class CreatorAttentionService:
         publishing_projection: Any | None = None,
         publishing_job: Any | None = None,
         publishing_queue_item: Any | None = None,
+        chat_registration_records: tuple["ChatCommerceAssetRecord", ...] = (),
         metadata: Mapping[str, Any] | None = None,
     ) -> CreatorAttentionSummary:
         items = self.build_attention_items(
@@ -109,6 +111,7 @@ class CreatorAttentionService:
             publishing_projection=publishing_projection,
             publishing_job=publishing_job,
             publishing_queue_item=publishing_queue_item,
+            chat_registration_records=chat_registration_records,
         )
         ordered = self.prioritize_items(items)
         attention_required = any(item.attention_required for item in ordered)
@@ -142,6 +145,7 @@ class CreatorAttentionService:
         publishing_projection: Any | None = None,
         publishing_job: Any | None = None,
         publishing_queue_item: Any | None = None,
+        chat_registration_records: tuple["ChatCommerceAssetRecord", ...] = (),
     ) -> tuple[CreatorAttentionItem, ...]:
         resolved_lifecycle = self._resolve_lifecycle(lifecycle, workflow_snapshot)
         resolved_review = self._resolve_review_status(
@@ -163,6 +167,7 @@ class CreatorAttentionService:
         self._add_review_items(items, resolved_review)
         self._add_lifecycle_items(items, resolved_lifecycle, resolved_review)
         self._add_publishing_items(items, resolved_publishing)
+        self._add_chat_registration_items(items, chat_registration_records)
 
         deduped = self._dedupe_items(items)
         if not any(item.attention_required for item in deduped):
@@ -440,6 +445,65 @@ class CreatorAttentionService:
                     lifecycle=publishing_status.lifecycle,
                     title="Publishing verification required",
                     evidence=publishing_status.evidence,
+                )
+            )
+
+    def _add_chat_registration_items(
+        self,
+        items: list[CreatorAttentionItem],
+        chat_registration_records: tuple["ChatCommerceAssetRecord", ...],
+    ) -> None:
+        if not chat_registration_records:
+            return
+        from app.models.chat_commerce_registration import ChatAvailabilityState
+
+        for record in chat_registration_records:
+            if record.availability_state == ChatAvailabilityState.CHAT_READY:
+                continue
+            if record.availability_state == ChatAvailabilityState.RETIRED:
+                priority = CreatorAttentionPriority.NORMAL
+                action = "Review Retired Chat Asset"
+                title = "Chat Commerce asset retired"
+            elif record.temporarily_unavailable:
+                priority = CreatorAttentionPriority.HIGH
+                action = "Review Chat Availability"
+                title = "Chat Commerce asset unavailable"
+            else:
+                priority = CreatorAttentionPriority.HIGH
+                action = "Resolve Chat Registration"
+                title = "Chat Commerce registration blocked"
+            reason = record.error_message or (
+                ", ".join(record.block_reasons)
+                if record.block_reasons
+                else "Chat Commerce registration is not eligible for runtime inventory."
+            )
+            items.append(
+                CreatorAttentionItem(
+                    category=CreatorAttentionCategory.FAILURE,
+                    priority=priority,
+                    recommended_action=action,
+                    reason=reason,
+                    title=title,
+                    product_id=(
+                        str(record.product_ids[0]) if record.product_ids else None
+                    ),
+                    workflow_id=record.source_workflow,
+                    source="ChatCommerceRegistrationService",
+                    evidence={
+                        "asset_id": record.asset_id,
+                        "chat_registration_id": str(record.chat_registration_id),
+                        "availability_state": record.availability_state.value,
+                        "commerce_destination": record.commerce_destination,
+                        "fulfillment_ready": record.fulfillment_ready,
+                        "block_reasons": list(record.block_reasons),
+                    },
+                    compatibility={
+                        "read_only": True,
+                        "recommendation_only": True,
+                        "provider_neutral": True,
+                        "does_not_mutate_state": True,
+                        "source": "chat_commerce_registration",
+                    },
                 )
             )
 

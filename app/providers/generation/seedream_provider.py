@@ -20,15 +20,15 @@ class Seedream45Provider(WaveSpeedProviderBase):
     )
 
 
-class Seedream50LiteProvider(WaveSpeedProviderBase):
-    provider_id = "seedream_5_0_lite"
-    display_name = "ByteDance Seedream 5.0 Lite Edit"
-    endpoint = "https://api.wavespeed.ai/api/v3/bytedance/seedream-v5.0-lite/edit"
+class Seedream50ProProvider(WaveSpeedProviderBase):
+    provider_id = "seedream_5_0_pro"
+    display_name = "ByteDance Seedream 5.0 Pro Edit"
+    endpoint = "https://api.wavespeed.ai/api/v3/bytedance/seedream-v5.0-pro/edit"
     capabilities = ProviderCapabilities(
         supported_generation_types=(GenerationType.IMAGE_TO_IMAGE.value,),
         supports_images=True,
         supports_video=False,
         supports_cancel=False,
         max_images=1,
-        metadata={"model": "seedream-v5.0-lite/edit"},
+        metadata={"model": "seedream-v5.0-pro/edit"},
     )

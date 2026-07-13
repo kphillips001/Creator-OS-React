@@ -400,6 +400,41 @@ class PublishingRepository:
                 row = cursor.fetchone()
         return PublishingJob.from_row(row) if row else None
 
+    def get_open_job_for_asset(
+        self,
+        asset_id: int,
+        *,
+        provider: str | None = None,
+        provider_metadata_filter: Mapping[str, Any] | None = None,
+        connection=None,
+    ) -> PublishingJob | None:
+        filters = [
+            "asset_id = %s",
+            "product_id IS NULL",
+            "status NOT IN ('COMPLETED', 'CANCELLED')",
+        ]
+        params: list[Any] = [int(asset_id)]
+        if provider:
+            filters.append("provider = %s")
+            params.append(provider)
+        for key, value in dict(provider_metadata_filter or {}).items():
+            filters.append("provider_metadata->>%s = %s")
+            params.extend((str(key), str(value)))
+        with self._connection(connection) as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    f"""
+                    SELECT *
+                    FROM public.publishing_jobs
+                    WHERE {' AND '.join(filters)}
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                    """,
+                    tuple(params),
+                )
+                row = cursor.fetchone()
+        return PublishingJob.from_row(row) if row else None
+
     def list_queue_items(
         self,
         *,
