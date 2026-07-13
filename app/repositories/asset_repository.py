@@ -344,6 +344,56 @@ class AssetRepository:
                 connection=conn,
             )
 
+    def update_analysis_fields(
+        self,
+        asset_id: int,
+        fields: Mapping[str, Any],
+        *,
+        connection=None,
+    ) -> None:
+        allowed_jsonb = {
+            "detected_themes",
+            "suggested_tags",
+            "nudity_labels",
+            "risk_flags",
+            "analysis_provenance",
+            "gpt_vision_result",
+            "nudenet_result",
+            "classification_result",
+        }
+        allowed_scalar = {
+            "classification",
+            "confidence",
+            "nudity_level",
+            "sexual_intensity",
+            "is_explicit",
+            "short_safe_summary",
+            "analysis_reasoning",
+        }
+        assignments = []
+        values = []
+        for key, value in fields.items():
+            if key in allowed_jsonb:
+                assignments.append(f"{key} = %s::jsonb")
+                values.append(json.dumps(value, default=str))
+            elif key in allowed_scalar:
+                assignments.append(f"{key} = %s")
+                values.append(value)
+        if not assignments:
+            return
+        values.append(asset_id)
+        query = f"""
+            UPDATE public.content_items
+            SET {", ".join(assignments)}
+            WHERE id = %s
+        """
+        if connection is not None:
+            with connection.cursor() as cursor:
+                cursor.execute(query, tuple(values))
+            return
+        with self._connection_factory() as conn:
+            self.update_analysis_fields(asset_id, fields, connection=conn)
+
     def update_reference_metadata(
         self,
         asset_id: int,

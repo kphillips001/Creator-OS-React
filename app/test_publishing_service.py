@@ -1,9 +1,11 @@
 import unittest
 import inspect
+from datetime import datetime
 from types import SimpleNamespace
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import app.services.publishing_service as publishing_service_module
+from app.models.publishing_job import PublishingJob, PublishingJobStatus, PublishingMediaLinkStatus
 from app.providers.publishing import PublishingProviderCapabilities
 from app.repositories.publishing_repository import PublishingRepository
 from app.services.publishing_service import PublishingService
@@ -26,6 +28,78 @@ class FakePublishingRepository:
 
     def project_product(self, row):
         return PublishingRepository().project_product(row)
+
+
+class FakeJobRepository(FakePublishingRepository):
+    def __init__(self):
+        super().__init__()
+        self.jobs = {}
+        self.asset_lookup_calls = []
+
+    def get_open_job_for_asset(self, asset_id, *, provider=None, provider_metadata_filter=None):
+        self.asset_lookup_calls.append((asset_id, provider, provider_metadata_filter))
+        for job in self.jobs.values():
+            if job.asset_id == asset_id and job.product_id is None and job.status not in {
+                PublishingJobStatus.COMPLETED,
+                PublishingJobStatus.CANCELLED,
+            }:
+                route = (job.provider_metadata or {}).get("route_owner")
+                if provider_metadata_filter and route != provider_metadata_filter.get("route_owner"):
+                    continue
+                return job
+        return None
+
+    def create_job(self, **kwargs):
+        now = datetime.now()
+        job = PublishingJob(
+            id=uuid4(),
+            product_id=kwargs.get("product_id"),
+            asset_id=kwargs.get("asset_id"),
+            provider=kwargs.get("provider"),
+            provider_account_id=kwargs.get("provider_account_id"),
+            status=PublishingJobStatus.QUEUED,
+            media_link_status=(
+                PublishingMediaLinkStatus.REQUIRED
+                if kwargs.get("media_link_required")
+                else PublishingMediaLinkStatus.NOT_REQUIRED
+            ),
+            provider_status=None,
+            provider_output_url=None,
+            provider_media_id=None,
+            provider_preview_media_id=None,
+            provider_full_media_id=None,
+            provider_metadata=kwargs.get("provider_metadata") or {},
+            failure_reason=None,
+            retry_count=0,
+            max_retries=kwargs.get("max_retries") or 3,
+            next_retry_at=None,
+            upload_started_at=None,
+            uploaded_at=None,
+            completed_at=None,
+            created_at=now,
+            updated_at=now,
+        )
+        self.jobs[job.id] = job
+        return job
+
+    def get_job_by_id(self, job_id):
+        return self.jobs.get(job_id)
+
+    def mark_job_media_link_created(self, job_id, *, media_link, provider_metadata=None, complete=True):
+        job = self.jobs[job_id]
+        updated = PublishingJob(
+            **{
+                **job.__dict__,
+                "status": PublishingJobStatus.COMPLETED if complete else PublishingJobStatus.MEDIA_LINK_CREATED,
+                "media_link_status": PublishingMediaLinkStatus.CREATED,
+                "provider_output_url": media_link,
+                "provider_metadata": {**dict(job.provider_metadata), **dict(provider_metadata or {})},
+                "completed_at": datetime.now() if complete else job.completed_at,
+                "updated_at": datetime.now(),
+            }
+        )
+        self.jobs[job_id] = updated
+        return updated
 
 
 class FakeCursor:
@@ -490,6 +564,57 @@ class PublishingServiceTests(unittest.TestCase):
                 }
             ],
         )
+
+    def test_asset_only_publishing_job_reuses_route_job(self):
+        repository = FakeJobRepository()
+        provider = FakePublishingProvider()
+        service = PublishingService(repository, publishing_provider=provider)
+
+        first = service.ensure_asset_publishing_job(
+            asset_id=44,
+            media_link_required=True,
+            provider_metadata={"route_owner": "CUSTOMER_CONVERSATIONS"},
+            route_owner="CUSTOMER_CONVERSATIONS",
+        )
+        second = service.ensure_asset_publishing_job(
+            asset_id=44,
+            media_link_required=True,
+            provider_metadata={"route_owner": "CUSTOMER_CONVERSATIONS"},
+            route_owner="CUSTOMER_CONVERSATIONS",
+        )
+
+        self.assertEqual(first.id, second.id)
+        self.assertIsNone(first.product_id)
+        self.assertEqual(first.media_link_status, PublishingMediaLinkStatus.REQUIRED)
+
+    def test_asset_only_media_link_workflow_completes_without_product(self):
+        repository = FakeJobRepository()
+        provider = FakePublishingProvider()
+        service = PublishingService(repository, publishing_provider=provider)
+        job = service.ensure_asset_publishing_job(
+            asset_id=45,
+            media_link_required=True,
+            provider_metadata={"route_owner": "CUSTOMER_CONVERSATIONS"},
+            route_owner="CUSTOMER_CONVERSATIONS",
+        )
+        repository.jobs[job.id] = PublishingJob(
+            **{
+                **job.__dict__,
+                "status": PublishingJobStatus.UPLOADED,
+                "media_link_status": PublishingMediaLinkStatus.REQUIRED,
+            }
+        )
+
+        result = service.complete_publishing_media_link_workflow(
+            job.id,
+            creator_profile_id=7,
+            media_link="https://fanvue.example/link",
+        )
+
+        self.assertTrue(result["success"])
+        self.assertIsNone(result["product"])
+        self.assertEqual(result["media_link"], "https://fanvue.example/link")
+        self.assertEqual(repository.jobs[job.id].status, PublishingJobStatus.COMPLETED)
 
     def test_create_wall_post_delegates_to_publishing_provider(self):
         provider = FakePublishingProvider()

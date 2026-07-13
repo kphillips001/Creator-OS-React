@@ -1,5 +1,10 @@
 import unittest
+from uuid import uuid4
 
+from app.models.chat_commerce_registration import (
+    ChatAvailabilityState,
+    ChatCommerceAssetRecord,
+)
 from app.models.creator_attention import (
     CreatorAttentionCategory,
     CreatorAttentionPriority,
@@ -194,6 +199,34 @@ class CreatorAttentionServiceTests(unittest.TestCase):
         self.assertFalse(summary.attention_required)
         self.assertEqual(summary.recommended_action, "No Action Required")
         self.assertEqual(summary.items[0].category, CreatorAttentionCategory.INFORMATION)
+
+    def test_chat_commerce_registration_exception_requires_attention(self):
+        record = ChatCommerceAssetRecord(
+            chat_registration_id=uuid4(),
+            asset_id=42,
+            registration_id=uuid4(),
+            fulfillment_id=uuid4(),
+            creator_profile_id=7,
+            commerce_destination="CUSTOMER_CONVERSATIONS",
+            availability_state=ChatAvailabilityState.BLOCKED,
+            chat_ready=False,
+            fulfillment_ready=True,
+            recommendation_eligible=False,
+            delivery_eligible=False,
+            product_ids=("product-1",),
+            source_workflow="generation_library",
+            block_reasons=("media_link_not_verified",),
+        )
+
+        summary = CreatorAttentionService().build_attention_summary(
+            chat_registration_records=(record,)
+        )
+
+        self.assertTrue(summary.attention_required)
+        self.assertEqual(summary.recommended_action, "Resolve Chat Registration")
+        self.assertEqual(summary.items[0].category, CreatorAttentionCategory.FAILURE)
+        self.assertEqual(summary.items[0].source, "ChatCommerceRegistrationService")
+        self.assertEqual(summary.items[0].evidence["asset_id"], 42)
 
 
 if __name__ == "__main__":

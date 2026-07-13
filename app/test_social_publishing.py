@@ -5,6 +5,7 @@ import unittest
 import os
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
 
 if "streamlit" not in sys.modules:
     streamlit = types.ModuleType("streamlit")
@@ -39,7 +40,7 @@ from PIL import Image
 
 from app.providers.social import telegram_provider as telegram_provider_module
 from app.providers.social.telegram_provider import TelegramPublishingProvider
-from app.providers.social.x_provider import XPublishResult, XPublishingProvider
+from app.providers.social.x_provider import XPublishError, XPublishResult, XPublishingProvider
 from app.services.content_archive_service import ContentArchiveService
 from app.services.generation_library_service import GenerationLibraryService
 from app.services.social_publishing_service import SocialPublishingService
@@ -387,6 +388,40 @@ class SocialPublishingTests(unittest.TestCase):
         self.assertEqual(result.provider_post_id, "tweet_456")
         self.assertEqual(result.provider_media_id, "media_456")
 
+    def test_x_provider_reports_runtime_python_when_tweepy_is_missing(self):
+        provider = XPublishingProvider()
+
+        missing = ModuleNotFoundError("No module named 'tweepy'", name="tweepy")
+        with patch("app.providers.social.x_provider.import_module", side_effect=missing):
+            with self.assertRaises(XPublishError) as caught:
+                provider._load_tweepy()
+
+        message = str(caught.exception)
+        self.assertIn("X publishing dependency missing.", message)
+        self.assertIn("Runtime interpreter:", message)
+        self.assertIn("python -m pip install tweepy==4.15.0", message)
+        self.assertIn(" -m pip install tweepy==4.15.0", message)
+
+    def test_x_provider_runtime_diagnostic_reports_missing_tweepy(self):
+        missing = ModuleNotFoundError("No module named 'tweepy'", name="tweepy")
+
+        with patch("app.providers.social.x_provider.import_module", side_effect=missing):
+            diagnostic = XPublishingProvider.runtime_dependency_diagnostic()
+
+        self.assertFalse(diagnostic.tweepy_installed)
+        self.assertIn("Not Installed", diagnostic.format())
+        self.assertTrue(diagnostic.runtime_interpreter)
+
+    def test_x_provider_runtime_diagnostic_reports_installed_tweepy(self):
+        fake_tweepy = SimpleNamespace(__version__="4.15.0", __file__="runtime/site-packages/tweepy/__init__.py")
+
+        with patch("app.providers.social.x_provider.import_module", return_value=fake_tweepy):
+            diagnostic = XPublishingProvider.runtime_dependency_diagnostic()
+
+        self.assertTrue(diagnostic.tweepy_installed)
+        self.assertEqual(diagnostic.tweepy_version, "4.15.0")
+        self.assertIn("Installed", diagnostic.format())
+
     def test_telegram_provider_prepares_image_and_sends_photo_with_cta(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             image_path = Path(temp_dir) / "transparent.png"
@@ -529,6 +564,13 @@ class SocialPublishingTests(unittest.TestCase):
         source = Path("app/dashboard/pages/content_studio.py").read_text(encoding="utf-8")
         navigation = Path("app/dashboard/navigation.py").read_text(encoding="utf-8")
         main = Path("app/dashboard/main.py").read_text(encoding="utf-8")
+        content_studio_navigation = navigation.split(
+            'DashboardNavigationGroup(\n        "Content Creation"',
+            1,
+        )[1].split(
+            'DashboardNavigationGroup(\n        "Experiences"',
+            1,
+        )[0]
 
         self.assertIn("Social Publishing", source)
         self.assertIn("Social Queue", source)
@@ -552,7 +594,17 @@ class SocialPublishingTests(unittest.TestCase):
         self.assertIn("Schedule", source)
         self.assertIn("Select Caption", source)
         self.assertIn("Published to X", source)
+        self.assertIn("Previous publish failure:", source)
+        self.assertIn("Clear previous failure", source)
+        self.assertIn("_x_dependency_blocking_message", source)
+        self.assertIn("_is_stale_x_dependency_message", source)
+        self.assertIn('st.session_state.pop("generation_library_x_publish_message", None)', source)
+        self.assertIn("_sanitize_historical_publish_message", source)
+        self.assertIn("[previous runtime interpreter]", source)
+        self.assertNotIn("X publishing dependency missing.", source)
+        self.assertNotIn("Fanvue" + "-Chatbot", source)
         self.assertIn('"Social Publishing"', navigation)
+        self.assertNotIn("Social Publishing", content_studio_navigation)
         self.assertIn('"Social Publishing"', main)
         self.assertNotIn('"Staging"', navigation)
         self.assertNotIn('"Staging"', main)

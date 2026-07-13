@@ -1,0 +1,1597 @@
+[
+  {
+    "event_type": "recommendation_event",
+    "payload": {
+      "asset_id": 101,
+      "business_learning_context_reference": null,
+      "business_registration_id": "101",
+      "chat_registration_id": null,
+      "content_intelligence_reference": null,
+      "conversation_context_reference": null,
+      "conversation_id": "conversation-1",
+      "customer_id": "customer-1",
+      "customer_intelligence_reference": null,
+      "delivery_id": "delivery-101",
+      "event_id": "63f8f292-80d4-594f-b127-7918fcc7dfbf",
+      "event_state": "PURCHASED",
+      "event_timestamp": "2026-07-13T02:27:11Z",
+      "experience_id": "experience-1",
+      "fulfillment_registration_id": null,
+      "outcome_metadata": {
+        "commerce_outcome_id": "52c90c6c-7563-5a61-977e-961f638b9d2b",
+        "gross_revenue_cents": 2500,
+        "matched_by": "direct_payload",
+        "net_revenue_cents": 2500,
+        "provider_transaction_id": "evt-1",
+        "refund_cents": 0,
+        "tip_cents": 0,
+        "unresolved_fields": []
+      },
+      "product_id": "product-1",
+      "provider": "fanvue",
+      "recommendation_confidence": null,
+      "recommendation_id": "rec-101",
+      "recommendation_rationale": [],
+      "recommendation_score": null,
+      "rejected_candidate_reasons": [],
+      "schema_version": "phase_3_10_11_content_commerce_learning_v1",
+      "score_breakdown": {},
+      "supporting_evidence": [],
+      "suppression_reasons": []
+    }
+  },
+  {
+    "event_type": "recommendation_event",
+    "payload": {
+      "asset_id": 101,
+      "business_learning_context_reference": null,
+      "business_registration_id": "101",
+      "chat_registration_id": null,
+      "content_intelligence_reference": null,
+      "conversation_context_reference": null,
+      "conversation_id": "conversation-1",
+      "customer_id": "customer-1",
+      "customer_intelligence_reference": null,
+      "delivery_id": "delivery-101",
+      "event_id": "a1bcc3d7-a716-5e10-9673-7248614331ee",
+      "event_state": "REFUNDED",
+      "event_timestamp": "2026-07-13T02:27:11Z",
+      "experience_id": "experience-1",
+      "fulfillment_registration_id": null,
+      "outcome_metadata": {
+        "commerce_outcome_id": "2dea85ac-9dae-55b0-b1cb-0fe6b5092801",
+        "gross_revenue_cents": 2500,
+        "matched_by": "direct_payload",
+        "net_revenue_cents": 0,
+        "provider_transaction_id": "refund-1",
+        "refund_cents": 2500,
+        "tip_cents": 0,
+        "unresolved_fields": []
+      },
+      "product_id": "product-1",
+      "provider": "fanvue",
+      "recommendation_confidence": null,
+      "recommendation_id": "rec-101",
+      "recommendation_rationale": [],
+      "recommendation_score": null,
+      "rejected_candidate_reasons": [],
+      "schema_version": "phase_3_10_11_content_commerce_learning_v1",
+      "score_breakdown": {},
+      "supporting_evidence": [],
+      "suppression_reasons": []
+    }
+  },
+  {
+    "event_type": "recommendation_event",
+    "payload": {
+      "asset_id": 202,
+      "business_learning_context_reference": null,
+      "business_registration_id": "202",
+      "chat_registration_id": null,
+      "content_intelligence_reference": null,
+      "conversation_context_reference": null,
+      "conversation_id": "conversation-2",
+      "customer_id": "fanvue-user-2",
+      "customer_intelligence_reference": null,
+      "delivery_id": "delivery-202",
+      "event_id": "5ac9cf27-e411-5ca3-8f16-bf0edbb64cf5",
+      "event_state": "PURCHASED",
+      "event_timestamp": "2026-07-13T02:27:11Z",
+      "experience_id": "experience-2",
+      "fulfillment_registration_id": null,
+      "outcome_metadata": {
+        "commerce_outcome_id": "5d85e7fc-e244-5dc7-ab8e-c33cdf7ba0ea",
+        "gross_revenue_cents": 2500,
+        "matched_by": "delivery_history",
+        "net_revenue_cents": 2500,
+        "provider_transaction_id": "evt-202",
+        "refund_cents": 0,
+        "tip_cents": 0,
+        "unresolved_fields": []
+      },
+      "product_id": "product-2",
+      "provider": "fanvue",
+      "recommendation_confidence": null,
+      "recommendation_id": "rec-202",
+      "recommendation_rationale": [],
+      "recommendation_score": null,
+      "rejected_candidate_reasons": [],
+      "schema_version": "phase_3_10_11_content_commerce_learning_v1",
+      "score_breakdown": {},
+      "supporting_evidence": [],
+      "suppression_reasons": []
+    }
+  },
+  {
+    "event_type": "recommendation_event",
+    "payload": {
+      "asset_id": 101,
+      "business_learning_context_reference": null,
+      "business_registration_id": "101",
+      "chat_registration_id": null,
+      "content_intelligence_reference": null,
+      "conversation_context_reference": null,
+      "conversation_id": "conversation-1",
+      "customer_id": "customer-1",
+      "customer_intelligence_reference": null,
+      "delivery_id": "delivery-101",
+      "event_id": "532052e8-e47d-582c-b93f-d9a8473f895a",
+      "event_state": "PURCHASED",
+      "event_timestamp": "2026-07-13T02:27:11Z",
+      "experience_id": "experience-1",
+      "fulfillment_registration_id": null,
+      "outcome_metadata": {
+        "commerce_outcome_id": "4eed4076-f44f-57f3-92aa-b4aad4b868f9",
+        "gross_revenue_cents": 2500,
+        "matched_by": "direct_payload",
+        "net_revenue_cents": 2500,
+        "provider_transaction_id": "evt-api",
+        "refund_cents": 0,
+        "tip_cents": 0,
+        "unresolved_fields": []
+      },
+      "product_id": "product-1",
+      "provider": "fanvue",
+      "recommendation_confidence": null,
+      "recommendation_id": "rec-101",
+      "recommendation_rationale": [],
+      "recommendation_score": null,
+      "rejected_candidate_reasons": [],
+      "schema_version": "phase_3_10_11_content_commerce_learning_v1",
+      "score_breakdown": {},
+      "supporting_evidence": [],
+      "suppression_reasons": []
+    }
+  },
+  {
+    "event_type": "recommendation_event",
+    "payload": {
+      "asset_id": null,
+      "business_learning_context_reference": null,
+      "business_registration_id": null,
+      "chat_registration_id": null,
+      "content_intelligence_reference": null,
+      "conversation_context_reference": null,
+      "conversation_id": null,
+      "customer_id": "fanvue-user-x",
+      "customer_intelligence_reference": null,
+      "delivery_id": null,
+      "event_id": "73d86061-6215-5438-9716-6037ccf344ff",
+      "event_state": "UNMATCHED",
+      "event_timestamp": "2026-07-13T02:27:11Z",
+      "experience_id": null,
+      "fulfillment_registration_id": null,
+      "outcome_metadata": {
+        "commerce_outcome_id": "94a0c4c7-aa87-5869-a210-378f19edcf4b",
+        "gross_revenue_cents": 900,
+        "matched_by": "unmatched",
+        "net_revenue_cents": 900,
+        "provider_transaction_id": "evt-unmatched",
+        "refund_cents": 0,
+        "tip_cents": 0,
+        "unresolved_fields": [
+          "recommendation_id",
+          "delivery_id",
+          "asset_id"
+        ]
+      },
+      "product_id": null,
+      "provider": "fanvue",
+      "recommendation_confidence": null,
+      "recommendation_id": null,
+      "recommendation_rationale": [],
+      "recommendation_score": null,
+      "rejected_candidate_reasons": [],
+      "schema_version": "phase_3_10_11_content_commerce_learning_v1",
+      "score_breakdown": {},
+      "supporting_evidence": [],
+      "suppression_reasons": []
+    }
+  },
+  {
+    "event_type": "business_outcome",
+    "payload": {
+      "compatibility_metadata": {
+        "read_only": true,
+        "source": "business_learning"
+      },
+      "customer_id": "customer-1",
+      "customer_reference": "customer-1",
+      "evidence_metadata": {
+        "message_id": "message-1"
+      },
+      "experience_id": null,
+      "experience_reference": null,
+      "metadata": {
+        "canonical_business_outcome": true,
+        "source": "business_learning"
+      },
+      "occurred_at": "2026-07-05T12:00:00Z",
+      "outcome_id": "outcome-1",
+      "outcome_type": "PRODUCT_OFFERED",
+      "product_id": "product-1",
+      "product_reference": "product-1",
+      "provider_metadata": {
+        "provider": "telegram"
+      },
+      "recommendation_id": null,
+      "signals": {},
+      "status": "offered",
+      "strategy_source": null,
+      "subject_id": null,
+      "subject_type": null,
+      "timestamp": "2026-07-05T12:00:00Z",
+      "value_cents": 0
+    }
+  },
+  {
+    "event_type": "business_outcome",
+    "payload": {
+      "compatibility_metadata": {
+        "read_only": true,
+        "source": "business_learning"
+      },
+      "customer_id": "customer-1",
+      "customer_reference": "customer-1",
+      "evidence_metadata": {},
+      "experience_id": null,
+      "experience_reference": null,
+      "metadata": {
+        "canonical_business_outcome": true,
+        "source": "business_learning"
+      },
+      "occurred_at": null,
+      "outcome_id": null,
+      "outcome_type": "PRODUCT_PURCHASED",
+      "product_id": "product-1",
+      "product_reference": "product-1",
+      "provider_metadata": {},
+      "recommendation_id": null,
+      "signals": {},
+      "status": null,
+      "strategy_source": null,
+      "subject_id": null,
+      "subject_type": null,
+      "timestamp": null,
+      "value_cents": 0
+    }
+  },
+  {
+    "event_type": "business_outcome",
+    "payload": {
+      "compatibility_metadata": {
+        "read_only": true,
+        "source": "business_learning"
+      },
+      "customer_id": "customer-1",
+      "customer_reference": "customer-1",
+      "evidence_metadata": {},
+      "experience_id": "experience-1",
+      "experience_reference": "experience-1",
+      "metadata": {
+        "canonical_business_outcome": true,
+        "source": "business_learning"
+      },
+      "occurred_at": null,
+      "outcome_id": null,
+      "outcome_type": "EXPERIENCE_COMPLETED",
+      "product_id": null,
+      "product_reference": null,
+      "provider_metadata": {},
+      "recommendation_id": null,
+      "signals": {},
+      "status": null,
+      "strategy_source": null,
+      "subject_id": null,
+      "subject_type": null,
+      "timestamp": null,
+      "value_cents": 0
+    }
+  },
+  {
+    "event_type": "recommendation_event",
+    "payload": {
+      "asset_id": 101,
+      "business_learning_context_reference": null,
+      "business_registration_id": null,
+      "chat_registration_id": "58a8c2e7-f089-49af-a326-02b3ed91cf7e",
+      "content_intelligence_reference": null,
+      "conversation_context_reference": null,
+      "conversation_id": null,
+      "customer_id": null,
+      "customer_intelligence_reference": null,
+      "delivery_id": null,
+      "event_id": "c85f60c5-87ec-5db3-b7ea-c5d0ffdcde1f",
+      "event_state": "GENERATED",
+      "event_timestamp": "2026-07-13T02:27:11.389565+00:00",
+      "experience_id": null,
+      "fulfillment_registration_id": null,
+      "outcome_metadata": {
+        "engine": "ContentRecommendationService",
+        "selected": false
+      },
+      "product_id": null,
+      "provider": null,
+      "recommendation_confidence": 0.71,
+      "recommendation_id": "d26ab872-2cef-599f-b119-64df624a5af3",
+      "recommendation_rationale": [
+        "Content Intelligence increased ranking.",
+        "Business evidence increased ranking."
+      ],
+      "recommendation_score": 71.283,
+      "rejected_candidate_reasons": [],
+      "schema_version": "phase_3_10_11_content_commerce_learning_v1",
+      "score_breakdown": {
+        "business_fit": 4.083,
+        "confidence": 0.71,
+        "content_fit": 17.2,
+        "conversation_fit": 0.0,
+        "customer_fit": 0.0,
+        "suppression_penalty": 0.0,
+        "total": 71.283
+      },
+      "supporting_evidence": [
+        {
+          "category": "content",
+          "metadata": {},
+          "rationale": "Content Intelligence confidence is available.",
+          "signal": "content_intelligence_confidence",
+          "value": 0.9,
+          "weight": 7.2
+        },
+        {
+          "category": "content",
+          "metadata": {},
+          "rationale": "Content descriptors are available for ranking.",
+          "signal": "content_descriptors_available",
+          "value": true,
+          "weight": 6.0
+        },
+        {
+          "category": "content",
+          "metadata": {},
+          "rationale": "Runtime media is available.",
+          "signal": "runtime_media_available",
+          "value": true,
+          "weight": 4.0
+        },
+        {
+          "category": "business",
+          "metadata": {},
+          "rationale": "Business learning changes asset ranking.",
+          "signal": "business_learning_asset_score",
+          "value": {
+            "confidence": 0.7,
+            "evidence_freshness": "2026-07-13T02:27:11.381880+00:00",
+            "sample_size": 7,
+            "score": 5.833333333333332
+          },
+          "weight": 4.083333333333332
+        }
+      ],
+      "suppression_reasons": []
+    }
+  },
+  {
+    "event_type": "recommendation_event",
+    "payload": {
+      "asset_id": 101,
+      "business_learning_context_reference": null,
+      "business_registration_id": null,
+      "chat_registration_id": "2565797e-7e6a-48e4-917e-b4b396424265",
+      "content_intelligence_reference": null,
+      "conversation_context_reference": null,
+      "conversation_id": null,
+      "customer_id": null,
+      "customer_intelligence_reference": null,
+      "delivery_id": null,
+      "event_id": "f3f3b341-a438-581c-b038-f281c3b8afc6",
+      "event_state": "SELECTED",
+      "event_timestamp": "2026-07-13T02:27:11.381880+00:00",
+      "experience_id": null,
+      "fulfillment_registration_id": null,
+      "outcome_metadata": {
+        "engine": "ContentRecommendationService",
+        "selected": true
+      },
+      "product_id": null,
+      "provider": null,
+      "recommendation_confidence": 0.71,
+      "recommendation_id": "d26ab872-2cef-599f-b119-64df624a5af3",
+      "recommendation_rationale": [
+        "Content Intelligence increased ranking.",
+        "Business evidence increased ranking."
+      ],
+      "recommendation_score": 79.2,
+      "rejected_candidate_reasons": [],
+      "schema_version": "phase_3_10_11_content_commerce_learning_v1",
+      "score_breakdown": {
+        "business_fit": 12.0,
+        "confidence": 0.71,
+        "content_fit": 17.2,
+        "conversation_fit": 0.0,
+        "customer_fit": 0.0,
+        "suppression_penalty": 0.0,
+        "total": 79.2
+      },
+      "supporting_evidence": [
+        {
+          "category": "content",
+          "metadata": {},
+          "rationale": "Content Intelligence confidence is available.",
+          "signal": "content_intelligence_confidence",
+          "value": 0.9,
+          "weight": 7.2
+        },
+        {
+          "category": "content",
+          "metadata": {},
+          "rationale": "Content descriptors are available for ranking.",
+          "signal": "content_descriptors_available",
+          "value": true,
+          "weight": 6.0
+        },
+        {
+          "category": "content",
+          "metadata": {},
+          "rationale": "Runtime media is available.",
+          "signal": "runtime_media_available",
+          "value": true,
+          "weight": 4.0
+        },
+        {
+          "category": "business",
+          "metadata": {},
+          "rationale": "Business learning changes asset ranking.",
+          "signal": "business_learning_asset_score",
+          "value": {
+            "confidence": 0.7,
+            "evidence_freshness": "2026-07-13T02:26:35Z",
+            "sample_size": 7,
+            "score": 25
+          },
+          "weight": 12.0
+        }
+      ],
+      "suppression_reasons": []
+    }
+  },
+  {
+    "event_type": "recommendation_event",
+    "payload": {
+      "asset_id": 202,
+      "business_learning_context_reference": null,
+      "business_registration_id": null,
+      "chat_registration_id": "aeed8c3c-3db8-4019-bbc2-e43f4ed36ee7",
+      "content_intelligence_reference": null,
+      "conversation_context_reference": null,
+      "conversation_id": null,
+      "customer_id": null,
+      "customer_intelligence_reference": null,
+      "delivery_id": null,
+      "event_id": "7ec85e68-c632-5719-b900-796b55a87e4e",
+      "event_state": "GENERATED",
+      "event_timestamp": "2026-07-13T02:27:11.408382+00:00",
+      "experience_id": null,
+      "fulfillment_registration_id": null,
+      "outcome_metadata": {
+        "engine": "ContentRecommendationService",
+        "selected": false
+      },
+      "product_id": null,
+      "provider": null,
+      "recommendation_confidence": 0.71,
+      "recommendation_id": "0125b500-7115-5879-9cbb-94b992ace8dd",
+      "recommendation_rationale": [
+        "Content Intelligence increased ranking.",
+        "Business evidence increased ranking."
+      ],
+      "recommendation_score": 64.853,
+      "rejected_candidate_reasons": [],
+      "schema_version": "phase_3_10_11_content_commerce_learning_v1",
+      "score_breakdown": {
+        "business_fit": 0.853,
+        "confidence": 0.71,
+        "content_fit": 14.0,
+        "conversation_fit": 0.0,
+        "customer_fit": 0.0,
+        "suppression_penalty": 0.0,
+        "total": 64.853
+      },
+      "supporting_evidence": [
+        {
+          "category": "content",
+          "metadata": {},
+          "rationale": "Content Intelligence confidence is available.",
+          "signal": "content_intelligence_confidence",
+          "value": 0.5,
+          "weight": 4.0
+        },
+        {
+          "category": "content",
+          "metadata": {},
+          "rationale": "Content descriptors are available for ranking.",
+          "signal": "content_descriptors_available",
+          "value": true,
+          "weight": 6.0
+        },
+        {
+          "category": "content",
+          "metadata": {},
+          "rationale": "Runtime media is available.",
+          "signal": "runtime_media_available",
+          "value": true,
+          "weight": 4.0
+        },
+        {
+          "category": "business",
+          "metadata": {},
+          "rationale": "Business learning changes asset ranking.",
+          "signal": "business_learning_asset_score",
+          "value": {
+            "confidence": 0.4,
+            "evidence_freshness": "2026-07-13T02:27:11.403274+00:00",
+            "sample_size": 4,
+            "score": 2.1333333333333333
+          },
+          "weight": 0.8533333333333334
+        }
+      ],
+      "suppression_reasons": []
+    }
+  },
+  {
+    "event_type": "recommendation_event",
+    "payload": {
+      "asset_id": 202,
+      "business_learning_context_reference": null,
+      "business_registration_id": null,
+      "chat_registration_id": "aeed8c3c-3db8-4019-bbc2-e43f4ed36ee7",
+      "content_intelligence_reference": null,
+      "conversation_context_reference": null,
+      "conversation_id": null,
+      "customer_id": null,
+      "customer_intelligence_reference": null,
+      "delivery_id": null,
+      "event_id": "7fe8f218-a721-5995-842f-a739ba7ddcf5",
+      "event_state": "SELECTED",
+      "event_timestamp": "2026-07-13T02:27:11.410384+00:00",
+      "experience_id": null,
+      "fulfillment_registration_id": null,
+      "outcome_metadata": {
+        "engine": "ContentRecommendationService",
+        "selected": true
+      },
+      "product_id": null,
+      "provider": null,
+      "recommendation_confidence": 0.71,
+      "recommendation_id": "0125b500-7115-5879-9cbb-94b992ace8dd",
+      "recommendation_rationale": [
+        "Content Intelligence increased ranking.",
+        "Business evidence increased ranking."
+      ],
+      "recommendation_score": 64.853,
+      "rejected_candidate_reasons": [],
+      "schema_version": "phase_3_10_11_content_commerce_learning_v1",
+      "score_breakdown": {
+        "business_fit": 0.853,
+        "confidence": 0.71,
+        "content_fit": 14.0,
+        "conversation_fit": 0.0,
+        "customer_fit": 0.0,
+        "suppression_penalty": 0.0,
+        "total": 64.853
+      },
+      "supporting_evidence": [
+        {
+          "category": "content",
+          "metadata": {},
+          "rationale": "Content Intelligence confidence is available.",
+          "signal": "content_intelligence_confidence",
+          "value": 0.5,
+          "weight": 4.0
+        },
+        {
+          "category": "content",
+          "metadata": {},
+          "rationale": "Content descriptors are available for ranking.",
+          "signal": "content_descriptors_available",
+          "value": true,
+          "weight": 6.0
+        },
+        {
+          "category": "content",
+          "metadata": {},
+          "rationale": "Runtime media is available.",
+          "signal": "runtime_media_available",
+          "value": true,
+          "weight": 4.0
+        },
+        {
+          "category": "business",
+          "metadata": {},
+          "rationale": "Business learning changes asset ranking.",
+          "signal": "business_learning_asset_score",
+          "value": {
+            "confidence": 0.4,
+            "evidence_freshness": "2026-07-13T02:27:11.403274+00:00",
+            "sample_size": 4,
+            "score": 2.1333333333333333
+          },
+          "weight": 0.8533333333333334
+        }
+      ],
+      "suppression_reasons": []
+    }
+  },
+  {
+    "event_type": "recommendation_event",
+    "payload": {
+      "asset_id": 202,
+      "business_learning_context_reference": null,
+      "business_registration_id": null,
+      "chat_registration_id": "817f3ecb-53b2-4c4b-a50c-6e5c1bbf60cc",
+      "content_intelligence_reference": null,
+      "conversation_context_reference": null,
+      "conversation_id": null,
+      "customer_id": null,
+      "customer_intelligence_reference": null,
+      "delivery_id": null,
+      "event_id": "d3796f9f-0907-5aad-842c-a8d8abadef56",
+      "event_state": "GENERATED",
+      "event_timestamp": "2026-07-13T02:27:11.392835+00:00",
+      "experience_id": null,
+      "fulfillment_registration_id": null,
+      "outcome_metadata": {
+        "engine": "ContentRecommendationService",
+        "selected": false
+      },
+      "product_id": null,
+      "provider": null,
+      "recommendation_confidence": 0.86,
+      "recommendation_id": "7e756422-63dd-5cb7-96b2-1bbc034d9f22",
+      "recommendation_rationale": [
+        "Customer fit increased ranking.",
+        "Content Intelligence increased ranking.",
+        "Business evidence increased ranking."
+      ],
+      "recommendation_score": 74.053,
+      "rejected_candidate_reasons": [],
+      "schema_version": "phase_3_10_11_content_commerce_learning_v1",
+      "score_breakdown": {
+        "business_fit": 0.853,
+        "confidence": 0.86,
+        "content_fit": 17.2,
+        "conversation_fit": 0.0,
+        "customer_fit": 6.0,
+        "suppression_penalty": 0.0,
+        "total": 74.053
+      },
+      "supporting_evidence": [
+        {
+          "category": "customer",
+          "metadata": {},
+          "rationale": "Customer preferences match asset intelligence.",
+          "signal": "preference_match",
+          "value": [
+            "gym"
+          ],
+          "weight": 6.0
+        },
+        {
+          "category": "content",
+          "metadata": {},
+          "rationale": "Content Intelligence confidence is available.",
+          "signal": "content_intelligence_confidence",
+          "value": 0.9,
+          "weight": 7.2
+        },
+        {
+          "category": "content",
+          "metadata": {},
+          "rationale": "Content descriptors are available for ranking.",
+          "signal": "content_descriptors_available",
+          "value": true,
+          "weight": 6.0
+        },
+        {
+          "category": "content",
+          "metadata": {},
+          "rationale": "Runtime media is available.",
+          "signal": "runtime_media_available",
+          "value": true,
+          "weight": 4.0
+        },
+        {
+          "category": "business",
+          "metadata": {},
+          "rationale": "Business learning changes asset ranking.",
+          "signal": "business_learning_asset_score",
+          "value": {
+            "confidence": 0.4,
+            "evidence_freshness": "2026-07-13T02:27:11.388333+00:00",
+            "sample_size": 4,
+            "score": 2.1333333333333333
+          },
+          "weight": 0.8533333333333334
+        }
+      ],
+      "suppression_reasons": []
+    }
+  },
+  {
+    "event_type": "recommendation_event",
+    "payload": {
+      "asset_id": 202,
+      "business_learning_context_reference": null,
+      "business_registration_id": null,
+      "chat_registration_id": "817f3ecb-53b2-4c4b-a50c-6e5c1bbf60cc",
+      "content_intelligence_reference": null,
+      "conversation_context_reference": null,
+      "conversation_id": null,
+      "customer_id": null,
+      "customer_intelligence_reference": null,
+      "delivery_id": null,
+      "event_id": "4889e0fa-36eb-5df2-9469-e3f5feaedeb6",
+      "event_state": "SELECTED",
+      "event_timestamp": "2026-07-13T02:27:11.393835+00:00",
+      "experience_id": null,
+      "fulfillment_registration_id": null,
+      "outcome_metadata": {
+        "engine": "ContentRecommendationService",
+        "selected": true
+      },
+      "product_id": null,
+      "provider": null,
+      "recommendation_confidence": 0.86,
+      "recommendation_id": "7e756422-63dd-5cb7-96b2-1bbc034d9f22",
+      "recommendation_rationale": [
+        "Customer fit increased ranking.",
+        "Content Intelligence increased ranking.",
+        "Business evidence increased ranking."
+      ],
+      "recommendation_score": 74.053,
+      "rejected_candidate_reasons": [],
+      "schema_version": "phase_3_10_11_content_commerce_learning_v1",
+      "score_breakdown": {
+        "business_fit": 0.853,
+        "confidence": 0.86,
+        "content_fit": 17.2,
+        "conversation_fit": 0.0,
+        "customer_fit": 6.0,
+        "suppression_penalty": 0.0,
+        "total": 74.053
+      },
+      "supporting_evidence": [
+        {
+          "category": "customer",
+          "metadata": {},
+          "rationale": "Customer preferences match asset intelligence.",
+          "signal": "preference_match",
+          "value": [
+            "gym"
+          ],
+          "weight": 6.0
+        },
+        {
+          "category": "content",
+          "metadata": {},
+          "rationale": "Content Intelligence confidence is available.",
+          "signal": "content_intelligence_confidence",
+          "value": 0.9,
+          "weight": 7.2
+        },
+        {
+          "category": "content",
+          "metadata": {},
+          "rationale": "Content descriptors are available for ranking.",
+          "signal": "content_descriptors_available",
+          "value": true,
+          "weight": 6.0
+        },
+        {
+          "category": "content",
+          "metadata": {},
+          "rationale": "Runtime media is available.",
+          "signal": "runtime_media_available",
+          "value": true,
+          "weight": 4.0
+        },
+        {
+          "category": "business",
+          "metadata": {},
+          "rationale": "Business learning changes asset ranking.",
+          "signal": "business_learning_asset_score",
+          "value": {
+            "confidence": 0.4,
+            "evidence_freshness": "2026-07-13T02:27:11.388333+00:00",
+            "sample_size": 4,
+            "score": 2.1333333333333333
+          },
+          "weight": 0.8533333333333334
+        }
+      ],
+      "suppression_reasons": []
+    }
+  },
+  {
+    "event_type": "recommendation_event",
+    "payload": {
+      "asset_id": 101,
+      "business_learning_context_reference": null,
+      "business_registration_id": null,
+      "chat_registration_id": "c7290ee5-a335-4ddf-8d0c-a6f1c1678be8",
+      "content_intelligence_reference": null,
+      "conversation_context_reference": null,
+      "conversation_id": null,
+      "customer_id": null,
+      "customer_intelligence_reference": null,
+      "delivery_id": null,
+      "event_id": "fcce1ade-6bea-5ba4-b08d-b041b1829de0",
+      "event_state": "SUPPRESSED",
+      "event_timestamp": "2026-07-13T02:27:11.412439+00:00",
+      "experience_id": null,
+      "fulfillment_registration_id": null,
+      "outcome_metadata": {
+        "engine": "ContentRecommendationService",
+        "selected": false
+      },
+      "product_id": null,
+      "provider": null,
+      "recommendation_confidence": 0.0,
+      "recommendation_id": "d26ab872-2cef-599f-b119-64df624a5af3",
+      "recommendation_rationale": [
+        "Content Intelligence increased ranking.",
+        "Business evidence increased ranking."
+      ],
+      "recommendation_score": -77.917,
+      "rejected_candidate_reasons": [
+        "not_chat_ready"
+      ],
+      "schema_version": "phase_3_10_11_content_commerce_learning_v1",
+      "score_breakdown": {
+        "business_fit": 4.083,
+        "confidence": 0.0,
+        "content_fit": 18.0,
+        "conversation_fit": 0.0,
+        "customer_fit": 0.0,
+        "suppression_penalty": 100.0,
+        "total": -77.917
+      },
+      "supporting_evidence": [
+        {
+          "category": "content",
+          "metadata": {},
+          "rationale": "Content Intelligence confidence is available.",
+          "signal": "content_intelligence_confidence",
+          "value": 1.0,
+          "weight": 8.0
+        },
+        {
+          "category": "content",
+          "metadata": {},
+          "rationale": "Content descriptors are available for ranking.",
+          "signal": "content_descriptors_available",
+          "value": true,
+          "weight": 6.0
+        },
+        {
+          "category": "content",
+          "metadata": {},
+          "rationale": "Runtime media is available.",
+          "signal": "runtime_media_available",
+          "value": true,
+          "weight": 4.0
+        },
+        {
+          "category": "business",
+          "metadata": {},
+          "rationale": "Business learning changes asset ranking.",
+          "signal": "business_learning_asset_score",
+          "value": {
+            "confidence": 0.7,
+            "evidence_freshness": "2026-07-13T02:27:11.405733+00:00",
+            "sample_size": 7,
+            "score": 5.833333333333332
+          },
+          "weight": 4.083333333333332
+        }
+      ],
+      "suppression_reasons": [
+        "not_chat_ready"
+      ]
+    }
+  },
+  {
+    "event_type": "recommendation_event",
+    "payload": {
+      "asset_id": 202,
+      "business_learning_context_reference": null,
+      "business_registration_id": null,
+      "chat_registration_id": "215d30b9-407a-460c-9b21-b4f031c02ad3",
+      "content_intelligence_reference": null,
+      "conversation_context_reference": null,
+      "conversation_id": null,
+      "customer_id": null,
+      "customer_intelligence_reference": null,
+      "delivery_id": null,
+      "event_id": "75e1d7cf-0d34-520d-9306-bc9a0e658ab8",
+      "event_state": "GENERATED",
+      "event_timestamp": "2026-07-13T02:27:11.402277+00:00",
+      "experience_id": null,
+      "fulfillment_registration_id": null,
+      "outcome_metadata": {
+        "engine": "ContentRecommendationService",
+        "selected": false
+      },
+      "product_id": null,
+      "provider": null,
+      "recommendation_confidence": 0.86,
+      "recommendation_id": "4835bac8-dd23-5f61-8bb3-057481dae4be",
+      "recommendation_rationale": [
+        "Customer fit increased ranking.",
+        "Content Intelligence increased ranking.",
+        "Business evidence increased ranking."
+      ],
+      "recommendation_score": 74.453,
+      "rejected_candidate_reasons": [],
+      "schema_version": "phase_3_10_11_content_commerce_learning_v1",
+      "score_breakdown": {
+        "business_fit": 0.853,
+        "confidence": 0.86,
+        "content_fit": 17.6,
+        "conversation_fit": 0.0,
+        "customer_fit": 6.0,
+        "suppression_penalty": 0.0,
+        "total": 74.453
+      },
+      "supporting_evidence": [
+        {
+          "category": "customer",
+          "metadata": {},
+          "rationale": "Customer preferences match asset intelligence.",
+          "signal": "preference_match",
+          "value": [
+            "gym"
+          ],
+          "weight": 6.0
+        },
+        {
+          "category": "content",
+          "metadata": {},
+          "rationale": "Content Intelligence confidence is available.",
+          "signal": "content_intelligence_confidence",
+          "value": 0.95,
+          "weight": 7.6
+        },
+        {
+          "category": "content",
+          "metadata": {},
+          "rationale": "Content descriptors are available for ranking.",
+          "signal": "content_descriptors_available",
+          "value": true,
+          "weight": 6.0
+        },
+        {
+          "category": "content",
+          "metadata": {},
+          "rationale": "Runtime media is available.",
+          "signal": "runtime_media_available",
+          "value": true,
+          "weight": 4.0
+        },
+        {
+          "category": "business",
+          "metadata": {},
+          "rationale": "Business learning changes asset ranking.",
+          "signal": "business_learning_asset_score",
+          "value": {
+            "confidence": 0.4,
+            "evidence_freshness": "2026-07-13T02:27:11.393835+00:00",
+            "sample_size": 4,
+            "score": 2.1333333333333333
+          },
+          "weight": 0.8533333333333334
+        }
+      ],
+      "suppression_reasons": []
+    }
+  },
+  {
+    "event_type": "recommendation_event",
+    "payload": {
+      "asset_id": 202,
+      "business_learning_context_reference": null,
+      "business_registration_id": null,
+      "chat_registration_id": "215d30b9-407a-460c-9b21-b4f031c02ad3",
+      "content_intelligence_reference": null,
+      "conversation_context_reference": null,
+      "conversation_id": null,
+      "customer_id": null,
+      "customer_intelligence_reference": null,
+      "delivery_id": null,
+      "event_id": "8dad0850-738a-5dd7-9cbe-c01b1d0b0b60",
+      "event_state": "SELECTED",
+      "event_timestamp": "2026-07-13T02:27:11.403274+00:00",
+      "experience_id": null,
+      "fulfillment_registration_id": null,
+      "outcome_metadata": {
+        "engine": "ContentRecommendationService",
+        "selected": true
+      },
+      "product_id": null,
+      "provider": null,
+      "recommendation_confidence": 0.86,
+      "recommendation_id": "4835bac8-dd23-5f61-8bb3-057481dae4be",
+      "recommendation_rationale": [
+        "Customer fit increased ranking.",
+        "Content Intelligence increased ranking.",
+        "Business evidence increased ranking."
+      ],
+      "recommendation_score": 74.453,
+      "rejected_candidate_reasons": [],
+      "schema_version": "phase_3_10_11_content_commerce_learning_v1",
+      "score_breakdown": {
+        "business_fit": 0.853,
+        "confidence": 0.86,
+        "content_fit": 17.6,
+        "conversation_fit": 0.0,
+        "customer_fit": 6.0,
+        "suppression_penalty": 0.0,
+        "total": 74.453
+      },
+      "supporting_evidence": [
+        {
+          "category": "customer",
+          "metadata": {},
+          "rationale": "Customer preferences match asset intelligence.",
+          "signal": "preference_match",
+          "value": [
+            "gym"
+          ],
+          "weight": 6.0
+        },
+        {
+          "category": "content",
+          "metadata": {},
+          "rationale": "Content Intelligence confidence is available.",
+          "signal": "content_intelligence_confidence",
+          "value": 0.95,
+          "weight": 7.6
+        },
+        {
+          "category": "content",
+          "metadata": {},
+          "rationale": "Content descriptors are available for ranking.",
+          "signal": "content_descriptors_available",
+          "value": true,
+          "weight": 6.0
+        },
+        {
+          "category": "content",
+          "metadata": {},
+          "rationale": "Runtime media is available.",
+          "signal": "runtime_media_available",
+          "value": true,
+          "weight": 4.0
+        },
+        {
+          "category": "business",
+          "metadata": {},
+          "rationale": "Business learning changes asset ranking.",
+          "signal": "business_learning_asset_score",
+          "value": {
+            "confidence": 0.4,
+            "evidence_freshness": "2026-07-13T02:27:11.393835+00:00",
+            "sample_size": 4,
+            "score": 2.1333333333333333
+          },
+          "weight": 0.8533333333333334
+        }
+      ],
+      "suppression_reasons": []
+    }
+  },
+  {
+    "event_type": "recommendation_event",
+    "payload": {
+      "asset_id": 101,
+      "business_learning_context_reference": null,
+      "business_registration_id": null,
+      "chat_registration_id": "b29a4d5d-337d-4357-935a-c1fbab42c82a",
+      "content_intelligence_reference": null,
+      "conversation_context_reference": null,
+      "conversation_id": null,
+      "customer_id": null,
+      "customer_intelligence_reference": null,
+      "delivery_id": null,
+      "event_id": "218476e4-99f4-5e71-b0fd-61ff86e65655",
+      "event_state": "GENERATED",
+      "event_timestamp": "2026-07-13T02:27:11.405733+00:00",
+      "experience_id": null,
+      "fulfillment_registration_id": null,
+      "outcome_metadata": {
+        "engine": "ContentRecommendationService",
+        "selected": false
+      },
+      "product_id": null,
+      "provider": null,
+      "recommendation_confidence": 0.71,
+      "recommendation_id": "c61dc4cf-79ea-57fb-b3df-49dd7a627840",
+      "recommendation_rationale": [
+        "Content Intelligence increased ranking.",
+        "Business evidence increased ranking."
+      ],
+      "recommendation_score": 67.283,
+      "rejected_candidate_reasons": [],
+      "schema_version": "phase_3_10_11_content_commerce_learning_v1",
+      "score_breakdown": {
+        "business_fit": 4.083,
+        "confidence": 0.71,
+        "content_fit": 13.2,
+        "conversation_fit": 0.0,
+        "customer_fit": 0.0,
+        "suppression_penalty": 0.0,
+        "total": 67.283
+      },
+      "supporting_evidence": [
+        {
+          "category": "content",
+          "metadata": {},
+          "rationale": "Content Intelligence confidence is available.",
+          "signal": "content_intelligence_confidence",
+          "value": 0.4,
+          "weight": 3.2
+        },
+        {
+          "category": "content",
+          "metadata": {},
+          "rationale": "Content descriptors are available for ranking.",
+          "signal": "content_descriptors_available",
+          "value": true,
+          "weight": 6.0
+        },
+        {
+          "category": "content",
+          "metadata": {},
+          "rationale": "Runtime media is available.",
+          "signal": "runtime_media_available",
+          "value": true,
+          "weight": 4.0
+        },
+        {
+          "category": "business",
+          "metadata": {},
+          "rationale": "Business learning changes asset ranking.",
+          "signal": "business_learning_asset_score",
+          "value": {
+            "confidence": 0.7,
+            "evidence_freshness": "2026-07-13T02:27:11.400053+00:00",
+            "sample_size": 7,
+            "score": 5.833333333333332
+          },
+          "weight": 4.083333333333332
+        }
+      ],
+      "suppression_reasons": []
+    }
+  },
+  {
+    "event_type": "recommendation_event",
+    "payload": {
+      "asset_id": 101,
+      "business_learning_context_reference": null,
+      "business_registration_id": null,
+      "chat_registration_id": "1d372ca9-b048-4454-bd43-bc1f5e889e2c",
+      "content_intelligence_reference": null,
+      "conversation_context_reference": null,
+      "conversation_id": "conversation-1",
+      "customer_id": "customer-1",
+      "customer_intelligence_reference": null,
+      "delivery_id": "281202a9-dfbe-5831-af1a-85e0515c37fe",
+      "event_id": "70c6bb39-77be-5a3a-993d-23413eab93a4",
+      "event_state": "DELIVERY_PREPARED",
+      "event_timestamp": "2026-07-13T02:27:11.417426+00:00",
+      "experience_id": "experience-1",
+      "fulfillment_registration_id": "3fe81ba7-8c27-4fba-bed8-a25e16b3bf02",
+      "outcome_metadata": {
+        "failure_reason": null,
+        "retry_of_delivery_id": null,
+        "retryable": false,
+        "validation": {
+          "failures": [],
+          "metadata": {
+            "owner": "ChatCommerceDeliveryService",
+            "validates_chat_ready": true,
+            "validates_fulfillment_ready": true,
+            "validates_media_link": true
+          },
+          "retryable": false,
+          "valid": true,
+          "warnings": []
+        }
+      },
+      "product_id": "product-1",
+      "provider": "fanvue",
+      "recommendation_confidence": null,
+      "recommendation_id": "rec-101",
+      "recommendation_rationale": [],
+      "recommendation_score": null,
+      "rejected_candidate_reasons": [],
+      "schema_version": "phase_3_10_11_content_commerce_learning_v1",
+      "score_breakdown": {},
+      "supporting_evidence": [],
+      "suppression_reasons": []
+    }
+  },
+  {
+    "event_type": "recommendation_event",
+    "payload": {
+      "asset_id": 101,
+      "business_learning_context_reference": null,
+      "business_registration_id": null,
+      "chat_registration_id": null,
+      "content_intelligence_reference": null,
+      "conversation_context_reference": null,
+      "conversation_id": null,
+      "customer_id": null,
+      "customer_intelligence_reference": null,
+      "delivery_id": "281202a9-dfbe-5831-af1a-85e0515c37fe",
+      "event_id": "d63d9eff-3999-5c79-bb1b-c3dfa4385a8e",
+      "event_state": "DELIVERY_BLOCKED",
+      "event_timestamp": "2026-07-13T02:27:11.427295+00:00",
+      "experience_id": null,
+      "fulfillment_registration_id": null,
+      "outcome_metadata": {
+        "failure_reason": "invalid_media_link",
+        "retry_of_delivery_id": null,
+        "retryable": true,
+        "validation": {
+          "failures": [
+            "invalid_media_link"
+          ],
+          "metadata": {
+            "owner": "ChatCommerceDeliveryService",
+            "validates_chat_ready": true,
+            "validates_fulfillment_ready": true,
+            "validates_media_link": true
+          },
+          "retryable": true,
+          "valid": false,
+          "warnings": []
+        }
+      },
+      "product_id": null,
+      "provider": "telegram",
+      "recommendation_confidence": null,
+      "recommendation_id": "rec-101",
+      "recommendation_rationale": [],
+      "recommendation_score": null,
+      "rejected_candidate_reasons": [],
+      "schema_version": "phase_3_10_11_content_commerce_learning_v1",
+      "score_breakdown": {},
+      "supporting_evidence": [],
+      "suppression_reasons": []
+    }
+  },
+  {
+    "event_type": "recommendation_event",
+    "payload": {
+      "asset_id": 101,
+      "business_learning_context_reference": null,
+      "business_registration_id": null,
+      "chat_registration_id": null,
+      "content_intelligence_reference": null,
+      "conversation_context_reference": null,
+      "conversation_id": "conversation-1",
+      "customer_id": "customer-1",
+      "customer_intelligence_reference": null,
+      "delivery_id": "281202a9-dfbe-5831-af1a-85e0515c37fe",
+      "event_id": "7a50cac5-7206-5fc4-a08c-cb89bf4e9566",
+      "event_state": "DELIVERED",
+      "event_timestamp": "2026-07-13T02:27:11.418536+00:00",
+      "experience_id": "experience-1",
+      "fulfillment_registration_id": null,
+      "outcome_metadata": {
+        "payload": {
+          "asset_id": 101,
+          "blocking_reason": null,
+          "chat_registration_id": "1d372ca9-b048-4454-bd43-bc1f5e889e2c",
+          "conversation_id": "conversation-1",
+          "customer_id": "customer-1",
+          "delivery_id": "281202a9-dfbe-5831-af1a-85e0515c37fe",
+          "delivery_method": null,
+          "delivery_ready": true,
+          "delivery_type": "PAID",
+          "executed": true,
+          "execution_state": "sent",
+          "experience_id": "experience-1",
+          "experience_ids": [
+            "experience-1"
+          ],
+          "fanvue_media_link": "https://fanvue.example/media/101",
+          "fulfillment_id": "3fe81ba7-8c27-4fba-bed8-a25e16b3bf02",
+          "media_link": "https://fanvue.example/media/101",
+          "metadata": {
+            "delivery_owner": "ChatCommerceDeliveryService",
+            "recommendation_owner": "ContentRecommendationService",
+            "sends_messages": false,
+            "source": "ChatCommerceDeliveryService"
+          },
+          "payload_version": "phase_3_10_8_chat_commerce_delivery_v1",
+          "product_id": "product-1",
+          "product_ids": [
+            "product-1"
+          ],
+          "provider": "fanvue",
+          "provider_media_id": "media-101",
+          "provider_media_uuid": "media-101",
+          "readiness": {
+            "chat_ready": true,
+            "customer_eligible": true,
+            "fulfillment_ready": true,
+            "media_link_verified": true,
+            "recommendation_valid": true
+          },
+          "recommendation_id": "rec-101",
+          "status": "executed"
+        },
+        "reason": null
+      },
+      "product_id": "product-1",
+      "provider": "fanvue",
+      "recommendation_confidence": null,
+      "recommendation_id": "rec-101",
+      "recommendation_rationale": [],
+      "recommendation_score": null,
+      "rejected_candidate_reasons": [],
+      "schema_version": "phase_3_10_11_content_commerce_learning_v1",
+      "score_breakdown": {},
+      "supporting_evidence": [],
+      "suppression_reasons": []
+    }
+  },
+  {
+    "event_type": "recommendation_event",
+    "payload": {
+      "asset_id": 101,
+      "business_learning_context_reference": null,
+      "business_registration_id": null,
+      "chat_registration_id": null,
+      "content_intelligence_reference": null,
+      "conversation_context_reference": null,
+      "conversation_id": "conversation-1",
+      "customer_id": "customer-1",
+      "customer_intelligence_reference": null,
+      "delivery_id": "281202a9-dfbe-5831-af1a-85e0515c37fe",
+      "event_id": "34adc706-c6ea-5b9a-b447-ed34c3595a5c",
+      "event_state": "DELIVERY_FAILED",
+      "event_timestamp": "2026-07-13T02:27:11.420780+00:00",
+      "experience_id": "experience-1",
+      "fulfillment_registration_id": null,
+      "outcome_metadata": {
+        "payload": {
+          "asset_id": 101,
+          "blocking_reason": "provider_unavailable",
+          "chat_registration_id": "1d372ca9-b048-4454-bd43-bc1f5e889e2c",
+          "conversation_id": "conversation-1",
+          "customer_id": "customer-1",
+          "delivery_id": "281202a9-dfbe-5831-af1a-85e0515c37fe",
+          "delivery_method": null,
+          "delivery_ready": true,
+          "delivery_type": "PAID",
+          "executed": false,
+          "execution_state": "provider_unavailable",
+          "experience_id": "experience-1",
+          "experience_ids": [
+            "experience-1"
+          ],
+          "fanvue_media_link": "https://fanvue.example/media/101",
+          "fulfillment_id": "3fe81ba7-8c27-4fba-bed8-a25e16b3bf02",
+          "media_link": "https://fanvue.example/media/101",
+          "metadata": {
+            "delivery_owner": "ChatCommerceDeliveryService",
+            "recommendation_owner": "ContentRecommendationService",
+            "sends_messages": false,
+            "source": "ChatCommerceDeliveryService"
+          },
+          "payload_version": "phase_3_10_8_chat_commerce_delivery_v1",
+          "product_id": "product-1",
+          "product_ids": [
+            "product-1"
+          ],
+          "provider": "fanvue",
+          "provider_media_id": "media-101",
+          "provider_media_uuid": "media-101",
+          "readiness": {
+            "chat_ready": true,
+            "customer_eligible": true,
+            "fulfillment_ready": true,
+            "media_link_verified": true,
+            "recommendation_valid": true
+          },
+          "recommendation_id": "rec-101",
+          "status": "failed"
+        },
+        "reason": "failed"
+      },
+      "product_id": "product-1",
+      "provider": "fanvue",
+      "recommendation_confidence": null,
+      "recommendation_id": "rec-101",
+      "recommendation_rationale": [],
+      "recommendation_score": null,
+      "rejected_candidate_reasons": [],
+      "schema_version": "phase_3_10_11_content_commerce_learning_v1",
+      "score_breakdown": {},
+      "supporting_evidence": [],
+      "suppression_reasons": []
+    }
+  },
+  {
+    "event_type": "recommendation_event",
+    "payload": {
+      "asset_id": 101,
+      "business_learning_context_reference": null,
+      "business_registration_id": null,
+      "chat_registration_id": "1d372ca9-b048-4454-bd43-bc1f5e889e2c",
+      "content_intelligence_reference": null,
+      "conversation_context_reference": null,
+      "conversation_id": "conversation-1",
+      "customer_id": "customer-1",
+      "customer_intelligence_reference": null,
+      "delivery_id": "f86708c9-1d8c-5bd0-b5b1-2ecb3ea884f8",
+      "event_id": "defa658a-6293-5bea-b910-90ffbe5aad0b",
+      "event_state": "DELIVERY_PREPARED",
+      "event_timestamp": "2026-07-13T02:27:11.424294+00:00",
+      "experience_id": "experience-1",
+      "fulfillment_registration_id": "3fe81ba7-8c27-4fba-bed8-a25e16b3bf02",
+      "outcome_metadata": {
+        "failure_reason": null,
+        "retry_of_delivery_id": "old",
+        "retryable": false,
+        "validation": {
+          "failures": [],
+          "metadata": {
+            "owner": "ChatCommerceDeliveryService",
+            "validates_chat_ready": true,
+            "validates_fulfillment_ready": true,
+            "validates_media_link": true
+          },
+          "retryable": false,
+          "valid": true,
+          "warnings": []
+        }
+      },
+      "product_id": "product-1",
+      "provider": "fanvue",
+      "recommendation_confidence": null,
+      "recommendation_id": "rec-101",
+      "recommendation_rationale": [],
+      "recommendation_score": null,
+      "rejected_candidate_reasons": [],
+      "schema_version": "phase_3_10_11_content_commerce_learning_v1",
+      "score_breakdown": {},
+      "supporting_evidence": [],
+      "suppression_reasons": []
+    }
+  },
+  {
+    "event_type": "recommendation_event",
+    "payload": {
+      "asset_id": 101,
+      "business_learning_context_reference": null,
+      "business_registration_id": null,
+      "chat_registration_id": null,
+      "content_intelligence_reference": null,
+      "conversation_context_reference": null,
+      "conversation_id": "conversation-1",
+      "customer_id": "customer-1",
+      "customer_intelligence_reference": null,
+      "delivery_id": "f86708c9-1d8c-5bd0-b5b1-2ecb3ea884f8",
+      "event_id": "8486a3a7-fcbc-5d57-9ede-cd262ecd61d8",
+      "event_state": "RETRIED",
+      "event_timestamp": "2026-07-13T02:27:11.424294+00:00",
+      "experience_id": null,
+      "fulfillment_registration_id": null,
+      "outcome_metadata": {
+        "retry_of_delivery_id": "old"
+      },
+      "product_id": null,
+      "provider": null,
+      "recommendation_confidence": null,
+      "recommendation_id": "rec-101",
+      "recommendation_rationale": [],
+      "recommendation_score": null,
+      "rejected_candidate_reasons": [],
+      "schema_version": "phase_3_10_11_content_commerce_learning_v1",
+      "score_breakdown": {},
+      "supporting_evidence": [],
+      "suppression_reasons": []
+    }
+  },
+  {
+    "event_type": "business_outcome",
+    "payload": {
+      "compatibility_metadata": {
+        "read_only": true,
+        "source": "business_learning"
+      },
+      "customer_id": "customer-1",
+      "customer_reference": "customer-1",
+      "evidence_metadata": {},
+      "experience_id": null,
+      "experience_reference": null,
+      "metadata": {
+        "canonical_business_outcome": true,
+        "source": "business_learning"
+      },
+      "occurred_at": null,
+      "outcome_id": null,
+      "outcome_type": "PRODUCT_PURCHASED",
+      "product_id": "product-1",
+      "product_reference": "product-1",
+      "provider_metadata": {},
+      "recommendation_id": null,
+      "signals": {},
+      "status": null,
+      "strategy_source": null,
+      "subject_id": null,
+      "subject_type": null,
+      "timestamp": null,
+      "value_cents": 0
+    }
+  },
+  {
+    "event_type": "business_outcome",
+    "payload": {
+      "compatibility_metadata": {
+        "read_only": true,
+        "source": "business_learning"
+      },
+      "customer_id": "customer-1",
+      "customer_reference": "customer-1",
+      "evidence_metadata": {},
+      "experience_id": "experience-1",
+      "experience_reference": "experience-1",
+      "metadata": {
+        "canonical_business_outcome": true,
+        "source": "business_learning"
+      },
+      "occurred_at": null,
+      "outcome_id": null,
+      "outcome_type": "EXPERIENCE_COMPLETED",
+      "product_id": null,
+      "product_reference": null,
+      "provider_metadata": {},
+      "recommendation_id": null,
+      "signals": {},
+      "status": null,
+      "strategy_source": null,
+      "subject_id": null,
+      "subject_type": null,
+      "timestamp": null,
+      "value_cents": 0
+    }
+  }
+]

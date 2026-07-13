@@ -75,6 +75,22 @@ class PromptAssistantBatch:
 
 
 @dataclass(frozen=True)
+class PhotoshootCreativeDirection:
+    title: str
+    creative_direction: str
+    reasoning: str
+    continuity_notes: str
+    camera_framing: str
+    lighting: str
+    emotion: str
+    pose_composition: str
+    creative_mode: str = "premium"
+    session_direction: str = ""
+    continuity_locks: Mapping[str, bool] = field(default_factory=dict)
+    raw_response: str = ""
+
+
+@dataclass(frozen=True)
 class CreativeHistoryEntry:
     session: CreativeSession
     prompt_plan: PromptPlan | None = None

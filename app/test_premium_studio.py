@@ -9,6 +9,10 @@ from unittest.mock import patch
 if "streamlit" not in sys.modules:
     streamlit = types.ModuleType("streamlit")
     sys.modules["streamlit"] = streamlit
+if "streamlit.components" not in sys.modules:
+    sys.modules["streamlit.components"] = types.ModuleType("streamlit.components")
+if "streamlit.components.v1" not in sys.modules:
+    sys.modules["streamlit.components.v1"] = types.ModuleType("streamlit.components.v1")
 
 if "psycopg" not in sys.modules:
     psycopg = types.ModuleType("psycopg")
@@ -29,6 +33,8 @@ if "psycopg" not in sys.modules:
 from app.dashboard.pages.content_studio import (
     PREMIUM_CREATIVE_MODE_LABELS,
     PREMIUM_PROVIDER_LABELS,
+    _apply_pending_premium_prompt_source,
+    _select_premium_prompt_source_on_next_run,
     create_premium_photoshoot_session,
     create_premium_studio_generation_request,
     default_provider_index,
@@ -126,6 +132,7 @@ class FakeRegistry:
     def provider_ids(self):
         return (
             "seedream_4_5",
+            "seedream_5_0_pro",
             "wan_2_7_image_edit",
             "nano_banana_pro",
             "flux",
@@ -278,15 +285,39 @@ class PremiumStudioTests(unittest.TestCase):
         options = premium_studio_provider_options(FakeGenerationEngine())
 
         self.assertIn(("seedream_4_5", PREMIUM_PROVIDER_LABELS["seedream_4_5"]), options)
+        self.assertIn(("seedream_5_0_pro", PREMIUM_PROVIDER_LABELS["seedream_5_0_pro"]), options)
         self.assertIn(("wan_2_7_image_edit", PREMIUM_PROVIDER_LABELS["wan_2_7_image_edit"]), options)
-        self.assertIn(("nano_banana_pro", PREMIUM_PROVIDER_LABELS["nano_banana_pro"]), options)
-        self.assertIn(("flux", PREMIUM_PROVIDER_LABELS["flux"]), options)
+        self.assertNotIn(("nano_banana_pro", "Nano Banana Pro"), options)
+        self.assertNotIn(("flux", "Flux"), options)
         self.assertNotIn(("unknown_provider", "unknown_provider"), options)
 
-    def test_seedream_4_5_is_default_provider_when_available(self):
+    def test_seedream_5_0_pro_is_default_provider_when_available(self):
         provider_ids = tuple(provider_id for provider_id, _label in premium_studio_provider_options(FakeGenerationEngine()))
 
-        self.assertEqual(provider_ids[default_provider_index(provider_ids)], "seedream_4_5")
+        self.assertEqual(
+            provider_ids[default_provider_index(provider_ids, preferred_provider_id="seedream_5_0_pro")],
+            "seedream_5_0_pro",
+        )
+
+    def test_prompt_workshop_selection_is_staged_before_radio_render(self):
+        import streamlit as st
+
+        original_state = getattr(st, "session_state", None)
+        try:
+            st.session_state = {}
+
+            _select_premium_prompt_source_on_next_run("Prompt Workshop")
+            self.assertEqual(st.session_state["premium_studio_pending_tag_source"], "Prompt Workshop")
+
+            _apply_pending_premium_prompt_source()
+
+            self.assertEqual(st.session_state["premium_studio_selected_tag_source"], "Prompt Workshop")
+            self.assertNotIn("premium_studio_pending_tag_source", st.session_state)
+        finally:
+            if original_state is None:
+                delattr(st, "session_state")
+            else:
+                st.session_state = original_state
 
     def test_photoshoot_integration_creates_premium_sequence(self):
         references = FakeReferenceLibrary(reference_asset())
@@ -314,47 +345,49 @@ class PremiumStudioTests(unittest.TestCase):
 
     def test_premium_studio_ui_contract_and_generation_library_integration(self):
         source = Path("app/dashboard/pages/content_studio.py").read_text(encoding="utf-8")
+        premium_source = source.split("def _render_premium_studio", 1)[1].split("def _render_edit_studio", 1)[0]
         navigation = Path("app/dashboard/navigation.py").read_text(encoding="utf-8")
 
         self.assertIn("def _render_premium_studio", source)
-        self.assertIn("Premium Creative Mode", source)
-        self.assertIn("Premium Creative Tags", source)
-        self.assertIn("Prompt Count", source)
-        self.assertIn("Provider", source)
-        self.assertIn("Prompt Preview", source)
-        self.assertIn("expanded=False", source)
+        self.assertIn("Premium Creative Mode", premium_source)
+        self.assertIn("Premium Creative Tags", premium_source)
+        self.assertIn("Prompt Count", premium_source)
+        self.assertIn("Provider", premium_source)
+        self.assertIn("Prompt Preview", premium_source)
+        self.assertIn("expanded=True", premium_source)
         self.assertIn("Copy Prompt Batch", source)
-        self.assertIn("Regenerate Premium Prompt Preview", source)
+        self.assertIn("Regenerate Premium Prompt Preview", premium_source)
         self.assertIn("Advanced Details", source)
         self.assertIn("prompt_variations", source)
-        self.assertIn("Generate Premium Images", source)
-        self.assertIn("Start Premium Photoshoot", source)
-        self.assertIn("Generation Status", source)
-        self.assertIn("Generation Library", source)
-        self.assertIn("Open Generation Library", source)
-        self.assertIn("Live Generated Images", source)
-        self.assertIn("Generation Complete", source)
-        self.assertIn("complete_preview", source)
-        self.assertIn("time.sleep(5)", source)
-        self.assertIn("Reset Session", source)
-        self.assertIn("content_studio_reset_requested", source)
-        self.assertIn("Resume Previous Generation?", source)
-        self.assertIn("No active Premium Studio generation session.", source)
-        self.assertIn("remaining", source)
-        self.assertIn("Creative Director Tools", source)
-        self.assertIn("Enhance Premium Tags", source)
-        self.assertIn("Surprise Me", source)
-        self.assertIn("Enhanced Explicit Tags", source)
-        self.assertIn("Ask Grok / Prompt Assistant", source)
-        self.assertIn("Ask Grok Anything", source)
+        self.assertIn("Generate Premium Images", premium_source)
+        self.assertIn("Live Generated Images", premium_source)
+        self.assertIn("complete_preview", premium_source)
+        self.assertIn("preview_placeholder.empty()", source)
+        self.assertNotIn("time.sleep(5)", source)
+        self.assertNotIn("Start Premium Photoshoot", premium_source)
+        self.assertNotIn("Continue Photoshoot", premium_source)
+        self.assertNotIn("Open Existing Photoshoot", premium_source)
+        self.assertNotIn("Current Photoshoot", premium_source)
+        self.assertNotIn("Generation Status", premium_source)
+        self.assertNotIn("Open Generation Library", premium_source)
+        self.assertNotIn("Reset Session", premium_source)
+        self.assertNotIn("Resume Previous Generation?", premium_source)
+        self.assertNotIn("No active Content Studio generation session.", premium_source)
+        self.assertIn("Creative Director Tools", premium_source)
+        self.assertIn("Enhance Premium Tags", premium_source)
+        self.assertIn("Surprise Me", premium_source)
+        self.assertIn("Enhanced Explicit Tags", premium_source)
+        self.assertIn("Prompt Workshop", source)
+        self.assertIn("Canonical Prompt Planner Q&A", source)
         self.assertIn("premium_grok_anything_history", source)
-        self.assertIn("Ask Grok for Shot Cards", source)
-        self.assertIn("Apply to Premium Tags", source)
-        self.assertIn("Prompt Archive", source)
-        self.assertIn("Manual Prompt", source)
-        self.assertIn("generation_library.sync_jobs", source)
-        self.assertIn("premium_studio", source)
-        self.assertIn('"Premium Studio"', navigation)
+        self.assertIn("Prompt Workshop Brief", source)
+        self.assertIn("Accept Selected", source)
+        self.assertIn("Prompt Workshop Archive", source)
+        self.assertIn("Manual Prompt", premium_source)
+        self.assertIn("premium_studio", premium_source)
+        self.assertIn('DashboardNavigationItem("Content Studio", "Premium Studio")', navigation)
+        self.assertIn('"Premium Studio": "Content Creation: Content Studio"', navigation)
+        self.assertIn('st.title("Content Studio")', premium_source)
         self.assertNotIn("Premium generated images will appear here", source)
         for mode in PREMIUM_CREATIVE_MODE_LABELS:
             self.assertIn(mode, source)
@@ -411,11 +444,11 @@ class PremiumStudioTests(unittest.TestCase):
         profile = {"id": 7, "display_name": "Ava"}
 
         with patch(
-            "app.services.creative_director_service.ask_grok_for_prompt_candidates",
+            "app.services.canonical_prompt_planner.generate_premium_prompts",
             return_value=[
-                "hotel mirror lingerie shot card 1",
-                "hotel mirror lingerie shot card 2",
-                "hotel mirror lingerie shot card 3",
+                "hotel mirror lingerie canonical prompt 1",
+                "hotel mirror lingerie canonical prompt 2",
+                "hotel mirror lingerie canonical prompt 3",
             ],
         ):
             batch = service.ask_prompt_assistant(
@@ -439,7 +472,7 @@ class PremiumStudioTests(unittest.TestCase):
         )
 
         with patch(
-            "app.services.creative_director_service.generate_premium_prompts",
+            "app.services.canonical_prompt_planner.generate_premium_prompts",
             return_value=[
                 "premium hotel mirror prompt with medium-close creator framing",
                 "premium black lace prompt with head-to-hips crop",
@@ -454,7 +487,7 @@ class PremiumStudioTests(unittest.TestCase):
 
         self.assertIn("premium hotel mirror prompt", plan.prompt_text)
         self.assertEqual(plan.prompt_metadata["generation_brain"], "wavespeed_canonical")
-        self.assertEqual(plan.prompt_metadata["prompt_builder"], "wavespeed_premium_prompt_builder")
+        self.assertEqual(plan.prompt_metadata["prompt_builder"], "canonical_premium_prompt_planner")
         self.assertEqual(plan.prompt_metadata["reference_conditioning"], "wavespeed")
         self.assertIn("medium-close creator framing", plan.prompt_text)
 

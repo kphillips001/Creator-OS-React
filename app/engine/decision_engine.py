@@ -17,6 +17,12 @@ from app.services.decision_engine_runtime_boundary import (
 from app.services.product_recommendation_service import (
     ProductRecommendationService,
 )
+from app.models.content_recommendation import RecommendationRequest
+from app.services.content_recommendation_service import (
+    ContentRecommendationService,
+)
+from app.models.chat_commerce_delivery import ChatDeliveryRequest
+from app.services.chat_commerce_delivery_service import ChatCommerceDeliveryService
 from app.services.cms_contract_service import CMSContractService
 
 from app.services.decision_engine_intimacy_integration_service import (
@@ -184,6 +190,21 @@ class DecisionEngine:
             content_service=self.content,
             logger=self.logger,
         )
+        try:
+            from app.services.chat_commerce_registration_service import (
+                ChatCommerceRegistrationService,
+            )
+
+            self.chat_commerce_inventory_service = ChatCommerceRegistrationService()
+        except Exception:
+            self.chat_commerce_inventory_service = None
+        self.content_recommendation_service = ContentRecommendationService(
+            chat_commerce_inventory_service=self.chat_commerce_inventory_service,
+            logger=self.logger,
+        )
+        self.chat_commerce_delivery_service = ChatCommerceDeliveryService(
+            chat_commerce_registration_service=self.chat_commerce_inventory_service,
+        )
         self.cms_contract_service = CMSContractService()
         self.last_cms_offer_candidate_contract = None
         self.last_cms_customer_progress_contract = None
@@ -209,6 +230,24 @@ class DecisionEngine:
             self.logger.info("[CMS CONTENT SELECT] skipped: offer_type=none")
             return None
 
+        chat_inventory_payload = self._select_chat_commerce_inventory_content(
+            normalized_offer_type,
+            working_memory,
+        )
+        if chat_inventory_payload is not None:
+            self.logger.info(
+                "[CMS CONTENT SELECT] source=ChatCommerceInventory | "
+                f"type={normalized_offer_type} | persona={self.settings.DEFAULT_PERSONA}"
+            )
+            self.last_cms_offer_candidate_contract = None
+            self.last_cms_customer_progress_contract = (
+                self.cms_contract_service.build_customer_progress(
+                    self._cms_customer_id(working_memory),
+                    user_memory=working_memory,
+                )
+            )
+            return chat_inventory_payload
+
         self.logger.info(
             f"[CMS CONTENT SELECT] source=ProductRecommendationService | "
             f"fallback=ContentService.get_content | "
@@ -230,6 +269,192 @@ class DecisionEngine:
             )
         )
         return selected_content
+
+    def _select_chat_commerce_inventory_content(
+        self,
+        offer_type: str,
+        working_memory: dict,
+    ) -> dict | None:
+        creator_profile_id = (
+            working_memory.get("creator_profile_id")
+            or working_memory.get("active_creator_profile_id")
+        )
+        try:
+            creator_profile_id = (
+                int(creator_profile_id) if creator_profile_id is not None else None
+            )
+        except (TypeError, ValueError):
+            creator_profile_id = None
+        recommendation_service = getattr(
+            self,
+            "content_recommendation_service",
+            None,
+        )
+        if recommendation_service is not None:
+            try:
+                result = recommendation_service.recommend(
+                    RecommendationRequest(
+                        creator_profile_id=creator_profile_id,
+                        customer_context=working_memory,
+                        conversation_context={
+                            "last_user_message": working_memory.get(
+                                "last_user_message"
+                            ),
+                            "intent_signals": working_memory.get(
+                                "intent_signals",
+                                (),
+                            ),
+                        },
+                        decision_context=working_memory,
+                        offer_type=offer_type,
+                        persona=self.settings.DEFAULT_PERSONA,
+                        limit=1,
+                        candidate_limit=25,
+                    )
+                )
+                candidate = result.top_candidate
+                if candidate is not None:
+                    payload = candidate.to_legacy_payload(
+                        self.settings.DEFAULT_PERSONA,
+                        offer_type,
+                    )
+                    return self._prepare_chat_commerce_delivery_payload(
+                        payload,
+                        recommendation=candidate.to_context(),
+                        working_memory=working_memory,
+                        offer_type=offer_type,
+                    )
+            except Exception as error:
+                self.logger.info(
+                    "[CONTENT RECOMMENDATION FALLBACK] "
+                    f"reason={type(error).__name__}"
+                )
+
+        service = getattr(self, "chat_commerce_inventory_service", None)
+        if service is None:
+            return None
+        try:
+            candidates = service.get_recommendation_candidates(
+                creator_profile_id=creator_profile_id,
+                limit=25,
+            )
+        except Exception:
+            return None
+        for candidate in candidates:
+            eligibility = service.eligibility_for_asset(
+                candidate.asset_id,
+                customer_context=working_memory,
+            )
+            if eligibility.recommendation_eligible:
+                payload = candidate.to_legacy_payload(
+                    self.settings.DEFAULT_PERSONA,
+                    offer_type,
+                )
+                return self._prepare_chat_commerce_delivery_payload(
+                    payload,
+                    recommendation=payload,
+                    working_memory=working_memory,
+                    offer_type=offer_type,
+                )
+        return None
+
+    def _prepare_chat_commerce_delivery_payload(
+        self,
+        payload: dict,
+        *,
+        recommendation,
+        working_memory: dict,
+        offer_type: str,
+    ) -> dict:
+        service = getattr(self, "chat_commerce_delivery_service", None)
+        if service is None:
+            return payload
+        asset_id = payload.get("asset_id") or payload.get("content_item_id")
+        if asset_id is None:
+            return payload
+        try:
+            recommendation_metadata = payload.get("recommendation_metadata")
+            if not isinstance(recommendation_metadata, dict):
+                recommendation_metadata = {}
+            result = service.prepare_delivery(
+                ChatDeliveryRequest(
+                    asset_id=int(asset_id),
+                    recommendation=recommendation,
+                    recommendation_id=(
+                        payload.get("recommendation_id")
+                        or recommendation_metadata.get("recommendation_id")
+                    ),
+                    customer_context=working_memory or {},
+                    conversation_context={
+                        "conversation_id": (working_memory or {}).get(
+                            "conversation_id"
+                        ),
+                        "last_user_message": (working_memory or {}).get(
+                            "last_user_message"
+                        ),
+                        "intent_signals": (working_memory or {}).get(
+                            "intent_signals",
+                            (),
+                        ),
+                    },
+                    decision_context={
+                        **dict(working_memory or {}),
+                        "offer_type": offer_type,
+                        "persona": self.settings.DEFAULT_PERSONA,
+                    },
+                    provider="telegram",
+                    customer_id=str(
+                        (working_memory or {}).get("customer_id")
+                        or (working_memory or {}).get("user_id")
+                        or (working_memory or {}).get("fanvue_user_id")
+                        or ""
+                    )
+                    or None,
+                    conversation_id=(working_memory or {}).get("conversation_id"),
+                    metadata={"source": "DecisionEngine"},
+                )
+            )
+        except Exception as error:
+            self.logger.info(
+                "[CHAT COMMERCE DELIVERY FALLBACK] "
+                f"reason={type(error).__name__}"
+            )
+            return payload
+
+        context = result.to_context()
+        delivery_payload = context.get("payload") or {}
+        payload["chat_delivery_result"] = context
+        payload["chat_delivery_payload"] = delivery_payload
+        payload["delivery_prepared"] = bool(result.success)
+        payload["delivery_allowed"] = bool(result.success)
+        payload["delivery_validation_failures"] = (
+            context.get("validation", {}).get("failures", [])
+        )
+        payload["delivery_blocking_reason"] = result.failure_reason
+        if delivery_payload:
+            payload["delivery_id"] = delivery_payload.get("delivery_id")
+            payload["recommendation_id"] = delivery_payload.get("recommendation_id")
+            payload["fulfillment_id"] = delivery_payload.get("fulfillment_id")
+            payload["provider_media_id"] = delivery_payload.get("provider_media_id")
+            payload["media_link"] = delivery_payload.get("media_link")
+            payload["fanvue_link"] = delivery_payload.get("media_link")
+            payload["checkout_url"] = delivery_payload.get("media_link")
+            payload["product_id"] = payload.get("product_id") or delivery_payload.get(
+                "product_id"
+            )
+            payload["experience_id"] = payload.get("experience_id") or (
+                delivery_payload.get("experience_id")
+            )
+            payload["delivery_type"] = delivery_payload.get("delivery_type")
+            payload["delivery_permission_mode"] = (
+                "paid"
+                if delivery_payload.get("delivery_method") == "paid_media_link"
+                else "free"
+            )
+            payload["delivery_requires_payment"] = (
+                delivery_payload.get("delivery_method") == "paid_media_link"
+            )
+        return payload
 
     def _cms_customer_id(self, working_memory: dict | None) -> str:
         working_memory = working_memory or {}

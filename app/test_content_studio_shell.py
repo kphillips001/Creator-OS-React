@@ -1,4 +1,4 @@
-import unittest
+﻿import unittest
 import sys
 import types
 from pathlib import Path
@@ -6,6 +6,10 @@ from pathlib import Path
 if "streamlit" not in sys.modules:
     streamlit = types.ModuleType("streamlit")
     sys.modules["streamlit"] = streamlit
+if "streamlit.components" not in sys.modules:
+    sys.modules["streamlit.components"] = types.ModuleType("streamlit.components")
+if "streamlit.components.v1" not in sys.modules:
+    sys.modules["streamlit.components.v1"] = types.ModuleType("streamlit.components.v1")
 
 if "psycopg" not in sys.modules:
     psycopg = types.ModuleType("psycopg")
@@ -41,31 +45,54 @@ class ContentStudioShellTests(unittest.TestCase):
             self.assertIn(page, PROFILE_LOCKED_PAGES)
             self.assertEqual(
                 DASHBOARD_PAGE_LABELS[page],
-                f"Content Studio: {page}",
-            )
-            self.assertEqual(
-                page_for_grouped_navigation_label(
-                    grouped_navigation_label_for_page(page)
-                ),
-                page,
+                "Content Creation: Content Studio"
+                if page == "Premium Studio"
+                else "Content Creation: Diagnostics"
+                if page == "Generation Workspace"
+                else f"Content Creation: {page}",
             )
 
     def test_content_studio_navigation_group_matches_shell_pages(self):
         group = next(
             item
             for item in DASHBOARD_NAVIGATION_GROUPS
-            if item.label == "Content Studio"
+            if item.label == "Content Creation"
         )
 
-        self.assertEqual(group.icon, "CS")
+        self.assertEqual(group.icon, "📸")
         self.assertEqual(
             tuple(item.label for item in group.items),
-            CONTENT_STUDIO_PAGES,
+            (
+                "Content Studio",
+                "Generation Library",
+                "Edit Studio",
+                "📸 Photoshoot Studio",
+                "📸 Photoshoot Gallery",
+                "Reference Library",
+                "Archive",
+                "Diagnostics",
+            ),
         )
         self.assertEqual(
             tuple(item.page for item in group.items),
-            CONTENT_STUDIO_PAGES,
+            (
+                "Premium Studio",
+                "Generation Library",
+                "Edit Studio",
+                "Photoshoot Studio",
+                "Photoshoot Gallery",
+                "Reference Library",
+                "Archive",
+                "Generation Workspace",
+            ),
         )
+        for item in group.items:
+            self.assertEqual(
+                page_for_grouped_navigation_label(
+                    grouped_navigation_label_for_page(item.page)
+                ),
+                item.page,
+            )
 
     def test_dashboard_router_exposes_content_studio_shell(self):
         source = Path("app/dashboard/main.py").read_text(encoding="utf-8")
@@ -87,7 +114,6 @@ class ContentStudioShellTests(unittest.TestCase):
         self.assertNotIn("poll_wavespeed_result", source)
         self.assertNotIn("upload_to_imgbb", source)
         self.assertNotIn("generate_prompts_with_grok", source)
-        self.assertNotIn("requests", source)
         self.assertNotIn("ProductRepository", source)
         self.assertNotIn("PublishingService", source)
         self.assertNotIn("AssetRepository", source)

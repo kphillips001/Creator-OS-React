@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+import re
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Callable, Mapping
@@ -16,6 +17,7 @@ from app.models.creative_director import (
     CreativeHistoryEntry,
     CreativeRecommendation,
     CreativeSession,
+    PhotoshootCreativeDirection,
     PromptAssistantBatch,
     PromptPlan,
     new_id,
@@ -23,9 +25,12 @@ from app.models.creative_director import (
 from app.models.reference_library import ReferenceAsset
 from app.prompts.generation_modes import GENERATION_MODES
 from app.prompts.prompt_builder import build_chatgpt_prompt, normalize_social_prompt_continuity
-from app.services.explicit_prompt_service import enhance_explicit_tags, generate_explicit_prompts
-from app.services.grok_prompt_assistant_service import ask_grok_for_prompt_candidates
-from app.services.premium_director_service import generate_premium_prompts
+from app.services.canonical_prompt_planner import (
+    CanonicalPromptPlanner,
+    CanonicalPromptPlanningRequest,
+    CanonicalPromptPlanningResult,
+)
+from app.services.explicit_prompt_service import enhance_explicit_tags
 from app.services.premium_lucky_service import (
     generate_lucky_explicit_tags,
     generate_lucky_premium_tags,
@@ -54,6 +59,7 @@ class CreativeDirectorService:
         self.storage_dir = Path(storage_dir or self.DEFAULT_STORAGE_DIR)
         self.reference_library = reference_library_service or ReferenceLibraryService()
         self.ask_anything_provider = ask_anything_provider
+        self.prompt_planner = CanonicalPromptPlanner()
 
     @property
     def sessions_path(self) -> Path:
@@ -222,23 +228,40 @@ class CreativeDirectorService:
         request = str(request_text or "").strip()
         if not request:
             raise ValueError("Prompt assistant request is required.")
-        count = max(1, min(int(prompt_count or 1), 12))
-        prompts = tuple(
-            ask_grok_for_prompt_candidates(
-                user_request=request,
-                lane=str(lane or "premium").strip().lower(),
-                prompt_count=count,
-            )
+        planning_result = self.plan_prompts(
+            mode=str(lane or "premium").strip().lower(),
+            creative_tags=request,
+            prompt_count=prompt_count,
+            metadata={"source": "prompt_workshop"},
         )
         batch = PromptAssistantBatch(
             batch_id=new_id("prompt_assistant"),
             creator_profile_id=creator_profile_id,
             request_text=request,
-            lane=str(lane or "premium").strip().lower(),
-            prompts=prompts,
+            lane=planning_result.mode,
+            prompts=planning_result.prompts,
         )
         self.save_prompt_assistant_batch(batch)
         return batch
+
+    def plan_prompts(
+        self,
+        *,
+        mode: str,
+        creative_tags: str,
+        prompt_count: int,
+        optional_direction: str | None = None,
+        metadata: Mapping[str, Any] | None = None,
+    ) -> CanonicalPromptPlanningResult:
+        return self.prompt_planner.plan(
+            CanonicalPromptPlanningRequest(
+                mode=mode,
+                creative_tags=creative_tags,
+                prompt_count=prompt_count,
+                optional_direction=optional_direction,
+                metadata=metadata or {},
+            )
+        )
 
     def save_prompt_assistant_batch(self, batch: PromptAssistantBatch) -> None:
         entries = self._read_json(self.prompt_assistant_path, [])
@@ -284,17 +307,27 @@ class CreativeDirectorService:
         image_bytes: bytes | None = None,
         image_mime_type: str | None = None,
         image_name: str | None = None,
+        images: tuple[Mapping[str, Any], ...] | list[Mapping[str, Any]] | None = None,
     ) -> str:
         prompt = str(question or "").strip()
         if not prompt:
             raise ValueError("Enter a question before asking.")
+        image_payloads = self._normalize_vision_images(
+            image_bytes=image_bytes,
+            image_mime_type=image_mime_type,
+            image_name=image_name,
+            images=images,
+        )
         if self.ask_anything_provider:
+            # Prefer the latest/current frame as the primary image for backward-compatible providers.
+            primary = image_payloads[-1] if image_payloads else {}
             return str(
                 self.ask_anything_provider(
                     question=prompt,
-                    image_bytes=image_bytes,
-                    image_mime_type=image_mime_type,
-                    image_name=image_name,
+                    image_bytes=primary.get("bytes"),
+                    image_mime_type=primary.get("mime_type"),
+                    image_name=primary.get("label") or image_name,
+                    images=image_payloads,
                 )
             ).strip()
         module = __import__("openai")
@@ -303,22 +336,26 @@ class CreativeDirectorService:
             api_key=self._grok_api_key(),
             base_url=os.getenv("GROK_BASE_URL") or "https://api.x.ai/v1",
         )
-        has_image = bool(image_bytes)
+        has_image = bool(image_payloads)
         model = (
             GROK_VISION_MODEL
             if has_image
             else os.getenv("GROK_MODEL") or "grok-3-mini"
         )
         if has_image:
-            mime_type = image_mime_type or "image/png"
-            encoded = base64.b64encode(image_bytes or b"").decode("utf-8")
-            content = [
-                {"type": "text", "text": prompt},
-                {
-                    "type": "image_url",
-                    "image_url": {"url": f"data:{mime_type};base64,{encoded}"},
-                },
-            ]
+            content: list[dict[str, Any]] = [{"type": "text", "text": prompt}]
+            for item in image_payloads:
+                label = str(item.get("label") or "").strip()
+                if label:
+                    content.append({"type": "text", "text": f"[Image: {label}]"})
+                mime_type = str(item.get("mime_type") or "image/png")
+                encoded = base64.b64encode(item.get("bytes") or b"").decode("utf-8")
+                content.append(
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:{mime_type};base64,{encoded}"},
+                    }
+                )
         else:
             content = prompt
         response = client.chat.completions.create(
@@ -327,6 +364,191 @@ class CreativeDirectorService:
             temperature=0.8,
         )
         return str(response.choices[0].message.content or "").strip()
+
+    @staticmethod
+    def _normalize_vision_images(
+        *,
+        image_bytes: bytes | None = None,
+        image_mime_type: str | None = None,
+        image_name: str | None = None,
+        images: tuple[Mapping[str, Any], ...] | list[Mapping[str, Any]] | None = None,
+    ) -> tuple[dict[str, Any], ...]:
+        payloads: list[dict[str, Any]] = []
+        for item in images or ():
+            if not isinstance(item, Mapping):
+                continue
+            raw = item.get("bytes")
+            if raw is None:
+                raw = item.get("image_bytes")
+            if not raw:
+                continue
+            payloads.append(
+                {
+                    "bytes": bytes(raw),
+                    "mime_type": str(item.get("mime_type") or item.get("image_mime_type") or "image/png"),
+                    "label": str(item.get("label") or item.get("image_name") or item.get("name") or "").strip(),
+                }
+            )
+        if not payloads and image_bytes:
+            payloads.append(
+                {
+                    "bytes": bytes(image_bytes),
+                    "mime_type": str(image_mime_type or "image/png"),
+                    "label": str(image_name or "").strip(),
+                }
+            )
+        return tuple(payloads)
+
+    def recommend_photoshoot_direction(
+        self,
+        *,
+        image_bytes: bytes,
+        image_mime_type: str | None = None,
+        session_context: Mapping[str, Any] | None = None,
+        approved_history: tuple[Mapping[str, Any], ...] = (),
+        creative_mode: str = "premium",
+        session_direction: str = "",
+        creative_hint: str = "",
+        continuity_locks: Mapping[str, bool] | None = None,
+    ) -> PhotoshootCreativeDirection:
+        if not image_bytes:
+            raise ValueError("Current image is required before asking the Creative Director.")
+        locks = {
+            "location": True,
+            "wardrobe": True,
+            "lighting": True,
+            "hairstyle": True,
+            "makeup": True,
+            "camera_style": True,
+            **dict(continuity_locks or {}),
+        }
+        context = dict(session_context or {})
+        history = tuple(dict(item or {}) for item in approved_history)
+        direction = str(session_direction or "").strip()
+        hint = str(creative_hint or "").strip()
+        mode = str(creative_mode or "premium").strip().lower()
+        prompt = self._build_photoshoot_creative_director_prompt(
+            session_context=context,
+            approved_history=history,
+            creative_mode=mode,
+            session_direction=direction,
+            creative_hint=hint,
+            continuity_locks=locks,
+        )
+        response = self.ask_anything(
+            question=prompt,
+            image_bytes=image_bytes,
+            image_mime_type=image_mime_type or "image/png",
+        )
+        return self._photoshoot_direction_from_response(
+            response=response,
+            creative_mode=mode,
+            session_direction=direction,
+            continuity_locks=locks,
+        )
+
+    def suggest_photoshoot_inspiration(
+        self,
+        *,
+        image_bytes: bytes,
+        image_mime_type: str | None = None,
+        session_context: Mapping[str, Any] | None = None,
+        approved_history: tuple[Mapping[str, Any], ...] = (),
+        creative_mode: str = "premium",
+        session_direction: str = "",
+        creative_hint: str = "",
+        grok_guidance: str = "",
+        continuity_locks: Mapping[str, bool] | None = None,
+        provider_context: str = "",
+        idea_count: int = 8,
+        timeline_images: tuple[Mapping[str, Any], ...] | list[Mapping[str, Any]] | None = None,
+    ) -> tuple[str, ...]:
+        if not image_bytes and not timeline_images:
+            raise ValueError("Current image is required before asking Grok.")
+        locks = {
+            "location": True,
+            "wardrobe": True,
+            "lighting": True,
+            "hairstyle": True,
+            "makeup": True,
+            "camera_style": True,
+            **dict(continuity_locks or {}),
+        }
+        count = max(5, min(10, int(idea_count or 8)))
+        vision_images = self._select_timeline_vision_images(
+            timeline_images=timeline_images,
+            fallback_bytes=image_bytes,
+            fallback_mime_type=image_mime_type or "image/png",
+        )
+        if not vision_images:
+            raise ValueError("Current image is required before asking Grok.")
+        # Prefer dedicated Ask Grok guidance; fall back to creative_hint only if guidance is blank.
+        guidance = str(grok_guidance or "").strip() or str(creative_hint or "").strip()
+        prompt = self._build_photoshoot_grok_inspiration_prompt(
+            session_context=dict(session_context or {}),
+            approved_history=tuple(dict(item or {}) for item in approved_history),
+            creative_mode=str(creative_mode or "premium").strip().lower(),
+            session_direction=str(session_direction or "").strip(),
+            creative_hint=str(creative_hint or "").strip(),
+            grok_guidance=guidance,
+            continuity_locks=locks,
+            provider_context=str(provider_context or "").strip(),
+            idea_count=count,
+            timeline_labels=tuple(
+                str(item.get("label") or f"Shot {index}")
+                for index, item in enumerate(vision_images, start=1)
+            ),
+        )
+        response = self.ask_anything(
+            question=prompt,
+            image_bytes=vision_images[-1]["bytes"],
+            image_mime_type=str(vision_images[-1].get("mime_type") or "image/png"),
+            images=vision_images,
+        )
+        return self._parse_inspiration_ideas(response, idea_count=count)
+
+    @classmethod
+    def _select_timeline_vision_images(
+        cls,
+        *,
+        timeline_images: tuple[Mapping[str, Any], ...] | list[Mapping[str, Any]] | None,
+        fallback_bytes: bytes | None,
+        fallback_mime_type: str = "image/png",
+        max_images: int = 12,
+    ) -> tuple[dict[str, Any], ...]:
+        """Keep ordered timeline frames for vision; cap long shoots while preserving arc."""
+        normalized = list(
+            cls._normalize_vision_images(
+                image_bytes=None,
+                images=timeline_images,
+            )
+        )
+        if not normalized and fallback_bytes:
+            normalized = [
+                {
+                    "bytes": bytes(fallback_bytes),
+                    "mime_type": str(fallback_mime_type or "image/png"),
+                    "label": "Current shot",
+                }
+            ]
+        if not normalized:
+            return ()
+        # Ensure labels are shot-ordered when missing.
+        for index, item in enumerate(normalized, start=1):
+            if not str(item.get("label") or "").strip():
+                item["label"] = f"Shot {index}"
+        limit = max(1, int(max_images or 12))
+        if len(normalized) <= limit:
+            return tuple(normalized)
+        # Always keep first + last, sample intermediates across the arc.
+        keep_indexes = {0, len(normalized) - 1}
+        middle_slots = limit - 2
+        if middle_slots > 0 and len(normalized) > 2:
+            step = (len(normalized) - 1) / (middle_slots + 1)
+            for slot in range(1, middle_slots + 1):
+                keep_indexes.add(min(len(normalized) - 2, max(1, int(round(slot * step)))))
+        ordered = sorted(keep_indexes)
+        return tuple(normalized[index] for index in ordered)
 
     def suggested_ideas(
         self,
@@ -382,13 +604,23 @@ class CreativeDirectorService:
         profile_name = self._profile_name(creator_profile, fallback="Creator")
         raw_tag_text = str(session.metadata.get("raw_creative_tags") or "").strip()
         tag_text = raw_tag_text or ", ".join(session.creative_tags)
-        prompt_variations = self.build_diversified_prompt_batch(
-            profile_name=profile_name,
-            creative_mode=session.creative_mode,
-            tag_text=tag_text,
-            reference_text=self._reference_text(reference_asset),
-            prompt_count=session.prompt_count,
-        )
+        planning_result: CanonicalPromptPlanningResult | None = None
+        if session.creative_mode in {"premium_teaser", "story_sequence"}:
+            planning_result = self.plan_prompts(
+                mode=session.creative_mode,
+                creative_tags=tag_text,
+                prompt_count=session.prompt_count,
+                metadata={"source": "prompt_plan"},
+            )
+            prompt_variations = planning_result.prompts
+        else:
+            prompt_variations = self.build_diversified_prompt_batch(
+                profile_name=profile_name,
+                creative_mode=session.creative_mode,
+                tag_text=tag_text,
+                reference_text=self._reference_text(reference_asset),
+                prompt_count=session.prompt_count,
+            )
         if not prompt_variations:
             prompt_variations = (tag_text,)
         prompt_text = "\n\n".join(prompt_variations)
@@ -407,7 +639,13 @@ class CreativeDirectorService:
                 "generation_brain": "wavespeed_canonical",
                 "wavespeed_source": "Wavespeed_App",
                 "reference_conditioning": "wavespeed",
-                "prompt_builder": self._prompt_builder_name(session.creative_mode),
+                "prompt_builder": planning_result.prompt_builder
+                if planning_result
+                else self._prompt_builder_name(session.creative_mode),
+                "canonical_planner": planning_result.metadata.get("canonical_planner")
+                if planning_result
+                else None,
+                "planning_mode": planning_result.mode if planning_result else None,
             },
         )
         self.save_prompt_plan(plan)
@@ -417,10 +655,12 @@ class CreativeDirectorService:
         mode = self.normalize_mode(creative_mode)
         count = max(1, int(prompt_count or 1))
         if mode in {"premium_teaser", "story_sequence"}:
-            return generate_premium_prompts(
+            return self.plan_prompts(
+                mode=mode,
                 creative_tags=tag_text,
                 prompt_count=count,
-            )[0]
+                metadata={"source": "generation_contract"},
+            ).prompts[0]
         generation_mode = GENERATION_MODES["3"] if mode == "story_sequence" else GENERATION_MODES["1"]
         return build_chatgpt_prompt(
             prompt_count=count,
@@ -443,12 +683,13 @@ class CreativeDirectorService:
         count = max(1, int(prompt_count or 1))
         mode = self.normalize_mode(creative_mode)
         if mode in {"premium_teaser", "story_sequence"}:
-            return tuple(
-                generate_premium_prompts(
-                    creative_tags=tag_text,
-                    prompt_count=count,
-                )
+            planning_result = self.plan_prompts(
+                mode=mode,
+                creative_tags=tag_text,
+                prompt_count=count,
+                metadata={"source": "diversified_prompt_batch"},
             )
+            return planning_result.prompts
         if mode == "spicy":
             spice_level = "Spicy"
         else:
@@ -643,6 +884,365 @@ class CreativeDirectorService:
         if not api_key:
             raise ValueError("Missing GROK_API_KEY in .env")
         return api_key
+
+    @staticmethod
+    def _build_photoshoot_creative_director_prompt(
+        *,
+        session_context: Mapping[str, Any],
+        approved_history: tuple[Mapping[str, Any], ...],
+        creative_mode: str,
+        session_direction: str,
+        creative_hint: str,
+        continuity_locks: Mapping[str, bool],
+    ) -> str:
+        lock_lines = "\n".join(
+            f"- Keep {name.replace('_', ' ')}: {'yes' if enabled else 'no'}"
+            for name, enabled in continuity_locks.items()
+        )
+        history_lines = "\n".join(
+            f"- {item.get('title') or item.get('creative_direction') or item}"
+            for item in approved_history[-8:]
+        ) or "- No approved AI directions yet."
+        context_json = json.dumps(dict(session_context or {}), ensure_ascii=True, indent=2, default=str)
+        override_text = session_direction or "None. Maintain the current setting and outfit."
+        hint_text = str(creative_hint or "").strip()
+        hint_section = (
+            "\nCreative Hint:\n"
+            f"{hint_text}\n\n"
+            "Creative Hint represents user-approved creative intent. Never reject it because of continuity. "
+            "Instead reinterpret continuity around the requested evolution while preserving every remaining locked attribute. "
+            "If the Creative Hint intentionally changes wardrobe, location, prop, camera distance, or another locked element, "
+            "treat that as an intentional evolution of the photoshoot and preserve all other continuity locks. "
+            "The Shot Director still owns pose, composition, camera angle, lighting, emotion, progression, and framing.\n"
+            if hint_text
+            else ""
+        )
+        return f"""
+You are the Shot Director for a continuity-locked Creator OS Photoshoot Studio session.
+
+Analyze the current image and recommend exactly one next scene direction. Do not write a renderer prompt.
+The Canonical Prompt Planner will convert your creative direction into renderer-ready wording later.
+
+Creative mode: {creative_mode}
+Session Direction override: {override_text}
+{hint_section}
+
+Priority Order:
+1. Creative Hint, if provided.
+2. Session Direction.
+3. Continuity Locks.
+4. AI Creative Direction.
+
+Continuity locks:
+{lock_lines}
+
+Session defaults and memory:
+{context_json}
+
+Approved direction history:
+{history_lines}
+
+Rules:
+- Preserve identity, face continuity, body continuity, hairstyle, makeup, wardrobe, lighting, camera style, and location by default.
+- When a Creative Hint is provided, it has higher priority than continuity locks for the hinted element only.
+- Never reject the Creative Hint because of continuity; evolve the hinted element naturally and preserve every remaining locked attribute.
+- Only change locked elements when the Session Direction explicitly asks for that change.
+- If the Session Direction is blank, keep the same room, outfit, lighting, hairstyle, makeup, camera style, and visual tone.
+- Safe mode must remain platform-safe. Premium mode can be sensual and subscription-content coded. Explicit mode may include explicit adult direction only when consistent with the session.
+- Recommend a natural progression from the current selected image and approved session history.
+- Every approved image should feel like the next frame of a professionally directed photoshoot.
+- Progression must be based on the latest approved shot, session history, creative mode, Creative Hint if provided, and continuity locks.
+- Avoid repetitive poses, repetitive framing, repetitive facial expressions, repeated hand placement, and repeated camera distance.
+- In safe mode, progress through expression, eye contact, confidence, pose variety, body language, framing, camera angles, composition, and storytelling while remaining SFW.
+- In premium mode, progress through tasteful intimacy, confidence, body language, wardrobe styling, pose sophistication, emotional connection, framing, and atmosphere.
+- In explicit mode, recommend the next logical stage of the established session instead of arbitrary jumps.
+
+        Return only valid JSON with these string keys:
+title
+creative_direction
+reasoning
+continuity_notes
+camera_framing
+lighting
+emotion
+pose_composition
+""".strip()
+
+    @staticmethod
+    def _build_photoshoot_grok_inspiration_prompt(
+        *,
+        session_context: Mapping[str, Any],
+        approved_history: tuple[Mapping[str, Any], ...],
+        creative_mode: str,
+        session_direction: str,
+        creative_hint: str,
+        continuity_locks: Mapping[str, bool],
+        provider_context: str,
+        idea_count: int = 8,
+        timeline_labels: tuple[str, ...] = (),
+        grok_guidance: str = "",
+    ) -> str:
+        lock_lines = "\n".join(
+            f"- Keep {name.replace('_', ' ')}: {'yes' if enabled else 'no'}"
+            for name, enabled in continuity_locks.items()
+        )
+        history_lines = "\n".join(
+            f"- {item.get('title') or item.get('creative_direction') or item}"
+            for item in approved_history[-8:]
+        ) or "- No approved directions yet."
+        context_json = json.dumps(dict(session_context or {}), ensure_ascii=True, indent=2, default=str)
+        guidance_text = str(grok_guidance or "").strip()
+        hint_text = str(creative_hint or "").strip() or "None."
+        direction_text = str(session_direction or "").strip() or "None."
+        provider_text = str(provider_context or "").strip() or "Default Photoshoot Studio provider."
+        mode = str(creative_mode or "premium").strip().lower()
+        count = max(5, min(10, int(idea_count or 8)))
+        labels = tuple(str(label).strip() for label in timeline_labels if str(label or "").strip())
+        image_count = len(labels) or 1
+        shot_count = max(len(tuple(approved_history or ())), image_count)
+        progression_stage = 0
+        if isinstance(session_context, Mapping):
+            try:
+                progression_stage = int(session_context.get("progression_stage") or 0)
+            except Exception:
+                progression_stage = 0
+        if labels:
+            timeline_lines = "\n".join(
+                f"- Image {index}: {label}" + ("  ← current/latest approved shot" if index == len(labels) else "")
+                for index, label in enumerate(labels, start=1)
+            )
+        else:
+            timeline_lines = "- Image 1: Current/latest approved shot"
+        if guidance_text:
+            guidance_section = f"""
+User guidance for these suggestions (optional steering — high priority):
+"{guidance_text}"
+
+Guidance rules:
+- The creator is steering paid NSFW content direction with this short note.
+- Every suggestion should clearly move toward that guidance (e.g. if they wrote "topless", all ideas should be topless or immediately arriving at topless).
+- Keep continuity with the timeline (same person, room, lighting, hair, makeup) unless the guidance itself changes wardrobe/location.
+- Still vary pose, hands, and especially facial expression across the list.
+- Do not ignore the guidance. Do not water it down into a weaker stage unless the current image is already past it — then advance one natural step beyond it.
+- Short tags are fine: "topless", "panties off", "playing with herself", "more horny face", etc.
+""".strip()
+        else:
+            guidance_section = """
+User guidance for these suggestions: None.
+Continue the natural next beat from the timeline arc and creative mode.
+""".strip()
+        if mode == "explicit":
+            intensity_rules = f"""
+Explicit mode — progressive photoshoot ladder:
+This is a multi-shot photoshoot that escalates naturally shot-by-shot. Study the FULL attached timeline in order, then place the LATEST shot on this ladder and suggest only the next natural beat(s):
+
+1. Clothed / dressed tease (outfit still on; pose, flirty eye contact, soft smile or coy look)
+2. Partial undress (unbutton, pull straps, lift top, lower bottoms slightly; smirk, bitten lip)
+3. Topless / breasts exposed (bottoms may still be on; hungrier eyes, parted lips)
+4. Bottoms off / nude reveal (full or nearly full nudity, still more pose than sex act; open-mouth tease, bedroom eyes)
+5. Sexual teasing (hands near breasts/pussy, spreading, showing, light touch; naughty/horny expression)
+6. Active masturbation (rubbing, fingering, grinding; pleasure face, heavy lids, moan-ready mouth)
+7. Intensified play (deeper fingering, toys, more frantic motion; lost-in-it / desperate lust face)
+8. Climax / afterglow (orgasm build, shaking, spent pose; orgasmic or wrecked afterglow expression)
+
+Facial expression progression (required):
+- Face must evolve every shot. Do NOT keep the same neutral model face, same soft smile, or same calm eye contact.
+- Each idea must name a specific facial change that is one step hornier / naughtier than the latest shot.
+- Progress expressions along a path like: polite/soft → flirty smirk → bitten lip → heavy-lidded lust → parted lips → open-mouth moan → orgasmic / afterglow wrecked.
+- Vary eyes, mouth, brow, and jaw: e.g. half-lidded stare, looking up through lashes, tongue tip, o-face building, brow furrow of pleasure.
+- Same face reused across the timeline is a failure. Match expression intensity to the body/wardrobe stage.
+
+Hard rules for the next shot:
+- Use the whole image sequence as evidence of pace. If shots 1→N only moved from clothed to topless, do NOT leap to hardcore masturbation.
+- Measure the actual rate of escalation across approved shots. Match that pace for the next frame.
+- Base every idea on the latest image, constrained by the arc visible across earlier images.
+- Most ideas should advance only ONE stage from the latest shot. A minority may advance about TWO stages max.
+- Never jump from early stages (clothed/topless) straight to hard masturbation or climax.
+- If the sequence is still mild/clothed, next ideas stay in tease / partial undress / topless territory with matching mild-to-flirty face upgrades.
+- Only use direct masturbation/climax language when the latest shot and prior arc already support that stage.
+- Progressive wardrobe removal is a normal part of this photoshoot. Even if "Keep wardrobe" is yes, you may still suggest the next intentional undress stage when that is the natural next beat; otherwise keep the current dress state and escalate pose/touch/face.
+- Preserve location, lighting, hairstyle, makeup, and camera style unless Session Direction or Creative Hint changes them.
+- Avoid repeating poses, actions, OR facial expressions already visible in any attached timeline image.
+- Approved timeline frames attached: {image_count}. Progression stage: {progression_stage}.
+""".strip()
+        elif mode == "premium":
+            intensity_rules = """
+Premium mode intensity rules:
+- Keep suggestions sensual, subscription-content coded, teasing, and intimate.
+- Read the full attached timeline and continue that sensual arc one step at a time.
+- Progress shot-by-shot through confidence, body language, wardrobe tension, erotic atmosphere, and facial expression without full explicit sex acts.
+- Face must change each shot: soft → flirty → bitten lip → heavier bedroom eyes — never the same neutral look twice.
+- Prefer one-step escalation from the latest image, not sudden jumps or end-of-shoot climax ideas.
+""".strip()
+        else:
+            intensity_rules = """
+Safe mode intensity rules:
+- Stay platform-safe and SFW.
+- Read the full attached timeline and continue the same story/pose progression.
+- Progress through expression, pose variety, framing, confidence, and storytelling only.
+- Each idea should change the facial expression slightly (smile, glance, confidence) so faces do not look identical shot to shot.
+""".strip()
+        return f"""
+You are Grok helping with creative inspiration for a Creator OS Photoshoot Studio session.
+
+This is a continuity-locked photoshoot that evolves frame by frame from one seed subject.
+You are given the approved photoshoot timeline images in chronological order (oldest → newest).
+Analyze ALL of them as a progression sequence, not only the last frame:
+- How clothing/nudity changed across shots
+- How pose, hands, and sexual intensity changed
+- How facial expression, eyes, mouth, and emotional heat changed (critical — faces should not stay frozen)
+- How fast or slow the escalation has been so far
+
+The last attached image is the current/latest approved shot. Propose the immediate next photoshoot frames that continue this same arc.
+
+Attached timeline images in order:
+{timeline_lines}
+
+{guidance_section}
+
+Propose exactly {count} distinct next-scene ideas for the following shot.
+
+{intensity_rules}
+
+Output rules:
+- Return exactly {count} ideas as a plain numbered list: 1. ... through {count}. ...
+- Each idea is one or two short conversational sentences describing the next evolving scene.
+- Every idea MUST include a concrete facial expression or eye/mouth change (not just "looks at the camera").
+- If user guidance is provided, every idea must honor that guidance.
+- Creative inspiration only.
+- Do not write a renderer prompt.
+- Do not include camera settings.
+- Do not include prompt engineering.
+- Do not explain the workflow or name the ladder stage.
+- Do not wrap the list in markdown code fences or JSON.
+- Make every idea meaningfully different (pose, wardrobe stage, hand placement, genital focus, facial expression, eye contact, or intensity), but keep all of them near the same next-stage band defined by the full timeline arc and any user guidance.
+
+Creative mode: {mode}
+Provider context: {provider_text}
+Session direction: {direction_text}
+User guidance: {guidance_text or "None."}
+Creative hint: {hint_text}
+Approved shot/direction count: {shot_count}
+Timeline images attached: {image_count}
+Progression stage: {progression_stage}
+
+Continuity locks:
+{lock_lines}
+
+Session memory:
+{context_json}
+
+Approved direction history:
+{history_lines}
+""".strip()
+
+    @staticmethod
+    def _short_inspiration_text(response: str) -> str:
+        text = re.sub(r"\s+", " ", str(response or "").strip())
+        if not text:
+            return "Try a natural next variation that keeps the session feeling continuous."
+        sentences = re.split(r"(?<=[.!?])\s+", text)
+        short = " ".join(sentence for sentence in sentences[:2] if sentence).strip()
+        return short or text
+
+    @classmethod
+    def _parse_inspiration_ideas(cls, response: str, *, idea_count: int = 8) -> tuple[str, ...]:
+        text = str(response or "").strip()
+        if not text:
+            return (cls._short_inspiration_text(""),)
+
+        cleaned = text
+        if cleaned.startswith("```"):
+            cleaned = re.sub(r"^```(?:json|text)?", "", cleaned.strip(), flags=re.IGNORECASE).strip()
+            cleaned = re.sub(r"```$", "", cleaned).strip()
+
+        # JSON array of strings, or object with ideas/suggestions.
+        try:
+            parsed = json.loads(cleaned)
+        except Exception:
+            parsed = None
+        if isinstance(parsed, list):
+            ideas = [cls._short_inspiration_text(str(item)) for item in parsed if str(item or "").strip()]
+            if ideas:
+                return tuple(ideas[: max(5, min(10, int(idea_count or 8)))])
+        if isinstance(parsed, Mapping):
+            for key in ("ideas", "suggestions", "options", "scenes"):
+                value = parsed.get(key)
+                if isinstance(value, list):
+                    ideas = [cls._short_inspiration_text(str(item)) for item in value if str(item or "").strip()]
+                    if ideas:
+                        return tuple(ideas[: max(5, min(10, int(idea_count or 8)))])
+
+        numbered = re.findall(
+            r"(?:^|\n)\s*(?:\d+[\).\:\-]|[-*•])\s+(.+?)(?=(?:\n\s*(?:\d+[\).\:\-]|[-*•])\s+)|\Z)",
+            cleaned,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        ideas = []
+        for raw in numbered:
+            idea = cls._short_inspiration_text(raw)
+            if idea and idea not in ideas:
+                ideas.append(idea)
+        if ideas:
+            return tuple(ideas[: max(5, min(10, int(idea_count or 8)))])
+
+        # Fallback: split on blank lines or treat as a single idea.
+        blocks = [block.strip() for block in re.split(r"\n\s*\n", cleaned) if block.strip()]
+        if len(blocks) > 1:
+            ideas = [cls._short_inspiration_text(block) for block in blocks]
+            ideas = [idea for idea in ideas if idea]
+            if ideas:
+                return tuple(ideas[: max(5, min(10, int(idea_count or 8)))])
+        return (cls._short_inspiration_text(cleaned),)
+
+    @classmethod
+    def _photoshoot_direction_from_response(
+        cls,
+        *,
+        response: str,
+        creative_mode: str,
+        session_direction: str,
+        continuity_locks: Mapping[str, bool],
+    ) -> PhotoshootCreativeDirection:
+        text = str(response or "").strip()
+        data: Mapping[str, Any] = {}
+        try:
+            cleaned = text
+            if cleaned.startswith("```"):
+                cleaned = re.sub(r"^```(?:json)?", "", cleaned.strip(), flags=re.IGNORECASE).strip()
+                cleaned = re.sub(r"```$", "", cleaned).strip()
+            parsed = json.loads(cleaned)
+            if isinstance(parsed, Mapping):
+                data = parsed
+        except Exception:
+            data = {}
+        if not data:
+            lines = [line.strip(" -") for line in text.splitlines() if line.strip()]
+            fallback = lines[0] if lines else "Continue the photoshoot with a natural next pose."
+            data = {
+                "title": "Next Photoshoot Direction",
+                "creative_direction": fallback,
+                "reasoning": "Derived from the Shot Director response.",
+                "continuity_notes": "Maintain the current session continuity unless the creator supplied an override.",
+                "camera_framing": "Use close creator framing with the subject as the visual priority.",
+                "lighting": "Preserve the current lighting style.",
+                "emotion": "Keep the expression natural and connected.",
+                "pose_composition": fallback,
+            }
+        return PhotoshootCreativeDirection(
+            title=str(data.get("title") or "Next Photoshoot Direction").strip(),
+            creative_direction=str(data.get("creative_direction") or "").strip(),
+            reasoning=str(data.get("reasoning") or "").strip(),
+            continuity_notes=str(data.get("continuity_notes") or "").strip(),
+            camera_framing=str(data.get("camera_framing") or "").strip(),
+            lighting=str(data.get("lighting") or "").strip(),
+            emotion=str(data.get("emotion") or "").strip(),
+            pose_composition=str(data.get("pose_composition") or "").strip(),
+            creative_mode=str(creative_mode or "premium").strip().lower(),
+            session_direction=str(session_direction or "").strip(),
+            continuity_locks=dict(continuity_locks or {}),
+            raw_response=text,
+        )
 
     @classmethod
     def _prompt_builder_name(cls, creative_mode: str) -> str:

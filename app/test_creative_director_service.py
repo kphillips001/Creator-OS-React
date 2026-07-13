@@ -120,7 +120,7 @@ class CreativeDirectorServiceTests(unittest.TestCase):
         )
         self.assertIn("generate_prompts_with_grok", source)
         self.assertIn("build_chatgpt_prompt", source)
-        self.assertIn("generate_premium_prompts", source)
+        self.assertIn("CanonicalPromptPlanner", source)
         self.assertIn("premium_tag_enhancer_service", source)
         self.assertNotIn("requests", source)
         self.assertNotIn("Nano", source)
@@ -192,7 +192,7 @@ class CreativeDirectorServiceTests(unittest.TestCase):
                 creator_profile={"id": 7, "display_name": "Ava"},
             )
         with patch(
-            "app.services.creative_director_service.generate_premium_prompts",
+            "app.services.canonical_prompt_planner.generate_premium_prompts",
             return_value=[
                 "premium prompt one with medium-close creator framing and wardrobe continuity",
                 "premium prompt two with head-to-hips framing and warm bedroom light",
@@ -208,8 +208,207 @@ class CreativeDirectorServiceTests(unittest.TestCase):
 
         self.assertEqual(enhanced, "enhanced premium crop tank with medium-close creator framing")
         self.assertEqual(plan.prompt_metadata["generation_brain"], "wavespeed_canonical")
-        self.assertEqual(plan.prompt_metadata["prompt_builder"], "wavespeed_premium_prompt_builder")
+        self.assertEqual(plan.prompt_metadata["prompt_builder"], "canonical_premium_prompt_planner")
         self.assertIn("medium-close creator framing", variations[0])
+
+    def test_photoshoot_creative_director_returns_structured_direction(self):
+        captured = {}
+
+        def fake_provider(**_kwargs):
+            captured.update(_kwargs)
+            return """
+{
+  "title": "Balcony Door Tease",
+  "creative_direction": "Move her closer to the balcony door while keeping the same lingerie and hairstyle.",
+  "reasoning": "It progresses the shoot without breaking continuity.",
+  "continuity_notes": "Keep wardrobe, lighting, makeup, and camera style.",
+  "camera_framing": "Close-medium head-to-hips framing",
+  "lighting": "Same warm window light",
+  "emotion": "Soft playful confidence",
+  "pose_composition": "One hand near the door frame, body angled toward camera"
+}
+"""
+
+        service = CreativeDirectorService(
+            storage_dir=tempfile.mkdtemp(),
+            ask_anything_provider=fake_provider,
+        )
+
+        direction = service.recommend_photoshoot_direction(
+            image_bytes=b"fake-image",
+            image_mime_type="image/png",
+            session_context={"session_defaults": {"wardrobe": "same outfit"}},
+            approved_history=(),
+            creative_mode="premium",
+            session_direction="Move to the balcony",
+            creative_hint="mirror, window",
+            continuity_locks={"wardrobe": True, "lighting": True},
+        )
+
+        self.assertEqual(direction.title, "Balcony Door Tease")
+        self.assertIn("same lingerie", direction.creative_direction)
+        self.assertEqual(direction.creative_mode, "premium")
+        self.assertTrue(direction.continuity_locks["wardrobe"])
+        self.assertIn("head-to-hips", direction.camera_framing)
+        self.assertIn("Creative Hint:", captured["question"])
+        self.assertIn("mirror, window", captured["question"])
+        self.assertIn("Creative Hint represents user-approved creative intent", captured["question"])
+        self.assertIn("Never reject it because of continuity", captured["question"])
+        self.assertIn("Priority Order:", captured["question"])
+        self.assertIn("1. Creative Hint, if provided.", captured["question"])
+        self.assertIn("2. Session Direction.", captured["question"])
+        self.assertIn("3. Continuity Locks.", captured["question"])
+        self.assertIn("preserving every remaining locked attribute", captured["question"])
+        self.assertIn("The Shot Director still owns", captured["question"])
+        self.assertIn("next frame of a professionally directed photoshoot", captured["question"])
+        self.assertIn("latest approved shot, session history, creative mode, Creative Hint", captured["question"])
+        self.assertIn("Avoid repetitive poses", captured["question"])
+        self.assertIn("In premium mode, progress through tasteful intimacy", captured["question"])
+
+    def test_photoshoot_ask_grok_inspiration_uses_vision_context_without_prompt_planner(self):
+        captured = {}
+
+        def fake_provider(**_kwargs):
+            captured.update(_kwargs)
+            return (
+                "1. Try a softer mirror moment that keeps the same mood.\n"
+                "2. Slide one hand lower while holding eye contact.\n"
+                "3. Arch her back and open her thighs a little more.\n"
+                "4. Use both hands to tease her chest and hips.\n"
+                "5. Shift onto her side and look back over her shoulder.\n"
+                "6. Pull the fabric aside just enough to feel riskier.\n"
+                "7. Bring her free hand to her mouth while she stays posed.\n"
+                "8. Let the next beat feel hungrier and more deliberate."
+            )
+
+        service = CreativeDirectorService(
+            storage_dir=tempfile.mkdtemp(),
+            ask_anything_provider=fake_provider,
+        )
+        service.plan_prompts = lambda *_args, **_kwargs: self.fail("Ask Grok must not invoke the Canonical Prompt Planner")
+
+        ideas = service.suggest_photoshoot_inspiration(
+            image_bytes=b"fake-image",
+            image_mime_type="image/png",
+            session_context={"progression_stage": 4},
+            approved_history=({"title": "Shot 4"},),
+            creative_mode="premium",
+            session_direction="Keep the bedroom set",
+            creative_hint="mirror",
+            continuity_locks={"wardrobe": True, "lighting": True},
+            provider_context="Seedream 5.0 Pro",
+            idea_count=8,
+            timeline_images=(
+                {"bytes": b"shot-1", "mime_type": "image/png", "label": "Shot 1 (Seed)"},
+                {"bytes": b"shot-2", "mime_type": "image/png", "label": "Shot 2"},
+                {"bytes": b"fake-image", "mime_type": "image/png", "label": "Shot 3 — current"},
+            ),
+        )
+
+        self.assertEqual(len(ideas), 8)
+        self.assertIn("mirror moment", ideas[0])
+        self.assertEqual(captured["image_bytes"], b"fake-image")
+        self.assertEqual(captured["image_mime_type"], "image/png")
+        self.assertEqual(len(captured["images"]), 3)
+        self.assertEqual(captured["images"][0]["bytes"], b"shot-1")
+        self.assertIn("exactly 8 distinct next-scene ideas", captured["question"])
+        self.assertIn("Creative inspiration only", captured["question"])
+        self.assertIn("Do not write a renderer prompt", captured["question"])
+        self.assertIn("progression_stage", captured["question"])
+        self.assertIn("Shot 4", captured["question"])
+        self.assertIn("mirror", captured["question"])
+        self.assertIn("Seedream 5.0 Pro", captured["question"])
+        self.assertIn("Premium mode intensity rules", captured["question"])
+        self.assertIn("Shot 1 (Seed)", captured["question"])
+        self.assertIn("Analyze ALL of them as a progression sequence", captured["question"])
+
+    def test_photoshoot_ask_grok_explicit_mode_requests_escalating_nsfw_options(self):
+        captured = {}
+
+        def fake_provider(**_kwargs):
+            captured.update(_kwargs)
+            return (
+                "1. She spreads her pussy with two fingers and keeps staring at the camera.\n"
+                "2. She starts slow circular clit rubs while pinching a nipple.\n"
+                "3. She slides two fingers inside and fucks herself for the next frame.\n"
+                "4. She grinds her palm against her pussy and lifts her hips.\n"
+                "5. She switches to a toy and presses the tip against her entrance.\n"
+                "6. She fingers herself deeper with her legs wider and mouth open.\n"
+                "7. She edges herself, pulling her fingers out shiny and showing them.\n"
+                "8. She builds toward orgasm, hips shaking, still holding eye contact."
+            )
+
+        service = CreativeDirectorService(
+            storage_dir=tempfile.mkdtemp(),
+            ask_anything_provider=fake_provider,
+        )
+
+        ideas = service.suggest_photoshoot_inspiration(
+            image_bytes=b"fake-image",
+            creative_mode="explicit",
+            approved_history=({"title": "Shot 5"}, {"title": "Shot 6"}),
+            idea_count=8,
+            timeline_images=(
+                {"bytes": b"s1", "label": "Shot 1 (Seed)"},
+                {"bytes": b"s2", "label": "Shot 2"},
+                {"bytes": b"s3", "label": "Shot 3"},
+                {"bytes": b"fake-image", "label": "Shot 4 — current"},
+            ),
+        )
+
+        self.assertEqual(len(ideas), 8)
+        self.assertIn("progressive photoshoot ladder", captured["question"].lower())
+        self.assertIn("ONE stage", captured["question"])
+        self.assertIn("Never jump from early stages", captured["question"])
+        self.assertIn("Active masturbation", captured["question"])
+        self.assertIn("exactly 8 distinct next-scene ideas", captured["question"])
+        self.assertIn("Measure the actual rate of escalation", captured["question"])
+        self.assertIn("Facial expression progression", captured["question"])
+        self.assertIn("MUST include a concrete facial expression", captured["question"])
+        self.assertIn("Shot 1 (Seed)", captured["question"])
+        self.assertEqual(len(captured["images"]), 4)
+        self.assertIn("fingers inside", ideas[2].lower())
+
+    def test_photoshoot_ask_grok_caps_very_long_timelines_but_keeps_arc(self):
+        service = CreativeDirectorService(storage_dir=tempfile.mkdtemp())
+        timeline = [
+            {"bytes": bytes([index]), "mime_type": "image/png", "label": f"Shot {index}"}
+            for index in range(1, 21)
+        ]
+        selected = CreativeDirectorService._select_timeline_vision_images(
+            timeline_images=timeline,
+            fallback_bytes=b"fallback",
+            max_images=12,
+        )
+        self.assertEqual(len(selected), 12)
+        self.assertEqual(selected[0]["label"], "Shot 1")
+        self.assertEqual(selected[-1]["label"], "Shot 20")
+
+    def test_photoshoot_creative_hint_blank_preserves_prompt_shape(self):
+        captured = {}
+
+        def fake_provider(**_kwargs):
+            captured.update(_kwargs)
+            return "{}"
+
+        service = CreativeDirectorService(
+            storage_dir=tempfile.mkdtemp(),
+            ask_anything_provider=fake_provider,
+        )
+
+        service.recommend_photoshoot_direction(
+            image_bytes=b"fake-image",
+            image_mime_type="image/png",
+            session_context={"session_defaults": {"wardrobe": "same outfit"}},
+            approved_history=(),
+            creative_mode="premium",
+            session_direction="",
+            creative_hint="",
+            continuity_locks={"wardrobe": True},
+        )
+
+        self.assertNotIn("Creative Hint:", captured["question"])
+        self.assertIn("Session Direction override: None. Maintain the current setting and outfit.", captured["question"])
 
     def test_creative_session_persistence_and_history(self):
         service = self.make_service(reference_asset())

@@ -8,7 +8,6 @@ from app.services.local_vault_service import LocalVaultService
 def start_process(command):
     return subprocess.Popen(
         command,
-        shell=True,
     )
 
 
@@ -19,7 +18,7 @@ if __name__ == "__main__":
     print("🚀 Starting Fanvue Callback Server (port 8000)...")
 
     callback_server = start_process(
-        "uvicorn app.fanvue_callback_server:app --port 8000"
+        [sys.executable, "-m", "uvicorn", "app.fanvue_callback_server:app", "--port", "8000"]
     )
 
     # Give it a second to boot
@@ -28,7 +27,7 @@ if __name__ == "__main__":
     print("🚀 Starting Streamlit Dashboard (port 8501)...")
 
     dashboard = start_process(
-        "streamlit run app/dashboard/main.py"
+        [sys.executable, "-m", "streamlit", "run", "app/dashboard/main.py"]
     )
 
     try:

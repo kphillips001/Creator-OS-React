@@ -1,5 +1,381 @@
 [
   {
+    "publish_request_id": "social_publish_item_1e1f3013931b46279301e7db3d42f9ff",
+    "queue_item_id": "social_queue_item_e6c93c80b53f4ebf8e0351fb52103d55",
+    "platform": "x",
+    "caption_id": null,
+    "scheduled_for": null,
+    "status": "posted",
+    "created_at": "2026-07-13T15:27:15.202949",
+    "metadata": {
+      "posting_implemented": true,
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "provider_post_id": "2076689926708474265",
+      "provider_media_id": "2076689923965382656",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2076689926708474265",
+      "provider_metadata": {
+        "tweet_data": {
+          "id": "2076689926708474265",
+          "text": "If you had one hour with no plans, how would you spend it? \ud83d\udc40\ud83d\udc47 https://t.co/tnXJRxENpJ",
+          "edit_history_tweet_ids": [
+            "2076689926708474265"
+          ]
+        }
+      }
+    }
+  },
+  {
+    "publish_request_id": "social_publish_item_04116668251344ad8a0251ed55095da1",
+    "queue_item_id": "social_queue_item_9c487cb3346b493ca45b8730e1762cff",
+    "platform": "x",
+    "caption_id": null,
+    "scheduled_for": null,
+    "status": "posted",
+    "created_at": "2026-07-12T14:55:04.246379",
+    "metadata": {
+      "posting_implemented": true,
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "provider_post_id": "2076319439637590149",
+      "provider_media_id": "2076319436961726464",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2076319439637590149",
+      "provider_metadata": {
+        "tweet_data": {
+          "id": "2076319439637590149",
+          "text": "If we grabbed drinks after this, what topic would we accidentally spend hours talking about? \ud83c\udf79\ud83d\udc47 https://t.co/OauXvEgHrs",
+          "edit_history_tweet_ids": [
+            "2076319439637590149"
+          ]
+        }
+      }
+    }
+  },
+  {
+    "publish_request_id": "social_publish_item_5cc1ac490e7645368f17a758cab74e32",
+    "queue_item_id": "social_queue_item_34a379fdf6cd4a53857a09db78580b45",
+    "platform": "x",
+    "caption_id": null,
+    "scheduled_for": null,
+    "status": "posted",
+    "created_at": "2026-07-11T17:13:48.192304",
+    "metadata": {
+      "posting_implemented": true,
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "provider_post_id": "2075991964881727569",
+      "provider_media_id": "2075991962298048512",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2075991964881727569",
+      "provider_metadata": {
+        "tweet_data": {
+          "text": "Finish this sentence: 'The perfect weekend starts with\u2026' \ud83d\udc40\ud83d\udc47 https://t.co/wAKCJ94OUN",
+          "id": "2075991964881727569",
+          "edit_history_tweet_ids": [
+            "2075991964881727569"
+          ]
+        }
+      }
+    }
+  },
+  {
+    "publish_request_id": "social_publish_item_7c6af65f143142f09e06d2919b0fbc7c",
+    "queue_item_id": "social_queue_item_37ed91865d454b37a10664010ae8e2b9",
+    "platform": "x",
+    "caption_id": "caption_result_badc52c138d544e1b1a7e914999e516e",
+    "scheduled_for": null,
+    "status": "posted",
+    "created_at": "2026-07-11T02:40:55.642545",
+    "metadata": {
+      "posting_implemented": true,
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "provider_post_id": "2075772298468954268",
+      "provider_media_id": "2075772295847550976",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2075772298468954268",
+      "provider_metadata": {
+        "tweet_data": {
+          "edit_history_tweet_ids": [
+            "2075772298468954268"
+          ],
+          "text": "I left the door unlocked for the rooftop\u2026 what would you bring if you showed up right now? \ud83e\udeb4 https://t.co/fpyUPfWtr3",
+          "id": "2075772298468954268"
+        }
+      }
+    }
+  },
+  {
+    "publish_request_id": "social_publish_item_f45d6d44f31741ae932d3a46e335d317",
+    "queue_item_id": "social_queue_item_c45561bcfe5c40fc80104cce78dda106",
+    "platform": "telegram",
+    "caption_id": "caption_result_31b0b1beb6964155bb6432a9f033e718",
+    "scheduled_for": null,
+    "status": "posted",
+    "created_at": "2026-07-10T15:13:12.990832",
+    "metadata": {
+      "posting_implemented": true,
+      "account_name": null,
+      "telegram_post_to": "main",
+      "provider_post_id": "82",
+      "provider_media_id": null,
+      "provider_output_url": null,
+      "provider_metadata": {
+        "status_code": 200,
+        "message_id": 82,
+        "response": {
+          "ok": true,
+          "result": {
+            "message_id": 82,
+            "sender_chat": {
+              "id": -1002507455539,
+              "title": "Ava Blackthorne",
+              "type": "channel"
+            },
+            "chat": {
+              "id": -1002507455539,
+              "title": "Ava Blackthorne",
+              "type": "channel"
+            },
+            "date": 1783696394,
+            "photo": [
+              {
+                "file_id": "AgACAgEAAyEGAASVdLwzAANSalEMC1NEO2GMK10SV-iXszaigx8AAhINaxtbSolGi-a2nYDsbRgBAAMCAANzAAM8BA",
+                "file_unique_id": "AQADEg1rG1tKiUZ4",
+                "file_size": 1530,
+                "width": 60,
+                "height": 90
+              },
+              {
+                "file_id": "AgACAgEAAyEGAASVdLwzAANSalEMC1NEO2GMK10SV-iXszaigx8AAhINaxtbSolGi-a2nYDsbRgBAAMCAANtAAM8BA",
+                "file_unique_id": "AQADEg1rG1tKiUZy",
+                "file_size": 18647,
+                "width": 213,
+                "height": 320
+              },
+              {
+                "file_id": "AgACAgEAAyEGAASVdLwzAANSalEMC1NEO2GMK10SV-iXszaigx8AAhINaxtbSolGi-a2nYDsbRgBAAMCAAN4AAM8BA",
+                "file_unique_id": "AQADEg1rG1tKiUZ9",
+                "file_size": 86734,
+                "width": 533,
+                "height": 800
+              },
+              {
+                "file_id": "AgACAgEAAyEGAASVdLwzAANSalEMC1NEO2GMK10SV-iXszaigx8AAhINaxtbSolGi-a2nYDsbRgBAAMCAAN5AAM8BA",
+                "file_unique_id": "AQADEg1rG1tKiUZ-",
+                "file_size": 230541,
+                "width": 832,
+                "height": 1248
+              }
+            ],
+            "caption": "Barely covered and completely unbothered \ud83d\udca6 this poolside tease was made for you"
+          }
+        },
+        "post_to": "main"
+      }
+    }
+  },
+  {
+    "publish_request_id": "social_publish_item_bd73b1b91c934360af6ccf23b44c1d41",
+    "queue_item_id": "social_queue_item_2df6dbdd9189481b8771f288e95c592d",
+    "platform": "x",
+    "caption_id": "caption_result_e679abc01427488fae826379565d0fd9",
+    "scheduled_for": null,
+    "status": "posted",
+    "created_at": "2026-07-10T14:44:59.686879",
+    "metadata": {
+      "posting_implemented": true,
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "provider_post_id": "2075592128319639719",
+      "provider_media_id": "2075592125580771328",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2075592128319639719",
+      "provider_metadata": {
+        "tweet_data": {
+          "text": "If I left the door unlocked this morning\u2026 what would you do first? \ud83d\udc40 https://t.co/pVfCxOFAHl",
+          "edit_history_tweet_ids": [
+            "2075592128319639719"
+          ],
+          "id": "2075592128319639719"
+        }
+      }
+    }
+  },
+  {
+    "publish_request_id": "social_publish_item_bc11d4047c674818ab88fcb933318989",
+    "queue_item_id": "social_queue_item_d52517f6e861486ca5ebed82249fc92b",
+    "platform": "x",
+    "caption_id": "caption_result_ffc9d1d0cc0b426e8fa89ed1f9ef1d39",
+    "scheduled_for": null,
+    "status": "posted",
+    "created_at": "2026-07-10T14:23:31.345939",
+    "metadata": {
+      "posting_implemented": true,
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "provider_post_id": "2075586724483236338",
+      "provider_media_id": "2075586721824034816",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2075586724483236338",
+      "provider_metadata": {
+        "tweet_data": {
+          "text": "Choose carefully: A) join me on the stones B) take me somewhere more private \ud83d\ude0f What\u2019s it gonna be? https://t.co/xzd4W6vKGq",
+          "id": "2075586724483236338",
+          "edit_history_tweet_ids": [
+            "2075586724483236338"
+          ]
+        }
+      }
+    }
+  },
+  {
+    "publish_request_id": "social_publish_item_d2939d9cac464eaca08157e62d7f24aa",
+    "queue_item_id": "social_queue_item_4c1c64f504d448de96baa66db6f435c5",
+    "platform": "telegram",
+    "caption_id": "caption_result_049866bf13f64f7f88c3159205f75910",
+    "scheduled_for": null,
+    "status": "posted",
+    "created_at": "2026-07-09T21:05:56.906609",
+    "metadata": {
+      "posting_implemented": true,
+      "account_name": null,
+      "telegram_post_to": "main",
+      "provider_post_id": "81",
+      "provider_media_id": null,
+      "provider_output_url": null,
+      "provider_metadata": {
+        "status_code": 200,
+        "message_id": 81,
+        "response": {
+          "ok": true,
+          "result": {
+            "message_id": 81,
+            "sender_chat": {
+              "id": -1002507455539,
+              "title": "Ava Blackthorne",
+              "type": "channel"
+            },
+            "chat": {
+              "id": -1002507455539,
+              "title": "Ava Blackthorne",
+              "type": "channel"
+            },
+            "date": 1783631158,
+            "photo": [
+              {
+                "file_id": "AgACAgEAAyEGAASVdLwzAANRalANNmqzrfnDbbKIVMqPkho8jjYAAuILaxtbSoFG_LHrBZ26D5cBAAMCAANzAAM8BA",
+                "file_unique_id": "AQAD4gtrG1tKgUZ4",
+                "file_size": 1451,
+                "width": 60,
+                "height": 90
+              },
+              {
+                "file_id": "AgACAgEAAyEGAASVdLwzAANRalANNmqzrfnDbbKIVMqPkho8jjYAAuILaxtbSoFG_LHrBZ26D5cBAAMCAANtAAM8BA",
+                "file_unique_id": "AQAD4gtrG1tKgUZy",
+                "file_size": 16173,
+                "width": 213,
+                "height": 320
+              },
+              {
+                "file_id": "AgACAgEAAyEGAASVdLwzAANRalANNmqzrfnDbbKIVMqPkho8jjYAAuILaxtbSoFG_LHrBZ26D5cBAAMCAAN4AAM8BA",
+                "file_unique_id": "AQAD4gtrG1tKgUZ9",
+                "file_size": 74443,
+                "width": 533,
+                "height": 800
+              },
+              {
+                "file_id": "AgACAgEAAyEGAASVdLwzAANRalANNmqzrfnDbbKIVMqPkho8jjYAAuILaxtbSoFG_LHrBZ26D5cBAAMCAAN5AAM8BA",
+                "file_unique_id": "AQAD4gtrG1tKgUZ-",
+                "file_size": 190592,
+                "width": 832,
+                "height": 1248
+              }
+            ],
+            "caption": "This top doesn\u2019t leave much to the imagination\u2026 and I like it that way \ud83d\ude0f\ud83e\udd0d"
+          }
+        },
+        "post_to": "main"
+      }
+    }
+  },
+  {
+    "publish_request_id": "social_publish_item_2fb9285eefcf42d78c13c30434bbe03e",
+    "queue_item_id": "social_queue_item_d8d605c6b4344e0fb9dcafaa4b969c25",
+    "platform": "x",
+    "caption_id": "caption_result_c2fc2391b1354ae0a4345c577ff60476",
+    "scheduled_for": null,
+    "status": "posted",
+    "created_at": "2026-07-09T18:03:40.716924",
+    "metadata": {
+      "posting_implemented": true,
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "provider_post_id": "2075279742568124510",
+      "provider_media_id": "2075279738537385984",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2075279742568124510",
+      "provider_metadata": {
+        "tweet_data": {
+          "text": "Caught me in my favorite kind of quiet \ud83d\ude0a what would you whisper if you were standing right here? https://t.co/wHpHzUlPYR",
+          "edit_history_tweet_ids": [
+            "2075279742568124510"
+          ],
+          "id": "2075279742568124510"
+        }
+      }
+    }
+  },
+  {
+    "publish_request_id": "social_publish_item_fca0f29525224f08a93eb1972c679d4e",
+    "queue_item_id": "social_queue_item_d8d605c6b4344e0fb9dcafaa4b969c25",
+    "platform": "x",
+    "caption_id": "caption_result_031e9b27746c443a993bd1747a9c6427",
+    "scheduled_for": null,
+    "status": "failed",
+    "created_at": "2026-07-09T16:51:36.297669",
+    "metadata": {
+      "posting_implemented": true,
+      "account_name": "AvaBlackthorne",
+      "caption_id": "caption_result_031e9b27746c443a993bd1747a9c6427",
+      "telegram_post_to": "main",
+      "exception_type": "XPublishError",
+      "error": "X publishing dependency missing.\n\nRuntime interpreter:\nC:\\Fanvue-Chatbot\\bot\\Scripts\\python.exe\n\nInstall using:\npython -m pip install tweepy==4.15.0\n\nor\n\nC:\\Fanvue-Chatbot\\bot\\Scripts\\python.exe -m pip install tweepy==4.15.0",
+      "traceback": "Traceback (most recent call last):\n  File \"C:\\Creator-OS\\app\\providers\\social\\x_provider.py\", line 190, in _load_tweepy\n    return import_module(\"tweepy\")\n           ^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\knphi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\importlib\\__init__.py\", line 90, in import_module\n    return _bootstrap._gcd_import(name[level:], package, level)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<frozen importlib._bootstrap>\", line 1387, in _gcd_import\n  File \"<frozen importlib._bootstrap>\", line 1360, in _find_and_load\n  File \"<frozen importlib._bootstrap>\", line 1324, in _find_and_load_unlocked\nModuleNotFoundError: No module named 'tweepy'\n\nThe above exception was the direct cause of the following exception:\n\nTraceback (most recent call last):\n  File \"C:\\Creator-OS\\app\\services\\social_publishing_service.py\", line 306, in publish_now\n    result = self.x_provider.publish(\n             ^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Creator-OS\\app\\providers\\social\\x_provider.py\", line 149, in publish\n    tweepy = self._load_tweepy()\n             ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Creator-OS\\app\\providers\\social\\x_provider.py\", line 197, in _load_tweepy\n    raise XPublishError(self._missing_tweepy_message()) from exc\napp.providers.social.x_provider.XPublishError: X publishing dependency missing.\n\nRuntime interpreter:\nC:\\Fanvue-Chatbot\\bot\\Scripts\\python.exe\n\nInstall using:\npython -m pip install tweepy==4.15.0\n\nor\n\nC:\\Fanvue-Chatbot\\bot\\Scripts\\python.exe -m pip install tweepy==4.15.0\n"
+    }
+  },
+  {
+    "publish_request_id": "social_publish_item_20d4db4ccd744d449c95a28a676c37b0",
+    "queue_item_id": "social_queue_item_d8d605c6b4344e0fb9dcafaa4b969c25",
+    "platform": "x",
+    "caption_id": "caption_result_7ea69091e29346acb9b2de4516f5cd8c",
+    "scheduled_for": null,
+    "status": "failed",
+    "created_at": "2026-07-09T16:35:05.098778",
+    "metadata": {
+      "posting_implemented": true,
+      "account_name": "AvaBlackthorne",
+      "caption_id": "caption_result_7ea69091e29346acb9b2de4516f5cd8c",
+      "telegram_post_to": "main",
+      "exception_type": "XPublishError",
+      "error": "X publishing is not available because tweepy is not installed for the runtime Python interpreter: C:\\Fanvue-Chatbot\\bot\\Scripts\\python.exe.",
+      "traceback": "Traceback (most recent call last):\n  File \"C:\\Creator-OS\\app\\providers\\social\\x_provider.py\", line 161, in _load_tweepy\n    return import_module(\"tweepy\")\n           ^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\knphi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\importlib\\__init__.py\", line 90, in import_module\n    return _bootstrap._gcd_import(name[level:], package, level)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<frozen importlib._bootstrap>\", line 1387, in _gcd_import\n  File \"<frozen importlib._bootstrap>\", line 1360, in _find_and_load\n  File \"<frozen importlib._bootstrap>\", line 1324, in _find_and_load_unlocked\nModuleNotFoundError: No module named 'tweepy'\n\nThe above exception was the direct cause of the following exception:\n\nTraceback (most recent call last):\n  File \"C:\\Creator-OS\\app\\services\\social_publishing_service.py\", line 306, in publish_now\n    result = self.x_provider.publish(\n             ^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Creator-OS\\app\\providers\\social\\x_provider.py\", line 120, in publish\n    tweepy = self._load_tweepy()\n             ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Creator-OS\\app\\providers\\social\\x_provider.py\", line 168, in _load_tweepy\n    raise XPublishError(\napp.providers.social.x_provider.XPublishError: X publishing is not available because tweepy is not installed for the runtime Python interpreter: C:\\Fanvue-Chatbot\\bot\\Scripts\\python.exe.\n"
+    }
+  },
+  {
+    "publish_request_id": "social_publish_item_cd0373a9cf594c229d5082d6eccea8b7",
+    "queue_item_id": "social_queue_item_d8d605c6b4344e0fb9dcafaa4b969c25",
+    "platform": "x",
+    "caption_id": "caption_result_00cfc71c388f45e2b740843631e7da80",
+    "scheduled_for": null,
+    "status": "failed",
+    "created_at": "2026-07-09T16:09:23.216307",
+    "metadata": {
+      "posting_implemented": true,
+      "account_name": "AvaBlackthorne",
+      "caption_id": "caption_result_00cfc71c388f45e2b740843631e7da80",
+      "telegram_post_to": "main",
+      "exception_type": "XPublishError",
+      "error": "tweepy is required for X publishing.",
+      "traceback": "Traceback (most recent call last):\n  File \"C:\\Creator-OS\\app\\providers\\social\\x_provider.py\", line 159, in _load_tweepy\n    import tweepy  # type: ignore\n    ^^^^^^^^^^^^^\nModuleNotFoundError: No module named 'tweepy'\n\nThe above exception was the direct cause of the following exception:\n\nTraceback (most recent call last):\n  File \"C:\\Creator-OS\\app\\services\\social_publishing_service.py\", line 306, in publish_now\n    result = self.x_provider.publish(\n             ^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Creator-OS\\app\\providers\\social\\x_provider.py\", line 118, in publish\n    tweepy = self._load_tweepy()\n             ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Creator-OS\\app\\providers\\social\\x_provider.py\", line 161, in _load_tweepy\n    raise XPublishError(\"tweepy is required for X publishing.\") from exc\napp.providers.social.x_provider.XPublishError: tweepy is required for X publishing.\n"
+    }
+  },
+  {
     "publish_request_id": "social_publish_item_698c75bd39a940e7a52461b85afa19ef",
     "queue_item_id": "social_queue_item_d53a205869a34201879bc97b9f14074c",
     "platform": "telegram",

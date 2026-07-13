@@ -19,11 +19,28 @@ from app.models.asset_library import (
     AssetRelationshipSummary,
     AssetStorageSummary,
 )
+from app.models.chat_commerce_inventory import ChatCommerceInventoryFilter
 from app.services.asset_library_service import AssetLibraryService
+from app.services.chat_commerce_inventory_service import ChatCommerceInventoryService
 
 
 MEDIA_TYPE_OPTIONS = ("all", "image", "video")
 CLASSIFICATION_OPTIONS = ("ALL", "TEASE", "VIP", "PREMIUM", "EDGE_CASE")
+INVENTORY_FILTER_OPTIONS = (
+    "All",
+    "Chat Ready",
+    "Fulfillment Ready",
+    "Waiting For Media Link",
+    "Awaiting Destination",
+    "Blocked",
+    "Temporarily Unavailable",
+    "Retired",
+    "Recommendation Ready",
+)
+
+
+def _money(cents: int) -> str:
+    return f"${int(cents or 0) / 100:.2f}"
 
 
 def build_asset_library_filter(
@@ -343,6 +360,266 @@ def _render_bulk_actions(selected_asset_ids: tuple[int, ...]) -> None:
         _handoff_to_publishing_workflow(selected_asset_ids)
 
 
+def _inventory_filter_from_ui(
+    *,
+    status_filter: str,
+    destination: str,
+    product_id: str,
+    experience_id: str,
+    source_workflow: str,
+) -> ChatCommerceInventoryFilter:
+    flags = {
+        "Chat Ready": {"chat_ready": True},
+        "Fulfillment Ready": {"fulfillment_ready": True},
+        "Waiting For Media Link": {"waiting_for_media_link": True},
+        "Awaiting Destination": {"awaiting_destination": True},
+        "Blocked": {"blocked": True},
+        "Temporarily Unavailable": {"temporarily_unavailable": True},
+        "Retired": {"retired": True},
+        "Recommendation Ready": {"recommendation_ready": True},
+    }.get(status_filter, {})
+    return ChatCommerceInventoryFilter(
+        destination=(destination or "").strip() or None,
+        product_id=(product_id or "").strip() or None,
+        experience_id=(experience_id or "").strip() or None,
+        source_workflow=(source_workflow or "").strip() or None,
+        **flags,
+    )
+
+
+def _render_inventory_summary(summary) -> None:
+    rows = (
+        (
+            ("Total Business Assets", summary.total_business_assets),
+            ("Chat Ready", summary.chat_ready),
+            ("Fulfillment Ready", summary.fulfillment_ready),
+            ("Waiting For Media Link", summary.waiting_for_media_link),
+        ),
+        (
+            ("Awaiting Destination", summary.awaiting_destination),
+            ("Blocked", summary.blocked),
+            ("Unavailable", summary.temporarily_unavailable),
+            ("Retired", summary.retired),
+        ),
+        (
+            ("Recommendation Ready", summary.recommendation_ready),
+            ("Recommendation Pending", summary.recommendation_pending),
+            ("Total Revenue", _money(summary.total_revenue_cents)),
+            ("Total Purchases", summary.total_purchases),
+        ),
+    )
+    for row in rows:
+        columns = st.columns(4)
+        for column, (label, value) in zip(columns, row):
+            column.metric(label, value)
+    st.metric("Overall Conversion", f"{summary.overall_conversion:.1%}")
+
+
+def _render_inventory_actions(item) -> None:
+    if not item.quick_actions:
+        st.caption("No creator action available.")
+        return
+    with st.expander(f"Actions for Asset #{item.asset_id}"):
+        if "Open Fanvue" in item.quick_actions:
+            st.link_button("Open Fanvue", item.media_link or "https://fanvue.com")
+        if "Paste Media Link" in item.quick_actions:
+            media_link = st.text_input(
+                "Fanvue Media Link",
+                key=f"inventory_media_link_{item.asset_id}",
+            )
+            creator_profile_id = st.number_input(
+                "Creator Profile ID",
+                min_value=0,
+                value=0,
+                step=1,
+                key=f"inventory_creator_profile_{item.asset_id}",
+            )
+            if st.button(
+                "Verify Media Link",
+                key=f"inventory_verify_media_link_{item.asset_id}",
+            ):
+                try:
+                    from app.models.fulfillment_registration import MediaLinkSubmission
+                    from app.services.fulfillment_registration_service import (
+                        FulfillmentRegistrationService,
+                    )
+
+                    result = FulfillmentRegistrationService().submit_media_link(
+                        MediaLinkSubmission(
+                            asset_id=int(item.asset_id),
+                            media_link=media_link,
+                            creator_profile_id=int(creator_profile_id),
+                        )
+                    )
+                except Exception as error:
+                    st.error(f"Verification failed: {error}")
+                else:
+                    if result.success:
+                        st.success("Media Link verified.")
+                    else:
+                        st.error("; ".join(result.errors) or "Verification failed.")
+        if "Retry Upload" in item.quick_actions:
+            fanvue_account_id = st.number_input(
+                "Fanvue Account ID",
+                min_value=0,
+                value=0,
+                step=1,
+                key=f"inventory_fanvue_account_{item.asset_id}",
+            )
+            if st.button("Retry Upload", key=f"inventory_retry_upload_{item.asset_id}"):
+                try:
+                    from app.services.fulfillment_registration_service import (
+                        FulfillmentRegistrationService,
+                    )
+
+                    result = FulfillmentRegistrationService().upload_customer_conversations_asset(
+                        asset_id=int(item.asset_id),
+                        fanvue_account_id=int(fanvue_account_id),
+                    )
+                except Exception as error:
+                    st.error(f"Upload retry failed: {error}")
+                else:
+                    if result.success:
+                        st.success("Upload queued.")
+                    else:
+                        st.error("; ".join(result.errors) or "Upload retry failed.")
+        if "Change Destination" in item.quick_actions:
+            if st.button(
+                "Change Destination",
+                key=f"inventory_change_destination_{item.asset_id}",
+            ):
+                st.session_state["commerce_destination_asset_id"] = int(item.asset_id)
+                st.session_state["dashboard_page"] = "Asset Library"
+                st.info("Destination change is handled by Commerce Destination workflow.")
+        if "Temporarily Disable" in item.quick_actions:
+            if st.button(
+                "Temporarily Disable",
+                key=f"inventory_disable_{item.asset_id}",
+            ):
+                try:
+                    from app.services.chat_commerce_registration_service import (
+                        ChatCommerceRegistrationService,
+                    )
+
+                    result = ChatCommerceRegistrationService().temporarily_disable(
+                        int(item.asset_id),
+                        reason="Disabled from Asset Library inventory.",
+                    )
+                except Exception as error:
+                    st.error(f"Disable failed: {error}")
+                else:
+                    st.success("Asset temporarily disabled." if result.success else "Disable failed.")
+        if "Re-enable" in item.quick_actions:
+            if st.button("Re-enable", key=f"inventory_enable_{item.asset_id}"):
+                try:
+                    from app.services.chat_commerce_registration_service import (
+                        ChatCommerceRegistrationService,
+                    )
+
+                    result = ChatCommerceRegistrationService().re_enable(int(item.asset_id))
+                except Exception as error:
+                    st.error(f"Re-enable failed: {error}")
+                else:
+                    st.success("Asset re-enabled." if result.success else "Re-enable failed.")
+        if "Retire" in item.quick_actions:
+            if st.button("Retire", key=f"inventory_retire_{item.asset_id}"):
+                try:
+                    from app.services.chat_commerce_registration_service import (
+                        ChatCommerceRegistrationService,
+                    )
+
+                    result = ChatCommerceRegistrationService().retire_asset(
+                        int(item.asset_id),
+                        reason="Retired from Asset Library inventory.",
+                    )
+                except Exception as error:
+                    st.error(f"Retire failed: {error}")
+                else:
+                    st.success("Asset retired." if result.success else "Retire failed.")
+
+
+def _render_chat_commerce_inventory() -> None:
+    st.markdown("### Chat Commerce Inventory")
+    st.caption("Operational inventory for autonomous Customer Conversations.")
+    with st.expander("Inventory Filters", expanded=True):
+        c1, c2, c3, c4, c5 = st.columns(5)
+        status_filter = c1.selectbox(
+            "Inventory Status",
+            INVENTORY_FILTER_OPTIONS,
+            key="chat_inventory_status_filter",
+        )
+        destination = c2.text_input(
+            "Destination",
+            key="chat_inventory_destination_filter",
+        )
+        product_id = c3.text_input("Product", key="chat_inventory_product_filter")
+        experience_id = c4.text_input(
+            "Experience",
+            key="chat_inventory_experience_filter",
+        )
+        source_workflow = c5.text_input(
+            "Source Workflow",
+            key="chat_inventory_source_filter",
+        )
+    try:
+        inventory = ChatCommerceInventoryService().build_inventory(
+            filters=_inventory_filter_from_ui(
+                status_filter=status_filter,
+                destination=destination,
+                product_id=product_id,
+                experience_id=experience_id,
+                source_workflow=source_workflow,
+            )
+        )
+    except Exception as error:
+        st.warning(f"Chat Commerce Inventory is unavailable: {error}")
+        return
+
+    _render_inventory_summary(inventory.summary)
+    if not inventory.items:
+        st.info("No Business Assets match the current inventory filters.")
+        return
+
+    for item in inventory.items:
+        with st.container():
+            cols = st.columns([1, 2, 2, 2, 2])
+            with cols[0]:
+                st.caption(f"Asset #{item.asset_id}")
+                if item.thumbnail_path:
+                    st.image(item.thumbnail_path, use_container_width=True)
+            with cols[1]:
+                st.write(item.asset_name or f"Asset {item.asset_id}")
+                st.caption(f"Source: {item.source_workflow or '-'}")
+                st.caption(f"Destination: {item.commerce_destination or '-'}")
+                st.caption(f"Lifecycle: {item.current_lifecycle or '-'}")
+            with cols[2]:
+                st.caption(f"Chat Ready: {'Yes' if item.chat_ready else 'No'}")
+                st.caption(f"Fulfillment Ready: {'Yes' if item.fulfillment_ready else 'No'}")
+                st.caption(f"Recommendation Ready: {'Yes' if item.recommendation_ready else 'No'}")
+                st.caption(f"Availability: {item.availability}")
+            with cols[3]:
+                st.caption(f"Fanvue Upload: {item.fanvue_upload_status or '-'}")
+                st.caption(f"Fanvue Media UUID: {item.fanvue_media_uuid or '-'}")
+                st.caption(f"Media Link Status: {item.media_link_status or '-'}")
+                st.caption(f"Product: {', '.join(item.product_ids) or '-'}")
+                st.caption(f"Experience: {', '.join(item.experience_ids) or '-'}")
+            with cols[4]:
+                st.caption(f"Recommendations: {item.metrics.recommendation_count}")
+                st.caption(f"Offers: {item.metrics.offer_count}")
+                st.caption(f"Deliveries: {item.metrics.delivery_count}")
+                st.caption(f"Purchases: {item.metrics.purchase_count}")
+                st.caption(f"Revenue: {_money(item.metrics.revenue_cents)}")
+                st.caption(f"Conversion: {item.metrics.conversion_rate:.1%}")
+                st.caption(f"Last Recommended: {item.metrics.last_recommended or '-'}")
+                st.caption(f"Last Offered: {item.metrics.last_offered or '-'}")
+                st.caption(f"Last Purchased: {item.metrics.last_purchased or '-'}")
+            with st.expander(f"Lifecycle for Asset #{item.asset_id}"):
+                for label, value in item.lifecycle_steps:
+                    st.caption(f"{label}: {value or '-'}")
+            _render_inventory_actions(item)
+            st.divider()
+
+
 def _render_details(
     details: AssetLibraryDetails | None,
     service: AssetLibraryService,
@@ -505,6 +782,8 @@ def render_asset_library(
         created_before=created_before,
     )
     result = service.search_assets(filters)
+
+    _render_chat_commerce_inventory()
 
     st.markdown("### Assets")
     st.caption(f"{result.total} asset(s) found.")

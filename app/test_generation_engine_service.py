@@ -34,9 +34,16 @@ from app.models.generation_engine import (
     GenerationFailure,
     GenerationResult,
     GenerationStatus,
+    GenerationType,
     new_generation_id,
 )
 from app.models.reference_library import ReferenceAsset
+from app.providers.generation.base import (
+    ProviderCapabilities,
+    ProviderPollResult,
+    ProviderSubmission,
+    WaveSpeedProviderBase,
+)
 from app.services.generation_engine_service import GenerationEngineService
 
 
@@ -111,6 +118,51 @@ class FakeGenerationProvider:
             execution_metadata={"external_api_called": False},
             image_metadata={"count": request.image_count},
             output_references=("future_asset_reference",),
+        )
+
+
+class FakeResilientWaveProvider(WaveSpeedProviderBase):
+    provider_id = "fake_resilient_wave"
+    display_name = "Fake Resilient Wave"
+    endpoint = "https://example.test/generate"
+    capabilities = ProviderCapabilities(
+        supported_generation_types=(GenerationType.IMAGE_TO_IMAGE.value,),
+        max_images=1,
+    )
+
+    def __init__(self, *, fail_submissions=(), fail_polls=()):
+        super().__init__(api_key="test-key")
+        self.fail_submissions = set(fail_submissions)
+        self.fail_polls = set(fail_polls)
+        self.submission_count = 0
+
+    def validate_request(self, request):
+        return None
+
+    def submit_generation(self, request):
+        self.submission_count += 1
+        index = self.submission_count
+        if index in self.fail_submissions:
+            raise RuntimeError(f"submit failed {index}")
+        return ProviderSubmission(
+            provider_request_id=f"provider-{index}",
+            raw_response={"index": index},
+        )
+
+    def poll_status(self, submission):
+        index = int(submission.provider_request_id.rsplit("-", 1)[1])
+        if index in self.fail_polls:
+            return ProviderPollResult(
+                provider_request_id=submission.provider_request_id,
+                status=GenerationStatus.FAILED.value,
+                raw_response={"index": index, "status": "failed"},
+                failure_reason=f"poll failed {index}",
+            )
+        return ProviderPollResult(
+            provider_request_id=submission.provider_request_id,
+            status=GenerationStatus.SUCCEEDED.value,
+            raw_response={"index": index, "status": "succeeded"},
+            output_references=(f"generated-{index}.png",),
         )
 
 
@@ -197,6 +249,44 @@ class GenerationEngineServiceTests(unittest.TestCase):
         self.assertEqual(dispatched.result.image_metadata["count"], 2)
         self.assertEqual(provider.requests[0].prompt_plan_id, "plan_7")
 
+    def test_generation_provider_continues_after_per_image_failures(self):
+        provider = FakeResilientWaveProvider(fail_submissions=(2,), fail_polls=(3,))
+        service = self.make_service(providers={provider.provider_id: provider})
+        events = []
+        job = service.queue_prompt_plan(
+            creator_profile={"id": 7},
+            prompt_plan=prompt_plan(),
+            provider_id=provider.provider_id,
+            image_count=4,
+        )
+
+        dispatched = service.dispatch_job(job.job_id, progress_callback=lambda **event: events.append(event))
+
+        self.assertEqual(dispatched.status, GenerationStatus.SUCCEEDED.value)
+        self.assertEqual(dispatched.result.output_references, ("generated-1.png", "generated-4.png"))
+        self.assertEqual(dispatched.result.image_metadata["completed_count"], 2)
+        self.assertEqual(dispatched.result.image_metadata["failed_count"], 2)
+        self.assertEqual(dispatched.result.image_metadata["processed_count"], 4)
+        self.assertTrue(dispatched.result.generation_metadata["partial_success"])
+        self.assertEqual(events[-1]["processed_count"], 4)
+        self.assertEqual(events[-1]["failed_count"], 2)
+
+    def test_generation_provider_reports_complete_failure_only_when_all_images_fail(self):
+        provider = FakeResilientWaveProvider(fail_submissions=(1, 2))
+        service = self.make_service(providers={provider.provider_id: provider})
+        job = service.queue_prompt_plan(
+            creator_profile={"id": 7},
+            prompt_plan=prompt_plan(),
+            provider_id=provider.provider_id,
+            image_count=2,
+        )
+
+        dispatched = service.dispatch_job(job.job_id)
+
+        self.assertEqual(dispatched.status, GenerationStatus.FAILED.value)
+        self.assertIn("submit failed 1", dispatched.failure.reason)
+        self.assertNotIn("Generation provider returned a failure result.", dispatched.failure.reason)
+
     def test_retry_state_and_failure_are_tracked(self):
         service = self.make_service()
         job = service.queue_prompt_plan(
@@ -226,7 +316,8 @@ class GenerationEngineServiceTests(unittest.TestCase):
         self.assertIn("latest_job_for_prompt_plan", source)
         self.assertIn('"Social Studio", "Premium Studio", "Creative Director"', source)
         self.assertNotIn("submit_wavespeed_task", source)
-        self.assertNotIn("download", source.lower())
+        self.assertNotIn("poll_status(", source)
+        self.assertNotIn("submit_generation(", source)
         self.assertNotIn("Nano Banana", engine_source)
         self.assertNotIn("Seedream", engine_source)
         self.assertNotIn("Flux", engine_source)

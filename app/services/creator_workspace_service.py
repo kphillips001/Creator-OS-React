@@ -76,6 +76,7 @@ from app.services.product_review_service import ProductReviewService
 from app.services.publishing_automation_service import PublishingAutomationService
 from app.services.publishing_service import PublishingService
 from app.services.creator_attention_service import CreatorAttentionService
+from app.services.chat_commerce_inventory_service import ChatCommerceInventoryService
 from app.services.telegram_business_service import TelegramBusinessService
 from app.services.conversation_operations_service import ConversationOperationsService
 from app.services.sales_management_service import SalesManagementService
@@ -123,6 +124,7 @@ class CreatorWorkspaceService:
         business_optimization_service: BusinessOptimizationService | None = None,
         content_opportunity_service: ContentOpportunityService | None = None,
         runtime_control_service: RuntimeControlService | None = None,
+        chat_commerce_inventory_service: ChatCommerceInventoryService | None = None,
         wall_counts_fetcher: Callable[..., dict] = fetch_wall_queue_counts,
         pending_mass_ppv_fetcher: Callable[[], int] = get_pending_queue_count,
         failed_mass_ppv_fetcher: Callable[[], int] = get_failed_queue_count,
@@ -174,6 +176,7 @@ class CreatorWorkspaceService:
             review_optimization_service=self.creator_review_optimization_service,
             publishing_automation_service=self.publishing_automation_service,
         )
+        self._chat_commerce_inventory_service = chat_commerce_inventory_service
         self.product_business_service = product_business_service or ProductBusinessService(
             product_catalog_service=self.product_catalog_service,
             product_lifecycle_service=self.product_lifecycle_service,
@@ -3333,6 +3336,7 @@ class CreatorWorkspaceService:
             lifecycle=product_lifecycle,
             review_status=review_status,
             publishing_status=publishing_status,
+            chat_registration_records=self._safe_chat_attention_records(),
         )
         return WorkspaceWorkflowItem(
             product_id=workflow_snapshot.product_id,
@@ -3350,6 +3354,16 @@ class CreatorWorkspaceService:
                 self._attribute(product, "legacy_content_item_id", None)
             ),
         )
+
+    def _safe_chat_attention_records(self) -> tuple[Any, ...]:
+        try:
+            if self._chat_commerce_inventory_service is None:
+                self._chat_commerce_inventory_service = ChatCommerceInventoryService(
+                    asset_library_service=self.asset_library_service,
+                )
+            return self._chat_commerce_inventory_service.attention_chat_records(limit=50)
+        except Exception:
+            return ()
 
     def _build_product_card(self, display: Any) -> WorkspaceProductCard:
         product = self._attribute(display, "product")

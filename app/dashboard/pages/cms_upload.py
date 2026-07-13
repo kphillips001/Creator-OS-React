@@ -7,8 +7,10 @@ import re
 
 import streamlit as st
 
+from app.models.creator_approval import ApprovedSourceIdentity, CreatorApprovalRequest
 from app.models.creator_intent import CreatorIntent
 from app.services.ai_import_workflow_service import AIImportWorkflowService
+from app.services.creator_approval_service import CreatorApprovalService
 from app.services.creator_review_service import CreatorReviewService
 from app.services.grok_caption_service import GrokCaptionService
 from app.services.publishing_service import PublishingService
@@ -17,6 +19,7 @@ from app.services.publishing_service import PublishingService
 CONFIG_PATH = Path("data/config/behavior_config.json")
 _PUBLISHING_SERVICE = PublishingService()
 _AI_IMPORT_WORKFLOW = AIImportWorkflowService()
+_CREATOR_APPROVAL_SERVICE = CreatorApprovalService()
 _CREATOR_REVIEW_SERVICE = CreatorReviewService()
 IMAGE_UPLOAD_TYPES = ["jpg", "jpeg", "png", "webp"]
 VIDEO_UPLOAD_TYPES = ["mp4", "mov", "webm", "m4v"]
@@ -164,6 +167,40 @@ def _creator_intent_from_selection(
             "source": "cms_upload",
             "content_structure": content_structure,
         },
+    )
+
+
+def _promote_manual_upload(
+    *,
+    asset_id: int | None,
+    media_reference: str | Path,
+    original_filename: str | None,
+    creator_profile_id: int | None,
+    creator_intent: CreatorIntent,
+    source_metadata: dict,
+) -> None:
+    if asset_id is None:
+        return
+    request = CreatorApprovalRequest(
+        source=ApprovedSourceIdentity(
+            source_workflow="cms_upload",
+            source_item_id=str(asset_id),
+            source_session_id=source_metadata.get("classification_key"),
+            idempotency_key=f"cms-upload:{asset_id}",
+        ),
+        media_reference=str(media_reference),
+        creator_profile_id=creator_profile_id,
+        creator_intent=creator_intent,
+        source_metadata={
+            "original_filename": original_filename,
+            "approval_entrypoint": "cms_upload_manual_import",
+            **dict(source_metadata or {}),
+        },
+    )
+    _CREATOR_APPROVAL_SERVICE.promote_existing_asset(
+        int(asset_id),
+        request,
+        asset_repository=_AI_IMPORT_WORKFLOW.assets,
     )
 
 
@@ -605,13 +642,14 @@ def render_cms_upload():
         )
 
         if classification_key not in st.session_state:
+            selected_creator_intent = _creator_intent_from_selection(
+                content_structure,
+                upload_intent=media_upload_intent,
+            )
             import_result = _AI_IMPORT_WORKFLOW.import_asset(
                 media_path=file_path,
                 upload_intent=media_upload_intent,
-                creator_intent=_creator_intent_from_selection(
-                    content_structure,
-                    upload_intent=media_upload_intent,
-                ),
+                creator_intent=selected_creator_intent,
                 creator_profile_id=creator_profile.get("id"),
                 original_filename=uploaded_file.name,
                 fanvue_account_id=active_account_id,
@@ -621,6 +659,18 @@ def render_cms_upload():
                 create_product_draft=True,
                 provider_upload_enabled=False,
                 is_test=False,
+            )
+            _promote_manual_upload(
+                asset_id=import_result.content_id,
+                media_reference=file_path,
+                original_filename=uploaded_file.name,
+                creator_profile_id=creator_profile.get("id"),
+                creator_intent=selected_creator_intent,
+                source_metadata={
+                    "classification_key": classification_key,
+                    "upload_intent": media_upload_intent,
+                    "content_structure": content_structure,
+                },
             )
             result = import_result.to_legacy_result()
             creator_review = _CREATOR_REVIEW_SERVICE.build_review(import_result)

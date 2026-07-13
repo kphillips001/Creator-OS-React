@@ -255,7 +255,7 @@ class GenerationEngineService:
 
         started = perf_counter()
         try:
-            if progress_callback and hasattr(provider, "execute_with_progress"):
+            if hasattr(provider, "execute_with_progress"):
                 result = provider.execute_with_progress(
                     job.request,
                     progress_callback=progress_callback,
@@ -285,11 +285,16 @@ class GenerationEngineService:
         )
         if result.status == GenerationStatus.SUCCEEDED.value:
             return self.complete_job(job_id, result)
+        retryable_failure = any(
+            bool(item.get("provider_error"))
+            for item in dict(result.execution_metadata or {}).get("failures", ())
+            if isinstance(item, Mapping)
+        )
         return self.fail_job(
             job_id,
             GenerationFailure(
-                reason=result.failure_reason or "Generation provider returned a failure result.",
-                retryable=False,
+                reason=result.failure_reason or "Generation failed. No requested images completed.",
+                retryable=retryable_failure,
             ),
         )
 

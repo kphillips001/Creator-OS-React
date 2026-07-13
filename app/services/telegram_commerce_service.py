@@ -172,6 +172,7 @@ class TelegramCommerceService:
         engine_result = DecisionEngineResult.from_value(raw_engine_result)
 
         delivery_decision = self.build_delivery_decision(engine_result)
+        prepared_delivery = self._chat_delivery_context(engine_result)
         customer_progress = self.build_customer_progress(
             engine_user_id=engine_user_id,
             engine_result=engine_result,
@@ -210,8 +211,12 @@ class TelegramCommerceService:
                 runtime_context={
                     "correlation_id": correlation_id,
                     "engine_user_id": engine_user_id,
+                    "delivery_id": prepared_delivery.get("delivery_id"),
+                    "recommendation_id": prepared_delivery.get("recommendation_id"),
+                    "asset_id": prepared_delivery.get("asset_id"),
                 },
                 metadata={
+                    "chat_commerce_delivery": prepared_delivery,
                     "customer_intelligence": (
                         self.customer_intelligence_service
                         .build_execution_customer_context(
@@ -227,6 +232,10 @@ class TelegramCommerceService:
             runtime_executor=self.delivery_executor,
         )
         delivery_execution_result = commerce_execution_result.execution_result
+        self._record_chat_delivery_execution(
+            engine_result=engine_result,
+            execution_result=delivery_execution_result,
+        )
         commerce_memory = self.update_commerce_memory(
             previous_memory=previous_commerce_memory,
             delivery_decision=delivery_decision,
@@ -729,6 +738,19 @@ class TelegramCommerceService:
         """Build a runtime-owned Telegram delivery payload."""
 
         response_text = self._runtime_response_text(engine_result)
+        prepared_delivery = self._chat_delivery_context(engine_result)
+
+        if prepared_delivery and not prepared_delivery.get("delivery_ready"):
+            return self._blocked_payload(
+                delivery_decision=delivery_decision,
+                conversation_state=conversation_state,
+                message_text=response_text,
+                reason=(
+                    prepared_delivery.get("blocking_reason")
+                    or prepared_delivery.get("failure_reason")
+                    or "chat_delivery_not_ready"
+                ),
+            )
 
         blocking_reason = self._delivery_blocking_reason(delivery_decision)
         if blocking_reason:
@@ -750,6 +772,40 @@ class TelegramCommerceService:
 
         action = delivery_decision.next_suggested_action
         if action == "deliver_free_asset":
+            if (
+                prepared_delivery
+                and prepared_delivery.get("delivery_method") == "free_asset"
+            ):
+                asset_path = self._safe_text(
+                    prepared_delivery.get("asset_path")
+                    or prepared_delivery.get("local_vault_path")
+                    or self._delivery_value(engine_result, "asset_path", "file_path")
+                )
+                if not asset_path:
+                    return self._blocked_payload(
+                        delivery_decision=delivery_decision,
+                        conversation_state=conversation_state,
+                        message_text=response_text,
+                        reason="free_asset_unavailable",
+                    )
+                return TelegramDeliveryPayload(
+                    delivery_type=prepared_delivery.get("delivery_type") or "FREE",
+                    message_text=response_text,
+                    asset_path=asset_path,
+                    product_reference=prepared_delivery.get("product_id"),
+                    experience_reference=(
+                        prepared_delivery.get("experience_id")
+                        or conversation_state.current_experience_id
+                    ),
+                    delivery_reason=delivery_decision.reason,
+                    next_suggested_action=action,
+                    delivery_method="free_asset",
+                    metadata={
+                        "source": "ChatCommerceDeliveryService",
+                        "chat_commerce_delivery": prepared_delivery,
+                        "transport_owner": "Telegram runtime",
+                    },
+                )
             asset_path = self._free_asset_path(
                 engine_result,
                 delivery_decision.free_asset_id,
@@ -780,6 +836,47 @@ class TelegramCommerceService:
             )
 
         if action == "deliver_paid_media_link":
+            if (
+                prepared_delivery
+                and prepared_delivery.get("delivery_method") == "paid_media_link"
+            ):
+                media_link = self._safe_text(
+                    prepared_delivery.get("media_link")
+                    or prepared_delivery.get("fanvue_media_link")
+                )
+                if not media_link:
+                    return self._blocked_payload(
+                        delivery_decision=delivery_decision,
+                        conversation_state=conversation_state,
+                        message_text=response_text,
+                        reason="media_link_unavailable",
+                    )
+                return TelegramDeliveryPayload(
+                    delivery_type=prepared_delivery.get("delivery_type") or "PAID",
+                    message_text=response_text,
+                    media_link=media_link,
+                    product_reference=prepared_delivery.get("product_id"),
+                    experience_reference=(
+                        prepared_delivery.get("experience_id")
+                        or conversation_state.current_experience_id
+                    ),
+                    delivery_reason=delivery_decision.reason,
+                    next_suggested_action=action,
+                    delivery_method="paid_media_link",
+                    metadata={
+                        "source": "ChatCommerceDeliveryService",
+                        "chat_commerce_delivery": prepared_delivery,
+                        "provider_media_uuid": (
+                            prepared_delivery.get("provider_media_uuid")
+                            or prepared_delivery.get("provider_media_id")
+                        ),
+                        "fulfillment_id": prepared_delivery.get("fulfillment_id"),
+                        "recommendation_id": prepared_delivery.get(
+                            "recommendation_id"
+                        ),
+                        "transport_owner": "Telegram runtime",
+                    },
+                )
             if not self._product_delivery_eligible(engine_result):
                 return self._blocked_payload(
                     delivery_decision=delivery_decision,
@@ -908,6 +1005,7 @@ class TelegramCommerceService:
                 reason="decision_engine_no_result",
             )
 
+        prepared_delivery = self._chat_delivery_context(engine_result)
         runtime_decision = self._runtime_decision(engine_result)
         blocked = runtime_decision.blocked if runtime_decision else False
         offer_authorized = (
@@ -920,6 +1018,10 @@ class TelegramCommerceService:
         )
         commerce_recommendation = self._commerce_recommendation(engine_result)
         current_product_id = self._safe_text(
+            prepared_delivery.get("product_id")
+            if prepared_delivery
+            else None
+        ) or self._safe_text(
             (
                 runtime_decision.product_reference
                 if runtime_decision
@@ -929,6 +1031,10 @@ class TelegramCommerceService:
             or commerce_recommendation.get("product_id")
         )
         delivery_type = (
+            prepared_delivery.get("delivery_type")
+            if prepared_delivery
+            else None
+        ) or (
             runtime_decision.delivery_type
             if runtime_decision
             else self._delivery_value(engine_result, "delivery_type")
@@ -936,6 +1042,11 @@ class TelegramCommerceService:
         delivery_mode = (
             runtime_decision.execution_metadata.get("delivery_permission_mode")
             if runtime_decision
+            else None
+        ) or (
+            "paid"
+            if prepared_delivery
+            and prepared_delivery.get("delivery_method") == "paid_media_link"
             else None
         ) or self._delivery_value(
             engine_result,
@@ -961,6 +1072,9 @@ class TelegramCommerceService:
             requires_payment=requires_payment,
         )
         free_asset_id = (
+            self._safe_text(prepared_delivery.get("asset_id"))
+            if prepared_delivery and delivery_method == "free_asset"
+            else
             self._safe_text(
                 self._delivery_value(engine_result, "asset_id", "content_item_id")
             )
@@ -968,6 +1082,12 @@ class TelegramCommerceService:
             else None
         )
         paid_media_link = (
+            self._safe_text(
+                prepared_delivery.get("media_link")
+                or prepared_delivery.get("fanvue_media_link")
+            )
+            if prepared_delivery and delivery_method == "paid_media_link"
+            else
             self._paid_media_link(engine_result, current_product_id)
             if delivery_method == "paid_media_link"
             else None
@@ -1000,6 +1120,49 @@ class TelegramCommerceService:
             commerce_recommendation=commerce_recommendation,
             next_suggested_action=action,
         )
+
+    def _chat_delivery_context(
+        self,
+        engine_result: DecisionEngineResult | Mapping[str, Any] | None,
+    ) -> dict[str, Any]:
+        value = self._delivery_value(
+            engine_result,
+            "chat_delivery_payload",
+            "delivery_payload",
+        )
+        if isinstance(value, Mapping):
+            return self._safe_metadata(value)
+        result = self._delivery_value(engine_result, "chat_delivery_result")
+        if isinstance(result, Mapping):
+            payload = result.get("payload")
+            if isinstance(payload, Mapping):
+                context = self._safe_metadata(payload)
+                context.setdefault("failure_reason", result.get("failure_reason"))
+                context.setdefault("delivery_ready", result.get("success") is True)
+                return context
+        return {}
+
+    def _record_chat_delivery_execution(
+        self,
+        *,
+        engine_result: DecisionEngineResult | Mapping[str, Any] | None,
+        execution_result: Any,
+    ) -> None:
+        delivery_context = self._delivery_value(engine_result, "chat_delivery_result")
+        if not isinstance(delivery_context, Mapping):
+            return
+        service = getattr(
+            self.decision_engine,
+            "chat_commerce_delivery_service",
+            None,
+        )
+        recorder = getattr(service, "record_execution_result", None)
+        if not callable(recorder):
+            return
+        try:
+            recorder(delivery_context, execution_result)
+        except Exception:
+            return
 
     def build_customer_progress(
         self,

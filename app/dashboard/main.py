@@ -18,6 +18,7 @@ from app.dashboard.pages.creator_workspace import render_creator_workspace
 from app.dashboard.pages.creator_agent import render_creator_agent
 from app.dashboard.pages.developer_agent import render_developer_agent
 from app.dashboard.pages.customer_workspace import render_customer_workspace
+from app.dashboard.pages.system_health import render_system_health
 from app.dashboard.pages.system_overview import render_system_overview
 from app.dashboard.pages.module_switches import render_module_switches
 from app.dashboard.pages.creator_profile import render_creator_profile
@@ -699,6 +700,12 @@ elif (
 
 elif (
     st.session_state.dashboard_page
+    == "System Health"
+):
+    render_system_health()
+
+elif (
+    st.session_state.dashboard_page
     == "System Overview"
 ):
     render_system_overview(
@@ -807,7 +814,9 @@ elif (
         "Creative Director",
         "Generation Workspace",
         "Generation Library",
-        "Photoshoot Queue",
+        "Archive",
+        "Photoshoot Studio",
+        "Photoshoot Gallery",
         "Social Publishing",
         "Caption Studio",
         "Edit Studio",

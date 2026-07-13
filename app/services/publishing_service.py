@@ -18,6 +18,7 @@ from app.database import get_db_connection
 from app.models.experience import ExperiencePublishingReadiness
 from app.models.publishing_job import (
     PublishingJob,
+    PublishingMediaLinkStatus,
     PublishingStatusProjection,
     build_publishing_status_projection,
 )
@@ -158,6 +159,42 @@ class PublishingService:
             media_link_required=media_link_required,
             max_retries=max_retries,
             provider_metadata=provider_metadata,
+        )
+
+    def ensure_asset_publishing_job(
+        self,
+        *,
+        asset_id: int,
+        provider: str | None = None,
+        provider_account_id: int | None = None,
+        media_link_required: bool = True,
+        max_retries: int = 3,
+        provider_metadata: Mapping[str, Any] | None = None,
+        route_owner: str | None = None,
+    ) -> PublishingJob:
+        """Create one open asset-only PublishingJob for a fulfillment route."""
+
+        provider_name = provider or self._publishing_provider.provider_name
+        metadata_filter = {}
+        if route_owner:
+            metadata_filter["route_owner"] = route_owner
+        existing = self.publishing_repository.get_open_job_for_asset(
+            int(asset_id),
+            provider=provider_name,
+            provider_metadata_filter=metadata_filter,
+        )
+        if existing:
+            return existing
+        metadata = dict(provider_metadata or {})
+        if route_owner:
+            metadata.setdefault("route_owner", route_owner)
+        return self.create_publishing_job(
+            asset_id=int(asset_id),
+            provider=provider_name,
+            provider_account_id=provider_account_id,
+            media_link_required=media_link_required,
+            max_retries=max_retries,
+            provider_metadata=metadata,
         )
 
     def project_publishing_job_record(
@@ -316,15 +353,11 @@ class PublishingService:
                 "job_id": str(job_id),
                 "publishing_status": status.publishing_status,
             }
-        if not job.product_id:
-            return {
-                "success": False,
-                "reason": "publishing_job_missing_product",
-                "errors": ("publishing_job_missing_product",),
-                "job_id": str(job_id),
-            }
-
-        catalog = product_catalog_service or self._product_catalog_service()
+        catalog = (
+            product_catalog_service or self._product_catalog_service()
+            if job.product_id
+            else None
+        )
         validation = self.validate_publishing_media_link(
             media_link,
             product_id=job.product_id,
@@ -345,6 +378,7 @@ class PublishingService:
                 "source": "PublishingService.complete_publishing_media_link_workflow",
                 "validated": True,
                 "manual_provider_step": True,
+                "asset_only": not bool(job.product_id),
             }
         }
         verified_job = self.record_publishing_job_media_link(
@@ -359,11 +393,13 @@ class PublishingService:
             provider_metadata=metadata,
             complete=True,
         )
-        product = catalog.complete_publishing_media_link(
-            product_id=job.product_id,
-            creator_profile_id=creator_profile_id,
-            media_link=normalized_link,
-        )
+        product = None
+        if job.product_id and catalog is not None:
+            product = catalog.complete_publishing_media_link(
+                product_id=job.product_id,
+                creator_profile_id=creator_profile_id,
+                media_link=normalized_link,
+            )
         return {
             "success": True,
             "job_id": job_id,
@@ -521,7 +557,11 @@ class PublishingService:
             job_id=job_id,
             fanvue_account_id=provider_account_id,
             item=upload_item,
-            media_link_required=item.waiting_for_media_link,
+            media_link_required=item.job.media_link_status
+            in {
+                PublishingMediaLinkStatus.REQUIRED,
+                PublishingMediaLinkStatus.PENDING,
+            },
         )
         return {
             "success": bool(result.get("upload_result", {}).get("success")),
@@ -560,7 +600,11 @@ class PublishingService:
             job_id=job_id,
             fanvue_account_id=provider_account_id,
             item=upload_item,
-            media_link_required=item.waiting_for_media_link,
+            media_link_required=item.job.media_link_status
+            in {
+                PublishingMediaLinkStatus.REQUIRED,
+                PublishingMediaLinkStatus.PENDING,
+            },
         )
         return {
             "success": bool(result.get("upload_result", {}).get("success")),

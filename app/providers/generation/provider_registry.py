@@ -8,7 +8,7 @@ from app.models.generation_engine import GenerationRequest, GenerationResult
 from app.providers.generation.base import GenerationProvider, ProviderMetadata
 from app.providers.generation.flux_provider import FluxProvider
 from app.providers.generation.nano_banana_provider import NanoBananaProProvider, NanoBananaProvider
-from app.providers.generation.seedream_provider import Seedream45Provider, Seedream50LiteProvider
+from app.providers.generation.seedream_provider import Seedream45Provider, Seedream50ProProvider
 from app.providers.generation.wan_provider import WanImageEditProvider
 
 
@@ -51,7 +51,7 @@ def create_default_registry(**provider_kwargs) -> ProviderRegistry:
         NanoBananaProProvider(**provider_kwargs),
         WanImageEditProvider(**provider_kwargs),
         Seedream45Provider(**provider_kwargs),
-        Seedream50LiteProvider(**provider_kwargs),
+        Seedream50ProProvider(**provider_kwargs),
         FluxProvider(),
     )
     return ProviderRegistry({provider.provider_id: provider for provider in providers})

@@ -11,6 +11,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, TYPE_CHECKING
 
+from app.models.asset_provenance import (
+    ASSET_PROVENANCE_METADATA_KEY,
+    AssetProvenanceClassification,
+    administrative_import_context,
+    provenance_context,
+)
 from app.models.creator_intent import CreatorIntent
 
 if TYPE_CHECKING:
@@ -284,6 +290,10 @@ class AIImportWorkflowService:
         provider_upload_enabled: bool = False,
         is_test: bool = False,
         import_session_id: str | None = None,
+        provenance_classification: AssetProvenanceClassification | str = (
+            AssetProvenanceClassification.ADMINISTRATIVE_IMPORT
+        ),
+        provenance_source: str = "AIImportWorkflowService.import_asset",
     ) -> AIImportAssetResult:
         """Import one asset through the existing AI/CMS pipeline."""
 
@@ -310,6 +320,17 @@ class AIImportWorkflowService:
         )
 
         content_id = self._content_id_from_result(result)
+        self._stamp_import_provenance(
+            content_id,
+            classification=provenance_classification,
+            source=provenance_source,
+            source_workflow="ai_import_workflow",
+            metadata={
+                "import_session_id": import_session_id,
+                "upload_intent": resolved_upload_intent,
+                "creator_profile_id": creator_profile_id,
+            },
+        )
         legacy_product_draft_result = self._product_draft_from_result(result)
         product_draft_result = (
             {}
@@ -413,6 +434,10 @@ class AIImportWorkflowService:
         provider_upload_enabled: bool = False,
         is_test: bool = False,
         import_session_id: str | None = None,
+        provenance_classification: AssetProvenanceClassification | str = (
+            AssetProvenanceClassification.ADMINISTRATIVE_IMPORT
+        ),
+        provenance_source: str = "AIImportWorkflowService.import_asset_batch",
     ) -> AIImportBatchResult:
         """Import a batch and optionally create one photo-set Product draft."""
 
@@ -457,6 +482,8 @@ class AIImportWorkflowService:
                 provider_upload_enabled=provider_upload_enabled,
                 is_test=is_test,
                 import_session_id=import_session_id,
+                provenance_classification=provenance_classification,
+                provenance_source=provenance_source,
             )
             asset_results.append(result)
             if not result.success:
@@ -561,6 +588,44 @@ class AIImportWorkflowService:
             organization_result=organization_result,
             errors=tuple(errors),
         )
+
+    def _stamp_import_provenance(
+        self,
+        content_id: int | None,
+        *,
+        classification: AssetProvenanceClassification | str,
+        source: str,
+        source_workflow: str | None,
+        metadata: Mapping[str, Any] | None = None,
+    ) -> None:
+        if content_id is None:
+            return
+        asset = self._load_asset(content_id)
+        if asset is None:
+            return
+        current = dict(getattr(asset, "media_metadata", None) or {})
+        if ASSET_PROVENANCE_METADATA_KEY in current:
+            return
+        try:
+            context = provenance_context(
+                classification,
+                source=source,
+                source_workflow=source_workflow,
+                metadata=metadata,
+            )
+        except ValueError:
+            context = administrative_import_context(
+                source=source,
+                source_workflow=source_workflow,
+                metadata={
+                    **dict(metadata or {}),
+                    "invalid_requested_classification": str(classification),
+                },
+            )
+        current[ASSET_PROVENANCE_METADATA_KEY] = context
+        update = getattr(self.assets, "update_media_metadata", None)
+        if callable(update):
+            update(content_id, current)
 
     def _load_asset(self, content_id: int | None) -> Any | None:
         if not content_id:

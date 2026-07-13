@@ -49,6 +49,99 @@ LearningRecommendationInput = (
 class BusinessLearningService:
     """Build provider-neutral business learning read models."""
 
+    def __init__(
+        self,
+        *,
+        learning_repository: Any | None = None,
+        content_commerce_learning_service: Any | None = None,
+    ) -> None:
+        self.learning_repository = learning_repository
+        self.content_commerce_learning_service = content_commerce_learning_service
+
+    def _content_commerce_learning(self) -> Any | None:
+        if self.content_commerce_learning_service is not None:
+            return self.content_commerce_learning_service
+        try:
+            from app.repositories.content_commerce_learning_repository import (
+                ContentCommerceLearningRepository,
+            )
+            from app.services.content_commerce_learning_service import (
+                ContentCommerceLearningService,
+            )
+
+            repository = self.learning_repository or ContentCommerceLearningRepository()
+            self.content_commerce_learning_service = ContentCommerceLearningService(
+                repository=repository,
+                business_learning_service=self,
+            )
+            return self.content_commerce_learning_service
+        except Exception:
+            return None
+
+    def record_business_outcome(
+        self,
+        outcome: BusinessOutcome | Mapping[str, Any],
+    ) -> dict[str, Any]:
+        """Persist one normalized Business Outcome idempotently."""
+
+        normalized = self.normalize_business_outcomes(outcome)
+        if not normalized:
+            return {"success": False, "reason": "invalid_business_outcome"}
+        service = self._content_commerce_learning()
+        if service is None:
+            return {"success": False, "reason": "learning_history_unavailable"}
+        return service.record_business_outcome(normalized[0])
+
+    def record_outcome(
+        self,
+        outcome: BusinessOutcome | Mapping[str, Any],
+    ) -> dict[str, Any]:
+        return self.record_business_outcome(outcome)
+
+    def build_runtime_learning_context(
+        self,
+        *,
+        request: Any | None = None,
+        creator_profile_id: int | None = None,
+        customer_context: Mapping[str, Any] | None = None,
+        conversation_context: Mapping[str, Any] | None = None,
+    ) -> Any | None:
+        """Return the current content-commerce learning context when available."""
+
+        service = self._content_commerce_learning()
+        if service is None:
+            return None
+        return service.build_runtime_learning_context(
+            request=request,
+            creator_profile_id=creator_profile_id,
+            customer_context=customer_context,
+            conversation_context=conversation_context,
+        )
+
+    def get_asset_learning_profile(self, asset_id: int | str) -> Any | None:
+        service = self._content_commerce_learning()
+        if service is None:
+            return None
+        return service.get_asset_learning_profile(asset_id)
+
+    def list_asset_learning_profiles(self) -> tuple[Any, ...]:
+        service = self._content_commerce_learning()
+        if service is None:
+            return ()
+        return service.list_asset_learning_profiles()
+
+    def list_top_performers(self, *, limit: int = 10) -> tuple[Any, ...]:
+        service = self._content_commerce_learning()
+        if service is None:
+            return ()
+        return service.list_top_performers(limit=limit)
+
+    def list_underperformers(self, *, limit: int = 10) -> tuple[Any, ...]:
+        service = self._content_commerce_learning()
+        if service is None:
+            return ()
+        return service.list_underperformers(limit=limit)
+
     def build_learning_snapshot(
         self,
         *,
@@ -413,6 +506,10 @@ class BusinessLearningService:
         **values: Any,
     ) -> tuple[BusinessOutcome, ...]:
         existing = self.normalize_business_outcomes(outcomes)
+        if existing and outcome_type is None and not values:
+            for item in existing:
+                self._persist_business_outcome(item)
+            return existing
         outcome = BusinessOutcome(
             outcome_id=self._text(values.get("outcome_id")),
             outcome_type=self._normalize_outcome_type(
@@ -448,7 +545,18 @@ class BusinessLearningService:
                 "canonical_business_outcome": True,
             },
         )
+        self._persist_business_outcome(outcome)
         return existing + (outcome,)
+
+    def _persist_business_outcome(self, outcome: BusinessOutcome) -> None:
+        service = self._content_commerce_learning()
+        recorder = getattr(service, "record_business_outcome", None)
+        if not callable(recorder):
+            return
+        try:
+            recorder(outcome)
+        except Exception:
+            return
 
     def summarize_business_outcomes(
         self,
