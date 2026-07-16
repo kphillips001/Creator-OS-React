@@ -108,6 +108,7 @@ class AssetLibraryItem:
 @dataclass(frozen=True)
 class AssetLibraryDetails:
     item: AssetLibraryItem
+    creator_profile_id: int | None = None
     confidence: float | None = None
     summary: str | None = None
     reasoning: str | None = None
@@ -126,6 +127,7 @@ class AssetLibraryDetails:
     classification_result: Mapping[str, Any] | None = None
     media_metadata: Mapping[str, Any] | None = None
     asset_understanding: Any = None
+    intelligence_profile: Any = None
 
 
 @dataclass(frozen=True)

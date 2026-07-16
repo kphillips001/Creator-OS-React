@@ -39,6 +39,9 @@ When the user asks for clothing or wardrobe, preserve it as mandatory unless the
 
 If the user asks for bikini top, bikini bottoms, denim shorts, shorts, jeans, lingerie, bra, crop top, shirt, dress, skirt, robe, bodysuit, swimwear, panties, or thong:
 - keep the requested garments visibly worn in every prompt
+- preserve wardrobe attributes the user explicitly supplied, including color, fabric, cut, neckline, trim, rise, and garment construction
+- when the user supplied only a broad garment category, preserve that category but vary unspecified color, fabric, cut, neckline, trim, rise, and styling across the Content Studio batch
+- do not treat enhancer-added wardrobe specificity as a reason to make every prompt use one exact outfit; preserve the user's creative intent while exploring legitimate wardrobe variations
 - do not escalate the prompt into nude, topless, bare-breasted, naked, no-top, no-bottoms, or unclothed imagery
 - show body continuity through garment fit, fabric tension, cleavage when appropriate, underboob when requested, silhouette, posture, and close framing
 - for "underboob", "very short shorts", "tiny bikini", "sheer", "wet fabric", or similar revealing clothed ideas, keep the garment on and describe placement/fit rather than removing it
@@ -275,6 +278,37 @@ Do not default to black lace lingerie.
 Across the batch, intentionally rotate through lace, satin, sheer mesh, strappy, balconette, corset/teddy, silk robe over lingerie, garter stockings, fishnets, and different colors.
 Only use "black lace lingerie" for at most one prompt in the batch.
 
+CONTENT STUDIO WARDROBE VARIATION CONTRACT:
+This is a variation workflow, not a Photoshoot Studio continuity workflow.
+
+First distinguish between:
+1. wardrobe categories and attributes explicitly supplied by the user, and
+2. extra wardrobe details introduced by tag enhancement.
+
+When the input contains labeled ORIGINAL USER TAGS and ENHANCED SUGGESTIONS sections:
+- only ORIGINAL USER TAGS define mandatory wardrobe categories and attributes
+- ENHANCED SUGGESTIONS provide scene, lighting, mood, styling, and optional wardrobe ideas
+- a wardrobe color, fabric, cut, neckline, trim, rise, or construction appearing only in ENHANCED SUGGESTIONS must be varied rather than copied into every prompt
+- the labeled sections are one concept, not separate multi-line concepts
+
+Preserve the user's explicit wardrobe categories and explicit attributes.
+Treat enhancer-added colors, fabrics, cuts, necklines, trim, rise, and garment construction as creative suggestions, not batch-wide requirements.
+
+When a wardrobe attribute was not explicitly requested by the user, intentionally vary it across the batch:
+- top and bottom colors
+- fabrics and textures
+- garment cuts
+- necklines and strap or sleeve styles
+- shorts or skirt styling and rise
+- footwear and accessories when appropriate
+
+Examples:
+- "tight shorts, micro crop top" requires tight shorts and a micro crop top in every prompt, but prompts must vary their colors, fabrics, neckline/cut, top style, and shorts style
+- "black leather mini skirt" requires a black leather mini skirt in every prompt because black, leather, and mini skirt were explicitly requested
+- "white ribbed scoop-neck crop top" must remain white, ribbed, scoop-neck, and a crop top
+
+Do not preserve one exact outfit across the batch unless the user's own input explicitly fixed that outfit.
+
 USER CREATIVE TAGS:
 {creative_tags}
 
@@ -329,7 +363,7 @@ Generate scene variety first.
 MANDATORY TAG ENFORCEMENT:
 
 User Creative Tags are mandatory.
-For single-line tags, every final prompt must preserve every concrete user-supplied tag.
+For single-line tags, every final prompt must preserve every concrete detail explicitly supplied by the user.
 For multi-line tags, every final prompt must preserve every concrete user-supplied tag from its matching concept line only.
 If the matching tags include a location, time of day, wardrobe state, nudity state, body state, wetness, lighting, or environment, that prompt must include those concepts.
 Do not treat user tags as optional inspiration.
@@ -349,8 +383,10 @@ Be creative only with:
 - environment details
 - mood
 - micro-action
+- wardrobe colors, fabrics, cuts, necklines, trim, rise, styling, footwear, and accessories that the user did not explicitly specify
 
-Do NOT be creative with required user tags.
+Do NOT change wardrobe attributes or other required details that the user explicitly supplied.
+Do vary wardrobe attributes that the user left unspecified.
 
 If the current concept requests topless, bare breasts, nude, naked, booty shorts, bikini, lake, couch, bedroom, shower, or any specific wardrobe/location, preserve those exact requirements in that prompt.
 If the current concept requests pool, night, evening, wet hair, wet skin, shower, bedroom, couch, lake, hotel, beach, cabin, water, rain, or any other setting/body-state anchor, preserve those exact anchors in that prompt.

@@ -18,6 +18,7 @@ from app.models.reference_library import (
 from app.repositories.asset_repository import AssetRepository
 from app.services.ai_import_workflow_service import AIImportWorkflowService
 from app.services.asset_library_service import AssetLibraryService
+from app.repositories.content_repository import insert_content_item
 
 
 REFERENCE_METADATA_KEY = "reference_library"
@@ -93,6 +94,74 @@ class ReferenceLibraryService:
             data={"import_result": result.to_legacy_result()},
         )
 
+    def restore_canonical_reference(
+        self,
+        *,
+        media_path: str | Path,
+        creator_profile_id: int,
+        original_filename: str,
+        canonical_metadata: Mapping[str, Any],
+    ) -> ReferenceLibraryActionResult:
+        """Restore permanent identity media through content insertion and vault ownership."""
+        path = Path(media_path)
+        if not path.is_file():
+            return ReferenceLibraryActionResult(False, "Canonical image was not found.")
+        content_id = insert_content_item(
+            {
+                "file_path": str(path),
+                "file_name": original_filename,
+                "classification": "REFERENCE",
+                "confidence": 1.0,
+                "detected_themes": [],
+                "suggested_tags": ["canonical-reference", "identity"],
+                "nudity_labels": [],
+                "is_explicit": False,
+                "is_active": True,
+                "is_test": False,
+                "requires_nudenet": False,
+                "requires_blur": False,
+                "requires_vision": False,
+                "status": "approved",
+                "ready_for_rotation": False,
+                "content_type": "image",
+                "creator_profile_id": int(creator_profile_id),
+                "media_metadata": {
+                    "media_type": "image",
+                    "original_filename": original_filename,
+                    "canonical_reference": dict(canonical_metadata),
+                },
+            }
+        )
+        if not content_id:
+            return ReferenceLibraryActionResult(False, "Canonical reference registration failed.")
+        result = self.mark_asset_as_reference(
+            int(content_id),
+            creator_profile_id=int(creator_profile_id),
+            favorite=True,
+            make_active=True,
+            original_filename=original_filename,
+        )
+        if result.success:
+            asset = self.assets.get_by_id(int(content_id))
+            metadata = self._reference_metadata(asset)
+            self.assets.update_reference_metadata(
+                int(content_id),
+                {
+                    **metadata,
+                    "canonical": True,
+                    "protected": True,
+                    "canonical_sha256": canonical_metadata.get("sha256"),
+                    "canonical_path": canonical_metadata.get("canonical_path"),
+                },
+            )
+            return ReferenceLibraryActionResult(
+                True,
+                "Canonical Reference restored.",
+                int(content_id),
+                self.get_reference(int(content_id)),
+            )
+        return result
+
     def mark_asset_as_reference(
         self,
         asset_id: int,
@@ -149,6 +218,7 @@ class ReferenceLibraryService:
         asset_id: int,
         *,
         creator_profile_id: int,
+        confirm_canonical: bool = False,
     ) -> ReferenceLibraryActionResult:
         asset = self.assets.get_by_id(asset_id)
         if not asset:
@@ -170,6 +240,12 @@ class ReferenceLibraryService:
                 message="Reference belongs to a different Creator Profile.",
                 asset_id=asset_id,
             )
+        if metadata.get("canonical") and not confirm_canonical:
+            return ReferenceLibraryActionResult(
+                success=False,
+                message="Canonical Reference removal requires explicit confirmation.",
+                asset_id=asset_id,
+            )
         updated = {
             **metadata,
             "is_reference": False,
@@ -188,6 +264,7 @@ class ReferenceLibraryService:
         asset_id: int,
         *,
         creator_profile_id: int,
+        confirm_replace_canonical: bool = False,
     ) -> ReferenceLibraryActionResult:
         asset = self.assets.get_by_id(asset_id)
         if not asset:
@@ -210,6 +287,18 @@ class ReferenceLibraryService:
                 asset_id=asset_id,
             )
 
+        current = self.get_active_reference(creator_profile_id=creator_profile_id)
+        if (
+            current is not None
+            and current.asset_id != asset_id
+            and bool((current.metadata or {}).get("canonical"))
+            and not confirm_replace_canonical
+        ):
+            return ReferenceLibraryActionResult(
+                False,
+                "Replacing the Canonical Reference requires explicit confirmation.",
+                asset_id,
+            )
         self._clear_active_reference(creator_profile_id)
         updated = {
             **metadata,

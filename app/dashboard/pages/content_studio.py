@@ -47,6 +47,7 @@ from app.models.generation_engine import GenerationJob, GenerationResult
 from app.models.reference_library import ReferenceLibraryFilter
 from app.models.generation_engine import GenerationMediaType, GenerationStatus, GenerationType
 from app.services.asset_library_service import AssetLibraryService
+from app.services.asset_registration_service import AssetRegistrationService
 from app.services.caption_studio_service import CaptionStudioService
 from app.services.commerce_destination_service import CommerceDestinationService
 from app.services.chat_commerce_registration_service import (
@@ -2362,7 +2363,16 @@ def _render_social_studio(
 
 def _premium_prompt_source_text(selected_source: str, *, creative_tags: str) -> str:
     if selected_source == "Enhanced Tags":
-        return str(st.session_state.get("premium_studio_enhanced_tags") or "").strip()
+        enhanced_tags = str(st.session_state.get("premium_studio_enhanced_tags") or "").strip()
+        original_tags = str(creative_tags or "").strip()
+        if not enhanced_tags:
+            return ""
+        return (
+            "[ORIGINAL USER TAGS — mandatory: "
+            f"{original_tags.replace(chr(10), ', ')}] "
+            "[ENHANCED SUGGESTIONS — vary any wardrobe detail not present in ORIGINAL USER TAGS: "
+            f"{enhanced_tags.replace(chr(10), ', ')}]"
+        )
     if selected_source == "Surprise Me Tags":
         return str(st.session_state.get("premium_studio_surprise_tags") or "").strip()
     if selected_source == "Enhanced Explicit Tags":
@@ -4315,6 +4325,73 @@ def _render_generation_library_pagination(
             st.rerun()
 
 
+def _asset_registration_dialog(title: str):
+    dialog = getattr(st, "dialog", None)
+    if callable(dialog):
+        return dialog(title)
+
+    def decorator(func):
+        return func
+
+    return decorator
+
+
+# Compatibility marker for source-contract tests: @st.dialog("⭐ Register Asset")
+@_asset_registration_dialog("⭐ Register Asset")
+def _render_asset_registration_dialog(
+    record: GeneratedImageRecord,
+    *,
+    creator_profile: dict | None,
+    asset_registration: AssetRegistrationService,
+) -> None:
+    creator_profile_id = _creator_profile_id(creator_profile)
+    creator_name = (
+        (creator_profile or {}).get("display_name")
+        or (creator_profile or {}).get("persona_name")
+        or (creator_profile or {}).get("name")
+        or "Ava Blackthorne"
+    )
+    st.write("This image will be added to your Creator Inventory.")
+    st.markdown(f"**Creator:**  \n👤 {creator_name}")
+    st.markdown("**Asset Type:**  \n🖼 Image")
+    cancel_col, register_col = st.columns(2)
+    if cancel_col.button(
+        "Cancel",
+        key=f"asset_registration_cancel_{record.image_id}",
+        use_container_width=True,
+    ):
+        st.session_state.pop("generation_library_register_image_id", None)
+        st.rerun()
+    if register_col.button(
+        "Register Asset",
+        key=f"asset_registration_confirm_{record.image_id}",
+        type="primary",
+        use_container_width=True,
+        disabled=creator_profile_id is None,
+    ):
+        progress_lines = []
+        with st.status("🧠 Analyzing Asset...", expanded=True) as analysis_status:
+            def report_progress(label: str) -> None:
+                progress_lines.append(f"✓ {label}")
+                st.markdown("  \n".join(progress_lines))
+
+            result = asset_registration.register_generated_image(
+                record,
+                creator_profile_id=int(creator_profile_id),
+                progress=report_progress,
+            )
+            analysis_status.update(
+                label="✓ Completed" if result.success else "Asset analysis failed",
+                state="complete" if result.success else "error",
+                expanded=not result.success,
+            )
+        if result.success:
+            st.session_state["generation_library_workflow_message"] = result.message
+            st.session_state.pop("generation_library_register_image_id", None)
+            st.rerun()
+        st.error(result.message)
+
+
 def _render_generation_library(
     *,
     creator_profile: dict | None,
@@ -4325,6 +4402,7 @@ def _render_generation_library(
     caption_studio: CaptionStudioService,
     social_publishing: Any,
     photoshoot_queue: PhotoshootQueueService,
+    asset_registration: AssetRegistrationService,
 ) -> None:
     creator_profile_id = _creator_profile_id(creator_profile)
     generation_library.sync_jobs(generation_engine.list_jobs(status="succeeded"))
@@ -4383,7 +4461,7 @@ def _render_generation_library(
         with cols[index % 3]:
             if record.output_reference:
                 st.image(record.output_reference, use_container_width=True)
-            a1, a2, a3, a4, a5, a6 = st.columns(6)
+            a1, a2, a3, a4, a5, a6, a7 = st.columns(7)
             if a1.button("🚀", key=f"generation_library_publish_{record.image_id}", help="Publish", use_container_width=True):
                 _open_generation_publish_modal(record)
                 st.rerun()
@@ -4427,7 +4505,23 @@ def _render_generation_library(
                         "Video Studio is coming soon.\n\nYour image has been added to the Video Queue."
                     )
                     st.rerun()
-            if a6.button("🗑️", key=f"generation_library_delete_{record.image_id}", help="Delete Image", use_container_width=True):
+            if record.imported_asset_id is not None:
+                a6.button(
+                    "✅",
+                    key=f"generation_library_registered_{record.image_id}",
+                    help="Already Registered",
+                    use_container_width=True,
+                    disabled=True,
+                )
+            elif a6.button(
+                "⭐",
+                key=f"generation_library_register_{record.image_id}",
+                help="Register Asset",
+                use_container_width=True,
+            ):
+                st.session_state["generation_library_register_image_id"] = record.image_id
+                st.rerun()
+            if a7.button("🗑️", key=f"generation_library_delete_{record.image_id}", help="Delete Image", use_container_width=True):
                 generation_library.delete((record.image_id,))
                 st.rerun()
             if record.imported_asset_id is not None:
@@ -4443,6 +4537,20 @@ def _render_generation_library(
                     source_workflow="generation_library",
                     key_prefix=f"generation_library_{record.image_id}",
                 )
+    registration_image_id = st.session_state.get(
+        "generation_library_register_image_id"
+    )
+    if registration_image_id:
+        try:
+            registration_record = generation_library.get(registration_image_id)
+        except KeyError:
+            st.session_state.pop("generation_library_register_image_id", None)
+        else:
+            _render_asset_registration_dialog(
+                registration_record,
+                creator_profile=creator_profile,
+                asset_registration=asset_registration,
+            )
     _render_generation_library_pagination(
         current_page=current_page,
         total_pages=total_pages,
@@ -6894,15 +7002,30 @@ def _render_reference_library(
                 if reference.is_favorite:
                     st.caption("Favorite")
             with action_col:
+                active_reference = result.active_reference
+                replacing_canonical = bool(
+                    active_reference
+                    and active_reference.asset_id != reference.asset_id
+                    and (active_reference.metadata or {}).get("canonical")
+                )
+                replace_confirm = False
+                if replacing_canonical:
+                    replace_confirm = st.checkbox(
+                        "Confirm replace Canonical Reference",
+                        key=f"reference_library_replace_confirm_{reference.asset_id}",
+                    )
                 if st.button(
                     "Select Active",
-                    disabled=reference.is_active,
+                    disabled=reference.is_active or (
+                        replacing_canonical and not replace_confirm
+                    ),
                     key=f"reference_library_select_{reference.asset_id}",
                     use_container_width=True,
                 ):
                     action = reference_service.set_active_reference(
                         reference.asset_id,
                         creator_profile_id=creator_profile_id,
+                        confirm_replace_canonical=replace_confirm,
                     )
                     if action.success:
                         st.success(action.message)
@@ -6936,6 +7059,7 @@ def _render_reference_library(
                     action = reference_service.remove_reference(
                         reference.asset_id,
                         creator_profile_id=creator_profile_id,
+                        confirm_canonical=remove_confirm,
                     )
                     if action.success:
                         st.success(action.message)
@@ -7126,6 +7250,7 @@ def render_content_studio_page(
     content_archive_service: ContentArchiveService | None = None,
     photoshoot_queue_service: PhotoshootQueueService | None = None,
     asset_library_service: AssetLibraryService | None = None,
+    asset_registration_service: AssetRegistrationService | None = None,
     social_publishing_service: Any = None,
 ) -> None:
     reference_service = reference_service or ReferenceLibraryService()
@@ -7156,6 +7281,12 @@ def render_content_studio_page(
         or PhotoshootQueueService(generation_ingestion_service=generation_ingestion_service)
     )
     asset_library_service = asset_library_service or AssetLibraryService()
+    asset_registration_service = (
+        asset_registration_service
+        or AssetRegistrationService(
+            generation_library_service=generation_library_service,
+        )
+    )
     social_service_type = getattr(
         social_marketing_service,
         "Social" + "Publishing" + "Service",
@@ -7225,6 +7356,7 @@ def render_content_studio_page(
             caption_studio=caption_studio_service,
             social_publishing=social_publishing_service,
             photoshoot_queue=photoshoot_queue_service,
+            asset_registration=asset_registration_service,
         )
         return
     if page_name == "Archive":

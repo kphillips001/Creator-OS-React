@@ -51,6 +51,10 @@ Premium intimacy rules to inherit from the explicit prompt path, without becomin
 PREMIUM_CLOTHING_PRESERVATION_RULES = """
 Premium clothing preservation rules:
 - if the user asks for clothing, wardrobe, bikini, denim shorts, lingerie, dress, robe, bodysuit, crop top, shorts, jeans, skirt, or swimwear, preserve those garments as mandatory premium wardrobe tags
+- treat broad wardrobe phrases as categories, not as one fixed outfit; examples include crop top, micro crop top, tank top, tight shorts, micro-shorts, dress, skirt, bikini, jeans, and lingerie
+- preserve broad wardrobe phrases using the user's own level of specificity so the prompt generator can vary unspecified color, fabric, cut, neckline, trim, and garment construction across the Content Studio batch
+- do not invent a single color, fabric, cut, neckline, trim, or construction for a broad wardrobe phrase unless the user explicitly supplied that detail
+- if the user explicitly supplies a wardrobe detail such as black, white, red, leather, denim, lace, satin, halter, racerback, tied-front, scoop-neck, high-waisted, or low-rise, preserve that exact requested detail
 - if the user gives a broad wardrobe category such as "lingerie", preserve it as a broad category and expand it into variety instead of choosing one default style
 - for broad "lingerie" input, include a mixed lingerie palette such as satin lingerie, lace bralette and panties, sheer mesh set, strappy lingerie, balconette bra set, bodysuit/teddy, corset-style lingerie, garter belt, thigh-high stockings, fishnets, silk robe over lingerie, neutral tones, white, champagne, blush pink, red, emerald, navy, and black; do not default every result to black lace lingerie
 - if the user asks for cute, casual, around the house, at home, lounge, doorway, couch, kitchen, bedroom, bathroom, or morning light, keep it casual-home premium but add paywall-teaser heat through cleavage, fitted fabric, tiny shorts, bralette, robe, stockings, heels, teasing pose, or private eye contact
@@ -267,6 +271,9 @@ Avoid adding:
 - specific body positions
 - exact camera angles
 - one fixed location inside the environment
+- wardrobe colors the user did not request
+- wardrobe fabrics the user did not request
+- garment cuts, necklines, trim, or construction the user did not request
 - cellphone selfie tags
 - phone-in-frame tags
 - mirror selfie tags
@@ -286,6 +293,14 @@ Examples to avoid:
 - arm stretched toward the camera
 
 Keep enhanced tags flexible so the prompt builder can create multiple different scenes.
+
+CONTENT STUDIO WARDROBE VARIATION:
+- Content Studio creates independent variations, not one continuous photoshoot
+- keep broad user wardrobe categories broad in the enhanced tags
+- expand scene, lighting, mood, atmosphere, environment, expression, and premium styling without collapsing a broad garment category into one exact outfit
+- example: "tight shorts, micro crop top" must remain "tight shorts, micro crop top"; do not turn it into one coral halter top with white high-waisted shorts
+- example: "black leather mini skirt" must remain black, leather, and a mini skirt because those details came from the user
+- AI-added wardrobe ideas are suggestions for the later batch, not new fixed requirements
 
 Do NOT choose a specific outdoor setting.
 

@@ -21,6 +21,7 @@ from urllib.parse import urlparse
 
 import requests
 from PIL import Image, ImageOps
+from app.services.metadata_strip_service import MetadataStripService
 
 
 X_PUBLISH_DIALOG_DEBUG_LOG = Path("logs") / "x_publish_dialog_debug.log"
@@ -148,10 +149,11 @@ class XPublishingProvider:
         ),
     )
 
-    def __init__(self, *, accounts: tuple[XAccount, ...] | None = None, http_client=None, tweepy_module=None):
+    def __init__(self, *, accounts: tuple[XAccount, ...] | None = None, http_client=None, tweepy_module=None, metadata_strip_service=None):
         self._accounts = accounts or self.DEFAULT_ACCOUNTS
         self.http_client = http_client or requests
         self._tweepy = tweepy_module
+        self.metadata_strip = metadata_strip_service or MetadataStripService()
 
     def accounts(self) -> tuple[XAccount, ...]:
         return self._accounts
@@ -337,29 +339,46 @@ class XPublishingProvider:
         return path
 
     def _prepare_image_for_x(self, image_path: Path) -> Path:
+        clean_file = tempfile.NamedTemporaryFile(
+            delete=False,
+            suffix=image_path.suffix.lower() or ".jpg",
+        )
+        clean_path = Path(clean_file.name)
+        clean_file.close()
+        try:
+            self.metadata_strip.strip_to_exact_path(
+                image_path,
+                clean_path,
+                apply_exif_orientation=True,
+            )
+        except Exception:
+            clean_path.unlink(missing_ok=True)
+            raise
         temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".jpg")
         temp_path = Path(temp_file.name)
         temp_file.close()
-        with Image.open(image_path) as image:
-            image = ImageOps.exif_transpose(image)
-            if image.mode in ("RGBA", "LA") or (image.mode == "P" and "transparency" in image.info):
-                background = Image.new("RGB", image.size, "white")
-                alpha = image.convert("RGBA").getchannel("A")
-                background.paste(image.convert("RGBA"), mask=alpha)
-                image = background
-            else:
-                image = image.convert("RGB")
-            image.thumbnail((self.X_IMAGE_MAX_SIDE, self.X_IMAGE_MAX_SIDE), Image.Resampling.LANCZOS)
-            for quality in (94, 90, 86, 82, 78, 74, 70):
-                image.save(temp_path, format="JPEG", quality=quality, optimize=True, progressive=True)
-                if temp_path.stat().st_size <= self.X_IMAGE_MAX_BYTES:
-                    return temp_path
-            while temp_path.stat().st_size > self.X_IMAGE_MAX_BYTES:
-                width, height = image.size
-                if width < 600 or height < 600:
-                    break
-                image = image.resize((int(width * 0.9), int(height * 0.9)), Image.Resampling.LANCZOS)
-                image.save(temp_path, format="JPEG", quality=76, optimize=True, progressive=True)
+        try:
+            with Image.open(clean_path) as image:
+                if image.mode in ("RGBA", "LA") or (image.mode == "P" and "transparency" in image.info):
+                    background = Image.new("RGB", image.size, "white")
+                    alpha = image.convert("RGBA").getchannel("A")
+                    background.paste(image.convert("RGBA"), mask=alpha)
+                    image = background
+                else:
+                    image = image.convert("RGB")
+                image.thumbnail((self.X_IMAGE_MAX_SIDE, self.X_IMAGE_MAX_SIDE), Image.Resampling.LANCZOS)
+                for quality in (94, 90, 86, 82, 78, 74, 70):
+                    image.save(temp_path, format="JPEG", quality=quality, optimize=True, progressive=True)
+                    if temp_path.stat().st_size <= self.X_IMAGE_MAX_BYTES:
+                        return temp_path
+                while temp_path.stat().st_size > self.X_IMAGE_MAX_BYTES:
+                    width, height = image.size
+                    if width < 600 or height < 600:
+                        break
+                    image = image.resize((int(width * 0.9), int(height * 0.9)), Image.Resampling.LANCZOS)
+                    image.save(temp_path, format="JPEG", quality=76, optimize=True, progressive=True)
+        finally:
+            clean_path.unlink(missing_ok=True)
         if temp_path.stat().st_size > self.X_IMAGE_MAX_BYTES:
             temp_path.unlink(missing_ok=True)
             raise XPublishError("Prepared image is still too large for X upload.")

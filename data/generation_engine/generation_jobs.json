@@ -9776,5 +9776,581 @@
       "created_at": "2026-07-13T15:48:18.267128"
     },
     "failure": null
+  },
+  {
+    "job_id": "generation_job_a787a4667f494d0a99a458c3db1e7f77",
+    "request": {
+      "request_id": "generation_request_2471561c46734051b4c6b9a3c906eb25",
+      "creator_profile_id": 2,
+      "prompt_plan_id": "prompt_plan_2af7fdc60f36418db3b79c2cb34797d5",
+      "prompt_text": "Prompt 1: The same woman with her exact face, long dark hair worn down with smooth flat natural top and loose flowing strands lying over her shoulders, same natural sun-kissed skin tone as the reference image, feminine hourglass body, same waist-to-hip proportions, and full natural D-cup bust stands on a wooden beach boardwalk, leaning slightly forward against the salt-weathered railing with chest-forward posture and hips angled toward the viewer, wearing a strappy halter crop top in shimmering coral that clings with realistic fabric tension across the bust and visible cleavage from the low neckline, paired with high-waisted white micro-shorts riding high on her hips, teasing smile with warm eye contact and private alluring gaze directed at the viewer, natural daylight with soft highlights and salt spray atmosphere, medium-close waist-up creator framing with full head and clean space above loose hair, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.\n\nPrompt 2: The same woman with her exact face, long dark hair worn down with smooth flat natural top and loose flowing strands lying over her shoulders, same natural sun-kissed skin tone as the reference image, feminine hourglass body, same waist-to-hip proportions, and full natural D-cup bust sits on a weathered bench along the beach boardwalk, torso gently twisted and hips angled with chest-forward posture that emphasizes visible D-cup bust projection through the fabric, wearing a strappy halter crop top in shimmering coral stretched tight with realistic fabric tension across the bust and low neckline revealing cleavage, plus high-waisted white micro-shorts riding high on her hips, teasing smile and warm eye contact creating a private alluring gaze, salt spray atmosphere under natural daylight with soft highlights, close-medium upper-body framing with full face and natural hair top visible, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.\n\nPrompt 3: The same woman with her exact face, long dark hair worn down with smooth flat natural top and loose flowing strands lying over her shoulders, same natural sun-kissed skin tone as the reference image, feminine hourglass body, same waist-to-hip proportions, and full natural D-cup bust poses near the boardwalk overlook, standing with one hip cocked and shoulders relaxed while maintaining chest-forward posture, wearing a strappy halter crop top in shimmering coral that shows realistic fabric tension and visible cleavage from the low neckline, matched with high-waisted white micro-shorts riding high on her hips, soft teasing smile with warm eye contact and private alluring gaze, salt spray atmosphere in natural daylight with gentle highlights, head-to-upper-thigh portrait framing with smooth loose hair visible, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.\n\nPrompt 4: The same woman with her exact face, long dark hair worn down with smooth flat natural top and loose flowing strands lying over her shoulders, same natural sun-kissed skin tone as the reference image, feminine hourglass body, same waist-to-hip proportions, and full natural D-cup bust walks slowly along the beach boardwalk path, mid-step with hips angled naturally and chest-forward posture that makes the strappy halter crop top in shimmering coral reveal realistic fabric tension and low-neckline cleavage while the high-waisted white micro-shorts ride high on her hips, looking back over one shoulder with a warm teasing smile and private alluring gaze, salt spray atmosphere under natural daylight with soft highlights, medium-close waist-up creator framing with full head and clean space above loose hair, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.\n\nPrompt 5: The same woman with her exact face, long dark hair worn down with smooth flat natural top and loose flowing strands lying over her shoulders, same natural sun-kissed skin tone as the reference image, feminine hourglass body, same waist-to-hip proportions, and full natural D-cup bust leans casually against the wooden railing at the boardwalk steps, body angled three-quarters with subtle chest-forward posture and hips tilted, dressed in a strappy halter crop top in shimmering coral that stretches with realistic fabric tension across the bust and low neckline showing cleavage, plus high-waisted white micro-shorts riding high on her hips, relaxed playful smile with warm eye contact and private alluring gaze, salt spray atmosphere in natural daylight with soft highlights, intimate seated portrait framing with full face and natural hair top visible, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.",
+      "reference_asset_id": 93,
+      "reference_asset_path": "D:\\Ava_CMS\\vault\\originals\\images\\93.png",
+      "provider_id": "seedream_5_0_pro",
+      "generation_type": "image_to_image",
+      "media_type": "image",
+      "image_count": 5,
+      "metadata": {
+        "owner": "Generation Engine",
+        "provider_neutral": true,
+        "prompt_plan_owner": "Creative Director",
+        "creative_mode": "premium_teaser",
+        "creative_tags": [
+          "beach boardwalk",
+          "strappy halter crop top in shimmering coral",
+          "high-waisted white micro-shorts",
+          "realistic fabric tension across the bust",
+          "visible cleavage",
+          "low neckline",
+          "micro-shorts riding high on hips",
+          "feminine hourglass body",
+          "full natural D-cup bust",
+          "same waist-to-hip proportions",
+          "same natural sun-kissed skin tone as the reference image",
+          "loose flowing dark hair with smooth flat natural top lying over shoulders",
+          "teasing smile with warm eye contact",
+          "chest-forward posture",
+          "hips angled",
+          "private alluring gaze",
+          "salt spray atmosphere",
+          "natural daylight with soft highlights",
+          "realistic premium skin and fabric texture",
+          "intimate creator-content framing",
+          "medium-close portrait with full head visible and clean space above hair"
+        ],
+        "prompt_metadata": {
+          "prompt_variations": [
+            "The same woman with her exact face, long dark hair worn down with smooth flat natural top and loose flowing strands lying over her shoulders, same natural sun-kissed skin tone as the reference image, feminine hourglass body, same waist-to-hip proportions, and full natural D-cup bust stands on a wooden beach boardwalk, leaning slightly forward against the salt-weathered railing with chest-forward posture and hips angled toward the viewer, wearing a strappy halter crop top in shimmering coral that clings with realistic fabric tension across the bust and visible cleavage from the low neckline, paired with high-waisted white micro-shorts riding high on her hips, teasing smile with warm eye contact and private alluring gaze directed at the viewer, natural daylight with soft highlights and salt spray atmosphere, medium-close waist-up creator framing with full head and clean space above loose hair, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.",
+            "The same woman with her exact face, long dark hair worn down with smooth flat natural top and loose flowing strands lying over her shoulders, same natural sun-kissed skin tone as the reference image, feminine hourglass body, same waist-to-hip proportions, and full natural D-cup bust sits on a weathered bench along the beach boardwalk, torso gently twisted and hips angled with chest-forward posture that emphasizes visible D-cup bust projection through the fabric, wearing a strappy halter crop top in shimmering coral stretched tight with realistic fabric tension across the bust and low neckline revealing cleavage, plus high-waisted white micro-shorts riding high on her hips, teasing smile and warm eye contact creating a private alluring gaze, salt spray atmosphere under natural daylight with soft highlights, close-medium upper-body framing with full face and natural hair top visible, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.",
+            "The same woman with her exact face, long dark hair worn down with smooth flat natural top and loose flowing strands lying over her shoulders, same natural sun-kissed skin tone as the reference image, feminine hourglass body, same waist-to-hip proportions, and full natural D-cup bust poses near the boardwalk overlook, standing with one hip cocked and shoulders relaxed while maintaining chest-forward posture, wearing a strappy halter crop top in shimmering coral that shows realistic fabric tension and visible cleavage from the low neckline, matched with high-waisted white micro-shorts riding high on her hips, soft teasing smile with warm eye contact and private alluring gaze, salt spray atmosphere in natural daylight with gentle highlights, head-to-upper-thigh portrait framing with smooth loose hair visible, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.",
+            "The same woman with her exact face, long dark hair worn down with smooth flat natural top and loose flowing strands lying over her shoulders, same natural sun-kissed skin tone as the reference image, feminine hourglass body, same waist-to-hip proportions, and full natural D-cup bust walks slowly along the beach boardwalk path, mid-step with hips angled naturally and chest-forward posture that makes the strappy halter crop top in shimmering coral reveal realistic fabric tension and low-neckline cleavage while the high-waisted white micro-shorts ride high on her hips, looking back over one shoulder with a warm teasing smile and private alluring gaze, salt spray atmosphere under natural daylight with soft highlights, medium-close waist-up creator framing with full head and clean space above loose hair, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.",
+            "The same woman with her exact face, long dark hair worn down with smooth flat natural top and loose flowing strands lying over her shoulders, same natural sun-kissed skin tone as the reference image, feminine hourglass body, same waist-to-hip proportions, and full natural D-cup bust leans casually against the wooden railing at the boardwalk steps, body angled three-quarters with subtle chest-forward posture and hips tilted, dressed in a strappy halter crop top in shimmering coral that stretches with realistic fabric tension across the bust and low neckline showing cleavage, plus high-waisted white micro-shorts riding high on her hips, relaxed playful smile with warm eye contact and private alluring gaze, salt spray atmosphere in natural daylight with soft highlights, intimate seated portrait framing with full face and natural hair top visible, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality."
+          ],
+          "generation_brain": "wavespeed_canonical",
+          "wavespeed_source": "Wavespeed_App",
+          "reference_conditioning": "wavespeed",
+          "prompt_builder": "canonical_premium_prompt_planner",
+          "canonical_planner": "creator_os",
+          "planning_mode": "premium",
+          "prompt_count": 5,
+          "edited_in_prompt_preview": true
+        },
+        "reference_metadata": {
+          "active": true,
+          "source": "content_studio_reference_library",
+          "added_at": "2026-07-16T15:51:23.582972",
+          "favorite": true,
+          "canonical": true,
+          "protected": true,
+          "removed_at": null,
+          "is_reference": true,
+          "last_used_at": "2026-07-16T15:51:23.582972",
+          "canonical_path": "D:\\Ava_CMS\\Canonical\\Ava_Blackthorne\\canonical_reference.png",
+          "canonical_sha256": "6D14784CD9D98C72591C057058219AF1337B9328DE6B63BB692FA4A06A3432B4",
+          "original_filename": "9a6f4c0e78fc44648070284ab23e994e.png",
+          "creator_profile_id": 2
+        },
+        "reference_file_name": "9a6f4c0e78fc44648070284ab23e994e.png",
+        "reference_preview_path": "D:\\Ava_CMS\\vault\\originals\\images\\93.png",
+        "source": "premium_studio",
+        "workflow_type": "premium",
+        "premium_workflow": true,
+        "prompt_variations": [
+          "The same woman with her exact face, long dark hair worn down with smooth flat natural top and loose flowing strands lying over her shoulders, same natural sun-kissed skin tone as the reference image, feminine hourglass body, same waist-to-hip proportions, and full natural D-cup bust stands on a wooden beach boardwalk, leaning slightly forward against the salt-weathered railing with chest-forward posture and hips angled toward the viewer, wearing a strappy halter crop top in shimmering coral that clings with realistic fabric tension across the bust and visible cleavage from the low neckline, paired with high-waisted white micro-shorts riding high on her hips, teasing smile with warm eye contact and private alluring gaze directed at the viewer, natural daylight with soft highlights and salt spray atmosphere, medium-close waist-up creator framing with full head and clean space above loose hair, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.",
+          "The same woman with her exact face, long dark hair worn down with smooth flat natural top and loose flowing strands lying over her shoulders, same natural sun-kissed skin tone as the reference image, feminine hourglass body, same waist-to-hip proportions, and full natural D-cup bust sits on a weathered bench along the beach boardwalk, torso gently twisted and hips angled with chest-forward posture that emphasizes visible D-cup bust projection through the fabric, wearing a strappy halter crop top in shimmering coral stretched tight with realistic fabric tension across the bust and low neckline revealing cleavage, plus high-waisted white micro-shorts riding high on her hips, teasing smile and warm eye contact creating a private alluring gaze, salt spray atmosphere under natural daylight with soft highlights, close-medium upper-body framing with full face and natural hair top visible, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.",
+          "The same woman with her exact face, long dark hair worn down with smooth flat natural top and loose flowing strands lying over her shoulders, same natural sun-kissed skin tone as the reference image, feminine hourglass body, same waist-to-hip proportions, and full natural D-cup bust poses near the boardwalk overlook, standing with one hip cocked and shoulders relaxed while maintaining chest-forward posture, wearing a strappy halter crop top in shimmering coral that shows realistic fabric tension and visible cleavage from the low neckline, matched with high-waisted white micro-shorts riding high on her hips, soft teasing smile with warm eye contact and private alluring gaze, salt spray atmosphere in natural daylight with gentle highlights, head-to-upper-thigh portrait framing with smooth loose hair visible, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.",
+          "The same woman with her exact face, long dark hair worn down with smooth flat natural top and loose flowing strands lying over her shoulders, same natural sun-kissed skin tone as the reference image, feminine hourglass body, same waist-to-hip proportions, and full natural D-cup bust walks slowly along the beach boardwalk path, mid-step with hips angled naturally and chest-forward posture that makes the strappy halter crop top in shimmering coral reveal realistic fabric tension and low-neckline cleavage while the high-waisted white micro-shorts ride high on her hips, looking back over one shoulder with a warm teasing smile and private alluring gaze, salt spray atmosphere under natural daylight with soft highlights, medium-close waist-up creator framing with full head and clean space above loose hair, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.",
+          "The same woman with her exact face, long dark hair worn down with smooth flat natural top and loose flowing strands lying over her shoulders, same natural sun-kissed skin tone as the reference image, feminine hourglass body, same waist-to-hip proportions, and full natural D-cup bust leans casually against the wooden railing at the boardwalk steps, body angled three-quarters with subtle chest-forward posture and hips tilted, dressed in a strappy halter crop top in shimmering coral that stretches with realistic fabric tension across the bust and low neckline showing cleavage, plus high-waisted white micro-shorts riding high on her hips, relaxed playful smile with warm eye contact and private alluring gaze, salt spray atmosphere in natural daylight with soft highlights, intimate seated portrait framing with full face and natural hair top visible, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality."
+        ],
+        "prompt_batch_count": 5
+      },
+      "created_at": "2026-07-16T15:58:30.763105"
+    },
+    "status": "succeeded",
+    "progress": {
+      "current": 5,
+      "total": 5,
+      "percent": 100.0,
+      "message": "Succeeded"
+    },
+    "retry_count": 0,
+    "max_retries": 0,
+    "queued_at": "2026-07-16T15:58:30.763105",
+    "started_at": "2026-07-16T15:58:30.793112",
+    "completed_at": "2026-07-16T16:03:11.917642",
+    "updated_at": "2026-07-16T16:03:11.917642",
+    "result": {
+      "result_id": "generation_result_0f47ef0b9e264025a7999ec768b87b5a",
+      "request_id": "generation_request_2471561c46734051b4c6b9a3c906eb25",
+      "job_id": "generation_job_a787a4667f494d0a99a458c3db1e7f77",
+      "provider_id": "seedream_5_0_pro",
+      "status": "succeeded",
+      "generation_metadata": {
+        "provider_request_id": "8abce98d72ad4e07bbc49bb9a49e6d3d",
+        "provider_family": "wavespeed",
+        "endpoint": "https://api.wavespeed.ai/api/v3/bytedance/seedream-v5.0-pro/edit",
+        "partial_success": false
+      },
+      "execution_metadata": {
+        "submit_response": {
+          "code": 200,
+          "message": "success",
+          "data": {
+            "id": "8abce98d72ad4e07bbc49bb9a49e6d3d",
+            "model": "bytedance/seedream-v5.0-pro/edit",
+            "input": {
+              "enable_base64_output": false,
+              "enable_sync_mode": false,
+              "images": [
+                "https://i.ibb.co/mCQRhhd7/1efaa614ba74.png"
+              ],
+              "output_format": "png",
+              "prompt": "The same woman with her exact face, long dark hair worn down with smooth flat natural top and loose flowing strands lying over her shoulders, same natural sun-kissed skin tone as the reference image, feminine hourglass body, same waist-to-hip proportions, and full natural D-cup bust stands on a wooden beach boardwalk, leaning slightly forward against the salt-weathered railing with chest-forward posture and hips angled toward the viewer, wearing a strappy halter crop top in shimmering coral that clings with realistic fabric tension across the bust and visible cleavage from the low neckline, paired with high-waisted white micro-shorts riding high on her hips, teasing smile with warm eye contact and private alluring gaze directed at the viewer, natural daylight with soft highlights and salt spray atmosphere, medium-close waist-up creator framing with full head and clean space above loose hair, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.\n\nFINAL REFERENCE BODY LOCK - NON-NEGOTIABLE:\nUse the reference image as the identity, face, hair, skin-tone, body-size, body-shape, and bust-size source of truth only.\nPreserve the exact same woman, face, long dark loose hair, same natural sun-kissed skin tone as the reference image, body size, body weight, and recognizable silhouette from the reference image.\nHair must be worn down: soft center part or natural side part, smooth flat natural top, loose flowing dark hair lying over her shoulders or down her back.\nKeep the scalp area natural and low-profile, with no lifted tied hairstyle and no tall hair shape.\nDo not create a bun, hairbun, topknot, ponytail, updo, tied-up hair, piled hair, messy crown, lifted hair knot, or any clump of hair above the scalp.\nThe top of her hair must remain smooth, flat, natural, and low-profile, with no raised tied silhouette.\nDo NOT copy the reference image's setting, location, background, water, boat, dock, railings, trees, cabin, rocks, room, furniture, props, lighting, outfit, pose, or camera angle unless the written prompt explicitly asks for those exact elements.\nThe written prompt is the source of truth for the generated scene, wardrobe, nudity state, shower/pool/bedroom/hotel/indoor/outdoor setting, pose, lighting, and background.\nIf the written prompt asks for a shower, bathroom, bedroom, hotel, couch, pool, or any non-boat scene, do not include a boat, lake, dock, marina, railing, cabin, natural-water background, or outdoor boat-deck elements from the reference image.\nIf the written prompt asks for nude/topless/shower content, do not preserve clothing from the reference image.\nHer breasts must remain visibly large natural D-cup breasts in the generated image, with full D-cup breast volume, full upper and lower breast fullness, rounded natural breast shape, visible bust projection, and natural cleavage when clothing or framing allows it.\nDo not reduce breast size. Do not make her smaller-busted. Do not flatten her chest. Do not make her appear B-cup or small-chested.\nPreserve her feminine hourglass body, same waist-to-hip proportions, hip width, thigh proportions, shoulder width, and bust-to-waist ratio.\nPreserve the reference skin tone exactly across face, chest, arms, waist, hips, and legs when visible. Keep it natural, even, sun-kissed, and photorealistic without making her darker, changing undertone, changing ethnicity, or making her look like a different person.\nMANDATORY FRAMING LOCK FOR WAN 2.7:\nUse medium-close creator framing. The subject must be large in frame without being pressed against the image edges.\nUse close-medium, waist-up, head-to-hips, head-to-upper-thigh, upper-thigh, or intimate seated portrait framing.\nMake her face, upper body, torso, bust, waist, and hip angle visually dominant in the composition.\nKeep her full face and full head inside the frame, with her smooth natural hair top visible and a little clean background space above her hair.\nLeave visible empty background space above her hair. Keep her hair and forehead away from the top image edge.\nIf the composition cannot fit her face, smooth hair top, bust, waist, and hips at the requested crop distance, pull the camera back slightly.\nKeep the camera close enough that her full natural D-cup bust, hourglass waist, and reference skin tone are obvious.\nKeep the background secondary. The environment may be visible, but it must not become the main subject.\nReject wide bed shots, wide room shots, distant mattress compositions, distant full-body shots, scenery-dominant lake/pool/landscape shots, or any framing where the bed, furniture, room, water, or landscape is more visually important than her body.\nUnless the prompt explicitly asks for a wide shot, do not create a wide shot.\nReject cropped-off forehead, missing top of head, face pressed against the top edge, hair touching the top border, or any composition that slices through her hair.\nReject tall hair shapes, lifted tied hair, piled hair, knot-like hair silhouettes, or large hair clumps above the scalp.\nDo not crop out the body cues needed to preserve her D-cup bust, hourglass shape, reference skin tone, and recognizable facial identity.\nDo not use side/rear all-fours angles that hide or minimize the bust; if using side/rear body orientation, keep the chest, bust, face, and upper torso still visible and prominent.\nPreserve her exact facial identity, facial structure, eyes, nose, lips, jawline, cheekbones, smile shape, and natural facial proportions from the reference image.\nKeep the face photorealistic, natural, anatomically correct, and consistent with the selected expression variation.\nAvoid goofy, silly, cartoonish, distorted, uncanny, melted, asymmetrical, cross-eyed, or over-exaggerated facial expressions.\nAvoid distorted mouth shape, strange teeth, warped lips, oversized tongue, misplaced tongue, or unnatural tongue anatomy.\nIf the prompt asks for a tongue-out expression, keep it subtle, teasing, natural, and flattering, with normal mouth proportions and the same recognizable face.\n\nWAN BUST VISIBILITY LOCK:\nPreserve visibly full natural D-cup breast volume, not a petite or minimized bust.\nDo not reduce, flatten, minimize, shrink, hide, or soften her bust size.\nWhen wearing a bikini, lingerie, bra, crop top, fitted shirt, dress, bodysuit, swimwear, or any tight clothing, show realistic fabric tension from full D-cup volume.\nMake cleavage, bust projection, rounded lower-breast fullness, upper-breast fullness, and cup fill clearly visible whenever framing and wardrobe allow it.\nUse torso angle, chest-forward posture, side angle, three-quarter angle, seated lean, or close upper-body crop to make bust size obvious.\nAvoid loose clothing, straight-on flat posture, hair coverage, arm coverage, shadows, or crops that hide or visually reduce bust volume.\nIf a bikini top or bra is present, the cups must look visibly filled and slightly tensioned by full natural D-cup volume.",
+              "resolution": "1k"
+            },
+            "outputs": [],
+            "urls": {
+              "get": "https://api.wavespeed.ai/api/v3/predictions/8abce98d72ad4e07bbc49bb9a49e6d3d/result"
+            },
+            "status": "created",
+            "created_at": "2026-07-16T15:58:34.846Z",
+            "code": 0,
+            "error": "",
+            "executionTime": 0,
+            "timings": {
+              "inference": 0
+            }
+          }
+        },
+        "poll_response": {
+          "provider_request_ids": [
+            "8abce98d72ad4e07bbc49bb9a49e6d3d",
+            "2320b14c4cdf49209916743dc1a539ee",
+            "558f403e22c0413080427643cc0fa2d0",
+            "2411864133e741e0b56410bfef8b5e87",
+            "2163206900cb458abb72ef8a352c27ff"
+          ],
+          "poll_responses": [
+            {
+              "code": 200,
+              "message": "success",
+              "data": {
+                "id": "8abce98d72ad4e07bbc49bb9a49e6d3d",
+                "model": "bytedance/seedream-v5.0-pro/edit",
+                "outputs": [
+                  "https://d2h7xmz5gqybh9.cloudfront.net/output/aa7eb47c-a10a-4d5f-879f-71f78dae23f5.png"
+                ],
+                "urls": {
+                  "get": "https://api.wavespeed.ai/api/v3/predictions/8abce98d72ad4e07bbc49bb9a49e6d3d/result"
+                },
+                "status": "completed",
+                "created_at": "2026-07-16T15:58:34.844525171Z",
+                "code": 0,
+                "error": "",
+                "executionTime": 58358,
+                "timings": {
+                  "inference": 58358
+                }
+              }
+            },
+            {
+              "code": 200,
+              "message": "success",
+              "data": {
+                "id": "2320b14c4cdf49209916743dc1a539ee",
+                "model": "bytedance/seedream-v5.0-pro/edit",
+                "outputs": [
+                  "https://d2h7xmz5gqybh9.cloudfront.net/output/349c75ba-5503-41e0-ab7b-002571870db5.png"
+                ],
+                "urls": {
+                  "get": "https://api.wavespeed.ai/api/v3/predictions/2320b14c4cdf49209916743dc1a539ee/result"
+                },
+                "status": "completed",
+                "created_at": "2026-07-16T15:59:37.853347408Z",
+                "code": 0,
+                "error": "",
+                "executionTime": 53741,
+                "timings": {
+                  "inference": 53741
+                }
+              }
+            },
+            {
+              "code": 200,
+              "message": "success",
+              "data": {
+                "id": "558f403e22c0413080427643cc0fa2d0",
+                "model": "bytedance/seedream-v5.0-pro/edit",
+                "outputs": [
+                  "https://d2h7xmz5gqybh9.cloudfront.net/output/9f81638f-31cd-40ce-8682-6741d4518590.png"
+                ],
+                "urls": {
+                  "get": "https://api.wavespeed.ai/api/v3/predictions/558f403e22c0413080427643cc0fa2d0/result"
+                },
+                "status": "completed",
+                "created_at": "2026-07-16T16:00:37.185112201Z",
+                "code": 0,
+                "error": "",
+                "executionTime": 51766,
+                "timings": {
+                  "inference": 51766
+                }
+              }
+            },
+            {
+              "code": 200,
+              "message": "success",
+              "data": {
+                "id": "2411864133e741e0b56410bfef8b5e87",
+                "model": "bytedance/seedream-v5.0-pro/edit",
+                "outputs": [
+                  "https://d2h7xmz5gqybh9.cloudfront.net/output/88414c30-ab08-4abf-865e-49112a9c4105.png"
+                ],
+                "urls": {
+                  "get": "https://api.wavespeed.ai/api/v3/predictions/2411864133e741e0b56410bfef8b5e87/result"
+                },
+                "status": "completed",
+                "created_at": "2026-07-16T16:01:36.871765164Z",
+                "code": 0,
+                "error": "",
+                "executionTime": 44136,
+                "timings": {
+                  "inference": 44136
+                }
+              }
+            },
+            {
+              "code": 200,
+              "message": "success",
+              "data": {
+                "id": "2163206900cb458abb72ef8a352c27ff",
+                "model": "bytedance/seedream-v5.0-pro/edit",
+                "outputs": [
+                  "https://d2h7xmz5gqybh9.cloudfront.net/output/bc0aa612-a30f-4761-8777-4770edf19cba.png"
+                ],
+                "urls": {
+                  "get": "https://api.wavespeed.ai/api/v3/predictions/2163206900cb458abb72ef8a352c27ff/result"
+                },
+                "status": "completed",
+                "created_at": "2026-07-16T16:02:26.178198197Z",
+                "code": 0,
+                "error": "",
+                "executionTime": 43070,
+                "timings": {
+                  "inference": 43070
+                }
+              }
+            }
+          ],
+          "failures": []
+        },
+        "failures": []
+      },
+      "image_metadata": {
+        "requested_image_count": 5,
+        "output_count": 5,
+        "reference_asset_id": 93,
+        "completed_count": 5,
+        "failed_count": 0,
+        "processed_count": 5
+      },
+      "output_references": [
+        "https://d2h7xmz5gqybh9.cloudfront.net/output/aa7eb47c-a10a-4d5f-879f-71f78dae23f5.png",
+        "https://d2h7xmz5gqybh9.cloudfront.net/output/349c75ba-5503-41e0-ab7b-002571870db5.png",
+        "https://d2h7xmz5gqybh9.cloudfront.net/output/9f81638f-31cd-40ce-8682-6741d4518590.png",
+        "https://d2h7xmz5gqybh9.cloudfront.net/output/88414c30-ab08-4abf-865e-49112a9c4105.png",
+        "https://d2h7xmz5gqybh9.cloudfront.net/output/bc0aa612-a30f-4761-8777-4770edf19cba.png"
+      ],
+      "duration_seconds": 281.0997740998864,
+      "failure_reason": null,
+      "created_at": "2026-07-16T16:03:11.912129"
+    },
+    "failure": null
+  },
+  {
+    "job_id": "generation_job_699439c148d1450bafc48370ccd22883",
+    "request": {
+      "request_id": "generation_request_00b0b678a6944d46a2475948b9451ad4",
+      "creator_profile_id": 2,
+      "prompt_plan_id": "prompt_plan_adcfc3762d1e4407ab2c0c7ef4856b5e",
+      "prompt_text": "Prompt 1: In a sunlit bedroom with soft beige walls, the same woman leans casually against a tall window frame at golden hour, wearing a fitted white micro crop top and tight black high-waisted shorts that accentuate her figure. Her long dark hair falls loosely over her shoulders with a smooth natural top, warm eye contact directed at the viewer and a soft teasing smile playing on her lips as one hand rests lightly on her hip. Medium-close waist-up creator framing with full head and clean space above loose hair shows her full natural D-cup bust creating visible fabric tension across the tight micro crop top, feminine hourglass body, same curvy waist-to-hip proportions, and same natural sun-kissed skin tone as the reference image.\n\nPrompt 2: Seated sideways on the edge of a kitchen island with cool marble surfaces, the same woman turns her torso toward the camera in a quiet private moment, wearing a fitted soft grey micro crop top and tight charcoal lounge shorts. Long dark hair flows loosely down her back, slight head tilt and playful smirk with relaxed shoulders, soft natural window light from the side. Close-medium upper-body framing with full face and natural hair top visible keeps her body large in frame while showing full natural D-cup bust projection through the micro crop top fabric, feminine hourglass body, same waist-to-hip proportions, and same natural sun-kissed skin tone as the reference image.\n\nPrompt 3: Reclining back against plush cushions on a low couch in a modern living room bathed in diffused afternoon light, the same woman crosses one leg casually while facing the viewer, wearing a ribbed blush-pink micro crop top and tight matching high-rise shorts. Her long dark hair spreads softly across her shoulders, warm inviting gaze and relaxed parted lips. Head-to-hips portrait framing with smooth loose hair visible emphasizes her full natural D-cup bust with realistic fabric tension, feminine hourglass body, same waist-to-hip proportions, and same natural sun-kissed skin tone as the reference image.\n\nPrompt 4: Standing near an open balcony doorway at dusk with city lights beginning to glow behind her, the same woman rests one hand on the doorframe and angles her hips toward the camera, wearing a fitted black micro crop top and tight denim shorts. Long dark hair falls loosely over one shoulder, confident soft smile and direct eye contact under moody warm interior lighting mixed with fading daylight. Medium-close creator framing with full head and clean space above loose hair highlights full natural D-cup bust volume pressing against the crop top, feminine hourglass body, same waist-to-hip proportions, and same natural sun-kissed skin tone as the reference image.\n\nPrompt 5: Lounging sideways across the arm of a deep leather reading chair near a tall window with soft evening lamplight, the same woman looks back over her shoulder toward the camera with a mischievous little smile, wearing a fitted cream micro crop top and tight olive lounge shorts. Long dark hair tumbles naturally down her back, relaxed posture with one hand resting on her thigh. Upper-thigh portrait crop with full head visible shows full natural D-cup bust creating clear fabric stretch across the micro crop top, feminine hourglass body, same waist-to-hip proportions, and same natural sun-kissed skin tone as the reference image.",
+      "reference_asset_id": 93,
+      "reference_asset_path": "D:\\Ava_CMS\\vault\\originals\\images\\93.png",
+      "provider_id": "seedream_5_0_pro",
+      "generation_type": "image_to_image",
+      "media_type": "image",
+      "image_count": 5,
+      "metadata": {
+        "owner": "Generation Engine",
+        "provider_neutral": true,
+        "prompt_plan_owner": "Creative Director",
+        "creative_mode": "premium_teaser",
+        "creative_tags": [
+          "[ORIGINAL USER TAGS \u2014 mandatory: tight shorts",
+          "micro crop top] [ENHANCED SUGGESTIONS \u2014 vary any wardrobe detail not present in ORIGINAL USER TAGS: tight shorts",
+          "micro crop top",
+          "warm curtain window light",
+          "fitted micro crop top with visible cleavage",
+          "realistic fabric tension across the bust",
+          "tiny lounge shorts",
+          "teasing smile",
+          "warm eye contact",
+          "chest-forward posture",
+          "hips angled",
+          "medium-close portrait framing with full head visible and clean space above loose hair",
+          "intimate creator-content atmosphere",
+          "full natural D-cup bust",
+          "feminine hourglass body",
+          "same waist-to-hip proportions",
+          "same natural sun-kissed skin tone as the reference image]"
+        ],
+        "prompt_metadata": {
+          "prompt_variations": [
+            "In a sunlit bedroom with soft beige walls, the same woman leans casually against a tall window frame at golden hour, wearing a fitted white micro crop top and tight black high-waisted shorts that accentuate her figure. Her long dark hair falls loosely over her shoulders with a smooth natural top, warm eye contact directed at the viewer and a soft teasing smile playing on her lips as one hand rests lightly on her hip. Medium-close waist-up creator framing with full head and clean space above loose hair shows her full natural D-cup bust creating visible fabric tension across the tight micro crop top, feminine hourglass body, same curvy waist-to-hip proportions, and same natural sun-kissed skin tone as the reference image.",
+            "Seated sideways on the edge of a kitchen island with cool marble surfaces, the same woman turns her torso toward the camera in a quiet private moment, wearing a fitted soft grey micro crop top and tight charcoal lounge shorts. Long dark hair flows loosely down her back, slight head tilt and playful smirk with relaxed shoulders, soft natural window light from the side. Close-medium upper-body framing with full face and natural hair top visible keeps her body large in frame while showing full natural D-cup bust projection through the micro crop top fabric, feminine hourglass body, same waist-to-hip proportions, and same natural sun-kissed skin tone as the reference image.",
+            "Reclining back against plush cushions on a low couch in a modern living room bathed in diffused afternoon light, the same woman crosses one leg casually while facing the viewer, wearing a ribbed blush-pink micro crop top and tight matching high-rise shorts. Her long dark hair spreads softly across her shoulders, warm inviting gaze and relaxed parted lips. Head-to-hips portrait framing with smooth loose hair visible emphasizes her full natural D-cup bust with realistic fabric tension, feminine hourglass body, same waist-to-hip proportions, and same natural sun-kissed skin tone as the reference image.",
+            "Standing near an open balcony doorway at dusk with city lights beginning to glow behind her, the same woman rests one hand on the doorframe and angles her hips toward the camera, wearing a fitted black micro crop top and tight denim shorts. Long dark hair falls loosely over one shoulder, confident soft smile and direct eye contact under moody warm interior lighting mixed with fading daylight. Medium-close creator framing with full head and clean space above loose hair highlights full natural D-cup bust volume pressing against the crop top, feminine hourglass body, same waist-to-hip proportions, and same natural sun-kissed skin tone as the reference image.",
+            "Lounging sideways across the arm of a deep leather reading chair near a tall window with soft evening lamplight, the same woman looks back over her shoulder toward the camera with a mischievous little smile, wearing a fitted cream micro crop top and tight olive lounge shorts. Long dark hair tumbles naturally down her back, relaxed posture with one hand resting on her thigh. Upper-thigh portrait crop with full head visible shows full natural D-cup bust creating clear fabric stretch across the micro crop top, feminine hourglass body, same waist-to-hip proportions, and same natural sun-kissed skin tone as the reference image."
+          ],
+          "generation_brain": "wavespeed_canonical",
+          "wavespeed_source": "Wavespeed_App",
+          "reference_conditioning": "wavespeed",
+          "prompt_builder": "canonical_premium_prompt_planner",
+          "canonical_planner": "creator_os",
+          "planning_mode": "premium",
+          "prompt_count": 5,
+          "edited_in_prompt_preview": true
+        },
+        "reference_metadata": {
+          "active": true,
+          "source": "content_studio_reference_library",
+          "added_at": "2026-07-16T15:51:23.582972",
+          "favorite": true,
+          "canonical": true,
+          "protected": true,
+          "removed_at": null,
+          "is_reference": true,
+          "last_used_at": "2026-07-16T15:51:23.582972",
+          "canonical_path": "D:\\Ava_CMS\\Canonical\\Ava_Blackthorne\\canonical_reference.png",
+          "canonical_sha256": "6D14784CD9D98C72591C057058219AF1337B9328DE6B63BB692FA4A06A3432B4",
+          "original_filename": "9a6f4c0e78fc44648070284ab23e994e.png",
+          "creator_profile_id": 2
+        },
+        "reference_file_name": "9a6f4c0e78fc44648070284ab23e994e.png",
+        "reference_preview_path": "D:\\Ava_CMS\\vault\\originals\\images\\93.png",
+        "source": "premium_studio",
+        "workflow_type": "premium",
+        "premium_workflow": true,
+        "prompt_variations": [
+          "In a sunlit bedroom with soft beige walls, the same woman leans casually against a tall window frame at golden hour, wearing a fitted white micro crop top and tight black high-waisted shorts that accentuate her figure. Her long dark hair falls loosely over her shoulders with a smooth natural top, warm eye contact directed at the viewer and a soft teasing smile playing on her lips as one hand rests lightly on her hip. Medium-close waist-up creator framing with full head and clean space above loose hair shows her full natural D-cup bust creating visible fabric tension across the tight micro crop top, feminine hourglass body, same curvy waist-to-hip proportions, and same natural sun-kissed skin tone as the reference image.",
+          "Seated sideways on the edge of a kitchen island with cool marble surfaces, the same woman turns her torso toward the camera in a quiet private moment, wearing a fitted soft grey micro crop top and tight charcoal lounge shorts. Long dark hair flows loosely down her back, slight head tilt and playful smirk with relaxed shoulders, soft natural window light from the side. Close-medium upper-body framing with full face and natural hair top visible keeps her body large in frame while showing full natural D-cup bust projection through the micro crop top fabric, feminine hourglass body, same waist-to-hip proportions, and same natural sun-kissed skin tone as the reference image.",
+          "Reclining back against plush cushions on a low couch in a modern living room bathed in diffused afternoon light, the same woman crosses one leg casually while facing the viewer, wearing a ribbed blush-pink micro crop top and tight matching high-rise shorts. Her long dark hair spreads softly across her shoulders, warm inviting gaze and relaxed parted lips. Head-to-hips portrait framing with smooth loose hair visible emphasizes her full natural D-cup bust with realistic fabric tension, feminine hourglass body, same waist-to-hip proportions, and same natural sun-kissed skin tone as the reference image.",
+          "Standing near an open balcony doorway at dusk with city lights beginning to glow behind her, the same woman rests one hand on the doorframe and angles her hips toward the camera, wearing a fitted black micro crop top and tight denim shorts. Long dark hair falls loosely over one shoulder, confident soft smile and direct eye contact under moody warm interior lighting mixed with fading daylight. Medium-close creator framing with full head and clean space above loose hair highlights full natural D-cup bust volume pressing against the crop top, feminine hourglass body, same waist-to-hip proportions, and same natural sun-kissed skin tone as the reference image.",
+          "Lounging sideways across the arm of a deep leather reading chair near a tall window with soft evening lamplight, the same woman looks back over her shoulder toward the camera with a mischievous little smile, wearing a fitted cream micro crop top and tight olive lounge shorts. Long dark hair tumbles naturally down her back, relaxed posture with one hand resting on her thigh. Upper-thigh portrait crop with full head visible shows full natural D-cup bust creating clear fabric stretch across the micro crop top, feminine hourglass body, same waist-to-hip proportions, and same natural sun-kissed skin tone as the reference image."
+        ],
+        "prompt_batch_count": 5
+      },
+      "created_at": "2026-07-16T18:06:30.024266"
+    },
+    "status": "succeeded",
+    "progress": {
+      "current": 5,
+      "total": 5,
+      "percent": 100.0,
+      "message": "Succeeded"
+    },
+    "retry_count": 0,
+    "max_retries": 0,
+    "queued_at": "2026-07-16T18:06:30.024266",
+    "started_at": "2026-07-16T18:06:30.048154",
+    "completed_at": "2026-07-16T18:10:29.233026",
+    "updated_at": "2026-07-16T18:10:29.233026",
+    "result": {
+      "result_id": "generation_result_28dce0fccc8f465d9167498a174bd7a2",
+      "request_id": "generation_request_00b0b678a6944d46a2475948b9451ad4",
+      "job_id": "generation_job_699439c148d1450bafc48370ccd22883",
+      "provider_id": "seedream_5_0_pro",
+      "status": "succeeded",
+      "generation_metadata": {
+        "provider_request_id": "2f22d34af0464853a2864f626c6ca2cd",
+        "provider_family": "wavespeed",
+        "endpoint": "https://api.wavespeed.ai/api/v3/bytedance/seedream-v5.0-pro/edit",
+        "partial_success": false
+      },
+      "execution_metadata": {
+        "submit_response": {
+          "code": 200,
+          "message": "success",
+          "data": {
+            "id": "2f22d34af0464853a2864f626c6ca2cd",
+            "model": "bytedance/seedream-v5.0-pro/edit",
+            "input": {
+              "enable_base64_output": false,
+              "enable_sync_mode": false,
+              "images": [
+                "https://i.ibb.co/mCQRhhd7/1efaa614ba74.png"
+              ],
+              "output_format": "png",
+              "prompt": "In a sunlit bedroom with soft beige walls, the same woman leans casually against a tall window frame at golden hour, wearing a fitted white micro crop top and tight black high-waisted shorts that accentuate her figure. Her long dark hair falls loosely over her shoulders with a smooth natural top, warm eye contact directed at the viewer and a soft teasing smile playing on her lips as one hand rests lightly on her hip. Medium-close waist-up creator framing with full head and clean space above loose hair shows her full natural D-cup bust creating visible fabric tension across the tight micro crop top, feminine hourglass body, same curvy waist-to-hip proportions, and same natural sun-kissed skin tone as the reference image.\n\nFINAL REFERENCE BODY LOCK - NON-NEGOTIABLE:\nUse the reference image as the identity, face, hair, skin-tone, body-size, body-shape, and bust-size source of truth only.\nPreserve the exact same woman, face, long dark loose hair, same natural sun-kissed skin tone as the reference image, body size, body weight, and recognizable silhouette from the reference image.\nHair must be worn down: soft center part or natural side part, smooth flat natural top, loose flowing dark hair lying over her shoulders or down her back.\nKeep the scalp area natural and low-profile, with no lifted tied hairstyle and no tall hair shape.\nDo not create a bun, hairbun, topknot, ponytail, updo, tied-up hair, piled hair, messy crown, lifted hair knot, or any clump of hair above the scalp.\nThe top of her hair must remain smooth, flat, natural, and low-profile, with no raised tied silhouette.\nDo NOT copy the reference image's setting, location, background, water, boat, dock, railings, trees, cabin, rocks, room, furniture, props, lighting, outfit, pose, or camera angle unless the written prompt explicitly asks for those exact elements.\nThe written prompt is the source of truth for the generated scene, wardrobe, nudity state, shower/pool/bedroom/hotel/indoor/outdoor setting, pose, lighting, and background.\nIf the written prompt asks for a shower, bathroom, bedroom, hotel, couch, pool, or any non-boat scene, do not include a boat, lake, dock, marina, railing, cabin, natural-water background, or outdoor boat-deck elements from the reference image.\nIf the written prompt asks for nude/topless/shower content, do not preserve clothing from the reference image.\nHer breasts must remain visibly large natural D-cup breasts in the generated image, with full D-cup breast volume, full upper and lower breast fullness, rounded natural breast shape, visible bust projection, and natural cleavage when clothing or framing allows it.\nDo not reduce breast size. Do not make her smaller-busted. Do not flatten her chest. Do not make her appear B-cup or small-chested.\nPreserve her feminine hourglass body, same waist-to-hip proportions, hip width, thigh proportions, shoulder width, and bust-to-waist ratio.\nPreserve the reference skin tone exactly across face, chest, arms, waist, hips, and legs when visible. Keep it natural, even, sun-kissed, and photorealistic without making her darker, changing undertone, changing ethnicity, or making her look like a different person.\nMANDATORY FRAMING LOCK FOR WAN 2.7:\nUse medium-close creator framing. The subject must be large in frame without being pressed against the image edges.\nUse close-medium, waist-up, head-to-hips, head-to-upper-thigh, upper-thigh, or intimate seated portrait framing.\nMake her face, upper body, torso, bust, waist, and hip angle visually dominant in the composition.\nKeep her full face and full head inside the frame, with her smooth natural hair top visible and a little clean background space above her hair.\nLeave visible empty background space above her hair. Keep her hair and forehead away from the top image edge.\nIf the composition cannot fit her face, smooth hair top, bust, waist, and hips at the requested crop distance, pull the camera back slightly.\nKeep the camera close enough that her full natural D-cup bust, hourglass waist, and reference skin tone are obvious.\nKeep the background secondary. The environment may be visible, but it must not become the main subject.\nReject wide bed shots, wide room shots, distant mattress compositions, distant full-body shots, scenery-dominant lake/pool/landscape shots, or any framing where the bed, furniture, room, water, or landscape is more visually important than her body.\nUnless the prompt explicitly asks for a wide shot, do not create a wide shot.\nReject cropped-off forehead, missing top of head, face pressed against the top edge, hair touching the top border, or any composition that slices through her hair.\nReject tall hair shapes, lifted tied hair, piled hair, knot-like hair silhouettes, or large hair clumps above the scalp.\nDo not crop out the body cues needed to preserve her D-cup bust, hourglass shape, reference skin tone, and recognizable facial identity.\nDo not use side/rear all-fours angles that hide or minimize the bust; if using side/rear body orientation, keep the chest, bust, face, and upper torso still visible and prominent.\nPreserve her exact facial identity, facial structure, eyes, nose, lips, jawline, cheekbones, smile shape, and natural facial proportions from the reference image.\nKeep the face photorealistic, natural, anatomically correct, and consistent with the selected expression variation.\nAvoid goofy, silly, cartoonish, distorted, uncanny, melted, asymmetrical, cross-eyed, or over-exaggerated facial expressions.\nAvoid distorted mouth shape, strange teeth, warped lips, oversized tongue, misplaced tongue, or unnatural tongue anatomy.\nIf the prompt asks for a tongue-out expression, keep it subtle, teasing, natural, and flattering, with normal mouth proportions and the same recognizable face.\n\nWAN BUST VISIBILITY LOCK:\nPreserve visibly full natural D-cup breast volume, not a petite or minimized bust.\nDo not reduce, flatten, minimize, shrink, hide, or soften her bust size.\nWhen wearing a bikini, lingerie, bra, crop top, fitted shirt, dress, bodysuit, swimwear, or any tight clothing, show realistic fabric tension from full D-cup volume.\nMake cleavage, bust projection, rounded lower-breast fullness, upper-breast fullness, and cup fill clearly visible whenever framing and wardrobe allow it.\nUse torso angle, chest-forward posture, side angle, three-quarter angle, seated lean, or close upper-body crop to make bust size obvious.\nAvoid loose clothing, straight-on flat posture, hair coverage, arm coverage, shadows, or crops that hide or visually reduce bust volume.\nIf a bikini top or bra is present, the cups must look visibly filled and slightly tensioned by full natural D-cup volume.",
+              "resolution": "1k"
+            },
+            "outputs": [],
+            "urls": {
+              "get": "https://api.wavespeed.ai/api/v3/predictions/2f22d34af0464853a2864f626c6ca2cd/result"
+            },
+            "status": "created",
+            "created_at": "2026-07-16T18:06:33.314Z",
+            "code": 0,
+            "error": "",
+            "executionTime": 0,
+            "timings": {
+              "inference": 0
+            }
+          }
+        },
+        "poll_response": {
+          "provider_request_ids": [
+            "2f22d34af0464853a2864f626c6ca2cd",
+            "72b8fa19e1e34a2b94f47400add58874",
+            "e6b981464df84a1b9791363c9378fe39",
+            "198c8357f7b84127829ed20da180e498",
+            "fe7c752432484d0c8dd67ac3edb4e9a9"
+          ],
+          "poll_responses": [
+            {
+              "code": 200,
+              "message": "success",
+              "data": {
+                "id": "2f22d34af0464853a2864f626c6ca2cd",
+                "model": "bytedance/seedream-v5.0-pro/edit",
+                "outputs": [
+                  "https://d2h7xmz5gqybh9.cloudfront.net/output/b650b201-fa28-431f-a0ad-e14ec11f13dc.png"
+                ],
+                "urls": {
+                  "get": "https://api.wavespeed.ai/api/v3/predictions/2f22d34af0464853a2864f626c6ca2cd/result"
+                },
+                "status": "completed",
+                "created_at": "2026-07-16T18:06:33.312798595Z",
+                "code": 0,
+                "error": "",
+                "executionTime": 58176,
+                "timings": {
+                  "inference": 58176
+                }
+              }
+            },
+            {
+              "code": 200,
+              "message": "success",
+              "data": {
+                "id": "72b8fa19e1e34a2b94f47400add58874",
+                "model": "bytedance/seedream-v5.0-pro/edit",
+                "outputs": [
+                  "https://d2h7xmz5gqybh9.cloudfront.net/output/25e9297f-97ce-4287-a1e1-0ee729003c31.png"
+                ],
+                "urls": {
+                  "get": "https://api.wavespeed.ai/api/v3/predictions/72b8fa19e1e34a2b94f47400add58874/result"
+                },
+                "status": "completed",
+                "created_at": "2026-07-16T18:07:36.559898029Z",
+                "code": 0,
+                "error": "",
+                "executionTime": 38385,
+                "timings": {
+                  "inference": 38385
+                }
+              }
+            },
+            {
+              "code": 200,
+              "message": "success",
+              "data": {
+                "id": "e6b981464df84a1b9791363c9378fe39",
+                "model": "bytedance/seedream-v5.0-pro/edit",
+                "outputs": [
+                  "https://d2h7xmz5gqybh9.cloudfront.net/output/d44aad14-b2d5-4084-9f06-2e3832ae23ec.png"
+                ],
+                "urls": {
+                  "get": "https://api.wavespeed.ai/api/v3/predictions/e6b981464df84a1b9791363c9378fe39/result"
+                },
+                "status": "completed",
+                "created_at": "2026-07-16T18:08:22.384880655Z",
+                "code": 0,
+                "error": "",
+                "executionTime": 34941,
+                "timings": {
+                  "inference": 34941
+                }
+              }
+            },
+            {
+              "code": 200,
+              "message": "success",
+              "data": {
+                "id": "198c8357f7b84127829ed20da180e498",
+                "model": "bytedance/seedream-v5.0-pro/edit",
+                "outputs": [
+                  "https://d2h7xmz5gqybh9.cloudfront.net/output/bcb8347a-4b14-449a-bc9c-bce6768abd5a.png"
+                ],
+                "urls": {
+                  "get": "https://api.wavespeed.ai/api/v3/predictions/198c8357f7b84127829ed20da180e498/result"
+                },
+                "status": "completed",
+                "created_at": "2026-07-16T18:09:04.734723899Z",
+                "code": 0,
+                "error": "",
+                "executionTime": 38191,
+                "timings": {
+                  "inference": 38191
+                }
+              }
+            },
+            {
+              "code": 200,
+              "message": "success",
+              "data": {
+                "id": "fe7c752432484d0c8dd67ac3edb4e9a9",
+                "model": "bytedance/seedream-v5.0-pro/edit",
+                "outputs": [
+                  "https://d2h7xmz5gqybh9.cloudfront.net/output/949ff420-33d5-447f-bf20-5841c849a1bf.png"
+                ],
+                "urls": {
+                  "get": "https://api.wavespeed.ai/api/v3/predictions/fe7c752432484d0c8dd67ac3edb4e9a9/result"
+                },
+                "status": "completed",
+                "created_at": "2026-07-16T18:09:50.069737148Z",
+                "code": 0,
+                "error": "",
+                "executionTime": 38065,
+                "timings": {
+                  "inference": 38065
+                }
+              }
+            }
+          ],
+          "failures": []
+        },
+        "failures": []
+      },
+      "image_metadata": {
+        "requested_image_count": 5,
+        "output_count": 5,
+        "reference_asset_id": 93,
+        "completed_count": 5,
+        "failed_count": 0,
+        "processed_count": 5
+      },
+      "output_references": [
+        "https://d2h7xmz5gqybh9.cloudfront.net/output/b650b201-fa28-431f-a0ad-e14ec11f13dc.png",
+        "https://d2h7xmz5gqybh9.cloudfront.net/output/25e9297f-97ce-4287-a1e1-0ee729003c31.png",
+        "https://d2h7xmz5gqybh9.cloudfront.net/output/d44aad14-b2d5-4084-9f06-2e3832ae23ec.png",
+        "https://d2h7xmz5gqybh9.cloudfront.net/output/bcb8347a-4b14-449a-bc9c-bce6768abd5a.png",
+        "https://d2h7xmz5gqybh9.cloudfront.net/output/949ff420-33d5-447f-bf20-5841c849a1bf.png"
+      ],
+      "duration_seconds": 239.16347640007734,
+      "failure_reason": null,
+      "created_at": "2026-07-16T18:10:29.228512"
+    },
+    "failure": null
   }
 ]

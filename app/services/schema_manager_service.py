@@ -61,6 +61,51 @@ class SchemaManagerService:
             "legacy": "provider-compatibility",
             "compatibility": "COMPATIBILITY",
         },
+        "asset_intelligence_profiles": {
+            "owner": "Asset Intelligence",
+            "migration": "20260715_001_asset_intelligence_foundation.sql",
+            "repository": "AssetIntelligenceRepository",
+            "service": "AssetIntelligenceService",
+            "dashboard": ("Asset Library",),
+            "columns": (
+                "asset_id",
+                "creator_profile_id",
+                "schema_version",
+                "analysis_status",
+                "profile_data",
+            ),
+        },
+        "asset_intelligence_provider_results": {
+            "owner": "Asset Intelligence Provider Evidence",
+            "migration": "20260715_001_asset_intelligence_foundation.sql",
+            "repository": "AssetIntelligenceRepository",
+            "service": "AssetIntelligenceService / AssetIntelligenceMerger",
+            "dashboard": (),
+            "columns": (
+                "result_id",
+                "asset_id",
+                "creator_profile_id",
+                "provider",
+                "status",
+                "raw_response",
+            ),
+        },
+        "asset_intelligence_runs": {
+            "owner": "Asset Intelligence Orchestration",
+            "migration": "20260715_002_asset_intelligence_provider_execution.sql",
+            "repository": "AssetIntelligenceRunRepository",
+            "service": "AssetIntelligenceOrchestrator",
+            "dashboard": (),
+            "columns": ("run_id", "asset_id", "creator_profile_id", "status", "is_current", "required_providers", "optional_providers"),
+        },
+        "asset_intelligence_provider_executions": {
+            "owner": "Asset Intelligence Provider Execution",
+            "migration": "20260715_002_asset_intelligence_provider_execution.sql",
+            "repository": "AssetIntelligenceRunRepository",
+            "service": "AssetIntelligenceOrchestrator",
+            "dashboard": (),
+            "columns": ("execution_id", "run_id", "asset_id", "provider_name", "attempt_number", "status", "result_id"),
+        },
         "products": {
             "owner": "Product Business",
             "migration": "20260621_001_create_commerce_foundation.sql",
@@ -150,6 +195,28 @@ class SchemaManagerService:
     }
 
     MIGRATION_SCHEMA_REQUIREMENTS: Mapping[str, Mapping[str, tuple[str, ...]]] = {
+        "20260715_002_asset_intelligence_provider_execution.sql": {
+            "asset_intelligence_runs": ("run_id", "asset_id", "status", "is_current"),
+            "asset_intelligence_provider_executions": ("execution_id", "run_id", "provider_name", "attempt_number", "status"),
+            "asset_intelligence_provider_results": ("run_id", "execution_id"),
+        },
+        "20260715_001_asset_intelligence_foundation.sql": {
+            "asset_intelligence_profiles": (
+                "asset_id",
+                "creator_profile_id",
+                "schema_version",
+                "analysis_status",
+                "profile_data",
+            ),
+            "asset_intelligence_provider_results": (
+                "result_id",
+                "asset_id",
+                "creator_profile_id",
+                "provider",
+                "status",
+                "raw_response",
+            ),
+        },
         "20260619_001_create_telegram_identity_map.sql": {
             "telegram_identity_map": (
                 "id",
