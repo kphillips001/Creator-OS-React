@@ -166,6 +166,22 @@ class GenerationLibraryService:
         self._write_records(updated)
         return GenerationLibraryActionResult(True, "Selection updated.", ids)
 
+    def mark_registered(self, image_id: str, asset_id: int) -> GeneratedImageRecord:
+        """Keep generated history intact while linking its canonical Asset."""
+        record = self.get(str(image_id))
+        updated = replace(
+            record,
+            imported_asset_id=int(asset_id),
+            generation_metadata={
+                **dict(record.generation_metadata or {}),
+                "asset_registration_phase": 1,
+                "registered_asset_id": int(asset_id),
+            },
+            updated_at=utc_now(),
+        )
+        self._replace_record(updated)
+        return updated
+
     def bulk_select(self, filters: GenerationLibraryFilter) -> GenerationLibraryActionResult:
         result = self.browse(filters)
         return self.select(tuple(record.image_id for record in result.records), selected=True)

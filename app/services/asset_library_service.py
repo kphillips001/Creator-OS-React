@@ -29,6 +29,7 @@ from app.repositories.product_asset_repository import ProductAssetRepository
 from app.repositories.product_repository import ProductRepository
 from app.services.asset_lifecycle_service import AssetLifecycleService
 from app.services.asset_understanding_service import AssetUnderstandingService
+from app.services.asset_intelligence_service import AssetIntelligenceService
 from app.services.experience_service import ExperienceService
 from app.services.local_vault_service import LocalVaultService
 from app.services.media_processing_service import MediaProcessingService
@@ -53,6 +54,7 @@ class AssetLibraryService:
         asset_lifecycle_service: AssetLifecycleService | None = None,
         asset_understanding_service: AssetUnderstandingService | None = None,
         content_opportunity_service=None,
+        asset_intelligence_service: AssetIntelligenceService | None = None,
     ):
         self.assets = asset_repository or AssetRepository()
         self.runtime_media_resolver = runtime_media_resolver or RuntimeMediaResolver()
@@ -76,6 +78,7 @@ class AssetLibraryService:
             )
         )
         self.content_opportunity_service = content_opportunity_service
+        self.asset_intelligence = asset_intelligence_service or AssetIntelligenceService()
 
     def search_assets(
         self,
@@ -121,6 +124,7 @@ class AssetLibraryService:
         understanding = self._safe_asset_understanding(asset)
         return AssetLibraryDetails(
             item=item,
+            creator_profile_id=asset.creator_profile_id,
             confidence=self._understanding_confidence(understanding, asset),
             summary=self._understanding_summary(understanding, asset),
             reasoning=self._understanding_reasoning(understanding, asset),
@@ -142,7 +146,14 @@ class AssetLibraryService:
             classification_result=asset.classification_result,
             media_metadata=asset.media_metadata,
             asset_understanding=understanding,
+            intelligence_profile=self._safe_intelligence_profile(asset.id),
         )
+
+    def _safe_intelligence_profile(self, asset_id: int):
+        try:
+            return self.asset_intelligence.get_profile(asset_id)
+        except Exception:
+            return None
 
     def get_asset_items(self, asset_ids: tuple[int, ...] | list[int]) -> tuple[AssetLibraryItem, ...]:
         assets = self.assets.list_by_ids(asset_ids)

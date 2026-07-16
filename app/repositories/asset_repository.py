@@ -140,6 +140,22 @@ class AssetRepository:
         with self._connection_factory() as conn:
             return self.get_by_id(asset_id, connection=conn)
 
+    def get_by_generation_image_id(self, image_id: str) -> Asset | None:
+        with self._connection_factory() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    f"""
+                    SELECT {_ASSET_COLUMNS}
+                    FROM public.content_items
+                    WHERE media_metadata->'asset_registration'->>'generated_image_id' = %s
+                    ORDER BY id
+                    LIMIT 1
+                    """,
+                    (str(image_id),),
+                )
+                row = cursor.fetchone()
+        return Asset.from_row(row) if row else None
+
     def list_by_ids(
         self,
         asset_ids: Iterable[int],
@@ -199,9 +215,13 @@ class AssetRepository:
                 ]
             )
         if search:
-            filters.append("(file_name ILIKE %s OR file_path ILIKE %s)")
+            filters.append(
+                "(file_name ILIKE %s OR file_path ILIKE %s OR EXISTS ("
+                "SELECT 1 FROM public.asset_intelligence_profiles aip "
+                "WHERE aip.asset_id = content_items.id AND aip.profile_data::text ILIKE %s))"
+            )
             term = f"%{search.strip()}%"
-            params.extend((term, term))
+            params.extend((term, term, term))
         if classification:
             filters.append("classification = %s")
             params.append(classification)
@@ -393,6 +413,14 @@ class AssetRepository:
             return
         with self._connection_factory() as conn:
             self.update_analysis_fields(asset_id, fields, connection=conn)
+
+    def update_registration_status(self, asset_id: int, status: str) -> None:
+        with self._connection_factory() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "UPDATE public.content_items SET status = %s WHERE id = %s",
+                    (str(status), int(asset_id)),
+                )
 
     def update_reference_metadata(
         self,

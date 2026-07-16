@@ -36,6 +36,7 @@ _CONTENT_ITEM_COLUMNS = (
     "nudity_level",
     "sexual_intensity",
     "is_explicit",
+    "is_active",
     "is_test",
     "upload_intent",
     "requires_nudenet",

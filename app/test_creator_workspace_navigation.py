@@ -103,6 +103,7 @@ class CreatorWorkspaceNavigationTests(unittest.TestCase):
                 "Customer Conversations",
                 "Activity",
                 "Notifications",
+                "Utilities",
                 "Administration",
                 "Agents",
             ],
@@ -115,7 +116,7 @@ class CreatorWorkspaceNavigationTests(unittest.TestCase):
         self.assertIn("  Creator Agent", labels)
         self.assertIn("  Developer Agent", labels)
         self.assertIn("Assets", labels)
-        self.assertIn("  CMS Upload", labels)
+        self.assertNotIn("  CMS Upload", labels)
         self.assertIn("Content Creation", labels)
         self.assertIn("  Content Studio", labels)
         self.assertNotIn("  Social Studio", labels)

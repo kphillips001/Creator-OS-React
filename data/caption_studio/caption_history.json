@@ -1,5 +1,31 @@
 [
   {
+    "history_id": "caption_history_1429b9ecb8d048d69d331a933a7e73d3",
+    "session_id": "caption_session_1c51b682da274cd89e40e098f62ccdb7",
+    "caption_request_id": "caption_request_b75522e8363843d58920610e857b48ed",
+    "caption_result_id": "caption_result_67f7ee7d41234f2db188579ead43e3b0",
+    "platform": "telegram",
+    "selected_text": "Soft sheets, warm lamp light, and me giving you this look \ud83d\ude08 you know exactly what it means",
+    "created_at": "2026-07-14T15:11:47.601538",
+    "metadata": {
+      "source_generated_image_id": "generated_image_2ba1875797a86522974ccefd",
+      "social_queue_item_id": null
+    }
+  },
+  {
+    "history_id": "caption_history_ab7c4d4850604941a0023fd6cad94914",
+    "session_id": "caption_session_1c51b682da274cd89e40e098f62ccdb7",
+    "caption_request_id": "caption_request_b75522e8363843d58920610e857b48ed",
+    "caption_result_id": "caption_result_67f7ee7d41234f2db188579ead43e3b0",
+    "platform": "telegram",
+    "selected_text": null,
+    "created_at": "2026-07-14T15:11:28.932676",
+    "metadata": {
+      "source_generated_image_id": "generated_image_2ba1875797a86522974ccefd",
+      "social_queue_item_id": null
+    }
+  },
+  {
     "history_id": "caption_history_fdd799e7bab14433802e8779a325ef1c",
     "session_id": "caption_session_d70a941db5474e77a1b598bd57e7954f",
     "caption_request_id": "caption_request_da9471c76b534285a158faa8bb83f20d",

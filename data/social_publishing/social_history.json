@@ -1,5 +1,80 @@
 [
   {
+    "history_id": "social_publish_history_99e25c7e4c2345059c4fd2d75956ef12",
+    "queue_item_id": "social_queue_item_90b520cecadb40e88e776ee2e616ee04",
+    "platform": "x",
+    "status": "failed",
+    "message": "AvaBlackthorne X publish failed: status 402 - {\"detail\":\"credits depleted\",\"status\":402,\"title\":\"Payment Required\",\"type\":\"https://api.x.com/2/problems/credits-depleted\"} - credits depleted - 402 Payment Required\ncredits depleted",
+    "created_at": "2026-07-16T16:06:00.673606",
+    "metadata": {
+      "account_name": "AvaBlackthorne",
+      "caption_id": null,
+      "telegram_post_to": "main",
+      "exception_type": "XPublishError",
+      "error": "AvaBlackthorne X publish failed: status 402 - {\"detail\":\"credits depleted\",\"status\":402,\"title\":\"Payment Required\",\"type\":\"https://api.x.com/2/problems/credits-depleted\"} - credits depleted - 402 Payment Required\ncredits depleted",
+      "traceback": "Traceback (most recent call last):\n  File \"C:\\Creator-OS\\app\\providers\\social\\x_provider.py\", line 216, in publish\n    tweet = client.create_tweet(text=text[:280], media_ids=[media.media_id])\n            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Creator-OS\\bot\\Lib\\site-packages\\tweepy\\client.py\", line 839, in create_tweet\n    return self._make_request(\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Creator-OS\\bot\\Lib\\site-packages\\tweepy\\client.py\", line 129, in _make_request\n    response = self.request(method, route, params=request_params,\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Creator-OS\\bot\\Lib\\site-packages\\tweepy\\client.py\", line 119, in request\n    raise HTTPException(response)\ntweepy.errors.HTTPException: 402 Payment Required\ncredits depleted\n\nThe above exception was the direct cause of the following exception:\n\nTraceback (most recent call last):\n  File \"C:\\Creator-OS\\app\\services\\social_publishing_service.py\", line 306, in publish_now\n    result = self.x_provider.publish(\n             ^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Creator-OS\\app\\providers\\social\\x_provider.py\", line 218, in publish\n    raise XPublishError(f\"{account.account_name} X publish failed: {self._error_details(exc)}\") from exc\napp.providers.social.x_provider.XPublishError: AvaBlackthorne X publish failed: status 402 - {\"detail\":\"credits depleted\",\"status\":402,\"title\":\"Payment Required\",\"type\":\"https://api.x.com/2/problems/credits-depleted\"} - credits depleted - 402 Payment Required\ncredits depleted\n"
+    }
+  },
+  {
+    "history_id": "social_publish_history_c46c418b74264f6b801a222cfd09dd04",
+    "queue_item_id": "social_queue_item_ed46d67a87244a78ac158e1d622b4275",
+    "platform": "x",
+    "status": "posted",
+    "message": "Posted to X.",
+    "created_at": "2026-07-15T15:43:44.798991",
+    "metadata": {
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "caption_id": null,
+      "provider_post_id": "2077418847645114508",
+      "provider_media_id": "2077418844365246464",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2077418847645114508"
+    }
+  },
+  {
+    "history_id": "social_publish_history_1eac07b21e984f91b80e4382b679879b",
+    "queue_item_id": "social_queue_item_99cb2342e4964e8d9a5f0c849db8d608",
+    "platform": "telegram",
+    "status": "posted",
+    "message": "Posted to Telegram.",
+    "created_at": "2026-07-14T15:11:50.514341",
+    "metadata": {
+      "account_name": null,
+      "telegram_post_to": "main",
+      "caption_id": "caption_result_67f7ee7d41234f2db188579ead43e3b0",
+      "provider_post_id": "83",
+      "provider_media_id": null,
+      "provider_output_url": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_8f9e4d63d9294872ba3f2c3fe9d3ec82",
+    "queue_item_id": "social_queue_item_99cb2342e4964e8d9a5f0c849db8d608",
+    "platform": "telegram",
+    "status": "caption_attached",
+    "message": "Caption Studio result attached to Social Queue item.",
+    "created_at": "2026-07-14T15:11:47.645451",
+    "metadata": {
+      "caption_id": "caption_result_67f7ee7d41234f2db188579ead43e3b0"
+    }
+  },
+  {
+    "history_id": "social_publish_history_19090e2c6cd84813838455273c67b343",
+    "queue_item_id": "social_queue_item_a86e62b5c6d04a3f905e1dff7a85e7b2",
+    "platform": "x",
+    "status": "posted",
+    "message": "Posted to X.",
+    "created_at": "2026-07-14T14:45:30.989501",
+    "metadata": {
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "caption_id": null,
+      "provider_post_id": "2077041805925683672",
+      "provider_media_id": "2077041802763198466",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2077041805925683672"
+    }
+  },
+  {
     "history_id": "social_publish_history_ff97a5875ca54e7396a4b9c50f7b933e",
     "queue_item_id": "social_queue_item_e6c93c80b53f4ebf8e0351fb52103d55",
     "platform": "x",

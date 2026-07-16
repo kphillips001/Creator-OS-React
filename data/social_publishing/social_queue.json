@@ -1,5 +1,885 @@
 [
   {
+    "queue_item_id": "social_queue_item_90b520cecadb40e88e776ee2e616ee04",
+    "generated_image_id": "generated_image_60db5dc5d9d4013d8ca7cd08",
+    "creator_profile_id": 2,
+    "platform": "x",
+    "status": "failed",
+    "scheduled_for": null,
+    "creator_notes": "Queued from Generation Library X Publish dialog.",
+    "caption_id": null,
+    "generation_metadata": {
+      "generation_job_id": "generation_job_a787a4667f494d0a99a458c3db1e7f77",
+      "generation_request_id": "generation_request_2471561c46734051b4c6b9a3c906eb25",
+      "generation_result_id": "generation_job_a787a4667f494d0a99a458c3db1e7f77_live_result",
+      "provider_id": "seedream_5_0_pro",
+      "provider_metadata": {
+        "provider_neutral_result": true,
+        "live_generation_sync": true
+      },
+      "prompt_metadata": {
+        "creative_tags": [
+          "beach boardwalk",
+          "strappy halter crop top in shimmering coral",
+          "high-waisted white micro-shorts",
+          "realistic fabric tension across the bust",
+          "visible cleavage",
+          "low neckline",
+          "micro-shorts riding high on hips",
+          "feminine hourglass body",
+          "full natural D-cup bust",
+          "same waist-to-hip proportions",
+          "same natural sun-kissed skin tone as the reference image",
+          "loose flowing dark hair with smooth flat natural top lying over shoulders",
+          "teasing smile with warm eye contact",
+          "chest-forward posture",
+          "hips angled",
+          "private alluring gaze",
+          "salt spray atmosphere",
+          "natural daylight with soft highlights",
+          "realistic premium skin and fabric texture",
+          "intimate creator-content framing",
+          "medium-close portrait with full head visible and clean space above hair"
+        ],
+        "prompt_metadata": {
+          "prompt_variations": [
+            "The same woman with her exact face, long dark hair worn down with smooth flat natural top and loose flowing strands lying over her shoulders, same natural sun-kissed skin tone as the reference image, feminine hourglass body, same waist-to-hip proportions, and full natural D-cup bust stands on a wooden beach boardwalk, leaning slightly forward against the salt-weathered railing with chest-forward posture and hips angled toward the viewer, wearing a strappy halter crop top in shimmering coral that clings with realistic fabric tension across the bust and visible cleavage from the low neckline, paired with high-waisted white micro-shorts riding high on her hips, teasing smile with warm eye contact and private alluring gaze directed at the viewer, natural daylight with soft highlights and salt spray atmosphere, medium-close waist-up creator framing with full head and clean space above loose hair, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.",
+            "The same woman with her exact face, long dark hair worn down with smooth flat natural top and loose flowing strands lying over her shoulders, same natural sun-kissed skin tone as the reference image, feminine hourglass body, same waist-to-hip proportions, and full natural D-cup bust sits on a weathered bench along the beach boardwalk, torso gently twisted and hips angled with chest-forward posture that emphasizes visible D-cup bust projection through the fabric, wearing a strappy halter crop top in shimmering coral stretched tight with realistic fabric tension across the bust and low neckline revealing cleavage, plus high-waisted white micro-shorts riding high on her hips, teasing smile and warm eye contact creating a private alluring gaze, salt spray atmosphere under natural daylight with soft highlights, close-medium upper-body framing with full face and natural hair top visible, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.",
+            "The same woman with her exact face, long dark hair worn down with smooth flat natural top and loose flowing strands lying over her shoulders, same natural sun-kissed skin tone as the reference image, feminine hourglass body, same waist-to-hip proportions, and full natural D-cup bust poses near the boardwalk overlook, standing with one hip cocked and shoulders relaxed while maintaining chest-forward posture, wearing a strappy halter crop top in shimmering coral that shows realistic fabric tension and visible cleavage from the low neckline, matched with high-waisted white micro-shorts riding high on her hips, soft teasing smile with warm eye contact and private alluring gaze, salt spray atmosphere in natural daylight with gentle highlights, head-to-upper-thigh portrait framing with smooth loose hair visible, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.",
+            "The same woman with her exact face, long dark hair worn down with smooth flat natural top and loose flowing strands lying over her shoulders, same natural sun-kissed skin tone as the reference image, feminine hourglass body, same waist-to-hip proportions, and full natural D-cup bust walks slowly along the beach boardwalk path, mid-step with hips angled naturally and chest-forward posture that makes the strappy halter crop top in shimmering coral reveal realistic fabric tension and low-neckline cleavage while the high-waisted white micro-shorts ride high on her hips, looking back over one shoulder with a warm teasing smile and private alluring gaze, salt spray atmosphere under natural daylight with soft highlights, medium-close waist-up creator framing with full head and clean space above loose hair, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.",
+            "The same woman with her exact face, long dark hair worn down with smooth flat natural top and loose flowing strands lying over her shoulders, same natural sun-kissed skin tone as the reference image, feminine hourglass body, same waist-to-hip proportions, and full natural D-cup bust leans casually against the wooden railing at the boardwalk steps, body angled three-quarters with subtle chest-forward posture and hips tilted, dressed in a strappy halter crop top in shimmering coral that stretches with realistic fabric tension across the bust and low neckline showing cleavage, plus high-waisted white micro-shorts riding high on her hips, relaxed playful smile with warm eye contact and private alluring gaze, salt spray atmosphere in natural daylight with soft highlights, intimate seated portrait framing with full face and natural hair top visible, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality."
+          ],
+          "generation_brain": "wavespeed_canonical",
+          "wavespeed_source": "Wavespeed_App",
+          "reference_conditioning": "wavespeed",
+          "prompt_builder": "canonical_premium_prompt_planner",
+          "canonical_planner": "creator_os",
+          "planning_mode": "premium",
+          "prompt_count": 5,
+          "edited_in_prompt_preview": true
+        }
+      },
+      "image_metadata": {
+        "source": "premium_studio",
+        "workflow_type": "premium",
+        "generation_timestamp": "2026-07-16T16:00:33.134518",
+        "reference_metadata": {
+          "active": true,
+          "source": "content_studio_reference_library",
+          "added_at": "2026-07-16T15:51:23.582972",
+          "favorite": true,
+          "canonical": true,
+          "protected": true,
+          "removed_at": null,
+          "is_reference": true,
+          "last_used_at": "2026-07-16T15:51:23.582972",
+          "canonical_path": "D:\\Ava_CMS\\Canonical\\Ava_Blackthorne\\canonical_reference.png",
+          "canonical_sha256": "6D14784CD9D98C72591C057058219AF1337B9328DE6B63BB692FA4A06A3432B4",
+          "original_filename": "9a6f4c0e78fc44648070284ab23e994e.png",
+          "creator_profile_id": 2
+        },
+        "reference_file_name": "9a6f4c0e78fc44648070284ab23e994e.png",
+        "reference_preview_path": "D:\\Ava_CMS\\vault\\originals\\images\\93.png",
+        "creative_tags": [
+          "beach boardwalk",
+          "strappy halter crop top in shimmering coral",
+          "high-waisted white micro-shorts",
+          "realistic fabric tension across the bust",
+          "visible cleavage",
+          "low neckline",
+          "micro-shorts riding high on hips",
+          "feminine hourglass body",
+          "full natural D-cup bust",
+          "same waist-to-hip proportions",
+          "same natural sun-kissed skin tone as the reference image",
+          "loose flowing dark hair with smooth flat natural top lying over shoulders",
+          "teasing smile with warm eye contact",
+          "chest-forward posture",
+          "hips angled",
+          "private alluring gaze",
+          "salt spray atmosphere",
+          "natural daylight with soft highlights",
+          "realistic premium skin and fabric texture",
+          "intimate creator-content framing",
+          "medium-close portrait with full head visible and clean space above hair"
+        ],
+        "creative_mode": "premium_teaser",
+        "output_reference": "D:\\Ava_CMS\\Content\\Generation\\Active\\generated_image_60db5dc5d9d4013d8ca7cd08.png",
+        "request_metadata": {
+          "owner": "Generation Engine",
+          "provider_neutral": true,
+          "prompt_plan_owner": "Creative Director",
+          "creative_mode": "premium_teaser",
+          "creative_tags": [
+            "beach boardwalk",
+            "strappy halter crop top in shimmering coral",
+            "high-waisted white micro-shorts",
+            "realistic fabric tension across the bust",
+            "visible cleavage",
+            "low neckline",
+            "micro-shorts riding high on hips",
+            "feminine hourglass body",
+            "full natural D-cup bust",
+            "same waist-to-hip proportions",
+            "same natural sun-kissed skin tone as the reference image",
+            "loose flowing dark hair with smooth flat natural top lying over shoulders",
+            "teasing smile with warm eye contact",
+            "chest-forward posture",
+            "hips angled",
+            "private alluring gaze",
+            "salt spray atmosphere",
+            "natural daylight with soft highlights",
+            "realistic premium skin and fabric texture",
+            "intimate creator-content framing",
+            "medium-close portrait with full head visible and clean space above hair"
+          ],
+          "prompt_metadata": {
+            "prompt_variations": [
+              "The same woman with her exact face, long dark hair worn down with smooth flat natural top and loose flowing strands lying over her shoulders, same natural sun-kissed skin tone as the reference image, feminine hourglass body, same waist-to-hip proportions, and full natural D-cup bust stands on a wooden beach boardwalk, leaning slightly forward against the salt-weathered railing with chest-forward posture and hips angled toward the viewer, wearing a strappy halter crop top in shimmering coral that clings with realistic fabric tension across the bust and visible cleavage from the low neckline, paired with high-waisted white micro-shorts riding high on her hips, teasing smile with warm eye contact and private alluring gaze directed at the viewer, natural daylight with soft highlights and salt spray atmosphere, medium-close waist-up creator framing with full head and clean space above loose hair, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.",
+              "The same woman with her exact face, long dark hair worn down with smooth flat natural top and loose flowing strands lying over her shoulders, same natural sun-kissed skin tone as the reference image, feminine hourglass body, same waist-to-hip proportions, and full natural D-cup bust sits on a weathered bench along the beach boardwalk, torso gently twisted and hips angled with chest-forward posture that emphasizes visible D-cup bust projection through the fabric, wearing a strappy halter crop top in shimmering coral stretched tight with realistic fabric tension across the bust and low neckline revealing cleavage, plus high-waisted white micro-shorts riding high on her hips, teasing smile and warm eye contact creating a private alluring gaze, salt spray atmosphere under natural daylight with soft highlights, close-medium upper-body framing with full face and natural hair top visible, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.",
+              "The same woman with her exact face, long dark hair worn down with smooth flat natural top and loose flowing strands lying over her shoulders, same natural sun-kissed skin tone as the reference image, feminine hourglass body, same waist-to-hip proportions, and full natural D-cup bust poses near the boardwalk overlook, standing with one hip cocked and shoulders relaxed while maintaining chest-forward posture, wearing a strappy halter crop top in shimmering coral that shows realistic fabric tension and visible cleavage from the low neckline, matched with high-waisted white micro-shorts riding high on her hips, soft teasing smile with warm eye contact and private alluring gaze, salt spray atmosphere in natural daylight with gentle highlights, head-to-upper-thigh portrait framing with smooth loose hair visible, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.",
+              "The same woman with her exact face, long dark hair worn down with smooth flat natural top and loose flowing strands lying over her shoulders, same natural sun-kissed skin tone as the reference image, feminine hourglass body, same waist-to-hip proportions, and full natural D-cup bust walks slowly along the beach boardwalk path, mid-step with hips angled naturally and chest-forward posture that makes the strappy halter crop top in shimmering coral reveal realistic fabric tension and low-neckline cleavage while the high-waisted white micro-shorts ride high on her hips, looking back over one shoulder with a warm teasing smile and private alluring gaze, salt spray atmosphere under natural daylight with soft highlights, medium-close waist-up creator framing with full head and clean space above loose hair, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.",
+              "The same woman with her exact face, long dark hair worn down with smooth flat natural top and loose flowing strands lying over her shoulders, same natural sun-kissed skin tone as the reference image, feminine hourglass body, same waist-to-hip proportions, and full natural D-cup bust leans casually against the wooden railing at the boardwalk steps, body angled three-quarters with subtle chest-forward posture and hips tilted, dressed in a strappy halter crop top in shimmering coral that stretches with realistic fabric tension across the bust and low neckline showing cleavage, plus high-waisted white micro-shorts riding high on her hips, relaxed playful smile with warm eye contact and private alluring gaze, salt spray atmosphere in natural daylight with soft highlights, intimate seated portrait framing with full face and natural hair top visible, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality."
+            ],
+            "generation_brain": "wavespeed_canonical",
+            "wavespeed_source": "Wavespeed_App",
+            "reference_conditioning": "wavespeed",
+            "prompt_builder": "canonical_premium_prompt_planner",
+            "canonical_planner": "creator_os",
+            "planning_mode": "premium",
+            "prompt_count": 5,
+            "edited_in_prompt_preview": true
+          },
+          "reference_metadata": {
+            "active": true,
+            "source": "content_studio_reference_library",
+            "added_at": "2026-07-16T15:51:23.582972",
+            "favorite": true,
+            "canonical": true,
+            "protected": true,
+            "removed_at": null,
+            "is_reference": true,
+            "last_used_at": "2026-07-16T15:51:23.582972",
+            "canonical_path": "D:\\Ava_CMS\\Canonical\\Ava_Blackthorne\\canonical_reference.png",
+            "canonical_sha256": "6D14784CD9D98C72591C057058219AF1337B9328DE6B63BB692FA4A06A3432B4",
+            "original_filename": "9a6f4c0e78fc44648070284ab23e994e.png",
+            "creator_profile_id": 2
+          },
+          "reference_file_name": "9a6f4c0e78fc44648070284ab23e994e.png",
+          "reference_preview_path": "D:\\Ava_CMS\\vault\\originals\\images\\93.png",
+          "source": "premium_studio",
+          "workflow_type": "premium",
+          "premium_workflow": true,
+          "prompt_variations": [
+            "The same woman with her exact face, long dark hair worn down with smooth flat natural top and loose flowing strands lying over her shoulders, same natural sun-kissed skin tone as the reference image, feminine hourglass body, same waist-to-hip proportions, and full natural D-cup bust stands on a wooden beach boardwalk, leaning slightly forward against the salt-weathered railing with chest-forward posture and hips angled toward the viewer, wearing a strappy halter crop top in shimmering coral that clings with realistic fabric tension across the bust and visible cleavage from the low neckline, paired with high-waisted white micro-shorts riding high on her hips, teasing smile with warm eye contact and private alluring gaze directed at the viewer, natural daylight with soft highlights and salt spray atmosphere, medium-close waist-up creator framing with full head and clean space above loose hair, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.",
+            "The same woman with her exact face, long dark hair worn down with smooth flat natural top and loose flowing strands lying over her shoulders, same natural sun-kissed skin tone as the reference image, feminine hourglass body, same waist-to-hip proportions, and full natural D-cup bust sits on a weathered bench along the beach boardwalk, torso gently twisted and hips angled with chest-forward posture that emphasizes visible D-cup bust projection through the fabric, wearing a strappy halter crop top in shimmering coral stretched tight with realistic fabric tension across the bust and low neckline revealing cleavage, plus high-waisted white micro-shorts riding high on her hips, teasing smile and warm eye contact creating a private alluring gaze, salt spray atmosphere under natural daylight with soft highlights, close-medium upper-body framing with full face and natural hair top visible, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.",
+            "The same woman with her exact face, long dark hair worn down with smooth flat natural top and loose flowing strands lying over her shoulders, same natural sun-kissed skin tone as the reference image, feminine hourglass body, same waist-to-hip proportions, and full natural D-cup bust poses near the boardwalk overlook, standing with one hip cocked and shoulders relaxed while maintaining chest-forward posture, wearing a strappy halter crop top in shimmering coral that shows realistic fabric tension and visible cleavage from the low neckline, matched with high-waisted white micro-shorts riding high on her hips, soft teasing smile with warm eye contact and private alluring gaze, salt spray atmosphere in natural daylight with gentle highlights, head-to-upper-thigh portrait framing with smooth loose hair visible, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.",
+            "The same woman with her exact face, long dark hair worn down with smooth flat natural top and loose flowing strands lying over her shoulders, same natural sun-kissed skin tone as the reference image, feminine hourglass body, same waist-to-hip proportions, and full natural D-cup bust walks slowly along the beach boardwalk path, mid-step with hips angled naturally and chest-forward posture that makes the strappy halter crop top in shimmering coral reveal realistic fabric tension and low-neckline cleavage while the high-waisted white micro-shorts ride high on her hips, looking back over one shoulder with a warm teasing smile and private alluring gaze, salt spray atmosphere under natural daylight with soft highlights, medium-close waist-up creator framing with full head and clean space above loose hair, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.",
+            "The same woman with her exact face, long dark hair worn down with smooth flat natural top and loose flowing strands lying over her shoulders, same natural sun-kissed skin tone as the reference image, feminine hourglass body, same waist-to-hip proportions, and full natural D-cup bust leans casually against the wooden railing at the boardwalk steps, body angled three-quarters with subtle chest-forward posture and hips tilted, dressed in a strappy halter crop top in shimmering coral that stretches with realistic fabric tension across the bust and low neckline showing cleavage, plus high-waisted white micro-shorts riding high on her hips, relaxed playful smile with warm eye contact and private alluring gaze, salt spray atmosphere in natural daylight with soft highlights, intimate seated portrait framing with full face and natural hair top visible, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality."
+          ],
+          "prompt_batch_count": 5
+        },
+        "execution_metadata": {},
+        "image_metadata": {
+          "requested_image_count": 5,
+          "output_count": 2
+        },
+        "original_output_reference": "https://d2h7xmz5gqybh9.cloudfront.net/output/349c75ba-5503-41e0-ab7b-002571870db5.png",
+        "cms_content_root": "D:\\Ava_CMS\\Content"
+      }
+    },
+    "reference_asset_id": 93,
+    "creative_mode": "premium_teaser",
+    "prompt_text": "Prompt 1: The same woman with her exact face, long dark hair worn down with smooth flat natural top and loose flowing strands lying over her shoulders, same natural sun-kissed skin tone as the reference image, feminine hourglass body, same waist-to-hip proportions, and full natural D-cup bust stands on a wooden beach boardwalk, leaning slightly forward against the salt-weathered railing with chest-forward posture and hips angled toward the viewer, wearing a strappy halter crop top in shimmering coral that clings with realistic fabric tension across the bust and visible cleavage from the low neckline, paired with high-waisted white micro-shorts riding high on her hips, teasing smile with warm eye contact and private alluring gaze directed at the viewer, natural daylight with soft highlights and salt spray atmosphere, medium-close waist-up creator framing with full head and clean space above loose hair, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.\n\nPrompt 2: The same woman with her exact face, long dark hair worn down with smooth flat natural top and loose flowing strands lying over her shoulders, same natural sun-kissed skin tone as the reference image, feminine hourglass body, same waist-to-hip proportions, and full natural D-cup bust sits on a weathered bench along the beach boardwalk, torso gently twisted and hips angled with chest-forward posture that emphasizes visible D-cup bust projection through the fabric, wearing a strappy halter crop top in shimmering coral stretched tight with realistic fabric tension across the bust and low neckline revealing cleavage, plus high-waisted white micro-shorts riding high on her hips, teasing smile and warm eye contact creating a private alluring gaze, salt spray atmosphere under natural daylight with soft highlights, close-medium upper-body framing with full face and natural hair top visible, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.\n\nPrompt 3: The same woman with her exact face, long dark hair worn down with smooth flat natural top and loose flowing strands lying over her shoulders, same natural sun-kissed skin tone as the reference image, feminine hourglass body, same waist-to-hip proportions, and full natural D-cup bust poses near the boardwalk overlook, standing with one hip cocked and shoulders relaxed while maintaining chest-forward posture, wearing a strappy halter crop top in shimmering coral that shows realistic fabric tension and visible cleavage from the low neckline, matched with high-waisted white micro-shorts riding high on her hips, soft teasing smile with warm eye contact and private alluring gaze, salt spray atmosphere in natural daylight with gentle highlights, head-to-upper-thigh portrait framing with smooth loose hair visible, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.\n\nPrompt 4: The same woman with her exact face, long dark hair worn down with smooth flat natural top and loose flowing strands lying over her shoulders, same natural sun-kissed skin tone as the reference image, feminine hourglass body, same waist-to-hip proportions, and full natural D-cup bust walks slowly along the beach boardwalk path, mid-step with hips angled naturally and chest-forward posture that makes the strappy halter crop top in shimmering coral reveal realistic fabric tension and low-neckline cleavage while the high-waisted white micro-shorts ride high on her hips, looking back over one shoulder with a warm teasing smile and private alluring gaze, salt spray atmosphere under natural daylight with soft highlights, medium-close waist-up creator framing with full head and clean space above loose hair, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.\n\nPrompt 5: The same woman with her exact face, long dark hair worn down with smooth flat natural top and loose flowing strands lying over her shoulders, same natural sun-kissed skin tone as the reference image, feminine hourglass body, same waist-to-hip proportions, and full natural D-cup bust leans casually against the wooden railing at the boardwalk steps, body angled three-quarters with subtle chest-forward posture and hips tilted, dressed in a strappy halter crop top in shimmering coral that stretches with realistic fabric tension across the bust and low neckline showing cleavage, plus high-waisted white micro-shorts riding high on her hips, relaxed playful smile with warm eye contact and private alluring gaze, salt spray atmosphere in natural daylight with soft highlights, intimate seated portrait framing with full face and natural hair top visible, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.",
+    "output_reference": "D:\\Ava_CMS\\Content\\Generation\\Active\\generated_image_60db5dc5d9d4013d8ca7cd08.png",
+    "created_at": "2026-07-16T16:05:59.664466",
+    "updated_at": "2026-07-16T16:06:00.664073"
+  },
+  {
+    "queue_item_id": "social_queue_item_ed46d67a87244a78ac158e1d622b4275",
+    "generated_image_id": "generated_image_ad5405f252c52a9986873c4f",
+    "creator_profile_id": 2,
+    "platform": "x",
+    "status": "posted",
+    "scheduled_for": null,
+    "creator_notes": "Queued from Generation Library X Publish dialog.",
+    "caption_id": null,
+    "generation_metadata": {
+      "generation_job_id": "generation_job_c59c8eebacb743d8a40c8f7c1eed57f2",
+      "generation_request_id": "generation_request_31890d2ed229449b861e6edd803a98bf",
+      "generation_result_id": "generation_job_c59c8eebacb743d8a40c8f7c1eed57f2_live_result",
+      "provider_id": "seedream_5_0_pro",
+      "provider_metadata": {
+        "provider_neutral_result": true,
+        "live_generation_sync": true
+      },
+      "prompt_metadata": {
+        "creative_tags": [
+          "hiking trail",
+          "super short frayed micro denim shorts hugging hips",
+          "micro crop-top with deep neckline and underboob tease",
+          "realistic fabric tension across the bust",
+          "long dark hair worn down with smooth flat natural top and loose flowing strands over shoulders",
+          "warm teasing smile",
+          "playful private eye contact",
+          "chest-forward posture",
+          "feminine hourglass body",
+          "full natural D-cup bust",
+          "same waist-to-hip proportions",
+          "same natural sun-kissed skin tone as the reference image",
+          "outdoor daylight atmosphere",
+          "medium-close portrait framing with full head visible and clean space above hair",
+          "intimate creator-content paywall-teaser mood",
+          "realistic denim texture",
+          "realistic skin texture"
+        ],
+        "prompt_metadata": {
+          "prompt_variations": [
+            "Standing confidently on a sunlit forest path, the same woman leans slightly forward with chest-forward posture, wearing super short frayed micro denim shorts hugging her hips and a micro crop-top with deep neckline and underboob tease, realistic fabric tension across the bust, long dark hair worn down with smooth flat natural top and loose flowing strands over shoulders, warm teasing smile and playful private eye contact, feminine hourglass body, full natural D-cup bust, same waist-to-hip proportions, same natural sun-kissed skin tone as the reference image, outdoor daylight atmosphere, realistic denim texture and realistic skin texture, medium-close waist-up creator framing with full head visible and clean space above loose hair, intimate creator-content paywall-teaser mood. photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality",
+            "Paused on a gentle uphill section of the hiking trail with her torso angled three-quarter toward camera, the same woman rests one hand lightly on her hip, wearing super short frayed micro denim shorts hugging her hips and a micro crop-top with deep neckline and underboob tease, realistic fabric tension across the bust, long dark hair worn down with smooth flat natural top and loose flowing strands over shoulders, warm teasing smile and playful private eye contact, feminine hourglass body, full natural D-cup bust, same waist-to-hip proportions, same natural sun-kissed skin tone as the reference image, outdoor daylight atmosphere, realistic denim texture and realistic skin texture, head-to-upper-thigh portrait framing with smooth loose hair visible, intimate creator-content paywall-teaser mood. photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality",
+            "Leaning casually against a mossy trailside rock on the hiking path, the same woman shifts weight onto one leg with natural hip curve, wearing super short frayed micro denim shorts hugging her hips and a micro crop-top with deep neckline and underboob tease, realistic fabric tension across the bust, long dark hair worn down with smooth flat natural top and loose flowing strands over shoulders, warm teasing smile and playful private eye contact, feminine hourglass body, full natural D-cup bust, same waist-to-hip proportions, same natural sun-kissed skin tone as the reference image, outdoor daylight atmosphere, realistic denim texture and realistic skin texture, close-medium upper-body framing with full face and natural hair top visible, intimate creator-content paywall-teaser mood. photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality",
+            "Standing on a narrow sun-dappled trail bend and glancing back over her shoulder, the same woman maintains chest-forward posture, wearing super short frayed micro denim shorts hugging her hips and a micro crop-top with deep neckline and underboob tease, realistic fabric tension across the bust, long dark hair worn down with smooth flat natural top and loose flowing strands over shoulders, warm teasing smile and playful private eye contact, feminine hourglass body, full natural D-cup bust, same waist-to-hip proportions, same natural sun-kissed skin tone as the reference image, outdoor daylight atmosphere, realistic denim texture and realistic skin texture, medium-close portrait framing with full head and clean space above loose hair, intimate creator-content paywall-teaser mood. photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality",
+            "Relaxed on the edge of a wooden trail footbridge with one knee softly bent, the same woman faces viewer directly, wearing super short frayed micro denim shorts hugging her hips and a micro crop-top with deep neckline and underboob tease, realistic fabric tension across the bust, long dark hair worn down with smooth flat natural top and loose flowing strands over shoulders, warm teasing smile and playful private eye contact, feminine hourglass body, full natural D-cup bust, same waist-to-hip proportions, same natural sun-kissed skin tone as the reference image, outdoor daylight atmosphere, realistic denim texture and realistic skin texture, upper-thigh portrait crop with full head visible, intimate creator-content paywall-teaser mood. photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality"
+          ],
+          "generation_brain": "wavespeed_canonical",
+          "wavespeed_source": "Wavespeed_App",
+          "reference_conditioning": "wavespeed",
+          "prompt_builder": "canonical_premium_prompt_planner",
+          "canonical_planner": "creator_os",
+          "planning_mode": "premium",
+          "prompt_count": 5,
+          "edited_in_prompt_preview": true
+        }
+      },
+      "image_metadata": {
+        "source": "premium_studio",
+        "workflow_type": "premium",
+        "generation_timestamp": "2026-07-13T15:35:56.193054",
+        "reference_metadata": {
+          "active": true,
+          "source": "content_studio_reference_library",
+          "added_at": "2026-07-08T00:05:08.012680",
+          "favorite": true,
+          "removed_at": null,
+          "is_reference": true,
+          "last_used_at": "2026-07-08T00:05:08.012680",
+          "original_filename": "9a6f4c0e78fc44648070284ab23e994e.png",
+          "creator_profile_id": 2
+        },
+        "reference_file_name": "9a6f4c0e78fc44648070284ab23e994e.png",
+        "reference_preview_path": "D:\\Ava_CMS\\vault\\originals\\images\\84.png",
+        "creative_tags": [
+          "hiking trail",
+          "super short frayed micro denim shorts hugging hips",
+          "micro crop-top with deep neckline and underboob tease",
+          "realistic fabric tension across the bust",
+          "long dark hair worn down with smooth flat natural top and loose flowing strands over shoulders",
+          "warm teasing smile",
+          "playful private eye contact",
+          "chest-forward posture",
+          "feminine hourglass body",
+          "full natural D-cup bust",
+          "same waist-to-hip proportions",
+          "same natural sun-kissed skin tone as the reference image",
+          "outdoor daylight atmosphere",
+          "medium-close portrait framing with full head visible and clean space above hair",
+          "intimate creator-content paywall-teaser mood",
+          "realistic denim texture",
+          "realistic skin texture"
+        ],
+        "creative_mode": "premium_teaser",
+        "output_reference": "D:\\Ava_CMS\\Content\\Generation\\Active\\generated_image_ad5405f252c52a9986873c4f.png",
+        "request_metadata": {
+          "owner": "Generation Engine",
+          "provider_neutral": true,
+          "prompt_plan_owner": "Creative Director",
+          "creative_mode": "premium_teaser",
+          "creative_tags": [
+            "hiking trail",
+            "super short frayed micro denim shorts hugging hips",
+            "micro crop-top with deep neckline and underboob tease",
+            "realistic fabric tension across the bust",
+            "long dark hair worn down with smooth flat natural top and loose flowing strands over shoulders",
+            "warm teasing smile",
+            "playful private eye contact",
+            "chest-forward posture",
+            "feminine hourglass body",
+            "full natural D-cup bust",
+            "same waist-to-hip proportions",
+            "same natural sun-kissed skin tone as the reference image",
+            "outdoor daylight atmosphere",
+            "medium-close portrait framing with full head visible and clean space above hair",
+            "intimate creator-content paywall-teaser mood",
+            "realistic denim texture",
+            "realistic skin texture"
+          ],
+          "prompt_metadata": {
+            "prompt_variations": [
+              "Standing confidently on a sunlit forest path, the same woman leans slightly forward with chest-forward posture, wearing super short frayed micro denim shorts hugging her hips and a micro crop-top with deep neckline and underboob tease, realistic fabric tension across the bust, long dark hair worn down with smooth flat natural top and loose flowing strands over shoulders, warm teasing smile and playful private eye contact, feminine hourglass body, full natural D-cup bust, same waist-to-hip proportions, same natural sun-kissed skin tone as the reference image, outdoor daylight atmosphere, realistic denim texture and realistic skin texture, medium-close waist-up creator framing with full head visible and clean space above loose hair, intimate creator-content paywall-teaser mood. photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality",
+              "Paused on a gentle uphill section of the hiking trail with her torso angled three-quarter toward camera, the same woman rests one hand lightly on her hip, wearing super short frayed micro denim shorts hugging her hips and a micro crop-top with deep neckline and underboob tease, realistic fabric tension across the bust, long dark hair worn down with smooth flat natural top and loose flowing strands over shoulders, warm teasing smile and playful private eye contact, feminine hourglass body, full natural D-cup bust, same waist-to-hip proportions, same natural sun-kissed skin tone as the reference image, outdoor daylight atmosphere, realistic denim texture and realistic skin texture, head-to-upper-thigh portrait framing with smooth loose hair visible, intimate creator-content paywall-teaser mood. photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality",
+              "Leaning casually against a mossy trailside rock on the hiking path, the same woman shifts weight onto one leg with natural hip curve, wearing super short frayed micro denim shorts hugging her hips and a micro crop-top with deep neckline and underboob tease, realistic fabric tension across the bust, long dark hair worn down with smooth flat natural top and loose flowing strands over shoulders, warm teasing smile and playful private eye contact, feminine hourglass body, full natural D-cup bust, same waist-to-hip proportions, same natural sun-kissed skin tone as the reference image, outdoor daylight atmosphere, realistic denim texture and realistic skin texture, close-medium upper-body framing with full face and natural hair top visible, intimate creator-content paywall-teaser mood. photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality",
+              "Standing on a narrow sun-dappled trail bend and glancing back over her shoulder, the same woman maintains chest-forward posture, wearing super short frayed micro denim shorts hugging her hips and a micro crop-top with deep neckline and underboob tease, realistic fabric tension across the bust, long dark hair worn down with smooth flat natural top and loose flowing strands over shoulders, warm teasing smile and playful private eye contact, feminine hourglass body, full natural D-cup bust, same waist-to-hip proportions, same natural sun-kissed skin tone as the reference image, outdoor daylight atmosphere, realistic denim texture and realistic skin texture, medium-close portrait framing with full head and clean space above loose hair, intimate creator-content paywall-teaser mood. photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality",
+              "Relaxed on the edge of a wooden trail footbridge with one knee softly bent, the same woman faces viewer directly, wearing super short frayed micro denim shorts hugging her hips and a micro crop-top with deep neckline and underboob tease, realistic fabric tension across the bust, long dark hair worn down with smooth flat natural top and loose flowing strands over shoulders, warm teasing smile and playful private eye contact, feminine hourglass body, full natural D-cup bust, same waist-to-hip proportions, same natural sun-kissed skin tone as the reference image, outdoor daylight atmosphere, realistic denim texture and realistic skin texture, upper-thigh portrait crop with full head visible, intimate creator-content paywall-teaser mood. photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality"
+            ],
+            "generation_brain": "wavespeed_canonical",
+            "wavespeed_source": "Wavespeed_App",
+            "reference_conditioning": "wavespeed",
+            "prompt_builder": "canonical_premium_prompt_planner",
+            "canonical_planner": "creator_os",
+            "planning_mode": "premium",
+            "prompt_count": 5,
+            "edited_in_prompt_preview": true
+          },
+          "reference_metadata": {
+            "active": true,
+            "source": "content_studio_reference_library",
+            "added_at": "2026-07-08T00:05:08.012680",
+            "favorite": true,
+            "removed_at": null,
+            "is_reference": true,
+            "last_used_at": "2026-07-08T00:05:08.012680",
+            "original_filename": "9a6f4c0e78fc44648070284ab23e994e.png",
+            "creator_profile_id": 2
+          },
+          "reference_file_name": "9a6f4c0e78fc44648070284ab23e994e.png",
+          "reference_preview_path": "D:\\Ava_CMS\\vault\\originals\\images\\84.png",
+          "source": "premium_studio",
+          "workflow_type": "premium",
+          "premium_workflow": true,
+          "prompt_variations": [
+            "Standing confidently on a sunlit forest path, the same woman leans slightly forward with chest-forward posture, wearing super short frayed micro denim shorts hugging her hips and a micro crop-top with deep neckline and underboob tease, realistic fabric tension across the bust, long dark hair worn down with smooth flat natural top and loose flowing strands over shoulders, warm teasing smile and playful private eye contact, feminine hourglass body, full natural D-cup bust, same waist-to-hip proportions, same natural sun-kissed skin tone as the reference image, outdoor daylight atmosphere, realistic denim texture and realistic skin texture, medium-close waist-up creator framing with full head visible and clean space above loose hair, intimate creator-content paywall-teaser mood. photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality",
+            "Paused on a gentle uphill section of the hiking trail with her torso angled three-quarter toward camera, the same woman rests one hand lightly on her hip, wearing super short frayed micro denim shorts hugging her hips and a micro crop-top with deep neckline and underboob tease, realistic fabric tension across the bust, long dark hair worn down with smooth flat natural top and loose flowing strands over shoulders, warm teasing smile and playful private eye contact, feminine hourglass body, full natural D-cup bust, same waist-to-hip proportions, same natural sun-kissed skin tone as the reference image, outdoor daylight atmosphere, realistic denim texture and realistic skin texture, head-to-upper-thigh portrait framing with smooth loose hair visible, intimate creator-content paywall-teaser mood. photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality",
+            "Leaning casually against a mossy trailside rock on the hiking path, the same woman shifts weight onto one leg with natural hip curve, wearing super short frayed micro denim shorts hugging her hips and a micro crop-top with deep neckline and underboob tease, realistic fabric tension across the bust, long dark hair worn down with smooth flat natural top and loose flowing strands over shoulders, warm teasing smile and playful private eye contact, feminine hourglass body, full natural D-cup bust, same waist-to-hip proportions, same natural sun-kissed skin tone as the reference image, outdoor daylight atmosphere, realistic denim texture and realistic skin texture, close-medium upper-body framing with full face and natural hair top visible, intimate creator-content paywall-teaser mood. photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality",
+            "Standing on a narrow sun-dappled trail bend and glancing back over her shoulder, the same woman maintains chest-forward posture, wearing super short frayed micro denim shorts hugging her hips and a micro crop-top with deep neckline and underboob tease, realistic fabric tension across the bust, long dark hair worn down with smooth flat natural top and loose flowing strands over shoulders, warm teasing smile and playful private eye contact, feminine hourglass body, full natural D-cup bust, same waist-to-hip proportions, same natural sun-kissed skin tone as the reference image, outdoor daylight atmosphere, realistic denim texture and realistic skin texture, medium-close portrait framing with full head and clean space above loose hair, intimate creator-content paywall-teaser mood. photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality",
+            "Relaxed on the edge of a wooden trail footbridge with one knee softly bent, the same woman faces viewer directly, wearing super short frayed micro denim shorts hugging her hips and a micro crop-top with deep neckline and underboob tease, realistic fabric tension across the bust, long dark hair worn down with smooth flat natural top and loose flowing strands over shoulders, warm teasing smile and playful private eye contact, feminine hourglass body, full natural D-cup bust, same waist-to-hip proportions, same natural sun-kissed skin tone as the reference image, outdoor daylight atmosphere, realistic denim texture and realistic skin texture, upper-thigh portrait crop with full head visible, intimate creator-content paywall-teaser mood. photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality"
+          ],
+          "prompt_batch_count": 5
+        },
+        "execution_metadata": {},
+        "image_metadata": {
+          "requested_image_count": 5,
+          "output_count": 3
+        },
+        "original_output_reference": "https://d2h7xmz5gqybh9.cloudfront.net/output/17e87aaf-d015-4e41-ab57-028fc895b339.png",
+        "cms_content_root": "D:\\Ava_CMS\\Content"
+      }
+    },
+    "reference_asset_id": 84,
+    "creative_mode": "premium_teaser",
+    "prompt_text": "Prompt 1: Standing confidently on a sunlit forest path, the same woman leans slightly forward with chest-forward posture, wearing super short frayed micro denim shorts hugging her hips and a micro crop-top with deep neckline and underboob tease, realistic fabric tension across the bust, long dark hair worn down with smooth flat natural top and loose flowing strands over shoulders, warm teasing smile and playful private eye contact, feminine hourglass body, full natural D-cup bust, same waist-to-hip proportions, same natural sun-kissed skin tone as the reference image, outdoor daylight atmosphere, realistic denim texture and realistic skin texture, medium-close waist-up creator framing with full head visible and clean space above loose hair, intimate creator-content paywall-teaser mood. photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality\n\nPrompt 2: Paused on a gentle uphill section of the hiking trail with her torso angled three-quarter toward camera, the same woman rests one hand lightly on her hip, wearing super short frayed micro denim shorts hugging her hips and a micro crop-top with deep neckline and underboob tease, realistic fabric tension across the bust, long dark hair worn down with smooth flat natural top and loose flowing strands over shoulders, warm teasing smile and playful private eye contact, feminine hourglass body, full natural D-cup bust, same waist-to-hip proportions, same natural sun-kissed skin tone as the reference image, outdoor daylight atmosphere, realistic denim texture and realistic skin texture, head-to-upper-thigh portrait framing with smooth loose hair visible, intimate creator-content paywall-teaser mood. photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality\n\nPrompt 3: Leaning casually against a mossy trailside rock on the hiking path, the same woman shifts weight onto one leg with natural hip curve, wearing super short frayed micro denim shorts hugging her hips and a micro crop-top with deep neckline and underboob tease, realistic fabric tension across the bust, long dark hair worn down with smooth flat natural top and loose flowing strands over shoulders, warm teasing smile and playful private eye contact, feminine hourglass body, full natural D-cup bust, same waist-to-hip proportions, same natural sun-kissed skin tone as the reference image, outdoor daylight atmosphere, realistic denim texture and realistic skin texture, close-medium upper-body framing with full face and natural hair top visible, intimate creator-content paywall-teaser mood. photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality\n\nPrompt 4: Standing on a narrow sun-dappled trail bend and glancing back over her shoulder, the same woman maintains chest-forward posture, wearing super short frayed micro denim shorts hugging her hips and a micro crop-top with deep neckline and underboob tease, realistic fabric tension across the bust, long dark hair worn down with smooth flat natural top and loose flowing strands over shoulders, warm teasing smile and playful private eye contact, feminine hourglass body, full natural D-cup bust, same waist-to-hip proportions, same natural sun-kissed skin tone as the reference image, outdoor daylight atmosphere, realistic denim texture and realistic skin texture, medium-close portrait framing with full head and clean space above loose hair, intimate creator-content paywall-teaser mood. photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality\n\nPrompt 5: Relaxed on the edge of a wooden trail footbridge with one knee softly bent, the same woman faces viewer directly, wearing super short frayed micro denim shorts hugging her hips and a micro crop-top with deep neckline and underboob tease, realistic fabric tension across the bust, long dark hair worn down with smooth flat natural top and loose flowing strands over shoulders, warm teasing smile and playful private eye contact, feminine hourglass body, full natural D-cup bust, same waist-to-hip proportions, same natural sun-kissed skin tone as the reference image, outdoor daylight atmosphere, realistic denim texture and realistic skin texture, upper-thigh portrait crop with full head visible, intimate creator-content paywall-teaser mood. photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality",
+    "output_reference": "D:\\Ava_CMS\\Content\\Generation\\Active\\generated_image_ad5405f252c52a9986873c4f.png",
+    "created_at": "2026-07-15T15:43:43.362924",
+    "updated_at": "2026-07-15T15:43:44.786034"
+  },
+  {
+    "queue_item_id": "social_queue_item_99cb2342e4964e8d9a5f0c849db8d608",
+    "generated_image_id": "generated_image_2ba1875797a86522974ccefd",
+    "creator_profile_id": 2,
+    "platform": "telegram",
+    "status": "posted",
+    "scheduled_for": null,
+    "creator_notes": "Queued from Generation Library Telegram Publish dialog.",
+    "caption_id": "caption_result_67f7ee7d41234f2db188579ead43e3b0",
+    "generation_metadata": {
+      "generation_job_id": "generation_job_232bb81c611c41d29e312775c7354277",
+      "generation_request_id": "generation_request_793b7d7c5d4f4a60a1618bd797c13f01",
+      "generation_result_id": "generation_result_c9436be7b67e414e9f0fb215d468790d",
+      "provider_id": "seedream_5_0_pro",
+      "provider_metadata": {
+        "provider_request_id": "0fc11140b7b44b20ae87777128e862cb",
+        "provider_family": "wavespeed",
+        "endpoint": "https://api.wavespeed.ai/api/v3/bytedance/seedream-v5.0-pro/edit"
+      },
+      "prompt_metadata": {
+        "creative_tags": [
+          "Reclining against the hotel bed headboard in soft black satin lingerie",
+          "the same woman with identical face",
+          "long dark hair worn down with smooth flat natural top and loose flowing strands over her shoulders",
+          "preserves her full natural D-cup bust through realistic fabric tension and visible cleavage",
+          "feminine hourglass body with the same waist-to-hip proportions",
+          "and same natural sun-kissed skin tone as the reference image across face",
+          "chest",
+          "and arms",
+          "leaning back on elbows with chest-forward posture in medium-close waist-up creator framing with full head and clean space above loose hair",
+          "warm playful eye contact and soft teasing smile under warm bedside lamp glow with subtle shadows on the sheets",
+          "head-to-hips portrait crop with body large in frame. photorealistic",
+          "ultra-realistic raw photo",
+          "natural skin texture with visible pores",
+          "realistic anatomy and proportions",
+          "natural lighting with subtle shadows",
+          "candid intimate atmosphere",
+          "film grain",
+          "natural body",
+          "best quality"
+        ],
+        "prompt_metadata": {
+          "prompt_variations": [
+            "Reclining against the hotel bed headboard in soft black satin lingerie, the same woman leans back on her elbows with chest-forward posture, her full natural D-cup bust creating realistic fabric tension and visible cleavage across the smooth satin, feminine hourglass body with identical waist-to-hip proportions and same natural sun-kissed skin tone across face, chest and arms, long dark hair worn down with smooth flat natural top and loose flowing strands over her shoulders, warm playful eye contact and soft teasing smile captured from a slightly lowered angle in medium-close waist-up creator framing with full head and clean space above loose hair, head-to-hips portrait crop with body large in frame, subtle shadows from warm bedside lamp glow highlighting gentle satin folds and natural skin texture, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.",
+            "The same woman reclines against the hotel bed headboard wearing soft black satin lingerie, leaning back on elbows with chest-forward posture that emphasizes her full natural D-cup bust through visible fabric tension and soft cleavage, feminine hourglass body preserving exact waist-to-hip proportions and same natural sun-kissed skin tone across face, chest and arms, long dark hair worn down with smooth flat natural top and loose flowing strands cascading over her shoulders, gentle sideways tilt of her head creating a soft teasing smile and direct warm eye contact, medium-close waist-up creator framing with full head and clean space above loose hair, head-to-hips portrait crop keeping her body large in frame, intimate warm bedside lamp light casting subtle shadows across the sheets and satin, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.",
+            "Reclining against the hotel bed headboard in soft black satin lingerie, the woman rests on her elbows with chest-forward posture, her full natural D-cup bust pressing naturally against the fabric to show realistic tension and subtle cleavage, feminine hourglass body with consistent waist-to-hip proportions and same natural sun-kissed skin tone across face, chest and arms, long dark hair worn down featuring smooth flat natural top and loose flowing strands over her shoulders, playful warm eye contact paired with a relaxed soft smile, three-quarter torso angle captured in medium-close waist-up creator framing with full head and clean space above loose hair, head-to-hips portrait crop with body large in frame, gentle warm bedside lamp glow creating soft shadows and highlights on the satin and skin, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.",
+            "The identical woman reclines against the hotel bed headboard in soft black satin lingerie, propped on elbows with chest-forward posture that highlights her full natural D-cup bust through natural fabric stretch and visible cleavage, feminine hourglass body maintaining the same waist-to-hip proportions and natural sun-kissed skin tone across face, chest and arms, long dark hair worn down with smooth flat natural top and loose flowing strands resting over her shoulders, soft mischievous smile and inviting eye contact directed toward the viewer, medium-close waist-up creator framing with full head and clean space above loose hair, head-to-hips portrait crop keeping body large in frame, warm bedside lamp light casting intimate low-angle shadows across the sheets, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.",
+            "Reclining against the hotel bed headboard in soft black satin lingerie, the woman leans back on her elbows in chest-forward posture, her full natural D-cup bust creating visible fabric tension and soft natural cleavage, feminine hourglass body with preserved waist-to-hip proportions and same natural sun-kissed skin tone across face, chest and arms, long dark hair worn down with smooth flat natural top and loose flowing strands over her shoulders, warm playful eye contact with a gentle teasing smile, captured from a slightly angled perspective in medium-close waist-up creator framing with full head and clean space above loose hair, head-to-hips portrait crop with body large in frame, soft warm bedside lamp glow producing subtle shadows on the satin and linens, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality."
+          ],
+          "generation_brain": "wavespeed_canonical",
+          "wavespeed_source": "Wavespeed_App",
+          "reference_conditioning": "wavespeed",
+          "prompt_builder": "canonical_premium_prompt_planner",
+          "canonical_planner": "creator_os",
+          "planning_mode": "premium",
+          "prompt_count": 5,
+          "edited_in_prompt_preview": true
+        }
+      },
+      "image_metadata": {
+        "source": "premium_studio",
+        "workflow_type": "premium",
+        "generation_timestamp": "2026-07-10T18:24:11.059853",
+        "reference_metadata": {
+          "active": true,
+          "source": "content_studio_reference_library",
+          "added_at": "2026-07-08T00:05:08.012680",
+          "favorite": true,
+          "removed_at": null,
+          "is_reference": true,
+          "last_used_at": "2026-07-08T00:05:08.012680",
+          "original_filename": "9a6f4c0e78fc44648070284ab23e994e.png",
+          "creator_profile_id": 2
+        },
+        "reference_file_name": "9a6f4c0e78fc44648070284ab23e994e.png",
+        "reference_preview_path": "D:\\Ava_CMS\\vault\\originals\\images\\84.png",
+        "creative_tags": [
+          "Reclining against the hotel bed headboard in soft black satin lingerie",
+          "the same woman with identical face",
+          "long dark hair worn down with smooth flat natural top and loose flowing strands over her shoulders",
+          "preserves her full natural D-cup bust through realistic fabric tension and visible cleavage",
+          "feminine hourglass body with the same waist-to-hip proportions",
+          "and same natural sun-kissed skin tone as the reference image across face",
+          "chest",
+          "and arms",
+          "leaning back on elbows with chest-forward posture in medium-close waist-up creator framing with full head and clean space above loose hair",
+          "warm playful eye contact and soft teasing smile under warm bedside lamp glow with subtle shadows on the sheets",
+          "head-to-hips portrait crop with body large in frame. photorealistic",
+          "ultra-realistic raw photo",
+          "natural skin texture with visible pores",
+          "realistic anatomy and proportions",
+          "natural lighting with subtle shadows",
+          "candid intimate atmosphere",
+          "film grain",
+          "natural body",
+          "best quality"
+        ],
+        "creative_mode": "premium_teaser",
+        "output_reference": "D:\\Ava_CMS\\Content\\Generation\\Active\\generated_image_2ba1875797a86522974ccefd.png",
+        "request_metadata": {
+          "owner": "Generation Engine",
+          "provider_neutral": true,
+          "prompt_plan_owner": "Creative Director",
+          "creative_mode": "premium_teaser",
+          "creative_tags": [
+            "Reclining against the hotel bed headboard in soft black satin lingerie",
+            "the same woman with identical face",
+            "long dark hair worn down with smooth flat natural top and loose flowing strands over her shoulders",
+            "preserves her full natural D-cup bust through realistic fabric tension and visible cleavage",
+            "feminine hourglass body with the same waist-to-hip proportions",
+            "and same natural sun-kissed skin tone as the reference image across face",
+            "chest",
+            "and arms",
+            "leaning back on elbows with chest-forward posture in medium-close waist-up creator framing with full head and clean space above loose hair",
+            "warm playful eye contact and soft teasing smile under warm bedside lamp glow with subtle shadows on the sheets",
+            "head-to-hips portrait crop with body large in frame. photorealistic",
+            "ultra-realistic raw photo",
+            "natural skin texture with visible pores",
+            "realistic anatomy and proportions",
+            "natural lighting with subtle shadows",
+            "candid intimate atmosphere",
+            "film grain",
+            "natural body",
+            "best quality"
+          ],
+          "prompt_metadata": {
+            "prompt_variations": [
+              "Reclining against the hotel bed headboard in soft black satin lingerie, the same woman leans back on her elbows with chest-forward posture, her full natural D-cup bust creating realistic fabric tension and visible cleavage across the smooth satin, feminine hourglass body with identical waist-to-hip proportions and same natural sun-kissed skin tone across face, chest and arms, long dark hair worn down with smooth flat natural top and loose flowing strands over her shoulders, warm playful eye contact and soft teasing smile captured from a slightly lowered angle in medium-close waist-up creator framing with full head and clean space above loose hair, head-to-hips portrait crop with body large in frame, subtle shadows from warm bedside lamp glow highlighting gentle satin folds and natural skin texture, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.",
+              "The same woman reclines against the hotel bed headboard wearing soft black satin lingerie, leaning back on elbows with chest-forward posture that emphasizes her full natural D-cup bust through visible fabric tension and soft cleavage, feminine hourglass body preserving exact waist-to-hip proportions and same natural sun-kissed skin tone across face, chest and arms, long dark hair worn down with smooth flat natural top and loose flowing strands cascading over her shoulders, gentle sideways tilt of her head creating a soft teasing smile and direct warm eye contact, medium-close waist-up creator framing with full head and clean space above loose hair, head-to-hips portrait crop keeping her body large in frame, intimate warm bedside lamp light casting subtle shadows across the sheets and satin, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.",
+              "Reclining against the hotel bed headboard in soft black satin lingerie, the woman rests on her elbows with chest-forward posture, her full natural D-cup bust pressing naturally against the fabric to show realistic tension and subtle cleavage, feminine hourglass body with consistent waist-to-hip proportions and same natural sun-kissed skin tone across face, chest and arms, long dark hair worn down featuring smooth flat natural top and loose flowing strands over her shoulders, playful warm eye contact paired with a relaxed soft smile, three-quarter torso angle captured in medium-close waist-up creator framing with full head and clean space above loose hair, head-to-hips portrait crop with body large in frame, gentle warm bedside lamp glow creating soft shadows and highlights on the satin and skin, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.",
+              "The identical woman reclines against the hotel bed headboard in soft black satin lingerie, propped on elbows with chest-forward posture that highlights her full natural D-cup bust through natural fabric stretch and visible cleavage, feminine hourglass body maintaining the same waist-to-hip proportions and natural sun-kissed skin tone across face, chest and arms, long dark hair worn down with smooth flat natural top and loose flowing strands resting over her shoulders, soft mischievous smile and inviting eye contact directed toward the viewer, medium-close waist-up creator framing with full head and clean space above loose hair, head-to-hips portrait crop keeping body large in frame, warm bedside lamp light casting intimate low-angle shadows across the sheets, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.",
+              "Reclining against the hotel bed headboard in soft black satin lingerie, the woman leans back on her elbows in chest-forward posture, her full natural D-cup bust creating visible fabric tension and soft natural cleavage, feminine hourglass body with preserved waist-to-hip proportions and same natural sun-kissed skin tone across face, chest and arms, long dark hair worn down with smooth flat natural top and loose flowing strands over her shoulders, warm playful eye contact with a gentle teasing smile, captured from a slightly angled perspective in medium-close waist-up creator framing with full head and clean space above loose hair, head-to-hips portrait crop with body large in frame, soft warm bedside lamp glow producing subtle shadows on the satin and linens, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality."
+            ],
+            "generation_brain": "wavespeed_canonical",
+            "wavespeed_source": "Wavespeed_App",
+            "reference_conditioning": "wavespeed",
+            "prompt_builder": "canonical_premium_prompt_planner",
+            "canonical_planner": "creator_os",
+            "planning_mode": "premium",
+            "prompt_count": 5,
+            "edited_in_prompt_preview": true
+          },
+          "reference_metadata": {
+            "active": true,
+            "source": "content_studio_reference_library",
+            "added_at": "2026-07-08T00:05:08.012680",
+            "favorite": true,
+            "removed_at": null,
+            "is_reference": true,
+            "last_used_at": "2026-07-08T00:05:08.012680",
+            "original_filename": "9a6f4c0e78fc44648070284ab23e994e.png",
+            "creator_profile_id": 2
+          },
+          "reference_file_name": "9a6f4c0e78fc44648070284ab23e994e.png",
+          "reference_preview_path": "D:\\Ava_CMS\\vault\\originals\\images\\84.png",
+          "source": "premium_studio",
+          "workflow_type": "premium",
+          "premium_workflow": true,
+          "prompt_variations": [
+            "Reclining against the hotel bed headboard in soft black satin lingerie, the same woman leans back on her elbows with chest-forward posture, her full natural D-cup bust creating realistic fabric tension and visible cleavage across the smooth satin, feminine hourglass body with identical waist-to-hip proportions and same natural sun-kissed skin tone across face, chest and arms, long dark hair worn down with smooth flat natural top and loose flowing strands over her shoulders, warm playful eye contact and soft teasing smile captured from a slightly lowered angle in medium-close waist-up creator framing with full head and clean space above loose hair, head-to-hips portrait crop with body large in frame, subtle shadows from warm bedside lamp glow highlighting gentle satin folds and natural skin texture, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.",
+            "The same woman reclines against the hotel bed headboard wearing soft black satin lingerie, leaning back on elbows with chest-forward posture that emphasizes her full natural D-cup bust through visible fabric tension and soft cleavage, feminine hourglass body preserving exact waist-to-hip proportions and same natural sun-kissed skin tone across face, chest and arms, long dark hair worn down with smooth flat natural top and loose flowing strands cascading over her shoulders, gentle sideways tilt of her head creating a soft teasing smile and direct warm eye contact, medium-close waist-up creator framing with full head and clean space above loose hair, head-to-hips portrait crop keeping her body large in frame, intimate warm bedside lamp light casting subtle shadows across the sheets and satin, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.",
+            "Reclining against the hotel bed headboard in soft black satin lingerie, the woman rests on her elbows with chest-forward posture, her full natural D-cup bust pressing naturally against the fabric to show realistic tension and subtle cleavage, feminine hourglass body with consistent waist-to-hip proportions and same natural sun-kissed skin tone across face, chest and arms, long dark hair worn down featuring smooth flat natural top and loose flowing strands over her shoulders, playful warm eye contact paired with a relaxed soft smile, three-quarter torso angle captured in medium-close waist-up creator framing with full head and clean space above loose hair, head-to-hips portrait crop with body large in frame, gentle warm bedside lamp glow creating soft shadows and highlights on the satin and skin, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.",
+            "The identical woman reclines against the hotel bed headboard in soft black satin lingerie, propped on elbows with chest-forward posture that highlights her full natural D-cup bust through natural fabric stretch and visible cleavage, feminine hourglass body maintaining the same waist-to-hip proportions and natural sun-kissed skin tone across face, chest and arms, long dark hair worn down with smooth flat natural top and loose flowing strands resting over her shoulders, soft mischievous smile and inviting eye contact directed toward the viewer, medium-close waist-up creator framing with full head and clean space above loose hair, head-to-hips portrait crop keeping body large in frame, warm bedside lamp light casting intimate low-angle shadows across the sheets, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.",
+            "Reclining against the hotel bed headboard in soft black satin lingerie, the woman leans back on her elbows in chest-forward posture, her full natural D-cup bust creating visible fabric tension and soft natural cleavage, feminine hourglass body with preserved waist-to-hip proportions and same natural sun-kissed skin tone across face, chest and arms, long dark hair worn down with smooth flat natural top and loose flowing strands over her shoulders, warm playful eye contact with a gentle teasing smile, captured from a slightly angled perspective in medium-close waist-up creator framing with full head and clean space above loose hair, head-to-hips portrait crop with body large in frame, soft warm bedside lamp glow producing subtle shadows on the satin and linens, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality."
+          ],
+          "prompt_batch_count": 5
+        },
+        "execution_metadata": {
+          "submit_response": {
+            "code": 200,
+            "message": "success",
+            "data": {
+              "id": "0fc11140b7b44b20ae87777128e862cb",
+              "model": "bytedance/seedream-v5.0-pro/edit",
+              "outputs": [],
+              "urls": {
+                "get": "https://api.wavespeed.ai/api/v3/predictions/0fc11140b7b44b20ae87777128e862cb/result"
+              },
+              "status": "created",
+              "created_at": "2026-07-10T18:20:06.66Z",
+              "code": 0,
+              "error": "",
+              "executionTime": 0,
+              "timings": {
+                "inference": 0
+              }
+            }
+          },
+          "poll_response": {
+            "provider_request_ids": [
+              "0fc11140b7b44b20ae87777128e862cb",
+              "73709784d5f24bf1add042ca599afe38",
+              "0c3f5b2af9bd41569e4cc4a5241d0f3e",
+              "966d4fe38cb44206a4c5d7585717efa6",
+              "4df8dfd83ac84f95b44874cce63b178a"
+            ],
+            "poll_responses": [
+              {
+                "code": 200,
+                "message": "success",
+                "data": {
+                  "id": "0fc11140b7b44b20ae87777128e862cb",
+                  "model": "bytedance/seedream-v5.0-pro/edit",
+                  "outputs": [
+                    "https://d2h7xmz5gqybh9.cloudfront.net/output/f292eb85-fc29-4f0d-aaf0-fa54e3e4e8b3.png"
+                  ],
+                  "urls": {
+                    "get": "https://api.wavespeed.ai/api/v3/predictions/0fc11140b7b44b20ae87777128e862cb/result"
+                  },
+                  "status": "completed",
+                  "created_at": "2026-07-10T18:20:06.65851767Z",
+                  "code": 0,
+                  "error": "",
+                  "executionTime": 37702,
+                  "timings": {
+                    "inference": 37702
+                  }
+                }
+              },
+              {
+                "code": 200,
+                "message": "success",
+                "data": {
+                  "id": "73709784d5f24bf1add042ca599afe38",
+                  "model": "bytedance/seedream-v5.0-pro/edit",
+                  "outputs": [
+                    "https://d2h7xmz5gqybh9.cloudfront.net/output/e95b2fa6-00d8-49fd-9a9f-ac3b597b7840.png"
+                  ],
+                  "urls": {
+                    "get": "https://api.wavespeed.ai/api/v3/predictions/73709784d5f24bf1add042ca599afe38/result"
+                  },
+                  "status": "completed",
+                  "created_at": "2026-07-10T18:20:48.020592823Z",
+                  "code": 0,
+                  "error": "",
+                  "executionTime": 51562,
+                  "timings": {
+                    "inference": 51562
+                  }
+                }
+              },
+              {
+                "code": 200,
+                "message": "success",
+                "data": {
+                  "id": "0c3f5b2af9bd41569e4cc4a5241d0f3e",
+                  "model": "bytedance/seedream-v5.0-pro/edit",
+                  "outputs": [
+                    "https://d2h7xmz5gqybh9.cloudfront.net/output/02a65534-3352-475b-a7f8-c53948a430f4.png"
+                  ],
+                  "urls": {
+                    "get": "https://api.wavespeed.ai/api/v3/predictions/0c3f5b2af9bd41569e4cc4a5241d0f3e/result"
+                  },
+                  "status": "completed",
+                  "created_at": "2026-07-10T18:21:42.869041459Z",
+                  "code": 0,
+                  "error": "",
+                  "executionTime": 43047,
+                  "timings": {
+                    "inference": 43047
+                  }
+                }
+              },
+              {
+                "code": 200,
+                "message": "success",
+                "data": {
+                  "id": "966d4fe38cb44206a4c5d7585717efa6",
+                  "model": "bytedance/seedream-v5.0-pro/edit",
+                  "outputs": [
+                    "https://d2h7xmz5gqybh9.cloudfront.net/output/14e249a0-70ac-4555-8ae7-252731d8dc6f.png"
+                  ],
+                  "urls": {
+                    "get": "https://api.wavespeed.ai/api/v3/predictions/966d4fe38cb44206a4c5d7585717efa6/result"
+                  },
+                  "status": "completed",
+                  "created_at": "2026-07-10T18:22:30.975452778Z",
+                  "code": 0,
+                  "error": "",
+                  "executionTime": 42516,
+                  "timings": {
+                    "inference": 42516
+                  }
+                }
+              },
+              {
+                "code": 200,
+                "message": "success",
+                "data": {
+                  "id": "4df8dfd83ac84f95b44874cce63b178a",
+                  "model": "bytedance/seedream-v5.0-pro/edit",
+                  "outputs": [
+                    "https://d2h7xmz5gqybh9.cloudfront.net/output/f52604ae-da7a-4703-92c6-cc230d04eac4.png"
+                  ],
+                  "urls": {
+                    "get": "https://api.wavespeed.ai/api/v3/predictions/4df8dfd83ac84f95b44874cce63b178a/result"
+                  },
+                  "status": "completed",
+                  "created_at": "2026-07-10T18:23:19.199281135Z",
+                  "code": 0,
+                  "error": "",
+                  "executionTime": 48953,
+                  "timings": {
+                    "inference": 48953
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "image_metadata": {
+          "requested_image_count": 5,
+          "output_count": 5,
+          "reference_asset_id": 84
+        },
+        "original_output_reference": "https://d2h7xmz5gqybh9.cloudfront.net/output/14e249a0-70ac-4555-8ae7-252731d8dc6f.png",
+        "cms_content_root": "D:\\Ava_CMS\\Content"
+      }
+    },
+    "reference_asset_id": 84,
+    "creative_mode": "premium_teaser",
+    "prompt_text": "Prompt 1: Reclining against the hotel bed headboard in soft black satin lingerie, the same woman leans back on her elbows with chest-forward posture, her full natural D-cup bust creating realistic fabric tension and visible cleavage across the smooth satin, feminine hourglass body with identical waist-to-hip proportions and same natural sun-kissed skin tone across face, chest and arms, long dark hair worn down with smooth flat natural top and loose flowing strands over her shoulders, warm playful eye contact and soft teasing smile captured from a slightly lowered angle in medium-close waist-up creator framing with full head and clean space above loose hair, head-to-hips portrait crop with body large in frame, subtle shadows from warm bedside lamp glow highlighting gentle satin folds and natural skin texture, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.\n\nPrompt 2: The same woman reclines against the hotel bed headboard wearing soft black satin lingerie, leaning back on elbows with chest-forward posture that emphasizes her full natural D-cup bust through visible fabric tension and soft cleavage, feminine hourglass body preserving exact waist-to-hip proportions and same natural sun-kissed skin tone across face, chest and arms, long dark hair worn down with smooth flat natural top and loose flowing strands cascading over her shoulders, gentle sideways tilt of her head creating a soft teasing smile and direct warm eye contact, medium-close waist-up creator framing with full head and clean space above loose hair, head-to-hips portrait crop keeping her body large in frame, intimate warm bedside lamp light casting subtle shadows across the sheets and satin, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.\n\nPrompt 3: Reclining against the hotel bed headboard in soft black satin lingerie, the woman rests on her elbows with chest-forward posture, her full natural D-cup bust pressing naturally against the fabric to show realistic tension and subtle cleavage, feminine hourglass body with consistent waist-to-hip proportions and same natural sun-kissed skin tone across face, chest and arms, long dark hair worn down featuring smooth flat natural top and loose flowing strands over her shoulders, playful warm eye contact paired with a relaxed soft smile, three-quarter torso angle captured in medium-close waist-up creator framing with full head and clean space above loose hair, head-to-hips portrait crop with body large in frame, gentle warm bedside lamp glow creating soft shadows and highlights on the satin and skin, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.\n\nPrompt 4: The identical woman reclines against the hotel bed headboard in soft black satin lingerie, propped on elbows with chest-forward posture that highlights her full natural D-cup bust through natural fabric stretch and visible cleavage, feminine hourglass body maintaining the same waist-to-hip proportions and natural sun-kissed skin tone across face, chest and arms, long dark hair worn down with smooth flat natural top and loose flowing strands resting over her shoulders, soft mischievous smile and inviting eye contact directed toward the viewer, medium-close waist-up creator framing with full head and clean space above loose hair, head-to-hips portrait crop keeping body large in frame, warm bedside lamp light casting intimate low-angle shadows across the sheets, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.\n\nPrompt 5: Reclining against the hotel bed headboard in soft black satin lingerie, the woman leans back on her elbows in chest-forward posture, her full natural D-cup bust creating visible fabric tension and soft natural cleavage, feminine hourglass body with preserved waist-to-hip proportions and same natural sun-kissed skin tone across face, chest and arms, long dark hair worn down with smooth flat natural top and loose flowing strands over her shoulders, warm playful eye contact with a gentle teasing smile, captured from a slightly angled perspective in medium-close waist-up creator framing with full head and clean space above loose hair, head-to-hips portrait crop with body large in frame, soft warm bedside lamp glow producing subtle shadows on the satin and linens, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.",
+    "output_reference": "D:\\Ava_CMS\\Content\\Generation\\Active\\generated_image_2ba1875797a86522974ccefd.png",
+    "created_at": "2026-07-14T15:11:47.624271",
+    "updated_at": "2026-07-14T15:11:50.502171"
+  },
+  {
+    "queue_item_id": "social_queue_item_a86e62b5c6d04a3f905e1dff7a85e7b2",
+    "generated_image_id": "generated_image_1fcda36e006d9b22f203cd66",
+    "creator_profile_id": 2,
+    "platform": "x",
+    "status": "posted",
+    "scheduled_for": null,
+    "creator_notes": "Queued from Generation Library X Publish dialog.",
+    "caption_id": null,
+    "generation_metadata": {
+      "generation_job_id": "generation_job_a5681bdd06e0493cb1e237e88319dffe",
+      "generation_request_id": "generation_request_aa0d348b0ff94c729e244c7dbd930216",
+      "generation_result_id": "generation_job_a5681bdd06e0493cb1e237e88319dffe_live_result",
+      "provider_id": "seedream_5_0_pro",
+      "provider_metadata": {
+        "provider_neutral_result": true,
+        "live_generation_sync": true
+      },
+      "prompt_metadata": {
+        "creative_tags": [
+          "lakeside",
+          "dock",
+          "tiny string bikini top with deep cleavage",
+          "micro denim shorts hugging hips",
+          "legs dangling over water edge",
+          "wet-look skin",
+          "golden hour sunlight",
+          "warm cinematic light",
+          "soft sky reflections on water",
+          "private teasing eye contact",
+          "chest-forward posture",
+          "hips angled",
+          "realistic fabric tension across the bust",
+          "medium-close portrait framing with full head visible and clean space above loose hair",
+          "intimate creator-content mood",
+          "full natural D-cup bust",
+          "feminine hourglass body",
+          "same waist-to-hip proportions",
+          "same natural sun-kissed skin tone as the reference image"
+        ],
+        "prompt_metadata": {
+          "prompt_variations": [
+            "Captured at the edge of a weathered wooden dock during golden hour, the same woman sits with legs dangling over the calm water, wearing a tiny string bikini top that creates deep cleavage through realistic fabric tension across her full natural D-cup bust and micro denim shorts hugging her hips, her feminine hourglass body and same waist-to-hip proportions accentuated by a slight chest-forward posture with hips angled toward the viewer, long dark hair worn down with a smooth flat natural top and loose flowing strands over her shoulders, same natural sun-kissed skin tone as the reference image glowing with wet-look sheen under warm cinematic light, private teasing eye contact and soft mischievous smile, medium-close waist-up creator framing with full head and clean space above loose hair, intimate creator-content mood, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.",
+            "The same woman leans slightly sideways on a lakeside dock at sunset, legs dangling over the reflective water, dressed in a tiny string bikini top with deep cleavage and micro denim shorts that hug her hips, showcasing her full natural D-cup bust, feminine hourglass body, same waist-to-hip proportions and same natural sun-kissed skin tone as the reference image with a glistening wet-look finish, long dark hair worn down with smooth flat natural top and loose flowing hair cascading over her shoulders, chest-forward posture with hips angled, warm cinematic golden hour light casting soft sky reflections, playful confident gaze and relaxed smirk directed at the viewer, head-to-upper-thigh portrait framing with smooth loose hair visible, intimate creator-content mood, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.",
+            "Seated on the sun-warmed planks of a quiet dock overlooking glassy water at golden hour, the same woman keeps her legs dangling over the edge while wearing a tiny string bikini top with pronounced deep cleavage and micro denim shorts hugging her hips, her full natural D-cup bust, feminine hourglass body, same waist-to-hip proportions and same natural sun-kissed skin tone as the reference image enhanced by wet-look skin, long dark hair worn down with smooth flat natural top and loose flowing strands resting over her shoulders, chest-forward posture and hips angled, private teasing eye contact with warm inviting expression, medium-close portrait framing with full head and clean space above loose hair under warm cinematic light and soft sky reflections, intimate creator-content mood, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.",
+            "The same woman perches near the end of a lakeside dock at golden hour with legs dangling above the water, wearing a tiny string bikini top that produces deep cleavage and micro denim shorts that hug her hips tightly, highlighting her full natural D-cup bust, feminine hourglass body, same waist-to-hip proportions and same natural sun-kissed skin tone as the reference image now glistening with wet-look skin, long dark hair worn down with smooth flat natural top and loose flowing hair over her shoulders, chest-forward posture with hips angled toward the lens, soft cinematic golden light and sky reflections on the surface, teasing playful smile and direct warm eye contact, close-medium upper-body framing with full face and natural hair top visible, intimate creator-content mood, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.",
+            "Positioned at the dock\u2019s edge during golden hour with legs dangling over still water, the same woman appears in a tiny string bikini top featuring deep cleavage and micro denim shorts hugging her hips, her full natural D-cup bust, feminine hourglass body, same waist-to-hip proportions and same natural sun-kissed skin tone as the reference image shining with wet-look skin, long dark hair worn down with smooth flat natural top and loose flowing hair lying over her shoulders, chest-forward posture and hips angled, private teasing eye contact paired with a soft confident smirk, medium-close waist-up creator framing with full head and clean space above loose hair, bathed in warm cinematic light and gentle sky reflections on the water, intimate creator-content mood, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality."
+          ],
+          "generation_brain": "wavespeed_canonical",
+          "wavespeed_source": "Wavespeed_App",
+          "reference_conditioning": "wavespeed",
+          "prompt_builder": "canonical_premium_prompt_planner",
+          "canonical_planner": "creator_os",
+          "planning_mode": "premium",
+          "prompt_count": 5,
+          "edited_in_prompt_preview": true
+        }
+      },
+      "image_metadata": {
+        "source": "premium_studio",
+        "workflow_type": "premium",
+        "generation_timestamp": "2026-07-13T15:44:53.827817",
+        "reference_metadata": {
+          "active": true,
+          "source": "content_studio_reference_library",
+          "added_at": "2026-07-08T00:05:08.012680",
+          "favorite": true,
+          "removed_at": null,
+          "is_reference": true,
+          "last_used_at": "2026-07-08T00:05:08.012680",
+          "original_filename": "9a6f4c0e78fc44648070284ab23e994e.png",
+          "creator_profile_id": 2
+        },
+        "reference_file_name": "9a6f4c0e78fc44648070284ab23e994e.png",
+        "reference_preview_path": "D:\\Ava_CMS\\vault\\originals\\images\\84.png",
+        "creative_tags": [
+          "lakeside",
+          "dock",
+          "tiny string bikini top with deep cleavage",
+          "micro denim shorts hugging hips",
+          "legs dangling over water edge",
+          "wet-look skin",
+          "golden hour sunlight",
+          "warm cinematic light",
+          "soft sky reflections on water",
+          "private teasing eye contact",
+          "chest-forward posture",
+          "hips angled",
+          "realistic fabric tension across the bust",
+          "medium-close portrait framing with full head visible and clean space above loose hair",
+          "intimate creator-content mood",
+          "full natural D-cup bust",
+          "feminine hourglass body",
+          "same waist-to-hip proportions",
+          "same natural sun-kissed skin tone as the reference image"
+        ],
+        "creative_mode": "premium_teaser",
+        "output_reference": "D:\\Ava_CMS\\Content\\Generation\\Active\\generated_image_1fcda36e006d9b22f203cd66.png",
+        "request_metadata": {
+          "owner": "Generation Engine",
+          "provider_neutral": true,
+          "prompt_plan_owner": "Creative Director",
+          "creative_mode": "premium_teaser",
+          "creative_tags": [
+            "lakeside",
+            "dock",
+            "tiny string bikini top with deep cleavage",
+            "micro denim shorts hugging hips",
+            "legs dangling over water edge",
+            "wet-look skin",
+            "golden hour sunlight",
+            "warm cinematic light",
+            "soft sky reflections on water",
+            "private teasing eye contact",
+            "chest-forward posture",
+            "hips angled",
+            "realistic fabric tension across the bust",
+            "medium-close portrait framing with full head visible and clean space above loose hair",
+            "intimate creator-content mood",
+            "full natural D-cup bust",
+            "feminine hourglass body",
+            "same waist-to-hip proportions",
+            "same natural sun-kissed skin tone as the reference image"
+          ],
+          "prompt_metadata": {
+            "prompt_variations": [
+              "Captured at the edge of a weathered wooden dock during golden hour, the same woman sits with legs dangling over the calm water, wearing a tiny string bikini top that creates deep cleavage through realistic fabric tension across her full natural D-cup bust and micro denim shorts hugging her hips, her feminine hourglass body and same waist-to-hip proportions accentuated by a slight chest-forward posture with hips angled toward the viewer, long dark hair worn down with a smooth flat natural top and loose flowing strands over her shoulders, same natural sun-kissed skin tone as the reference image glowing with wet-look sheen under warm cinematic light, private teasing eye contact and soft mischievous smile, medium-close waist-up creator framing with full head and clean space above loose hair, intimate creator-content mood, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.",
+              "The same woman leans slightly sideways on a lakeside dock at sunset, legs dangling over the reflective water, dressed in a tiny string bikini top with deep cleavage and micro denim shorts that hug her hips, showcasing her full natural D-cup bust, feminine hourglass body, same waist-to-hip proportions and same natural sun-kissed skin tone as the reference image with a glistening wet-look finish, long dark hair worn down with smooth flat natural top and loose flowing hair cascading over her shoulders, chest-forward posture with hips angled, warm cinematic golden hour light casting soft sky reflections, playful confident gaze and relaxed smirk directed at the viewer, head-to-upper-thigh portrait framing with smooth loose hair visible, intimate creator-content mood, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.",
+              "Seated on the sun-warmed planks of a quiet dock overlooking glassy water at golden hour, the same woman keeps her legs dangling over the edge while wearing a tiny string bikini top with pronounced deep cleavage and micro denim shorts hugging her hips, her full natural D-cup bust, feminine hourglass body, same waist-to-hip proportions and same natural sun-kissed skin tone as the reference image enhanced by wet-look skin, long dark hair worn down with smooth flat natural top and loose flowing strands resting over her shoulders, chest-forward posture and hips angled, private teasing eye contact with warm inviting expression, medium-close portrait framing with full head and clean space above loose hair under warm cinematic light and soft sky reflections, intimate creator-content mood, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.",
+              "The same woman perches near the end of a lakeside dock at golden hour with legs dangling above the water, wearing a tiny string bikini top that produces deep cleavage and micro denim shorts that hug her hips tightly, highlighting her full natural D-cup bust, feminine hourglass body, same waist-to-hip proportions and same natural sun-kissed skin tone as the reference image now glistening with wet-look skin, long dark hair worn down with smooth flat natural top and loose flowing hair over her shoulders, chest-forward posture with hips angled toward the lens, soft cinematic golden light and sky reflections on the surface, teasing playful smile and direct warm eye contact, close-medium upper-body framing with full face and natural hair top visible, intimate creator-content mood, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.",
+              "Positioned at the dock\u2019s edge during golden hour with legs dangling over still water, the same woman appears in a tiny string bikini top featuring deep cleavage and micro denim shorts hugging her hips, her full natural D-cup bust, feminine hourglass body, same waist-to-hip proportions and same natural sun-kissed skin tone as the reference image shining with wet-look skin, long dark hair worn down with smooth flat natural top and loose flowing hair lying over her shoulders, chest-forward posture and hips angled, private teasing eye contact paired with a soft confident smirk, medium-close waist-up creator framing with full head and clean space above loose hair, bathed in warm cinematic light and gentle sky reflections on the water, intimate creator-content mood, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality."
+            ],
+            "generation_brain": "wavespeed_canonical",
+            "wavespeed_source": "Wavespeed_App",
+            "reference_conditioning": "wavespeed",
+            "prompt_builder": "canonical_premium_prompt_planner",
+            "canonical_planner": "creator_os",
+            "planning_mode": "premium",
+            "prompt_count": 5,
+            "edited_in_prompt_preview": true
+          },
+          "reference_metadata": {
+            "active": true,
+            "source": "content_studio_reference_library",
+            "added_at": "2026-07-08T00:05:08.012680",
+            "favorite": true,
+            "removed_at": null,
+            "is_reference": true,
+            "last_used_at": "2026-07-08T00:05:08.012680",
+            "original_filename": "9a6f4c0e78fc44648070284ab23e994e.png",
+            "creator_profile_id": 2
+          },
+          "reference_file_name": "9a6f4c0e78fc44648070284ab23e994e.png",
+          "reference_preview_path": "D:\\Ava_CMS\\vault\\originals\\images\\84.png",
+          "source": "premium_studio",
+          "workflow_type": "premium",
+          "premium_workflow": true,
+          "prompt_variations": [
+            "Captured at the edge of a weathered wooden dock during golden hour, the same woman sits with legs dangling over the calm water, wearing a tiny string bikini top that creates deep cleavage through realistic fabric tension across her full natural D-cup bust and micro denim shorts hugging her hips, her feminine hourglass body and same waist-to-hip proportions accentuated by a slight chest-forward posture with hips angled toward the viewer, long dark hair worn down with a smooth flat natural top and loose flowing strands over her shoulders, same natural sun-kissed skin tone as the reference image glowing with wet-look sheen under warm cinematic light, private teasing eye contact and soft mischievous smile, medium-close waist-up creator framing with full head and clean space above loose hair, intimate creator-content mood, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.",
+            "The same woman leans slightly sideways on a lakeside dock at sunset, legs dangling over the reflective water, dressed in a tiny string bikini top with deep cleavage and micro denim shorts that hug her hips, showcasing her full natural D-cup bust, feminine hourglass body, same waist-to-hip proportions and same natural sun-kissed skin tone as the reference image with a glistening wet-look finish, long dark hair worn down with smooth flat natural top and loose flowing hair cascading over her shoulders, chest-forward posture with hips angled, warm cinematic golden hour light casting soft sky reflections, playful confident gaze and relaxed smirk directed at the viewer, head-to-upper-thigh portrait framing with smooth loose hair visible, intimate creator-content mood, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.",
+            "Seated on the sun-warmed planks of a quiet dock overlooking glassy water at golden hour, the same woman keeps her legs dangling over the edge while wearing a tiny string bikini top with pronounced deep cleavage and micro denim shorts hugging her hips, her full natural D-cup bust, feminine hourglass body, same waist-to-hip proportions and same natural sun-kissed skin tone as the reference image enhanced by wet-look skin, long dark hair worn down with smooth flat natural top and loose flowing strands resting over her shoulders, chest-forward posture and hips angled, private teasing eye contact with warm inviting expression, medium-close portrait framing with full head and clean space above loose hair under warm cinematic light and soft sky reflections, intimate creator-content mood, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.",
+            "The same woman perches near the end of a lakeside dock at golden hour with legs dangling above the water, wearing a tiny string bikini top that produces deep cleavage and micro denim shorts that hug her hips tightly, highlighting her full natural D-cup bust, feminine hourglass body, same waist-to-hip proportions and same natural sun-kissed skin tone as the reference image now glistening with wet-look skin, long dark hair worn down with smooth flat natural top and loose flowing hair over her shoulders, chest-forward posture with hips angled toward the lens, soft cinematic golden light and sky reflections on the surface, teasing playful smile and direct warm eye contact, close-medium upper-body framing with full face and natural hair top visible, intimate creator-content mood, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.",
+            "Positioned at the dock\u2019s edge during golden hour with legs dangling over still water, the same woman appears in a tiny string bikini top featuring deep cleavage and micro denim shorts hugging her hips, her full natural D-cup bust, feminine hourglass body, same waist-to-hip proportions and same natural sun-kissed skin tone as the reference image shining with wet-look skin, long dark hair worn down with smooth flat natural top and loose flowing hair lying over her shoulders, chest-forward posture and hips angled, private teasing eye contact paired with a soft confident smirk, medium-close waist-up creator framing with full head and clean space above loose hair, bathed in warm cinematic light and gentle sky reflections on the water, intimate creator-content mood, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality."
+          ],
+          "prompt_batch_count": 5
+        },
+        "execution_metadata": {},
+        "image_metadata": {
+          "requested_image_count": 5,
+          "output_count": 1
+        },
+        "original_output_reference": "https://d2h7xmz5gqybh9.cloudfront.net/output/61cd433d-4920-4a5d-9d65-c91940b2fb1e.png",
+        "cms_content_root": "D:\\Ava_CMS\\Content"
+      }
+    },
+    "reference_asset_id": 84,
+    "creative_mode": "premium_teaser",
+    "prompt_text": "Prompt 1: Captured at the edge of a weathered wooden dock during golden hour, the same woman sits with legs dangling over the calm water, wearing a tiny string bikini top that creates deep cleavage through realistic fabric tension across her full natural D-cup bust and micro denim shorts hugging her hips, her feminine hourglass body and same waist-to-hip proportions accentuated by a slight chest-forward posture with hips angled toward the viewer, long dark hair worn down with a smooth flat natural top and loose flowing strands over her shoulders, same natural sun-kissed skin tone as the reference image glowing with wet-look sheen under warm cinematic light, private teasing eye contact and soft mischievous smile, medium-close waist-up creator framing with full head and clean space above loose hair, intimate creator-content mood, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.\n\nPrompt 2: The same woman leans slightly sideways on a lakeside dock at sunset, legs dangling over the reflective water, dressed in a tiny string bikini top with deep cleavage and micro denim shorts that hug her hips, showcasing her full natural D-cup bust, feminine hourglass body, same waist-to-hip proportions and same natural sun-kissed skin tone as the reference image with a glistening wet-look finish, long dark hair worn down with smooth flat natural top and loose flowing hair cascading over her shoulders, chest-forward posture with hips angled, warm cinematic golden hour light casting soft sky reflections, playful confident gaze and relaxed smirk directed at the viewer, head-to-upper-thigh portrait framing with smooth loose hair visible, intimate creator-content mood, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.\n\nPrompt 3: Seated on the sun-warmed planks of a quiet dock overlooking glassy water at golden hour, the same woman keeps her legs dangling over the edge while wearing a tiny string bikini top with pronounced deep cleavage and micro denim shorts hugging her hips, her full natural D-cup bust, feminine hourglass body, same waist-to-hip proportions and same natural sun-kissed skin tone as the reference image enhanced by wet-look skin, long dark hair worn down with smooth flat natural top and loose flowing strands resting over her shoulders, chest-forward posture and hips angled, private teasing eye contact with warm inviting expression, medium-close portrait framing with full head and clean space above loose hair under warm cinematic light and soft sky reflections, intimate creator-content mood, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.\n\nPrompt 4: The same woman perches near the end of a lakeside dock at golden hour with legs dangling above the water, wearing a tiny string bikini top that produces deep cleavage and micro denim shorts that hug her hips tightly, highlighting her full natural D-cup bust, feminine hourglass body, same waist-to-hip proportions and same natural sun-kissed skin tone as the reference image now glistening with wet-look skin, long dark hair worn down with smooth flat natural top and loose flowing hair over her shoulders, chest-forward posture with hips angled toward the lens, soft cinematic golden light and sky reflections on the surface, teasing playful smile and direct warm eye contact, close-medium upper-body framing with full face and natural hair top visible, intimate creator-content mood, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.\n\nPrompt 5: Positioned at the dock\u2019s edge during golden hour with legs dangling over still water, the same woman appears in a tiny string bikini top featuring deep cleavage and micro denim shorts hugging her hips, her full natural D-cup bust, feminine hourglass body, same waist-to-hip proportions and same natural sun-kissed skin tone as the reference image shining with wet-look skin, long dark hair worn down with smooth flat natural top and loose flowing hair lying over her shoulders, chest-forward posture and hips angled, private teasing eye contact paired with a soft confident smirk, medium-close waist-up creator framing with full head and clean space above loose hair, bathed in warm cinematic light and gentle sky reflections on the water, intimate creator-content mood, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.",
+    "output_reference": "D:\\Ava_CMS\\Content\\Generation\\Active\\generated_image_1fcda36e006d9b22f203cd66.png",
+    "created_at": "2026-07-14T14:45:29.645858",
+    "updated_at": "2026-07-14T14:45:30.978956"
+  },
+  {
     "queue_item_id": "social_queue_item_e6c93c80b53f4ebf8e0351fb52103d55",
     "generated_image_id": "generated_image_e85f46fc25631afba11a13d5",
     "creator_profile_id": 2,

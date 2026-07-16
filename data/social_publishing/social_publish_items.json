@@ -1,5 +1,145 @@
 [
   {
+    "publish_request_id": "social_publish_item_8f774c3604604c53a567ec8b0dcaa230",
+    "queue_item_id": "social_queue_item_90b520cecadb40e88e776ee2e616ee04",
+    "platform": "x",
+    "caption_id": null,
+    "scheduled_for": null,
+    "status": "failed",
+    "created_at": "2026-07-16T16:05:59.678020",
+    "metadata": {
+      "posting_implemented": true,
+      "account_name": "AvaBlackthorne",
+      "caption_id": null,
+      "telegram_post_to": "main",
+      "exception_type": "XPublishError",
+      "error": "AvaBlackthorne X publish failed: status 402 - {\"detail\":\"credits depleted\",\"status\":402,\"title\":\"Payment Required\",\"type\":\"https://api.x.com/2/problems/credits-depleted\"} - credits depleted - 402 Payment Required\ncredits depleted",
+      "traceback": "Traceback (most recent call last):\n  File \"C:\\Creator-OS\\app\\providers\\social\\x_provider.py\", line 216, in publish\n    tweet = client.create_tweet(text=text[:280], media_ids=[media.media_id])\n            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Creator-OS\\bot\\Lib\\site-packages\\tweepy\\client.py\", line 839, in create_tweet\n    return self._make_request(\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Creator-OS\\bot\\Lib\\site-packages\\tweepy\\client.py\", line 129, in _make_request\n    response = self.request(method, route, params=request_params,\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Creator-OS\\bot\\Lib\\site-packages\\tweepy\\client.py\", line 119, in request\n    raise HTTPException(response)\ntweepy.errors.HTTPException: 402 Payment Required\ncredits depleted\n\nThe above exception was the direct cause of the following exception:\n\nTraceback (most recent call last):\n  File \"C:\\Creator-OS\\app\\services\\social_publishing_service.py\", line 306, in publish_now\n    result = self.x_provider.publish(\n             ^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Creator-OS\\app\\providers\\social\\x_provider.py\", line 218, in publish\n    raise XPublishError(f\"{account.account_name} X publish failed: {self._error_details(exc)}\") from exc\napp.providers.social.x_provider.XPublishError: AvaBlackthorne X publish failed: status 402 - {\"detail\":\"credits depleted\",\"status\":402,\"title\":\"Payment Required\",\"type\":\"https://api.x.com/2/problems/credits-depleted\"} - credits depleted - 402 Payment Required\ncredits depleted\n"
+    }
+  },
+  {
+    "publish_request_id": "social_publish_item_70d3177f2af54d0db87725d2138c4184",
+    "queue_item_id": "social_queue_item_ed46d67a87244a78ac158e1d622b4275",
+    "platform": "x",
+    "caption_id": null,
+    "scheduled_for": null,
+    "status": "posted",
+    "created_at": "2026-07-15T15:43:43.375973",
+    "metadata": {
+      "posting_implemented": true,
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "provider_post_id": "2077418847645114508",
+      "provider_media_id": "2077418844365246464",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2077418847645114508",
+      "provider_metadata": {
+        "tweet_data": {
+          "id": "2077418847645114508",
+          "text": "Okay hiking partner... are we making it to the summit or stopping every five minutes to take pictures? \ud83d\ude02\ud83c\udf32\ud83d\udc47 https://t.co/LFhjrtvODk",
+          "edit_history_tweet_ids": [
+            "2077418847645114508"
+          ]
+        }
+      }
+    }
+  },
+  {
+    "publish_request_id": "social_publish_item_2eb808ca9fe74d8b8867101d18e97793",
+    "queue_item_id": "social_queue_item_99cb2342e4964e8d9a5f0c849db8d608",
+    "platform": "telegram",
+    "caption_id": "caption_result_67f7ee7d41234f2db188579ead43e3b0",
+    "scheduled_for": null,
+    "status": "posted",
+    "created_at": "2026-07-14T15:11:47.650990",
+    "metadata": {
+      "posting_implemented": true,
+      "account_name": null,
+      "telegram_post_to": "main",
+      "provider_post_id": "83",
+      "provider_media_id": null,
+      "provider_output_url": null,
+      "provider_metadata": {
+        "status_code": 200,
+        "message_id": 83,
+        "response": {
+          "ok": true,
+          "result": {
+            "message_id": 83,
+            "sender_chat": {
+              "id": -1002507455539,
+              "title": "Ava Blackthorne",
+              "type": "channel"
+            },
+            "chat": {
+              "id": -1002507455539,
+              "title": "Ava Blackthorne",
+              "type": "channel"
+            },
+            "date": 1784041909,
+            "photo": [
+              {
+                "file_id": "AgACAgEAAyEGAASVdLwzAANTalZRtZ5wgCacWfdw9yWyEw-Rd3IAAvgLaxtIc7FGiJIX1kH4xesBAAMCAANzAAM9BA",
+                "file_unique_id": "AQAD-AtrG0hzsUZ4",
+                "file_size": 1559,
+                "width": 67,
+                "height": 90
+              },
+              {
+                "file_id": "AgACAgEAAyEGAASVdLwzAANTalZRtZ5wgCacWfdw9yWyEw-Rd3IAAvgLaxtIc7FGiJIX1kH4xesBAAMCAANtAAM9BA",
+                "file_unique_id": "AQAD-AtrG0hzsUZy",
+                "file_size": 16960,
+                "width": 240,
+                "height": 320
+              },
+              {
+                "file_id": "AgACAgEAAyEGAASVdLwzAANTalZRtZ5wgCacWfdw9yWyEw-Rd3IAAvgLaxtIc7FGiJIX1kH4xesBAAMCAAN4AAM9BA",
+                "file_unique_id": "AQAD-AtrG0hzsUZ9",
+                "file_size": 78850,
+                "width": 600,
+                "height": 800
+              },
+              {
+                "file_id": "AgACAgEAAyEGAASVdLwzAANTalZRtZ5wgCacWfdw9yWyEw-Rd3IAAvgLaxtIc7FGiJIX1kH4xesBAAMCAAN5AAM9BA",
+                "file_unique_id": "AQAD-AtrG0hzsUZ-",
+                "file_size": 192268,
+                "width": 864,
+                "height": 1152
+              }
+            ],
+            "caption": "Soft sheets, warm lamp light, and me giving you this look \ud83d\ude08 you know exactly what it means"
+          }
+        },
+        "post_to": "main"
+      }
+    }
+  },
+  {
+    "publish_request_id": "social_publish_item_88be9d96886f479b9d2cd52017bd22e8",
+    "queue_item_id": "social_queue_item_a86e62b5c6d04a3f905e1dff7a85e7b2",
+    "platform": "x",
+    "caption_id": null,
+    "scheduled_for": null,
+    "status": "posted",
+    "created_at": "2026-07-14T14:45:29.662758",
+    "metadata": {
+      "posting_implemented": true,
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "provider_post_id": "2077041805925683672",
+      "provider_media_id": "2077041802763198466",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2077041805925683672",
+      "provider_metadata": {
+        "tweet_data": {
+          "text": "If you sat down beside me right now, what's the first thing we'd talk about? \ud83d\udc40\ud83d\udc47 https://t.co/Hnq7zwF7jI",
+          "id": "2077041805925683672",
+          "edit_history_tweet_ids": [
+            "2077041805925683672"
+          ]
+        }
+      }
+    }
+  },
+  {
     "publish_request_id": "social_publish_item_1e1f3013931b46279301e7db3d42f9ff",
     "queue_item_id": "social_queue_item_e6c93c80b53f4ebf8e0351fb52103d55",
     "platform": "x",

@@ -34,6 +34,7 @@ from app.dashboard.pages.content_studio import (
     PREMIUM_CREATIVE_MODE_LABELS,
     PREMIUM_PROVIDER_LABELS,
     _apply_pending_premium_prompt_source,
+    _premium_prompt_source_text,
     _select_premium_prompt_source_on_next_run,
     create_premium_photoshoot_session,
     create_premium_studio_generation_request,
@@ -49,7 +50,10 @@ from app.models.asset_library import (
 from app.models.creative_director import PromptPlan
 from app.models.generation_engine import GenerationJob, GenerationRequest, GenerationResult, GenerationStatus
 from app.models.reference_library import ReferenceAsset
+from app.prompts.premium_prompt_builder import build_premium_grok_prompt
 from app.services.creative_director_service import CreativeDirectorService
+from app.services.premium_director_service import generate_premium_prompts
+from app.services.premium_tag_enhancer_service import build_premium_tag_enhancer_prompt
 
 
 def reference_asset(asset_id=55, creator_profile_id=7):
@@ -215,6 +219,88 @@ class FakePhotoshootQueue:
 
 
 class PremiumStudioTests(unittest.TestCase):
+    def test_enhanced_prompt_source_preserves_original_wardrobe_provenance(self):
+        import streamlit as st
+
+        original_state = getattr(st, "session_state", None)
+        try:
+            st.session_state = {
+                "premium_studio_enhanced_tags": (
+                    "beach boardwalk, shimmering coral halter crop top, "
+                    "high-waisted white micro-shorts"
+                )
+            }
+
+            source = _premium_prompt_source_text(
+                "Enhanced Tags",
+                creative_tags="tight shorts\nmicro crop top",
+            )
+
+            self.assertIn("ORIGINAL USER TAGS", source)
+            self.assertIn("tight shorts, micro crop top", source)
+            self.assertIn("ENHANCED SUGGESTIONS", source)
+            self.assertIn("shimmering coral halter crop top", source)
+        finally:
+            if original_state is None:
+                delattr(st, "session_state")
+            else:
+                st.session_state = original_state
+
+    def test_tag_enhancer_keeps_broad_wardrobe_categories_open_for_variation(self):
+        prompt = build_premium_tag_enhancer_prompt("tight shorts\nmicro crop top")
+
+        self.assertIn("keep broad user wardrobe categories broad", prompt)
+        self.assertIn('"tight shorts, micro crop top"', prompt)
+        self.assertIn("do not turn it into one coral halter top with white high-waisted shorts", prompt)
+        self.assertIn("wardrobe colors the user did not request", prompt)
+
+    def test_tag_enhancer_preserves_explicit_wardrobe_details(self):
+        prompt = build_premium_tag_enhancer_prompt("black leather mini skirt")
+
+        self.assertIn('"black leather mini skirt" must remain black, leather, and a mini skirt', prompt)
+        self.assertIn("preserve that exact requested detail", prompt)
+
+    def test_premium_prompt_contract_varies_only_unspecified_wardrobe_details(self):
+        broad_prompt = build_premium_grok_prompt(
+            creative_tags=(
+                "[ORIGINAL USER TAGS — mandatory: tight shorts, micro crop top] "
+                "[ENHANCED SUGGESTIONS — vary: coral halter top, white high-waisted shorts]"
+            ),
+            prompt_count=5,
+        )
+        explicit_prompt = build_premium_grok_prompt(
+            creative_tags="black leather mini skirt",
+            prompt_count=5,
+        )
+
+        self.assertIn("CONTENT STUDIO WARDROBE VARIATION CONTRACT", broad_prompt)
+        self.assertIn("only ORIGINAL USER TAGS define mandatory wardrobe", broad_prompt)
+        self.assertIn("intentionally vary it across the batch", broad_prompt)
+        self.assertIn('"tight shorts, micro crop top" requires tight shorts and a micro crop top', broad_prompt)
+        self.assertIn('"black leather mini skirt" requires a black leather mini skirt', explicit_prompt)
+
+    def test_premium_prompt_batch_accepts_varied_broad_wardrobe_outputs(self):
+        varied_response = [
+            "Black racerback micro crop top with white fitted shorts in window light.",
+            "Cream tied-front micro crop top with olive tight shorts on a balcony.",
+            "Coral halter micro crop top with black fitted shorts beside a pool.",
+            "White cropped tank-style micro top with denim tight shorts on a boardwalk.",
+            "Pink scoop-neck micro crop top with khaki fitted shorts in a kitchen doorway.",
+        ]
+
+        with patch(
+            "app.services.premium_director_service.generate_prompts_with_grok",
+            return_value=varied_response,
+        ) as grok:
+            prompts = generate_premium_prompts(
+                creative_tags="tight shorts, micro crop top",
+                prompt_count=5,
+            )
+
+        self.assertEqual(prompts, varied_response)
+        self.assertEqual(len({prompt.split()[0] for prompt in prompts}), 5)
+        self.assertIn("CONTENT STUDIO WARDROBE VARIATION CONTRACT", grok.call_args.args[0])
+
     def test_premium_workflow_requires_active_reference(self):
         with self.assertRaises(ValueError):
             create_premium_studio_generation_request(

@@ -1,5 +1,74 @@
 [
   {
+    "caption_result_id": "caption_result_67f7ee7d41234f2db188579ead43e3b0",
+    "caption_request_id": "caption_request_b75522e8363843d58920610e857b48ed",
+    "session_id": "caption_session_1c51b682da274cd89e40e098f62ccdb7",
+    "platform": "telegram",
+    "variations": [
+      "Soft black satin and this warm hotel glow \u2728 just feeling so close to you right now \ud83d\udda4",
+      "Leaning in with this little smile \ud83d\ude0c the kind of quiet night I wish we were sharing \ud83d\udecf\ufe0f",
+      "Long hair down, soft light on my skin\u2026 thinking of you in this peaceful moment \ud83d\udc95",
+      "There\u2019s something so sweet about this cozy bed and the way I\u2019m looking at you \ud83c\udf19",
+      "Just me, warm sheets, and this soft smile reserved only for you \ud83d\udda4\u2728",
+      "Caught me leaning in this black satin \ud83d\udda4\u2026 good luck looking away now \ud83d\udd25",
+      "Soft sheets, warm lamp light, and me giving you this look \ud83d\ude08 you know exactly what it means",
+      "Black satin hugging me just right while I lean closer \u2728 don\u2019t pretend you\u2019re not staring",
+      "This teasing little smile and the way this lingerie sits\u2026 pure trouble tonight \ud83d\udd25",
+      "Hotel bed, satin straps slipping, and eyes locked on you \ud83d\udda4 I know you like this view"
+    ],
+    "selected_text": "Soft sheets, warm lamp light, and me giving you this look \ud83d\ude08 you know exactly what it means",
+    "formatter_metadata": {
+      "provider_neutral": true,
+      "formatter": "CaptionStudioService",
+      "workflow": "telegram_publish",
+      "vision_primary": true,
+      "vision_provider": "grok",
+      "vision": {
+        "location": "hotel bedroom",
+        "wardrobe": "black satin lingerie bra and matching bottoms",
+        "expression": "soft teasing smile with warm direct eye contact",
+        "body_language": "leaning forward on the bed on her arms with chest-forward posture",
+        "lighting": "warm bedside lamp glow with soft shadows",
+        "mood": "intimate, candid, playful, seductive",
+        "environment": "dark wooden headboard, white hotel sheets, bedside lamp on nightstand",
+        "activity": "posing on the bed in lingerie"
+      },
+      "themes": [
+        {
+          "theme": "\ud83d\udc9b Romantic",
+          "persona": "romantic",
+          "captions": [
+            "Soft black satin and this warm hotel glow \u2728 just feeling so close to you right now \ud83d\udda4",
+            "Leaning in with this little smile \ud83d\ude0c the kind of quiet night I wish we were sharing \ud83d\udecf\ufe0f",
+            "Long hair down, soft light on my skin\u2026 thinking of you in this peaceful moment \ud83d\udc95",
+            "There\u2019s something so sweet about this cozy bed and the way I\u2019m looking at you \ud83c\udf19",
+            "Just me, warm sheets, and this soft smile reserved only for you \ud83d\udda4\u2728"
+          ]
+        },
+        {
+          "theme": "\ud83d\ude08 Teasing / Naughty",
+          "persona": "teasing_naughty",
+          "captions": [
+            "Caught me leaning in this black satin \ud83d\udda4\u2026 good luck looking away now \ud83d\udd25",
+            "Soft sheets, warm lamp light, and me giving you this look \ud83d\ude08 you know exactly what it means",
+            "Black satin hugging me just right while I lean closer \u2728 don\u2019t pretend you\u2019re not staring",
+            "This teasing little smile and the way this lingerie sits\u2026 pure trouble tonight \ud83d\udd25",
+            "Hotel bed, satin straps slipping, and eyes locked on you \ud83d\udda4 I know you like this view"
+          ]
+        }
+      ],
+      "personas": {
+        "romantic": "\ud83d\udc9b Romantic",
+        "teasing_naughty": "\ud83d\ude08 Teasing / Naughty"
+      },
+      "engagement_goals": [
+        "creator selects preferred caption",
+        "telegram publishing"
+      ]
+    },
+    "created_at": "2026-07-14T15:11:28.929368"
+  },
+  {
     "caption_result_id": "caption_result_badc52c138d544e1b1a7e914999e516e",
     "caption_request_id": "caption_request_da9471c76b534285a158faa8bb83f20d",
     "session_id": "caption_session_d70a941db5474e77a1b598bd57e7954f",

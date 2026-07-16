@@ -23,6 +23,7 @@ from app.dashboard.pages.system_overview import render_system_overview
 from app.dashboard.pages.module_switches import render_module_switches
 from app.dashboard.pages.creator_profile import render_creator_profile
 from app.dashboard.pages.asset_library import render_asset_library
+from app.dashboard.pages.strip_metadata import render_strip_metadata
 from app.dashboard.pages.cms_upload import render_cms_upload
 from app.dashboard.pages.content_studio import render_content_studio_page
 from app.dashboard.pages.relationship_sync import render as render_relationship_sync
@@ -49,6 +50,8 @@ from app.repositories.fanvue_account_repository import (
     get_all_accounts,
 )
 from app.services.local_vault_service import LocalVaultService
+from app.services.canonical_reference_service import CanonicalReferenceService
+from app.services.reference_library_service import ReferenceLibraryService
 from app.dashboard.navigation import (
     DASHBOARD_NAVIGATION_GROUPS,
     DASHBOARD_PAGE_LABELS,
@@ -62,6 +65,32 @@ st.set_page_config(
     layout="wide",
 )
 LocalVaultService().initialize()
+
+
+def _recover_canonical_references() -> None:
+    """Best-effort startup recovery; missing permanent media never blocks startup."""
+    try:
+        from app.database import get_db_connection
+
+        with get_db_connection() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "SELECT * FROM creator_profiles WHERE COALESCE(is_active, TRUE) = TRUE"
+                )
+                profiles = tuple(dict(row) for row in cursor.fetchall())
+        canonical = CanonicalReferenceService()
+        references = ReferenceLibraryService()
+        for profile in profiles:
+            canonical.recover_creator(profile, reference_service=references)
+    except Exception as exc:
+        import logging
+
+        logging.getLogger(__name__).warning(
+            "Canonical reference startup recovery was skipped: %s", exc
+        )
+
+
+_recover_canonical_references()
 
 
 # ==================================================
@@ -434,70 +463,7 @@ if (
 
 st.sidebar.title("Navigation")
 
-st.sidebar.subheader(
-    "Active Creator Account"
-)
-
 if all_fanvue_accounts:
-
-    account_options = {
-        get_account_label(account): account
-        for account in all_fanvue_accounts
-    }
-
-    option_labels = list(
-        account_options.keys()
-    )
-
-    current_label = next(
-        (
-            label
-            for label, account
-            in account_options.items()
-            if account["id"]
-            == st.session_state.get(
-                "fanvue_account_id"
-            )
-        ),
-        option_labels[0],
-    )
-
-    selected_label = (
-        st.sidebar.selectbox(
-            "Account",
-            option_labels,
-            index=option_labels.index(
-                current_label
-            ),
-            key="active_fanvue_account_select",
-        )
-    )
-
-    selected_account = (
-        account_options[selected_label]
-    )
-
-    previous_account_id = (
-        st.session_state.get(
-            "fanvue_account_id"
-        )
-    )
-
-    if (
-        previous_account_id
-        != selected_account["id"]
-    ):
-
-        st.session_state[
-            "fanvue_account_id"
-        ] = selected_account["id"]
-
-        save_last_selected_account_id(
-            selected_account["id"]
-        )
-
-        st.rerun()
-
     active_account = next(
         (
             account
@@ -508,7 +474,7 @@ if all_fanvue_accounts:
                 "fanvue_account_id"
             )
         ),
-        selected_account,
+        all_fanvue_accounts[0],
     )
 
     st.session_state[
@@ -521,14 +487,8 @@ if all_fanvue_accounts:
         active_account,
     )
 
-    st.sidebar.caption(
-        f"Selected: "
-        f"{st.session_state.get('active_persona_name')}"
-    )
-
-    st.sidebar.caption(
-        f"Provider Account ID: "
-        f"{st.session_state.get('fanvue_account_id')}"
+    st.sidebar.markdown(
+        f"👤 {st.session_state.get('active_persona_name')}"
     )
 
     oauth_connected = bool(
@@ -537,16 +497,8 @@ if all_fanvue_accounts:
         or active_account.get("fanvue_user_uuid")
     )
 
-    if oauth_connected:
-        st.sidebar.success(
-            "OAuth Connected ✅"
-        )
-    else:
-        st.sidebar.warning(
-            "OAuth Not Connected ⚠️"
-        )
-
 else:
+    oauth_connected = False
     st.sidebar.warning(
         "No creator accounts found."
     )
@@ -561,6 +513,13 @@ st.sidebar.divider()
 page_labels = DASHBOARD_PAGE_LABELS
 st.sidebar.markdown("#### Pages")
 _render_sidebar_navigation()
+
+st.sidebar.divider()
+st.sidebar.markdown("#### Connections")
+if oauth_connected:
+    st.sidebar.markdown("🟢 Fanvue Connected")
+else:
+    st.sidebar.markdown("🟡 Fanvue Not Connected")
 
 
 # ==================================================
@@ -674,6 +633,12 @@ if (
         creator_profile=active_creator_profile or {},
         active_account=st.session_state.get("active_fanvue_account", {}),
     )
+
+elif (
+    st.session_state.dashboard_page
+    == "Strip Metadata"
+):
+    render_strip_metadata()
 
 elif (
     st.session_state.dashboard_page

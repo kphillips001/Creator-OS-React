@@ -264,37 +264,6 @@ def _render_actions(
             else:
                 st.error(result.message)
 
-    with st.expander("Metadata Edit"):
-        classification = st.text_input(
-            "Classification",
-            value=item.classification or "",
-            key=f"asset_library_edit_classification_{item.asset_id}",
-        )
-        tags = st.text_input(
-            "Tags",
-            value=", ".join(item.tags),
-            key=f"asset_library_edit_tags_{item.asset_id}",
-        )
-        themes = st.text_input(
-            "Themes",
-            value=", ".join(item.themes),
-            key=f"asset_library_edit_themes_{item.asset_id}",
-        )
-        if st.button(
-            "Save Metadata",
-            key=f"asset_library_save_metadata_{item.asset_id}",
-        ):
-            result = service.update_asset_metadata(
-                item.asset_id,
-                classification=classification,
-                tags=_csv_values(tags),
-                themes=_csv_values(themes),
-            )
-            if result.success:
-                st.success(result.message)
-            else:
-                st.error(result.message)
-
     with st.expander("Workflow Handoff"):
         if st.button(
             "Create Product Draft",
@@ -620,11 +589,10 @@ def _render_chat_commerce_inventory() -> None:
             st.divider()
 
 
-def _render_details(
+def _render_library_details(
     details: AssetLibraryDetails | None,
-    service: AssetLibraryService,
 ) -> None:
-    st.markdown("### Asset Details")
+    st.markdown("### Selected Asset Details")
     if not details:
         st.info("Select an asset to view details.")
         return
@@ -634,30 +602,81 @@ def _render_details(
         render_asset_thumbnail(item, caption=f"Asset #{item.asset_id}")
     with meta_col:
         st.subheader(item.file_name or f"Asset {item.asset_id}")
-        st.caption(f"Asset ID: {item.asset_id}")
         st.caption(f"Media Type: {item.media_type}")
-        st.caption(f"Status: {item.status or '-'}")
-        st.caption(f"Active: {'Yes' if item.is_active else 'No'}")
-        st.caption(f"Reference Image: {'Yes' if item.is_reference_image else 'No'}")
         st.caption(f"Imported: {_format_date(item.created_at)}")
-        st.metric("Classification", item.classification or "-")
-        st.metric("Confidence", "-" if details.confidence is None else f"{details.confidence:.2f}")
+        st.caption(f"Reference Image: {'Yes' if item.is_reference_image else 'No'}")
 
-    st.markdown("#### Metadata")
-    st.write(f"Tags: {_display_tags(item.tags)}")
-    st.write(f"Themes: {_display_tags(item.themes)}")
-    st.write(f"Summary: {details.summary or '-'}")
-    st.write(f"Reasoning: {details.reasoning or '-'}")
-    st.write(f"Risk Flags: {_display_tags(details.risk_flags)}")
-    st.write(f"Explicit: {'Yes' if details.is_explicit else 'No'}")
-    st.write(f"Nudity Level: {details.nudity_level or '-'}")
-    st.write(f"Sexual Intensity: {details.sexual_intensity or '-'}")
 
+def _render_intelligence(
+    details: AssetLibraryDetails | None,
+    service: AssetLibraryService,
+) -> None:
+    st.markdown("### Asset Intelligence")
+    if not details:
+        st.info("Select an asset in the Library tab to view its intelligence.")
+        return
+    item = details.item
+    profile = details.intelligence_profile
+    st.subheader(item.file_name or f"Asset {item.asset_id}")
+    if profile is None or profile.analysis_status.value != "READY":
+        st.info("Asset intelligence is not ready yet.")
+        return
+    st.markdown("#### Description")
+    st.write(profile.short_description or "-")
+    st.markdown("#### Tags")
+    st.write(_display_tags(profile.tags))
+    st.markdown("#### Themes")
+    st.write(_display_tags(profile.themes))
+    st.markdown("#### Safety")
+    st.write(profile.safety_classification or "-")
+    st.markdown("#### Quality")
+    st.write("-" if profile.quality_score is None else f"{profile.quality_score:.2f}")
+
+
+def _render_operations_details(
+    details: AssetLibraryDetails | None,
+    service: AssetLibraryService,
+) -> None:
+    st.markdown("### Selected Asset Operations")
+    if not details:
+        st.info("Select an asset in the Library tab to view operations.")
+        return
+    item = details.item
+    st.subheader(item.file_name or f"Asset {item.asset_id}")
+    st.caption(f"Asset ID: {item.asset_id}")
+    st.caption(f"Creator Profile ID: {details.creator_profile_id or '-'}")
+    st.caption(f"Legacy Content ID: {item.asset_id}")
+    st.caption(f"Status: {item.status or '-'}")
+    st.caption(f"Active: {'Yes' if item.is_active else 'No'}")
+    _render_publishing(details.publishing)
+    st.markdown("#### Upload History")
+    upload_history = (
+        (details.media_metadata or {}).get("upload_history")
+        or (details.media_metadata or {}).get("provider_upload_history")
+    )
+    if upload_history:
+        st.json(upload_history)
+    else:
+        st.caption("No upload history recorded for this asset.")
     _render_storage(details.storage)
     _render_derivative(details.derivative)
-    _render_relationships(details.relationship)
-    _render_publishing(details.publishing)
+
+    st.markdown("#### Raw Metadata and Debug Information")
+    st.json(
+        {
+            "analysis_provenance": details.analysis_provenance,
+            "classification_result": details.classification_result,
+            "media_metadata": details.media_metadata,
+        }
+    )
     _render_actions(details, service)
+
+
+def _render_no_selection(title: str, items: tuple[str, ...]) -> None:
+    _, content, _ = st.columns([1, 2, 1])
+    with content:
+        st.markdown(f"### {title}")
+        st.markdown("\n".join(f"- {item}" for item in items))
 
 
 def render_asset_library(
@@ -667,153 +686,219 @@ def render_asset_library(
     service = asset_library_service or AssetLibraryService()
 
     st.title("Asset Library")
-    st.caption("Read-only media management view for Creator OS assets.")
+    st.caption("Your Creator Inventory.")
 
-    with st.expander("Filters", expanded=True):
-        f1, f2, f3 = st.columns(3)
-        search = f1.text_input("Search", key="asset_library_search")
-        media_type = f2.selectbox(
-            "Media Type",
-            MEDIA_TYPE_OPTIONS,
-            key="asset_library_media_type",
-        )
-        classification = f3.selectbox(
-            "Classification",
-            CLASSIFICATION_OPTIONS,
-            key="asset_library_classification",
-        )
-        f4, f5, f6 = st.columns(3)
-        eligible_only = f4.checkbox(
-            "Active library only",
-            value=True,
-            key="asset_library_eligible_only",
-        )
-        limit = f5.number_input(
-            "Limit",
-            min_value=1,
-            max_value=1000,
-            value=100,
-            step=25,
-            key="asset_library_limit",
-        )
-        f6.selectbox(
-            "Relationship Filter",
-            ("All", "Use Product ID", "Use Experience ID"),
-            key="asset_library_future_relationship_filter",
-        )
-        f7, f8, f9 = st.columns(3)
-        tags = f7.text_input("Tags", key="asset_library_tags")
-        themes = f8.text_input("Themes", key="asset_library_themes")
-        status = f9.text_input("Status", key="asset_library_status")
-        f10, f11, f12 = st.columns(3)
-        creator_profile_id = f10.number_input(
-            "Creator Profile ID",
-            min_value=0,
-            value=0,
-            step=1,
-            key="asset_library_creator_profile_id",
-        )
-        product_id = f11.text_input("Product ID", key="asset_library_product_id")
-        experience_id = f12.text_input(
-            "Experience ID",
-            key="asset_library_experience_id",
-        )
-        f13, f14, f15 = st.columns(3)
-        publishing_status = f13.text_input(
-            "Publishing Status",
-            key="asset_library_publishing_status",
-        )
-        vault_filter = f14.selectbox(
-            "Local Vault",
-            ("Any", "Yes", "No"),
-            key="asset_library_local_vault_filter",
-        )
-        derivative_filter = f15.selectbox(
-            "Derivative Preview",
-            ("Any", "Yes", "No"),
-            key="asset_library_derivative_filter",
-        )
-        f16, f17, f18, f19 = st.columns(4)
-        legacy_content_id_raw = f16.number_input(
-            "Legacy Content ID",
-            min_value=0,
-            value=0,
-            step=1,
-            key="asset_library_legacy_content_id",
-        )
-        reference_filter = f17.selectbox(
-            "Reference Image",
-            ("Any", "Yes", "No"),
-            key="asset_library_reference_filter",
-        )
-        created_after = f18.text_input(
-            "Created After",
-            placeholder="YYYY-MM-DD",
-            key="asset_library_created_after",
-        )
-        created_before = f19.text_input(
-            "Created Before",
-            placeholder="YYYY-MM-DD",
-            key="asset_library_created_before",
-        )
-
-    filters = build_asset_library_filter(
-        search=search,
-        media_type=media_type,
-        classification=classification,
-        eligible_only=eligible_only,
-        limit=limit,
-        tags=tags,
-        themes=themes,
-        status=status,
-        creator_profile_id=(
-            int(creator_profile_id) if creator_profile_id else None
-        ),
-        product_id=product_id,
-        experience_id=experience_id,
-        publishing_status=publishing_status,
-        has_local_vault_original=_optional_bool_filter(vault_filter),
-        has_derivative_preview=_optional_bool_filter(derivative_filter),
-        is_reference_image=_optional_bool_filter(reference_filter),
-        legacy_content_id=(
-            int(legacy_content_id_raw) if legacy_content_id_raw else None
-        ),
-        created_after=created_after,
-        created_before=created_before,
-    )
-    result = service.search_assets(filters)
-
-    _render_chat_commerce_inventory()
-
-    st.markdown("### Assets")
-    st.caption(f"{result.total} asset(s) found.")
-    if not result.items:
-        st.info("No assets match the current filters.")
-        return
-
-    labels = {
-        f"#{item.asset_id} - {item.file_name or item.media_type}": item.asset_id
-        for item in result.items
-    }
-    selected_label = st.selectbox(
-        "Selected Asset",
-        list(labels),
-        key="asset_library_selected_asset",
-    )
-    selected_asset_id = labels[selected_label]
-    selected_asset_ids = st.multiselect(
-        "Bulk Selected Assets",
-        options=[item.asset_id for item in result.items],
-        default=[selected_asset_id],
-        format_func=lambda asset_id: (
-            f"#{asset_id} - "
-            f"{next(item.file_name or item.media_type for item in result.items if item.asset_id == asset_id)}"
-        ),
-        key="asset_library_bulk_selected_assets",
+    library_tab, intelligence_tab, operations_tab = st.tabs(
+        ["📦 Library", "🧠 Intelligence", "⚙ Operations"]
     )
 
-    render_asset_grid(result.items, columns=3)
-    _render_bulk_actions(tuple(int(asset_id) for asset_id in selected_asset_ids))
+    with library_tab:
+        with st.expander("Filters", expanded=False):
+            f1, f2, f3 = st.columns(3)
+            search = f1.text_input("Search", key="asset_library_search")
+            media_type = f2.selectbox(
+                "Media Type",
+                MEDIA_TYPE_OPTIONS,
+                key="asset_library_media_type",
+            )
+            classification = f3.selectbox(
+                "Classification",
+                CLASSIFICATION_OPTIONS,
+                key="asset_library_classification",
+            )
+            f4, f5 = st.columns(2)
+            tags = f4.text_input("Tags", key="asset_library_tags")
+            themes = f5.text_input("Themes", key="asset_library_themes")
+            f6, f7, f8 = st.columns(3)
+            created_after = f6.text_input(
+                "Created After",
+                placeholder="YYYY-MM-DD",
+                key="asset_library_created_after",
+            )
+            created_before = f7.text_input(
+                "Created Before",
+                placeholder="YYYY-MM-DD",
+                key="asset_library_created_before",
+            )
+            reference_filter = f8.selectbox(
+                "Reference Image",
+                ("Any", "Yes", "No"),
+                key="asset_library_reference_filter",
+            )
 
-    details = service.get_asset_details(selected_asset_id)
-    _render_details(details, service)
+        filters = build_asset_library_filter(
+            search=search,
+            media_type=media_type,
+            classification=classification,
+            eligible_only=bool(
+                st.session_state.get("asset_library_eligible_only", True)
+            ),
+            limit=int(st.session_state.get("asset_library_limit", 100)),
+            tags=tags,
+            themes=themes,
+            status=st.session_state.get("asset_library_status", ""),
+            creator_profile_id=(
+                int(st.session_state.get("asset_library_creator_profile_id", 0))
+                or None
+            ),
+            product_id=st.session_state.get("asset_library_product_id", ""),
+            experience_id=st.session_state.get("asset_library_experience_id", ""),
+            publishing_status=st.session_state.get(
+                "asset_library_publishing_status", ""
+            ),
+            has_local_vault_original=_optional_bool_filter(
+                st.session_state.get("asset_library_local_vault_filter", "Any")
+            ),
+            has_derivative_preview=_optional_bool_filter(
+                st.session_state.get("asset_library_derivative_filter", "Any")
+            ),
+            is_reference_image=_optional_bool_filter(reference_filter),
+            legacy_content_id=(
+                int(st.session_state.get("asset_library_legacy_content_id", 0))
+                or None
+            ),
+            created_after=created_after,
+            created_before=created_before,
+        )
+        result = service.search_assets(filters)
+
+        st.caption(f"{result.total} asset(s) found.")
+        selected_asset_id = None
+        details = None
+        if not result.items:
+            _, empty_state, _ = st.columns([1, 2, 1])
+            with empty_state:
+                st.markdown("### 📦 No assets yet")
+                st.write(
+                    "Assets appear here after you add them from the "
+                    "Generation Library."
+                )
+                st.caption(
+                    "Once assets are registered, Creator_OS will organize, "
+                    "classify, and prepare them for publishing, commerce, "
+                    "and customer conversations."
+                )
+                if st.button(
+                    "Go to Generation Library",
+                    key="asset_library_go_to_generation_library",
+                ):
+                    st.session_state["dashboard_page"] = "Generation Library"
+                    st.rerun()
+        else:
+            labels = {
+                f"#{item.asset_id} - {item.file_name or item.media_type}": item.asset_id
+                for item in result.items
+            }
+            selected_label = st.selectbox(
+                "Selected Asset",
+                list(labels),
+                key="asset_library_selected_asset",
+            )
+            selected_asset_id = labels[selected_label]
+            render_asset_grid(result.items, columns=3)
+            details = service.get_asset_details(selected_asset_id)
+            _render_library_details(details)
+
+    with intelligence_tab:
+        if details is None:
+            _render_no_selection(
+                "🧠 Select an asset from the Library tab to view:",
+                (
+                    "Description",
+                    "Tags",
+                    "Themes",
+                    "Safety",
+                    "Quality",
+                ),
+            )
+        else:
+            st.caption("Everything Creator_OS knows about this asset.")
+            _render_intelligence(details, service)
+
+    with operations_tab:
+        if details is None:
+            _render_no_selection(
+                "⚙ Select an asset from the Library tab to manage:",
+                (
+                    "Publishing",
+                    "Fanvue Upload",
+                    "Commerce Status",
+                    "Chat Availability",
+                    "Diagnostics",
+                    "Storage",
+                    "Analytics",
+                ),
+            )
+        else:
+            st.caption("Everything the business does with this asset.")
+            with st.expander("Advanced Inventory Filters"):
+                o1, o2, o3 = st.columns(3)
+                o1.checkbox(
+                    "Active library only",
+                    value=True,
+                    key="asset_library_eligible_only",
+                )
+                o2.number_input(
+                    "Limit",
+                    min_value=1,
+                    max_value=1000,
+                    value=100,
+                    step=25,
+                    key="asset_library_limit",
+                )
+                o3.selectbox(
+                    "Relationship Filter",
+                    ("All", "Use Product ID", "Use Experience ID"),
+                    key="asset_library_future_relationship_filter",
+                )
+                o4, o5, o6 = st.columns(3)
+                o4.text_input("Status", key="asset_library_status")
+                o5.number_input(
+                    "Creator Profile ID",
+                    min_value=0,
+                    value=0,
+                    step=1,
+                    key="asset_library_creator_profile_id",
+                )
+                o6.number_input(
+                    "Legacy Content ID",
+                    min_value=0,
+                    value=0,
+                    step=1,
+                    key="asset_library_legacy_content_id",
+                )
+                o7, o8, o9 = st.columns(3)
+                o7.text_input("Product ID", key="asset_library_product_id")
+                o8.text_input("Experience ID", key="asset_library_experience_id")
+                o9.text_input(
+                    "Publishing Status",
+                    key="asset_library_publishing_status",
+                )
+                o10, o11 = st.columns(2)
+                o10.selectbox(
+                    "Local Vault",
+                    ("Any", "Yes", "No"),
+                    key="asset_library_local_vault_filter",
+                )
+                o11.selectbox(
+                    "Derivative Preview",
+                    ("Any", "Yes", "No"),
+                    key="asset_library_derivative_filter",
+                )
+
+            _render_chat_commerce_inventory()
+
+            selected_asset_ids = st.multiselect(
+                "Bulk Selected Assets",
+                options=[item.asset_id for item in result.items],
+                default=[selected_asset_id],
+                format_func=lambda asset_id: (
+                    f"#{asset_id} - "
+                    f"{next(item.file_name or item.media_type for item in result.items if item.asset_id == asset_id)}"
+                ),
+                key="asset_library_bulk_selected_assets",
+            )
+            _render_bulk_actions(
+                tuple(int(asset_id) for asset_id in selected_asset_ids)
+            )
+            _render_operations_details(details, service)

@@ -33,6 +33,97 @@ from app.dashboard.pages.asset_library import build_asset_library_filter
 
 
 class AssetLibraryPageTests(unittest.TestCase):
+    def test_asset_library_uses_creator_focused_tabs(self):
+        source = Path("app/dashboard/pages/asset_library.py").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn(
+            '["📦 Library", "🧠 Intelligence", "⚙ Operations"]',
+            source,
+        )
+        library = source.split("with library_tab:", 1)[1].split(
+            "with intelligence_tab:", 1
+        )[0]
+        for label in (
+            '"Search"',
+            '"Media Type"',
+            '"Classification"',
+            '"Tags"',
+            '"Themes"',
+            '"Created After"',
+            '"Created Before"',
+            '"Reference Image"',
+        ):
+            self.assertIn(label, library)
+        for label in (
+            '"Limit"',
+            '"Relationship Filter"',
+            '"Creator Profile ID"',
+            '"Publishing Status"',
+            '"Local Vault"',
+            '"Legacy Content ID"',
+        ):
+            self.assertNotIn(label, library)
+
+    def test_intelligence_and_operations_own_their_domains(self):
+        source = Path("app/dashboard/pages/asset_library.py").read_text(
+            encoding="utf-8"
+        )
+
+        intelligence = source.split("def _render_intelligence", 1)[1].split(
+            "def _render_operations_details", 1
+        )[0]
+        for heading in ("Description", "Tags", "Themes", "Safety", "Quality"):
+            self.assertIn(f'"#### {heading}"', intelligence)
+        self.assertNotIn("gpt_vision_result", intelligence)
+        self.assertNotIn("nudenet_result", intelligence)
+
+        operations = source.split("with operations_tab:", 1)[1]
+        self.assertIn("_render_chat_commerce_inventory()", operations)
+        self.assertIn("_render_bulk_actions", operations)
+        self.assertIn("_render_operations_details", operations)
+
+    def test_empty_inventory_has_creator_focused_navigation(self):
+        source = Path("app/dashboard/pages/asset_library.py").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertNotIn('st.markdown("### What assets do I own?")', source)
+        self.assertNotIn('st.markdown("### Asset Grid")', source)
+        self.assertIn('st.markdown("### 📦 No assets yet")', source)
+        self.assertIn('"Go to Generation Library"', source)
+        self.assertIn(
+            'st.session_state["dashboard_page"] = "Generation Library"',
+            source,
+        )
+
+    def test_library_filters_are_collapsed_by_default(self):
+        source = Path("app/dashboard/pages/asset_library.py").read_text(
+            encoding="utf-8"
+        )
+        library = source.split("with library_tab:", 1)[1].split(
+            "with intelligence_tab:", 1
+        )[0]
+
+        self.assertIn('st.expander("Filters", expanded=False)', library)
+        self.assertNotIn('st.expander("Filters", expanded=True)', library)
+
+    def test_empty_selection_gates_intelligence_and_operations(self):
+        source = Path("app/dashboard/pages/asset_library.py").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("if details is None:", source)
+        self.assertIn(
+            '"🧠 Select an asset from the Library tab to view:"',
+            source,
+        )
+        self.assertIn(
+            '"⚙ Select an asset from the Library tab to manage:"',
+            source,
+        )
+
     def test_asset_library_route_exists(self):
         self.assertIn("Asset Library", DASHBOARD_PAGE_OPTIONS)
         self.assertEqual(
@@ -50,10 +141,8 @@ class AssetLibraryPageTests(unittest.TestCase):
         labels = [item.label for item in assets_group.items]
         pages = [item.page for item in assets_group.items]
 
-        self.assertEqual(labels[0], "Asset Library")
-        self.assertIn("CMS Upload", labels)
-        self.assertIn("Asset Library", pages)
-        self.assertIn("CMS Upload", pages)
+        self.assertEqual(labels, ["Asset Library"])
+        self.assertEqual(pages, ["Asset Library"])
 
     def test_dashboard_router_imports_and_routes_asset_library(self):
         source = Path("app/dashboard/main.py").read_text(encoding="utf-8")
@@ -127,7 +216,6 @@ class AssetLibraryPageTests(unittest.TestCase):
 
         self.assertIn("service.regenerate_derivative_preview", source)
         self.assertIn("service.refresh_derivative_summary", source)
-        self.assertIn("service.update_asset_metadata", source)
         self.assertIn("product_catalog_prefill_asset_ids", source)
         self.assertIn("experience_prefill_asset_ids", source)
         self.assertIn("publishing_prefill_asset_ids", source)

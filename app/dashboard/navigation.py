@@ -54,6 +54,7 @@ DASHBOARD_PAGE_OPTIONS = [
     "Pricing Playground",
     "Relationship Sync",
     "Fanvue Auth",
+    "Strip Metadata",
 ]
 
 DASHBOARD_NAVIGATION_GROUPS = (
@@ -67,7 +68,6 @@ DASHBOARD_NAVIGATION_GROUPS = (
         "Assets",
         (
             DashboardNavigationItem("Asset Library", "Asset Library"),
-            DashboardNavigationItem("CMS Upload", "CMS Upload"),
         ),
         "🗂️",
     ),
@@ -135,6 +135,13 @@ DASHBOARD_NAVIGATION_GROUPS = (
         "🔔",
     ),
     DashboardNavigationGroup(
+        "Utilities",
+        (
+            DashboardNavigationItem("Strip Metadata", "Strip Metadata"),
+        ),
+        "🧰",
+    ),
+    DashboardNavigationGroup(
         "Administration",
         (
             DashboardNavigationItem("System Health", "System Health"),
@@ -192,6 +199,7 @@ DASHBOARD_PAGE_LABELS = {
     "Activity Feed": "Activity: Activity Feed",
     "Delayed Messages": "Activity: Delayed Messages",
     "Fanvue Auth": "Administration: Provider Connections",
+    "Strip Metadata": "Utilities: Strip Metadata",
 }
 
 PROFILE_LOCKED_PAGES = [
@@ -222,6 +230,7 @@ PROFILE_LOCKED_PAGES = [
     "Product Review",
     "Product Catalog",
     "Relationship Sync",
+    "Strip Metadata",
 ]
 
 
