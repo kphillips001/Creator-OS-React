@@ -1,0 +1,616 @@
+[
+  {
+    "ingestion_id": "generation_ingestion_cf286edd0df24caab35d41e103e56aae",
+    "generation_job_id": "generation_job_a3d4aae256f54c92b047320688931486",
+    "generation_request_id": "generation_request_fee3aacdc97544c8b3639a67269be823",
+    "generation_result_id": "generation_result_b0d6707e0efa400c901d29fedcacac75",
+    "output_reference": "D:\\Ava_CMS\\Content\\Generation\\Photoshoot\\Active\\Photoshoot_2026-07-18_476\\Candidate_generated_image_024e82e394c19a32990d6a77.png",
+    "status": "failed",
+    "asset_id": null,
+    "local_file_path": null,
+    "message": "No module named 'nudenet'",
+    "metadata": {},
+    "created_at": "2026-07-18T21:48:13.539892",
+    "updated_at": null
+  },
+  {
+    "ingestion_id": "generation_ingestion_674ae2fe984e40dba2b501a260ddf27f",
+    "generation_job_id": "generation_job_a4527c7baab34fd0b0c8dfe95dfc132e",
+    "generation_request_id": "generation_request_7a2c52df1494425ea6e7067869b643fb",
+    "generation_result_id": "generation_result_545bd18128694378aac312af7fc57f46",
+    "output_reference": "D:\\Ava_CMS\\Content\\Generation\\Photoshoot\\Active\\Photoshoot_2026-07-19_d12\\Candidate_generated_image_7eb0553443cf4fdc789bcec0.png",
+    "status": "failed",
+    "asset_id": null,
+    "local_file_path": null,
+    "message": "No module named 'nudenet'",
+    "metadata": {},
+    "created_at": "2026-07-19T00:52:42.101940",
+    "updated_at": "2026-07-19T00:52:42.101940"
+  },
+  {
+    "ingestion_id": "generation_ingestion_2a27c7e68e124e978e9ea8014614e758",
+    "generation_job_id": "generation_job_a4527c7baab34fd0b0c8dfe95dfc132e",
+    "generation_request_id": "generation_request_7a2c52df1494425ea6e7067869b643fb",
+    "generation_result_id": "generation_result_545bd18128694378aac312af7fc57f46",
+    "output_reference": "D:\\Ava_CMS\\Content\\Generation\\Photoshoot\\Active\\Photoshoot_2026-07-19_d12\\Candidate_generated_image_7eb0553443cf4fdc789bcec0.png",
+    "status": "imported",
+    "asset_id": 94,
+    "local_file_path": "data\\generation_engine\\downloads\\generation_job_a4527c7baab34fd0b0c8dfe95dfc132e\\50378b6abcf5931a225af7d5.png",
+    "message": "Generation result imported as Creator OS Asset.",
+    "metadata": {
+      "source": "content_studio",
+      "generation_provider": "seedream_5_0_pro",
+      "generation_job_id": "generation_job_a4527c7baab34fd0b0c8dfe95dfc132e",
+      "generation_request_id": "generation_request_7a2c52df1494425ea6e7067869b643fb",
+      "generation_result_id": "generation_result_545bd18128694378aac312af7fc57f46",
+      "prompt_plan_id": "prompt_plan_2d00c9665f8347b4b91ea6fed566b6ed",
+      "prompt_text": "The same woman with her exact face, long dark hair worn down with smooth flat natural top and loose flowing strands lying over her shoulders, same natural sun-kissed skin tone as the reference image, feminine hourglass body, same waist-to-hip proportions, and full natural D-cup bust turns her torso a little further open toward the viewer along the same wooden beach boardwalk, resting both forearms fully on the salt-weathered railing with chest-forward posture and hips softly angled, chin lifted slightly as her playful half-lidded gaze softens into quiet confidence with lips parted into the start of a knowing smirk, wearing the shimmering coral strappy halter crop top stretched with realistic fabric tension across the bust and low neckline revealing natural cleavage plus high-waisted white micro-shorts riding high on her hips, warm private allure directed at the viewer in natural daylight with soft highlights and subtle salt-spray atmosphere, medium-close waist-up creator framing with full head and clean space above loose hair, intimate eye-level perspective on a slight three-quarter angle now more open to camera, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.",
+      "creative_mode": "premium",
+      "creative_tags": [],
+      "reference_asset_id": 93,
+      "creator_profile_id": 2,
+      "provider_response_id": "f64dc2bfab2c4ef7b2dbcdd4c86fcd98",
+      "generation_parameters": {
+        "generation_type": "image_to_image",
+        "media_type": "image",
+        "image_count": 1,
+        "request_metadata": {
+          "owner": "Generation Engine",
+          "provider_neutral": true,
+          "prompt_plan_owner": "Creative Director",
+          "creative_mode": "premium",
+          "creative_tags": [],
+          "prompt_metadata": {
+            "provider_neutral": true,
+            "generation_mode_behavior": "photoshoot_queue",
+            "wavespeed_generation_mode_key": "photoshoot_set",
+            "photoshoot_continuity": "Maintain one continuous photoshoot: same location, same wardrobe, same lighting, same story, same environment, same mood; vary only pose, camera, framing, crop, expression, hand placement, posture, distance, eye contact, and body orientation.",
+            "photoshoot_session_id": "photoshoot_session_28202397b8e14594b05a424790a7e4d6",
+            "photoshoot_request_id": "photoshoot_request_d329b2035f3b4b5391bcfd57d60ffa22",
+            "source": "photoshoot_studio",
+            "shot_direction": "Turning a little more toward the viewer along the boardwalk rail, she rests both forearms on the wood and lifts her chin with a playful half-lidded gaze that softens into quiet confidence. Her lips part just enough to show the start of a knowing smirk.",
+            "seed_image_id": "generated_image_865a4dcff51f913acb07a9ab",
+            "active_reference_image_id": "generated_image_865a4dcff51f913acb07a9ab",
+            "active_reference_output_reference": "D:\\Ava_CMS\\Content\\Pending_Photoshoot\\generated_image_865a4dcff51f913acb07a9ab.png",
+            "continuity_rule": "Use the seed image as the canonical continuity reference. Preserve outfit, hair, makeup, accessories, location, lighting, time of day, mood, and photography style. Vary only pose, expression, camera angle, framing, distance, body orientation, hand placement, eye contact, and subtle movement unless the creator explicitly asks otherwise.",
+            "creative_direction": {
+              "title": "Rail Forearm Rest with Knowing Smirk",
+              "creative_direction": "Evolve the current lean into a more open orientation toward the viewer along the same boardwalk rail. She turns her torso a little further open, rests both forearms fully on the weathered wood for support, and lifts her chin slightly. Expression shifts from the current warm closed smile into a playful half-lidded gaze that softens into quiet confidence, lips parting just enough to begin a knowing smirk. Keep the chest-forward posture and natural body line while the new arm placement and chin lift create a fresher, more intimate connection beat.",
+              "reasoning": "The Creative Hint is the top priority and directly specifies this exact pose and expression progression. It builds naturally from the current single-arm lean and soft smile without repeating framing or hand placement, advancing the premium photoshoot into a confident, teasing intimate moment while staying fully locked to the boardwalk setting and outfit.",
+              "continuity_notes": "Preserve exact identity, face, body proportions, long dark hair worn down with loose strands, sun-kissed skin, shimmering coral strappy halter crop top, high-waisted white micro-shorts, beach boardwalk location with salt-weathered railing, natural daylight, salt-spray atmosphere, and photorealistic camera style. Only pose, arm placement, chin angle, eye expression, and lip shape change per the approved hint.",
+              "camera_framing": "Medium-close waist-up creator framing matching the current distance, full head with clean space above the loose hair, slight three-quarter body angle now more open to camera, intimate eye-level perspective.",
+              "lighting": "Maintain the existing natural daylight with soft highlights and subtle salt-spray atmosphere; no change to time of day or quality of light.",
+              "emotion": "Playful half-lidded gaze softening into quiet confidence, lips parted into the start of a knowing smirk, warm private allure directed at the viewer.",
+              "pose_composition": "Body turned a little more toward the viewer while still along the boardwalk rail; both forearms resting on the weathered wood; chin gently lifted; chest-forward posture retained; hips softly angled; shoulders relaxed; hair falling naturally over the shoulders.",
+              "creative_mode": "premium",
+              "session_direction": "",
+              "continuity_locks": {
+                "location": true,
+                "wardrobe": true,
+                "lighting": true,
+                "hairstyle": true,
+                "makeup": true,
+                "camera_style": true
+              },
+              "created_at": "2026-07-19T00:39:20.353599"
+            }
+          },
+          "reference_metadata": {
+            "active": true,
+            "source": "content_studio_reference_library",
+            "added_at": "2026-07-16T15:51:23.582972",
+            "favorite": true,
+            "canonical": true,
+            "protected": true,
+            "removed_at": null,
+            "is_reference": true,
+            "last_used_at": "2026-07-16T15:51:23.582972",
+            "canonical_path": "D:\\Ava_CMS\\Canonical\\Ava_Blackthorne\\canonical_reference.png",
+            "canonical_sha256": "6D14784CD9D98C72591C057058219AF1337B9328DE6B63BB692FA4A06A3432B4",
+            "original_filename": "9a6f4c0e78fc44648070284ab23e994e.png",
+            "creator_profile_id": 2
+          },
+          "reference_file_name": "9a6f4c0e78fc44648070284ab23e994e.png",
+          "reference_preview_path": "D:\\Ava_CMS\\vault\\originals\\images\\93.png",
+          "canonical_reference_image_url": "D:\\Ava_CMS\\vault\\originals\\images\\93.png",
+          "source": "photoshoot_queue",
+          "workflow_type": "photoshoot",
+          "generation_mode_behavior": "photoshoot_queue",
+          "wavespeed_generation_mode_key": "photoshoot_set",
+          "wavespeed_mode_decision": "Photoshoot Queue uses Wavespeed Photoshoot Set Mode: same environment, same wardrobe, same lighting, same mood, ordered progression. It must not use normal generation scene-hopping.",
+          "photoshoot_session_id": "photoshoot_session_28202397b8e14594b05a424790a7e4d6",
+          "photoshoot_request_id": "photoshoot_request_d329b2035f3b4b5391bcfd57d60ffa22",
+          "photoshoot_sequence_index": 2,
+          "creative_continuity": {
+            "prompt_count": 1,
+            "generation_mode_behavior": "photoshoot_queue",
+            "wavespeed_generation_mode_key": "photoshoot_set",
+            "continuity": "Wavespeed Photoshoot Queue Mode: preserve the same selected-shot or requested location, wardrobe, lighting, mood, story, environment, camera style, and creative concept across ordered prompts. Vary only pose, camera angle, framing, crop, expression, hand placement, posture, distance from camera, eye contact, and body orientation.",
+            "normal_generation_boundary": "Do not use normal generation scene-hopping here. Photoshoot Queue is the continuity workflow.",
+            "source": "photoshoot_studio",
+            "seed_image_id": "generated_image_865a4dcff51f913acb07a9ab",
+            "seed_output_reference": "D:\\Ava_CMS\\Content\\Pending_Photoshoot\\generated_image_865a4dcff51f913acb07a9ab.png",
+            "seed_prompt_text": "Prompt 1: The same woman with her exact face, long dark hair worn down with smooth flat natural top and loose flowing strands lying over her shoulders, same natural sun-kissed skin tone as the reference image, feminine hourglass body, same waist-to-hip proportions, and full natural D-cup bust stands on a wooden beach boardwalk, leaning slightly forward against the salt-weathered railing with chest-forward posture and hips angled toward the viewer, wearing a strappy halter crop top in shimmering coral that clings with realistic fabric tension across the bust and visible cleavage from the low neckline, paired with high-waisted white micro-shorts riding high on her hips, teasing smile with warm eye contact and private alluring gaze directed at the viewer, natural daylight with soft highlights and salt spray atmosphere, medium-close waist-up creator framing with full head and clean space above loose hair, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.\n\nPrompt 2: The same woman with her exact face, long dark hair worn down with smooth flat natural top and loose flowing strands lying over her shoulders, same natural sun-kissed skin tone as the reference image, feminine hourglass body, same waist-to-hip proportions, and full natural D-cup bust sits on a weathered bench along the beach boardwalk, torso gently twisted and hips angled with chest-forward posture that emphasizes visible D-cup bust projection through the fabric, wearing a strappy halter crop top in shimmering coral stretched tight with realistic fabric tension across the bust and low neckline revealing cleavage, plus high-waisted white micro-shorts riding high on her hips, teasing smile and warm eye contact creating a private alluring gaze, salt spray atmosphere under natural daylight with soft highlights, close-medium upper-body framing with full face and natural hair top visible, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.\n\nPrompt 3: The same woman with her exact face, long dark hair worn down with smooth flat natural top and loose flowing strands lying over her shoulders, same natural sun-kissed skin tone as the reference image, feminine hourglass body, same waist-to-hip proportions, and full natural D-cup bust poses near the boardwalk overlook, standing with one hip cocked and shoulders relaxed while maintaining chest-forward posture, wearing a strappy halter crop top in shimmering coral that shows realistic fabric tension and visible cleavage from the low neckline, matched with high-waisted white micro-shorts riding high on her hips, soft teasing smile with warm eye contact and private alluring gaze, salt spray atmosphere in natural daylight with gentle highlights, head-to-upper-thigh portrait framing with smooth loose hair visible, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.\n\nPrompt 4: The same woman with her exact face, long dark hair worn down with smooth flat natural top and loose flowing strands lying over her shoulders, same natural sun-kissed skin tone as the reference image, feminine hourglass body, same waist-to-hip proportions, and full natural D-cup bust walks slowly along the beach boardwalk path, mid-step with hips angled naturally and chest-forward posture that makes the strappy halter crop top in shimmering coral reveal realistic fabric tension and low-neckline cleavage while the high-waisted white micro-shorts ride high on her hips, looking back over one shoulder with a warm teasing smile and private alluring gaze, salt spray atmosphere under natural daylight with soft highlights, medium-close waist-up creator framing with full head and clean space above loose hair, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.\n\nPrompt 5: The same woman with her exact face, long dark hair worn down with smooth flat natural top and loose flowing strands lying over her shoulders, same natural sun-kissed skin tone as the reference image, feminine hourglass body, same waist-to-hip proportions, and full natural D-cup bust leans casually against the wooden railing at the boardwalk steps, body angled three-quarters with subtle chest-forward posture and hips tilted, dressed in a strappy halter crop top in shimmering coral that stretches with realistic fabric tension across the bust and low neckline showing cleavage, plus high-waisted white micro-shorts riding high on her hips, relaxed playful smile with warm eye contact and private alluring gaze, salt spray atmosphere in natural daylight with soft highlights, intimate seated portrait framing with full face and natural hair top visible, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.",
+            "seed_generation_job_id": "generation_job_a787a4667f494d0a99a458c3db1e7f77",
+            "seed_generation_request_id": "generation_request_2471561c46734051b4c6b9a3c906eb25",
+            "seed_generation_result_id": "generation_job_a787a4667f494d0a99a458c3db1e7f77_live_result",
+            "continuity_rule": "Use the seed image as the canonical continuity reference. Preserve outfit, hair, makeup, accessories, location, lighting, time of day, mood, and photography style. Vary only pose, expression, camera angle, framing, distance, body orientation, hand placement, eye contact, and subtle movement unless the creator explicitly asks otherwise.",
+            "session_defaults": {
+              "location": "Preserve the current image location unless overridden.",
+              "wardrobe": "Preserve the current outfit unless overridden.",
+              "lighting": "Preserve the current lighting unless overridden.",
+              "camera_style": "Preserve the current camera style unless overridden.",
+              "identity_continuity": "Preserve the same identity, face, body, and proportions.",
+              "hairstyle": "Preserve the current hairstyle unless overridden.",
+              "makeup": "Preserve the current makeup unless overridden.",
+              "visual_tone": "Preserve the current visual tone unless overridden."
+            },
+            "approved_directions": [
+              {
+                "title": "Rail Forearm Rest with Knowing Smirk",
+                "creative_direction": "Evolve the current lean into a more open orientation toward the viewer along the same boardwalk rail. She turns her torso a little further open, rests both forearms fully on the weathered wood for support, and lifts her chin slightly. Expression shifts from the current warm closed smile into a playful half-lidded gaze that softens into quiet confidence, lips parting just enough to begin a knowing smirk. Keep the chest-forward posture and natural body line while the new arm placement and chin lift create a fresher, more intimate connection beat.",
+                "reasoning": "The Creative Hint is the top priority and directly specifies this exact pose and expression progression. It builds naturally from the current single-arm lean and soft smile without repeating framing or hand placement, advancing the premium photoshoot into a confident, teasing intimate moment while staying fully locked to the boardwalk setting and outfit.",
+                "continuity_notes": "Preserve exact identity, face, body proportions, long dark hair worn down with loose strands, sun-kissed skin, shimmering coral strappy halter crop top, high-waisted white micro-shorts, beach boardwalk location with salt-weathered railing, natural daylight, salt-spray atmosphere, and photorealistic camera style. Only pose, arm placement, chin angle, eye expression, and lip shape change per the approved hint.",
+                "camera_framing": "Medium-close waist-up creator framing matching the current distance, full head with clean space above the loose hair, slight three-quarter body angle now more open to camera, intimate eye-level perspective.",
+                "lighting": "Maintain the existing natural daylight with soft highlights and subtle salt-spray atmosphere; no change to time of day or quality of light.",
+                "emotion": "Playful half-lidded gaze softening into quiet confidence, lips parted into the start of a knowing smirk, warm private allure directed at the viewer.",
+                "pose_composition": "Body turned a little more toward the viewer while still along the boardwalk rail; both forearms resting on the weathered wood; chin gently lifted; chest-forward posture retained; hips softly angled; shoulders relaxed; hair falling naturally over the shoulders.",
+                "creative_mode": "premium",
+                "session_direction": "",
+                "continuity_locks": {
+                  "location": true,
+                  "wardrobe": true,
+                  "lighting": true,
+                  "hairstyle": true,
+                  "makeup": true,
+                  "camera_style": true
+                },
+                "created_at": "2026-07-19T00:39:20.353599"
+              }
+            ],
+            "approved_prompts": [
+              "The same woman with her exact face, long dark hair worn down with smooth flat natural top and loose flowing strands lying over her shoulders, same natural sun-kissed skin tone as the reference image, feminine hourglass body, same waist-to-hip proportions, and full natural D-cup bust turns her torso a little further open toward the viewer along the same wooden beach boardwalk, resting both forearms fully on the salt-weathered railing with chest-forward posture and hips softly angled, chin lifted slightly as her playful half-lidded gaze softens into quiet confidence with lips parted into the start of a knowing smirk, wearing the shimmering coral strappy halter crop top stretched with realistic fabric tension across the bust and low neckline revealing natural cleavage plus high-waisted white micro-shorts riding high on her hips, warm private allure directed at the viewer in natural daylight with soft highlights and subtle salt-spray atmosphere, medium-close waist-up creator framing with full head and clean space above loose hair, intimate eye-level perspective on a slight three-quarter angle now more open to camera, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality."
+            ],
+            "progression_stage": 1,
+            "workflow_stage": "generating",
+            "session_direction": "",
+            "creator_guidance": "",
+            "grok_guidance": "",
+            "current_direction": {
+              "title": "Rail Forearm Rest with Knowing Smirk",
+              "creative_direction": "Evolve the current lean into a more open orientation toward the viewer along the same boardwalk rail. She turns her torso a little further open, rests both forearms fully on the weathered wood for support, and lifts her chin slightly. Expression shifts from the current warm closed smile into a playful half-lidded gaze that softens into quiet confidence, lips parting just enough to begin a knowing smirk. Keep the chest-forward posture and natural body line while the new arm placement and chin lift create a fresher, more intimate connection beat.",
+              "reasoning": "The Creative Hint is the top priority and directly specifies this exact pose and expression progression. It builds naturally from the current single-arm lean and soft smile without repeating framing or hand placement, advancing the premium photoshoot into a confident, teasing intimate moment while staying fully locked to the boardwalk setting and outfit.",
+              "continuity_notes": "Preserve exact identity, face, body proportions, long dark hair worn down with loose strands, sun-kissed skin, shimmering coral strappy halter crop top, high-waisted white micro-shorts, beach boardwalk location with salt-weathered railing, natural daylight, salt-spray atmosphere, and photorealistic camera style. Only pose, arm placement, chin angle, eye expression, and lip shape change per the approved hint.",
+              "camera_framing": "Medium-close waist-up creator framing matching the current distance, full head with clean space above the loose hair, slight three-quarter body angle now more open to camera, intimate eye-level perspective.",
+              "lighting": "Maintain the existing natural daylight with soft highlights and subtle salt-spray atmosphere; no change to time of day or quality of light.",
+              "emotion": "Playful half-lidded gaze softening into quiet confidence, lips parted into the start of a knowing smirk, warm private allure directed at the viewer.",
+              "pose_composition": "Body turned a little more toward the viewer while still along the boardwalk rail; both forearms resting on the weathered wood; chin gently lifted; chest-forward posture retained; hips softly angled; shoulders relaxed; hair falling naturally over the shoulders.",
+              "creative_mode": "premium",
+              "session_direction": "",
+              "continuity_locks": {
+                "location": true,
+                "wardrobe": true,
+                "lighting": true,
+                "hairstyle": true,
+                "makeup": true,
+                "camera_style": true
+              },
+              "created_at": "2026-07-19T00:39:20.353599"
+            },
+            "current_prompt": "The same woman with her exact face, long dark hair worn down with smooth flat natural top and loose flowing strands lying over her shoulders, same natural sun-kissed skin tone as the reference image, feminine hourglass body, same waist-to-hip proportions, and full natural D-cup bust turns her torso a little further open toward the viewer along the same wooden beach boardwalk, resting both forearms fully on the salt-weathered railing with chest-forward posture and hips softly angled, chin lifted slightly as her playful half-lidded gaze softens into quiet confidence with lips parted into the start of a knowing smirk, wearing the shimmering coral strappy halter crop top stretched with realistic fabric tension across the bust and low neckline revealing natural cleavage plus high-waisted white micro-shorts riding high on her hips, warm private allure directed at the viewer in natural daylight with soft highlights and subtle salt-spray atmosphere, medium-close waist-up creator framing with full head and clean space above loose hair, intimate eye-level perspective on a slight three-quarter angle now more open to camera, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.",
+            "direction_approved": true,
+            "continuity_locks": {
+              "location": true,
+              "wardrobe": true,
+              "lighting": true,
+              "hairstyle": true,
+              "makeup": true,
+              "camera_style": true
+            },
+            "creative_hint": "Turning a little more toward the viewer along the boardwalk rail, she rests both forearms on the wood and lifts her chin with a playful half-lidded gaze that softens into quiet confidence. Her lips part just enough to show the start of a knowing smirk.",
+            "inspiration_ideas": [
+              "She shifts her weight onto one hip while still leaning on the railing, tilting her head slightly as a soft flirty smile spreads and her eyes crinkle with warmer invitation. One hand drifts up to lightly brush a strand of hair from her collarbone.",
+              "Turning a little more toward the viewer along the boardwalk rail, she rests both forearms on the wood and lifts her chin with a playful half-lidded gaze that softens into quiet confidence. Her lips part just enough to show the start of a knowing smirk.",
+              "She straightens slightly from the lean, arching her back a touch more while keeping contact with the railing, and bites her lower lip gently as her eyes lock on with fresher heat. Fingers trail slowly along the weathered wood beside her.",
+              "Stepping one foot onto the lower rail for a taller pose, she glances over with bedroom-softened eyes and a slow teasing smile that deepens at the corners. Her free hand rests lightly against her midriff just above the shorts waistband.",
+              "She twists her torso further open to the light, pressing closer to the railing edge, and lets her expression melt into heavier-lidded flirty eyes paired with a subtle open-mouthed breath. One shoulder drops as her hair slides forward.",
+              "Leaning both elbows on the rail now with chest still forward, she tips her head and offers a bitten-lip smile while her gaze drops briefly then returns warmer and more private. Her fingertips toy idly with the edge of her crop top.",
+              "She pushes up from the lean into a standing three-quarter turn, hip cocked, and meets the viewer with soft smoldering eyes above a closed-mouth mischievous grin. One hand slides down to rest on her opposite thigh.",
+              "Settling back against the railing with a looser posture, she runs a hand through her long hair and holds the pose with parted lips and increasingly sultry eye contact that feels more intimate. Her free hand stays near her waist.",
+              "She angles her body sideways along the boardwalk while gripping the rail lightly, looking back with a flirtatious raised-brow expression and a slow lip-bite that hints at rising heat. Shoulders relax as the top fabric catches the light.",
+              "Bringing one knee up slightly against the wood for balance, she leans in closer with full warm eye contact that turns heavier and more bedroom-like above a soft open smile. Her hand drifts to trace the shimmering strap near her shoulder."
+            ],
+            "selected_inspiration": "Turning a little more toward the viewer along the boardwalk rail, she rests both forearms on the wood and lifts her chin with a playful half-lidded gaze that softens into quiet confidence. Her lips part just enough to show the start of a knowing smirk."
+          },
+          "reference_image_url": "D:\\Ava_CMS\\Content\\Pending_Photoshoot\\generated_image_865a4dcff51f913acb07a9ab.png",
+          "photoshoot_continuity_reference_image_url": "D:\\Ava_CMS\\Content\\Pending_Photoshoot\\generated_image_865a4dcff51f913acb07a9ab.png"
+        },
+        "provider_generation_metadata": {
+          "provider_request_id": "f64dc2bfab2c4ef7b2dbcdd4c86fcd98",
+          "provider_family": "wavespeed",
+          "endpoint": "https://api.wavespeed.ai/api/v3/bytedance/seedream-v5.0-pro/edit",
+          "partial_success": false
+        },
+        "provider_execution_metadata": {
+          "submit_response": {
+            "code": 200,
+            "message": "success",
+            "data": {
+              "id": "f64dc2bfab2c4ef7b2dbcdd4c86fcd98",
+              "model": "bytedance/seedream-v5.0-pro/edit",
+              "input": {
+                "enable_base64_output": false,
+                "enable_sync_mode": false,
+                "images": [
+                  "https://i.ibb.co/rGQLbJpH/cfdda2cc15a2.png",
+                  "https://i.ibb.co/BKdfkH7J/7cd505671cd8.png"
+                ],
+                "output_format": "png",
+                "prompt": "The same woman with her exact face, long dark hair worn down with smooth flat natural top and loose flowing strands lying over her shoulders, same natural sun-kissed skin tone as the reference image, feminine hourglass body, same waist-to-hip proportions, and full natural D-cup bust turns her torso a little further open toward the viewer along the same wooden beach boardwalk, resting both forearms fully on the salt-weathered railing with chest-forward posture and hips softly angled, chin lifted slightly as her playful half-lidded gaze softens into quiet confidence with lips parted into the start of a knowing smirk, wearing the shimmering coral strappy halter crop top stretched with realistic fabric tension across the bust and low neckline revealing natural cleavage plus high-waisted white micro-shorts riding high on her hips, warm private allure directed at the viewer in natural daylight with soft highlights and subtle salt-spray atmosphere, medium-close waist-up creator framing with full head and clean space above loose hair, intimate eye-level perspective on a slight three-quarter angle now more open to camera, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.\n\nSOCIAL CLOSE-FRAMING LOCK - NON-NEGOTIABLE:\nREFERENCE IMAGE USAGE:\nUse the reference image only for the creator's identity, face, hair, skin tone, body shape, and full natural D-cup bust.\nDo not copy the reference image's setting, background, water, boat, dock, railing, trees, cabin, furniture, outfit, pose, lighting, or camera angle unless the written prompt explicitly asks for those exact elements.\nThe written prompt controls the scene, wardrobe, pose, lighting, and background.\nIf the prompt asks for a shower, bathroom, bedroom, hotel, couch, pool, city, beach, or any non-boat scene, do not include boat/lake/dock/marina details from the reference image.\nUse tight creator framing unless the prompt explicitly asks for a wide environmental shot.\nUse close-up, close-medium, waist-up, head-to-hips, head-to-upper-thigh, upper-thigh, or intimate seated close framing.\nKeep the creator large in frame, with her face, upper body, torso, bust, waist, and hip angle treated as the main visual anchors.\nKeep her full face and full head inside the frame, including forehead, hairline, and crown, with a small amount of breathing room above her hair.\nKeep the camera close enough that her full natural D-cup bust, hourglass waist, reference skin tone, and recognizable facial identity are obvious.\nKeep the background secondary. The environment may be visible, but it must not become the main subject.\nAvoid distant full-body shots, tiny-subject compositions, wide room shots, wide bed shots, scenery-dominant lake/pool/landscape shots, or any framing where the room, water, furniture, or landscape is more visually important than the creator.\nAvoid cropped-off forehead, cropped hairline, cut-off crown, missing top of head, or a composition that slices through her hair.\nDo not crop out the body cues needed to preserve her D-cup bust, hourglass shape, reference skin tone, and recognizable facial identity.\nAvoid visible phone/cellphone/selfie-device poses unless the prompt explicitly asks for a phone or mirror selfie.\nKeep the result social-platform safe according to the selected Social Content Studio mode.",
+                "resolution": "1k"
+              },
+              "outputs": [],
+              "urls": {
+                "get": "https://api.wavespeed.ai/api/v3/predictions/f64dc2bfab2c4ef7b2dbcdd4c86fcd98/result"
+              },
+              "status": "created",
+              "created_at": "2026-07-19T00:39:28.983Z",
+              "code": 0,
+              "error": "",
+              "timings": {
+                "inference": 0
+              }
+            }
+          },
+          "poll_response": {
+            "provider_request_ids": [
+              "f64dc2bfab2c4ef7b2dbcdd4c86fcd98"
+            ],
+            "poll_responses": [
+              {
+                "code": 200,
+                "message": "success",
+                "data": {
+                  "id": "f64dc2bfab2c4ef7b2dbcdd4c86fcd98",
+                  "model": "bytedance/seedream-v5.0-pro/edit",
+                  "outputs": [
+                    "https://d2h7xmz5gqybh9.cloudfront.net/output/de1712d9-b2c5-4087-b900-b2b9cf335758.png"
+                  ],
+                  "urls": {
+                    "get": "https://api.wavespeed.ai/api/v3/predictions/f64dc2bfab2c4ef7b2dbcdd4c86fcd98/result"
+                  },
+                  "status": "completed",
+                  "created_at": "2026-07-19T00:39:28.981869361Z",
+                  "code": 0,
+                  "error": "",
+                  "timings": {
+                    "inference": 56670
+                  }
+                }
+              }
+            ],
+            "failures": []
+          },
+          "failures": []
+        },
+        "image_metadata": {
+          "requested_image_count": 1,
+          "output_count": 1,
+          "reference_asset_id": 93,
+          "completed_count": 1,
+          "failed_count": 0,
+          "processed_count": 1
+        }
+      },
+      "output_reference": "D:\\Ava_CMS\\Content\\Generation\\Photoshoot\\Active\\Photoshoot_2026-07-19_d12\\Candidate_generated_image_7eb0553443cf4fdc789bcec0.png",
+      "ingested_at": "2026-07-19T00:53:42.201914"
+    },
+    "created_at": "2026-07-19T00:53:42.313882",
+    "updated_at": null
+  },
+  {
+    "ingestion_id": "generation_ingestion_d1e6b499f7a94c3c97d5e5c8c9d05c91",
+    "generation_job_id": "generation_job_a01eebab3610419cba62fa35d50931f0",
+    "generation_request_id": "generation_request_f59e019c686243359a188926c619ac51",
+    "generation_result_id": "generation_result_8a90e4095b3340f2bfc550d0372280e2",
+    "output_reference": "D:\\Ava_CMS\\Content\\Generation\\Photoshoot\\Active\\Photoshoot_2026-07-19_d12\\Candidate_generated_image_cfacacc616f88e1ddfec8f00.png",
+    "status": "imported",
+    "asset_id": 95,
+    "local_file_path": "data\\generation_engine\\downloads\\generation_job_a01eebab3610419cba62fa35d50931f0\\ee9ddb363d787ef4ea137d9c.png",
+    "message": "Generation result imported as Creator OS Asset.",
+    "metadata": {
+      "source": "content_studio",
+      "generation_provider": "seedream_5_0_pro",
+      "generation_job_id": "generation_job_a01eebab3610419cba62fa35d50931f0",
+      "generation_request_id": "generation_request_f59e019c686243359a188926c619ac51",
+      "generation_result_id": "generation_result_8a90e4095b3340f2bfc550d0372280e2",
+      "prompt_plan_id": "prompt_plan_5951356b3b234651a1e0bec8192fe249",
+      "prompt_text": "The same woman with her exact face, long dark hair worn down with smooth flat natural top and loose flowing strands lying over her shoulders, same natural sun-kissed skin tone as the reference image, feminine hourglass body, same waist-to-hip proportions, and full natural D-cup bust shifts her weight onto one hip along the same wooden beach boardwalk for a softer S-curve while keeping one forearm planted on the salt-weathered railing, her free hand rising to lightly toy with the halter strap near her collarbone with fingers gently tracing the fabric, chest-forward posture retained as her half-lidded eyes deepen into a flirty squint and her knowing smirk softens into a parted-lip invitation aimed warmly at the viewer, wearing the shimmering coral strappy halter crop top stretched with realistic fabric tension across the bust and low neckline revealing natural cleavage paired with high-waisted white micro-shorts riding high on her hips, natural daylight with soft highlights and subtle salt-spray atmosphere, medium-close waist-up creator framing with full head and clean space above loose hair, intimate eye-level perspective on a slight three-quarter body angle open to camera, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.",
+      "creative_mode": "premium",
+      "creative_tags": [],
+      "reference_asset_id": 93,
+      "creator_profile_id": 2,
+      "provider_response_id": "07e154792a0e444b85b2c48c04e1115d",
+      "generation_parameters": {
+        "generation_type": "image_to_image",
+        "media_type": "image",
+        "image_count": 1,
+        "request_metadata": {
+          "owner": "Generation Engine",
+          "provider_neutral": true,
+          "prompt_plan_owner": "Creative Director",
+          "creative_mode": "premium",
+          "creative_tags": [],
+          "prompt_metadata": {
+            "provider_neutral": true,
+            "generation_mode_behavior": "photoshoot_queue",
+            "wavespeed_generation_mode_key": "photoshoot_set",
+            "photoshoot_continuity": "Maintain one continuous photoshoot: same location, same wardrobe, same lighting, same story, same environment, same mood; vary only pose, camera, framing, crop, expression, hand placement, posture, distance, eye contact, and body orientation.",
+            "photoshoot_session_id": "photoshoot_session_28202397b8e14594b05a424790a7e4d6",
+            "photoshoot_request_id": "photoshoot_request_916cc9168c4f461eaa2f7df3d0b56f12",
+            "source": "photoshoot_studio",
+            "shot_direction": "",
+            "seed_image_id": "generated_image_865a4dcff51f913acb07a9ab",
+            "active_reference_image_id": "generated_image_7eb0553443cf4fdc789bcec0",
+            "active_reference_output_reference": "D:\\Ava_CMS\\Content\\Generation\\Photoshoot\\Active\\Photoshoot_2026-07-19_d12\\Shot_001.png",
+            "continuity_rule": "Use the seed image as the canonical continuity reference. Preserve outfit, hair, makeup, accessories, location, lighting, time of day, mood, and photography style. Vary only pose, expression, camera angle, framing, distance, body orientation, hand placement, eye contact, and subtle movement unless the creator explicitly asks otherwise.",
+            "creative_direction": {
+              "title": "Hip Shift Halter Strap Tease",
+              "creative_direction": "From the current both-forearms rail lean, she shifts her weight onto one hip for a softer S-curve while keeping one forearm planted on the weathered wood. Her free hand slowly rises to toy with the halter strap near her collarbone, fingers lightly tracing the strap. Half-lidded eyes deepen into a flirty squint and the knowing smirk softens into a parted-lip invitation, still locked on the viewer with warm private heat. Maintain chest-forward posture and natural body line so the gesture feels like the next intimate beat of the same boardwalk moment.",
+              "reasoning": "The Creative Hint is top priority and specifies this exact weight shift, hand-to-halter-strap action, and expression evolution. It progresses naturally from the approved forearm-rest smirk without repeating the prior static both-hands pose, advancing premium sensual connection while fully honoring every continuity lock.",
+              "continuity_notes": "Preserve exact identity, face, body proportions, long dark hair worn down with loose strands over the shoulders, sun-kissed skin, shimmering coral strappy halter crop top, high-waisted white micro-shorts, beach boardwalk location with salt-weathered railing, natural daylight, salt-spray atmosphere, and photorealistic camera style. Only weight distribution, one hand placement, eye squint, and lip parting change per the approved hint.",
+              "camera_framing": "Medium-close waist-up creator framing matching current distance, full head with clean space above the loose hair, slight three-quarter body angle open to camera, intimate eye-level perspective.",
+              "lighting": "Maintain the existing natural daylight with soft highlights and subtle salt-spray atmosphere; no change to time of day or quality of light.",
+              "emotion": "Half-lidded eyes deepened into a flirty squint, smirk softened into a parted-lip invitation, warm private allure and teasing heat directed at the viewer.",
+              "pose_composition": "Weight shifted to one hip creating a gentle S-curve; one forearm remains on the salt-weathered rail for support; the other hand rises to toy lightly with the halter strap near the collarbone; chest-forward posture retained; shoulders relaxed; hair falling naturally.",
+              "creative_mode": "premium",
+              "session_direction": "",
+              "continuity_locks": {
+                "location": true,
+                "wardrobe": true,
+                "lighting": true,
+                "hairstyle": true,
+                "makeup": true,
+                "camera_style": true
+              },
+              "created_at": "2026-07-19T00:56:06.794310"
+            }
+          },
+          "reference_metadata": {
+            "active": true,
+            "source": "content_studio_reference_library",
+            "added_at": "2026-07-16T15:51:23.582972",
+            "favorite": true,
+            "canonical": true,
+            "protected": true,
+            "removed_at": null,
+            "is_reference": true,
+            "last_used_at": "2026-07-16T15:51:23.582972",
+            "canonical_path": "D:\\Ava_CMS\\Canonical\\Ava_Blackthorne\\canonical_reference.png",
+            "canonical_sha256": "6D14784CD9D98C72591C057058219AF1337B9328DE6B63BB692FA4A06A3432B4",
+            "original_filename": "9a6f4c0e78fc44648070284ab23e994e.png",
+            "creator_profile_id": 2
+          },
+          "reference_file_name": "9a6f4c0e78fc44648070284ab23e994e.png",
+          "reference_preview_path": "D:\\Ava_CMS\\vault\\originals\\images\\93.png",
+          "canonical_reference_image_url": "D:\\Ava_CMS\\vault\\originals\\images\\93.png",
+          "source": "photoshoot_queue",
+          "workflow_type": "photoshoot",
+          "generation_mode_behavior": "photoshoot_queue",
+          "wavespeed_generation_mode_key": "photoshoot_set",
+          "wavespeed_mode_decision": "Photoshoot Queue uses Wavespeed Photoshoot Set Mode: same environment, same wardrobe, same lighting, same mood, ordered progression. It must not use normal generation scene-hopping.",
+          "photoshoot_session_id": "photoshoot_session_28202397b8e14594b05a424790a7e4d6",
+          "photoshoot_request_id": "photoshoot_request_916cc9168c4f461eaa2f7df3d0b56f12",
+          "photoshoot_sequence_index": 3,
+          "creative_continuity": {
+            "prompt_count": 1,
+            "generation_mode_behavior": "photoshoot_queue",
+            "wavespeed_generation_mode_key": "photoshoot_set",
+            "continuity": "Wavespeed Photoshoot Queue Mode: preserve the same selected-shot or requested location, wardrobe, lighting, mood, story, environment, camera style, and creative concept across ordered prompts. Vary only pose, camera angle, framing, crop, expression, hand placement, posture, distance from camera, eye contact, and body orientation.",
+            "normal_generation_boundary": "Do not use normal generation scene-hopping here. Photoshoot Queue is the continuity workflow.",
+            "source": "photoshoot_studio",
+            "seed_image_id": "generated_image_865a4dcff51f913acb07a9ab",
+            "seed_output_reference": "D:\\Ava_CMS\\Content\\Pending_Photoshoot\\generated_image_865a4dcff51f913acb07a9ab.png",
+            "seed_prompt_text": "Prompt 1: The same woman with her exact face, long dark hair worn down with smooth flat natural top and loose flowing strands lying over her shoulders, same natural sun-kissed skin tone as the reference image, feminine hourglass body, same waist-to-hip proportions, and full natural D-cup bust stands on a wooden beach boardwalk, leaning slightly forward against the salt-weathered railing with chest-forward posture and hips angled toward the viewer, wearing a strappy halter crop top in shimmering coral that clings with realistic fabric tension across the bust and visible cleavage from the low neckline, paired with high-waisted white micro-shorts riding high on her hips, teasing smile with warm eye contact and private alluring gaze directed at the viewer, natural daylight with soft highlights and salt spray atmosphere, medium-close waist-up creator framing with full head and clean space above loose hair, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.\n\nPrompt 2: The same woman with her exact face, long dark hair worn down with smooth flat natural top and loose flowing strands lying over her shoulders, same natural sun-kissed skin tone as the reference image, feminine hourglass body, same waist-to-hip proportions, and full natural D-cup bust sits on a weathered bench along the beach boardwalk, torso gently twisted and hips angled with chest-forward posture that emphasizes visible D-cup bust projection through the fabric, wearing a strappy halter crop top in shimmering coral stretched tight with realistic fabric tension across the bust and low neckline revealing cleavage, plus high-waisted white micro-shorts riding high on her hips, teasing smile and warm eye contact creating a private alluring gaze, salt spray atmosphere under natural daylight with soft highlights, close-medium upper-body framing with full face and natural hair top visible, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.\n\nPrompt 3: The same woman with her exact face, long dark hair worn down with smooth flat natural top and loose flowing strands lying over her shoulders, same natural sun-kissed skin tone as the reference image, feminine hourglass body, same waist-to-hip proportions, and full natural D-cup bust poses near the boardwalk overlook, standing with one hip cocked and shoulders relaxed while maintaining chest-forward posture, wearing a strappy halter crop top in shimmering coral that shows realistic fabric tension and visible cleavage from the low neckline, matched with high-waisted white micro-shorts riding high on her hips, soft teasing smile with warm eye contact and private alluring gaze, salt spray atmosphere in natural daylight with gentle highlights, head-to-upper-thigh portrait framing with smooth loose hair visible, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.\n\nPrompt 4: The same woman with her exact face, long dark hair worn down with smooth flat natural top and loose flowing strands lying over her shoulders, same natural sun-kissed skin tone as the reference image, feminine hourglass body, same waist-to-hip proportions, and full natural D-cup bust walks slowly along the beach boardwalk path, mid-step with hips angled naturally and chest-forward posture that makes the strappy halter crop top in shimmering coral reveal realistic fabric tension and low-neckline cleavage while the high-waisted white micro-shorts ride high on her hips, looking back over one shoulder with a warm teasing smile and private alluring gaze, salt spray atmosphere under natural daylight with soft highlights, medium-close waist-up creator framing with full head and clean space above loose hair, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.\n\nPrompt 5: The same woman with her exact face, long dark hair worn down with smooth flat natural top and loose flowing strands lying over her shoulders, same natural sun-kissed skin tone as the reference image, feminine hourglass body, same waist-to-hip proportions, and full natural D-cup bust leans casually against the wooden railing at the boardwalk steps, body angled three-quarters with subtle chest-forward posture and hips tilted, dressed in a strappy halter crop top in shimmering coral that stretches with realistic fabric tension across the bust and low neckline showing cleavage, plus high-waisted white micro-shorts riding high on her hips, relaxed playful smile with warm eye contact and private alluring gaze, salt spray atmosphere in natural daylight with soft highlights, intimate seated portrait framing with full face and natural hair top visible, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.",
+            "seed_generation_job_id": "generation_job_a787a4667f494d0a99a458c3db1e7f77",
+            "seed_generation_request_id": "generation_request_2471561c46734051b4c6b9a3c906eb25",
+            "seed_generation_result_id": "generation_job_a787a4667f494d0a99a458c3db1e7f77_live_result",
+            "continuity_rule": "Use the seed image as the canonical continuity reference. Preserve outfit, hair, makeup, accessories, location, lighting, time of day, mood, and photography style. Vary only pose, expression, camera angle, framing, distance, body orientation, hand placement, eye contact, and subtle movement unless the creator explicitly asks otherwise.",
+            "session_defaults": {
+              "location": "Preserve the current image location unless overridden.",
+              "wardrobe": "Preserve the current outfit unless overridden.",
+              "lighting": "Preserve the current lighting unless overridden.",
+              "camera_style": "Preserve the current camera style unless overridden.",
+              "identity_continuity": "Preserve the same identity, face, body, and proportions.",
+              "hairstyle": "Preserve the current hairstyle unless overridden.",
+              "makeup": "Preserve the current makeup unless overridden.",
+              "visual_tone": "Preserve the current visual tone unless overridden."
+            },
+            "approved_directions": [
+              {
+                "title": "Rail Forearm Rest with Knowing Smirk",
+                "creative_direction": "Evolve the current lean into a more open orientation toward the viewer along the same boardwalk rail. She turns her torso a little further open, rests both forearms fully on the weathered wood for support, and lifts her chin slightly. Expression shifts from the current warm closed smile into a playful half-lidded gaze that softens into quiet confidence, lips parting just enough to begin a knowing smirk. Keep the chest-forward posture and natural body line while the new arm placement and chin lift create a fresher, more intimate connection beat.",
+                "reasoning": "The Creative Hint is the top priority and directly specifies this exact pose and expression progression. It builds naturally from the current single-arm lean and soft smile without repeating framing or hand placement, advancing the premium photoshoot into a confident, teasing intimate moment while staying fully locked to the boardwalk setting and outfit.",
+                "continuity_notes": "Preserve exact identity, face, body proportions, long dark hair worn down with loose strands, sun-kissed skin, shimmering coral strappy halter crop top, high-waisted white micro-shorts, beach boardwalk location with salt-weathered railing, natural daylight, salt-spray atmosphere, and photorealistic camera style. Only pose, arm placement, chin angle, eye expression, and lip shape change per the approved hint.",
+                "camera_framing": "Medium-close waist-up creator framing matching the current distance, full head with clean space above the loose hair, slight three-quarter body angle now more open to camera, intimate eye-level perspective.",
+                "lighting": "Maintain the existing natural daylight with soft highlights and subtle salt-spray atmosphere; no change to time of day or quality of light.",
+                "emotion": "Playful half-lidded gaze softening into quiet confidence, lips parted into the start of a knowing smirk, warm private allure directed at the viewer.",
+                "pose_composition": "Body turned a little more toward the viewer while still along the boardwalk rail; both forearms resting on the weathered wood; chin gently lifted; chest-forward posture retained; hips softly angled; shoulders relaxed; hair falling naturally over the shoulders.",
+                "creative_mode": "premium",
+                "session_direction": "",
+                "continuity_locks": {
+                  "location": true,
+                  "wardrobe": true,
+                  "lighting": true,
+                  "hairstyle": true,
+                  "makeup": true,
+                  "camera_style": true
+                },
+                "created_at": "2026-07-19T00:39:20.353599"
+              },
+              {
+                "title": "Hip Shift Halter Strap Tease",
+                "creative_direction": "From the current both-forearms rail lean, she shifts her weight onto one hip for a softer S-curve while keeping one forearm planted on the weathered wood. Her free hand slowly rises to toy with the halter strap near her collarbone, fingers lightly tracing the strap. Half-lidded eyes deepen into a flirty squint and the knowing smirk softens into a parted-lip invitation, still locked on the viewer with warm private heat. Maintain chest-forward posture and natural body line so the gesture feels like the next intimate beat of the same boardwalk moment.",
+                "reasoning": "The Creative Hint is top priority and specifies this exact weight shift, hand-to-halter-strap action, and expression evolution. It progresses naturally from the approved forearm-rest smirk without repeating the prior static both-hands pose, advancing premium sensual connection while fully honoring every continuity lock.",
+                "continuity_notes": "Preserve exact identity, face, body proportions, long dark hair worn down with loose strands over the shoulders, sun-kissed skin, shimmering coral strappy halter crop top, high-waisted white micro-shorts, beach boardwalk location with salt-weathered railing, natural daylight, salt-spray atmosphere, and photorealistic camera style. Only weight distribution, one hand placement, eye squint, and lip parting change per the approved hint.",
+                "camera_framing": "Medium-close waist-up creator framing matching current distance, full head with clean space above the loose hair, slight three-quarter body angle open to camera, intimate eye-level perspective.",
+                "lighting": "Maintain the existing natural daylight with soft highlights and subtle salt-spray atmosphere; no change to time of day or quality of light.",
+                "emotion": "Half-lidded eyes deepened into a flirty squint, smirk softened into a parted-lip invitation, warm private allure and teasing heat directed at the viewer.",
+                "pose_composition": "Weight shifted to one hip creating a gentle S-curve; one forearm remains on the salt-weathered rail for support; the other hand rises to toy lightly with the halter strap near the collarbone; chest-forward posture retained; shoulders relaxed; hair falling naturally.",
+                "creative_mode": "premium",
+                "session_direction": "",
+                "continuity_locks": {
+                  "location": true,
+                  "wardrobe": true,
+                  "lighting": true,
+                  "hairstyle": true,
+                  "makeup": true,
+                  "camera_style": true
+                },
+                "created_at": "2026-07-19T00:56:06.794310"
+              }
+            ],
+            "approved_prompts": [
+              "The same woman with her exact face, long dark hair worn down with smooth flat natural top and loose flowing strands lying over her shoulders, same natural sun-kissed skin tone as the reference image, feminine hourglass body, same waist-to-hip proportions, and full natural D-cup bust turns her torso a little further open toward the viewer along the same wooden beach boardwalk, resting both forearms fully on the salt-weathered railing with chest-forward posture and hips softly angled, chin lifted slightly as her playful half-lidded gaze softens into quiet confidence with lips parted into the start of a knowing smirk, wearing the shimmering coral strappy halter crop top stretched with realistic fabric tension across the bust and low neckline revealing natural cleavage plus high-waisted white micro-shorts riding high on her hips, warm private allure directed at the viewer in natural daylight with soft highlights and subtle salt-spray atmosphere, medium-close waist-up creator framing with full head and clean space above loose hair, intimate eye-level perspective on a slight three-quarter angle now more open to camera, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.",
+              "The same woman with her exact face, long dark hair worn down with smooth flat natural top and loose flowing strands lying over her shoulders, same natural sun-kissed skin tone as the reference image, feminine hourglass body, same waist-to-hip proportions, and full natural D-cup bust shifts her weight onto one hip along the same wooden beach boardwalk for a softer S-curve while keeping one forearm planted on the salt-weathered railing, her free hand rising to lightly toy with the halter strap near her collarbone with fingers gently tracing the fabric, chest-forward posture retained as her half-lidded eyes deepen into a flirty squint and her knowing smirk softens into a parted-lip invitation aimed warmly at the viewer, wearing the shimmering coral strappy halter crop top stretched with realistic fabric tension across the bust and low neckline revealing natural cleavage paired with high-waisted white micro-shorts riding high on her hips, natural daylight with soft highlights and subtle salt-spray atmosphere, medium-close waist-up creator framing with full head and clean space above loose hair, intimate eye-level perspective on a slight three-quarter body angle open to camera, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality."
+            ],
+            "progression_stage": 3,
+            "workflow_stage": "generating",
+            "session_direction": "",
+            "creator_guidance": "",
+            "grok_guidance": "",
+            "current_direction": {
+              "title": "Hip Shift Halter Strap Tease",
+              "creative_direction": "From the current both-forearms rail lean, she shifts her weight onto one hip for a softer S-curve while keeping one forearm planted on the weathered wood. Her free hand slowly rises to toy with the halter strap near her collarbone, fingers lightly tracing the strap. Half-lidded eyes deepen into a flirty squint and the knowing smirk softens into a parted-lip invitation, still locked on the viewer with warm private heat. Maintain chest-forward posture and natural body line so the gesture feels like the next intimate beat of the same boardwalk moment.",
+              "reasoning": "The Creative Hint is top priority and specifies this exact weight shift, hand-to-halter-strap action, and expression evolution. It progresses naturally from the approved forearm-rest smirk without repeating the prior static both-hands pose, advancing premium sensual connection while fully honoring every continuity lock.",
+              "continuity_notes": "Preserve exact identity, face, body proportions, long dark hair worn down with loose strands over the shoulders, sun-kissed skin, shimmering coral strappy halter crop top, high-waisted white micro-shorts, beach boardwalk location with salt-weathered railing, natural daylight, salt-spray atmosphere, and photorealistic camera style. Only weight distribution, one hand placement, eye squint, and lip parting change per the approved hint.",
+              "camera_framing": "Medium-close waist-up creator framing matching current distance, full head with clean space above the loose hair, slight three-quarter body angle open to camera, intimate eye-level perspective.",
+              "lighting": "Maintain the existing natural daylight with soft highlights and subtle salt-spray atmosphere; no change to time of day or quality of light.",
+              "emotion": "Half-lidded eyes deepened into a flirty squint, smirk softened into a parted-lip invitation, warm private allure and teasing heat directed at the viewer.",
+              "pose_composition": "Weight shifted to one hip creating a gentle S-curve; one forearm remains on the salt-weathered rail for support; the other hand rises to toy lightly with the halter strap near the collarbone; chest-forward posture retained; shoulders relaxed; hair falling naturally.",
+              "creative_mode": "premium",
+              "session_direction": "",
+              "continuity_locks": {
+                "location": true,
+                "wardrobe": true,
+                "lighting": true,
+                "hairstyle": true,
+                "makeup": true,
+                "camera_style": true
+              },
+              "created_at": "2026-07-19T00:56:06.794310"
+            },
+            "current_prompt": "The same woman with her exact face, long dark hair worn down with smooth flat natural top and loose flowing strands lying over her shoulders, same natural sun-kissed skin tone as the reference image, feminine hourglass body, same waist-to-hip proportions, and full natural D-cup bust shifts her weight onto one hip along the same wooden beach boardwalk for a softer S-curve while keeping one forearm planted on the salt-weathered railing, her free hand rising to lightly toy with the halter strap near her collarbone with fingers gently tracing the fabric, chest-forward posture retained as her half-lidded eyes deepen into a flirty squint and her knowing smirk softens into a parted-lip invitation aimed warmly at the viewer, wearing the shimmering coral strappy halter crop top stretched with realistic fabric tension across the bust and low neckline revealing natural cleavage paired with high-waisted white micro-shorts riding high on her hips, natural daylight with soft highlights and subtle salt-spray atmosphere, medium-close waist-up creator framing with full head and clean space above loose hair, intimate eye-level perspective on a slight three-quarter body angle open to camera, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.",
+            "direction_approved": true,
+            "continuity_locks": {
+              "location": true,
+              "wardrobe": true,
+              "lighting": true,
+              "hairstyle": true,
+              "makeup": true,
+              "camera_style": true
+            },
+            "creative_hint": "",
+            "inspiration_ideas": [
+              "She shifts her weight to one hip while keeping both forearms on the rail, then slowly runs one hand up to toy with the halter strap near her collarbone as her half-lidded eyes deepen into a flirty squint and her smirk softens into a parted-lip invitation.",
+              "Turning slightly more toward the camera, she lifts one elbow off the wood and rests her chin lightly on that raised hand, letting her gaze drop heavy with bedroom eyes while her mouth curves into a slow, knowing bite of the lower lip.",
+              "She arches her back a touch more against the railing so the crop top pulls tighter across her chest, sliding both hands farther apart along the wood as her expression warms into a soft, playful smile with eyes that sparkle with private teasing heat.",
+              "Leaning her hips into the rail, she brings one hand down to rest flat on her bare midriff just above the shorts waistband, tilting her head and locking eyes with a heavier, smoldering stare while her lips part in a quiet, breathy almost-smile.",
+              "She pushes up slightly from the forearms into a taller lean, shoulders rolling back as one hand drifts to adjust the side of her top, her face shifting into a confident half-smile with eyes half-closed in that languid, come-closer look.",
+              "Crossing one ankle behind the other for a more casual hip cock, she keeps her forearms planted but lets her fingers drum lightly on the weathered wood, meeting the camera with a flirty raised-eyebrow gaze and a subtle lip curl that promises more.",
+              "She angles her torso open even further and drops one hand to hook a thumb in the high waistband of her shorts, chin still lifted as her eyes go soft and heavy-lidded while her mouth relaxes into a bitten-lip smile full of quiet heat.",
+              "Pulling gently away from a full forearm rest, she places both palms flat on the rail and leans her chest forward a fraction more, her expression blooming into warm eye contact with a slow, teasing tongue-tip flick across her lower lip.",
+              "She twists just enough to glance back over one shoulder while still braced on the railing, one hand sliding along the wood toward her hip as her face lights with a mischievous half-smile and eyes that smolder with playful intensity.",
+              "Settling deeper into the lean with elbows bent and body closer to the rail, she lets her head tip slightly to the side, locking in direct eye contact as her knowing smirk deepens into a full bitten-lip stare heavy with intimate invitation."
+            ],
+            "selected_inspiration": "She shifts her weight to one hip while keeping both forearms on the rail, then slowly runs one hand up to toy with the halter strap near her collarbone as her half-lidded eyes deepen into a flirty squint and her smirk softens into a parted-lip invitation.",
+            "current_shot_image_id": "generated_image_7eb0553443cf4fdc789bcec0",
+            "selected_timeline_index": 1
+          },
+          "reference_image_url": "D:\\Ava_CMS\\Content\\Generation\\Photoshoot\\Active\\Photoshoot_2026-07-19_d12\\Shot_001.png",
+          "photoshoot_continuity_reference_image_url": "D:\\Ava_CMS\\Content\\Generation\\Photoshoot\\Active\\Photoshoot_2026-07-19_d12\\Shot_001.png"
+        },
+        "provider_generation_metadata": {
+          "provider_request_id": "07e154792a0e444b85b2c48c04e1115d",
+          "provider_family": "wavespeed",
+          "endpoint": "https://api.wavespeed.ai/api/v3/bytedance/seedream-v5.0-pro/edit",
+          "partial_success": false
+        },
+        "provider_execution_metadata": {
+          "submit_response": {
+            "code": 200,
+            "message": "success",
+            "data": {
+              "id": "07e154792a0e444b85b2c48c04e1115d",
+              "model": "bytedance/seedream-v5.0-pro/edit",
+              "input": {
+                "enable_base64_output": false,
+                "enable_sync_mode": false,
+                "images": [
+                  "https://i.ibb.co/rGQLbJpH/cfdda2cc15a2.png",
+                  "https://i.ibb.co/pvNmgNM9/189e53d9d08a.png"
+                ],
+                "output_format": "png",
+                "prompt": "The same woman with her exact face, long dark hair worn down with smooth flat natural top and loose flowing strands lying over her shoulders, same natural sun-kissed skin tone as the reference image, feminine hourglass body, same waist-to-hip proportions, and full natural D-cup bust shifts her weight onto one hip along the same wooden beach boardwalk for a softer S-curve while keeping one forearm planted on the salt-weathered railing, her free hand rising to lightly toy with the halter strap near her collarbone with fingers gently tracing the fabric, chest-forward posture retained as her half-lidded eyes deepen into a flirty squint and her knowing smirk softens into a parted-lip invitation aimed warmly at the viewer, wearing the shimmering coral strappy halter crop top stretched with realistic fabric tension across the bust and low neckline revealing natural cleavage paired with high-waisted white micro-shorts riding high on her hips, natural daylight with soft highlights and subtle salt-spray atmosphere, medium-close waist-up creator framing with full head and clean space above loose hair, intimate eye-level perspective on a slight three-quarter body angle open to camera, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.\n\nSOCIAL CLOSE-FRAMING LOCK - NON-NEGOTIABLE:\nREFERENCE IMAGE USAGE:\nUse the reference image only for the creator's identity, face, hair, skin tone, body shape, and full natural D-cup bust.\nDo not copy the reference image's setting, background, water, boat, dock, railing, trees, cabin, furniture, outfit, pose, lighting, or camera angle unless the written prompt explicitly asks for those exact elements.\nThe written prompt controls the scene, wardrobe, pose, lighting, and background.\nIf the prompt asks for a shower, bathroom, bedroom, hotel, couch, pool, city, beach, or any non-boat scene, do not include boat/lake/dock/marina details from the reference image.\nUse tight creator framing unless the prompt explicitly asks for a wide environmental shot.\nUse close-up, close-medium, waist-up, head-to-hips, head-to-upper-thigh, upper-thigh, or intimate seated close framing.\nKeep the creator large in frame, with her face, upper body, torso, bust, waist, and hip angle treated as the main visual anchors.\nKeep her full face and full head inside the frame, including forehead, hairline, and crown, with a small amount of breathing room above her hair.\nKeep the camera close enough that her full natural D-cup bust, hourglass waist, reference skin tone, and recognizable facial identity are obvious.\nKeep the background secondary. The environment may be visible, but it must not become the main subject.\nAvoid distant full-body shots, tiny-subject compositions, wide room shots, wide bed shots, scenery-dominant lake/pool/landscape shots, or any framing where the room, water, furniture, or landscape is more visually important than the creator.\nAvoid cropped-off forehead, cropped hairline, cut-off crown, missing top of head, or a composition that slices through her hair.\nDo not crop out the body cues needed to preserve her D-cup bust, hourglass shape, reference skin tone, and recognizable facial identity.\nAvoid visible phone/cellphone/selfie-device poses unless the prompt explicitly asks for a phone or mirror selfie.\nKeep the result social-platform safe according to the selected Social Content Studio mode.",
+                "resolution": "1k"
+              },
+              "outputs": [],
+              "urls": {
+                "get": "https://api.wavespeed.ai/api/v3/predictions/07e154792a0e444b85b2c48c04e1115d/result"
+              },
+              "status": "created",
+              "created_at": "2026-07-19T00:56:13.405Z",
+              "code": 0,
+              "error": "",
+              "timings": {
+                "inference": 0
+              }
+            }
+          },
+          "poll_response": {
+            "provider_request_ids": [
+              "07e154792a0e444b85b2c48c04e1115d"
+            ],
+            "poll_responses": [
+              {
+                "code": 200,
+                "message": "success",
+                "data": {
+                  "id": "07e154792a0e444b85b2c48c04e1115d",
+                  "model": "bytedance/seedream-v5.0-pro/edit",
+                  "outputs": [
+                    "https://d2h7xmz5gqybh9.cloudfront.net/output/8be3ed81-72da-4c42-b1e2-3039de5008d9.png"
+                  ],
+                  "urls": {
+                    "get": "https://api.wavespeed.ai/api/v3/predictions/07e154792a0e444b85b2c48c04e1115d/result"
+                  },
+                  "status": "completed",
+                  "created_at": "2026-07-19T00:56:13.403748348Z",
+                  "code": 0,
+                  "error": "",
+                  "timings": {
+                    "inference": 53704
+                  }
+                }
+              }
+            ],
+            "failures": []
+          },
+          "failures": []
+        },
+        "image_metadata": {
+          "requested_image_count": 1,
+          "output_count": 1,
+          "reference_asset_id": 93,
+          "completed_count": 1,
+          "failed_count": 0,
+          "processed_count": 1
+        }
+      },
+      "output_reference": "D:\\Ava_CMS\\Content\\Generation\\Photoshoot\\Active\\Photoshoot_2026-07-19_d12\\Candidate_generated_image_cfacacc616f88e1ddfec8f00.png",
+      "ingested_at": "2026-07-19T00:57:26.314377"
+    },
+    "created_at": "2026-07-19T00:57:26.428904",
+    "updated_at": null
+  }
+]

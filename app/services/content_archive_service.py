@@ -59,7 +59,8 @@ class ContentArchiveService:
             "posted_fanvue_paid": root / "Posted" / "Fanvue" / "Paid",
             "archive_edited": root / "Archive" / "Edited",
             "archive_imported": root / "Archive" / "Imported",
-            "archive_junk": root / "Archive" / "Junk",
+            "archive_junk": root / "Archive" / "Removed Content",
+            "archive_versions": root / "Archive" / "Versions",
         }
 
     def cms_paths(self) -> dict[str, Path]:
@@ -201,6 +202,120 @@ class ContentArchiveService:
             else paths["edited_originals"]
         )
         return self._copy_or_materialize(record.output_reference, destination, record.image_id)
+
+    def archive_asset_version(
+        self,
+        record: GeneratedImageRecord,
+        *,
+        version_number: int,
+        approval_timestamp: str,
+        edit_source: str,
+    ) -> ContentArchiveRecord:
+        """Preserve one superseded Generation Library version for future restore."""
+        version = max(1, int(version_number))
+        existing = next((
+            item
+            for item in self.list_asset_versions(record.image_id)
+            if int(item.metadata.get("version_number") or 0) == version
+            and item.original_output_reference == record.output_reference
+            and Path(item.current_file_path).is_file()
+        ), None)
+        if existing is not None:
+            return existing
+        destination = (
+            self.content_paths()["archive_versions"]
+            / record.image_id
+            / f"Version_{version:04d}"
+        )
+        self.initialize_content_root()
+        archived_path = self._copy_or_materialize(
+            record.output_reference,
+            destination,
+            record.image_id,
+        )
+        archive_record = ContentArchiveRecord(
+            archive_id=new_generation_id("asset_version"),
+            image_id=record.image_id,
+            archive_type="asset_version",
+            destination=str(destination),
+            current_file_path=str(archived_path),
+            original_output_reference=record.output_reference,
+            provider_id=record.provider_id,
+            workflow=record.generation_metadata.get("workflow_type") or record.generation_metadata.get("source"),
+            prompt_text=record.prompt_text,
+            imported_asset_id=record.imported_asset_id,
+            generation_record=asdict(record),
+            metadata={
+                "generation_library_record_id": record.image_id,
+                "version_number": version,
+                "approval_timestamp": approval_timestamp,
+                "provider": record.provider_id,
+                "prompt": record.prompt_text,
+                "prompt_plan_id": record.prompt_plan_id,
+                "provider_metadata": dict(record.provider_metadata or {}),
+                "prompt_metadata": dict(record.prompt_metadata or {}),
+                "generation_metadata": dict(record.generation_metadata or {}),
+                "original_file_path": record.output_reference,
+                "archived_file_path": str(archived_path),
+                "edit_source": str(edit_source or "edit_studio"),
+            },
+        )
+        records = list(self.list_records())
+        records.insert(0, archive_record)
+        self._write_records(records)
+        self._write_json(
+            archived_path.with_suffix(archived_path.suffix + ".json"),
+            asdict(archive_record),
+        )
+        return archive_record
+
+    def list_asset_versions(self, image_id: str) -> tuple[ContentArchiveRecord, ...]:
+        records = tuple(
+            record
+            for record in self.list_records(archive_type="asset_version")
+            if record.image_id == str(image_id)
+        )
+        return tuple(
+            sorted(
+                records,
+                key=lambda record: int(record.metadata.get("version_number") or 0),
+                reverse=True,
+            )
+        )
+
+    def copy_asset_version_to_generation_active(
+        self,
+        archive_record: ContentArchiveRecord,
+    ) -> Path:
+        """Copy an immutable archived version into active storage for promotion."""
+        source = Path(archive_record.current_file_path).expanduser()
+        if not source.is_file():
+            raise FileNotFoundError(f"Archived version media is unavailable: {source}")
+        restored = self._copy_or_materialize(
+            str(source),
+            self.content_paths()["generation_active"],
+            archive_record.image_id,
+        )
+        if not restored.is_file():
+            raise RuntimeError("Archived version media could not be staged in Generation Active.")
+        return restored
+
+    def rollback_asset_version_archive(self, archive_id: str) -> None:
+        """Remove only a newly-created archive record from a failed promotion."""
+        target = next((item for item in self.list_records() if item.archive_id == archive_id), None)
+        if target is None or target.archive_type != "asset_version":
+            return
+        media = Path(target.current_file_path)
+        manifest = media.with_suffix(media.suffix + ".json")
+        if media.is_file():
+            media.unlink()
+        if manifest.is_file():
+            manifest.unlink()
+        try:
+            media.parent.rmdir()
+        except OSError:
+            pass
+        self._write_records([item for item in self.list_records() if item.archive_id != archive_id])
 
     def archive_imported(
         self,

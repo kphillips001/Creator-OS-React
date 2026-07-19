@@ -235,6 +235,7 @@ def build_default_runtime_from_environment() -> TelegramBotTokenRuntimeSpike:
     from app.engine.mode_engine import ModeEngine
     from app.services.content_service import ContentService
     from app.services.gpt_service import GPTService
+    from app.services.global_automation_safety_service import GlobalAutomationSafetyService
     from app.services.intent_service import IntentService
     from app.services.memory_service import MemoryService
     from app.services.offer_service import OfferService
@@ -285,6 +286,7 @@ def build_default_runtime_from_environment() -> TelegramBotTokenRuntimeSpike:
         settings=settings,
         logger=logging.getLogger("telegram-decision-engine"),
     )
+    global_safety = GlobalAutomationSafetyService()
     gateway = ConversationGateway(
         MemoryInitializingDecisionEngine(decision_engine),
         allowed_fanvue_hostnames=allowed_hosts,
@@ -292,6 +294,7 @@ def build_default_runtime_from_environment() -> TelegramBotTokenRuntimeSpike:
             decision_engine=decision_engine,
             memory_service=memory_service,
         ),
+        global_automation_safety_service=global_safety,
     )
     inbound_adapter = TelegramInboundAdapter(
         identity_adapter=TelegramIdentityAdapter(

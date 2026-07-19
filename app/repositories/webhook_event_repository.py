@@ -3,6 +3,50 @@ import uuid
 from datetime import datetime, timedelta
 
 from app.database import get_db_connection
+from app.repositories.atomic_queue_claim_repository import AtomicQueueClaimRepository
+
+
+_claims = AtomicQueueClaimRepository(
+    table="webhook_events", status_column="status", pending_status="received",
+    completed_status="processed",
+    eligible_predicate=("status = 'received' OR (status = 'failed' AND next_retry_at IS NOT NULL "
+                        "AND next_retry_at <= NOW())"),
+    order_by="received_at ASC, id ASC",
+    claim_assignments=", processing_attempts = processing_attempts + 1",
+)
+
+
+def claim_due_items(*, worker_instance_id: str, limit: int = 25, lease_seconds: int = 300) -> list[dict]:
+    return _claims.claim_due_items(worker_instance_id=worker_instance_id, lease_seconds=lease_seconds, limit=limit)
+
+
+def renew_claim(webhook_event_id: int, *, worker_instance_id: str, lease_seconds: int = 300) -> dict:
+    return _claims.renew_claim(webhook_event_id, worker_instance_id=worker_instance_id, lease_seconds=lease_seconds)
+
+
+def release_claim(webhook_event_id: int, *, worker_instance_id: str) -> dict:
+    return _claims.release_claim(webhook_event_id, worker_instance_id=worker_instance_id)
+
+
+def complete_claim(webhook_event_id: int, *, worker_instance_id: str) -> dict:
+    return _claims.complete_claim(
+        webhook_event_id, worker_instance_id=worker_instance_id,
+        assignments="processed_at = NOW(), last_error = NULL, next_retry_at = NULL",
+    )
+
+
+def fail_claim(webhook_event_id: int, *, worker_instance_id: str, error_message: str,
+               retry_delay_minutes: int = 5) -> dict:
+    return _claims.fail_claim(
+        webhook_event_id, worker_instance_id=worker_instance_id,
+        assignments=("status = 'failed', retry_count = retry_count + 1, last_error = %s, "
+                     "failed_at = NOW(), next_retry_at = NOW() + (%s * INTERVAL '1 minute')"),
+        params=(error_message, max(1, int(retry_delay_minutes))),
+    )
+
+
+def recover_stale_claims(*, limit: int = 100) -> list[dict]:
+    return _claims.recover_stale_claims(limit=limit)
 
 
 def create_webhook_event(event: dict):
@@ -219,3 +263,26 @@ def mark_webhook_event_failed(
         conn.commit()
 
     return True
+
+
+def list_webhook_events_for_account(
+    fanvue_account_id: int,
+    limit: int = 250,
+):
+    """Return persisted webhook activity without processing or retrying it."""
+    sql = """
+        SELECT
+            id, internal_event_id, external_event_id, event_type,
+            fanvue_account_id, fanvue_user_id, status, received_at,
+            processed_at, failed_at, retry_count, next_retry_at,
+            last_error, processing_attempts
+            , worker_instance_id, claimed_at, lease_expires_at
+        FROM webhook_events
+        WHERE fanvue_account_id = %s::text
+        ORDER BY received_at DESC, id DESC
+        LIMIT %s
+    """
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(sql, (fanvue_account_id, limit))
+            return cursor.fetchall()

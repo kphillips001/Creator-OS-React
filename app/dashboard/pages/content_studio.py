@@ -54,6 +54,14 @@ from app.services.chat_commerce_registration_service import (
     ChatCommerceRegistrationService,
 )
 from app.services.content_archive_service import ContentArchiveService
+from app.services.content_studio_configuration_service import (
+    PREMIUM_CREATIVE_MODE_LABELS,
+    PREMIUM_PROVIDER_LABELS,
+    PREMIUM_STUDIO_PROMPT_COUNT_MAXIMUM,
+    PREMIUM_STUDIO_PROMPT_COUNT_MINIMUM,
+    default_provider_index,
+    premium_studio_provider_options,
+)
 from app.services.creator_approval_service import CreatorApprovalService
 from app.services.creative_director_service import CreativeDirectorService
 from app.services.edit_studio_service import EditStudioService
@@ -198,13 +206,6 @@ SOCIAL_CREATIVE_MODE_LABELS = {
     "story_sequence": "Story Sequence",
 }
 
-PREMIUM_PROVIDER_LABELS = {
-    "seedream_4_5": "Seedream 4.5",
-    "seedream_5_0_pro": "Seedream 5.0 Pro",
-    "wan_2_7_image_edit": "WAN 2.7",
-    "future_provider": "Future Provider",
-}
-
 EDIT_PROVIDER_LABELS = {
     "seedream_4_5": "Seedream 4.5",
     "seedream_5_0_pro": "Seedream 5.0 Pro",
@@ -221,12 +222,6 @@ EDIT_STUDIO_PROVIDER_ORDER = (
     "wan_2_7_image_edit",
 )
 EDIT_STUDIO_DEFAULT_PROVIDER_ID = "seedream_5_0_pro"
-
-PREMIUM_CREATIVE_MODE_LABELS = {
-    "premium_teaser": "Premium Teaser",
-    "spicy": "Spicy",
-    "story_sequence": "Story Sequence",
-}
 
 EDIT_MODE_LABELS = {
     "single_image": "Single Image Edit",
@@ -1070,29 +1065,6 @@ def social_studio_provider_options(
         if label:
             options.append((provider_id, label))
     return tuple(options) or (("future_provider", SOCIAL_PROVIDER_LABELS["future_provider"]),)
-
-
-def premium_studio_provider_options(
-    generation_engine: GenerationEngineService,
-) -> tuple[tuple[str, str], ...]:
-    registry = getattr(generation_engine, "provider_registry", None)
-    provider_ids = tuple(getattr(registry, "provider_ids", lambda: ())())
-    if not provider_ids:
-        return (("future_provider", PREMIUM_PROVIDER_LABELS["future_provider"]),)
-    options = []
-    for provider_id in provider_ids:
-        label = PREMIUM_PROVIDER_LABELS.get(provider_id)
-        if label:
-            options.append((provider_id, label))
-    return tuple(options) or (("future_provider", PREMIUM_PROVIDER_LABELS["future_provider"]),)
-
-
-def default_provider_index(
-    provider_ids: tuple[str, ...],
-    *,
-    preferred_provider_id: str = "seedream_4_5",
-) -> int:
-    return provider_ids.index(preferred_provider_id) if preferred_provider_id in provider_ids else 0
 
 
 def edit_studio_provider_options(
@@ -2700,9 +2672,12 @@ def _render_premium_studio(
     )
     prompt_count = st.slider(
         "Prompt Count",
-        min_value=1,
-        max_value=20,
-        value=min(max(settings.default_prompt_count, 1), 20),
+        min_value=PREMIUM_STUDIO_PROMPT_COUNT_MINIMUM,
+        max_value=PREMIUM_STUDIO_PROMPT_COUNT_MAXIMUM,
+        value=min(
+            max(settings.default_prompt_count, PREMIUM_STUDIO_PROMPT_COUNT_MINIMUM),
+            PREMIUM_STUDIO_PROMPT_COUNT_MAXIMUM,
+        ),
         key="premium_studio_prompt_count",
     )
     provider_options = premium_studio_provider_options(generation_engine)

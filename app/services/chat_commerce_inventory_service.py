@@ -125,6 +125,13 @@ class ChatCommerceInventoryService:
             records.append(record)
         return tuple(records[:limit])
 
+    def summarize_items(
+        self,
+        items: Iterable[ChatCommerceInventoryItem],
+    ) -> ChatCommerceInventorySummary:
+        """Summarize an already-scoped inventory without changing lifecycle rules."""
+        return self._summary(tuple(items))
+
     def _business_assets(self, *, limit: int) -> tuple[Any, ...]:
         records: list[Any] = []
         for getter_name in (

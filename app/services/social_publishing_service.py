@@ -3,10 +3,16 @@
 from __future__ import annotations
 
 import json
+import logging
+from datetime import UTC, datetime
+from threading import Thread
+from time import sleep
 import traceback
 from dataclasses import asdict, replace
 from pathlib import Path
 from typing import Any, Iterable, Mapping
+
+import requests
 
 from app.models.generation_engine import new_generation_id, utc_now
 from app.models.social_publishing import (
@@ -22,6 +28,10 @@ from app.providers.social.x_provider import XPublishingProvider
 from app.services.generation_engine_service import GenerationEngineService
 from app.services.generation_library_service import GenerationLibraryService
 from app.services.generation_result_ingestion_service import GenerationResultIngestionService
+
+
+logger = logging.getLogger(__name__)
+X_AUTO_PUBLISH_URL = "http://127.0.0.1:8765/api/publish/x"
 
 
 class SocialPublishingService:
@@ -367,7 +377,84 @@ class SocialPublishingService:
                 "provider_output_url": getattr(result, "provider_output_url", None),
             },
         )
+        if item.platform == SocialPlatform.X.value:
+            published_at = datetime.now(UTC).isoformat()
+            logger.info(
+                "X publish succeeded | platform=x tweet_id=%s published_at=%s",
+                result.provider_post_id,
+                published_at,
+            )
+            try:
+                self._schedule_x_auto_callback(
+                    {
+                        "platform": "x",
+                        "tweet_id": result.provider_post_id,
+                        "published_at": published_at,
+                    }
+                )
+            except Exception as exc:
+                logger.warning(
+                    "X_AUTO callback failed | callback_failed=true attempt=0 "
+                    "tweet_id=%s error=%s",
+                    result.provider_post_id,
+                    exc,
+                )
         return updated
+
+    @staticmethod
+    def _schedule_x_auto_callback(payload: Mapping[str, Any]) -> None:
+        """Run the post-publish handoff without delaying the React API response."""
+        Thread(
+            target=SocialPublishingService._send_x_auto_callback,
+            args=(dict(payload),),
+            name="x-auto-publish-callback",
+            daemon=True,
+        ).start()
+
+    @staticmethod
+    def _send_x_auto_callback(payload: Mapping[str, Any]) -> None:
+        """Send the callback and retry exactly once after five seconds."""
+        callback_payload = {
+            "platform": "x",
+            "tweet_id": str(payload["tweet_id"]),
+            "published_at": str(payload["published_at"]),
+        }
+        for attempt in (1, 2):
+            logger.info(
+                "X_AUTO callback started | callback_started=true attempt=%d tweet_id=%s",
+                attempt,
+                callback_payload["tweet_id"],
+            )
+            try:
+                response = requests.post(
+                    X_AUTO_PUBLISH_URL,
+                    json=callback_payload,
+                    timeout=10,
+                )
+                response.raise_for_status()
+                logger.info(
+                    "X_AUTO callback succeeded | callback_succeeded=true attempt=%d "
+                    "tweet_id=%s status_code=%s",
+                    attempt,
+                    callback_payload["tweet_id"],
+                    response.status_code,
+                )
+                return
+            except Exception as exc:
+                logger.warning(
+                    "X_AUTO callback failed | callback_failed=true attempt=%d "
+                    "tweet_id=%s error=%s",
+                    attempt,
+                    callback_payload["tweet_id"],
+                    exc,
+                )
+                if attempt == 1:
+                    logger.info(
+                        "X_AUTO callback retried | callback_retried=true retry_in_seconds=5 "
+                        "tweet_id=%s",
+                        callback_payload["tweet_id"],
+                    )
+                    sleep(5)
 
     def list_queue_items(
         self,

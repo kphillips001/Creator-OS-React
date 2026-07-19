@@ -20,6 +20,11 @@ class GlobalAutomationSafetyService:
     def __init__(self):
         self.behavior_config = self._load_behavior_config()
 
+    def refresh(self) -> dict:
+        """Reload the authoritative behavior configuration for live processes."""
+        self.behavior_config = self._load_behavior_config()
+        return self.behavior_config
+
     def _load_behavior_config(self) -> dict:
         try:
             if self.CONFIG_PATH.exists():
@@ -87,6 +92,9 @@ class GlobalAutomationSafetyService:
         return bool(value)
 
     def check_global_safety(self) -> dict:
+        # Workers and transport runtimes are long-lived.  The operator's master
+        # switch must therefore be observed without recreating this service.
+        self.refresh()
         if not self._config_enabled(
             "global_automation_enabled",
             False,
@@ -105,6 +113,15 @@ class GlobalAutomationSafetyService:
         ):
             return self._blocked("manual_pause_enabled")
 
+        return self._allowed()
+
+    def check_operator_send_safety(self) -> dict:
+        """Preserve manual publishing while honoring send/pause safeguards."""
+        self.refresh()
+        if not self._config_enabled("global_sends_enabled", False):
+            return self._blocked("global_sends_disabled")
+        if self._config_enabled("manual_pause_enabled", False):
+            return self._blocked("manual_pause_enabled")
         return self._allowed()
 
     def can_send_chat(self) -> dict:

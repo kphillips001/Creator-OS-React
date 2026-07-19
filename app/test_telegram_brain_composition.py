@@ -123,6 +123,17 @@ class NeverOwnedContentService:
         return False
 
 
+class NeverUsedContentService:
+    def has_seen_content(self, *args, **kwargs):
+        return False
+
+    def has_seen_content_tag(self, *args, **kwargs):
+        return False
+
+    def mark_content_seen(self, *args, **kwargs):
+        return None
+
+
 class TelegramBrainCompositionTests(unittest.TestCase):
     def setUp(self):
         self.adapter = TelegramIdentityAdapter(engine_account_id=7)
@@ -173,6 +184,7 @@ class TelegramBrainCompositionTests(unittest.TestCase):
                 logger=logging.getLogger("telegram-brain-composition"),
             )
         engine.content_ownership_service = NeverOwnedContentService()
+        engine.content_usage_service = NeverUsedContentService()
         return engine, memory
 
     @staticmethod
@@ -232,15 +244,17 @@ class TelegramBrainCompositionTests(unittest.TestCase):
         engine.process_message = recording_process_message
 
         with (
-            patch(
-                "app.engine.decision_engine.get_active_creator_profile",
+            patch.object(
+                engine.decision_runtime_boundary,
+                "get_active_creator_profile",
                 return_value=self.creator_profile(),
             ),
-            patch(
-                "app.engine.decision_engine.get_user_by_account_and_id",
+            patch.object(
+                engine.decision_runtime_boundary,
+                "get_user_by_account_and_id",
                 return_value=None,
             ),
-            patch("app.engine.decision_engine.log_send_event"),
+            patch.object(engine.decision_runtime_boundary, "log_send_event"),
             patch("builtins.print"),
         ):
             output = self.execute_gateway(
@@ -279,24 +293,17 @@ class TelegramBrainCompositionTests(unittest.TestCase):
         }
 
         with (
-            patch(
-                "app.engine.decision_engine.get_active_creator_profile",
+            patch.object(
+                engine.decision_runtime_boundary,
+                "get_active_creator_profile",
                 return_value=self.creator_profile(),
             ),
-            patch(
-                "app.engine.decision_engine.get_user_by_account_and_id",
+            patch.object(
+                engine.decision_runtime_boundary,
+                "get_user_by_account_and_id",
                 return_value=None,
             ),
-            patch(
-                "app.engine.decision_engine.has_user_seen_content",
-                return_value=False,
-            ),
-            patch(
-                "app.engine.decision_engine.has_user_seen_content_tag",
-                return_value=False,
-            ),
-            patch("app.engine.decision_engine.log_content_usage"),
-            patch("app.engine.decision_engine.log_send_event"),
+            patch.object(engine.decision_runtime_boundary, "log_send_event"),
             patch("builtins.print"),
         ):
             output = self.execute_gateway(
@@ -325,8 +332,9 @@ class TelegramBrainCompositionTests(unittest.TestCase):
         engine.process_message = recording_process_message
 
         with (
-            patch(
-                "app.engine.decision_engine.get_active_creator_profile",
+            patch.object(
+                engine.decision_runtime_boundary,
+                "get_active_creator_profile",
                 return_value=None,
             ),
             patch("builtins.print"),
@@ -351,15 +359,17 @@ class TelegramBrainCompositionTests(unittest.TestCase):
         )
 
         with (
-            patch(
-                "app.engine.decision_engine.get_active_creator_profile",
+            patch.object(
+                engine.decision_runtime_boundary,
+                "get_active_creator_profile",
                 return_value=None,
             ),
-            patch(
-                "app.engine.decision_engine.get_user_by_account_and_id",
+            patch.object(
+                engine.decision_runtime_boundary,
+                "get_user_by_account_and_id",
                 return_value=None,
             ),
-            patch("app.engine.decision_engine.log_send_event"),
+            patch.object(engine.decision_runtime_boundary, "log_send_event"),
             patch("builtins.print"),
         ):
             output = self.execute_gateway(

@@ -182,6 +182,20 @@ class SchemaManagerService:
             "dashboard": ("Creator HQ Runtime Control", "Developer Agent"),
             "columns": ("creator_profile_id", "mode", "status", "current_runtime_provider", "observed_recommendations"),
         },
+        "worker_heartbeats": {
+            "owner": "Runtime Operations",
+            "migration": "20260719_001_worker_heartbeats.sql",
+            "repository": "WorkerHeartbeatRepository",
+            "service": "WorkerHeartbeatService",
+            "dashboard": ("Business Operations",),
+            "columns": (
+                "heartbeat_id", "worker_name", "worker_instance_id", "worker_type",
+                "creator_profile_id", "account_id", "process_id", "host_name",
+                "application_version", "status", "started_at", "last_heartbeat_at",
+                "last_poll_at", "last_success_at", "last_failure_at", "last_error",
+                "shutdown_at", "metadata", "created_at", "updated_at",
+            ),
+        },
         "ppv_broadcast_logs": {
             "owner": "PPV Broadcast",
             "migration": "20260707_003_reconcile_ppv_broadcast_logs.sql",
@@ -314,6 +328,20 @@ class SchemaManagerService:
             "send_log": ("id", "fanvue_account_id", "send_status"),
             "wall_post_history": ("id", "fanvue_account_id", "content_item_id"),
             "wall_post_queue": ("id", "fanvue_account_id", "queue_status", "scheduled_for"),
+        },
+        "20260719_001_worker_heartbeats.sql": {
+            "worker_heartbeats": (
+                "heartbeat_id", "worker_name", "worker_instance_id", "worker_type",
+                "creator_profile_id", "account_id", "process_id", "host_name",
+                "status", "started_at", "last_heartbeat_at", "metadata",
+            ),
+        },
+        "20260719_002_atomic_queue_claims.sql": {
+            "outreach_queue": ("worker_instance_id", "claimed_at", "lease_expires_at"),
+            "delayed_message_queue": ("worker_instance_id", "claimed_at", "lease_expires_at"),
+            "mass_ppv_queue": ("worker_instance_id", "claimed_at", "lease_expires_at"),
+            "wall_post_queue": ("worker_instance_id", "claimed_at", "lease_expires_at"),
+            "webhook_events": ("worker_instance_id", "claimed_at", "lease_expires_at"),
         },
     }
 
@@ -605,14 +633,21 @@ class SchemaManagerService:
         "content_items": ("idx_content_items_creator_profile_status", "idx_content_items_local_vault_path"),
         "content_opportunity_records": ("idx_content_opportunity_records_type", "idx_content_opportunity_records_payload"),
         "customer_entitlements": ("idx_customer_entitlements_product", "idx_customer_entitlements_legacy_user"),
-        "delayed_message_queue": ("idx_delayed_message_queue_due",),
-        "outreach_queue": ("idx_outreach_queue_due",),
         "product_assets": ("idx_product_assets_asset_id",),
         "products": ("idx_products_catalog_creator_status",),
         "publishing_jobs": ("idx_publishing_jobs_provider_status", "idx_publishing_jobs_retry"),
         "runtime_control_records": ("idx_runtime_control_records_mode",),
         "telegram_identity_map": ("telegram_identity_map_active_telegram_lookup_idx",),
-        "wall_post_queue": ("idx_wall_post_queue_due",),
+        "worker_heartbeats": (
+            "idx_worker_heartbeats_worker_name", "idx_worker_heartbeats_instance",
+            "idx_worker_heartbeats_creator_account", "idx_worker_heartbeats_last_heartbeat",
+            "idx_worker_heartbeats_status",
+        ),
+        "outreach_queue": ("idx_outreach_queue_due", "idx_outreach_queue_active_lease"),
+        "delayed_message_queue": ("idx_delayed_message_queue_due", "idx_delayed_message_queue_active_lease"),
+        "mass_ppv_queue": ("idx_mass_ppv_queue_status_due", "idx_mass_ppv_queue_active_lease"),
+        "wall_post_queue": ("idx_wall_post_queue_due", "idx_wall_post_queue_active_lease"),
+        "webhook_events": ("idx_webhook_events_status_retry", "idx_webhook_events_active_lease"),
     }
 
     CRITICAL_FOREIGN_KEYS: Mapping[str, tuple[str, ...]] = {

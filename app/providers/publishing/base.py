@@ -51,6 +51,7 @@ class PublishingProvider(Protocol):
         text: str,
         media_ids: list[str] | None = None,
         audience: str = "followers-and-subscribers",
+        execution_origin: str = "operator",
     ) -> dict[str, Any]:
         """Create a provider wall post."""
 

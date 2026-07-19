@@ -2,6 +2,7 @@ import sys
 import tempfile
 import types
 import unittest
+import hashlib
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -32,7 +33,7 @@ from app.models.generation_engine import (
     GenerationStatus,
 )
 from app.models.generation_ingestion import GenerationResultIngestionResult
-from app.models.generation_library import GenerationLibraryFilter
+from app.models.generation_library import GeneratedImageRecord, GenerationLibraryFilter
 from app.services.content_archive_service import ContentArchiveService
 from app.services.generation_library_service import GenerationLibraryService
 from app.services.photoshoot_queue_service import PhotoshootQueueService
@@ -149,6 +150,95 @@ class GenerationLibraryServiceTests(unittest.TestCase):
             storage_dir=Path(temp_dir.name) / "library",
             archive_service=archive,
         )
+
+    @staticmethod
+    def version_record(image_id, path, version, provider, prompt):
+        return GeneratedImageRecord(
+            image_id=image_id,
+            generation_job_id=f"job-{version}",
+            generation_request_id=f"request-{version}",
+            generation_result_id=f"result-{version}",
+            output_reference=str(path),
+            creator_profile_id=7,
+            provider_id=provider,
+            prompt_plan_id=f"plan-{version}",
+            prompt_text=prompt,
+            creative_mode="premium_teaser",
+            reference_asset_id=None,
+            provider_metadata={"provider_version": version},
+            prompt_metadata={"prompt_version": version},
+            generation_metadata={"asset_version": version, "source": "edit_studio"},
+        )
+
+    def test_restore_archived_version_creates_monotonic_current_without_destroying_history(self):
+        service = self.make_service()
+        root = service.archive_service.content_root
+        source_one = root / "source-one.png"
+        source_two = root / "source-two.png"
+        active_three = service.archive_service.content_paths()["generation_active"] / "asset-1.png"
+        for path, content in ((source_one, b"version-one"), (source_two, b"version-two"), (active_three, b"version-three")):
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(content)
+        version_one = self.version_record("asset-1", source_one, 1, "seedream_4_5", "Version one prompt")
+        version_two = self.version_record("asset-1", source_two, 2, "wan_2_7", "Version two prompt")
+        current = self.version_record("asset-1", active_three, 3, "nano_banana_pro", "Version three prompt")
+        service.archive_service.archive_asset_version(version_one, version_number=1, approval_timestamp="2026-01-01", edit_source="edit_studio")
+        service.archive_service.archive_asset_version(version_two, version_number=2, approval_timestamp="2026-01-02", edit_source="edit_studio")
+        service._write_records([current])
+        selected_bytes_hash = hashlib.sha256(Path(service.archive_service.list_asset_versions("asset-1")[-1].current_file_path).read_bytes()).hexdigest()
+
+        restored = service.restore_asset_version(image_id="asset-1", version_number=1)
+
+        self.assertEqual(restored.image_id, "asset-1")
+        self.assertEqual(restored.generation_metadata["asset_version"], 4)
+        self.assertEqual(restored.generation_metadata["restored_from_version"], 1)
+        self.assertEqual(restored.generation_metadata["previous_current_version"], 3)
+        self.assertIn("restore_archive_record_id", restored.generation_metadata)
+        self.assertEqual(restored.provider_id, "seedream_4_5")
+        self.assertEqual(restored.prompt_text, "Version one prompt")
+        self.assertEqual(hashlib.sha256(Path(restored.output_reference).read_bytes()).hexdigest(), selected_bytes_hash)
+        self.assertEqual(len(service.list_records()), 1)
+        self.assertEqual([int(item.metadata["version_number"]) for item in service.archive_service.list_asset_versions("asset-1")], [3, 2, 1])
+        self.assertEqual(len(list(service.archive_service.content_paths()["generation_active"].glob("asset-1*"))), 1)
+        repeated = service.restore_asset_version(image_id="asset-1", version_number=1)
+        self.assertEqual(repeated.generation_metadata["asset_version"], 5)
+        self.assertEqual([int(item.metadata["version_number"]) for item in service.archive_service.list_asset_versions("asset-1")], [4, 3, 2, 1])
+        self.assertEqual(len(service.list_records()), 1)
+
+    def test_restore_rejects_current_and_missing_versions(self):
+        service = self.make_service()
+        active = service.archive_service.content_paths()["generation_active"] / "asset-1.png"
+        active.parent.mkdir(parents=True, exist_ok=True)
+        active.write_bytes(b"current")
+        service._write_records([self.version_record("asset-1", active, 3, "provider", "Current")])
+
+        with self.assertRaisesRegex(ValueError, "current asset version"):
+            service.restore_asset_version(image_id="asset-1", version_number=3)
+        with self.assertRaisesRegex(KeyError, "Archived asset version not found"):
+            service.restore_asset_version(image_id="asset-1", version_number=1)
+
+    def test_restore_staging_failure_rolls_back_new_archive_and_keeps_current_valid(self):
+        service = self.make_service()
+        root = service.archive_service.content_root
+        old = root / "old.png"
+        current_path = service.archive_service.content_paths()["generation_active"] / "asset-1.png"
+        old.parent.mkdir(parents=True, exist_ok=True)
+        current_path.parent.mkdir(parents=True, exist_ok=True)
+        old.write_bytes(b"old")
+        current_path.write_bytes(b"current")
+        old_record = self.version_record("asset-1", old, 1, "old-provider", "Old")
+        current = self.version_record("asset-1", current_path, 2, "current-provider", "Current")
+        service.archive_service.archive_asset_version(old_record, version_number=1, approval_timestamp="2026-01-01", edit_source="edit_studio")
+        service._write_records([current])
+        service.archive_service.copy_asset_version_to_generation_active = lambda _record: (_ for _ in ()).throw(RuntimeError("staging failed"))
+
+        with self.assertRaisesRegex(RuntimeError, "staging failed"):
+            service.restore_asset_version(image_id="asset-1", version_number=1)
+
+        self.assertEqual(service.get("asset-1").generation_metadata["asset_version"], 2)
+        self.assertEqual(current_path.read_bytes(), b"current")
+        self.assertEqual([int(item.metadata["version_number"]) for item in service.archive_service.list_asset_versions("asset-1")], [1])
+        self.assertEqual(len(list(service.archive_service.content_paths()["generation_active"].glob("asset-1*"))), 1)
 
     def test_library_browsing_indexes_successful_generated_images(self):
         service = self.make_service()

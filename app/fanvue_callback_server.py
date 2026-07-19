@@ -1,4 +1,7 @@
 import json
+import asyncio
+import logging
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
 from fastapi import FastAPI, Request
@@ -13,9 +16,67 @@ from app.repositories.webhook_event_repository import (
     create_webhook_event,
     get_webhook_event_by_external_id,
 )
+from app.api.content_studio import router as content_studio_router
+from app.api.generation_library_publishing import router as generation_library_publishing_router
+from app.api.edit_studio import router as edit_studio_router
+from app.api.generation_library import router as generation_library_router
+from app.api.posted_content import router as posted_content_router
+from app.api.photoshoot import router as photoshoot_router
+from app.api.reference_library import router as reference_library_router
+from app.api.asset_library import router as asset_library_router
+from app.api.test_chat import router as test_chat_router
+from app.api.business_assets import router as business_assets_router
+from app.api.products import router as products_router
+from app.api.customers import router as customers_router
+from app.api.sales import router as sales_router
+from app.api.operations import router as operations_router
+from app.services.worker_heartbeat_instrumentation import record_heartbeat_safely
+from app.services.worker_heartbeat_service import WorkerHeartbeatService
 
 
-app = FastAPI()
+_heartbeat_logger = logging.getLogger("fastapi-worker-heartbeat")
+
+
+async def _fastapi_heartbeat_loop(service: WorkerHeartbeatService) -> None:
+    while True:
+        await asyncio.to_thread(record_heartbeat_safely, _heartbeat_logger, "heartbeat", service.heartbeat)
+        await asyncio.sleep(30)
+
+
+@asynccontextmanager
+async def _application_lifespan(application: FastAPI):
+    service = WorkerHeartbeatService(worker_name="FastAPI", worker_type="application_runtime", poll_interval_seconds=30)
+    await asyncio.to_thread(record_heartbeat_safely, _heartbeat_logger, "startup", service.register_startup)
+    task = asyncio.create_task(_fastapi_heartbeat_loop(service))
+    application.state.worker_heartbeat_service = service
+    application.state.worker_heartbeat_task = task
+    try:
+        yield
+    finally:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+        await asyncio.to_thread(record_heartbeat_safely, _heartbeat_logger, "stopping", service.record_stopping)
+        await asyncio.to_thread(record_heartbeat_safely, _heartbeat_logger, "shutdown", service.record_shutdown)
+
+
+app = FastAPI(lifespan=_application_lifespan)
+app.include_router(content_studio_router)
+app.include_router(generation_library_publishing_router)
+app.include_router(edit_studio_router)
+app.include_router(generation_library_router)
+app.include_router(posted_content_router)
+app.include_router(photoshoot_router)
+app.include_router(reference_library_router)
+app.include_router(asset_library_router)
+app.include_router(test_chat_router)
+app.include_router(business_assets_router)
+app.include_router(products_router)
+app.include_router(customers_router)
+app.include_router(sales_router)
+app.include_router(operations_router)
 
 
 @app.get("/callback")
@@ -170,7 +231,9 @@ async def fanvue_webhook(request: Request):
     processing_error = None
 
     try:
-        processor = WebhookEventProcessorService()
+        processor = WebhookEventProcessorService(
+            worker_instance_id=request.app.state.worker_heartbeat_service.worker_instance_id
+        )
        
         processing_result = processor.process_pending_events()
 

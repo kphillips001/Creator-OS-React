@@ -1,5 +1,350 @@
 [
   {
+    "session_id": "photoshoot_session_12ae2858e5724d7294fc8fcda45b3832",
+    "creator_profile_id": 2,
+    "title": "Photoshoot Studio",
+    "reference_asset_id": 84,
+    "creative_mode": "premium",
+    "status": "cancelled",
+    "provider_id": "seedream_5_0_pro",
+    "creator_notes": "Opened from Generation Library Shoot action.",
+    "creative_continuity": {
+      "prompt_count": 1,
+      "generation_mode_behavior": "photoshoot_queue",
+      "wavespeed_generation_mode_key": "photoshoot_set",
+      "continuity": "Wavespeed Photoshoot Queue Mode: preserve the same selected-shot or requested location, wardrobe, lighting, mood, story, environment, camera style, and creative concept across ordered prompts. Vary only pose, camera angle, framing, crop, expression, hand placement, posture, distance from camera, eye contact, and body orientation.",
+      "normal_generation_boundary": "Do not use normal generation scene-hopping here. Photoshoot Queue is the continuity workflow.",
+      "source": "photoshoot_studio",
+      "continuity_rule": "Use the seed image as the canonical continuity reference. Preserve outfit, hair, makeup, accessories, location, lighting, time of day, mood, and photography style. Vary only pose, expression, camera angle, framing, distance, body orientation, hand placement, eye contact, and subtle movement unless the creator explicitly asks otherwise.",
+      "session_defaults": {
+        "location": "Preserve the current image location unless overridden.",
+        "wardrobe": "Preserve the current outfit unless overridden.",
+        "lighting": "Preserve the current lighting unless overridden.",
+        "camera_style": "Preserve the current camera style unless overridden.",
+        "identity_continuity": "Preserve the same identity, face, body, and proportions.",
+        "hairstyle": "Preserve the current hairstyle unless overridden.",
+        "makeup": "Preserve the current makeup unless overridden.",
+        "visual_tone": "Preserve the current visual tone unless overridden."
+      },
+      "approved_directions": [
+        {
+          "title": "Forward Shift Flirty Brush",
+          "creative_direction": "Evolve the seated dock pose by having her shift her weight forward onto the planks, arching her back just enough to deepen the natural cleavage of the string bikini top. One hand lifts to lightly brush a loose strand of hair behind her ear while the other remains planted for support; she meets the camera with a warmer flirty half-smile and softly narrowed eyes, creating a more intimate and inviting progression from the previous open-handed seated stance.",
+          "reasoning": "The Creative Hint is the top priority and directly dictates this exact body shift, arch, hand action, and warmer expression. This creates natural photoshoot progression from the current static hands-down seated pose into a more dynamic, chest-forward, engaging moment while staying fully within premium sensual creator-content tone and avoiding any repetition of prior framing or hand placement.",
+          "continuity_notes": "Preserve exact identity, face, body proportions, long dark hair worn down with smooth flat top and loose strands, natural makeup, tiny light string bikini top, micro denim shorts, sun-kissed wet-look skin, weathered wooden dock location, golden-hour lighting, calm water background, and intimate creator camera style. Only pose, hand placement, posture, and expression evolve per the approved hint.",
+          "camera_framing": "Medium-close waist-up creator framing with full head and clean space above the loose hair, slight downward angle to emphasize the forward weight shift and deepened cleavage while keeping legs and dock edge partially visible.",
+          "lighting": "Maintain the existing warm cinematic golden-hour light with soft sky reflections on the water and natural skin sheen.",
+          "emotion": "Warmer flirty half-smile with softly narrowed eyes conveying intimate, teasing invitation and private connection.",
+          "pose_composition": "Seated on the dock edge with weight shifted forward on the planks, back gently arched to deepen bikini cleavage, one hand lightly brushing a strand of hair behind her ear, the other hand still supporting on the wood beside her hip, hips angled slightly toward camera, legs remaining dangling or relaxed over the edge.",
+          "creative_mode": "premium",
+          "session_direction": "",
+          "continuity_locks": {
+            "location": true,
+            "wardrobe": true,
+            "lighting": true,
+            "hairstyle": true,
+            "makeup": true,
+            "camera_style": true
+          },
+          "created_at": "2026-07-19T01:15:16.553483"
+        }
+      ],
+      "approved_prompts": [
+        "Seated at the weathered dock edge during golden hour with her weight shifted forward onto the warm wooden planks, the same woman gently arches her back to deepen the natural cleavage of her tiny light string bikini top while one hand lightly brushes a loose strand of hair behind her ear and the other remains planted for support, her full natural D-cup bust creating realistic fabric tension and rounded lower-breast fullness beneath the thin strings, feminine hourglass body and same curvy waist-to-hip proportions accentuated by the forward lean and hips angled toward the viewer, long dark hair worn down with a smooth flat natural top and loose flowing strands cascading over her shoulders, same natural sun-kissed skin tone as the reference image glowing with wet-look sheen under warm cinematic light and soft sky reflections on the calm water, warmer flirty half-smile with softly narrowed eyes conveying intimate teasing invitation and private connection, medium-close waist-up creator framing with full head and clean space above loose hair, slight downward angle to emphasize the forward weight shift and deepened cleavage while keeping legs and dock edge partially visible, intimate creator-content mood, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality."
+      ],
+      "progression_stage": 1,
+      "workflow_stage": "seed_returned",
+      "session_direction": "",
+      "continuity_locks": {
+        "location": true,
+        "wardrobe": true,
+        "lighting": true,
+        "hairstyle": true,
+        "makeup": true,
+        "camera_style": true
+      },
+      "current_shot_image_id": null,
+      "photoshoot_returned_seed_image_ids": [
+        "generated_image_b2c7659600c4ef92c540ec61"
+      ],
+      "seed_image_id": "generated_image_b2c7659600c4ef92c540ec61",
+      "seed_returned_to_library": true
+    },
+    "request_ids": [
+      "photoshoot_request_6a1a1098c21c48708fd55039fc464906",
+      "photoshoot_request_54248cce5dfa4149ba4956a22124a002"
+    ],
+    "current_request_id": null,
+    "created_at": "2026-07-19T01:14:17.312777",
+    "updated_at": "2026-07-19T01:21:05.096921",
+    "metadata": {}
+  },
+  {
+    "session_id": "photoshoot_session_28202397b8e14594b05a424790a7e4d6",
+    "creator_profile_id": 2,
+    "title": "Photoshoot Studio",
+    "reference_asset_id": 93,
+    "creative_mode": "premium",
+    "status": "cancelled",
+    "provider_id": "seedream_5_0_pro",
+    "creator_notes": "Opened from Generation Library Shoot action.",
+    "creative_continuity": {
+      "prompt_count": 1,
+      "generation_mode_behavior": "photoshoot_queue",
+      "wavespeed_generation_mode_key": "photoshoot_set",
+      "continuity": "Wavespeed Photoshoot Queue Mode: preserve the same selected-shot or requested location, wardrobe, lighting, mood, story, environment, camera style, and creative concept across ordered prompts. Vary only pose, camera angle, framing, crop, expression, hand placement, posture, distance from camera, eye contact, and body orientation.",
+      "normal_generation_boundary": "Do not use normal generation scene-hopping here. Photoshoot Queue is the continuity workflow.",
+      "source": "photoshoot_studio",
+      "continuity_rule": "Use the seed image as the canonical continuity reference. Preserve outfit, hair, makeup, accessories, location, lighting, time of day, mood, and photography style. Vary only pose, expression, camera angle, framing, distance, body orientation, hand placement, eye contact, and subtle movement unless the creator explicitly asks otherwise.",
+      "session_defaults": {
+        "location": "Preserve the current image location unless overridden.",
+        "wardrobe": "Preserve the current outfit unless overridden.",
+        "lighting": "Preserve the current lighting unless overridden.",
+        "camera_style": "Preserve the current camera style unless overridden.",
+        "identity_continuity": "Preserve the same identity, face, body, and proportions.",
+        "hairstyle": "Preserve the current hairstyle unless overridden.",
+        "makeup": "Preserve the current makeup unless overridden.",
+        "visual_tone": "Preserve the current visual tone unless overridden."
+      },
+      "approved_directions": [
+        {
+          "title": "Rail Forearm Rest with Knowing Smirk",
+          "creative_direction": "Evolve the current lean into a more open orientation toward the viewer along the same boardwalk rail. She turns her torso a little further open, rests both forearms fully on the weathered wood for support, and lifts her chin slightly. Expression shifts from the current warm closed smile into a playful half-lidded gaze that softens into quiet confidence, lips parting just enough to begin a knowing smirk. Keep the chest-forward posture and natural body line while the new arm placement and chin lift create a fresher, more intimate connection beat.",
+          "reasoning": "The Creative Hint is the top priority and directly specifies this exact pose and expression progression. It builds naturally from the current single-arm lean and soft smile without repeating framing or hand placement, advancing the premium photoshoot into a confident, teasing intimate moment while staying fully locked to the boardwalk setting and outfit.",
+          "continuity_notes": "Preserve exact identity, face, body proportions, long dark hair worn down with loose strands, sun-kissed skin, shimmering coral strappy halter crop top, high-waisted white micro-shorts, beach boardwalk location with salt-weathered railing, natural daylight, salt-spray atmosphere, and photorealistic camera style. Only pose, arm placement, chin angle, eye expression, and lip shape change per the approved hint.",
+          "camera_framing": "Medium-close waist-up creator framing matching the current distance, full head with clean space above the loose hair, slight three-quarter body angle now more open to camera, intimate eye-level perspective.",
+          "lighting": "Maintain the existing natural daylight with soft highlights and subtle salt-spray atmosphere; no change to time of day or quality of light.",
+          "emotion": "Playful half-lidded gaze softening into quiet confidence, lips parted into the start of a knowing smirk, warm private allure directed at the viewer.",
+          "pose_composition": "Body turned a little more toward the viewer while still along the boardwalk rail; both forearms resting on the weathered wood; chin gently lifted; chest-forward posture retained; hips softly angled; shoulders relaxed; hair falling naturally over the shoulders.",
+          "creative_mode": "premium",
+          "session_direction": "",
+          "continuity_locks": {
+            "location": true,
+            "wardrobe": true,
+            "lighting": true,
+            "hairstyle": true,
+            "makeup": true,
+            "camera_style": true
+          },
+          "created_at": "2026-07-19T00:39:20.353599"
+        },
+        {
+          "title": "Hip Shift Halter Strap Tease",
+          "creative_direction": "From the current both-forearms rail lean, she shifts her weight onto one hip for a softer S-curve while keeping one forearm planted on the weathered wood. Her free hand slowly rises to toy with the halter strap near her collarbone, fingers lightly tracing the strap. Half-lidded eyes deepen into a flirty squint and the knowing smirk softens into a parted-lip invitation, still locked on the viewer with warm private heat. Maintain chest-forward posture and natural body line so the gesture feels like the next intimate beat of the same boardwalk moment.",
+          "reasoning": "The Creative Hint is top priority and specifies this exact weight shift, hand-to-halter-strap action, and expression evolution. It progresses naturally from the approved forearm-rest smirk without repeating the prior static both-hands pose, advancing premium sensual connection while fully honoring every continuity lock.",
+          "continuity_notes": "Preserve exact identity, face, body proportions, long dark hair worn down with loose strands over the shoulders, sun-kissed skin, shimmering coral strappy halter crop top, high-waisted white micro-shorts, beach boardwalk location with salt-weathered railing, natural daylight, salt-spray atmosphere, and photorealistic camera style. Only weight distribution, one hand placement, eye squint, and lip parting change per the approved hint.",
+          "camera_framing": "Medium-close waist-up creator framing matching current distance, full head with clean space above the loose hair, slight three-quarter body angle open to camera, intimate eye-level perspective.",
+          "lighting": "Maintain the existing natural daylight with soft highlights and subtle salt-spray atmosphere; no change to time of day or quality of light.",
+          "emotion": "Half-lidded eyes deepened into a flirty squint, smirk softened into a parted-lip invitation, warm private allure and teasing heat directed at the viewer.",
+          "pose_composition": "Weight shifted to one hip creating a gentle S-curve; one forearm remains on the salt-weathered rail for support; the other hand rises to toy lightly with the halter strap near the collarbone; chest-forward posture retained; shoulders relaxed; hair falling naturally.",
+          "creative_mode": "premium",
+          "session_direction": "",
+          "continuity_locks": {
+            "location": true,
+            "wardrobe": true,
+            "lighting": true,
+            "hairstyle": true,
+            "makeup": true,
+            "camera_style": true
+          },
+          "created_at": "2026-07-19T00:56:06.794310"
+        }
+      ],
+      "approved_prompts": [
+        "The same woman with her exact face, long dark hair worn down with smooth flat natural top and loose flowing strands lying over her shoulders, same natural sun-kissed skin tone as the reference image, feminine hourglass body, same waist-to-hip proportions, and full natural D-cup bust turns her torso a little further open toward the viewer along the same wooden beach boardwalk, resting both forearms fully on the salt-weathered railing with chest-forward posture and hips softly angled, chin lifted slightly as her playful half-lidded gaze softens into quiet confidence with lips parted into the start of a knowing smirk, wearing the shimmering coral strappy halter crop top stretched with realistic fabric tension across the bust and low neckline revealing natural cleavage plus high-waisted white micro-shorts riding high on her hips, warm private allure directed at the viewer in natural daylight with soft highlights and subtle salt-spray atmosphere, medium-close waist-up creator framing with full head and clean space above loose hair, intimate eye-level perspective on a slight three-quarter angle now more open to camera, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.",
+        "The same woman with her exact face, long dark hair worn down with smooth flat natural top and loose flowing strands lying over her shoulders, same natural sun-kissed skin tone as the reference image, feminine hourglass body, same waist-to-hip proportions, and full natural D-cup bust shifts her weight onto one hip along the same wooden beach boardwalk for a softer S-curve while keeping one forearm planted on the salt-weathered railing, her free hand rising to lightly toy with the halter strap near her collarbone with fingers gently tracing the fabric, chest-forward posture retained as her half-lidded eyes deepen into a flirty squint and her knowing smirk softens into a parted-lip invitation aimed warmly at the viewer, wearing the shimmering coral strappy halter crop top stretched with realistic fabric tension across the bust and low neckline revealing natural cleavage paired with high-waisted white micro-shorts riding high on her hips, natural daylight with soft highlights and subtle salt-spray atmosphere, medium-close waist-up creator framing with full head and clean space above loose hair, intimate eye-level perspective on a slight three-quarter body angle open to camera, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality."
+      ],
+      "progression_stage": 3,
+      "workflow_stage": "seed_returned",
+      "session_direction": "",
+      "continuity_locks": {
+        "location": true,
+        "wardrobe": true,
+        "lighting": true,
+        "hairstyle": true,
+        "makeup": true,
+        "camera_style": true
+      },
+      "current_shot_image_id": null,
+      "selected_timeline_index": 2,
+      "photoshoot_returned_seed_image_ids": [
+        "generated_image_865a4dcff51f913acb07a9ab"
+      ],
+      "seed_image_id": "generated_image_865a4dcff51f913acb07a9ab",
+      "seed_returned_to_library": true
+    },
+    "request_ids": [
+      "photoshoot_request_a3c6f8e688e14012bdfef94ef7c07477",
+      "photoshoot_request_d329b2035f3b4b5391bcfd57d60ffa22",
+      "photoshoot_request_916cc9168c4f461eaa2f7df3d0b56f12"
+    ],
+    "current_request_id": null,
+    "created_at": "2026-07-19T00:38:15.304080",
+    "updated_at": "2026-07-19T01:02:43.943965",
+    "metadata": {}
+  },
+  {
+    "session_id": "photoshoot_session_e12f506cac4f43ee8614390371e708a3",
+    "creator_profile_id": 2,
+    "title": "Photoshoot Studio",
+    "reference_asset_id": 84,
+    "creative_mode": "premium",
+    "status": "cancelled",
+    "provider_id": "seedream_5_0_pro",
+    "creator_notes": "Opened from Generation Library Shoot action.",
+    "creative_continuity": {
+      "prompt_count": 1,
+      "generation_mode_behavior": "photoshoot_queue",
+      "wavespeed_generation_mode_key": "photoshoot_set",
+      "continuity": "Wavespeed Photoshoot Queue Mode: preserve the same selected-shot or requested location, wardrobe, lighting, mood, story, environment, camera style, and creative concept across ordered prompts. Vary only pose, camera angle, framing, crop, expression, hand placement, posture, distance from camera, eye contact, and body orientation.",
+      "normal_generation_boundary": "Do not use normal generation scene-hopping here. Photoshoot Queue is the continuity workflow.",
+      "source": "photoshoot_studio",
+      "continuity_rule": "Use the seed image as the canonical continuity reference. Preserve outfit, hair, makeup, accessories, location, lighting, time of day, mood, and photography style. Vary only pose, expression, camera angle, framing, distance, body orientation, hand placement, eye contact, and subtle movement unless the creator explicitly asks otherwise.",
+      "session_defaults": {
+        "location": "Preserve the current image location unless overridden.",
+        "wardrobe": "Preserve the current outfit unless overridden.",
+        "lighting": "Preserve the current lighting unless overridden.",
+        "camera_style": "Preserve the current camera style unless overridden.",
+        "identity_continuity": "Preserve the same identity, face, body, and proportions.",
+        "hairstyle": "Preserve the current hairstyle unless overridden.",
+        "makeup": "Preserve the current makeup unless overridden.",
+        "visual_tone": "Preserve the current visual tone unless overridden."
+      },
+      "approved_directions": [
+        {
+          "title": "Arched Lean Intimate Gaze",
+          "creative_direction": "Evolve the seated dock pose so she leans back further onto both palms planted behind her on the weathered planks, arching her chest a little higher while her legs remain dangling. Part her lips slightly and shift into a playful half-lidded gaze that feels warmer and more intimate than the previous soft smile, deepening the private creator connection without changing outfit, hair, or setting.",
+          "reasoning": "The Creative Hint is the top priority and directly requests this exact body language and expression shift. The current seed already shows her seated with hands on the dock, so leaning further back on both palms and lifting the chest arch is a natural, continuous progression that heightens sensuality and intimacy in premium mode while avoiding any repetition of the prior upright posture or closed-mouth smile.",
+          "continuity_notes": "Preserve identical lakeside wooden dock location, tiny string bikini top, micro denim shorts, long dark hair worn down with smooth flat top and loose strands, natural sun-kissed wet-look skin, golden-hour lighting, makeup, identity, body proportions, and overall photorealistic creator-content camera style. Only pose, hand placement, chest arch, lip position, and eye expression change.",
+          "camera_framing": "Maintain medium-close waist-up creator framing with full head and clean space above the loose hair, slight downward angle emphasis on the arched torso and cleavage while keeping the same intimate distance and centered composition as the seed.",
+          "lighting": "Keep the exact warm cinematic golden-hour light with soft sky reflections on the water and the same glistening wet-look sheen on skin.",
+          "emotion": "Playful half-lidded intimacy\u2014soft parted lips, heavier-lidded eyes, and a quietly inviting, more personal energy that feels closer and more teasing than the previous gentle smile.",
+          "pose_composition": "Seated at the dock edge with legs still dangling over the water; both palms flat on the planks behind her for support as she leans back; chest arched higher and forward; shoulders relaxed; hips angled slightly toward camera; head tilted just enough to meet the lens with the new half-lidded gaze.",
+          "creative_mode": "premium",
+          "session_direction": "",
+          "continuity_locks": {
+            "location": true,
+            "wardrobe": true,
+            "lighting": true,
+            "hairstyle": true,
+            "makeup": true,
+            "camera_style": true
+          },
+          "created_at": "2026-07-19T00:14:51.886085"
+        }
+      ],
+      "approved_prompts": [
+        "Seated at the edge of the weathered wooden dock during golden hour, the same woman leans back farther onto both palms planted flat on the sun-warmed planks behind her, legs still dangling over the calm water, her chest arched higher and forward with relaxed shoulders while hips angle slightly toward the camera, tiny string bikini top stretched tight across her full natural D-cup bust creating deep natural cleavage through realistic fabric tension, micro denim shorts hugging her feminine hourglass body and same waist-to-hip proportions, long dark hair worn down with smooth flat natural top and loose flowing strands resting over her shoulders, same natural sun-kissed skin tone as the reference image glowing with glistening wet-look sheen, head tilted just enough for warm half-lidded eye contact, lips softly parted in a playful intimate expression, medium-close waist-up creator framing with full head and clean space above loose hair and slight downward angle that emphasizes the arched torso, bathed in warm cinematic golden-hour light with soft sky reflections on the water, intimate creator-content mood, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality."
+      ],
+      "progression_stage": 1,
+      "workflow_stage": "seed_returned",
+      "session_direction": "",
+      "continuity_locks": {
+        "location": true,
+        "wardrobe": true,
+        "lighting": true,
+        "hairstyle": true,
+        "makeup": true,
+        "camera_style": true
+      },
+      "current_shot_image_id": null,
+      "photoshoot_returned_seed_image_ids": [
+        "generated_image_b2c7659600c4ef92c540ec61"
+      ],
+      "seed_image_id": "generated_image_b2c7659600c4ef92c540ec61",
+      "seed_returned_to_library": true
+    },
+    "request_ids": [
+      "photoshoot_request_61db52b70d274cfd872bf00164875840",
+      "photoshoot_request_46ef200122154849b218662c25a32ef5"
+    ],
+    "current_request_id": null,
+    "created_at": "2026-07-18T21:56:53.176656",
+    "updated_at": "2026-07-19T00:18:10.798135",
+    "metadata": {}
+  },
+  {
+    "session_id": "photoshoot_session_f40435069c2349b4829a7e0684005c00",
+    "creator_profile_id": 2,
+    "title": "Photoshoot Studio",
+    "reference_asset_id": 84,
+    "creative_mode": "premium",
+    "status": "cancelled",
+    "provider_id": "seedream_5_0_pro",
+    "creator_notes": "Opened from Generation Library Shoot action.",
+    "creative_continuity": {
+      "prompt_count": 1,
+      "generation_mode_behavior": "photoshoot_queue",
+      "wavespeed_generation_mode_key": "photoshoot_set",
+      "continuity": "Wavespeed Photoshoot Queue Mode: preserve the same selected-shot or requested location, wardrobe, lighting, mood, story, environment, camera style, and creative concept across ordered prompts. Vary only pose, camera angle, framing, crop, expression, hand placement, posture, distance from camera, eye contact, and body orientation.",
+      "normal_generation_boundary": "Do not use normal generation scene-hopping here. Photoshoot Queue is the continuity workflow.",
+      "source": "photoshoot_studio",
+      "continuity_rule": "Use the seed image as the canonical continuity reference. Preserve outfit, hair, makeup, accessories, location, lighting, time of day, mood, and photography style. Vary only pose, expression, camera angle, framing, distance, body orientation, hand placement, eye contact, and subtle movement unless the creator explicitly asks otherwise.",
+      "session_defaults": {
+        "location": "Preserve the current image location unless overridden.",
+        "wardrobe": "Preserve the current outfit unless overridden.",
+        "lighting": "Preserve the current lighting unless overridden.",
+        "camera_style": "Preserve the current camera style unless overridden.",
+        "identity_continuity": "Preserve the same identity, face, body, and proportions.",
+        "hairstyle": "Preserve the current hairstyle unless overridden.",
+        "makeup": "Preserve the current makeup unless overridden.",
+        "visual_tone": "Preserve the current visual tone unless overridden."
+      },
+      "approved_directions": [
+        {
+          "title": "One-Knee Bridge Tease",
+          "creative_direction": "Evolve the current bridge moment by having her shift fully onto one knee on the wooden planks, resting one hand lightly on her thigh while the other stays relaxed for natural balance. Tilt her head slightly with a softer half-lidded gaze and the faintest upward curl at one corner of her mouth, deepening the intimate private-eye-contact feel without leaving the bridge or changing her outfit.",
+          "reasoning": "The Creative Hint is the top priority and directly builds on the existing seated/edge-of-bridge posture already established in the seed. This creates natural photoshoot progression: from the prior direct facing pose into a more grounded, intentionally sensual one-knee stance that heightens body language and emotional intimacy while staying premium and platform-appropriate. It varies pose, hand placement, head angle, and expression exactly as required to avoid repetition.",
+          "continuity_notes": "Preserve identical wooden footbridge location, white deep-neckline micro crop-top, frayed micro denim shorts, long dark hair worn down with smooth flat top and loose shoulder strands, natural sun-kissed skin, makeup, outdoor daylight lighting, and photorealistic creator-style camera aesthetic. Only pose, hand placement, head tilt, gaze, and subtle expression evolve per the approved hint.",
+          "camera_framing": "Medium upper-thigh to head portrait crop, slight high angle looking gently down to emphasize the one-knee shift and thigh hand placement, full head visible with clean space above the loose hair, intimate creator distance.",
+          "lighting": "Maintain the existing natural outdoor daylight with soft sun-dappled warmth and subtle realistic shadows on the bridge planks and skin.",
+          "emotion": "Softer half-lidded private gaze with the faintest knowing upward curl at one corner of the mouth\u2014warm, quietly teasing, and more intimate than the prior open smile.",
+          "pose_composition": "She shifts her weight onto one knee on the bridge planks, opposite foot planted for balance, one hand resting lightly on the forward thigh, torso still angled slightly chest-forward toward camera, head tilted softly, hair falling naturally over the shoulders.",
+          "creative_mode": "premium",
+          "session_direction": "",
+          "continuity_locks": {
+            "location": true,
+            "wardrobe": true,
+            "lighting": true,
+            "hairstyle": true,
+            "makeup": true,
+            "camera_style": true
+          },
+          "created_at": "2026-07-18T20:59:16.958836"
+        }
+      ],
+      "approved_prompts": [
+        "On the wooden footbridge, the same woman shifts fully onto one knee on the planks, opposite foot planted for balance, one hand resting lightly on her forward thigh while the other stays relaxed near her hip, torso angled slightly chest-forward toward the camera, head softly tilted, long dark hair worn down with smooth flat natural top and loose strands flowing over her shoulders. She wears the same white deep-neckline micro crop-top and frayed micro denim shorts, realistic fabric tension across her full natural D-cup bust with visible cleavage and underboob tease. Feminine hourglass body, same curvy waist-to-hip proportions, same natural sun-kissed skin tone as the reference image. Medium upper-thigh to head portrait crop, slight high angle looking gently down, full head visible with clean space above the loose hair, intimate creator distance. Softer half-lidded private gaze with the faintest knowing upward curl at one corner of her mouth\u2014warm, quietly teasing, and more intimate. Natural outdoor daylight with soft sun-dappled warmth and subtle realistic shadows on the bridge planks and skin. Photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality."
+      ],
+      "progression_stage": 1,
+      "workflow_stage": "seed_returned",
+      "session_direction": "",
+      "continuity_locks": {
+        "location": true,
+        "wardrobe": true,
+        "lighting": true,
+        "hairstyle": true,
+        "makeup": true,
+        "camera_style": true
+      },
+      "current_shot_image_id": null,
+      "photoshoot_returned_seed_image_ids": [
+        "generated_image_8cd1a381029b363a5a8208c7"
+      ],
+      "seed_image_id": "generated_image_8cd1a381029b363a5a8208c7",
+      "seed_returned_to_library": true
+    },
+    "request_ids": [
+      "photoshoot_request_7623af23bca04059b411a250d21e8e2c",
+      "photoshoot_request_e923a15bf68c4e6f9b6956127e5b6355",
+      "photoshoot_request_0e7704bc71b248d2bf92149614a87cfe"
+    ],
+    "current_request_id": null,
+    "created_at": "2026-07-18T20:07:05.496313",
+    "updated_at": "2026-07-18T21:56:32.984072",
+    "metadata": {}
+  },
+  {
     "session_id": "photoshoot_session_ec7eab66f4f0449e9091ccc68a2ed898",
     "creator_profile_id": 2,
     "title": "Photoshoot Studio",
@@ -362,7 +707,7 @@
     "title": "Photoshoot Studio",
     "reference_asset_id": 84,
     "creative_mode": "safe",
-    "status": "running",
+    "status": "cancelled",
     "provider_id": "seedream_5_0_pro",
     "creator_notes": "Opened from Generation Library Shoot action.",
     "creative_continuity": {
@@ -372,12 +717,6 @@
       "continuity": "Wavespeed Photoshoot Queue Mode: preserve the same selected-shot or requested location, wardrobe, lighting, mood, story, environment, camera style, and creative concept across ordered prompts. Vary only pose, camera angle, framing, crop, expression, hand placement, posture, distance from camera, eye contact, and body orientation.",
       "normal_generation_boundary": "Do not use normal generation scene-hopping here. Photoshoot Queue is the continuity workflow.",
       "source": "photoshoot_studio",
-      "seed_image_id": "generated_image_f4611011e183cfd47ee6893c",
-      "seed_output_reference": "D:\\Ava_CMS\\Content\\Pending_Photoshoot\\generated_image_f4611011e183cfd47ee6893c.png",
-      "seed_prompt_text": "Prompt 1: Reclining against the hotel bed headboard in soft black satin lingerie, the same woman leans back on her elbows with chest-forward posture, her full natural D-cup bust creating realistic fabric tension and visible cleavage across the smooth satin, feminine hourglass body with identical waist-to-hip proportions and same natural sun-kissed skin tone across face, chest and arms, long dark hair worn down with smooth flat natural top and loose flowing strands over her shoulders, warm playful eye contact and soft teasing smile captured from a slightly lowered angle in medium-close waist-up creator framing with full head and clean space above loose hair, head-to-hips portrait crop with body large in frame, subtle shadows from warm bedside lamp glow highlighting gentle satin folds and natural skin texture, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.\n\nPrompt 2: The same woman reclines against the hotel bed headboard wearing soft black satin lingerie, leaning back on elbows with chest-forward posture that emphasizes her full natural D-cup bust through visible fabric tension and soft cleavage, feminine hourglass body preserving exact waist-to-hip proportions and same natural sun-kissed skin tone across face, chest and arms, long dark hair worn down with smooth flat natural top and loose flowing strands cascading over her shoulders, gentle sideways tilt of her head creating a soft teasing smile and direct warm eye contact, medium-close waist-up creator framing with full head and clean space above loose hair, head-to-hips portrait crop keeping her body large in frame, intimate warm bedside lamp light casting subtle shadows across the sheets and satin, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.\n\nPrompt 3: Reclining against the hotel bed headboard in soft black satin lingerie, the woman rests on her elbows with chest-forward posture, her full natural D-cup bust pressing naturally against the fabric to show realistic tension and subtle cleavage, feminine hourglass body with consistent waist-to-hip proportions and same natural sun-kissed skin tone across face, chest and arms, long dark hair worn down featuring smooth flat natural top and loose flowing strands over her shoulders, playful warm eye contact paired with a relaxed soft smile, three-quarter torso angle captured in medium-close waist-up creator framing with full head and clean space above loose hair, head-to-hips portrait crop with body large in frame, gentle warm bedside lamp glow creating soft shadows and highlights on the satin and skin, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.\n\nPrompt 4: The identical woman reclines against the hotel bed headboard in soft black satin lingerie, propped on elbows with chest-forward posture that highlights her full natural D-cup bust through natural fabric stretch and visible cleavage, feminine hourglass body maintaining the same waist-to-hip proportions and natural sun-kissed skin tone across face, chest and arms, long dark hair worn down with smooth flat natural top and loose flowing strands resting over her shoulders, soft mischievous smile and inviting eye contact directed toward the viewer, medium-close waist-up creator framing with full head and clean space above loose hair, head-to-hips portrait crop keeping body large in frame, warm bedside lamp light casting intimate low-angle shadows across the sheets, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.\n\nPrompt 5: Reclining against the hotel bed headboard in soft black satin lingerie, the woman leans back on her elbows in chest-forward posture, her full natural D-cup bust creating visible fabric tension and soft natural cleavage, feminine hourglass body with preserved waist-to-hip proportions and same natural sun-kissed skin tone across face, chest and arms, long dark hair worn down with smooth flat natural top and loose flowing strands over her shoulders, warm playful eye contact with a gentle teasing smile, captured from a slightly angled perspective in medium-close waist-up creator framing with full head and clean space above loose hair, head-to-hips portrait crop with body large in frame, soft warm bedside lamp glow producing subtle shadows on the satin and linens, photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.",
-      "seed_generation_job_id": "generation_job_232bb81c611c41d29e312775c7354277",
-      "seed_generation_request_id": "generation_request_793b7d7c5d4f4a60a1618bd797c13f01",
-      "seed_generation_result_id": "generation_result_c9436be7b67e414e9f0fb215d468790d",
       "continuity_rule": "Use the seed image as the canonical continuity reference. Preserve outfit, hair, makeup, accessories, location, lighting, time of day, mood, and photography style. Vary only pose, expression, camera angle, framing, distance, body orientation, hand placement, eye contact, and subtle movement unless the creator explicitly asks otherwise.",
       "session_defaults": {
         "location": "Preserve the current image location unless overridden.",
@@ -392,7 +731,7 @@
       "approved_directions": [],
       "approved_prompts": [],
       "progression_stage": 0,
-      "workflow_stage": "ready_for_direction",
+      "workflow_stage": "seed_returned",
       "continuity_locks": {
         "location": true,
         "wardrobe": true,
@@ -400,14 +739,18 @@
         "hairstyle": true,
         "makeup": true,
         "camera_style": true
-      }
+      },
+      "current_shot_image_id": null,
+      "photoshoot_returned_seed_image_ids": [
+        "generated_image_f4611011e183cfd47ee6893c"
+      ]
     },
     "request_ids": [
       "photoshoot_request_fa4190bd7ab4477c93a8ef781b0483c5"
     ],
     "current_request_id": null,
     "created_at": "2026-07-11T00:34:31.299033",
-    "updated_at": "2026-07-11T00:34:31.483060",
+    "updated_at": "2026-07-18T20:06:47.375048",
     "metadata": {}
   },
   {
@@ -785,7 +1128,7 @@
     "title": "Photoshoot Studio",
     "reference_asset_id": 84,
     "creative_mode": "premium_teaser",
-    "status": "running",
+    "status": "cancelled",
     "provider_id": "seedream_5_0_pro",
     "creator_notes": "Opened from Generation Library Shoot action.",
     "creative_continuity": {
@@ -795,13 +1138,12 @@
       "continuity": "Wavespeed Photoshoot Queue Mode: preserve the same selected-shot or requested location, wardrobe, lighting, mood, story, environment, camera style, and creative concept across ordered prompts. Vary only pose, camera angle, framing, crop, expression, hand placement, posture, distance from camera, eye contact, and body orientation.",
       "normal_generation_boundary": "Do not use normal generation scene-hopping here. Photoshoot Queue is the continuity workflow.",
       "source": "photoshoot_studio",
-      "seed_image_id": "generated_image_59f833666676d0ae25d721db",
-      "seed_output_reference": "D:\\Ava_CMS\\Content\\Generation\\Active\\generated_image_59f833666676d0ae25d721db.png",
-      "seed_prompt_text": "Create one provider-neutral image-to-image photoshoot continuation from the seed image.\n\nNext shot direction: hand covering her breasts\n\nContinuity lock: preserve the same outfit, hair, makeup, accessories, location, lighting, time of day, overall mood, and photography style from the seed image. Do not change the location, clothing, hairstyle, or environment unless the creator explicitly asks.\n\nVary only pose, expression, camera angle, framing, camera distance, body orientation, hand placement, eye contact, and subtle movement. The result must feel like it belongs to the same professional photography session.\n\nSeed image context: Prompt 1: Same recognizable woman with long dark hair worn down, smooth flat natural top, loose flowing hair over shoulders, full natural D-cup bust, feminine hourglass body, same waist-to-hip proportions, and same natural sun-kissed skin tone as the reference image stands completely nude in a spacious walk-in shower, water cascading from an overhead rainfall head. She leans her back lightly against the tiled wall, one hand resting near her collarbone while the other rests on her hip, hips subtly angled toward camera with visible natural D-cup breast projection and perky unobstructed nipples. Medium-close waist-up creator framing with full head and clean space above loose hair, camera pulled back slightly to keep natural hair top visible. Completely wet glistening skin, streams of water running over bare breasts and smooth clean-shaven pubic area with no pubic hair. Warm eye contact and soft teasing smile. Photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.\n\nPrompt 2: Same recognizable woman with long dark hair worn down, smooth flat natural top, loose flowing hair over shoulders, full natural D-cup bust, feminine hourglass body, same waist-to-hip proportions, and same natural sun-kissed skin tone as the reference image stands completely nude under a handheld showerhead, water streaming directly over her shoulders and chest. She tilts her head slightly, fingers gently combing through wet hair, body turned three-quarters toward camera to emphasize full natural D-cup bust projection, perky visible nipples unobstructed, and smooth clean-shaven pubic area with no pubic hair. Close-medium upper-body framing with full face and natural hair top visible, camera pulled back slightly for clean headroom. Steamy atmosphere with droplets on skin and subtle reflections on wet tiles. Relaxed playful smile with direct inviting eye contact. Photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.\n\nPrompt 3: Same recognizable woman with long dark hair worn down, smooth flat natural top, loose flowing hair over shoulders, full natural D-cup bust, feminine hourglass body, same waist-to-hip proportions, and same natural sun-kissed skin tone as the reference image sits on the marble shower bench completely nude, legs relaxed and slightly parted. Water from a wall-mounted fixture runs down her torso and thighs, highlighting rounded natural breast fullness, perky visible nipples unobstructed, and fully smooth clean-shaven pubic area with no pubic hair. Head-to-upper-thigh portrait framing with smooth loose hair visible, camera pulled back slightly to keep full head and clean space above hair. She glances over one shoulder toward camera with a soft mischievous expression. Photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.\n\nPrompt 4: Same recognizable woman with long dark hair worn down, smooth flat natural top, loose flowing hair over shoulders, full natural D-cup bust, feminine hourglass body, same waist-to-hip proportions, and same natural sun-kissed skin tone as the reference image stands completely nude under a vertical rainfall shower, water pouring steadily over her front. Both hands lifted to tuck wet hair behind her ears, chest-forward posture displaying full natural D-cup breast projection, perky visible nipples unobstructed, and smooth clean-shaven pubic area with no pubic hair. Medium-close waist-up creator framing with full head and clean space above loose hair, camera pulled back slightly if needed. Gentle forward lean and warm teasing eye contact. Photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.\n\nPrompt 5: Same recognizable woman with long dark hair worn down, smooth flat natural top, loose flowing hair over shoulders, full natural D-cup bust, feminine hourglass body, same waist-to-hip proportions, and same natural sun-kissed skin tone as the reference image leans sideways against the glass shower partition completely nude, one hand resting on the glass and the other lightly on her thigh. Water beads and runs across bare skin, clearly showing rounded lower-breast fullness, perky visible nipples unobstructed, and fully smooth clean-shaven pubic area with no pubic hair. Upper-thigh portrait crop with full head visible, camera pulled back slightly to maintain clean headroom above hair. Three-quarter angle with soft parted-lip smile and confident private gaze. Photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.",
-      "seed_generation_job_id": "generation_job_db55a479e556403d9f1323d600aecd97",
-      "seed_generation_request_id": "generation_request_3031cd7192904be596a82d5422094b44",
-      "seed_generation_result_id": "generation_result_1b679b60a132428e8f012ffa1b3fe5a9",
-      "continuity_rule": "Use the seed image as the canonical continuity reference. Preserve outfit, hair, makeup, accessories, location, lighting, time of day, mood, and photography style. Vary only pose, expression, camera angle, framing, distance, body orientation, hand placement, eye contact, and subtle movement unless the creator explicitly asks otherwise."
+      "continuity_rule": "Use the seed image as the canonical continuity reference. Preserve outfit, hair, makeup, accessories, location, lighting, time of day, mood, and photography style. Vary only pose, expression, camera angle, framing, distance, body orientation, hand placement, eye contact, and subtle movement unless the creator explicitly asks otherwise.",
+      "current_shot_image_id": "generated_image_ce5ddec34e84000aa786eae7",
+      "photoshoot_returned_seed_image_ids": [
+        "generated_image_59f833666676d0ae25d721db"
+      ],
+      "workflow_stage": "ready_for_next_shot"
     },
     "request_ids": [
       "photoshoot_request_09a9a63d51bd42bab6a8c9c7d17fc7a1",
@@ -810,7 +1152,7 @@
     ],
     "current_request_id": null,
     "created_at": "2026-07-10T01:46:45.276170",
-    "updated_at": "2026-07-10T01:58:30.750997",
+    "updated_at": "2026-07-18T20:07:01.858857",
     "metadata": {}
   },
   {
@@ -819,7 +1161,7 @@
     "title": "Photoshoot Studio",
     "reference_asset_id": 84,
     "creative_mode": "premium_teaser",
-    "status": "running",
+    "status": "cancelled",
     "provider_id": "seedream_5_0_pro",
     "creator_notes": "Opened from Generation Library Shoot action.",
     "creative_continuity": {
@@ -829,13 +1171,12 @@
       "continuity": "Wavespeed Photoshoot Queue Mode: preserve the same selected-shot or requested location, wardrobe, lighting, mood, story, environment, camera style, and creative concept across ordered prompts. Vary only pose, camera angle, framing, crop, expression, hand placement, posture, distance from camera, eye contact, and body orientation.",
       "normal_generation_boundary": "Do not use normal generation scene-hopping here. Photoshoot Queue is the continuity workflow.",
       "source": "photoshoot_studio",
-      "seed_image_id": "generated_image_7cc0375754e31abaae03938a",
-      "seed_output_reference": "D:\\Ava_CMS\\Content\\Generation\\Premium\\generated_image_7cc0375754e31abaae03938a.png",
-      "seed_prompt_text": "Prompt 1: Same recognizable woman with long dark hair worn down, smooth flat natural top, loose flowing hair over shoulders, full natural D-cup bust, feminine hourglass body, same waist-to-hip proportions, and same natural sun-kissed skin tone as the reference image stands completely nude in a spacious walk-in shower, water cascading from an overhead rainfall head. She leans her back lightly against the tiled wall, one hand resting near her collarbone while the other rests on her hip, hips subtly angled toward camera with visible natural D-cup breast projection and perky unobstructed nipples. Medium-close waist-up creator framing with full head and clean space above loose hair, camera pulled back slightly to keep natural hair top visible. Completely wet glistening skin, streams of water running over bare breasts and smooth clean-shaven pubic area with no pubic hair. Warm eye contact and soft teasing smile. Photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.\n\nPrompt 2: Same recognizable woman with long dark hair worn down, smooth flat natural top, loose flowing hair over shoulders, full natural D-cup bust, feminine hourglass body, same waist-to-hip proportions, and same natural sun-kissed skin tone as the reference image stands completely nude under a handheld showerhead, water streaming directly over her shoulders and chest. She tilts her head slightly, fingers gently combing through wet hair, body turned three-quarters toward camera to emphasize full natural D-cup bust projection, perky visible nipples unobstructed, and smooth clean-shaven pubic area with no pubic hair. Close-medium upper-body framing with full face and natural hair top visible, camera pulled back slightly for clean headroom. Steamy atmosphere with droplets on skin and subtle reflections on wet tiles. Relaxed playful smile with direct inviting eye contact. Photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.\n\nPrompt 3: Same recognizable woman with long dark hair worn down, smooth flat natural top, loose flowing hair over shoulders, full natural D-cup bust, feminine hourglass body, same waist-to-hip proportions, and same natural sun-kissed skin tone as the reference image sits on the marble shower bench completely nude, legs relaxed and slightly parted. Water from a wall-mounted fixture runs down her torso and thighs, highlighting rounded natural breast fullness, perky visible nipples unobstructed, and fully smooth clean-shaven pubic area with no pubic hair. Head-to-upper-thigh portrait framing with smooth loose hair visible, camera pulled back slightly to keep full head and clean space above hair. She glances over one shoulder toward camera with a soft mischievous expression. Photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.\n\nPrompt 4: Same recognizable woman with long dark hair worn down, smooth flat natural top, loose flowing hair over shoulders, full natural D-cup bust, feminine hourglass body, same waist-to-hip proportions, and same natural sun-kissed skin tone as the reference image stands completely nude under a vertical rainfall shower, water pouring steadily over her front. Both hands lifted to tuck wet hair behind her ears, chest-forward posture displaying full natural D-cup breast projection, perky visible nipples unobstructed, and smooth clean-shaven pubic area with no pubic hair. Medium-close waist-up creator framing with full head and clean space above loose hair, camera pulled back slightly if needed. Gentle forward lean and warm teasing eye contact. Photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.\n\nPrompt 5: Same recognizable woman with long dark hair worn down, smooth flat natural top, loose flowing hair over shoulders, full natural D-cup bust, feminine hourglass body, same waist-to-hip proportions, and same natural sun-kissed skin tone as the reference image leans sideways against the glass shower partition completely nude, one hand resting on the glass and the other lightly on her thigh. Water beads and runs across bare skin, clearly showing rounded lower-breast fullness, perky visible nipples unobstructed, and fully smooth clean-shaven pubic area with no pubic hair. Upper-thigh portrait crop with full head visible, camera pulled back slightly to maintain clean headroom above hair. Three-quarter angle with soft parted-lip smile and confident private gaze. Photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.",
-      "seed_generation_job_id": "generation_job_b19761ef92834659adccb27bc50c58cd",
-      "seed_generation_request_id": "generation_request_25bd2cf2f091436ca3c01bddffecb7f1",
-      "seed_generation_result_id": "generation_result_746f16dca74d46829243a57594678300",
-      "continuity_rule": "Use the seed image as the canonical continuity reference. Preserve outfit, hair, makeup, accessories, location, lighting, time of day, mood, and photography style. Vary only pose, expression, camera angle, framing, distance, body orientation, hand placement, eye contact, and subtle movement unless the creator explicitly asks otherwise."
+      "continuity_rule": "Use the seed image as the canonical continuity reference. Preserve outfit, hair, makeup, accessories, location, lighting, time of day, mood, and photography style. Vary only pose, expression, camera angle, framing, distance, body orientation, hand placement, eye contact, and subtle movement unless the creator explicitly asks otherwise.",
+      "current_shot_image_id": "generated_image_59f833666676d0ae25d721db",
+      "photoshoot_returned_seed_image_ids": [
+        "generated_image_7cc0375754e31abaae03938a"
+      ],
+      "workflow_stage": "ready_for_next_shot"
     },
     "request_ids": [
       "photoshoot_request_125e5348cdfc42089169243f60c6f71e",
@@ -843,7 +1184,7 @@
     ],
     "current_request_id": null,
     "created_at": "2026-07-10T01:36:01.428948",
-    "updated_at": "2026-07-10T01:38:31.189061",
+    "updated_at": "2026-07-18T20:07:01.894372",
     "metadata": {}
   },
   {
@@ -884,7 +1225,7 @@
     "title": "Photoshoot Studio",
     "reference_asset_id": 84,
     "creative_mode": "premium_teaser",
-    "status": "running",
+    "status": "cancelled",
     "provider_id": "seedream_5_0_pro",
     "creator_notes": "Opened from Generation Library Shoot action.",
     "creative_continuity": {
@@ -894,20 +1235,19 @@
       "continuity": "Wavespeed Photoshoot Queue Mode: preserve the same selected-shot or requested location, wardrobe, lighting, mood, story, environment, camera style, and creative concept across ordered prompts. Vary only pose, camera angle, framing, crop, expression, hand placement, posture, distance from camera, eye contact, and body orientation.",
       "normal_generation_boundary": "Do not use normal generation scene-hopping here. Photoshoot Queue is the continuity workflow.",
       "source": "photoshoot_studio",
-      "seed_image_id": "generated_image_23d47d7904eb3ad19c981f31",
-      "seed_output_reference": "D:\\Ava_CMS\\Content\\Generation\\Active\\generated_image_23d47d7904eb3ad19c981f31.png",
-      "seed_prompt_text": "Prompt 1: On a private garden path at golden hour, the same woman stands with chest-forward posture and hips angled toward the viewer, her cropped halter crop top creating strong fabric tension across her full natural D-cup bust while the fitted halter neckline sits low enough to reveal soft cleavage. Low-rise micro shorts hug her feminine hourglass body and same waist-to-hip proportions, the teasing hemline resting high on her hips. Long dark hair falls loosely over her shoulders with a smooth flat natural top, her sun-kissed skin glowing under warm natural sunlight. She offers a teasing smile and private eye contact in medium-close waist-up creator framing with full head visible and clean space above loose hair. Photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.\n\nPrompt 2: Leaning lightly against a weathered wooden deck railing during golden hour, the same woman tilts her torso toward the camera with chest-forward posture and one hip cocked, the cropped halter crop top stretched tight over her full natural D-cup bust with realistic fabric tension and teasing cleavage visible. Her low-rise micro shorts sit low on her feminine hourglass body and same waist-to-hip proportions, the micro hemline barely covering her curves. Long dark hair cascades down her back, the same natural sun-kissed skin tone warm and even in the soft outdoor light. She meets the viewer with a playful teasing smile and intimate eye contact in head-to-upper-thigh portrait framing, pulling the camera back slightly to keep her full face and natural hair top visible. Photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.\n\nPrompt 3: Seated on the edge of a stone terrace bench at golden hour, the same woman leans forward slightly with hips angled, causing the cropped halter crop top to pull snugly across her full natural D-cup bust and display visible cleavage through realistic fabric tension. Low-rise micro shorts ride low on her feminine hourglass body and same waist-to-hip proportions, the teasing hemline riding up as she shifts. Long dark hair frames her face and falls over her shoulders, same natural sun-kissed skin tone catching the warm sunlight. She holds private eye contact with a soft mischievous smile in close-medium upper-body framing with full head and clean space above loose hair. Photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.\n\nPrompt 4: Standing on a quiet rooftop patio at golden hour with her body angled three-quarters to camera, the same woman rests one hand on her hip and pushes her chest forward, the fitted halter crop top straining with fabric tension over her full natural D-cup bust and revealing natural cleavage. Low-rise micro shorts sit low, accentuating her feminine hourglass body and same waist-to-hip proportions with a flirtatious hemline. Long dark hair flows loosely down her back, her same natural sun-kissed skin tone luminous in the soft outdoor sunlight. She gives a warm teasing smile and direct private gaze in medium-close waist-up creator framing, camera pulled back slightly to fully include her head and smooth hair top. Photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.\n\nPrompt 5: Kneeling on a cushioned outdoor lounge chair at golden hour, the same woman sits back on her heels with hips angled and torso twisted toward the viewer, the cropped halter crop top pulled tight across her full natural D-cup bust with obvious fabric tension and visible cleavage. Low-rise micro shorts cling to her feminine hourglass body and same waist-to-hip proportions, the teasing hemline riding high. Long dark hair drapes over one shoulder, same natural sun-kissed skin tone glowing softly in the warm light. She offers a relaxed teasing smile and intimate eye contact in head-to-upper-thigh portrait framing with full head visible and clean space above loose hair. Photorealistic, ultra-realistic raw photo, natural skin texture with visible pores, realistic anatomy and proportions, natural lighting with subtle shadows, candid intimate atmosphere, film grain, natural body, best quality.",
-      "seed_generation_job_id": "generation_job_2b51dbee335944d185dea7437fae02f4",
-      "seed_generation_request_id": "generation_request_3b86572abdc045fab831d173070f81c0",
-      "seed_generation_result_id": "generation_result_581ae324fe4f4128a183432934917d09",
-      "continuity_rule": "Use the seed image as the canonical continuity reference. Preserve outfit, hair, makeup, accessories, location, lighting, time of day, mood, and photography style. Vary only pose, expression, camera angle, framing, distance, body orientation, hand placement, eye contact, and subtle movement unless the creator explicitly asks otherwise."
+      "continuity_rule": "Use the seed image as the canonical continuity reference. Preserve outfit, hair, makeup, accessories, location, lighting, time of day, mood, and photography style. Vary only pose, expression, camera angle, framing, distance, body orientation, hand placement, eye contact, and subtle movement unless the creator explicitly asks otherwise.",
+      "current_shot_image_id": null,
+      "photoshoot_returned_seed_image_ids": [
+        "generated_image_23d47d7904eb3ad19c981f31"
+      ],
+      "workflow_stage": "seed_returned"
     },
     "request_ids": [
       "photoshoot_request_b2c7eeaa0d3c4d75a1ceb9fc142745fc"
     ],
     "current_request_id": null,
     "created_at": "2026-07-10T01:21:40.853778",
-    "updated_at": "2026-07-10T01:21:40.856776",
+    "updated_at": "2026-07-18T20:07:01.904875",
     "metadata": {}
   },
   {
@@ -946,7 +1286,7 @@
     "title": "Generation Library Photoshoot",
     "reference_asset_id": 84,
     "creative_mode": "premium_teaser",
-    "status": "running",
+    "status": "cancelled",
     "provider_id": "seedream_5_0_pro",
     "creator_notes": "Queued from Generation Library.",
     "creative_continuity": {
@@ -967,7 +1307,7 @@
     ],
     "current_request_id": "photoshoot_request_1151f1f089cd4358a174bb00efad2601",
     "created_at": "2026-07-09T21:43:07.373117",
-    "updated_at": "2026-07-09T21:43:07.376205",
+    "updated_at": "2026-07-18T20:07:05.358299",
     "metadata": {}
   },
   {
@@ -976,7 +1316,7 @@
     "title": "Premium Photoshoot",
     "reference_asset_id": 84,
     "creative_mode": "premium_teaser",
-    "status": "queued",
+    "status": "cancelled",
     "provider_id": "seedream_4_5",
     "creator_notes": "Started from Premium Studio.",
     "creative_continuity": {
@@ -998,7 +1338,7 @@
     ],
     "current_request_id": null,
     "created_at": "2026-07-08T00:48:56.518931",
-    "updated_at": null,
+    "updated_at": "2026-07-18T20:07:05.362300",
     "metadata": {}
   }
 ]

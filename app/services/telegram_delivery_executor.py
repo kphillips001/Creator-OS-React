@@ -47,6 +47,12 @@ class TelegramDeliveryExecutor:
     media/link/button delivery remains deferred to later phases.
     """
 
+    def __init__(self, *, global_safety_service: Any | None = None) -> None:
+        if global_safety_service is None:
+            from app.services.global_automation_safety_service import GlobalAutomationSafetyService
+            global_safety_service = GlobalAutomationSafetyService()
+        self._global_safety_service = global_safety_service
+
     def execute(
         self,
         payload: TelegramDeliveryPayload | RuntimeExecutionIntent | Mapping[str, Any],
@@ -60,6 +66,9 @@ class TelegramDeliveryExecutor:
         chat_id = self._chat_id(context)
 
         if message_text and sender is not None and chat_id is not None:
+            safety = self._global_safety_service.check_global_safety()
+            if not safety.get("allowed", False):
+                return self._safety_blocked_result(normalized, metadata, safety)
             return self._execute_text(
                 sender,
                 chat_id=chat_id,
@@ -84,6 +93,9 @@ class TelegramDeliveryExecutor:
         chat_id = self._chat_id(context)
 
         if message_text and sender is not None and chat_id is not None:
+            safety = self._global_safety_service.check_global_safety()
+            if not safety.get("allowed", False):
+                return self._safety_blocked_result(normalized, metadata, safety)
             return await self._execute_text_async(
                 sender,
                 chat_id=chat_id,
@@ -189,6 +201,20 @@ class TelegramDeliveryExecutor:
             executed=False,
             delivery_method=payload.delivery_method,
             metadata=metadata,
+        )
+
+    @staticmethod
+    def _safety_blocked_result(
+        payload: TelegramDeliveryPayload,
+        metadata: dict[str, Any],
+        safety: Mapping[str, Any],
+    ) -> TelegramDeliveryExecutionResult:
+        reason = str(safety.get("reason") or "global_automation_blocked")
+        metadata.update({"execution_state": "blocked", "safety_source": safety.get("source")})
+        return TelegramDeliveryExecutionResult(
+            status="blocked", executed=False,
+            delivery_method=payload.delivery_method,
+            blocking_reason=reason, metadata=metadata,
         )
 
     @staticmethod

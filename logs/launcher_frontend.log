@@ -1,0 +1,9 @@
+
+> creator-os-frontend@0.1.0 dev
+> vite --host 127.0.0.1 --port 5174
+
+
+  VITE v6.4.3  ready in 223 ms
+
+  ➜  Local:   http://127.0.0.1:5174/
+3:53:08 PM [vite] (client) hmr update /src/features/business-operations/BusinessOperationsPage.tsx

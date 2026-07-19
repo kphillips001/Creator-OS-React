@@ -2,6 +2,7 @@ import sys
 import tempfile
 import types
 import unittest
+from dataclasses import replace
 from pathlib import Path
 
 if "streamlit" not in sys.modules:
@@ -505,7 +506,7 @@ class EditStudioTests(unittest.TestCase):
         self.assertTrue(Path(active_records[0].output_reference).exists())
         self.assertEqual(tuple((content_root / "Pending_Edit").glob("*")), ())
 
-    def test_approve_replaces_generation_library_asset_and_copies_edit_history(self):
+    def test_approve_replaces_generation_library_asset_and_archives_previous_version(self):
         _edit_studio, generation_library = self.make_services()
         content_root = generation_library.archive_service.content_root
         source_path = content_root / "Generation" / "Active" / "source.png"
@@ -516,7 +517,12 @@ class EditStudioTests(unittest.TestCase):
         generation_library._write_records(
             [
                 generated_record("generated_image_1", output_reference=str(source_path)),
-                generated_record("generated_image_candidate", output_reference=str(candidate_path)),
+                replace(
+                    generated_record("generated_image_candidate", output_reference=str(candidate_path)),
+                    provider_metadata={"model": "approved-model", "preview_path": "candidate-preview.png"},
+                    prompt_metadata={"candidate_prompt": True, "thumbnail_path": "candidate-thumb.png"},
+                    generation_metadata={"candidate_media": True, "preview_path": "candidate-preview.png"},
+                ),
             ]
         )
         pending = generation_library.send_to_pending_edit("generated_image_1")
@@ -537,14 +543,80 @@ class EditStudioTests(unittest.TestCase):
         self.assertIn("Generation\\Active", approved.output_reference)
         self.assertTrue(Path(approved.output_reference).exists())
         self.assertEqual(Path(approved.output_reference).read_bytes(), b"approved")
-        self.assertTrue((content_root / "Edited" / "Originals").exists())
-        self.assertTrue((content_root / "Edited" / "Approved").exists())
-        self.assertEqual(len(tuple((content_root / "Edited" / "Originals").glob("*"))), 1)
-        self.assertEqual(len(tuple((content_root / "Edited" / "Approved").glob("*"))), 1)
+        versions = generation_library.archive_service.list_asset_versions("generated_image_1")
+        self.assertEqual(len(versions), 1)
+        self.assertEqual(versions[0].metadata["version_number"], 1)
+        self.assertEqual(versions[0].metadata["generation_library_record_id"], "generated_image_1")
+        self.assertEqual(versions[0].metadata["provider"], "wan_2_7_image_edit")
+        self.assertEqual(versions[0].metadata["prompt_plan_id"], "generated_image_1_plan")
+        self.assertEqual(versions[0].metadata["original_file_path"], pending.output_reference)
+        archived_path = Path(versions[0].current_file_path)
+        self.assertTrue(archived_path.exists())
+        self.assertEqual(archived_path.read_bytes(), b"original")
+        self.assertTrue(archived_path.with_suffix(archived_path.suffix + ".json").exists())
+        self.assertIn("Archive", str(archived_path))
+        self.assertIn("Versions", str(archived_path))
+        self.assertIn("generated_image_1", str(archived_path))
+        self.assertEqual(approved.generation_metadata["asset_version"], 2)
+        self.assertEqual(approved.provider_metadata["model"], "approved-model")
+        self.assertEqual(approved.provider_metadata["preview_path"], "candidate-preview.png")
+        self.assertTrue(approved.prompt_metadata["candidate_prompt"])
+        self.assertEqual(approved.prompt_metadata["thumbnail_path"], "candidate-thumb.png")
+        self.assertTrue(approved.generation_metadata["candidate_media"])
+        self.assertEqual(approved.generation_metadata["preview_path"], "candidate-preview.png")
         self.assertEqual(tuple((content_root / "Pending_Edit").glob("*")), ())
         with self.assertRaises(KeyError):
             generation_library.get("generated_image_candidate")
         self.assertEqual(tuple(record.image_id for record in generation_library.browse().records), ("generated_image_1",))
+
+    def test_repeated_edit_approvals_create_ordered_versions_without_duplicate_library_records(self):
+        _edit_studio, generation_library = self.make_services()
+        content_root = generation_library.archive_service.content_root
+        active_dir = content_root / "Generation" / "Active"
+        active_dir.mkdir(parents=True, exist_ok=True)
+        source_path = active_dir / "source.png"
+        first_path = active_dir / "candidate-1.png"
+        source_path.write_bytes(b"version-1")
+        first_path.write_bytes(b"version-2")
+        generation_library._write_records([
+            generated_record("generated_image_1", output_reference=str(source_path)),
+            generated_record("candidate-1", output_reference=str(first_path)),
+        ])
+        pending = generation_library.send_to_pending_edit("generated_image_1")
+        generation_library.mark_edit_candidate("candidate-1", pending_source_image_id=pending.image_id)
+        first_approval = generation_library.approve_edit_candidate(
+            source_image_id="generated_image_1", edited_image_id="candidate-1",
+            metadata={"approved_from": "edit_studio"},
+        )
+        second_path = active_dir / "candidate-2.png"
+        second_path.write_bytes(b"version-3")
+        records = list(generation_library.list_records())
+        records.append(generated_record("candidate-2", output_reference=str(second_path)))
+        generation_library._write_records(records)
+        pending = generation_library.send_to_pending_edit("generated_image_1")
+        generation_library.mark_edit_candidate("candidate-2", pending_source_image_id=pending.image_id)
+        second_approval = generation_library.approve_edit_candidate(
+            source_image_id="generated_image_1", edited_image_id="candidate-2",
+            metadata={"approved_from": "edit_studio"},
+        )
+
+        self.assertTrue(first_approval.success, first_approval.errors)
+        self.assertTrue(second_approval.success, second_approval.errors)
+        current = generation_library.get("generated_image_1")
+        self.assertEqual(current.image_id, "generated_image_1")
+        self.assertEqual(current.generation_metadata["asset_version"], 3)
+        self.assertEqual(Path(current.output_reference).read_bytes(), b"version-3")
+        self.assertEqual(tuple(record.image_id for record in generation_library.list_records()), ("generated_image_1",))
+        versions = generation_library.archive_service.list_asset_versions("generated_image_1")
+        self.assertEqual([item.metadata["version_number"] for item in versions], [2, 1])
+        self.assertEqual(
+            versions[0].metadata["approval_timestamp"],
+            versions[0].generation_record["generation_metadata"]["edit_approved_at"],
+        )
+        self.assertEqual([Path(item.current_file_path).read_bytes() for item in reversed(versions)], [b"version-1", b"version-2"])
+        self.assertTrue(all(Path(item.current_file_path).is_file() for item in versions))
+        self.assertEqual(len(tuple(active_dir.glob("*.png"))), 1)
+        self.assertEqual(tuple((content_root / "Pending_Edit").glob("*")), ())
 
     def test_discard_leaves_original_untouched_and_creates_no_edit_history(self):
         _edit_studio, generation_library = self.make_services()

@@ -1,0 +1,530 @@
+"""Generation Library workflow endpoints for React migration clients."""
+
+from __future__ import annotations
+
+import mimetypes
+import logging
+from dataclasses import asdict
+from pathlib import Path
+
+from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import FileResponse
+from pydantic import BaseModel
+
+from app.api.content_studio import _current_account_id
+from app.repositories.creator_profile_repository import get_active_creator_profile
+from app.services.generation_library_service import GenerationLibraryService
+from app.services.photoshoot_queue_service import PhotoshootQueueService
+from app.services.asset_registration_service import AssetRegistrationService
+from app.services.reference_library_service import ReferenceLibraryService
+from app.models.generation_library import GenerationLibraryFilter
+
+
+router = APIRouter(prefix="/api/v1/generation-library", tags=["generation-library"])
+logger = logging.getLogger(__name__)
+
+
+class EditStudioHandoffResponse(BaseModel):
+    success: bool
+    message: str
+    image_id: str
+    status: str
+    review_state: str
+    source_image_url: str
+    context_refresh: bool
+    redirect: str
+
+
+class PhotoshootHandoffResponse(BaseModel):
+    success: bool
+    message: str
+    image_id: str
+    session_id: str
+    status: str
+    context_refresh: bool
+    redirect: str
+
+
+class AssetVersionResponse(BaseModel):
+    generation_library_record_id: str
+    version_number: int
+    is_current: bool
+    approval_timestamp: str | None
+    provider_id: str
+    prompt: str
+    prompt_plan_id: str
+    generation_metadata: dict
+    original_file_path: str
+    archived_file_path: str | None
+    edit_source: str
+    image_url: str
+
+
+class AssetVersionHistoryResponse(BaseModel):
+    generation_library_record_id: str
+    current_version: int
+    versions: list[AssetVersionResponse]
+
+
+class AssetVersionRestoreResponse(BaseModel):
+    success: bool
+    message: str
+    updated_current: dict
+    version_history: AssetVersionHistoryResponse
+
+
+class PermanentDeleteRequest(BaseModel):
+    confirmed: bool = False
+
+
+class AssetRegistrationResponse(BaseModel):
+    success: bool
+    asset_id: int
+    generation_id: str
+    already_registered: bool
+    status: str
+    message: str
+
+
+def _record_payload(record) -> dict:
+    payload = asdict(record)
+    payload["image_url"] = f"/api/v1/generation-library/{record.image_id}/media?v={record.updated_at or record.generation_date}"
+    return payload
+
+
+def _removed_record(library: GenerationLibraryService, image_id: str):
+    try:
+        record = library.archive_service.get_latest(image_id, archive_type="junk")
+    except KeyError as error:
+        raise HTTPException(status_code=404, detail="Removed content not found.") from error
+    creator_profile_id = _creator_profile_id()
+    owner_id = int(dict(record.generation_record or {}).get("creator_profile_id") or 0)
+    if creator_profile_id and owner_id != creator_profile_id:
+        raise HTTPException(status_code=404, detail="Removed content not found.")
+    return record
+
+
+@router.get("")
+def browse_generation_library(
+    search: str | None = None,
+    provider: str | None = None,
+    mode: str | None = None,
+    sort: str = "newest",
+    page: int = Query(1, ge=1),
+):
+    library = GenerationLibraryService()
+    result = library.browse(GenerationLibraryFilter(
+        search=search,
+        provider_id=provider,
+        creative_mode=mode,
+        creator_profile_id=_creator_profile_id() or None,
+        sort=sort,
+    ))
+    page_size = 18
+    total_pages = max(1, (result.total + page_size - 1) // page_size)
+    current_page = min(page, total_pages)
+    start = (current_page - 1) * page_size
+    all_records = result.records
+    return {
+        "records": [_record_payload(record) for record in all_records[start:start + page_size]],
+        "total": result.total,
+        "page": current_page,
+        "pageSize": page_size,
+        "totalPages": total_pages,
+        "providers": sorted({record.provider_id for record in all_records}),
+        "modes": sorted({record.creative_mode for record in all_records if record.creative_mode}),
+    }
+
+
+@router.get("/{generated_image_id}/media", response_class=FileResponse)
+def generation_library_media(generated_image_id: str):
+    library = GenerationLibraryService()
+    try:
+        record = library.get(generated_image_id)
+    except KeyError as error:
+        raise HTTPException(status_code=404, detail="Generated image not found.") from error
+    if _creator_profile_id() and record.creator_profile_id != _creator_profile_id():
+        raise HTTPException(status_code=404, detail="Generated image not found.")
+    path = Path(record.output_reference).expanduser()
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="Generated image media is unavailable.")
+    return FileResponse(path, media_type=mimetypes.guess_type(path.name)[0] or "application/octet-stream")
+
+
+@router.post("/{generated_image_id}/remove")
+def remove_generation_content(generated_image_id: str):
+    library = GenerationLibraryService()
+    try:
+        record = library.get(generated_image_id)
+    except KeyError as error:
+        raise HTTPException(status_code=404, detail="Generated image not found.") from error
+    if _creator_profile_id() and record.creator_profile_id != _creator_profile_id():
+        raise HTTPException(status_code=404, detail="Generated image not found.")
+    result = library.delete((generated_image_id,))
+    if not result.success:
+        raise HTTPException(status_code=409, detail="; ".join(result.errors))
+    return {"success": True, "message": result.message, "image_id": generated_image_id}
+
+
+@router.get("/removed/items")
+def removed_generation_content():
+    library = GenerationLibraryService()
+    creator_profile_id = _creator_profile_id()
+    items = []
+    for record in library.archive_service.list_records(archive_type="junk"):
+        generation = dict(record.generation_record or {})
+        if creator_profile_id and int(generation.get("creator_profile_id") or 0) != creator_profile_id:
+            continue
+        items.append({
+            "archiveId": record.archive_id,
+            "generationLibraryId": record.image_id,
+            "removedAt": record.created_at,
+            "provider": record.provider_id,
+            "prompt": record.prompt_text or "",
+            "mediaUrl": f"/api/v1/generation-library/removed/{record.image_id}/media?v={record.updated_at or record.created_at}",
+        })
+    return {"items": items}
+
+
+@router.get("/removed/{generated_image_id}/media", response_class=FileResponse)
+def removed_generation_media(generated_image_id: str):
+    library = GenerationLibraryService()
+    record = _removed_record(library, generated_image_id)
+    path = Path(record.current_file_path).expanduser()
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="Removed media is unavailable.")
+    return FileResponse(path, media_type=mimetypes.guess_type(path.name)[0] or "application/octet-stream")
+
+
+@router.post("/removed/{generated_image_id}/restore")
+def restore_removed_generation(generated_image_id: str):
+    library = GenerationLibraryService()
+    _removed_record(library, generated_image_id)
+    result = library.restore((generated_image_id,))
+    if not result.success:
+        raise HTTPException(status_code=409, detail="; ".join(result.errors))
+    return {"success": True, "message": "Content restored to the Generation Library.", "image_id": generated_image_id}
+
+
+@router.post("/removed/{generated_image_id}/permanent-delete")
+def permanently_delete_removed_generation(generated_image_id: str, request: PermanentDeleteRequest):
+    if not request.confirmed:
+        raise HTTPException(status_code=400, detail="Permanent deletion requires confirmation.")
+    library = GenerationLibraryService()
+    _removed_record(library, generated_image_id)
+    library.archive_service.permanent_delete_junk(generated_image_id)
+    return {"success": True, "message": "Content permanently deleted.", "image_id": generated_image_id}
+
+
+def _creator_profile_id() -> int:
+    account_id = _current_account_id()
+    profile = get_active_creator_profile(str(account_id)) if account_id is not None else {}
+    return int(profile.get("id") or 0)
+
+
+@router.post("/{generated_image_id}/register", response_model=AssetRegistrationResponse)
+def register_generation_asset(generated_image_id: str):
+    creator_profile_id = _creator_profile_id()
+    if not creator_profile_id:
+        raise HTTPException(status_code=400, detail="Creator Profile required before registering an Asset.")
+    library = GenerationLibraryService()
+    try:
+        record = library.get(generated_image_id)
+    except KeyError as error:
+        raise HTTPException(status_code=404, detail="Generated image not found.") from error
+    if record.creator_profile_id != creator_profile_id:
+        raise HTTPException(status_code=404, detail="Generated image not found.")
+    if record.status != "active":
+        raise HTTPException(status_code=409, detail="Generated image is not available for Asset registration.")
+
+    canonical = ReferenceLibraryService().get_active_reference(
+        creator_profile_id=creator_profile_id,
+    )
+    canonical_id = (
+        int(canonical.asset_id)
+        if canonical is not None and bool(dict(canonical.metadata or {}).get("canonical"))
+        else None
+    )
+    if record.imported_asset_id is not None and int(record.imported_asset_id) == canonical_id:
+        return {
+            "success": True,
+            "asset_id": canonical_id,
+            "generation_id": record.image_id,
+            "already_registered": True,
+            "status": "protected",
+            "message": "Asset is already registered. The canonical reference remains protected.",
+        }
+
+    result = AssetRegistrationService(
+        generation_library_service=library,
+    ).register_generated_image(
+        record,
+        creator_profile_id=creator_profile_id,
+    )
+    if not result.success or result.asset_id is None:
+        raise HTTPException(status_code=409, detail=result.message or "Asset registration failed.")
+    return {
+        "success": True,
+        "asset_id": int(result.asset_id),
+        "generation_id": record.image_id,
+        "already_registered": bool(result.already_registered),
+        "status": "registered",
+        "message": result.message,
+    }
+
+
+@router.post("/{generated_image_id}/edit", response_model=EditStudioHandoffResponse)
+def send_generation_to_edit_studio(generated_image_id: str):
+    creator_profile_id = _creator_profile_id()
+    if not creator_profile_id:
+        raise HTTPException(status_code=400, detail="Creator Profile required before editing.")
+
+    library = GenerationLibraryService()
+    try:
+        selected = library.get(generated_image_id)
+    except KeyError as error:
+        raise HTTPException(status_code=404, detail="Generated image not found.") from error
+    if selected.creator_profile_id != creator_profile_id:
+        raise HTTPException(status_code=404, detail="Generated image not found.")
+
+    if selected.status not in {"active", "pending_edit"}:
+        raise HTTPException(status_code=400, detail="Generated image is not available for editing.")
+
+    pending_records = sorted(
+        (
+            record
+            for record in library.list_records()
+            if record.creator_profile_id == creator_profile_id
+            and record.status == "pending_edit"
+            and record.image_id != selected.image_id
+        ),
+        key=lambda record: (record.updated_at or record.created_at or "", record.image_id),
+        reverse=True,
+    )
+    for current in pending_records:
+        candidates = (
+            record
+            for record in library.list_records()
+            if record.status == "edit_candidate"
+            and dict(record.generation_metadata or {}).get("edit_pending_source_image_id") == current.image_id
+        )
+        for candidate in candidates:
+            discarded = library.discard_edit_candidate(candidate.image_id)
+            if not discarded.success:
+                raise HTTPException(status_code=400, detail="; ".join(discarded.errors) or discarded.message)
+        restored = library.return_pending_edit_to_library(current.image_id)
+        if not restored.success:
+            raise HTTPException(status_code=400, detail="; ".join(restored.errors) or restored.message)
+
+    try:
+        pending = library.send_to_pending_edit(selected.image_id)
+    except (KeyError, ValueError, RuntimeError) as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+    return {
+        "success": True,
+        "message": "Image opened in Edit Studio.",
+        "image_id": pending.image_id,
+        "status": pending.status,
+        "review_state": pending.review_state,
+        "source_image_url": (
+            f"/api/v1/edit-studio/pending-source/image"
+            f"?image_id={pending.image_id}&v={pending.updated_at or pending.generation_date}"
+        ),
+        "context_refresh": True,
+        "redirect": "/content/edit",
+    }
+
+
+def _resolve_photoshoot_session(queue: PhotoshootQueueService, library: GenerationLibraryService, session) -> None:
+    continuity = dict(session.creative_continuity or {})
+    seed_id = str(continuity.get("seed_image_id") or "")
+    seed_request = next((
+        request for request in queue.requests_for_session(session.session_id)
+        if bool(dict(request.metadata or {}).get("is_seed_image"))
+    ), None)
+    if seed_request is not None and seed_request.status != "returned_to_library":
+        queue.return_seed_request_to_library(seed_request.request_id, notes="Replaced by a new Generation Library seed.")
+    if seed_id:
+        restored = library.return_photoshoot_seed_to_library(seed_id)
+        if not restored.success:
+            raise HTTPException(status_code=409, detail="; ".join(restored.errors) or restored.message)
+    if session.status not in {"completed", "cancelled"}:
+        queue.cancel_session(session.session_id)
+
+
+@router.post("/{generated_image_id}/photoshoot", response_model=PhotoshootHandoffResponse)
+def send_generation_to_photoshoot(generated_image_id: str):
+    creator_profile_id = _creator_profile_id()
+    if not creator_profile_id:
+        raise HTTPException(status_code=400, detail="Creator Profile required before starting a Photoshoot.")
+
+    library = GenerationLibraryService()
+    queue = PhotoshootQueueService()
+    try:
+        selected = library.get(generated_image_id)
+    except KeyError as error:
+        raise HTTPException(status_code=404, detail="Generated image not found.") from error
+    if selected.creator_profile_id != creator_profile_id:
+        raise HTTPException(status_code=404, detail="Generated image not found.")
+    if selected.status not in {"active", "pending_photoshoot"}:
+        raise HTTPException(status_code=400, detail="Generated image is not available for Photoshoot Studio.")
+
+    matching_session = None
+    for session in queue.list_sessions(creator_profile_id=creator_profile_id):
+        if session.status in {"completed", "cancelled", "junked"}:
+            continue
+        seed_id = str(dict(session.creative_continuity or {}).get("seed_image_id") or "")
+        if seed_id == selected.image_id:
+            matching_session = session
+        else:
+            _resolve_photoshoot_session(queue, library, session)
+
+    for pending_record in tuple(library.list_records()):
+        if (pending_record.creator_profile_id == creator_profile_id
+                and pending_record.status == "pending_photoshoot"
+                and pending_record.image_id != selected.image_id):
+            restored = library.return_photoshoot_seed_to_library(pending_record.image_id)
+            if not restored.success:
+                raise HTTPException(status_code=409, detail="; ".join(restored.errors) or restored.message)
+
+    try:
+        pending = library.send_to_pending_photoshoot(selected.image_id)
+        session, _created = queue.start_studio_session_from_generated_image(pending)
+    except (KeyError, ValueError, RuntimeError) as error:
+        logger.exception("Photoshoot handoff failed for %s", generated_image_id)
+        raise HTTPException(status_code=409, detail="Generation Library handoff failed.") from error
+
+    if matching_session is not None and session.session_id != matching_session.session_id:
+        raise HTTPException(status_code=409, detail="Photoshoot session did not match the selected image.")
+    return {
+        "success": True,
+        "message": "Image opened in Photoshoot Studio.",
+        "image_id": pending.image_id,
+        "session_id": session.session_id,
+        "status": pending.status,
+        "context_refresh": True,
+        "redirect": "/content/photoshoot",
+    }
+
+
+@router.get("/{generated_image_id}/versions", response_model=AssetVersionHistoryResponse)
+def generation_asset_versions(generated_image_id: str):
+    creator_profile_id = _creator_profile_id()
+    library = GenerationLibraryService()
+    try:
+        current = library.get(generated_image_id)
+    except KeyError as error:
+        raise HTTPException(status_code=404, detail="Generated image not found.") from error
+    if current.creator_profile_id != creator_profile_id:
+        raise HTTPException(status_code=404, detail="Generated image not found.")
+    archived = library.archive_service.list_asset_versions(current.image_id)
+    archived_max = max(
+        (int(item.metadata.get("version_number") or 0) for item in archived),
+        default=0,
+    )
+    current_metadata = dict(current.generation_metadata or {})
+    current_version = max(1, int(current_metadata.get("asset_version") or 0), archived_max + 1)
+    versions = [{
+        "generation_library_record_id": current.image_id,
+        "version_number": current_version,
+        "is_current": True,
+        "approval_timestamp": current_metadata.get("edit_approved_at"),
+        "provider_id": current.provider_id,
+        "prompt": current.prompt_text,
+        "prompt_plan_id": current.prompt_plan_id,
+        "generation_metadata": current_metadata,
+        "original_file_path": current.output_reference,
+        "archived_file_path": None,
+        "edit_source": str(current_metadata.get("approved_from") or "current_generation"),
+        "image_url": f"/api/generation-library/media/{current.image_id}?v={current_version}",
+    }]
+    versions.extend({
+        "generation_library_record_id": item.image_id,
+        "version_number": int(item.metadata.get("version_number") or 0),
+        "is_current": False,
+        "approval_timestamp": item.metadata.get("approval_timestamp"),
+        "provider_id": item.provider_id,
+        "prompt": str(item.prompt_text or ""),
+        "prompt_plan_id": str(item.metadata.get("prompt_plan_id") or ""),
+        "generation_metadata": dict(item.metadata.get("generation_metadata") or {}),
+        "original_file_path": str(item.metadata.get("original_file_path") or item.original_output_reference),
+        "archived_file_path": item.current_file_path,
+        "edit_source": str(item.metadata.get("edit_source") or "edit_studio"),
+        "image_url": f"/api/v1/generation-library/{current.image_id}/versions/{int(item.metadata.get('version_number') or 0)}/media",
+    } for item in archived)
+    return {
+        "generation_library_record_id": current.image_id,
+        "current_version": current_version,
+        "versions": versions,
+    }
+
+
+@router.get("/{generated_image_id}/versions/{version_number}/media", response_class=FileResponse)
+def generation_asset_version_media(generated_image_id: str, version_number: int):
+    creator_profile_id = _creator_profile_id()
+    library = GenerationLibraryService()
+    try:
+        current = library.get(generated_image_id)
+    except KeyError as error:
+        raise HTTPException(status_code=404, detail="Generated image not found.") from error
+    if current.creator_profile_id != creator_profile_id:
+        raise HTTPException(status_code=404, detail="Generated image not found.")
+    archived = next((
+        item
+        for item in library.archive_service.list_asset_versions(current.image_id)
+        if int(item.metadata.get("version_number") or 0) == int(version_number)
+    ), None)
+    if archived is None:
+        raise HTTPException(status_code=404, detail="Archived asset version not found.")
+    path = Path(archived.current_file_path).expanduser()
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="Archived asset version media is unavailable.")
+    return FileResponse(
+        path,
+        media_type=mimetypes.guess_type(path.name)[0] or "application/octet-stream",
+        headers={"Cache-Control": "private, max-age=31536000, immutable"},
+    )
+
+
+@router.post(
+    "/{generated_image_id}/versions/{version_number}/restore",
+    response_model=AssetVersionRestoreResponse,
+)
+def restore_generation_asset_version(generated_image_id: str, version_number: int):
+    creator_profile_id = _creator_profile_id()
+    library = GenerationLibraryService()
+    try:
+        current = library.get(generated_image_id)
+    except KeyError as error:
+        raise HTTPException(status_code=404, detail="Generated image not found.") from error
+    if current.creator_profile_id != creator_profile_id:
+        raise HTTPException(status_code=404, detail="Generated image not found.")
+    try:
+        restored = library.restore_asset_version(
+            image_id=generated_image_id,
+            version_number=version_number,
+        )
+    except KeyError as error:
+        raise HTTPException(status_code=404, detail="Archived asset version not found.") from error
+    except FileNotFoundError as error:
+        logger.exception("Version restore media is missing for %s version %s", generated_image_id, version_number)
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    except Exception as error:
+        logger.exception("Version restore failed for %s version %s", generated_image_id, version_number)
+        raise HTTPException(status_code=500, detail="Version restore failed. The current version remains unchanged.") from error
+
+    history = generation_asset_versions(generated_image_id)
+    updated_current = asdict(restored)
+    updated_current["image_url"] = (
+        f"/api/generation-library/media/{restored.image_id}"
+        f"?v={int(restored.generation_metadata.get('asset_version') or 1)}"
+    )
+    return {
+        "success": True,
+        "message": f"Version {version_number} restored as a new current version.",
+        "updated_current": updated_current,
+        "version_history": history,
+    }

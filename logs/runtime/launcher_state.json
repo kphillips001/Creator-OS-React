@@ -1,0 +1,72 @@
+{
+  "telegram": {
+    "workerName": "Telegram",
+    "launcherManaged": true,
+    "launcherEnabled": false,
+    "expectedStartupMethod": "C:\\Users\\knphi\\AppData\\Local\\Programs\\Python\\Python311\\python.exe -m app.integrations.telegram.telethon_runtime",
+    "expectedHeartbeatName": "Telegram",
+    "pid": null,
+    "instanceId": null,
+    "lastLauncherAction": "disabled",
+    "lastLauncherActionAt": "2026-07-19T22:05:00.342470+00:00",
+    "startupFailure": null,
+    "configurationBlocked": false,
+    "error": null
+  },
+  "outreach": {
+    "workerName": "Outreach",
+    "launcherManaged": true,
+    "launcherEnabled": false,
+    "expectedStartupMethod": "C:\\Users\\knphi\\AppData\\Local\\Programs\\Python\\Python311\\python.exe -m app.workers.outreach_queue",
+    "expectedHeartbeatName": "Outreach",
+    "pid": null,
+    "instanceId": null,
+    "lastLauncherAction": "disabled",
+    "lastLauncherActionAt": "2026-07-19T22:05:00.343471+00:00",
+    "startupFailure": null,
+    "configurationBlocked": false,
+    "error": null
+  },
+  "delayed_messages": {
+    "workerName": "Delayed Messages",
+    "launcherManaged": true,
+    "launcherEnabled": false,
+    "expectedStartupMethod": "C:\\Users\\knphi\\AppData\\Local\\Programs\\Python\\Python311\\python.exe -m app.workers.delayed_messages",
+    "expectedHeartbeatName": "Delayed Messages",
+    "pid": null,
+    "instanceId": null,
+    "lastLauncherAction": "disabled",
+    "lastLauncherActionAt": "2026-07-19T22:05:00.344471+00:00",
+    "startupFailure": null,
+    "configurationBlocked": false,
+    "error": null
+  },
+  "mass_ppv": {
+    "workerName": "Mass PPV",
+    "launcherManaged": true,
+    "launcherEnabled": false,
+    "expectedStartupMethod": "C:\\Users\\knphi\\AppData\\Local\\Programs\\Python\\Python311\\python.exe -m app.workers.mass_ppv",
+    "expectedHeartbeatName": "Mass PPV",
+    "pid": null,
+    "instanceId": null,
+    "lastLauncherAction": "disabled",
+    "lastLauncherActionAt": "2026-07-19T22:05:00.344471+00:00",
+    "startupFailure": null,
+    "configurationBlocked": false,
+    "error": null
+  },
+  "wall": {
+    "workerName": "Wall Worker",
+    "launcherManaged": true,
+    "launcherEnabled": false,
+    "expectedStartupMethod": "C:\\Users\\knphi\\AppData\\Local\\Programs\\Python\\Python311\\python.exe -m app.workers.wall",
+    "expectedHeartbeatName": "Wall Worker",
+    "pid": null,
+    "instanceId": null,
+    "lastLauncherAction": "disabled",
+    "lastLauncherActionAt": "2026-07-19T22:05:00.345471+00:00",
+    "startupFailure": null,
+    "configurationBlocked": false,
+    "error": null
+  }
+}

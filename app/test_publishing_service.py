@@ -639,6 +639,7 @@ class PublishingServiceTests(unittest.TestCase):
                     "text": "hello",
                     "media_ids": ["media-1"],
                     "audience": "followers-and-subscribers",
+                    "execution_origin": "operator",
                 }
             ],
         )

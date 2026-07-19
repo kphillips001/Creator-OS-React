@@ -21,6 +21,6 @@
     "blur_strength": 12,
     "click_to_reveal_enabled": true
   },
-  "global_automation_enabled": true,
+  "global_automation_enabled": false,
   "global_sends_enabled": true
 }

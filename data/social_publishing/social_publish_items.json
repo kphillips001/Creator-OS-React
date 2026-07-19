@@ -1,5 +1,295 @@
 [
   {
+    "publish_request_id": "social_publish_item_642cd08b50e34cde85336e0daa97fb71",
+    "queue_item_id": "social_queue_item_7ae9395c8eee4b909c6a4bc2537a5bce",
+    "platform": "x",
+    "caption_id": null,
+    "scheduled_for": null,
+    "status": "posted",
+    "created_at": "2026-07-19T15:44:55.208613",
+    "metadata": {
+      "posting_implemented": true,
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "provider_post_id": "2078868698920603668",
+      "provider_media_id": "2078868697167351808",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2078868698920603668",
+      "provider_metadata": {
+        "tweet_data": {
+          "edit_history_tweet_ids": [
+            ""
+          ],
+          "id": "2078868698920603668",
+          "text": "If we bumped into each other on the boardwalk, what's the first thing you'd say? \ud83d\ude0a\ud83d\udc47 https://t.co/xfivDTrTYQ"
+        }
+      }
+    }
+  },
+  {
+    "publish_request_id": "social_publish_item_92ad59b978c34c4bb59187094a96594f",
+    "queue_item_id": "social_queue_item_3758da23d44041a3be43ea29d72f8d29",
+    "platform": "x",
+    "caption_id": null,
+    "scheduled_for": null,
+    "status": "posted",
+    "created_at": "2026-07-18T15:33:47.525840",
+    "metadata": {
+      "posting_implemented": true,
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "provider_post_id": "2078503510413279579",
+      "provider_media_id": "2078503508760797184",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2078503510413279579",
+      "provider_metadata": {
+        "tweet_data": {
+          "edit_history_tweet_ids": [
+            ""
+          ],
+          "id": "2078503510413279579",
+          "text": "Okay\u2026 what's one thing that instantly makes your day better? \ud83d\ude0a\ud83d\udc47 https://t.co/VaZRNSOoDR"
+        }
+      }
+    }
+  },
+  {
+    "publish_request_id": "social_publish_item_86256b3874384c8fb9f7c24b220e8d17",
+    "queue_item_id": "social_queue_item_ac8df87aa6c04bd8b1a8333e523dc5d3",
+    "platform": "telegram",
+    "caption_id": "caption_result_b10ede2b2ec04a4f985d1b3daacb5814",
+    "scheduled_for": null,
+    "status": "posted",
+    "created_at": "2026-07-17T20:43:15.105160",
+    "metadata": {
+      "posting_implemented": true,
+      "account_name": null,
+      "telegram_post_to": "main",
+      "provider_post_id": "85",
+      "provider_media_id": null,
+      "provider_output_url": null,
+      "provider_metadata": {
+        "status_code": 200,
+        "message_id": 85,
+        "response": {
+          "ok": true,
+          "result": {
+            "message_id": 85,
+            "sender_chat": {
+              "id": -1002507455539,
+              "title": "Ava Blackthorne",
+              "type": "channel"
+            },
+            "chat": {
+              "id": -1002507455539,
+              "title": "Ava Blackthorne",
+              "type": "channel"
+            },
+            "date": 1784320996,
+            "photo": [
+              {
+                "file_id": "AgACAgEAAyEGAASVdLwzAANValqT5AOVU8jJ2N4-8vqbT2U_8lAAAsoLaxtbWNlGuvhwiN_Z1xcBAAMCAANzAAM9BA",
+                "file_unique_id": "AQADygtrG1tY2UZ4",
+                "file_size": 1622,
+                "width": 67,
+                "height": 90
+              },
+              {
+                "file_id": "AgACAgEAAyEGAASVdLwzAANValqT5AOVU8jJ2N4-8vqbT2U_8lAAAsoLaxtbWNlGuvhwiN_Z1xcBAAMCAANtAAM9BA",
+                "file_unique_id": "AQADygtrG1tY2UZy",
+                "file_size": 17483,
+                "width": 240,
+                "height": 320
+              },
+              {
+                "file_id": "AgACAgEAAyEGAASVdLwzAANValqT5AOVU8jJ2N4-8vqbT2U_8lAAAsoLaxtbWNlGuvhwiN_Z1xcBAAMCAAN4AAM9BA",
+                "file_unique_id": "AQADygtrG1tY2UZ9",
+                "file_size": 75437,
+                "width": 600,
+                "height": 800
+              },
+              {
+                "file_id": "AgACAgEAAyEGAASVdLwzAANValqT5AOVU8jJ2N4-8vqbT2U_8lAAAsoLaxtbWNlGuvhwiN_Z1xcBAAMCAAN5AAM9BA",
+                "file_unique_id": "AQADygtrG1tY2UZ-",
+                "file_size": 170372,
+                "width": 864,
+                "height": 1152
+              }
+            ],
+            "caption": "One tug and this whole look changes \ud83d\ude08 still watching?"
+          }
+        },
+        "post_to": "main"
+      }
+    }
+  },
+  {
+    "publish_request_id": "social_publish_item_b2f61d2e4f0040f3b0dc4a946e4be3a4",
+    "queue_item_id": "social_queue_item_3f5573a0e4be4985ad1a687a7c1c2068",
+    "platform": "telegram",
+    "caption_id": "caption_result_e5ce15069b0448688dea87c89400b2a0",
+    "scheduled_for": null,
+    "status": "posted",
+    "created_at": "2026-07-17T18:57:12.423700",
+    "metadata": {
+      "posting_implemented": true,
+      "account_name": null,
+      "telegram_post_to": "vault",
+      "provider_post_id": "15",
+      "provider_media_id": null,
+      "provider_output_url": null,
+      "provider_metadata": {
+        "status_code": 200,
+        "message_id": 15,
+        "response": {
+          "ok": true,
+          "result": {
+            "message_id": 15,
+            "sender_chat": {
+              "id": -1003937188399,
+              "title": "Ava's Content Vault \ud83d\udc8b",
+              "username": "AvaContentVault",
+              "type": "channel"
+            },
+            "chat": {
+              "id": -1003937188399,
+              "title": "Ava's Content Vault \ud83d\udc8b",
+              "username": "AvaContentVault",
+              "type": "channel"
+            },
+            "date": 1784314633,
+            "photo": [
+              {
+                "file_id": "AgACAgEAAyEGAATqrLovAAMPalp7CqRnkprTfCBfXn991G4o-1IAAqEMaxvTm9FGBNpSqy5QXFABAAMCAANzAAM9BA",
+                "file_unique_id": "AQADoQxrG9Ob0UZ4",
+                "file_size": 1393,
+                "width": 60,
+                "height": 90
+              },
+              {
+                "file_id": "AgACAgEAAyEGAATqrLovAAMPalp7CqRnkprTfCBfXn991G4o-1IAAqEMaxvTm9FGBNpSqy5QXFABAAMCAANtAAM9BA",
+                "file_unique_id": "AQADoQxrG9Ob0UZy",
+                "file_size": 14723,
+                "width": 213,
+                "height": 320
+              },
+              {
+                "file_id": "AgACAgEAAyEGAATqrLovAAMPalp7CqRnkprTfCBfXn991G4o-1IAAqEMaxvTm9FGBNpSqy5QXFABAAMCAAN4AAM9BA",
+                "file_unique_id": "AQADoQxrG9Ob0UZ9",
+                "file_size": 66097,
+                "width": 533,
+                "height": 800
+              },
+              {
+                "file_id": "AgACAgEAAyEGAATqrLovAAMPalp7CqRnkprTfCBfXn991G4o-1IAAqEMaxvTm9FGBNpSqy5QXFABAAMCAAN5AAM9BA",
+                "file_unique_id": "AQADoQxrG9Ob0UZ-",
+                "file_size": 169852,
+                "width": 832,
+                "height": 1248
+              }
+            ],
+            "caption": "Golden light found me right here \u2600\ufe0f just wanted you closer for a second \ud83e\udd0d"
+          }
+        },
+        "post_to": "vault"
+      }
+    }
+  },
+  {
+    "publish_request_id": "social_publish_item_5995324062df414798ffc58849f556b0",
+    "queue_item_id": "social_queue_item_d168b21ea1d04db9b324cc4b2b12853f",
+    "platform": "telegram",
+    "caption_id": "caption_result_acfbb6fdba4e43d59124589fe0f567b6",
+    "scheduled_for": null,
+    "status": "posted",
+    "created_at": "2026-07-17T18:56:44.706553",
+    "metadata": {
+      "posting_implemented": true,
+      "account_name": null,
+      "telegram_post_to": "main",
+      "provider_post_id": "84",
+      "provider_media_id": null,
+      "provider_output_url": null,
+      "provider_metadata": {
+        "status_code": 200,
+        "message_id": 84,
+        "response": {
+          "ok": true,
+          "result": {
+            "message_id": 84,
+            "sender_chat": {
+              "id": -1002507455539,
+              "title": "Ava Blackthorne",
+              "type": "channel"
+            },
+            "chat": {
+              "id": -1002507455539,
+              "title": "Ava Blackthorne",
+              "type": "channel"
+            },
+            "date": 1784314606,
+            "photo": [
+              {
+                "file_id": "AgACAgEAAyEGAASVdLwzAANUalp67q6DPpB513QCQLmPX1BddLsAAsQLaxtbWNlGb0rwAAHWHTCeAQADAgADcwADPQQ",
+                "file_unique_id": "AQADxAtrG1tY2UZ4",
+                "file_size": 1471,
+                "width": 60,
+                "height": 90
+              },
+              {
+                "file_id": "AgACAgEAAyEGAASVdLwzAANUalp67q6DPpB513QCQLmPX1BddLsAAsQLaxtbWNlGb0rwAAHWHTCeAQADAgADbQADPQQ",
+                "file_unique_id": "AQADxAtrG1tY2UZy",
+                "file_size": 16013,
+                "width": 213,
+                "height": 320
+              },
+              {
+                "file_id": "AgACAgEAAyEGAASVdLwzAANUalp67q6DPpB513QCQLmPX1BddLsAAsQLaxtbWNlGb0rwAAHWHTCeAQADAgADeAADPQQ",
+                "file_unique_id": "AQADxAtrG1tY2UZ9",
+                "file_size": 77241,
+                "width": 533,
+                "height": 800
+              },
+              {
+                "file_id": "AgACAgEAAyEGAASVdLwzAANUalp67q6DPpB513QCQLmPX1BddLsAAsQLaxtbWNlGb0rwAAHWHTCeAQADAgADeQADPQQ",
+                "file_unique_id": "AQADxAtrG1tY2UZ-",
+                "file_size": 198883,
+                "width": 832,
+                "height": 1248
+              }
+            ],
+            "caption": "Sunlight found me on this couch and I just had to share the moment with you \u2600\ufe0f"
+          }
+        },
+        "post_to": "main"
+      }
+    }
+  },
+  {
+    "publish_request_id": "social_publish_item_a9d3ecd678604093ab3a97c47f15c2c7",
+    "queue_item_id": "social_queue_item_4406aa0d6eef49539e3569be7e5796d3",
+    "platform": "x",
+    "caption_id": "caption_result_16b369f2cc844e718eb886c8015b0102",
+    "scheduled_for": null,
+    "status": "posted",
+    "created_at": "2026-07-17T18:56:18.290132",
+    "metadata": {
+      "posting_implemented": true,
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "provider_post_id": "2078192086365438421",
+      "provider_media_id": "2078192084469547008",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2078192086365438421",
+      "provider_metadata": {
+        "tweet_data": {
+          "edit_history_tweet_ids": [
+            ""
+          ],
+          "id": "2078192086365438421",
+          "text": "Caught me stealing a little sun on the windowsill \u2600\ufe0f Would you pull up a seat or just stand there staring? Be honest \ud83d\ude0f https://t.co/R0Fe8Y0sx4"
+        }
+      }
+    }
+  },
+  {
     "publish_request_id": "social_publish_item_8f774c3604604c53a567ec8b0dcaa230",
     "queue_item_id": "social_queue_item_90b520cecadb40e88e776ee2e616ee04",
     "platform": "x",

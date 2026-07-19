@@ -1,9 +1,6 @@
-from app.repositories.outreach_queue_repository import (
-    fetch_due_outreach_queue,
-    mark_outreach_processing,
-    mark_outreach_completed,
-    mark_outreach_failed,
-)
+from uuid import uuid4
+
+from app.repositories.outreach_queue_repository import claim_due_items, renew_claim, release_claim, complete_claim, fail_claim
 
 from app.services.outreach_service import (
     OutreachService,
@@ -16,7 +13,9 @@ from app.services.global_automation_safety_service import (
 
 class OutreachWorkerService:
 
-    def __init__(self):
+    def __init__(self, worker_instance_id: str | None = None):
+
+        self.worker_instance_id = worker_instance_id or f"outreach-{uuid4()}"
 
         self.outreach_service = (
             OutreachService()
@@ -31,10 +30,17 @@ class OutreachWorkerService:
         limit: int = 25,
     ) -> dict:
 
+        global_result = self.global_safety_service.check_global_safety()
+        if not global_result.get("allowed", False):
+            return {
+                "success": True, "blocked": True,
+                "reason": global_result.get("reason"),
+                "processed_count": 0, "failed_count": 0,
+                "processed": [], "failed": [],
+            }
+
         queue_items = (
-            fetch_due_outreach_queue(
-                limit=limit,
-            )
+            claim_due_items(worker_instance_id=self.worker_instance_id, limit=limit)
         )
 
         processed = []
@@ -46,9 +52,8 @@ class OutreachWorkerService:
 
             try:
 
-                mark_outreach_processing(
-                    queue_id
-                )
+                if not renew_claim(queue_id, worker_instance_id=self.worker_instance_id):
+                    continue
 
                 # ==================================================
                 # Outreach Safety Enforcement
@@ -63,12 +68,8 @@ class OutreachWorkerService:
                     "allowed",
                     False,
                 ):
-                    raise Exception(
-                        safety_result.get(
-                            "reason",
-                            "outreach_automation_blocked",
-                        )
-                    )
+                    release_claim(queue_id, worker_instance_id=self.worker_instance_id)
+                    continue
 
                 # ==================================================
                 # Existing outreach execution layer
@@ -91,9 +92,7 @@ class OutreachWorkerService:
                     )
 
                 completed = (
-                    mark_outreach_completed(
-                        queue_id
-                    )
+                    complete_claim(queue_id, worker_instance_id=self.worker_instance_id)
                 )
 
                 processed.append(
@@ -103,8 +102,9 @@ class OutreachWorkerService:
             except Exception as e:
 
                 failed_item = (
-                    mark_outreach_failed(
+                    fail_claim(
                         queue_id=queue_id,
+                        worker_instance_id=self.worker_instance_id,
                         error_message=str(e),
                         retry=True,
                     )

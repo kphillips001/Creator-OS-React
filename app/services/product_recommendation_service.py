@@ -304,6 +304,19 @@ class ProductRecommendationService:
         )
         return candidates[0]
 
+    def eligibility_for_product(
+        self,
+        product: Product,
+        *,
+        user_memory: dict | None = None,
+    ) -> dict[str, str | bool | None]:
+        """Expose the existing recommendation gate as a read-only projection."""
+        reason = self._rejection_reason(product, user_memory or {})
+        return {
+            "eligible": reason is None,
+            "reason": reason,
+        }
+
     def _rejection_reason(
         self,
         product: Product,

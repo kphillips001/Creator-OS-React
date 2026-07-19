@@ -1,9 +1,6 @@
-from app.repositories.webhook_event_repository import (
-    get_unprocessed_webhook_events,
-    mark_webhook_event_processing,
-    mark_webhook_event_processed,
-    mark_webhook_event_failed,
-)
+from uuid import uuid4
+
+from app.repositories.webhook_event_repository import claim_due_items, renew_claim, complete_claim, fail_claim
 
 from app.services.webhook_event_router_service import (
     WebhookEventRouterService,
@@ -24,11 +21,12 @@ class WebhookEventProcessorService:
     - mark failed events retryable
     """
 
-    def __init__(self):
+    def __init__(self, worker_instance_id: str | None = None):
         self.router = WebhookEventRouterService()
+        self.worker_instance_id = worker_instance_id or f"webhook-processor-{uuid4()}"
 
     def process_pending_events(self):
-        events = get_unprocessed_webhook_events()
+        events = claim_due_items(worker_instance_id=self.worker_instance_id)
 
         print("\n===================================")
         print(" PROCESSING WEBHOOK EVENTS ")
@@ -55,13 +53,14 @@ class WebhookEventProcessorService:
         print(f"event_type={event_type}")
 
         try:
-            mark_webhook_event_processing(webhook_event_id)
+            if not renew_claim(webhook_event_id, worker_instance_id=self.worker_instance_id):
+                return {"success": False, "error": "claim_not_owned"}
 
             route_result = self.router.route_event(event)
 
             print(f"route_result={route_result}")
 
-            mark_webhook_event_processed(webhook_event_id)
+            complete_claim(webhook_event_id, worker_instance_id=self.worker_instance_id)
 
             print("[EVENT PROCESSED]")
 
@@ -76,8 +75,9 @@ class WebhookEventProcessorService:
             traceback_text = traceback.format_exc()
             print(traceback_text)
 
-            mark_webhook_event_failed(
+            fail_claim(
                 webhook_event_id=webhook_event_id,
+                worker_instance_id=self.worker_instance_id,
                 error_message=str(e),
             )
 

@@ -70,6 +70,7 @@ class EditStudioService:
         reference_image_id: str | None = None,
         reference_asset_id: int | None = None,
         batch_size: int = 1,
+        references: Iterable[Mapping[str, Any]] | None = None,
     ) -> tuple[EditRequest, Any]:
         creator_profile_id = int((creator_profile or {}).get("id") or 0)
         if not creator_profile_id:
@@ -81,6 +82,7 @@ class EditStudioService:
         if not prompt:
             raise ValueError("Edit prompt is required.")
         mode = self.normalize_mode(edit_mode)
+        reference_inputs = tuple(dict(reference) for reference in (references or ()))
         source_records = tuple(generation_library.get(image_id) for image_id in source_ids)
         reference_record = generation_library.get(reference_image_id) if reference_image_id else None
         session = self.create_session(
@@ -92,6 +94,7 @@ class EditStudioService:
                 "owner": "Edit Studio",
                 "reference_image_id": reference_image_id,
                 "reference_asset_id": reference_asset_id,
+                "references": reference_inputs,
             },
         )
         edit_item = EditRequest(
@@ -108,6 +111,7 @@ class EditStudioService:
             metadata={
                 "source_output_references": tuple(record.output_reference for record in source_records),
                 "reference_output_reference": reference_record.output_reference if reference_record else None,
+                "references": reference_inputs,
             },
         )
         plan = self._prompt_plan_for_edit(
@@ -131,6 +135,7 @@ class EditStudioService:
                 "source_image_ids": edit_item.source_image_ids,
                 "reference_image_id": edit_item.reference_image_id,
                 "reference_asset_id": edit_item.reference_asset_id,
+                "references": reference_inputs,
                 "reference_image_url": source_records[0].output_reference,
                 "edit_source_output_reference": source_records[0].output_reference,
                 "edit_reference_output_reference": reference_record.output_reference if reference_record else None,
@@ -254,6 +259,7 @@ class EditStudioService:
                 "source_image_ids": edit_item.source_image_ids,
                 "reference_image_id": edit_item.reference_image_id,
                 "batch_size": edit_item.batch_size,
+                "references": tuple(dict(edit_item.metadata or {}).get("references") or ()),
             },
         )
 

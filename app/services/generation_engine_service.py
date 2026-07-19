@@ -103,6 +103,11 @@ class GenerationEngineService:
                 "reference_metadata": reference_metadata,
                 "reference_file_name": active_reference.asset.file_name if active_reference else None,
                 "reference_preview_path": active_reference.asset.preview_path if active_reference else None,
+                **(
+                    {"canonical_reference_image_url": provider_reference_url or reference_asset_path}
+                    if active_reference and (provider_reference_url or reference_asset_path)
+                    else {}
+                ),
                 **({"reference_image_url": provider_reference_url} if provider_reference_url else {}),
                 **dict(metadata or {}),
             },

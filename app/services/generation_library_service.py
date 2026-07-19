@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import re
 import shutil
+import threading
 from dataclasses import asdict, replace
 from pathlib import Path
 from typing import Any, Iterable, Mapping
@@ -28,6 +30,7 @@ class GenerationLibraryService:
     """Owns generated-image review state before Creator OS asset import."""
 
     DEFAULT_STORAGE_DIR = Path("data") / "generation_library"
+    _version_restore_lock = threading.RLock()
 
     def __init__(
         self,
@@ -258,7 +261,7 @@ class GenerationLibraryService:
                 errors.append(f"Generated image not found: {image_id}")
                 continue
             try:
-                self.archive_service.archive_junk(record, metadata={"archive_reason": "delete"})
+                self.archive_service.archive_junk(record, metadata={"archive_reason": "removed"})
                 junked.append(image_id)
             except Exception as exc:
                 errors.append(str(exc))
@@ -266,7 +269,7 @@ class GenerationLibraryService:
             self._remove_records(junked)
         return GenerationLibraryActionResult(
             success=not errors,
-            message="Generated image(s) moved to Archive/Junk.",
+            message="Content moved to Archive / Removed Content.",
             image_ids=tuple(junked),
             errors=tuple(errors),
         )
@@ -1058,7 +1061,22 @@ class GenerationLibraryService:
         ]
         if not records:
             return None
-        return sorted(records, key=lambda record: record.updated_at or record.created_at or "", reverse=True)[0]
+        ordered = sorted(
+            records,
+            key=lambda record: (record.updated_at or record.created_at or "", record.image_id),
+            reverse=True,
+        )
+        if len(ordered) > 1:
+            ids = tuple(record.image_id for record in ordered)
+            logging.getLogger(__name__).error(
+                "Multiple pending Edit Studio records found for creator_profile_id=%s: %s",
+                creator_profile_id,
+                ids,
+            )
+            raise RuntimeError(
+                "Multiple pending Edit Studio records require repair: " + ", ".join(ids)
+            )
+        return ordered[0]
 
     def _photoshoot_session_dir(
         self,
@@ -1291,27 +1309,44 @@ class GenerationLibraryService:
         try:
             source_record = self.get(source_image_id)
             edited_record = self.get(edited_image_id)
-            original_history_path = self.archive_service.copy_edit_history(
-                source_record,
-                history_type="original",
+            approval_timestamp = utc_now()
+            archived_versions = self.archive_service.list_asset_versions(source_record.image_id)
+            latest_archived_version = max(
+                (int(item.metadata.get("version_number") or 0) for item in archived_versions),
+                default=0,
             )
-            approved_history_path = self.archive_service.copy_edit_history(
-                edited_record,
-                history_type="approved",
+            source_version = max(
+                1,
+                int(dict(source_record.generation_metadata or {}).get("asset_version") or 0),
+                latest_archived_version + 1,
+            )
+            version_approval_timestamp = str(
+                dict(source_record.generation_metadata or {}).get("edit_approved_at")
+                or approval_timestamp
+            )
+            archived_version = self.archive_service.archive_asset_version(
+                source_record,
+                version_number=source_version,
+                approval_timestamp=version_approval_timestamp,
+                edit_source=str(dict(metadata or {}).get("approved_from") or "edit_studio"),
             )
             active_approved_path = self.archive_service.move_to_generation_active(edited_record)
             merged_generation_metadata = {
                 **dict(source_record.generation_metadata or {}),
+                **dict(edited_record.generation_metadata or {}),
                 "workflow_type": "edit",
-                "edit_approved_at": utc_now(),
+                "edit_approved_at": approval_timestamp,
+                "asset_version": source_version + 1,
+                "asset_version_archive_id": archived_version.archive_id,
+                "previous_version_archived_path": archived_version.current_file_path,
                 "edit_original_output_reference": source_record.output_reference,
                 "original_output_reference": (
                     dict(edited_record.generation_metadata or {}).get("original_output_reference")
                     or edited_record.output_reference
                 ),
                 "output_reference": str(active_approved_path),
-                "edit_original_history_path": str(original_history_path),
-                "edit_approved_history_path": str(approved_history_path),
+                "edit_original_history_path": archived_version.current_file_path,
+                "edit_approved_history_path": str(active_approved_path),
                 "edit_candidate_image_id": edited_record.image_id,
                 "edit_candidate_generation_job_id": edited_record.generation_job_id,
                 "previous_generation_metadata": dict(source_record.generation_metadata or {}),
@@ -1334,7 +1369,7 @@ class GenerationLibraryService:
                 review_state="approved_edit",
                 provider_metadata=dict(edited_record.provider_metadata or {}),
                 prompt_metadata={
-                    **dict(source_record.prompt_metadata or {}),
+                    **dict(edited_record.prompt_metadata or {}),
                     "previous_prompt_metadata": dict(source_record.prompt_metadata or {}),
                     "approved_edit_prompt_metadata": dict(edited_record.prompt_metadata or {}),
                 },
@@ -1363,6 +1398,110 @@ class GenerationLibraryService:
             message="Edited image approved.",
             image_ids=(str(source_image_id),),
         )
+
+    def restore_asset_version(
+        self,
+        *,
+        image_id: str,
+        version_number: int,
+    ) -> GeneratedImageRecord:
+        """Promote an immutable archived snapshot as a new current version."""
+        with self._version_restore_lock:
+            current = self.get(image_id)
+            if current.status != "active":
+                raise ValueError("Only an active Generation Library record can be restored.")
+            archived_versions = self.archive_service.list_asset_versions(current.image_id)
+            latest_archived = max(
+                (int(item.metadata.get("version_number") or 0) for item in archived_versions),
+                default=0,
+            )
+            current_version = max(
+                1,
+                int(dict(current.generation_metadata or {}).get("asset_version") or 0),
+                latest_archived + 1,
+            )
+            requested_version = int(version_number)
+            if requested_version == current_version:
+                raise ValueError("The current asset version cannot be restored.")
+            selected = next((
+                item for item in archived_versions
+                if int(item.metadata.get("version_number") or 0) == requested_version
+            ), None)
+            if selected is None:
+                raise KeyError(f"Archived asset version not found: {requested_version}")
+            if not Path(selected.current_file_path).expanduser().is_file():
+                raise FileNotFoundError("The selected archived version media is unavailable.")
+
+            restore_timestamp = utc_now()
+            archive_ids_before = {item.archive_id for item in archived_versions}
+            current_archive = self.archive_service.archive_asset_version(
+                current,
+                version_number=current_version,
+                approval_timestamp=str(
+                    dict(current.generation_metadata or {}).get("edit_approved_at")
+                    or restore_timestamp
+                ),
+                edit_source=str(
+                    dict(current.generation_metadata or {}).get("approved_from")
+                    or "version_restore"
+                ),
+            )
+            staged_path: Path | None = None
+            original_records = list(self.list_records())
+            try:
+                staged_path = self.archive_service.copy_asset_version_to_generation_active(selected)
+                snapshot = dict(selected.generation_record or {})
+                selected_metadata = dict(selected.metadata or {})
+                restored_generation_metadata = {
+                    **dict(snapshot.get("generation_metadata") or {}),
+                    **dict(selected_metadata.get("generation_metadata") or {}),
+                    "asset_version": current_version + 1,
+                    "restored_from_version": requested_version,
+                    "restore_timestamp": restore_timestamp,
+                    "previous_current_version": current_version,
+                    "restore_archive_record_id": selected.archive_id,
+                    "asset_version_archive_id": current_archive.archive_id,
+                    "previous_version_archived_path": current_archive.current_file_path,
+                    "output_reference": str(staged_path),
+                    "edit_approved_at": restore_timestamp,
+                    "approved_from": "version_restore",
+                }
+                restored = replace(
+                    current,
+                    generation_job_id=str(snapshot.get("generation_job_id") or current.generation_job_id),
+                    generation_request_id=str(snapshot.get("generation_request_id") or current.generation_request_id),
+                    generation_result_id=str(snapshot.get("generation_result_id") or current.generation_result_id),
+                    output_reference=str(staged_path),
+                    provider_id=str(selected_metadata.get("provider") or selected.provider_id),
+                    prompt_plan_id=str(selected_metadata.get("prompt_plan_id") or snapshot.get("prompt_plan_id") or ""),
+                    prompt_text=str(selected_metadata.get("prompt") or selected.prompt_text or ""),
+                    creative_mode=snapshot.get("creative_mode"),
+                    reference_asset_id=snapshot.get("reference_asset_id"),
+                    generation_date=str(snapshot.get("generation_date") or current.generation_date),
+                    status="active",
+                    review_state="restored_version",
+                    selected=False,
+                    imported_asset_id=snapshot.get("imported_asset_id"),
+                    provider_metadata=dict(selected_metadata.get("provider_metadata") or snapshot.get("provider_metadata") or {}),
+                    prompt_metadata=dict(selected_metadata.get("prompt_metadata") or snapshot.get("prompt_metadata") or {}),
+                    generation_metadata=restored_generation_metadata,
+                    updated_at=restore_timestamp,
+                )
+                self._write_records([
+                    restored if record.image_id == current.image_id else record
+                    for record in original_records
+                ])
+                old_active = Path(current.output_reference).expanduser()
+                if old_active.resolve() != staged_path.resolve() and old_active.is_file():
+                    old_active.unlink()
+                return restored
+            except Exception:
+                self._write_records(original_records)
+                if staged_path is not None and staged_path.is_file():
+                    staged_path.unlink()
+                if current_archive.archive_id not in archive_ids_before:
+                    self.archive_service.rollback_asset_version_archive(current_archive.archive_id)
+                raise
 
     def discard_edit_candidate(self, edited_image_id: str) -> GenerationLibraryActionResult:
         try:

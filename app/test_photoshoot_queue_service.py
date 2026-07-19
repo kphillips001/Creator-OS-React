@@ -394,6 +394,7 @@ class PhotoshootQueueServiceTests(unittest.TestCase):
         self.assertEqual(shot_request.metadata["shot_direction"], "Closer portrait")
         self.assertEqual(shot_request.metadata["active_reference_image_id"], "generated_image_shot_reference")
         self.assertEqual(job.request.metadata["reference_image_url"], "https://cdn.test/selected-reference.png")
+        self.assertEqual(job.request.metadata["photoshoot_continuity_reference_image_url"], "https://cdn.test/selected-reference.png")
         self.assertEqual(completed_request.status, "awaiting_review")
         self.assertEqual(completed_request.metadata["generated_image_ids"], ("generated_image_shot_1",))
         self.assertEqual(approved_request.status, "approved")
@@ -535,6 +536,7 @@ class PhotoshootQueueServiceTests(unittest.TestCase):
         self.assertEqual(refreshed.creative_continuity["current_direction"], {})
         self.assertEqual(refreshed.creative_continuity["workflow_stage"], "ready_for_next_shot")
         self.assertEqual(refreshed.creative_continuity["current_shot_image_id"], "generated_image_window_turn")
+        self.assertEqual(refreshed.creative_continuity["selected_timeline_index"], 1)
         approved_requests = tuple(
             request
             for request in service.requests_for_session(session.session_id)

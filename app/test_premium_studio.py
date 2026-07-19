@@ -139,6 +139,7 @@ class FakeRegistry:
             "seedream_5_0_pro",
             "wan_2_7_image_edit",
             "nano_banana_pro",
+            "nano_banana",
             "flux",
             "unknown_provider",
         )
@@ -373,7 +374,18 @@ class PremiumStudioTests(unittest.TestCase):
         self.assertIn(("seedream_4_5", PREMIUM_PROVIDER_LABELS["seedream_4_5"]), options)
         self.assertIn(("seedream_5_0_pro", PREMIUM_PROVIDER_LABELS["seedream_5_0_pro"]), options)
         self.assertIn(("wan_2_7_image_edit", PREMIUM_PROVIDER_LABELS["wan_2_7_image_edit"]), options)
-        self.assertNotIn(("nano_banana_pro", "Nano Banana Pro"), options)
+        self.assertIn(("nano_banana_pro", PREMIUM_PROVIDER_LABELS["nano_banana_pro"]), options)
+        self.assertIn(("nano_banana", PREMIUM_PROVIDER_LABELS["nano_banana"]), options)
+        self.assertEqual(
+            tuple(provider_id for provider_id, _label in options),
+            (
+                "seedream_5_0_pro",
+                "nano_banana_pro",
+                "wan_2_7_image_edit",
+                "nano_banana",
+                "seedream_4_5",
+            ),
+        )
         self.assertNotIn(("flux", "Flux"), options)
         self.assertNotIn(("unknown_provider", "unknown_provider"), options)
 
