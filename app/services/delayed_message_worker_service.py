@@ -1,12 +1,8 @@
 import logging
 import traceback
+from uuid import uuid4
 
-from app.repositories.delayed_message_queue_repository import (
-    fetch_due_delayed_messages,
-    mark_delayed_message_processing,
-    mark_delayed_message_completed,
-    mark_delayed_message_failed,
-)
+from app.repositories.delayed_message_queue_repository import claim_due_items, renew_claim, release_claim, complete_claim, fail_claim
 
 from app.services.global_automation_safety_service import (
     GlobalAutomationSafetyService,
@@ -37,10 +33,12 @@ class DelayedMessageWorkerService:
     def __init__(
         self,
         fanvue_account_id: int | None = None,
+        worker_instance_id: str | None = None,
     ):
         self.logger = logging.getLogger(__name__)
 
         self.fanvue_account_id = fanvue_account_id
+        self.worker_instance_id = worker_instance_id or f"delayed-messages-{uuid4()}"
 
         self.global_safety_service = (
             GlobalAutomationSafetyService()
@@ -53,13 +51,22 @@ class DelayedMessageWorkerService:
     ):
         results = []
 
+        global_result = self.global_safety_service.check_global_safety()
+        if not global_result.get("allowed", False):
+            self.logger.info(
+                "[DELAYED WORKER IDLE] autonomous execution blocked: %s",
+                global_result.get("reason"),
+            )
+            return results
+
         active_account_id = (
             fanvue_account_id
             or self.fanvue_account_id
         )
 
         due_messages = (
-            fetch_due_delayed_messages(
+            claim_due_items(
+                worker_instance_id=self.worker_instance_id,
                 fanvue_account_id=active_account_id,
                 limit=limit,
             )
@@ -94,10 +101,8 @@ class DelayedMessageWorkerService:
                 continue
 
             try:
-                mark_delayed_message_processing(
-                    queue_id=queue_id,
-                    fanvue_account_id=row_account_id,
-                )
+                if not renew_claim(queue_id, worker_instance_id=self.worker_instance_id):
+                    continue
 
                 safety_result = (
                     self.global_safety_service
@@ -115,14 +120,7 @@ class DelayedMessageWorkerService:
                         f"reason={safety_result}"
                     )
 
-                    mark_delayed_message_failed(
-                        queue_id=queue_id,
-                        fanvue_account_id=row_account_id,
-                        failure_reason=(
-                            "Delayed followup blocked "
-                            "by automation safety"
-                        ),
-                    )
+                    release_claim(queue_id, worker_instance_id=self.worker_instance_id)
 
                     results.append({
                         "queue_id": queue_id,
@@ -155,9 +153,9 @@ class DelayedMessageWorkerService:
                 ).send_chat_message(...)
                 """
 
-                mark_delayed_message_completed(
+                complete_claim(
                     queue_id=queue_id,
-                    fanvue_account_id=row_account_id,
+                    worker_instance_id=self.worker_instance_id,
                     fanvue_message_id=(
                         f"dry_run_{queue_id}"
                     ),
@@ -179,9 +177,9 @@ class DelayedMessageWorkerService:
 
                 traceback.print_exc()
 
-                mark_delayed_message_failed(
+                fail_claim(
                     queue_id=queue_id,
-                    fanvue_account_id=row_account_id,
+                    worker_instance_id=self.worker_instance_id,
                     failure_reason=str(e),
                 )
 

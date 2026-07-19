@@ -1,5 +1,29 @@
 [
   {
+    "image_id": "generated_image_99f06a5acb9419bdf76fbd5d",
+    "generation_job_id": "generation_job_e39da526b3df4700b307f8be13285196",
+    "action": "approved",
+    "output_reference": "D:\\Ava_CMS\\Content\\Generation\\Active\\generated_image_99f06a5acb9419bdf76fbd5d.png",
+    "original_output_reference": "https://d2h7xmz5gqybh9.cloudfront.net/output/63542f24-974b-497e-a1d3-555a72ce4c07.png",
+    "reviewed_at": "2026-07-18T01:37:07.674646"
+  },
+  {
+    "image_id": "generated_image_5a42eb15debc53c3e892cee7",
+    "generation_job_id": "generation_job_815298c129b7423186d447192672e1cf",
+    "action": "approved",
+    "output_reference": "D:\\Ava_CMS\\Content\\Generation\\Active\\generated_image_5a42eb15debc53c3e892cee7.png",
+    "original_output_reference": "https://d2h7xmz5gqybh9.cloudfront.net/output/4656fea4-2cf7-48b9-9657-8381e60d91f3.png",
+    "reviewed_at": "2026-07-18T01:26:03.387670"
+  },
+  {
+    "image_id": "generated_image_229706b8826e126c8fdcf4bb",
+    "generation_job_id": "generation_job_aa6a20baf264441ba5f07b5173f8e2a6",
+    "action": "approved",
+    "output_reference": "D:\\Ava_CMS\\Content\\Generation\\Active\\generated_image_229706b8826e126c8fdcf4bb.png",
+    "original_output_reference": "https://d2h7xmz5gqybh9.cloudfront.net/output/2e6d0a4e-eb00-4a28-ac18-12fc4fd4aaa5.png",
+    "reviewed_at": "2026-07-18T01:07:19.773659"
+  },
+  {
     "image_id": "generated_image_e51af58dd3673689592c34d9",
     "generation_job_id": "generation_job_1e4aa0f8e3114f7bbe12be7eeb5de4ab",
     "action": "discarded",

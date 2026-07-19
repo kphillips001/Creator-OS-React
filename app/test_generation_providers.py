@@ -25,7 +25,7 @@ from app.models.generation_engine import GenerationStatus
 from app.providers.generation.base import GenerationProviderError
 from app.providers.generation.nano_banana_provider import NanoBananaProvider
 from app.providers.generation.provider_registry import ProviderRegistry, create_default_registry
-from app.providers.generation.seedream_provider import Seedream45Provider
+from app.providers.generation.seedream_provider import Seedream45Provider, Seedream50ProProvider
 from app.providers.generation.wan_provider import WanImageEditProvider
 from app.services.generation_engine_service import GenerationEngineService
 
@@ -115,6 +115,59 @@ class GenerationProviderTests(unittest.TestCase):
         self.assertIn("seedream_5_0_pro", provider_ids)
         self.assertIn("flux", provider_ids)
         self.assertFalse(registry.require("flux").metadata().enabled)
+        self.assertEqual(registry.require("seedream_5_0_pro").capabilities.max_reference_images, 10)
+
+    def test_seedream_5_photoshoot_payload_orders_identity_then_continuity_reference(self):
+        provider = Seedream50ProProvider(api_key="test-key", http_client=FakeHttpClient())
+        engine = self.make_engine(ProviderRegistry({provider.provider_id: provider}))
+        for creative_mode in ("safe", "premium", "explicit"):
+            request = engine.create_request(
+                creator_profile={"id": 7}, prompt_plan=prompt_plan(), provider_id=provider.provider_id,
+                metadata={
+                    "workflow_type": "photoshoot", "creative_mode": creative_mode,
+                    "canonical_reference_image_url": "https://cdn.test/canonical.png",
+                    "reference_image_url": "https://cdn.test/latest-shot.png",
+                    "photoshoot_continuity_reference_image_url": "https://cdn.test/latest-shot.png",
+                },
+            )
+            self.assertEqual(provider.build_payload(request)["images"], [
+                "https://cdn.test/canonical.png", "https://cdn.test/latest-shot.png",
+            ])
+            role_guidance = provider.build_payload(request)["prompt"]
+            self.assertIn("Image 1 is the canonical creator identity reference", role_guidance)
+            self.assertIn("Image 1 controls identity", role_guidance)
+            self.assertIn("Image 2 is the latest approved Photoshoot image", role_guidance)
+            self.assertIn("Image 2 controls Photoshoot continuity", role_guidance)
+            self.assertIn("Do not use Image 2 to redefine the creator's facial identity", role_guidance)
+
+    def test_single_reference_provider_keeps_latest_photoshoot_shot(self):
+        provider = Seedream45Provider(api_key="test-key", http_client=FakeHttpClient())
+        request = self.make_engine(ProviderRegistry({provider.provider_id: provider})).create_request(
+            creator_profile={"id": 7}, prompt_plan=prompt_plan(), provider_id=provider.provider_id,
+            metadata={
+                "workflow_type": "photoshoot",
+                "canonical_reference_image_url": "https://cdn.test/canonical.png",
+                "reference_image_url": "https://cdn.test/latest-shot.png",
+                "photoshoot_continuity_reference_image_url": "https://cdn.test/latest-shot.png",
+            },
+        )
+        payload = provider.build_payload(request)
+        self.assertEqual(payload["images"], ["https://cdn.test/latest-shot.png"])
+        self.assertNotIn("Image 1 is the canonical creator identity reference", payload["prompt"])
+
+    def test_seedream_5_non_photoshoot_prompt_has_no_photoshoot_reference_roles(self):
+        provider = Seedream50ProProvider(api_key="test-key", http_client=FakeHttpClient())
+        request = self.make_engine(ProviderRegistry({provider.provider_id: provider})).create_request(
+            creator_profile={"id": 7}, prompt_plan=prompt_plan(), provider_id=provider.provider_id,
+            metadata={
+                "workflow_type": "content_studio",
+                "canonical_reference_image_url": "https://cdn.test/canonical.png",
+                "reference_image_url": "https://cdn.test/canonical.png",
+            },
+        )
+        payload = provider.build_payload(request)
+        self.assertEqual(payload["images"], ["https://cdn.test/canonical.png"])
+        self.assertNotIn("Image 1 is the canonical creator identity reference", payload["prompt"])
 
     def test_provider_selection_and_payload_creation(self):
         http = FakeHttpClient()

@@ -405,6 +405,7 @@ class FanvueAPIService:
         publish_at: str | None = None,
         expires_at: str | None = None,
         collection_uuids: list[str] | None = None,
+        execution_origin: str = "autonomous",
     ) -> dict:
         print("[FANVUE CREATE WALL POST START]")
         print(f"audience={audience}")
@@ -435,7 +436,11 @@ class FanvueAPIService:
             if value is not None and value != []
         }
 
-        safety = self.safety_service.can_send_monetization()
+        safety = (
+            self.safety_service.check_operator_send_safety()
+            if execution_origin == "operator"
+            else self.safety_service.can_send_monetization()
+        )
 
         if not safety.get("allowed"):
             print("[FANVUE CREATE WALL POST BLOCKED BY GLOBAL SAFETY]")

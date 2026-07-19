@@ -75,6 +75,7 @@ from app.services.delayed_followup_scheduler_service import (
 from app.services.fanvue_outbound_reaction_service import (
     FanvueOutboundReactionService,
 )
+from app.services.global_automation_safety_service import GlobalAutomationSafetyService
 
 
 class RealtimeMonetizationEventService:
@@ -146,6 +147,7 @@ class RealtimeMonetizationEventService:
         self.fanvue_outbound_reaction_service = (
             FanvueOutboundReactionService()
         )
+        self.global_automation_safety_service = GlobalAutomationSafetyService()
 
     def process_event(self, event: dict):
         event_type = event.get("event_type")
@@ -327,6 +329,11 @@ class RealtimeMonetizationEventService:
                 "success": False,
                 "reason": "missing_fanvue_user_id",
             }
+
+        global_result = self.global_automation_safety_service.can_send_post_purchase_reaction()
+        if not global_result.get("allowed", False):
+            return {"success": False, "blocked": True, "stage": "global_safety",
+                    "reason": global_result.get("reason"), "safety": global_result}
 
         decision = self._build_post_purchase_decision(
             monetization_event

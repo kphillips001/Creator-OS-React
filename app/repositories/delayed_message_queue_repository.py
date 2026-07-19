@@ -1,5 +1,54 @@
 from app.database import get_db_connection
 from psycopg.types.json import Json
+from app.repositories.atomic_queue_claim_repository import AtomicQueueClaimRepository
+
+
+def _claims(account_scoped: bool = False) -> AtomicQueueClaimRepository:
+    account_filter = " AND fanvue_account_id = %s" if account_scoped else ""
+    return AtomicQueueClaimRepository(
+        table="delayed_message_queue", status_column="status", pending_status="pending",
+        completed_status="completed",
+        eligible_predicate=("status = 'pending' AND scheduled_for <= NOW() "
+                            "AND (expires_at IS NULL OR expires_at > NOW())" + account_filter),
+        order_by="scheduled_for ASC, id ASC",
+        claim_assignments=", processing_started_at = NOW(), updated_at = NOW()",
+        stale_scope_predicate="fanvue_account_id = %s" if account_scoped else "TRUE",
+    )
+
+
+def claim_due_items(*, worker_instance_id: str, fanvue_account_id: int | None = None,
+                    limit: int = 25, lease_seconds: int = 300) -> list[dict]:
+    return _claims(fanvue_account_id is not None).claim_due_items(
+        worker_instance_id=worker_instance_id, lease_seconds=lease_seconds, limit=limit,
+        predicate_params=(fanvue_account_id,) if fanvue_account_id is not None else (),
+        stale_scope_params=(fanvue_account_id,) if fanvue_account_id is not None else (),
+    )
+
+
+def renew_claim(queue_id: int, *, worker_instance_id: str, lease_seconds: int = 300) -> dict:
+    return _claims().renew_claim(queue_id, worker_instance_id=worker_instance_id, lease_seconds=lease_seconds)
+
+
+def release_claim(queue_id: int, *, worker_instance_id: str) -> dict:
+    return _claims().release_claim(queue_id, worker_instance_id=worker_instance_id)
+
+
+def complete_claim(queue_id: int, *, worker_instance_id: str, fanvue_message_id: str | None = None) -> dict:
+    return _claims().complete_claim(queue_id, worker_instance_id=worker_instance_id,
+                                    assignments="completed_at = NOW(), fanvue_message_id = %s, updated_at = NOW()",
+                                    params=(fanvue_message_id,))
+
+
+def fail_claim(queue_id: int, *, worker_instance_id: str, failure_reason: str) -> dict:
+    return _claims().fail_claim(
+        queue_id, worker_instance_id=worker_instance_id,
+        assignments="status = 'failed', retry_count = retry_count + 1, last_error = %s, updated_at = NOW()",
+        params=(failure_reason,),
+    )
+
+
+def recover_stale_claims(*, limit: int = 100) -> list[dict]:
+    return _claims().recover_stale_claims(limit=limit)
 
 
 def ensure_delayed_message_queue_table():
@@ -418,8 +467,15 @@ def fetch_recent_delayed_messages(
                     message_body,
                     status,
                     retry_count,
+                    max_retries,
+                    last_error,
                     scheduled_for,
                     created_at,
+                    updated_at,
+                    processing_started_at,
+                    worker_instance_id,
+                    claimed_at,
+                    lease_expires_at,
                     completed_at,
                     cancelled_at,
                     expired_at

@@ -108,3 +108,32 @@ class CustomerEntitlementRepository:
                     ),
                 )
                 return cursor.fetchone() is not None
+
+    def list_for_legacy_user(
+        self,
+        *,
+        legacy_fanvue_account_id: int,
+        legacy_fanvue_user_id,
+        limit: int = 100,
+    ) -> tuple[CustomerEntitlement, ...]:
+        """Return existing entitlements without changing fulfillment state."""
+
+        with self._connection_factory() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT *
+                    FROM public.customer_entitlements
+                    WHERE legacy_fanvue_account_id = %s
+                      AND legacy_fanvue_user_id = %s
+                    ORDER BY created_at DESC
+                    LIMIT %s
+                    """,
+                    (
+                        legacy_fanvue_account_id,
+                        str(legacy_fanvue_user_id),
+                        limit,
+                    ),
+                )
+                rows = cursor.fetchall()
+        return tuple(CustomerEntitlement.from_row(row) for row in rows)

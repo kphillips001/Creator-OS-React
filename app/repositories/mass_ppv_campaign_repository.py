@@ -1,4 +1,48 @@
 from app.database import get_db_connection
+from app.repositories.atomic_queue_claim_repository import AtomicQueueClaimRepository
+
+
+def _claims(*, retryable: bool = False) -> AtomicQueueClaimRepository:
+    eligible = "status = 'failed' AND retry_count < %s" if retryable else "status = 'pending'"
+    return AtomicQueueClaimRepository(
+        table="mass_ppv_queue", status_column="status", pending_status="pending",
+        completed_status="completed", eligible_predicate=eligible, order_by="id ASC",
+        claim_assignments=", processing_started_at = NOW(), updated_at = NOW()",
+    )
+
+
+def claim_due_items(*, worker_instance_id: str, limit: int = 25, lease_seconds: int = 900,
+                    retryable: bool = False, retry_limit: int = 3) -> list[dict]:
+    return _claims(retryable=retryable).claim_due_items(
+        worker_instance_id=worker_instance_id, lease_seconds=lease_seconds, limit=limit,
+        predicate_params=(retry_limit,) if retryable else (),
+    )
+
+
+def renew_claim(queue_id: int, *, worker_instance_id: str, lease_seconds: int = 900) -> dict:
+    return _claims().renew_claim(queue_id, worker_instance_id=worker_instance_id, lease_seconds=lease_seconds)
+
+
+def release_claim(queue_id: int, *, worker_instance_id: str) -> dict:
+    return _claims().release_claim(queue_id, worker_instance_id=worker_instance_id)
+
+
+def complete_claim(queue_id: int, *, worker_instance_id: str, fanvue_message_id: str | None = None) -> dict:
+    return _claims().complete_claim(queue_id, worker_instance_id=worker_instance_id,
+                                    assignments="completed_at = NOW(), fanvue_message_id = %s, updated_at = NOW()",
+                                    params=(fanvue_message_id,))
+
+
+def fail_claim(queue_id: int, *, worker_instance_id: str, failure_reason: str) -> dict:
+    return _claims().fail_claim(
+        queue_id, worker_instance_id=worker_instance_id,
+        assignments="status = 'failed', retry_count = retry_count + 1, last_error = %s, updated_at = NOW()",
+        params=(failure_reason,),
+    )
+
+
+def recover_stale_claims(*, limit: int = 100) -> list[dict]:
+    return _claims().recover_stale_claims(limit=limit)
 
 
 # =========================================================
@@ -610,6 +654,9 @@ def fetch_mass_ppv_queue_dashboard_rows(
                     q.created_at,
                     q.updated_at,
                     q.processing_started_at,
+                    q.worker_instance_id,
+                    q.claimed_at,
+                    q.lease_expires_at,
                     q.completed_at
                 FROM mass_ppv_queue q
                 LEFT JOIN mass_ppv_campaigns c

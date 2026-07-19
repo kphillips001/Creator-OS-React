@@ -80,12 +80,14 @@ class FanvuePublishingProvider:
         text: str,
         media_ids: list[str] | None = None,
         audience: str = "followers-and-subscribers",
+        execution_origin: str = "operator",
     ) -> dict[str, Any]:
         api = self._api_service_factory(fanvue_account_id=provider_account_id)
         return api.create_wall_post(
             text=text,
             media_uuids=media_ids,
             audience=audience,
+            execution_origin=execution_origin,
         )
 
     def update(

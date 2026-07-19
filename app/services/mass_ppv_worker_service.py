@@ -1,12 +1,13 @@
+from uuid import uuid4
+
 from app.repositories.mass_ppv_campaign_repository import (
-    fetch_pending_mass_ppv_queue,
-    fetch_retryable_mass_ppv_queue,
+    claim_due_items,
+    renew_claim,
+    release_claim,
+    complete_claim,
+    fail_claim,
     fetch_campaign,
     fetch_mass_ppv_user_for_queue,
-    mark_mass_ppv_processing,
-    mark_mass_ppv_completed,
-    mark_mass_ppv_failed,
-    reset_mass_ppv_failed_item,
 )
 
 from app.services.mass_ppv_send_service import (
@@ -30,16 +31,18 @@ class MassPPVWorkerService:
     -> mark completed/failed
     """
 
-    def __init__(self):
+    def __init__(self, worker_instance_id: str | None = None):
         self.send_service = MassPPVSendService()
+        self.worker_instance_id = worker_instance_id or f"mass-ppv-{uuid4()}"
 
     def process_pending_queue(
         self,
         limit: int = 25,
     ):
-        queue_items = fetch_pending_mass_ppv_queue(
-            limit=limit,
-        )
+        global_result = self.send_service.global_safety.check_global_safety()
+        if not global_result.get("allowed", False):
+            return []
+        queue_items = claim_due_items(worker_instance_id=self.worker_instance_id, limit=limit)
 
         print(
             f"[MASS PPV WORKER] "
@@ -61,10 +64,11 @@ class MassPPVWorkerService:
         self,
         limit: int = 25,
     ):
+        global_result = self.send_service.global_safety.check_global_safety()
+        if not global_result.get("allowed", False):
+            return []
         retry_items = (
-            fetch_retryable_mass_ppv_queue(
-                limit=limit,
-            )
+            claim_due_items(worker_instance_id=self.worker_instance_id, limit=limit, retryable=True)
         )
 
         print(
@@ -82,18 +86,8 @@ class MassPPVWorkerService:
                 f"queue_id={queue_id}"
             )
 
-            reset_mass_ppv_failed_item(
-                queue_id=queue_id,
-            )
-
-            refreshed_queue_item = dict(queue_item)
-
-            refreshed_queue_item["status"] = (
-                "pending"
-            )
-
             result = self.process_queue_item(
-                queue_item=refreshed_queue_item,
+                queue_item=dict(queue_item),
             )
 
             results.append(result)
@@ -140,9 +134,8 @@ class MassPPVWorkerService:
         queue_id = queue_item["id"]
 
         try:
-            mark_mass_ppv_processing(
-                queue_id=queue_id,
-            )
+            if not renew_claim(queue_id, worker_instance_id=self.worker_instance_id):
+                return {"success": False, "queue_id": queue_id, "status": "not_owned", "reason": "claim_not_owned"}
 
             campaign = fetch_campaign(
                 campaign_id=queue_item["campaign_id"],
@@ -252,6 +245,12 @@ class MassPPVWorkerService:
                 "id": campaign["content_id"],
             }
 
+            final_safety = self.send_service.global_safety.check_global_safety()
+            if not final_safety.get("allowed", False):
+                release_claim(queue_id, worker_instance_id=self.worker_instance_id)
+                return {"success": False, "blocked": True, "queue_id": queue_id,
+                        "status": "released", "reason": final_safety.get("reason")}
+
             send_result = (
                 self.send_service.send_mass_ppv_campaign(
                     fanvue_account_id=campaign[
@@ -266,8 +265,9 @@ class MassPPVWorkerService:
             )
 
             if send_result.get("success"):
-                mark_mass_ppv_completed(
+                complete_claim(
                     queue_id=queue_id,
+                    worker_instance_id=self.worker_instance_id,
                     fanvue_message_id=(
                         send_result.get(
                             "message_uuid"
@@ -290,8 +290,9 @@ class MassPPVWorkerService:
                 "unknown_send_failure",
             )
 
-            mark_mass_ppv_failed(
+            fail_claim(
                 queue_id=queue_id,
+                worker_instance_id=self.worker_instance_id,
                 failure_reason=failure_reason,
             )
 
@@ -304,8 +305,9 @@ class MassPPVWorkerService:
             }
 
         except Exception as e:
-            mark_mass_ppv_failed(
+            fail_claim(
                 queue_id=queue_id,
+                worker_instance_id=self.worker_instance_id,
                 failure_reason=str(e),
             )
 

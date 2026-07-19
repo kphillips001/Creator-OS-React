@@ -245,3 +245,19 @@ def get_user_by_account_and_id(fanvue_account_id: int, fanvue_user_id: int):
         with conn.cursor() as cur:
             cur.execute(query, (fanvue_account_id, fanvue_user_id))
             return cur.fetchone()
+
+
+def list_users_for_account(fanvue_account_id: int, limit: int = 1000):
+    """Return existing provider users for a read-only customer inventory."""
+
+    query = """
+        SELECT *
+        FROM fanvue_users
+        WHERE fanvue_account_id = %s
+        ORDER BY id DESC
+        LIMIT %s;
+    """
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(query, (fanvue_account_id, limit))
+            return cur.fetchall()

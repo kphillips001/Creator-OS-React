@@ -1,20 +1,24 @@
 """Composition and execution of the Telethon transport MVP."""
 
+from __future__ import annotations
+
 import asyncio
 import logging
 import os
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
 from dotenv import load_dotenv
-from telethon import TelegramClient
-
 from app.config import ENV_PATH
-from app.integrations.telegram.telethon_transport import TelethonUserTransport
 from app.models.telegram_inbound import TelegramInboundPayload, TelegramInboundResult
 from app.services.conversation_gateway import ConversationGateway
 from app.services.telegram_delivery_executor import TelegramDeliveryExecutor
 from app.services.telegram_identity_adapter import TelegramIdentityAdapter
 from app.services.telegram_inbound_adapter import TelegramInboundAdapter
+from app.services.worker_heartbeat_instrumentation import record_heartbeat_safely
+from app.services.worker_heartbeat_service import WorkerHeartbeatService
+
+if TYPE_CHECKING:
+    from app.integrations.telegram.telethon_transport import TelethonUserTransport
 
 
 class TelethonRuntimeError(RuntimeError):
@@ -51,6 +55,8 @@ class TelethonRuntime:
         inbound_adapter: TelegramInboundAdapter,
         delivery_executor: TelegramDeliveryExecutor | None = None,
         logger: logging.Logger | None = None,
+        heartbeat_service: WorkerHeartbeatService | None = None,
+        global_safety_service: Any | None = None,
     ) -> None:
         if transport is None:
             raise ValueError("transport is required")
@@ -59,16 +65,46 @@ class TelethonRuntime:
         self._transport = transport
         self._inbound_adapter = inbound_adapter
         self._delivery_executor = delivery_executor or TelegramDeliveryExecutor()
+        if global_safety_service is None:
+            from app.services.global_automation_safety_service import GlobalAutomationSafetyService
+            global_safety_service = GlobalAutomationSafetyService()
+        self._global_safety_service = global_safety_service
         self._logger = logger or logging.getLogger("telethon-runtime")
+        self._heartbeat = heartbeat_service or WorkerHeartbeatService(
+            worker_name="Telegram", worker_type="transport_runtime", poll_interval_seconds=30,
+        )
         self._chat_locks: dict[int, asyncio.Lock] = {}
         self._transport.set_inbound_handler(self.handle_payload)
 
     async def run(self) -> None:
-        await self._transport.start()
+        await asyncio.to_thread(record_heartbeat_safely, self._logger, "startup", self._heartbeat.register_startup)
+        heartbeat_task = None
+        failed = False
         try:
+            await self._transport.start()
+            heartbeat_task = asyncio.create_task(self._heartbeat_loop())
             await self._transport.run_until_disconnected()
+        except Exception as error:
+            failed = True
+            await asyncio.to_thread(record_heartbeat_safely, self._logger, "failure", lambda: self._heartbeat.record_failure(error))
+            raise
         finally:
+            if heartbeat_task is not None:
+                heartbeat_task.cancel()
+                try:
+                    await heartbeat_task
+                except asyncio.CancelledError:
+                    pass
             await self._transport.disconnect()
+            if not failed:
+                await asyncio.to_thread(record_heartbeat_safely, self._logger, "stopping", self._heartbeat.record_stopping)
+                await asyncio.to_thread(record_heartbeat_safely, self._logger, "shutdown", self._heartbeat.record_shutdown)
+
+    async def _heartbeat_loop(self) -> None:
+        while True:
+            await asyncio.to_thread(record_heartbeat_safely, self._logger, "poll", self._heartbeat.record_poll)
+            await asyncio.to_thread(record_heartbeat_safely, self._logger, "success", lambda: self._heartbeat.record_success(idle=True))
+            await asyncio.sleep(30)
 
     async def handle_payload(
         self,
@@ -86,6 +122,14 @@ class TelethonRuntime:
                 "chat_id=%s user_id=%s",
                 payload.telegram_chat_id,
                 payload.telegram_user_id,
+            )
+            return None
+
+        global_result = self._global_safety_service.check_global_safety()
+        if not global_result.get("allowed", False):
+            self._logger.info(
+                "[TELEGRAM AUTONOMY BLOCKED] chat_id=%s reason=%s",
+                payload.telegram_chat_id, global_result.get("reason"),
             )
             return None
 
@@ -154,6 +198,7 @@ def build_default_runtime_from_environment() -> TelethonRuntime:
     from app.engine.mode_engine import ModeEngine
     from app.services.content_service import ContentService
     from app.services.gpt_service import GPTService
+    from app.services.global_automation_safety_service import GlobalAutomationSafetyService
     from app.services.intent_service import IntentService
     from app.services.memory_service import MemoryService
     from app.services.offer_service import OfferService
@@ -168,6 +213,9 @@ def build_default_runtime_from_environment() -> TelethonRuntime:
     session_path = os.getenv("TG_SESSION_PATH", "tg_sessions/ava").strip()
     if not session_path:
         raise TelethonRuntimeError("TG_SESSION_PATH must not be empty.")
+
+    from telethon import TelegramClient
+    from app.integrations.telegram.telethon_transport import TelethonUserTransport
 
     allowed_hosts = [
         host.strip()
@@ -192,6 +240,7 @@ def build_default_runtime_from_environment() -> TelethonRuntime:
         settings=settings,
         logger=logging.getLogger("telegram-decision-engine"),
     )
+    global_safety = GlobalAutomationSafetyService()
     gateway = ConversationGateway(
         MemoryInitializingDecisionEngine(decision_engine),
         allowed_fanvue_hostnames=allowed_hosts,
@@ -199,6 +248,7 @@ def build_default_runtime_from_environment() -> TelethonRuntime:
             decision_engine=decision_engine,
             memory_service=memory_service,
         ),
+        global_automation_safety_service=global_safety,
     )
     inbound_adapter = TelegramInboundAdapter(
         identity_adapter=TelegramIdentityAdapter(
@@ -211,6 +261,11 @@ def build_default_runtime_from_environment() -> TelethonRuntime:
     return TelethonRuntime(
         transport=transport,
         inbound_adapter=inbound_adapter,
+        heartbeat_service=WorkerHeartbeatService(
+            worker_name="Telegram", worker_type="transport_runtime",
+            account_id=engine_account_id, poll_interval_seconds=30,
+        ),
+        global_safety_service=global_safety,
     )
 
 

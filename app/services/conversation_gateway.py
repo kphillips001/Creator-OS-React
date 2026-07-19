@@ -100,6 +100,15 @@ class ConversationGateway:
         "effective_route",
         "intent",
         "mode",
+        "send_offer",
+        "should_send_offer_behavior",
+        "selected_content",
+        "final_offer",
+        "buyer_tier",
+        "user_value_tier",
+        "ownership_blocked",
+        "delivery_prepared",
+        "delivery_blocking_reason",
         "send_nudge",
         "nudge_type",
         "buyer_session_active",
@@ -116,6 +125,8 @@ class ConversationGateway:
         ) = None,
         runtime_control_service: RuntimeControlCompatible | None = None,
         creator_profile_id: str | int | None = None,
+        raise_engine_exceptions: bool = False,
+        global_automation_safety_service: Any | None = None,
     ) -> None:
         if decision_engine is None:
             raise ValueError("decision_engine is required")
@@ -135,6 +146,8 @@ class ConversationGateway:
         )
         self._runtime_control_service = runtime_control_service
         self._creator_profile_id = creator_profile_id
+        self._raise_engine_exceptions = raise_engine_exceptions
+        self._global_automation_safety_service = global_automation_safety_service
 
     def execute(
         self,
@@ -161,6 +174,16 @@ class ConversationGateway:
                 runtime_decision=runtime_decision,
             )
 
+        if self._global_automation_safety_service is not None:
+            global_result = self._global_automation_safety_service.check_global_safety()
+            if not global_result.get("allowed", False):
+                return self._error_output(
+                    correlation_id=gateway_input.correlation_id,
+                    error_code="global_automation_blocked",
+                    status="autonomous_execution_blocked",
+                    extra_diagnostics={"reason": global_result.get("reason")},
+                )
+
         content_opportunity_ingestion = self._ingest_content_opportunity(gateway_input)
 
         try:
@@ -170,6 +193,8 @@ class ConversationGateway:
                 chat_history=gateway_input.chat_history,
             )
         except TimeoutError as error:
+            if self._raise_engine_exceptions:
+                raise
             logger.exception(
                 "[CONVERSATION GATEWAY ERROR] correlation_id=%s "
                 "exception_type=%s exception_message=%s",
@@ -183,6 +208,8 @@ class ConversationGateway:
                 status="engine_timeout",
             )
         except Exception as error:  # Boundary converts brain failures to data.
+            if self._raise_engine_exceptions:
+                raise
             logger.exception(
                 "[CONVERSATION GATEWAY ERROR] correlation_id=%s "
                 "exception_type=%s exception_message=%s",

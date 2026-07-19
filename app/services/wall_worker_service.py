@@ -1,10 +1,6 @@
-from app.repositories.wall_post_repository import (
-    fetch_due_wall_post_queue,
-    mark_wall_post_processing,
-    mark_wall_post_completed,
-    mark_wall_post_failed,
-    mark_wall_content_posted,
-)
+from uuid import uuid4
+
+from app.repositories.wall_post_repository import claim_due_items, renew_claim, release_claim, complete_claim, fail_claim, mark_wall_content_posted
 
 from app.services.global_automation_safety_service import (
     GlobalAutomationSafetyService,
@@ -13,7 +9,9 @@ from app.services.global_automation_safety_service import (
 
 class WallWorkerService:
 
-    def __init__(self):
+    def __init__(self, worker_instance_id: str | None = None):
+
+        self.worker_instance_id = worker_instance_id or f"wall-worker-{uuid4()}"
 
         self.global_safety_service = (
             GlobalAutomationSafetyService()
@@ -28,10 +26,16 @@ class WallWorkerService:
         limit: int = 10,
     ) -> dict:
 
+        global_result = self.global_safety_service.check_global_safety()
+        if not global_result.get("allowed", False):
+            return {
+                "success": True, "blocked": True,
+                "reason": global_result.get("reason"),
+                "processed_count": 0, "failed_count": 0,
+            }
+
         queue_items = (
-            fetch_due_wall_post_queue(
-                limit=limit,
-            )
+            claim_due_items(worker_instance_id=self.worker_instance_id, limit=limit)
         )
 
         processed = []
@@ -47,9 +51,8 @@ class WallWorkerService:
                 # MARK PROCESSING
                 # =========================================
 
-                mark_wall_post_processing(
-                    queue_id
-                )
+                if not renew_claim(queue_id, worker_instance_id=self.worker_instance_id):
+                    continue
 
                 # =========================================
                 # GLOBAL SAFETY CHECK
@@ -64,12 +67,8 @@ class WallWorkerService:
                     "allowed",
                     False,
                 ):
-
-                    raise Exception(
-                        "Global automation "
-                        "safety blocked "
-                        "wall execution."
-                    )
+                    release_claim(queue_id, worker_instance_id=self.worker_instance_id)
+                    continue
 
                 # =========================================
                 # PLACEHOLDER WALL POST EXECUTION
@@ -111,9 +110,7 @@ class WallWorkerService:
                 # =========================================
 
                 completed = (
-                    mark_wall_post_completed(
-                        queue_id
-                    )
+                    complete_claim(queue_id, worker_instance_id=self.worker_instance_id)
                 )
 
                 processed.append(
@@ -123,8 +120,9 @@ class WallWorkerService:
             except Exception as e:
 
                 failed_result = (
-                    mark_wall_post_failed(
+                    fail_claim(
                         queue_id=queue_id,
+                        worker_instance_id=self.worker_instance_id,
                         error_message=str(e),
                         retry=True,
                     )

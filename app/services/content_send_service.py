@@ -148,6 +148,7 @@ class ContentSendService:
             fanvue_account_id=fanvue_account_id,
             text=payload.get("caption"),
             media_ids=payload.get("media_uuids"),
+            execution_origin="autonomous",
         )
 
         if not response.get("success"):

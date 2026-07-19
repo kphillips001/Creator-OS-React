@@ -196,6 +196,19 @@ class GenerationEngineServiceTests(unittest.TestCase):
         self.assertEqual(request.media_type, "image")
         self.assertEqual(request.image_count, 3)
         self.assertTrue(request.metadata["provider_neutral"])
+        self.assertIn("99.png", request.metadata["canonical_reference_image_url"])
+
+    def test_canonical_reference_changes_are_resolved_for_each_new_request(self):
+        references = FakeReferenceLibraryService(reference_asset(asset_id=99, creator_profile_id=7))
+        temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(temp_dir.cleanup)
+        service = GenerationEngineService(storage_dir=temp_dir.name, reference_library_service=references, providers={})
+        first = service.create_request(creator_profile={"id": 7}, prompt_plan=prompt_plan(), provider_id="future_provider")
+        references.active_reference = reference_asset(asset_id=100, creator_profile_id=7)
+        second = service.create_request(creator_profile={"id": 7}, prompt_plan=prompt_plan(), provider_id="future_provider")
+
+        self.assertIn("99.png", first.metadata["canonical_reference_image_url"])
+        self.assertIn("100.png", second.metadata["canonical_reference_image_url"])
 
     def test_generation_job_lifecycle(self):
         service = self.make_service()

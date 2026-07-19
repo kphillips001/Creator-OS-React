@@ -61,3 +61,34 @@ def log_send_event(
 
     except Exception as e:
         print(f"[SEND LOG ERROR] {e}")
+
+
+def list_decision_activities(fanvue_account_id: int, limit: int = 5000):
+    """Read DecisionEngine activity without treating it as transport proof."""
+
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT * FROM send_log
+                WHERE fanvue_account_id = %s
+                ORDER BY created_at DESC, id DESC
+                LIMIT %s
+                """,
+                (fanvue_account_id, limit),
+            )
+            return cur.fetchall()
+
+
+def get_decision_activity(fanvue_account_id: int, activity_id: int):
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT * FROM send_log
+                WHERE fanvue_account_id = %s AND id = %s
+                LIMIT 1
+                """,
+                (fanvue_account_id, activity_id),
+            )
+            return cur.fetchone()

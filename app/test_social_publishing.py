@@ -5,7 +5,7 @@ import unittest
 import os
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 if "streamlit" not in sys.modules:
     streamlit = types.ModuleType("streamlit")
@@ -542,6 +542,100 @@ class SocialPublishingTests(unittest.TestCase):
         self.assertEqual(retried.status, SocialPublishStatus.QUEUED.value)
         self.assertTrue(any(entry.status == SocialPublishStatus.FAILED.value for entry in social_publishing.list_history()))
         self.assertTrue(any(entry.status == SocialPublishStatus.QUEUED.value for entry in social_publishing.list_history()))
+
+    def test_successful_x_publish_schedules_exact_x_auto_callback(self):
+        social_publishing, generation_library = self.make_services(x_provider=FakeXProvider())
+        item = social_publishing.create_queue_item(
+            generated_image_id="generated_image_social_1",
+            generation_library=generation_library,
+            platform=SocialPlatform.X.value,
+        )
+
+        with patch.object(
+            SocialPublishingService, "_schedule_x_auto_callback"
+        ) as callback:
+            posted = social_publishing.publish_now(
+                item.queue_item_id,
+                caption_text="A little moment worth saving.",
+                account_name="AvaBlackthorne",
+            )
+
+        self.assertEqual(posted.status, SocialPublishStatus.POSTED.value)
+        payload = callback.call_args.args[0]
+        self.assertEqual(
+            payload,
+            {
+                "platform": "x",
+                "tweet_id": "tweet_123",
+                "published_at": payload["published_at"],
+            },
+        )
+        self.assertTrue(str(payload["published_at"]).endswith("+00:00"))
+
+    def test_callback_start_failure_does_not_change_successful_publish(self):
+        social_publishing, generation_library = self.make_services(x_provider=FakeXProvider())
+        item = social_publishing.create_queue_item(
+            generated_image_id="generated_image_social_1",
+            generation_library=generation_library,
+            platform=SocialPlatform.X.value,
+        )
+
+        with patch.object(
+            SocialPublishingService,
+            "_schedule_x_auto_callback",
+            side_effect=RuntimeError("thread unavailable"),
+        ):
+            posted = social_publishing.publish_now(
+                item.queue_item_id,
+                caption_text="A little moment worth saving.",
+                account_name="AvaBlackthorne",
+            )
+
+        self.assertEqual(posted.status, SocialPublishStatus.POSTED.value)
+
+    @patch("app.services.social_publishing_service.sleep")
+    @patch("app.services.social_publishing_service.requests.post")
+    def test_x_auto_callback_failure_retries_once_after_five_seconds(self, post, wait):
+        accepted = Mock(status_code=200)
+        accepted.raise_for_status.return_value = None
+        post.side_effect = [RuntimeError("X_AUTO unavailable"), accepted]
+        payload = {
+            "platform": "x",
+            "tweet_id": "2079000000000000000",
+            "published_at": "2026-07-18T18:00:00+00:00",
+        }
+
+        SocialPublishingService._send_x_auto_callback(payload)
+
+        self.assertEqual(post.call_count, 2)
+        self.assertEqual(post.call_args.args[0], "http://127.0.0.1:8765/api/publish/x")
+        self.assertEqual(post.call_args.kwargs["json"], payload)
+        wait.assert_called_once_with(5)
+
+    @patch("app.services.social_publishing_service.sleep")
+    @patch("app.services.social_publishing_service.requests.post")
+    def test_x_auto_callback_final_failure_does_not_change_publish_result(self, post, wait):
+        post.side_effect = RuntimeError("X_AUTO unavailable")
+        social_publishing, generation_library = self.make_services(x_provider=FakeXProvider())
+        item = social_publishing.create_queue_item(
+            generated_image_id="generated_image_social_1",
+            generation_library=generation_library,
+            platform=SocialPlatform.X.value,
+        )
+
+        with patch(
+            "app.services.social_publishing_service.Thread.start",
+            lambda thread: thread.run(),
+        ):
+            posted = social_publishing.publish_now(
+                item.queue_item_id,
+                caption_text="A little moment worth saving.",
+                account_name="AvaBlackthorne",
+            )
+
+        self.assertEqual(posted.status, SocialPublishStatus.POSTED.value)
+        self.assertEqual(post.call_count, 2)
+        wait.assert_called_once_with(5)
 
     def test_scheduled_state_is_tracked(self):
         social_publishing, generation_library = self.make_services(x_provider=FakeXProvider())

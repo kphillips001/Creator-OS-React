@@ -35,6 +35,7 @@ class ProviderCapabilities:
     supports_video: bool = False
     supports_cancel: bool = False
     max_images: int = 1
+    max_reference_images: int = 1
     metadata: Mapping[str, Any] = field(default_factory=dict)
 
 
@@ -521,7 +522,7 @@ Scene families available from Wavespeed include lake, beach, boat, dock, pool, p
     def build_payload(self, request: GenerationRequest) -> Mapping[str, Any]:
         return {
             "prompt": self._render_prompt_text(request),
-            "images": [self._provider_reference_image(request)],
+            "images": self._provider_reference_images(request),
             "output_format": str(request.metadata.get("output_format") or "png"),
         }
 
@@ -687,6 +688,32 @@ Scene families available from Wavespeed include lake, beach, boat, dock, pool, p
         if self._is_remote_url(reference):
             return reference
 
+        path = Path(reference).expanduser()
+        if not path.exists():
+            raise GenerationProviderError(f"Reference image was not found: {reference}")
+        return self._upload_reference_image(path)
+
+    def _provider_reference_images(self, request: GenerationRequest) -> list[str]:
+        continuity = str(request.metadata.get("photoshoot_continuity_reference_image_url") or "").strip()
+        workflow = str(request.metadata.get("workflow_type") or "").strip().lower()
+        if workflow != "photoshoot" or self.capabilities.max_reference_images < 2 or not continuity:
+            return [self._provider_reference_image(request)]
+        canonical = str(
+            request.metadata.get("canonical_reference_image_url")
+            or request.reference_asset_path
+            or ""
+        ).strip()
+        ordered = []
+        for reference in (canonical, continuity):
+            if reference and reference not in ordered:
+                ordered.append(reference)
+        if len(ordered) < 2:
+            return [self._provider_reference_image(request)]
+        return [self._provider_reference_value(reference) for reference in ordered[:self.capabilities.max_reference_images]]
+
+    def _provider_reference_value(self, reference: str) -> str:
+        if self._is_remote_url(reference):
+            return reference
         path = Path(reference).expanduser()
         if not path.exists():
             raise GenerationProviderError(f"Reference image was not found: {reference}")

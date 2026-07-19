@@ -27,6 +27,7 @@ from app.repositories.telegram_identity_repository import TelegramIdentityReposi
 from app.repositories.user_repository import (
     get_user_by_account_and_fanvue_uuid,
     get_user_by_account_and_id,
+    list_users_for_account,
 )
 
 
@@ -52,6 +53,8 @@ class CustomerRepository:
         = get_thread_messages_for_user,
         owned_content_tags_fetcher: Callable[[int, int], Sequence[str]]
         = get_owned_content_tags,
+        fanvue_users_fetcher: Callable[[int, int], Sequence[Mapping[str, Any]]]
+        = list_users_for_account,
         telegram_identity_repository: Any | None = None,
     ):
         self._fanvue_user_by_id_fetcher = fanvue_user_by_id_fetcher
@@ -59,9 +62,29 @@ class CustomerRepository:
         self._memory_fetcher = memory_fetcher
         self._chat_messages_fetcher = chat_messages_fetcher
         self._owned_content_tags_fetcher = owned_content_tags_fetcher
+        self._fanvue_users_fetcher = fanvue_users_fetcher
         self._telegram_identity_repository = (
             telegram_identity_repository or TelegramIdentityRepository()
         )
+
+    def list_by_fanvue_account(
+        self,
+        *,
+        fanvue_account_id: int,
+        limit: int = 1000,
+    ) -> tuple[Customer, ...]:
+        """Build provider-neutral read models for one creator account."""
+
+        rows = self._fanvue_users_fetcher(int(fanvue_account_id), int(limit)) or ()
+        customers: list[Customer] = []
+        for row in rows:
+            customer = self.get_by_legacy_fanvue_user(
+                fanvue_account_id=int(fanvue_account_id),
+                fanvue_user_id=int(row["id"]),
+            )
+            if customer is not None:
+                customers.append(customer)
+        return tuple(customers)
 
     def get_by_legacy_fanvue_user(
         self,

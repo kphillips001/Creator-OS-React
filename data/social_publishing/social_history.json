@@ -1,5 +1,145 @@
 [
   {
+    "history_id": "social_publish_history_fa6c1415ebae42b081f4e9b9c7ed2812",
+    "queue_item_id": "social_queue_item_7ae9395c8eee4b909c6a4bc2537a5bce",
+    "platform": "x",
+    "status": "posted",
+    "message": "Posted to X.",
+    "created_at": "2026-07-19T15:44:56.455770",
+    "metadata": {
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "caption_id": null,
+      "provider_post_id": "2078868698920603668",
+      "provider_media_id": "2078868697167351808",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2078868698920603668"
+    }
+  },
+  {
+    "history_id": "social_publish_history_6010dc12f77743aea5f61d3e53acfa98",
+    "queue_item_id": "social_queue_item_3758da23d44041a3be43ea29d72f8d29",
+    "platform": "x",
+    "status": "posted",
+    "message": "Posted to X.",
+    "created_at": "2026-07-18T15:33:48.585891",
+    "metadata": {
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "caption_id": null,
+      "provider_post_id": "2078503510413279579",
+      "provider_media_id": "2078503508760797184",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2078503510413279579"
+    }
+  },
+  {
+    "history_id": "social_publish_history_10ba2d790ae442e69b5fa30db3d76288",
+    "queue_item_id": "social_queue_item_ac8df87aa6c04bd8b1a8333e523dc5d3",
+    "platform": "telegram",
+    "status": "posted",
+    "message": "Posted to Telegram.",
+    "created_at": "2026-07-17T20:43:16.887872",
+    "metadata": {
+      "account_name": null,
+      "telegram_post_to": "main",
+      "caption_id": "caption_result_b10ede2b2ec04a4f985d1b3daacb5814",
+      "provider_post_id": "85",
+      "provider_media_id": null,
+      "provider_output_url": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_901df7de8b704c3d97420def30387932",
+    "queue_item_id": "social_queue_item_ac8df87aa6c04bd8b1a8333e523dc5d3",
+    "platform": "telegram",
+    "status": "caption_attached",
+    "message": "Caption Studio result attached to Social Queue item.",
+    "created_at": "2026-07-17T20:43:15.100158",
+    "metadata": {
+      "caption_id": "caption_result_b10ede2b2ec04a4f985d1b3daacb5814"
+    }
+  },
+  {
+    "history_id": "social_publish_history_62018aa93f3a42d089cae32c4736bfdb",
+    "queue_item_id": "social_queue_item_3f5573a0e4be4985ad1a687a7c1c2068",
+    "platform": "telegram",
+    "status": "posted",
+    "message": "Posted to Telegram.",
+    "created_at": "2026-07-17T18:57:14.229555",
+    "metadata": {
+      "account_name": null,
+      "telegram_post_to": "vault",
+      "caption_id": "caption_result_e5ce15069b0448688dea87c89400b2a0",
+      "provider_post_id": "15",
+      "provider_media_id": null,
+      "provider_output_url": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_0684f45ac04140959ae0c5109c7306dc",
+    "queue_item_id": "social_queue_item_3f5573a0e4be4985ad1a687a7c1c2068",
+    "platform": "telegram",
+    "status": "caption_attached",
+    "message": "Caption Studio result attached to Social Queue item.",
+    "created_at": "2026-07-17T18:57:12.415817",
+    "metadata": {
+      "caption_id": "caption_result_e5ce15069b0448688dea87c89400b2a0"
+    }
+  },
+  {
+    "history_id": "social_publish_history_fb420a77954346ed8f132d3cea191409",
+    "queue_item_id": "social_queue_item_d168b21ea1d04db9b324cc4b2b12853f",
+    "platform": "telegram",
+    "status": "posted",
+    "message": "Posted to Telegram.",
+    "created_at": "2026-07-17T18:56:46.946339",
+    "metadata": {
+      "account_name": null,
+      "telegram_post_to": "main",
+      "caption_id": "caption_result_acfbb6fdba4e43d59124589fe0f567b6",
+      "provider_post_id": "84",
+      "provider_media_id": null,
+      "provider_output_url": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_6801de7db0194dd8b4c9ab0c744150b5",
+    "queue_item_id": "social_queue_item_d168b21ea1d04db9b324cc4b2b12853f",
+    "platform": "telegram",
+    "status": "caption_attached",
+    "message": "Caption Studio result attached to Social Queue item.",
+    "created_at": "2026-07-17T18:56:44.700012",
+    "metadata": {
+      "caption_id": "caption_result_acfbb6fdba4e43d59124589fe0f567b6"
+    }
+  },
+  {
+    "history_id": "social_publish_history_1e27c942bf0f450891801c45b893f625",
+    "queue_item_id": "social_queue_item_4406aa0d6eef49539e3569be7e5796d3",
+    "platform": "x",
+    "status": "posted",
+    "message": "Posted to X.",
+    "created_at": "2026-07-17T18:56:19.317023",
+    "metadata": {
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "caption_id": "caption_result_16b369f2cc844e718eb886c8015b0102",
+      "provider_post_id": "2078192086365438421",
+      "provider_media_id": "2078192084469547008",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2078192086365438421"
+    }
+  },
+  {
+    "history_id": "social_publish_history_d39ca2c8808e4bfeb86e806c13471a84",
+    "queue_item_id": "social_queue_item_4406aa0d6eef49539e3569be7e5796d3",
+    "platform": "x",
+    "status": "caption_attached",
+    "message": "Caption Studio result attached to Social Queue item.",
+    "created_at": "2026-07-17T18:56:18.284139",
+    "metadata": {
+      "caption_id": "caption_result_16b369f2cc844e718eb886c8015b0102"
+    }
+  },
+  {
     "history_id": "social_publish_history_99e25c7e4c2345059c4fd2d75956ef12",
     "queue_item_id": "social_queue_item_90b520cecadb40e88e776ee2e616ee04",
     "platform": "x",

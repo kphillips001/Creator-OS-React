@@ -1,5 +1,80 @@
 [
   {
+    "edit_request_id": "edit_request_46f5b9b045064008a6f01f50652894ee",
+    "session_id": "edit_session_fe29755d54304c5bb3190a00bcb952b8",
+    "creator_profile_id": 2,
+    "source_image_ids": [
+      "generated_image_4b694eacdb5311e7a459482c"
+    ],
+    "edit_mode": "single_image",
+    "edit_prompt": "Change the color of her bikini to yellow",
+    "provider_id": "seedream_5_0_pro",
+    "reference_image_id": null,
+    "reference_asset_id": null,
+    "batch_size": 1,
+    "status": "submitted",
+    "generation_job_id": "generation_job_e39da526b3df4700b307f8be13285196",
+    "created_at": "2026-07-18T01:35:24.975998",
+    "updated_at": "2026-07-18T01:35:25.459845",
+    "metadata": {
+      "source_output_references": [
+        "D:\\Ava_CMS\\Content\\Pending_Edit\\generated_image_4b694eacdb5311e7a459482c.png"
+      ],
+      "reference_output_reference": null,
+      "references": []
+    }
+  },
+  {
+    "edit_request_id": "edit_request_ea144a19be8d46ea94ab48e711c0657c",
+    "session_id": "edit_session_a078c03c6f6747acabce16986a90f4eb",
+    "creator_profile_id": 2,
+    "source_image_ids": [
+      "generated_image_b9099c0dd4e213f5706090ae"
+    ],
+    "edit_mode": "single_image",
+    "edit_prompt": "Change the color of her bikini to black",
+    "provider_id": "seedream_5_0_pro",
+    "reference_image_id": null,
+    "reference_asset_id": null,
+    "batch_size": 1,
+    "status": "submitted",
+    "generation_job_id": "generation_job_815298c129b7423186d447192672e1cf",
+    "created_at": "2026-07-18T01:25:18.244659",
+    "updated_at": "2026-07-18T01:25:18.715294",
+    "metadata": {
+      "source_output_references": [
+        "D:\\Ava_CMS\\Content\\Pending_Edit\\generated_image_b9099c0dd4e213f5706090ae.png"
+      ],
+      "reference_output_reference": null,
+      "references": []
+    }
+  },
+  {
+    "edit_request_id": "edit_request_26f6d7066d274479bb67cc97bc0ca295",
+    "session_id": "edit_session_f267be5cfc124988ba0c6660fd4ddeb9",
+    "creator_profile_id": 2,
+    "source_image_ids": [
+      "generated_image_ff2f9587774120c73979e6cd"
+    ],
+    "edit_mode": "single_image",
+    "edit_prompt": "Change her bikini to hot pink",
+    "provider_id": "seedream_5_0_pro",
+    "reference_image_id": null,
+    "reference_asset_id": null,
+    "batch_size": 1,
+    "status": "submitted",
+    "generation_job_id": "generation_job_aa6a20baf264441ba5f07b5173f8e2a6",
+    "created_at": "2026-07-18T01:06:20.437260",
+    "updated_at": "2026-07-18T01:06:21.015213",
+    "metadata": {
+      "source_output_references": [
+        "D:\\Ava_CMS\\Content\\Pending_Edit\\generated_image_ff2f9587774120c73979e6cd.png"
+      ],
+      "reference_output_reference": null,
+      "references": []
+    }
+  },
+  {
     "edit_request_id": "edit_request_7dce802ee5ac4bbf8f66ae406cdbdaed",
     "session_id": "edit_session_d09fa35a462341c5a592c788cd9d1b50",
     "creator_profile_id": 2,

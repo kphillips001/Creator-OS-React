@@ -966,12 +966,14 @@ class PublishingService:
         text: str,
         media_ids: list[str] | None = None,
         audience: str = "followers-and-subscribers",
+        execution_origin: str = "operator",
     ) -> dict[str, Any]:
         return self._publishing_provider.create_wall_post(
             provider_account_id=fanvue_account_id,
             text=text,
             media_ids=media_ids,
             audience=audience,
+            execution_origin=execution_origin,
         )
 
     def record_asset_upload_payload(

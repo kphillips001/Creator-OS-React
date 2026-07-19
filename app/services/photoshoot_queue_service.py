@@ -159,7 +159,9 @@ class PhotoshootQueueService:
                 **(
                     {
                         "reference_image_url": dict(next_request.metadata or {}).get("active_reference_output_reference")
-                        or dict(session.creative_continuity or {}).get("seed_output_reference")
+                        or dict(session.creative_continuity or {}).get("seed_output_reference"),
+                        "photoshoot_continuity_reference_image_url": dict(next_request.metadata or {}).get("active_reference_output_reference")
+                        or dict(session.creative_continuity or {}).get("seed_output_reference"),
                     }
                     if (
                         dict(next_request.metadata or {}).get("active_reference_output_reference")
@@ -173,6 +175,10 @@ class PhotoshootQueueService:
             next_request,
             status="generating",
             generation_job_id=job.job_id,
+            metadata={
+                key: value for key, value in dict(next_request.metadata or {}).items()
+                if key != "last_generation_failure"
+            },
             updated_at=utc_now(),
         )
         updated_session = replace(
@@ -333,7 +339,7 @@ class PhotoshootQueueService:
     ) -> tuple[PhotoshootSession, bool]:
         """Open a persisted Photoshoot Studio session with a generated image as seed."""
         for session in self.list_sessions(creator_profile_id=record.creator_profile_id):
-            if session.status in {"completed", "cancelled"}:
+            if session.status in {"completed", "cancelled", "junked"}:
                 continue
             continuity = dict(session.creative_continuity or {})
             if continuity.get("seed_image_id") == record.image_id:
@@ -691,6 +697,10 @@ class PhotoshootQueueService:
         if creative_direction and creative_direction not in approved_directions:
             approved_directions.append(creative_direction)
         generated_image_ids = tuple((updated.metadata or {}).get("generated_image_ids") or ())
+        approved_count = len(tuple(
+            request for request in self.requests_for_session(updated.session_id)
+            if request.status == "approved"
+        ))
         self._replace_session(
             replace(
                 session,
@@ -701,9 +711,13 @@ class PhotoshootQueueService:
                     "approved_directions": tuple(approved_directions),
                     "current_direction": {},
                     "current_prompt": "",
+                    "creative_hint": "",
+                    "inspiration_ideas": (),
+                    "selected_inspiration": "",
                     "direction_approved": False,
                     "workflow_stage": "ready_for_next_shot",
                     "current_shot_image_id": generated_image_ids[-1] if generated_image_ids else continuity.get("current_shot_image_id"),
+                    "selected_timeline_index": max(0, approved_count - 1),
                     "progression_stage": max(
                         int(continuity.get("progression_stage") or 0),
                         len(tuple(request for request in self.requests_for_session(updated.session_id) if request.status == "approved")),
@@ -860,6 +874,37 @@ class PhotoshootQueueService:
         self._replace_session(updated)
         return updated
 
+    def cancel_session_for_seed_return(self, session_id: str, *, seed_image_id: str) -> PhotoshootSession:
+        """Cancel one active session and clear its transient workspace without deleting media."""
+        session = self.get_session(session_id)
+        if session.status == "completed":
+            raise ValueError("Completed Photoshoots cannot be stopped.")
+        for request in self.requests_for_session(session_id):
+            if request.status in {"queued", "generating", "awaiting_review"}:
+                self._replace_request(replace(
+                    request, status="cancelled", review_status="cancelled",
+                    review_notes="Photoshoot stopped and seed returned.", updated_at=utc_now(),
+                ))
+        continuity = dict(session.creative_continuity or {})
+        for key in (
+            "inspiration_ideas", "selected_inspiration", "current_direction",
+            "current_prompt", "creator_guidance", "grok_guidance", "creative_hint",
+            "direction_approved",
+        ):
+            continuity.pop(key, None)
+        continuity.update({
+            "seed_image_id": str(seed_image_id),
+            "current_shot_image_id": None,
+            "workflow_stage": "seed_returned",
+            "seed_returned_to_library": True,
+        })
+        updated = replace(
+            session, status="cancelled", current_request_id=None,
+            creative_continuity=continuity, updated_at=utc_now(),
+        )
+        self._replace_session(updated)
+        return updated
+
     def junk_completed_session(self, session_id: str, *, notes: str | None = None) -> PhotoshootSession:
         session = self.get_session(session_id)
         metadata = dict(session.metadata or {})
@@ -970,6 +1015,12 @@ class PhotoshootQueueService:
         continuity_locks: Mapping[str, bool] | None = None,
         selected_timeline_index: int | None = None,
         workflow_stage: str | None = None,
+        session_direction: str | None = None,
+        creative_hint: str | None = None,
+        creator_guidance: str | None = None,
+        grok_guidance: str | None = None,
+        inspiration_ideas: tuple[str, ...] | list[str] | None = None,
+        selected_inspiration: str | None = None,
     ) -> PhotoshootSession:
         session = self.get_session(session_id)
         continuity = dict(session.creative_continuity or {})
@@ -982,6 +1033,18 @@ class PhotoshootQueueService:
             continuity["selected_timeline_index"] = int(selected_timeline_index)
         if workflow_stage:
             continuity["workflow_stage"] = str(workflow_stage)
+        if session_direction is not None:
+            continuity["session_direction"] = str(session_direction)
+        if creative_hint is not None:
+            continuity["creative_hint"] = str(creative_hint)
+        if creator_guidance is not None:
+            continuity["creator_guidance"] = str(creator_guidance)
+        if grok_guidance is not None:
+            continuity["grok_guidance"] = str(grok_guidance)
+        if inspiration_ideas is not None:
+            continuity["inspiration_ideas"] = tuple(str(item) for item in inspiration_ideas)
+        if selected_inspiration is not None:
+            continuity["selected_inspiration"] = str(selected_inspiration)
         updated = replace(
             session,
             provider_id=str(provider_id or session.provider_id),
