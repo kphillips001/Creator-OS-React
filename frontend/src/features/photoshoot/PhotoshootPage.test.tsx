@@ -24,7 +24,7 @@ function LibraryDestination() {
 }
 
 function renderPage() {
-  return render(<MemoryRouter initialEntries={["/content/photoshoot"]}><Routes><Route path="/content/photoshoot" element={<PhotoshootPage />} /><Route path="/library/generations" element={<LibraryDestination />} /></Routes></MemoryRouter>);
+  return render(<MemoryRouter initialEntries={["/content/photoshoot"]}><Routes><Route path="/content/photoshoot" element={<PhotoshootPage />} /><Route path="/library/generations" element={<LibraryDestination />} /><Route path="/library/assets" element={<div>Asset Library destination</div>} /></Routes></MemoryRouter>);
 }
 
 describe("PhotoshootPage Phase 1", () => {
@@ -186,22 +186,64 @@ describe("PhotoshootPage Phase 1", () => {
     expect(fetch).toHaveBeenCalledWith(expect.stringContaining("/creative-director/inspiration"), expect.objectContaining({ method: "POST" }));
   });
 
-  it("finishes only through Finish Photoshoot and preserves the completed timeline", async () => {
+  it("opens Review & Curate and confirms selected deliverables", async () => {
     const approved = { ...seed, image_id: "approved-2", image_url: "/approved-2.png", status: "photoshoot_session" };
     vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
       const url = String(input);
       if (url.includes("/photoshoot/status")) return response({ request: null, candidate: null });
       if (url.includes("/creative-director/context")) return response({ session_id: "session-1", creative_mode: "safe", creator_guidance: "", workflow_stage: "ready_for_next_shot", current_prompt: "", recommendation_state: { inspiration_ideas: [], selected_inspiration: "", direction_approved: false, recommendation: {} } });
-      if (url.endsWith("/photoshoot/finish")) return response({ success: true, status: "completed", approved_shot_count: 2, gallery_ready: true });
+      if (url.endsWith("/photoshoot/finish")) return response({ session_id: "session-1", session_title: "Photoshoot Studio", photoshoot_decision: "PENDING", confirmed: false, curation: {}, seed_image: { image_id: "seed-1", asset_id: 91, shot_number: 0, title: "Canonical Portrait", description: "Seed prompt", image_url: "/seed.png", keep: false, is_seed: true }, shots: [{ image_id: "approved-2", asset_id: 92, shot_number: 1, title: "Window Light", description: "Warm portrait", image_url: "/approved-2.png", keep: true, is_seed: false }] });
+      if (url.endsWith("/photoshoot/curation/confirm")) return response({ session_id: "session-1", status: "archived", already_confirmed: false, photoshoot_decision: "APPROVED", photoshoot_decided_at: "2026-07-21T00:00:00Z", selected_image_ids: ["approved-2"], photoshoot_created: true, photoshoot_deliverable_id: "set-1", image_asset_generation_ids: [] });
       return response({ creator_profile_exists: true, pending_photoshoot: seed, provider_list: [{ value: "flux", label: "Flux" }], active_session: { session_id: "session-1", title: "Photoshoot Studio", provider_id: "flux", creative_continuity: { workflow_stage: "ready_for_next_shot" } }, creative_mode: "safe", continuity_settings: { location: true, wardrobe: true, lighting: true, hairstyle: true, makeup: true, camera_style: true }, timeline_summary: [{ request_id: "request-1", sequence_index: 1, shot_number: 1, label: "Shot 1 (Seed)", is_seed: true, image: seed }, { request_id: "request-2", sequence_index: 2, shot_number: 2, label: "Shot 2", is_seed: false, image: approved }] });
     }));
     renderPage();
     fireEvent.click(await screen.findByRole("button", { name: /Finish Photoshoot/ }));
-    expect(await screen.findByRole("heading", { name: "Photoshoot Complete" })).toBeInTheDocument();
-    expect(screen.getByText("2 approved shots are preserved in this completed session.")).toBeInTheDocument();
-    expect(screen.getByText("Shot 1 (Seed)")).toBeInTheDocument();
-    expect(screen.getByText("Shot 2")).toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "Candidate Review" })).not.toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Review & Curate" })).toBeInTheDocument();
+    const sequence = screen.getByRole("list", { name: "Photoshoot sequence" });
+    expect(sequence.children[0]).toHaveTextContent("Seed Image");
+    expect(sequence.children[1]).toHaveTextContent("Shot 2");
+    expect(sequence.children[1]).toHaveTextContent("Window Light");
+    fireEvent.click(screen.getByRole("radio", { name: "Yes" }));
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Finish" }));
+    expect(await screen.findByText("Asset Library destination")).toBeInTheDocument();
+  });
+
+  it("restores backend-owned Auto Generation progress above the session plan after refresh", async () => {
+    const plan = Array.from({ length: 8 }, (_, index) => ({
+      shot_number: index + 1, title: index === 4 ? "Panty Peel Nude" : `Frame ${index + 1}`,
+      creative_direction: `Direction ${index + 1}`,
+    }));
+    const fetch = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/photoshoot/status")) return response({ request: null, candidate: null });
+      if (url.includes("/creative-director/context")) return response({
+        session_id: "session-1", creative_mode: "premium", creator_guidance: "", workflow_stage: "session_plan_running",
+        current_prompt: "", recommendation_state: {}, planning_mode: "full_plan", plan_frame_count: 8,
+        session_plan: plan, session_plan_index: 4, session_plan_approved: true,
+      });
+      if (url.includes("/auto-run/runtime")) return response({
+        session_id: "session-1", auto_run_state: "GENERATING", is_running: true, is_paused: false, is_failed: false,
+        plan_complete: false, photoshoot_complete: false, completed_frames: 4, total_frames: 8, progress_percent: 50,
+        current_frame_index: 4, current_frame_number: 5, current_frame_title: "Panty Peel Nude", current_frame_status: "generating",
+        current_request_id: "request-5", generation_job_id: "job-5", candidate: null, spinner_active: true,
+        waiting_for_review: false, failure: null, last_updated_at: "2026-07-21T12:00:00Z", auto_approve_enabled: true,
+        review_mode: "AUTO_APPROVE", available_actions: ["pause", "stop"],
+      });
+      if (url.includes("/creative-director/guidance")) return response({ creator_guidance: "" });
+      return response({ creator_profile_exists: true, pending_photoshoot: seed, provider_list: [{ value: "flux", label: "Flux" }], active_session: { session_id: "session-1", title: "Photoshoot Studio", provider_id: "flux", creative_continuity: {} }, creative_mode: "premium", continuity_settings: { location: true, wardrobe: true, lighting: true, hairstyle: true, makeup: true, camera_style: true }, timeline_summary: [{ request_id: "request-1", sequence_index: 1, shot_number: 1, label: "Shot 1 (Seed)", is_seed: true, image: seed }] });
+    });
+    vi.stubGlobal("fetch", fetch);
+    renderPage();
+    expect(await screen.findByText("4 of 8 Complete")).toBeInTheDocument();
+    expect(screen.getByText("Frame 5 — Panty Peel Nude")).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("Generating");
+    const progress = screen.getByLabelText("Auto Generation progress");
+    expect(progress).toHaveAttribute("value", "50");
+    const panel = screen.getByText("Auto Generation").closest(".live-progress");
+    const sessionPlan = screen.getByRole("heading", { name: "Session Planning" }).closest("section");
+    expect(Boolean(panel && sessionPlan && (panel.compareDocumentPosition(sessionPlan) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true);
+    expect(fetch).toHaveBeenCalledWith(expect.stringContaining("/auto-run/runtime?session_id=session-1"), expect.objectContaining({ cache: "no-store" }));
   });
 
   it("confirms the destructive stop action, supports cancel, and redirects with success feedback", async () => {

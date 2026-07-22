@@ -10,3 +10,6 @@ INFO:     127.0.0.1:52743 - "GET /api/v1/content-studio/context HTTP/1.1" 200 OK
 INFO:     127.0.0.1:50226 - "GET /api/status HTTP/1.1" 404 Not Found
 INFO:     127.0.0.1:58953 - "GET /api/v1/photoshoot/status?session_id=photoshoot_session_f40435069c2349b4829a7e0684005c00 HTTP/1.1" 404 Not Found
 INFO:     127.0.0.1:55752 - "GET /api/v1/photoshoot/context HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:54477 - "GET /api/v1/assets?page=1&page_size=18 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:50461 - "GET /api/v1/assets?page=1&page_size=18 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:63009 - "GET /api/v1/reference-library/active HTTP/1.1" 404 Not Found

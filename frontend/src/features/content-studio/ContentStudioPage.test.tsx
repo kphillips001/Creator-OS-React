@@ -42,7 +42,12 @@ const configuration = {
   defaults: { mode: "premium_teaser", provider: "seedream_5_0_pro" },
 };
 
-function mockContext(value: object, configurationValue: object = configuration, archiveValue: object[] = []) {
+function mockContext(
+  value: object,
+  configurationValue: object = configuration,
+  archiveValue: object[] = [],
+  plannerAnswer = "",
+) {
   vi.stubGlobal("fetch", vi.fn().mockImplementation((url: string, options?: RequestInit) => {
     let responseValue = url.endsWith("/configuration")
       ? configurationValue
@@ -67,7 +72,7 @@ function mockContext(value: object, configurationValue: object = configuration, 
         responseValue = {
           success: true,
           error: null,
-          answer: `answer for ${plannerBody.get("question")}${plannerBody.get("image") ? " with image" : ""}`,
+          answer: plannerAnswer || `answer for ${plannerBody.get("question")}${plannerBody.get("image") ? " with image" : ""}`,
         };
         return Promise.resolve({
           headers: new Headers({ "content-type": "application/json" }),
@@ -153,17 +158,17 @@ describe("ContentStudioPage", () => {
     const { container } = render(<ContentStudioPage />);
 
     const titles = [
-      "Premium Creative Mode / Prompt Count / Provider",
-      "Creative Director Tools",
+      "Creative Settings",
+      "Creative Direction",
       "Canonical Prompt Planner Q&A",
       "Prompt Workshop",
       "Manual Prompt",
-      "Prompt Preview",
+      "Generate Prompts",
     ];
 
     await screen.findByRole("region", { name: titles[0] });
     for (const title of titles) {
-      expect(screen.getByRole("region", { name: title })).toBeInTheDocument();
+      expect(screen.getByRole("region", { name: title === "Creative Direction" ? "Creative Direction Workspace" : title })).toBeInTheDocument();
       expect(screen.getByRole("heading", { level: 2, name: title })).toBeInTheDocument();
     }
 
@@ -210,7 +215,7 @@ describe("ContentStudioPage", () => {
       "Creator Profile required before selecting a Reference Image.",
     )).toBeInTheDocument();
     expect(screen.getByText("Creator Profile required before using Content Studio.")).toBeInTheDocument();
-    expect(screen.queryByRole("region", { name: "Creative Director Tools" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Creative Direction Workspace" })).not.toBeInTheDocument();
   });
 
   it("shows the missing-reference state and disables dependent sections", async () => {
@@ -240,6 +245,7 @@ describe("ContentStudioPage", () => {
     const mode = await screen.findByLabelText("Premium Creative Mode") as HTMLSelectElement;
     const count = await screen.findByLabelText("Prompt Count") as HTMLInputElement;
     const provider = screen.getByLabelText("Provider") as HTMLSelectElement;
+    const advancedSettings = screen.getByText("Advanced Settings").closest("details");
 
     expect(mode.value).toBe("premium_teaser");
     expect(Array.from(mode.options, (option) => [option.text, option.value])).toEqual([
@@ -248,6 +254,10 @@ describe("ContentStudioPage", () => {
     ]);
     expect(count).toHaveAttribute("min", "1");
     expect(count).toHaveAttribute("max", "20");
+    expect(advancedSettings).not.toHaveAttribute("open");
+    fireEvent.click(screen.getByText("Advanced Settings"));
+    expect(advancedSettings).toHaveAttribute("open");
+    expect(provider.value).toBe("seedream_5_0_pro");
     await waitFor(() => expect(count.value).toBe("5"));
     expect(provider.value).toBe("seedream_5_0_pro");
     expect(Array.from(provider.options, (option) => option.text)).toEqual([
@@ -264,7 +274,7 @@ describe("ContentStudioPage", () => {
     expect(mode.value).toBe("spicy");
     expect(count.value).toBe("20");
     expect(provider.value).toBe("wan_2_7_image_edit");
-    expect(fetch).toHaveBeenCalledTimes(3);
+    expect(fetch).toHaveBeenCalledTimes(2);
   });
 
   it("maps a historical story-sequence default to the Standard UI option", async () => {
@@ -295,24 +305,25 @@ describe("ContentStudioPage", () => {
   it("runs every Creative Director tag action through the backend and keeps editable session state", async () => {
     render(<ContentStudioPage />);
 
-    const premiumTags = await screen.findByLabelText("Premium Creative Tags") as HTMLTextAreaElement;
+    const premiumTags = await screen.findByLabelText("Creative Direction") as HTMLTextAreaElement;
     const explicitTags = screen.getByLabelText("Explicit Tags") as HTMLTextAreaElement;
     await waitFor(() => expect(screen.getByRole("button", { name: /🎲 I Feel Lucky/ })).toBeEnabled());
 
     fireEvent.click(screen.getByRole("button", { name: /🎲 I Feel Lucky/ }));
     await waitFor(() => expect(premiumTags.value).toBe("lucky premium tags"));
-    expect(screen.getByLabelText("Original")).toBeChecked();
 
     fireEvent.change(premiumTags, { target: { value: "hotel robe" } });
-    fireEvent.click(screen.getByRole("button", { name: /Enhance Premium Tags/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Enhance & Build Prompts/ }));
     const enhanced = screen.getByLabelText("Enhanced Premium Tags") as HTMLTextAreaElement;
     await waitFor(() => expect(enhanced.value).toBe("enhanced hotel robe"));
-    expect(screen.getByLabelText("Enhanced")).toBeChecked();
+    const reviewPrompts = await screen.findByRole("button", { name: "Review Prompts" });
+    fireEvent.click(reviewPrompts);
+    expect(screen.getByRole("dialog", { name: "Prompt Preview" })).toHaveTextContent("preview prompt one");
+    fireEvent.click(screen.getByRole("button", { name: "Save & Close" }));
 
     fireEvent.click(screen.getByRole("button", { name: /Surprise Me/ }));
     const surprised = screen.getByLabelText("Surprise Me Tags") as HTMLTextAreaElement;
     await waitFor(() => expect(surprised.value).toBe("surprised hotel robe"));
-    expect(screen.getByLabelText("Surprise Me")).toBeChecked();
 
     fireEvent.click(screen.getByRole("button", { name: /🔥 I Feel Lucky/ }));
     await waitFor(() => expect(explicitTags.value).toBe("lucky explicit tags"));
@@ -321,13 +332,159 @@ describe("ContentStudioPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /Enhance Explicit Tags/ }));
     const enhancedExplicit = screen.getByLabelText("Enhanced Explicit Tags") as HTMLTextAreaElement;
     await waitFor(() => expect(enhancedExplicit.value).toBe("explicitly enhanced explicit hotel"));
-    expect(screen.getByLabelText("Enhanced Explicit")).toBeChecked();
-
-    expect(screen.getByRole("radio", { name: "Prompt Workshop" })).toBeInTheDocument();
+    expect(screen.queryByText("Prompt Source")).not.toBeInTheDocument();
+    expect(screen.queryByRole("radio")).not.toBeInTheDocument();
     const postCalls = vi.mocked(fetch).mock.calls.filter(([, options]) => options?.method === "POST");
-    expect(postCalls).toHaveLength(5);
+    expect(postCalls).toHaveLength(6);
     expect(postCalls[0]![0]).toBe("/api/v1/content-studio/creative-tags/lucky");
     expect(JSON.parse(String(postCalls[0]![1]?.body))).toEqual({ explicit: false, promptCount: 5 });
+    expect(postCalls[1]![0]).toBe("/api/v1/content-studio/creative-tags/enhance");
+    expect(postCalls[2]![0]).toBe("/api/v1/content-studio/prompt-preview");
+    expect(JSON.parse(String(postCalls[2]![1]?.body))).toEqual({
+      creativeMode: "premium_teaser",
+      creativeTags: "[ORIGINAL USER TAGS — mandatory: hotel robe] [ENHANCED SUGGESTIONS — vary any wardrobe detail not present in ORIGINAL USER TAGS: enhanced hotel robe]",
+      promptCount: 5,
+    });
+  });
+
+  it("automatically uses the latest Surprise Me direction without a source selector", async () => {
+    render(<ContentStudioPage />);
+
+    fireEvent.change(await screen.findByLabelText("Creative Direction"), { target: { value: "hotel robe" } });
+    fireEvent.click(screen.getByRole("button", { name: /Surprise Me/ }));
+    await waitFor(() => expect(screen.getByLabelText("Surprise Me Tags")).toHaveValue("surprised hotel robe"));
+
+    const promptLauncher = screen.getByRole("region", { name: "Generate Prompts" });
+    fireEvent.click(within(promptLauncher).getByRole("button", { name: "Generate Prompts" }));
+    await within(promptLauncher).findByRole("button", { name: "Review Prompts" });
+
+    const previewCall = vi.mocked(fetch).mock.calls.find(([url]) => String(url).endsWith("/prompt-preview"));
+    expect(JSON.parse(String(previewCall?.[1]?.body))).toEqual({
+      creativeMode: "premium_teaser",
+      creativeTags: "surprised hotel robe",
+      promptCount: 5,
+    });
+
+    fireEvent.change(screen.getByLabelText("Creative Direction"), { target: { value: "new original direction" } });
+    fireEvent.click(within(promptLauncher).getByRole("button", { name: "Generate Prompts" }));
+    await waitFor(() => expect(
+      vi.mocked(fetch).mock.calls.filter(([url]) => String(url).endsWith("/prompt-preview")),
+    ).toHaveLength(2));
+    const previewCalls = vi.mocked(fetch).mock.calls.filter(([url]) => String(url).endsWith("/prompt-preview"));
+    expect(JSON.parse(String(previewCalls[1]![1]?.body))).toEqual({
+      creativeMode: "premium_teaser",
+      creativeTags: "new original direction",
+      promptCount: 5,
+    });
+    expect(screen.queryByText("Prompt Source")).not.toBeInTheDocument();
+  });
+
+  it("enhances each Grok idea through the existing premium enhancement action", async () => {
+    mockContext(
+      readyContext,
+      configuration,
+      [],
+      "1. Candlelit window portrait with a thoughtful side glance.\n2. Balcony pose with wind moving the robe.",
+    );
+    render(<ContentStudioPage />);
+
+    const premiumTags = await screen.findByLabelText("Creative Direction") as HTMLTextAreaElement;
+    fireEvent.change(premiumTags, { target: { value: "original tags stay here" } });
+    fireEvent.change(screen.getByLabelText("Ask Canonical Prompt Planner"), { target: { value: "Give me ideas" } });
+    fireEvent.click(screen.getByRole("button", { name: "Ask Planner" }));
+
+    const enhanceButtons = await screen.findAllByRole("button", { name: "✨ Enhance" });
+    expect(enhanceButtons).toHaveLength(2);
+    fireEvent.click(enhanceButtons[0]!);
+    fireEvent.click(enhanceButtons[0]!);
+
+    const enhanced = screen.getByLabelText("Enhanced Premium Tags") as HTMLTextAreaElement;
+    await waitFor(() => expect(enhanced.value).toBe("enhanced Candlelit window portrait with a thoughtful side glance."));
+    expect(premiumTags.value).toBe("original tags stay here");
+    const enhancementCalls = vi.mocked(fetch).mock.calls.filter(([url]) => String(url).endsWith("/creative-tags/enhance"));
+    expect(enhancementCalls).toHaveLength(1);
+    expect(JSON.parse(String(enhancementCalls[0]![1]?.body))).toEqual({
+      explicit: false,
+      tags: "Candlelit window portrait with a thoughtful side glance.",
+    });
+
+    fireEvent.change(premiumTags, { target: { value: "manual enhancement remains" } });
+    fireEvent.click(screen.getByRole("button", { name: /Enhance & Build Prompts/ }));
+    await waitFor(() => expect(enhanced.value).toBe("enhanced manual enhancement remains"));
+    expect(vi.mocked(fetch).mock.calls.filter(([url]) => String(url).endsWith("/creative-tags/enhance"))).toHaveLength(2);
+  });
+
+  it("stops before prompt generation when Enhance and Build Prompts enhancement fails", async () => {
+    const defaultFetch = vi.mocked(fetch).getMockImplementation();
+    vi.mocked(fetch).mockImplementation((url: RequestInfo | URL, options?: RequestInit) => {
+      if (String(url).endsWith("/creative-tags/enhance")) {
+        return Promise.resolve({
+          headers: new Headers({ "content-type": "application/json" }),
+          json: () => Promise.resolve({ success: false, error: "Enhancement unavailable", tags: "" }),
+          ok: true,
+          status: 200,
+        } as Response);
+      }
+      return defaultFetch!(url, options);
+    });
+    render(<ContentStudioPage />);
+
+    fireEvent.change(await screen.findByLabelText("Creative Direction"), { target: { value: "hotel robe" } });
+    fireEvent.click(screen.getByRole("button", { name: /Enhance & Build Prompts/ }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Enhancement unavailable");
+    expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).endsWith("/prompt-preview"))).toBe(false);
+    expect(screen.queryByRole("button", { name: "Review Prompts" })).not.toBeInTheDocument();
+  });
+
+  it("preserves enhanced tags and surfaces the existing preview error when automatic prompt generation fails", async () => {
+    const defaultFetch = vi.mocked(fetch).getMockImplementation();
+    vi.mocked(fetch).mockImplementation((url: RequestInfo | URL, options?: RequestInit) => {
+      if (String(url).endsWith("/prompt-preview")) {
+        return Promise.resolve({
+          headers: new Headers({ "content-type": "application/json" }),
+          json: () => Promise.resolve({ success: false, error: "Prompt Preview failed", preview: null }),
+          ok: true,
+          status: 200,
+        } as Response);
+      }
+      return defaultFetch!(url, options);
+    });
+    render(<ContentStudioPage />);
+
+    fireEvent.change(await screen.findByLabelText("Creative Direction"), { target: { value: "hotel robe" } });
+    fireEvent.click(screen.getByRole("button", { name: /Enhance & Build Prompts/ }));
+
+    await waitFor(() => expect(screen.getByLabelText("Enhanced Premium Tags")).toHaveValue("enhanced hotel robe"));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Prompt Preview failed");
+    expect(screen.queryByRole("button", { name: "Review Prompts" })).not.toBeInTheDocument();
+    expect(vi.mocked(fetch).mock.calls.filter(([url]) => String(url).endsWith("/creative-tags/enhance"))).toHaveLength(1);
+    expect(vi.mocked(fetch).mock.calls.filter(([url]) => String(url).endsWith("/prompt-preview"))).toHaveLength(1);
+  });
+
+  it("uses the existing Creative Director error feedback for idea enhancement failures", async () => {
+    mockContext(readyContext, configuration, [], "1. Window portrait idea.");
+    const defaultFetch = vi.mocked(fetch).getMockImplementation();
+    vi.mocked(fetch).mockImplementation((url: RequestInfo | URL, options?: RequestInit) => {
+      if (String(url).endsWith("/creative-tags/enhance")) {
+        return Promise.resolve({
+          headers: new Headers({ "content-type": "application/json" }),
+          json: () => Promise.resolve({ success: false, error: "Enhancement unavailable", tags: "" }),
+          ok: true,
+          status: 200,
+        } as Response);
+      }
+      return defaultFetch!(url, options);
+    });
+    render(<ContentStudioPage />);
+
+    await screen.findByLabelText("Creative Direction");
+    fireEvent.change(screen.getByLabelText("Ask Canonical Prompt Planner"), { target: { value: "One idea" } });
+    fireEvent.click(screen.getByRole("button", { name: "Ask Planner" }));
+    fireEvent.click(await screen.findByRole("button", { name: "✨ Enhance" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Enhancement unavailable");
+    await waitFor(() => expect(screen.getByRole("button", { name: "✨ Enhance" })).toBeEnabled());
   });
 
   it("disables Creative Director controls when the active reference is missing", async () => {
@@ -341,27 +498,19 @@ describe("ContentStudioPage", () => {
     });
     render(<ContentStudioPage />);
 
-    expect(await screen.findByLabelText("Premium Creative Tags")).toBeDisabled();
-    expect(screen.getByRole("region", { name: "Creative Director Tools" })).toHaveAttribute("aria-disabled", "true");
+    expect(await screen.findByLabelText("Creative Direction")).toBeDisabled();
+    expect(screen.getByRole("region", { name: "Creative Direction Workspace" })).toHaveAttribute("aria-disabled", "true");
   });
 
-  it("generates and edits Prompt Workshop batches and reuses the backend archive", async () => {
-    const archivedBatch = {
-      batchId: "batch-archived",
-      createdAt: "2026-07-16T11:30:00",
-      lane: "premium",
-      prompts: ["archived prompt one", "archived prompt two"],
-      requestText: "archived hotel brief",
-      usedPromptNumbers: [2],
-    };
-    mockContext(readyContext, configuration, [archivedBatch]);
+  it("generates and edits Prompt Workshop batches without rendering its archive", async () => {
+    mockContext(readyContext, configuration);
     render(<ContentStudioPage />);
 
     const brief = await screen.findByLabelText("Prompt Workshop Brief");
     await waitFor(() => expect(brief).toBeEnabled());
     fireEvent.change(screen.getByLabelText("Prompt Mode"), { target: { value: "explicit" } });
     fireEvent.change(brief, { target: { value: "hotel sequence" } });
-    fireEvent.click(screen.getByRole("button", { name: "Generate Prompts" }));
+    fireEvent.click(within(screen.getByRole("region", { name: "Prompt Workshop" })).getByRole("button", { name: "Generate Prompts" }));
 
     const firstPrompt = await screen.findByLabelText("Prompt 1") as HTMLTextAreaElement;
     expect(firstPrompt.value).toBe("generated prompt one");
@@ -369,18 +518,14 @@ describe("ContentStudioPage", () => {
     expect(firstPrompt.value).toBe("edited generated prompt");
 
     fireEvent.click(screen.getByRole("button", { name: "Accept Selected" }));
-    await waitFor(() => expect(screen.getByRole("radio", { name: "Prompt Workshop" })).toBeChecked());
+    const manualRegion = screen.getByRole("region", { name: "Manual Prompt" });
+    await waitFor(() => expect(within(manualRegion).getByLabelText("Manual Prompt")).toHaveValue("edited generated prompt"));
     fireEvent.click(screen.getByRole("button", { name: "Accept All" }));
     fireEvent.click(screen.getByRole("button", { name: "Copy Prompt" }));
     expect(await screen.findByText("edited generated prompt", { selector: "pre" })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByText("Prompt Workshop Archive"));
-    expect(screen.getByText("archived prompt one")).toBeInTheDocument();
-    expect(screen.getAllByRole("listitem")[1]).toHaveTextContent("used archived prompt two");
-    fireEvent.click(screen.getByRole("button", { name: "Use Archived" }));
-    await waitFor(() => expect(screen.getByText("Archived prompt selected.")).toBeInTheDocument());
-    fireEvent.click(screen.getByRole("button", { name: "Load Batch" }));
-    await waitFor(() => expect((screen.getByLabelText("Prompt 1") as HTMLTextAreaElement).value).toBe("archived prompt one"));
+    expect(screen.queryByText("Prompt Workshop Archive")).not.toBeInTheDocument();
+    expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).endsWith("/prompt-workshop/archive"))).toBe(false);
 
     const generateCall = vi.mocked(fetch).mock.calls.find(([url]) => String(url).endsWith("/prompt-workshop/generate"));
     expect(JSON.parse(String(generateCall?.[1]?.body))).toEqual({
@@ -389,26 +534,31 @@ describe("ContentStudioPage", () => {
       requestText: "hotel sequence",
     });
     expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes("/prompt-workshop/archive/batch-new/use"))).toBe(true);
-    expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes("/prompt-workshop/archive/batch-archived/use"))).toBe(true);
   });
 
   it("uses Manual Prompt as the preview override and preserves valid preview edits", async () => {
     render(<ContentStudioPage />);
 
-    const creativeTags = await screen.findByLabelText("Premium Creative Tags");
+    const creativeTags = await screen.findByLabelText("Creative Direction");
     const manualRegion = screen.getByRole("region", { name: "Manual Prompt" });
     const manualPrompt = within(manualRegion).getByLabelText("Manual Prompt");
-    const previewRegion = screen.getByRole("region", { name: "Prompt Preview" });
-    const createButton = within(previewRegion).getByRole("button", { name: "Create Prompt Preview" });
+    const promptLauncher = screen.getByRole("region", { name: "Generate Prompts" });
+    const createButton = within(promptLauncher).getByRole("button", { name: "Generate Prompts" });
 
     expect(manualPrompt).toHaveValue("");
+    expect(screen.queryByRole("dialog", { name: "Prompt Preview" })).not.toBeInTheDocument();
+    expect(within(promptLauncher).queryByRole("button", { name: "Review Prompts" })).not.toBeInTheDocument();
     expect(createButton).toBeDisabled();
     fireEvent.change(creativeTags, { target: { value: "original premium tags" } });
     await waitFor(() => expect(createButton).toBeEnabled());
     fireEvent.change(manualPrompt, { target: { value: "manual override prompt" } });
     fireEvent.click(createButton);
 
-    const previewPrompt = await within(previewRegion).findByLabelText("Prompt 1") as HTMLTextAreaElement;
+    const reviewButton = await within(promptLauncher).findByRole("button", { name: "Review Prompts" });
+    expect(screen.queryByLabelText("Prompt 1")).not.toBeInTheDocument();
+    fireEvent.click(reviewButton);
+    const previewDialog = screen.getByRole("dialog", { name: "Prompt Preview" });
+    const previewPrompt = within(previewDialog).getByLabelText("Prompt 1") as HTMLTextAreaElement;
     expect(previewPrompt.value).toBe("preview prompt one");
     const previewCalls = () => vi.mocked(fetch).mock.calls.filter(([url]) => String(url).endsWith("/prompt-preview"));
     await waitFor(() => expect(previewCalls()).toHaveLength(1));
@@ -420,30 +570,33 @@ describe("ContentStudioPage", () => {
 
     fireEvent.change(previewPrompt, { target: { value: "edited preview prompt" } });
     expect(previewPrompt.value).toBe("edited preview prompt");
-    const copyLink = within(previewRegion).getByRole("link", { name: "Copy Prompt Batch" });
+    const copyLink = within(previewDialog).getByRole("link", { name: "Copy Prompt Batch" });
     expect(decodeURIComponent(copyLink.getAttribute("href") ?? "")).toContain("Prompt 1: edited preview prompt");
 
     fireEvent.change(manualPrompt, { target: { value: "changed manual prompt" } });
-    expect(within(previewRegion).queryByRole("link", { name: "Copy Prompt Batch" })).not.toBeInTheDocument();
-    expect(within(previewRegion).getByText(/Prompt Preview is ready/)).toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Prompt Preview" })).not.toBeInTheDocument();
+    expect(within(promptLauncher).queryByRole("button", { name: "Review Prompts" })).not.toBeInTheDocument();
     fireEvent.change(manualPrompt, { target: { value: "manual override prompt" } });
-    expect((within(previewRegion).getByLabelText("Prompt 1") as HTMLTextAreaElement).value).toBe("edited preview prompt");
+    fireEvent.click(within(promptLauncher).getByRole("button", { name: "Review Prompts" }));
+    const reopenedDialog = screen.getByRole("dialog", { name: "Prompt Preview" });
+    expect((within(reopenedDialog).getByLabelText("Prompt 1") as HTMLTextAreaElement).value).toBe("edited preview prompt");
 
-    fireEvent.click(within(previewRegion).getByText("Advanced Details"));
-    expect(within(previewRegion).getByText("Prompt Plan: plan-preview")).toBeInTheDocument();
-    expect(within(previewRegion).getByText("Creative Mode: premium_teaser")).toBeInTheDocument();
-    expect(within(previewRegion).getByText(/canonical_premium_prompt_planner/)).toBeInTheDocument();
+    fireEvent.click(within(reopenedDialog).getByText("Advanced Details"));
+    expect(within(reopenedDialog).getByText("Prompt Plan: plan-preview")).toBeInTheDocument();
+    expect(within(reopenedDialog).getByText("Creative Mode: premium_teaser")).toBeInTheDocument();
+    expect(within(reopenedDialog).getByText(/canonical_premium_prompt_planner/)).toBeInTheDocument();
 
-    fireEvent.click(within(previewRegion).getByRole("button", { name: "Regenerate Prompt Preview" }));
+    fireEvent.click(within(reopenedDialog).getByRole("button", { name: "Regenerate Prompt Preview" }));
     await waitFor(() => expect(previewCalls()).toHaveLength(2));
-    expect(within(previewRegion).getByText("Premium Prompt Preview regenerated.")).toBeInTheDocument();
+    expect(within(screen.getByRole("dialog", { name: "Prompt Preview" })).getByText("Premium Prompt Preview regenerated.")).toBeInTheDocument();
+    fireEvent.click(within(screen.getByRole("dialog", { name: "Prompt Preview" })).getByRole("button", { name: "Save & Close" }));
+    expect(screen.queryByRole("dialog", { name: "Prompt Preview" })).not.toBeInTheDocument();
   });
 
   it("runs Canonical Prompt Planner Q&A with transient images and newest-first session history", async () => {
     render(<ContentStudioPage />);
 
     const planner = await screen.findByRole("region", { name: "Canonical Prompt Planner Q&A" });
-    fireEvent.click(within(planner).getByText("Canonical Prompt Planner Q&A"));
     const question = within(planner).getByLabelText("Ask Canonical Prompt Planner");
     const ask = within(planner).getByRole("button", { name: "Ask Planner" });
     const manual = within(screen.getByRole("region", { name: "Manual Prompt" })).getByLabelText("Manual Prompt");
@@ -490,7 +643,6 @@ describe("ContentStudioPage", () => {
       });
     })));
     render(<CanonicalPromptPlannerSection disabled={false} />);
-    fireEvent.click(screen.getByText("Canonical Prompt Planner Q&A"));
     fireEvent.change(screen.getByLabelText("Ask Canonical Prompt Planner"), { target: { value: "question" } });
     fireEvent.click(screen.getByRole("button", { name: "Ask Planner" }));
 
@@ -503,10 +655,8 @@ describe("ContentStudioPage", () => {
     expect(screen.getByRole("button", { name: "Ask Planner" })).toBeEnabled();
   });
 
-  it("renders planner answers as direct Markdown responses and copies the source answer", async () => {
+  it("renders planner recommendations as self-contained aligned rows without a copy action", async () => {
     const markdown = "# Direction\n\n- First beat\n- **Bold beat**\n\n1. Frame\n2. Finish\n\n*soft*\n\n```text\ncode block\n```";
-    const writeText = vi.fn();
-    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
       headers: new Headers({ "content-type": "application/json" }),
       json: () => Promise.resolve({ success: true, error: null, answer: markdown }),
@@ -514,7 +664,6 @@ describe("ContentStudioPage", () => {
       status: 200,
     }));
     render(<CanonicalPromptPlannerSection disabled={false} />);
-    fireEvent.click(screen.getByText("Canonical Prompt Planner Q&A"));
     fireEvent.change(screen.getByLabelText("Ask Canonical Prompt Planner"), { target: { value: "Plan this" } });
     fireEvent.click(screen.getByRole("button", { name: "Ask Planner" }));
 
@@ -523,18 +672,30 @@ describe("ContentStudioPage", () => {
     expect(screen.getByText("soft").tagName).toBe("EM");
     expect(screen.getByText("code block").tagName).toBe("CODE");
     expect(document.querySelectorAll(".canonical-prompt-planner__response details")).toHaveLength(0);
-    fireEvent.click(screen.getByRole("button", { name: "Copy" }));
-    expect(writeText).toHaveBeenCalledWith(markdown);
+    expect(document.querySelectorAll(".canonical-prompt-planner__recommendation")).toHaveLength(4);
+    expect(screen.getAllByRole("button", { name: /Enhance$/ })).toHaveLength(4);
+    expect(document.querySelectorAll(".canonical-prompt-planner__ideas")).toHaveLength(0);
+    expect(screen.queryByRole("button", { name: "Copy" })).not.toBeInTheDocument();
+    expect(stylesheetText).toMatch(/\.canonical-prompt-planner__recommendation\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) auto/);
+    expect(stylesheetText).toMatch(/\.canonical-prompt-planner__recommendation button\s*\{[^}]*justify-self:\s*end/);
   });
 
   it("submits generation inputs and renders backend-owned live progress and completed images", async () => {
+    mockContext(readyContext, configuration, [], "1. Continue with a closer window portrait.\n2. Explore a seated variation.");
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(Element.prototype, "scrollIntoView", { configurable: true, value: scrollIntoView });
     render(<ContentStudioPage />);
 
-    const tags = await screen.findByLabelText("Premium Creative Tags");
+    const tags = await screen.findByLabelText("Creative Direction");
+    const plannerInput = screen.getByLabelText("Ask Canonical Prompt Planner") as HTMLTextAreaElement;
+    fireEvent.change(plannerInput, { target: { value: "Continue this direction" } });
+    fireEvent.click(screen.getByRole("button", { name: "Ask Planner" }));
+    expect(await screen.findAllByRole("button", { name: /Enhance$/ })).toHaveLength(2);
     expect(screen.queryByRole("region", { name: "Live Generation" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Next Step" })).not.toBeInTheDocument();
     expect(stylesheetText).toMatch(/\.generation-live__images\s*\{[^}]*display:\s*grid/);
     expect(stylesheetText).toMatch(/\.generation-live__slot img,[\s\S]*?aspect-ratio:\s*1/);
-    const count = screen.getByLabelText("Prompt Count") as HTMLInputElement;
+    const count = await screen.findByLabelText("Prompt Count") as HTMLInputElement;
     await waitFor(() => expect(count.value).toBe("5"));
     fireEvent.change(count, { target: { value: "10" } });
     await waitFor(() => expect(count.value).toBe("10"));
@@ -543,6 +704,7 @@ describe("ContentStudioPage", () => {
     await waitFor(() => expect(generate).toBeEnabled());
     fireEvent.click(generate);
     const liveRegion = await screen.findByRole("region", { name: "Live Generation" });
+    expect(screen.queryByRole("region", { name: "Next Step" })).not.toBeInTheDocument();
     await waitFor(() => expect(
       within(liveRegion).getAllByRole("img", { name: /Waiting for generated image/ }),
     ).toHaveLength(10));
@@ -573,6 +735,26 @@ describe("ContentStudioPage", () => {
     const completedSlots = within(liveRegion).getAllByRole("figure");
     expect(completedSlots).toHaveLength(10);
     completedSlots.forEach((slot, index) => expect(slot).toBe(reservedSlots[index]));
+    expect(screen.getByText("Generation completed with partial success.")).toBeInTheDocument();
+
+    const nextStep = screen.getByRole("region", { name: "Next Step" });
+    expect(within(nextStep).getByText("Continue building on this creative direction or begin a new one.")).toBeInTheDocument();
+    fireEvent.click(within(nextStep).getByRole("button", { name: /Continue Exploring/ }));
+    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: "smooth", block: "start" });
+    expect(screen.getAllByText("Continue this direction")).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: /Enhance$/ })).toHaveLength(2);
+
+    fireEvent.click(within(nextStep).getByRole("button", { name: /Ask Another Question/ }));
+    await waitFor(() => expect(plannerInput).toHaveFocus());
+    expect(plannerInput).toHaveValue("Continue this direction");
+    expect(screen.getByText("Continue with a closer window portrait.")).toBeInTheDocument();
+
+    fireEvent.click(within(nextStep).getByRole("button", { name: /Start New Session/ }));
+    await waitFor(() => expect(plannerInput).toHaveFocus());
+    expect(plannerInput).toHaveValue("");
+    expect(screen.queryByText("Canonical Prompt Planner Responses")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Enhance$/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Generated image 1 of 10" })).toBeInTheDocument();
     expect(screen.getByText("Generation completed with partial success.")).toBeInTheDocument();
   });
 });

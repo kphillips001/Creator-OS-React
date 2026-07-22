@@ -14,9 +14,8 @@ from pydantic import BaseModel
 from app.api.content_studio import _current_account_id
 from app.repositories.creator_profile_repository import get_active_creator_profile
 from app.services.generation_library_service import GenerationLibraryService
+from app.services.grid_thumbnail_service import GridThumbnailService
 from app.services.photoshoot_queue_service import PhotoshootQueueService
-from app.services.asset_registration_service import AssetRegistrationService
-from app.services.reference_library_service import ReferenceLibraryService
 from app.models.generation_library import GenerationLibraryFilter
 
 
@@ -77,11 +76,10 @@ class PermanentDeleteRequest(BaseModel):
     confirmed: bool = False
 
 
-class AssetRegistrationResponse(BaseModel):
+class AssetLibraryMoveResponse(BaseModel):
     success: bool
-    asset_id: int
     generation_id: str
-    already_registered: bool
+    already_moved: bool
     status: str
     message: str
 
@@ -149,6 +147,38 @@ def generation_library_media(generated_image_id: str):
     if not path.is_file():
         raise HTTPException(status_code=404, detail="Generated image media is unavailable.")
     return FileResponse(path, media_type=mimetypes.guess_type(path.name)[0] or "application/octet-stream")
+
+
+@router.get("/{generated_image_id}/thumbnail", response_class=FileResponse)
+def generation_library_thumbnail(generated_image_id: str):
+    library = GenerationLibraryService()
+    try:
+        record = library.get(generated_image_id)
+    except KeyError as error:
+        raise HTTPException(status_code=404, detail="Generated image not found.") from error
+    creator_profile_id = _creator_profile_id()
+    if creator_profile_id and record.creator_profile_id != creator_profile_id:
+        raise HTTPException(status_code=404, detail="Generated image not found.")
+    source = Path(record.output_reference).expanduser()
+    if not source.is_file():
+        raise HTTPException(status_code=404, detail="Generated image media is unavailable.")
+    try:
+        path = GridThumbnailService().get_or_create(
+            source,
+            identity=f"generation-{generated_image_id}",
+        )
+        media_type = "image/webp"
+    except Exception:
+        logger.exception(
+            "Generation Library thumbnail failed for %s", generated_image_id
+        )
+        path = source
+        media_type = mimetypes.guess_type(source.name)[0] or "application/octet-stream"
+    return FileResponse(
+        path,
+        media_type=media_type,
+        headers={"Cache-Control": "private, no-cache"},
+    )
 
 
 @router.post("/{generated_image_id}/remove")
@@ -222,11 +252,11 @@ def _creator_profile_id() -> int:
     return int(profile.get("id") or 0)
 
 
-@router.post("/{generated_image_id}/register", response_model=AssetRegistrationResponse)
-def register_generation_asset(generated_image_id: str):
+@router.post("/{generated_image_id}/move-to-asset-library", response_model=AssetLibraryMoveResponse)
+def move_generation_to_asset_library(generated_image_id: str):
     creator_profile_id = _creator_profile_id()
     if not creator_profile_id:
-        raise HTTPException(status_code=400, detail="Creator Profile required before registering an Asset.")
+        raise HTTPException(status_code=400, detail="Creator Profile required before using Asset Library.")
     library = GenerationLibraryService()
     try:
         record = library.get(generated_image_id)
@@ -234,42 +264,41 @@ def register_generation_asset(generated_image_id: str):
         raise HTTPException(status_code=404, detail="Generated image not found.") from error
     if record.creator_profile_id != creator_profile_id:
         raise HTTPException(status_code=404, detail="Generated image not found.")
-    if record.status != "active":
-        raise HTTPException(status_code=409, detail="Generated image is not available for Asset registration.")
-
-    canonical = ReferenceLibraryService().get_active_reference(
-        creator_profile_id=creator_profile_id,
-    )
-    canonical_id = (
-        int(canonical.asset_id)
-        if canonical is not None and bool(dict(canonical.metadata or {}).get("canonical"))
-        else None
-    )
-    if record.imported_asset_id is not None and int(record.imported_asset_id) == canonical_id:
-        return {
-            "success": True,
-            "asset_id": canonical_id,
-            "generation_id": record.image_id,
-            "already_registered": True,
-            "status": "protected",
-            "message": "Asset is already registered. The canonical reference remains protected.",
-        }
-
-    result = AssetRegistrationService(
-        generation_library_service=library,
-    ).register_generated_image(
-        record,
-        creator_profile_id=creator_profile_id,
-    )
-    if not result.success or result.asset_id is None:
-        raise HTTPException(status_code=409, detail=result.message or "Asset registration failed.")
+    try:
+        moved, already_moved = library.move_to_asset_library(record.image_id)
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
     return {
         "success": True,
-        "asset_id": int(result.asset_id),
-        "generation_id": record.image_id,
-        "already_registered": bool(result.already_registered),
-        "status": "registered",
-        "message": result.message,
+        "generation_id": moved.image_id,
+        "already_moved": already_moved,
+        "status": moved.status,
+        "message": "Image is already in Asset Library." if already_moved else "Image moved to Asset Library.",
+    }
+
+
+@router.post("/{generated_image_id}/move-back-to-generation-library", response_model=AssetLibraryMoveResponse)
+def move_generation_back_to_generation_library(generated_image_id: str):
+    creator_profile_id = _creator_profile_id()
+    if not creator_profile_id:
+        raise HTTPException(status_code=400, detail="Creator Profile required before using Generation Library.")
+    library = GenerationLibraryService()
+    try:
+        record = library.get(generated_image_id)
+    except KeyError as error:
+        raise HTTPException(status_code=404, detail="Staged generation not found.") from error
+    if record.creator_profile_id != creator_profile_id:
+        raise HTTPException(status_code=404, detail="Staged generation not found.")
+    try:
+        moved, already_moved = library.move_back_to_generation_library(record.image_id)
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    return {
+        "success": True,
+        "generation_id": moved.image_id,
+        "already_moved": already_moved,
+        "status": moved.status,
+        "message": "Image is already in Generation Library." if already_moved else "Image moved back to Generation Library.",
     }
 
 

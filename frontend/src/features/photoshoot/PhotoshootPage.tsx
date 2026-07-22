@@ -3,23 +3,33 @@ import { useNavigate } from "react-router-dom";
 import {
   approvePhotoshootCandidate,
   approvePhotoshootRecommendation,
+  approvePhotoshootSessionPlan,
   chooseAnotherPhotoshootIdea,
+  confirmPhotoshootCuration,
   editPhotoshootCandidatePrompt,
+  generatePhotoshootSessionPlan,
   generatePhotoshootShot,
   finishPhotoshoot,
   getCreativeDirectorContext,
   getPhotoshootStatus,
+  getPhotoshootAutoRunRuntime,
+  pausePhotoshootAutoRun,
   persistPhotoshootGuidance,
   regeneratePhotoshootCandidate,
   rejectPhotoshootCandidate,
   requestPhotoshootInspiration,
   requestPhotoshootRecommendation,
+  resumePhotoshootAutoRun,
+  retryPhotoshootAutoRun,
   returnPhotoshootToLibrary,
   selectPhotoshootInspiration,
+  setPhotoshootPlanningMode,
   stopPhotoshootAndReturnSeed,
+  stopPhotoshootAutoRun,
+  startPhotoshootAutoRun,
   type PhotoshootStatus,
 } from "../../infrastructure/api/photoshootApi";
-import type { PhotoshootContext } from "./types";
+import type { PhotoshootAutoRunRuntime, PhotoshootContext, PhotoshootCurationReview, PlannedShot, PlanningMode } from "./types";
 import type { CreativeDirectorRecommendation } from "./types";
 import { CandidatePanel } from "./components/CandidatePanel";
 import { CreativeDirectionPanel } from "./components/CreativeDirectionPanel";
@@ -30,7 +40,10 @@ import { PhotoshootStateGate } from "./components/PhotoshootStateGate";
 import { PhotoshootTimeline } from "./components/PhotoshootTimeline";
 import { PromptPanel } from "./components/PromptPanel";
 import { SeedImageCard } from "./components/SeedImageCard";
-import { ActivePhotoshootActions, PhotoshootCompletedPanel, StopPhotoshootDialog } from "./components/ShotApprovedPanel";
+import { SessionPlanPanel } from "./components/SessionPlanPanel";
+import { ActivePhotoshootActions, StopPhotoshootDialog } from "./components/ShotApprovedPanel";
+import { PhotoshootCurationPanel } from "./components/PhotoshootCurationPanel";
+import { PhotoshootAutoGenerationProgress } from "./components/PhotoshootAutoGenerationProgress";
 import { usePhotoshootContext } from "./usePhotoshootContext";
 import "./photoshoot.css";
 
@@ -41,11 +54,13 @@ function ManualWorkspace({
   refresh,
   onReturn,
   onOpenLibrary,
+  onOpenAssetLibrary,
 }: {
   ready: Ready;
   refresh: () => Promise<unknown>;
   onReturn: () => void;
   onOpenLibrary: (message?: string) => void;
+  onOpenAssetLibrary: () => void;
 }) {
   const provider = ready.session.providerId;
   const [mode, setMode] = useState(ready.session.creativeMode);
@@ -56,13 +71,19 @@ function ManualWorkspace({
   const [selectedIdea, setSelectedIdea] = useState("");
   const [recommendation, setRecommendation] = useState<CreativeDirectorRecommendation | null>(null);
   const [directionApproved, setDirectionApproved] = useState(false);
+  const [planningMode, setPlanningMode] = useState<PlanningMode>("frame_by_frame");
+  const [planFrameCount, setPlanFrameCount] = useState(8);
+  const [sessionPlan, setSessionPlan] = useState<PlannedShot[]>([]);
+  const [sessionPlanIndex, setSessionPlanIndex] = useState(0);
+  const [sessionPlanApproved, setSessionPlanApproved] = useState(false);
+  const [autoRuntime, setAutoRuntime] = useState<PhotoshootAutoRunRuntime | null>(null);
   const [prompt, setPrompt] = useState("");
   const [status, setStatus] = useState<PhotoshootStatus>({
     request: null,
     candidate: null,
   });
   const [pollRevision, setPollRevision] = useState(0);
-  const [completedShots, setCompletedShots] = useState<number | null>(null);
+  const [curationReview, setCurationReview] = useState<PhotoshootCurationReview | null>(null);
   const [approvalNotice, setApprovalNotice] = useState(false);
   const [confirmStop, setConfirmStop] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -70,6 +91,7 @@ function ManualWorkspace({
   const request = status.request;
   const working =
     busy ||
+    Boolean(autoRuntime?.spinner_active) ||
     (!request?.failure &&
       (request?.status === "queued" || request?.status === "generating"));
 
@@ -114,6 +136,11 @@ function ManualWorkspace({
       setSelectedIdea(state.selectedInspiration);
       setRecommendation(state.recommendation);
       setDirectionApproved(state.directionApproved);
+      setPlanningMode(state.planningMode);
+      setPlanFrameCount(state.planFrameCount);
+      setSessionPlan(state.sessionPlan);
+      setSessionPlanIndex(state.sessionPlanIndex);
+      setSessionPlanApproved(state.sessionPlanApproved);
       if (state.currentPrompt) setPrompt(state.currentPrompt);
       setDirectorRestored(true);
     }).catch((reason: unknown) => {
@@ -132,6 +159,28 @@ function ManualWorkspace({
     return () => window.clearTimeout(timer);
   }, [directorRestored, guidance, ready.session.sessionId]);
 
+  useEffect(() => {
+    if (planningMode !== "full_plan" || !sessionPlanApproved) return;
+    const controller = new AbortController();
+    let timer = 0;
+    const poll = async () => {
+      try {
+        const runtime = await getPhotoshootAutoRunRuntime(ready.session.sessionId, controller.signal);
+        setAutoRuntime(runtime);
+        const runtimeIndex = runtime.current_frame_index ?? runtime.completed_frames;
+        setSessionPlanIndex(runtimeIndex);
+        setSessionPlan((current) => current.map((shot, index) => ({
+          ...shot, status: index < runtime.completed_frames ? "completed" : index === runtimeIndex && !runtime.plan_complete ? "current" : "pending",
+        })));
+        if (!runtime.photoshoot_complete) timer = window.setTimeout(poll, 1000);
+      } catch (reason) {
+        if ((reason as { name?: string }).name !== "AbortError") setError(reason instanceof Error ? reason.message : "Unable to refresh Auto Generation status.");
+      }
+    };
+    void poll();
+    return () => { controller.abort(); window.clearTimeout(timer); };
+  }, [planningMode, ready.session.sessionId, sessionPlanApproved]);
+
   const continuityBody = () => ({
     location: locks.location, wardrobe: locks.wardrobe, lighting: locks.lighting,
     hairstyle: locks.hairstyle, makeup: locks.makeup, camera_style: locks.cameraStyle,
@@ -141,8 +190,118 @@ function ManualWorkspace({
     setBusy(true); setError("");
     try {
       const result = await requestPhotoshootInspiration({ session_id: ready.session.sessionId, creative_mode: mode, creator_guidance: guidance, provider_context: ready.providers.find((item) => item.value === provider)?.label || provider, continuity_locks: continuityBody() });
-      setIdeas(result.ideas); setSelectedIdea(""); setRecommendation(null); setDirectionApproved(false); setPrompt("");
+      setIdeas(result.ideas);
+      setSelectedIdea(result.selected_inspiration || "");
+      setRecommendation(null); setDirectionApproved(false); setPrompt("");
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to generate inspiration ideas."); }
+    finally { setBusy(false); }
+  };
+
+  const changePlanningMode = async (next: PlanningMode) => {
+    setBusy(true); setError("");
+    try {
+      const result = await setPhotoshootPlanningMode({
+        session_id: ready.session.sessionId,
+        planning_mode: next,
+        plan_frame_count: planFrameCount,
+      });
+      setPlanningMode(result.planning_mode);
+      setPlanFrameCount(result.plan_frame_count);
+      setSessionPlan(result.session_plan || []);
+      setSessionPlanApproved(Boolean(result.session_plan_approved));
+      setSessionPlanIndex(0);
+      if (next === "frame_by_frame") {
+        setIdeas([]);
+        setSelectedIdea("");
+        setRecommendation(null);
+        setDirectionApproved(false);
+        setPrompt("");
+      }
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Unable to change planning mode.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const changeFrameCount = async (count: number) => {
+    setPlanFrameCount(count);
+    if (planningMode !== "full_plan") return;
+    try {
+      await setPhotoshootPlanningMode({
+        session_id: ready.session.sessionId,
+        planning_mode: "full_plan",
+        plan_frame_count: count,
+      });
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Unable to update frame count.");
+    }
+  };
+
+  const generateFullPlan = async () => {
+    setBusy(true); setError("");
+    try {
+      const result = await generatePhotoshootSessionPlan({
+        session_id: ready.session.sessionId,
+        creative_mode: mode,
+        creator_guidance: guidance,
+        continuity_locks: continuityBody(),
+        plan_frame_count: planFrameCount,
+      });
+      setPlanningMode("full_plan");
+      setPlanFrameCount(result.plan_frame_count);
+      setSessionPlan(result.session_plan || []);
+      setSessionPlanIndex(result.session_plan_index || 0);
+      setSessionPlanApproved(false);
+      setIdeas([]);
+      setSelectedIdea("");
+      setRecommendation(null);
+      setDirectionApproved(false);
+      setPrompt("");
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Unable to plan the full session.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const approveFullPlan = async () => {
+    setBusy(true); setError("");
+    try {
+      const result = await approvePhotoshootSessionPlan({ session_id: ready.session.sessionId });
+      const plan = result.session_plan || [];
+      setSessionPlan(plan);
+      setSessionPlanIndex(result.session_plan_index || 0);
+      setSessionPlanApproved(true);
+      const runtime = await startPhotoshootAutoRun({ session_id: ready.session.sessionId, auto_approve_enabled: true });
+      setAutoRuntime(runtime);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Unable to approve the session plan.");
+      setBusy(false);
+    }
+  };
+
+  const resumePlanRun = async () => {
+    setBusy(true); setError("");
+    try { setAutoRuntime(await (autoRuntime?.auto_run_state === "READY" ? startPhotoshootAutoRun({ session_id: ready.session.sessionId, auto_approve_enabled: true }) : resumePhotoshootAutoRun({ session_id: ready.session.sessionId }))); }
+    catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to resume Auto Generation."); }
+    finally { setBusy(false); }
+  };
+
+  const stopPlanRun = async () => {
+    setBusy(true); setError("");
+    try {
+      setAutoRuntime(await (autoRuntime?.auto_run_state === "FAILED"
+        ? stopPhotoshootAutoRun({ session_id: ready.session.sessionId })
+        : pausePhotoshootAutoRun({ session_id: ready.session.sessionId })));
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to pause Auto Generation."); }
+    finally { setBusy(false); }
+  };
+
+  const retryPlanRun = async () => {
+    setBusy(true); setError("");
+    try { setAutoRuntime(await retryPhotoshootAutoRun({ session_id: ready.session.sessionId })); }
+    catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to retry this frame."); }
     finally { setBusy(false); }
   };
 
@@ -240,7 +399,9 @@ function ManualWorkspace({
         await refresh();
         setApprovalNotice(true);
         window.setTimeout(() => setApprovalNotice(false), 3200);
-        await askAi();
+        if (!(planningMode === "full_plan" && sessionPlanApproved)) {
+          await askAi();
+        }
       }
       if (kind === "regenerate") {
         await regeneratePhotoshootCandidate(body);
@@ -273,9 +434,16 @@ function ManualWorkspace({
     setBusy(true); setError("");
     try {
       const result = await finishPhotoshoot({ session_id: ready.session.sessionId });
-      setCompletedShots(result.approved_shot_count);
+      setCurationReview(result);
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to finish this Photoshoot."); }
     finally { setBusy(false); }
+  };
+
+  const confirmCuration = async (selected: string[], photoshootDecision: "APPROVED" | "DECLINED") => {
+    setBusy(true); setError("");
+    try {
+      return await confirmPhotoshootCuration({ session_id: ready.session.sessionId, selected_image_ids: selected, photoshoot_decision: photoshootDecision });
+    } finally { setBusy(false); }
   };
 
   const stopSession = async () => {
@@ -289,7 +457,7 @@ function ManualWorkspace({
   };
 
   const latest = ready.timeline.at(-1)?.image || ready.seedImage;
-  if (completedShots !== null) return <div className="photoshoot-workflow"><PhotoshootTimeline items={ready.timeline} /><PhotoshootCompletedPanel approvedShotCount={completedShots} onOpenLibrary={onOpenLibrary} /></div>;
+  if (curationReview) return <div className="photoshoot-workflow"><PhotoshootCurationPanel busy={busy} review={curationReview} onConfirm={confirmCuration} onOpenAssetLibrary={onOpenAssetLibrary} />{error && <div className="photoshoot-state photoshoot-state--error" role="alert">{error}</div>}</div>;
   return (
     <div className="photoshoot-workflow">
       <SeedImageCard seed={ready.seedImage} onReturn={onReturn} />
@@ -304,57 +472,118 @@ function ManualWorkspace({
         providers={ready.providers}
         session={ready.session}
       />
-      <CreativeDirectionPanel
-        disabled={working || Boolean(status.candidate)}
-        busy={busy}
-        guidance={guidance}
-        ideas={ideas}
-        selectedIdea={selectedIdea}
-        recommendation={recommendation}
-        directionApproved={directionApproved}
-        onApprove={() => { void approveRecommendation(); }}
-        onAsk={() => { void askAi(); }}
-        onDifferentIdeas={() => { void askAi(); }}
-        onGuidance={setGuidance}
-        onDevelop={() => { void generateRecommendation(); }}
-        onChooseAnother={() => { void chooseAnother(); }}
-        onSelectIdea={(idea) => { void chooseIdea(idea); }}
-      />
-      <PromptPanel
-        disabled={working || Boolean(status.candidate)}
-        onPrompt={setPrompt}
-        prompt={prompt}
-      />
-      {error && (
-        <div className="photoshoot-state photoshoot-state--error" role="alert">
-          {error}
-        </div>
+      {autoRuntime && sessionPlanApproved && (
+        <PhotoshootAutoGenerationProgress
+          busy={busy}
+          onFinish={() => { void finishSession(); }}
+          onPause={() => { void stopPlanRun(); }}
+          onResume={() => { void resumePlanRun(); }}
+          onRetry={() => { void retryPlanRun(); }}
+          runtime={autoRuntime}
+        />
       )}
-      <GenerationPanel
-        disabled={working || Boolean(status.candidate) || !prompt.trim()}
-        onGenerate={() => {
-          void submit();
-        }}
-        provider={provider}
-        status={request?.status || ""}
-      />
-      {status.candidate && <CandidatePanel
+      <SessionPlanPanel
+        autoRunning={Boolean(autoRuntime?.is_running)}
+        runtime={autoRuntime}
         busy={busy}
-        candidate={status.candidate}
-        current={latest}
-        onApprove={() => {
-          void action("approve");
-        }}
-        onEdit={() => {
-          void action("edit");
-        }}
-        onRegenerate={() => {
-          void action("regenerate");
-        }}
-        onReject={() => {
-          void action("reject");
-        }}
-      />}
+        directionApproved={directionApproved}
+        disabled={working || Boolean(status.candidate)}
+        hasRecommendation={Boolean(recommendation)}
+        onApprovePlan={() => { void approveFullPlan(); }}
+        onFrameCount={(count) => { void changeFrameCount(count); }}
+        onGeneratePlan={() => { void generateFullPlan(); }}
+        onPlanningMode={(next) => { void changePlanningMode(next); }}
+        onResumePlan={() => { void resumePlanRun(); }}
+        planFrameCount={planFrameCount}
+        planningMode={planningMode}
+        sessionPlan={sessionPlan}
+        sessionPlanApproved={sessionPlanApproved}
+        sessionPlanIndex={sessionPlanIndex}
+      />
+      {planningMode === "frame_by_frame" ? (
+        <>
+          <CreativeDirectionPanel
+            disabled={working || Boolean(status.candidate)}
+            busy={busy}
+            creativeMode={mode}
+            guidance={guidance}
+            ideas={ideas}
+            selectedIdea={selectedIdea}
+            recommendation={recommendation}
+            directionApproved={directionApproved}
+            onApprove={() => { void approveRecommendation(); }}
+            onAsk={() => { void askAi(); }}
+            onDifferentIdeas={() => { void askAi(); }}
+            onGuidance={setGuidance}
+            onDevelop={() => { void generateRecommendation(); }}
+            onChooseAnother={() => { void chooseAnother(); }}
+            onSelectIdea={(idea) => { void chooseIdea(idea); }}
+          />
+          <PromptPanel
+            disabled={working || Boolean(status.candidate)}
+            onPrompt={setPrompt}
+            prompt={prompt}
+          />
+          {error && (
+            <div className="photoshoot-state photoshoot-state--error" role="alert">
+              {error}
+            </div>
+          )}
+          <GenerationPanel
+            disabled={working || Boolean(status.candidate) || !prompt.trim()}
+            onGenerate={() => {
+              void submit();
+            }}
+            provider={provider}
+            status={request?.status || ""}
+          />
+          {status.candidate && <CandidatePanel
+            busy={busy}
+            candidate={status.candidate}
+            current={latest}
+            onApprove={() => {
+              void action("approve");
+            }}
+            onEdit={() => {
+              void action("edit");
+            }}
+            onRegenerate={() => {
+              void action("regenerate");
+            }}
+            onReject={() => {
+              void action("reject");
+            }}
+          />}
+        </>
+      ) : (
+        <section className="photoshoot-card photoshoot-creative-director" aria-labelledby="photoshoot-plan-guidance-title">
+          <header>
+            <h2 id="photoshoot-plan-guidance-title">Session Guidance</h2>
+            <span>Optional steering before you approve the plan</span>
+          </header>
+          <label>
+            <span>Guide the plan (Optional)</span>
+            <textarea
+              disabled={working || Boolean(status.candidate) || sessionPlanApproved}
+              onChange={(event) => setGuidance(event.target.value)}
+              placeholder="e.g. start clothed, end topless, keep pink lingerie until later shots..."
+              value={guidance}
+            />
+          </label>
+          {Boolean(autoRuntime?.is_running) && recommendation && (
+            <article className="photoshoot-recommendation">
+              <h3>{recommendation.title || "Generating planned shot"}</h3>
+              <p>{recommendation.creative_direction}</p>
+              {prompt ? <small className="photoshoot-session-plan__hint">Prompt ready · waiting for image</small> : null}
+            </article>
+          )}
+          {error && (
+            <div className="photoshoot-state photoshoot-state--error" role="alert">
+              {error}
+            </div>
+          )}
+        </section>
+      )}
     </div>
   );
 }
@@ -385,7 +614,7 @@ export function PhotoshootPage() {
         </div>
       )}
       <PhotoshootStateGate {...state}>
-        {ready && <ManualWorkspace key={`${ready.session.sessionId}:${ready.seedImage.image_id}`} onOpenLibrary={(message) => navigate("/library/generations", { state: message ? { notification: message } : undefined })} onReturn={() => { void returnToLibrary(); }} ready={ready} refresh={state.refresh} />}
+        {ready && <ManualWorkspace key={`${ready.session.sessionId}:${ready.seedImage.image_id}`} onOpenAssetLibrary={() => navigate("/library/assets")} onOpenLibrary={(message) => navigate("/library/generations", { state: message ? { notification: message } : undefined })} onReturn={() => { void returnToLibrary(); }} ready={ready} refresh={state.refresh} />}
       </PhotoshootStateGate>
     </section>
   );

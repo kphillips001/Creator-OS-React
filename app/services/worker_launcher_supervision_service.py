@@ -8,6 +8,7 @@ import signal
 import subprocess
 import sys
 import time
+import psutil
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -47,6 +48,34 @@ WORKERS = (
                            "app.workers.mass_ppv", "Mass PPV", 30, 30, "mass_ppv.log"),
     WorkerLaunchDefinition("wall", "Wall Worker", "CREATOR_OS_LAUNCH_WALL_WORKER",
                            "app.workers.wall", "Wall Worker", 30, 30, "wall_worker.log"),
+    WorkerLaunchDefinition("nudenet_analysis", "NudeNet Analysis", "CREATOR_OS_LAUNCH_NUDENET_ANALYSIS",
+                           "app.workers.nudenet_analysis", "NudeNet Analysis", 30, 30,
+                           "nudenet_analysis.log"),
+    WorkerLaunchDefinition("analysis_orchestrator", "Analysis Orchestrator", "CREATOR_OS_LAUNCH_ANALYSIS_ORCHESTRATOR",
+                           "app.workers.analysis_orchestrator", "Analysis Orchestrator", 30, 30,
+                           "analysis_orchestrator.log"),
+    WorkerLaunchDefinition("vision_analysis", "Vision Analysis", "CREATOR_OS_LAUNCH_VISION_ANALYSIS",
+                           "app.workers.vision_analysis", "Vision Analysis", 30, 30,
+                           "vision_analysis.log"),
+    WorkerLaunchDefinition("grok_analysis", "Grok Analysis", "CREATOR_OS_LAUNCH_GROK_ANALYSIS",
+                           "app.workers.grok_analysis", "Grok Analysis", 30, 30,
+                           "grok_analysis.log", ("GROK_API_KEY",)),
+    WorkerLaunchDefinition("content_intelligence_merge", "Content Intelligence Merge",
+                           "CREATOR_OS_LAUNCH_CONTENT_INTELLIGENCE_MERGE",
+                           "app.workers.content_intelligence_merge", "Content Intelligence Merge",
+                           30, 30, "content_intelligence_merge.log"),
+    WorkerLaunchDefinition("photoshoot_analysis", "Photoshoot Analysis",
+                           "CREATOR_OS_LAUNCH_PHOTOSHOOT_ANALYSIS",
+                           "app.workers.photoshoot_analysis", "Photoshoot Analysis",
+                           30, 30, "photoshoot_analysis.log"),
+    WorkerLaunchDefinition("photoshoot_auto_run", "Photoshoot Auto Run",
+                           "CREATOR_OS_LAUNCH_PHOTOSHOOT_AUTO_RUN",
+                           "app.workers.photoshoot_auto_run", "Photoshoot Auto Run",
+                           30, 30, "photoshoot_auto_run.log"),
+    WorkerLaunchDefinition("ready_asset_chat_registration", "READY Asset Chat Registration",
+                           "CREATOR_OS_LAUNCH_READY_ASSET_CHAT_REGISTRATION",
+                           "app.workers.ready_asset_chat_registration", "READY Asset Chat Registration",
+                           30, 30, "ready_asset_chat_registration.log"),
 )
 
 
@@ -61,49 +90,73 @@ class ProcessAdapter:
 
     @staticmethod
     def exists(pid: int) -> bool:
-        try:
-            os.kill(pid, 0)
-            return True
-        except (OSError, ProcessLookupError):
+        if int(pid) <= 0:
             return False
+        return psutil.pid_exists(int(pid))
 
     @staticmethod
     def command_line(pid: int) -> str:
-        if os.name != "nt":
-            try: return Path(f"/proc/{pid}/cmdline").read_bytes().replace(b"\0", b" ").decode()
-            except OSError: return ""
-        escaped = str(int(pid))
-        result = subprocess.run(
-            ["powershell.exe", "-NoProfile", "-Command",
-             f"(Get-CimInstance Win32_Process -Filter 'ProcessId = {escaped}').CommandLine"],
-            capture_output=True, text=True, timeout=5, check=False,
-        )
-        return result.stdout.strip()
+        try:
+            return " ".join(psutil.Process(int(pid)).cmdline())
+        except (psutil.NoSuchProcess, psutil.ZombieProcess):
+            return ""
+        except psutil.AccessDenied as error:
+            raise RuntimeError(f"Cannot validate command line ownership for PID {pid}: access denied.") from error
 
     def matches(self, pid: int, definition: WorkerLaunchDefinition) -> bool:
         return self.exists(pid) and definition.module in self.command_line(pid)
 
     def matching(self, definition: WorkerLaunchDefinition) -> list[int]:
-        if os.name != "nt": return []
-        result = subprocess.run(
-            ["powershell.exe", "-NoProfile", "-Command",
-             "Get-CimInstance Win32_Process | Select-Object ProcessId,CommandLine | ConvertTo-Json -Compress"],
-            capture_output=True, text=True, timeout=10, check=False,
-        )
-        if not result.stdout.strip(): return []
-        payload = json.loads(result.stdout)
-        rows = payload if isinstance(payload, list) else [payload]
-        return [int(row["ProcessId"]) for row in rows if definition.module in str(row.get("CommandLine") or "")]
+        matches = []
+        for process in psutil.process_iter(("pid", "cmdline")):
+            try:
+                command = " ".join(process.info.get("cmdline") or ())
+            except (psutil.NoSuchProcess, psutil.ZombieProcess, psutil.AccessDenied):
+                continue
+            if definition.module in command:
+                matches.append(int(process.info["pid"]))
+        return matches
 
     @staticmethod
-    def graceful_stop(pid: int) -> None:
-        if os.name == "nt": os.kill(pid, signal.CTRL_BREAK_EVENT)
-        else: os.kill(pid, signal.SIGTERM)
+    def graceful_stop(pid: int) -> bool:
+        if os.name != "nt":
+            os.kill(pid, signal.SIGTERM)
+            return True
+        # A later launcher invocation is not necessarily attached to the
+        # console that created this process group. GenerateConsoleCtrlEvent
+        # (Python's CTRL_BREAK_EVENT path) then fails with WinError 87. Use
+        # Windows' process-tree shutdown boundary after ownership validation.
+        result = subprocess.run(
+            ["taskkill", "/PID", str(int(pid)), "/T"],
+            capture_output=True, text=True, timeout=10, check=False,
+        )
+        if result.returncode == 0 or not ProcessAdapter.exists(pid):
+            return True
+        detail = (result.stderr or result.stdout or "unknown taskkill error").strip()
+        if "can only be terminated forcefully" in detail.lower():
+            return False
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"Graceful worker process-tree shutdown failed for PID {pid}: "
+                f"command='taskkill /PID {pid} /T', exit={result.returncode}: {detail}"
+            )
+        return True
 
     @staticmethod
     def force_stop(pid: int) -> None:
-        if os.name == "nt": subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"], capture_output=True, check=False)
-        else: os.kill(pid, signal.SIGKILL)
+        if os.name != "nt":
+            os.kill(pid, signal.SIGKILL)
+            return
+        result = subprocess.run(
+            ["taskkill", "/PID", str(int(pid)), "/T", "/F"],
+            capture_output=True, text=True, timeout=10, check=False,
+        )
+        if result.returncode != 0 and ProcessAdapter.exists(pid):
+            detail = (result.stderr or result.stdout or "unknown taskkill error").strip()
+            raise RuntimeError(
+                f"Forced worker process-tree shutdown failed for PID {pid}: "
+                f"command='taskkill /PID {pid} /T /F', exit={result.returncode}: {detail}"
+            )
 
 
 class WorkerLauncherSupervisionService:
@@ -132,7 +185,14 @@ class WorkerLauncherSupervisionService:
         for definition in reversed(WORKERS):
             record = state.get(definition.key) or {}
             if record.get("pid"):
-                results.append(self.stop_worker(definition, int(record["pid"])))
+                pid = int(record["pid"])
+                try:
+                    results.append(self.stop_worker(definition, pid))
+                except Exception as error:
+                    raise RuntimeError(
+                        f"Worker shutdown failed: worker={definition.name!r}, "
+                        f"pid={pid}, operation={type(error).__name__}: {error}"
+                    ) from error
         return tuple(results)
 
     def start_worker(self, definition: WorkerLaunchDefinition) -> dict[str, Any]:
@@ -166,13 +226,28 @@ class WorkerLauncherSupervisionService:
             output.close(); error.close()
 
     def stop_worker(self, definition: WorkerLaunchDefinition, pid: int) -> dict[str, Any]:
+        if not self.processes.exists(pid):
+            return self._record(
+                definition, "stopped",
+                launcher_enabled=_enabled(self.environment.get(definition.environment_switch)),
+                pid=None,
+            )
         if not self.processes.matches(pid, definition):
             return self._record(definition, "shutdown_blocked", launcher_enabled=_enabled(self.environment.get(definition.environment_switch)),
                                 pid=pid, error="PID no longer belongs to the configured Creator_OS worker.")
-        self.processes.graceful_stop(pid)
+        graceful_requested = self.processes.graceful_stop(pid)
+        if graceful_requested is False:
+            self.processes.force_stop(pid)
+            return self._record(
+                definition, "force_stopped",
+                launcher_enabled=_enabled(self.environment.get(definition.environment_switch)),
+                pid=None,
+                error=("Windows required forced console-worker shutdown; "
+                       f"command='taskkill /PID {pid} /T /F'."),
+            )
         deadline = self.now().timestamp() + definition.shutdown_timeout
         while self.now().timestamp() < deadline:
-            if not self.processes.exists(pid) and self._shutdown_recorded(definition, pid):
+            if not self.processes.exists(pid):
                 return self._record(definition, "stopped", launcher_enabled=_enabled(self.environment.get(definition.environment_switch)), pid=None)
             self.sleep(0.25)
         self.processes.force_stop(pid)

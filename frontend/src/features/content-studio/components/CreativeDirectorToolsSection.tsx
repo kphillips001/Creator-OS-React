@@ -1,34 +1,34 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import {
   createLuckyTags,
   enhanceCreativeTags,
   surpriseCreativeTags,
 } from "../../../infrastructure/api/contentStudioApi";
-import {
-  PROMPT_SOURCES,
-  type CreativeToolInputs,
-  type PromptSource,
-} from "../types/contentStudioCreativeTools";
+import type { CreativeToolInputs, PromptSource } from "../types/contentStudioCreativeTools";
 
 type CreativeDirectorToolsSectionProps = {
   disabled: boolean;
+  ideaEnhancement: { id: string; text: string } | null;
+  onIdeaEnhancementComplete: () => void;
   onInputsChange: (inputs: CreativeToolInputs) => void;
+  onPremiumEnhanced: (originalTags: string, enhancedTags: string) => Promise<void>;
   onPromptSourceChange: (source: PromptSource) => void;
+  planner: ReactNode;
   promptCount: number;
-  promptSource: PromptSource;
-  promptWorkshopHasValue: boolean;
 };
 
 type ActionName = "premiumLucky" | "premiumEnhance" | "surprise" | "explicitLucky" | "explicitEnhance";
 
 export function CreativeDirectorToolsSection({
   disabled,
+  ideaEnhancement,
+  onIdeaEnhancementComplete,
   onInputsChange,
+  onPremiumEnhanced,
   onPromptSourceChange,
+  planner,
   promptCount,
-  promptSource,
-  promptWorkshopHasValue,
 }: CreativeDirectorToolsSectionProps) {
   const [creativeTags, setCreativeTags] = useState("");
   const [explicitTags, setExplicitTags] = useState("");
@@ -37,6 +37,23 @@ export function CreativeDirectorToolsSection({
   const [enhancedExplicitTags, setEnhancedExplicitTags] = useState("");
   const [pendingAction, setPendingAction] = useState<ActionName | null>(null);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!ideaEnhancement) return;
+    let active = true;
+    setError("");
+    enhanceCreativeTags(ideaEnhancement.text, false)
+      .then((tags) => {
+        if (!active) return;
+        setEnhancedTags(tags);
+        onPromptSourceChange("Enhanced Tags");
+      })
+      .catch((reason: unknown) => {
+        if (active) setError(reason instanceof Error ? reason.message : "Creative tag action failed");
+      })
+      .finally(() => { if (active) onIdeaEnhancementComplete(); });
+    return () => { active = false; };
+  }, [ideaEnhancement, onIdeaEnhancementComplete, onPromptSourceChange]);
 
   useEffect(() => {
     onInputsChange({
@@ -78,12 +95,14 @@ export function CreativeDirectorToolsSection({
     if (tags === null) return;
     setEnhancedTags(tags);
     onPromptSourceChange("Enhanced Tags");
+    await onPremiumEnhanced(creativeTags, tags);
   };
 
   const surprisePremium = async () => {
     const tags = await runAction("surprise", () => surpriseCreativeTags(creativeTags));
     if (tags === null) return;
     setSurpriseTags(tags);
+    onInputsChange({ creativeTags, enhancedExplicitTags, enhancedTags, explicitTags, surpriseTags: tags });
     onPromptSourceChange("Surprise Me Tags");
   };
 
@@ -95,42 +114,38 @@ export function CreativeDirectorToolsSection({
   };
 
   const busy = pendingAction !== null;
-  const selectedSourceHasValue = {
-    "Original Tags": Boolean(creativeTags.trim()),
-    "Enhanced Tags": Boolean(enhancedTags.trim()),
-    "Surprise Me Tags": Boolean(surpriseTags.trim()),
-    "Enhanced Explicit Tags": Boolean(enhancedExplicitTags.trim()),
-    "Prompt Workshop": promptWorkshopHasValue,
-  }[promptSource];
-
   return (
     <section
       aria-disabled={disabled || undefined}
-      aria-label="Creative Director Tools"
+      aria-label="Creative Direction Workspace"
       className={`workflow-section creative-director-tools${disabled ? " workflow-section--disabled" : ""}`}
     >
-      <h2>Creative Director Tools</h2>
+      <h2>Creative Direction</h2>
       <p className="creative-director-tools__caption">
         Premium prompt helpers, enhanced tags, Surprise Me, and explicit-ready planning.
       </p>
 
       <div className="creative-director-tools__group">
         <label>
-          <span>Premium Creative Tags</span>
+          <span>Creative Direction</span>
           <textarea
             disabled={disabled}
-            onChange={(event) => setCreativeTags(event.target.value)}
+            onChange={(event) => {
+              setCreativeTags(event.target.value);
+              onPromptSourceChange("Original Tags");
+            }}
             placeholder="Enter premium scene, wardrobe, setting, mood, continuity, and framing direction."
             rows={5}
             value={creativeTags}
           />
         </label>
+        {planner}
         <div className="creative-director-tools__actions">
           <button disabled={disabled || busy} onClick={premiumLucky} type="button">
             🎲 I Feel Lucky
           </button>
           <button disabled={disabled || busy || !creativeTags.trim()} onClick={enhancePremium} type="button">
-            ✨ Enhance Premium Tags
+            ✨ Enhance &amp; Build Prompts
           </button>
           <button disabled={disabled || busy || !creativeTags.trim()} onClick={surprisePremium} type="button">
             🎭 Surprise Me
@@ -141,11 +156,17 @@ export function CreativeDirectorToolsSection({
       <div className="creative-director-tools__derived-grid">
         <label>
           <span>Enhanced Premium Tags</span>
-          <textarea disabled={disabled} onChange={(event) => setEnhancedTags(event.target.value)} rows={4} value={enhancedTags} />
+          <textarea disabled={disabled} onChange={(event) => {
+            setEnhancedTags(event.target.value);
+            onPromptSourceChange("Enhanced Tags");
+          }} rows={4} value={enhancedTags} />
         </label>
         <label>
           <span>Surprise Me Tags</span>
-          <textarea disabled={disabled} onChange={(event) => setSurpriseTags(event.target.value)} rows={4} value={surpriseTags} />
+          <textarea disabled={disabled} onChange={(event) => {
+            setSurpriseTags(event.target.value);
+            onPromptSourceChange("Surprise Me Tags");
+          }} rows={4} value={surpriseTags} />
         </label>
       </div>
 
@@ -172,35 +193,15 @@ export function CreativeDirectorToolsSection({
           <span>Enhanced Explicit Tags</span>
           <textarea
             disabled={disabled}
-            onChange={(event) => setEnhancedExplicitTags(event.target.value)}
+            onChange={(event) => {
+              setEnhancedExplicitTags(event.target.value);
+              onPromptSourceChange("Enhanced Explicit Tags");
+            }}
             rows={4}
             value={enhancedExplicitTags}
           />
         </label>
       </div>
-
-      <fieldset className="creative-director-tools__sources">
-        <legend>Prompt Source</legend>
-        <div className="creative-director-tools__source-options">
-          {PROMPT_SOURCES.map((source) => (
-            <label key={source.value}>
-              <input
-                checked={promptSource === source.value}
-                disabled={disabled}
-                name="premium-studio-prompt-source"
-                onChange={() => onPromptSourceChange(source.value)}
-                type="radio"
-                value={source.value}
-              />
-              <span>{source.label}</span>
-            </label>
-          ))}
-        </div>
-      </fieldset>
-
-      <p className={`creative-director-tools__source-status${selectedSourceHasValue ? "" : " creative-director-tools__source-status--warning"}`}>
-        {selectedSourceHasValue ? `Using ${promptSource}.` : "Selected premium prompt source is empty."}
-      </p>
 
       {pendingAction && <p className="creative-director-tools__status">Working…</p>}
       {error && <p className="creative-director-tools__status creative-director-tools__status--error" role="alert">{error}</p>}

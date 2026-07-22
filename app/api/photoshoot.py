@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.api.content_studio import _current_account_id
 from app.repositories.creator_profile_repository import get_active_creator_profile
@@ -12,6 +12,8 @@ from app.services.generation_library_service import GenerationLibraryService
 from app.services.photoshoot_queue_service import PhotoshootQueueService
 from app.services.photoshoot_manual_service import PhotoshootManualService
 from app.services.photoshoot_creative_director_service import PhotoshootCreativeDirectorWorkflowService
+from app.services.photoshoot_auto_run_service import PhotoshootAutoRunService
+from app.services.photoshoot_curation_service import PhotoshootCurationService
 
 
 router = APIRouter(prefix="/api/v1/photoshoot", tags=["photoshoot"])
@@ -121,6 +123,15 @@ class CreativeDirectorSessionRequest(BaseModel):
     session_id: str
 
 
+class AutoRunStartRequest(CreativeDirectorSessionRequest):
+    auto_approve_enabled: bool = True
+
+
+class PhotoshootCurationRequest(CreativeDirectorSessionRequest):
+    selected_image_ids: list[str] = Field(default_factory=list)
+    photoshoot_decision: str
+
+
 class CreativeDirectorInputRequest(CreativeDirectorSessionRequest):
     creative_mode: str
     creator_guidance: str = ""
@@ -137,6 +148,15 @@ class InspirationSelectionRequest(CreativeDirectorSessionRequest):
 
 class CreatorGuidanceRequest(CreativeDirectorSessionRequest):
     creator_guidance: str = ""
+
+
+class PlanningModeRequest(CreativeDirectorSessionRequest):
+    planning_mode: str = "frame_by_frame"
+    plan_frame_count: int = 8
+
+
+class SessionPlanRequest(CreativeDirectorInputRequest):
+    plan_frame_count: int = 8
 
 
 def _creator_profile_id_required() -> int:
@@ -253,6 +273,119 @@ def creative_director_choose_another(request: CreativeDirectorSessionRequest):
         _creative_director_error(error)
 
 
+@router.post("/creative-director/planning-mode")
+def creative_director_planning_mode(request: PlanningModeRequest):
+    try:
+        return PhotoshootCreativeDirectorWorkflowService().set_planning_mode(
+            creator_profile_id=_creator_profile_id_required(),
+            session_id=request.session_id,
+            planning_mode=request.planning_mode,
+            plan_frame_count=request.plan_frame_count,
+        )
+    except Exception as error:
+        _creative_director_error(error)
+
+
+@router.post("/creative-director/session-plan")
+def creative_director_session_plan(request: SessionPlanRequest):
+    try:
+        return PhotoshootCreativeDirectorWorkflowService().generate_session_plan(
+            creator_profile_id=_creator_profile_id_required(),
+            session_id=request.session_id,
+            creative_mode=request.creative_mode,
+            creator_guidance=request.creator_guidance,
+            continuity_locks=request.continuity_locks.model_dump(),
+            plan_frame_count=request.plan_frame_count,
+        )
+    except Exception as error:
+        _creative_director_error(error)
+
+
+@router.post("/creative-director/session-plan/approve")
+def creative_director_approve_session_plan(request: CreativeDirectorSessionRequest):
+    try:
+        return PhotoshootCreativeDirectorWorkflowService().approve_session_plan(
+            creator_profile_id=_creator_profile_id_required(), session_id=request.session_id,
+        )
+    except Exception as error:
+        _creative_director_error(error)
+
+
+@router.get("/auto-run/runtime")
+def photoshoot_auto_run_runtime(session_id: str):
+    try:
+        return PhotoshootAutoRunService().runtime(
+            creator_profile_id=_creator_profile_id_required(), session_id=session_id)
+    except Exception as error:
+        _manual_error(error)
+
+
+@router.post("/auto-run/start")
+def photoshoot_auto_run_start(request: AutoRunStartRequest):
+    try:
+        return PhotoshootAutoRunService().start(
+            creator_profile_id=_creator_profile_id_required(), session_id=request.session_id,
+            auto_approve_enabled=request.auto_approve_enabled)
+    except Exception as error:
+        _manual_error(error)
+
+
+@router.post("/auto-run/pause")
+def photoshoot_auto_run_pause(request: CreativeDirectorSessionRequest):
+    try:
+        return PhotoshootAutoRunService().pause(
+            creator_profile_id=_creator_profile_id_required(), session_id=request.session_id)
+    except Exception as error:
+        _manual_error(error)
+
+
+@router.post("/auto-run/resume")
+def photoshoot_auto_run_resume(request: CreativeDirectorSessionRequest):
+    try:
+        return PhotoshootAutoRunService().resume(
+            creator_profile_id=_creator_profile_id_required(), session_id=request.session_id)
+    except Exception as error:
+        _manual_error(error)
+
+
+@router.post("/auto-run/stop")
+def photoshoot_auto_run_stop(request: CreativeDirectorSessionRequest):
+    try:
+        return PhotoshootAutoRunService().stop(
+            creator_profile_id=_creator_profile_id_required(), session_id=request.session_id)
+    except Exception as error:
+        _manual_error(error)
+
+
+@router.post("/auto-run/retry")
+def photoshoot_auto_run_retry(request: CreativeDirectorSessionRequest):
+    try:
+        return PhotoshootAutoRunService().retry(
+            creator_profile_id=_creator_profile_id_required(), session_id=request.session_id)
+    except Exception as error:
+        _manual_error(error)
+
+
+@router.post("/creative-director/session-plan/develop")
+def creative_director_develop_planned_shot(request: CreativeDirectorSessionRequest):
+    try:
+        return PhotoshootCreativeDirectorWorkflowService().develop_planned_shot(
+            creator_profile_id=_creator_profile_id_required(), session_id=request.session_id,
+        )
+    except Exception as error:
+        _creative_director_error(error)
+
+
+@router.post("/creative-director/session-plan/advance")
+def creative_director_advance_session_plan(request: CreativeDirectorSessionRequest):
+    try:
+        return PhotoshootCreativeDirectorWorkflowService().advance_session_plan(
+            creator_profile_id=_creator_profile_id_required(), session_id=request.session_id,
+        )
+    except Exception as error:
+        _creative_director_error(error)
+
+
 @router.post("/generate", response_model=ManualGenerateResponse, status_code=202)
 def generate_manual_photoshoot(request: ManualGenerateRequest, background_tasks: BackgroundTasks):
     service = PhotoshootManualService()
@@ -349,17 +482,30 @@ def reject_manual_candidate(request: CandidateActionRequest):
 @router.post("/finish")
 def finish_photoshoot(request: CreativeDirectorSessionRequest):
     try:
-        service = PhotoshootManualService()
-        session = service.finish_session(
-            creator_profile_id=_creator_profile_id_required(), session_id=request.session_id,
-        )
-        approved_count = len(tuple(
-            item for item in service.queue.requests_for_session(session.session_id) if item.status == "approved"
-        ))
+        return PhotoshootCurationService().review(
+            creator_profile_id=_creator_profile_id_required(), session_id=request.session_id)
     except Exception as error:
         _manual_error(error)
-    return {"success": True, "session_id": session.session_id, "status": session.status,
-            "approved_shot_count": approved_count, "gallery_ready": bool(dict(session.creative_continuity or {}).get("gallery_ready"))}
+
+
+@router.get("/curation")
+def photoshoot_curation_review(session_id: str):
+    try:
+        return PhotoshootCurationService().review(
+            creator_profile_id=_creator_profile_id_required(), session_id=session_id)
+    except Exception as error:
+        _manual_error(error)
+
+
+@router.post("/curation/confirm")
+def photoshoot_curation_confirm(request: PhotoshootCurationRequest):
+    try:
+        return PhotoshootCurationService().confirm(
+            creator_profile_id=_creator_profile_id_required(), session_id=request.session_id,
+            selected_image_ids=request.selected_image_ids,
+            photoshoot_decision=request.photoshoot_decision)
+    except Exception as error:
+        _manual_error(error)
 
 
 @router.post("/stop-and-return-seed", response_model=PhotoshootReturnResponse)

@@ -27,6 +27,7 @@ from app.models.generation_engine import (
 )
 from app.providers.generation.provider_registry import ProviderRegistry, create_default_registry
 from app.services.reference_library_service import ReferenceLibraryService
+from app.services.hosted_asset_reference_service import HostedAssetReferenceService
 
 
 class GenerationEngineService:
@@ -41,9 +42,11 @@ class GenerationEngineService:
         reference_library_service: ReferenceLibraryService | None = None,
         provider_registry: ProviderRegistry | None = None,
         providers: Mapping[str, Any] | None = None,
+        hosted_reference_service: HostedAssetReferenceService | None = None,
     ):
         self.storage_dir = Path(storage_dir or self.DEFAULT_STORAGE_DIR)
         self.reference_library = reference_library_service or ReferenceLibraryService()
+        self.hosted_references = hosted_reference_service
         if provider_registry is not None:
             self.provider_registry = provider_registry
         elif providers is not None:
@@ -67,7 +70,7 @@ class GenerationEngineService:
         metadata: Mapping[str, Any] | None = None,
     ) -> GenerationRequest:
         creator_profile_id = int((creator_profile or {}).get("id") or prompt_plan.creator_profile_id)
-        active_reference = self.reference_library.get_active_reference(
+        active_reference = self.reference_library.get_active_canonical_reference(
             creator_profile_id=creator_profile_id,
         )
         reference_asset_id = (
@@ -82,6 +85,14 @@ class GenerationEngineService:
         )
         reference_metadata = dict(active_reference.metadata or {}) if active_reference else {}
         provider_reference_url = self._provider_reference_url_from_metadata(reference_metadata)
+        if (
+            not provider_reference_url and active_reference and reference_asset_id
+            and reference_asset_path and str(provider_id) == "seedream_5_0_pro"
+        ):
+            resolver = self.hosted_references or HostedAssetReferenceService()
+            provider_reference_url = resolver.cached_url(
+                asset_id=int(reference_asset_id), source_path=str(reference_asset_path), host_name="imgbb",
+            )
         return GenerationRequest(
             request_id=new_generation_id("generation_request"),
             creator_profile_id=creator_profile_id,
@@ -277,7 +288,11 @@ class GenerationEngineService:
         except Exception as exc:  # pragma: no cover - defensive adapter boundary
             return self.fail_job(
                 job_id,
-                GenerationFailure(reason=str(exc), retryable=True, provider_error=exc.__class__.__name__),
+                GenerationFailure(
+                    reason=str(exc), retryable=bool(getattr(exc, "retryable", True)),
+                    provider_error=exc.__class__.__name__, stage=getattr(exc, "stage", None),
+                    may_have_been_accepted=bool(getattr(exc, "may_have_been_accepted", False)),
+                ),
             )
 
         duration = perf_counter() - started
@@ -295,11 +310,19 @@ class GenerationEngineService:
             for item in dict(result.execution_metadata or {}).get("failures", ())
             if isinstance(item, Mapping)
         )
+        provider_failures = tuple(
+            item for item in dict(result.execution_metadata or {}).get("failures", ())
+            if isinstance(item, Mapping)
+        )
+        primary_failure = provider_failures[0] if provider_failures else {}
         return self.fail_job(
             job_id,
             GenerationFailure(
                 reason=result.failure_reason or "Generation failed. No requested images completed.",
                 retryable=retryable_failure,
+                provider_error=primary_failure.get("provider_error"),
+                stage=primary_failure.get("stage"),
+                may_have_been_accepted=bool(primary_failure.get("may_have_been_accepted", False)),
             ),
         )
 
@@ -455,6 +478,8 @@ class GenerationEngineService:
             reason=str(data.get("reason") or ""),
             retryable=bool(data.get("retryable", True)),
             provider_error=data.get("provider_error"),
+            stage=data.get("stage"),
+            may_have_been_accepted=bool(data.get("may_have_been_accepted", False)),
             failed_at=data.get("failed_at") or "",
         )
 

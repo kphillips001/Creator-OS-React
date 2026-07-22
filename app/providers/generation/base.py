@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import base64
 import hashlib
+import logging
 import os
 import re
 import time
@@ -22,10 +22,29 @@ from app.models.generation_engine import (
     new_generation_id,
 )
 from app.services.wavespeed_premium_render_locks import enforce_premium_render_body_lock
+from app.services.hosted_asset_reference_service import HostedAssetReferenceService
+
+
+TRANSPORT_LOGGER = logging.getLogger("creator_os.transport")
 
 
 class GenerationProviderError(RuntimeError):
     """Raised when a provider cannot submit, poll, or parse a request."""
+
+
+class WaveSpeedSubmissionAmbiguousError(GenerationProviderError):
+    stage = "wavespeed_submission"
+    retryable = True
+    may_have_been_accepted = True
+
+
+class SafeTransportError(GenerationProviderError):
+    retryable = True
+    may_have_been_accepted = False
+
+    def __init__(self, message: str, *, stage: str):
+        super().__init__(message)
+        self.stage = stage
 
 
 @dataclass(frozen=True)
@@ -203,11 +222,19 @@ Scene families available from Wavespeed include lake, beach, boat, dock, pool, p
         http_client: HttpClient | None = None,
         poll_interval_seconds: float = 3.0,
         max_poll_attempts: int = 40,
+        hosted_reference_service=None,
+        sleep=time.sleep,
     ):
         self.api_key = api_key
         self.http_client = http_client or requests
         self.poll_interval_seconds = poll_interval_seconds
         self.max_poll_attempts = max(1, int(max_poll_attempts or 1))
+        self.sleep = sleep
+        self.hosted_references = hosted_reference_service or HostedAssetReferenceService(
+            http_client=self.http_client, sleep=sleep,
+        )
+        self.transport_timeout = max(1.0, float(os.getenv("WAVESPEED_TRANSPORT_TIMEOUT_SECONDS", "120")))
+        self.transport_retry_delays = HostedAssetReferenceService._retry_delays()
 
     def metadata(self) -> ProviderMetadata:
         return ProviderMetadata(
@@ -275,9 +302,10 @@ Scene families available from Wavespeed include lake, beach, boat, dock, pool, p
                 failures.append(
                     {
                         "index": index + 1,
-                        "stage": "submit",
+                        "stage": getattr(exc, "stage", "submit"),
                         "reason": str(exc),
                         "provider_error": exc.__class__.__name__,
+                        "may_have_been_accepted": bool(getattr(exc, "may_have_been_accepted", False)),
                     }
                 )
                 if progress_callback:
@@ -425,12 +453,19 @@ Scene families available from Wavespeed include lake, beach, boat, dock, pool, p
         )
 
     def submit_generation(self, request: GenerationRequest) -> ProviderSubmission:
-        response = self.http_client.post(
-            self.endpoint,
-            headers=self._headers(content_type=True),
-            json=self.build_payload(request),
-            timeout=120,
-        )
+        started = time.perf_counter()
+        try:
+            response = self.http_client.post(
+                self.endpoint, headers=self._headers(content_type=True), json=self.build_payload(request),
+                timeout=self.transport_timeout,
+            )
+        except Exception as exc:
+            self._transport_log("wavespeed_submission", self.endpoint, request, 1, started, "ambiguous", error=exc, retry=False)
+            raise WaveSpeedSubmissionAmbiguousError(
+                "The provider connection closed during submission. Creator_OS could not safely confirm whether "
+                "the job was accepted. Retry only after checking provider history."
+            ) from exc
+        self._transport_log("wavespeed_submission", self.endpoint, request, 1, started, "response", status=response.status_code)
         self._raise_for_status(response, "WaveSpeed submit failed")
         data = response.json()
         provider_request_id = (
@@ -454,7 +489,7 @@ Scene families available from Wavespeed include lake, beach, boat, dock, pool, p
                 return result
             last_result = result
             if attempt < self.max_poll_attempts - 1:
-                time.sleep(self.poll_interval_seconds)
+                self.sleep(self.poll_interval_seconds)
         return last_result or ProviderPollResult(
             provider_request_id=submission.provider_request_id,
             status=GenerationStatus.FAILED.value,
@@ -464,10 +499,9 @@ Scene families available from Wavespeed include lake, beach, boat, dock, pool, p
 
     def poll_status_once(self, submission: ProviderSubmission) -> ProviderPollResult:
         result_url = self.result_url_template.format(request_id=submission.provider_request_id)
-        response = self.http_client.get(
-            result_url,
-            headers=self._headers(),
-            timeout=120,
+        response = self._safe_request(
+            "get", result_url, stage="wavespeed_poll", asset_id=None,
+            request_id=submission.provider_request_id, headers=self._headers(), timeout=self.transport_timeout,
         )
         self._raise_for_status(response, "WaveSpeed result poll failed")
         data = response.json()
@@ -709,7 +743,18 @@ Scene families available from Wavespeed include lake, beach, boat, dock, pool, p
                 ordered.append(reference)
         if len(ordered) < 2:
             return [self._provider_reference_image(request)]
-        return [self._provider_reference_value(reference) for reference in ordered[:self.capabilities.max_reference_images]]
+        values = []
+        for index, reference in enumerate(ordered[:self.capabilities.max_reference_images]):
+            if index == 0 and not self._is_remote_url(reference) and request.reference_asset_id:
+                values.append(self.hosted_references.resolve(
+                    asset_id=int(request.reference_asset_id), source_path=reference,
+                    host_name="imgbb", uploader=lambda path: self._upload_reference_image(
+                        path, asset_id=int(request.reference_asset_id), request_id=request.request_id,
+                    ),
+                ))
+            else:
+                values.append(self._provider_reference_value(reference))
+        return values
 
     def _provider_reference_value(self, reference: str) -> str:
         if self._is_remote_url(reference):
@@ -733,24 +778,132 @@ Scene families available from Wavespeed include lake, beach, boat, dock, pool, p
     def _is_remote_url(value: str) -> bool:
         return urlparse(value).scheme in {"http", "https"}
 
-    def _upload_reference_image(self, path: Path) -> str:
+    def _upload_reference_image(self, path: Path, *, asset_id: int | None = None,
+                                request_id: str | None = None) -> str:
         api_key = os.getenv(self.image_host_api_key_env)
         if not api_key:
             raise GenerationProviderError(
                 f"{self.provider_id} needs a public reference image URL. "
                 f"Set {self.image_host_api_key_env} to upload local Creator OS reference assets."
             )
-        response = self.http_client.post(
-            "https://api.imgbb.com/1/upload",
-            data={"key": api_key, "image": base64.b64encode(path.read_bytes())},
-            timeout=120,
+        # Prefer a compressed JPEG for ImgBB — large local PNGs often fail with HTTP 400 / code 111.
+        payloads = self._reference_upload_payloads(path)
+        last_error: Exception | None = None
+        for index, payload in enumerate(payloads):
+            response = self._safe_request(
+                "post", "https://api.imgbb.com/1/upload", stage="canonical_reference_upload",
+                asset_id=asset_id, request_id=request_id or path.stem,
+                params={"key": api_key},
+                files={"image": (f"{path.stem}.jpg", payload, "image/jpeg")},
+                data={"name": path.stem},
+                timeout=self.transport_timeout,
+            )
+            try:
+                self._raise_for_status(response, "Reference image upload failed")
+                data = response.json()
+                image_url = self._extract_hosted_image_url(data)
+                if not image_url:
+                    raise GenerationProviderError(
+                        f"No hosted reference URL returned from image host. Response: {data}"
+                    )
+                return image_url
+            except GenerationProviderError as error:
+                last_error = error
+                # Retry with a smaller payload when ImgBB rejects the first attempt.
+                if index + 1 < len(payloads):
+                    continue
+                raise GenerationProviderError(
+                    f"Reference image upload failed after {len(payloads)} attempt(s) "
+                    f"({path.name}, {len(payload)} bytes). {error}"
+                ) from error
+        if last_error is not None:
+            raise last_error
+        raise GenerationProviderError(f"Reference image upload failed for {path}.")
+
+    def _safe_request(self, method: str, url: str, *, stage: str, asset_id, request_id: str, **kwargs):
+        attempts = len(self.transport_retry_delays) + 1
+        for attempt in range(1, attempts + 1):
+            started = time.perf_counter()
+            try:
+                response = getattr(self.http_client, method)(url, **kwargs)
+                status = int(response.status_code)
+                retryable = HostedAssetReferenceService._retryable_status(status)
+                if not retryable or attempt >= attempts:
+                    self._transport_log(stage, url, None, attempt, started, "response", status=status,
+                                        asset_id=asset_id, request_id=request_id, retry=False)
+                    return response
+                error = GenerationProviderError(f"HTTP {status}")
+            except Exception as exc:
+                if not HostedAssetReferenceService._retryable_exception(exc):
+                    self._transport_log(stage, url, None, attempt, started, "failed", error=exc,
+                                        asset_id=asset_id, request_id=request_id, retry=False)
+                    raise
+                error = exc
+                if attempt >= attempts:
+                    self._transport_log(stage, url, None, attempt, started, "failed", error=exc,
+                                        asset_id=asset_id, request_id=request_id, retry=False)
+                    message = (
+                        "WaveSpeed status check was interrupted after 3 attempts. Retry this frame."
+                        if stage == "wavespeed_poll"
+                        else "Could not host the canonical reference after 3 attempts. Retry this frame."
+                    )
+                    raise SafeTransportError(message, stage=stage) from exc
+            self._transport_log(stage, url, None, attempt, started, "retry", error=error,
+                                asset_id=asset_id, request_id=request_id, retry=True)
+            self.sleep(self.transport_retry_delays[attempt - 1])
+        raise AssertionError("unreachable")
+
+    @staticmethod
+    def _transport_log(stage, url, request, attempt, started, outcome, *, status=None, error=None,
+                       asset_id=None, request_id=None, retry=False):
+        TRANSPORT_LOGGER.info(
+            "transport stage=%s host=%s asset_id=%s request_id=%s attempt=%s elapsed_ms=%s "
+            "outcome=%s http_status=%s error_code=%s retry=%s",
+            stage, urlparse(url).netloc, asset_id or getattr(request, "reference_asset_id", None),
+            request_id or getattr(request, "request_id", None), attempt,
+            round((time.perf_counter() - started) * 1000, 2), outcome, status,
+            error.__class__.__name__ if error else None, retry,
         )
-        self._raise_for_status(response, "Reference image upload failed")
-        data = response.json()
-        image_url = self._extract_hosted_image_url(data)
-        if not image_url:
-            raise GenerationProviderError(f"No hosted reference URL returned from image host. Response: {data}")
-        return image_url
+
+    @classmethod
+    def _reference_upload_payloads(cls, path: Path) -> tuple[bytes, ...]:
+        """Build one or more ImgBB-safe payloads, largest acceptable first."""
+        raw = path.read_bytes()
+        if not raw:
+            raise GenerationProviderError(f"Reference image file is empty: {path}")
+        compressed = cls._compress_reference_image_bytes(raw, max_edge=2048, quality=90)
+        smaller = cls._compress_reference_image_bytes(raw, max_edge=1536, quality=82)
+        tiniest = cls._compress_reference_image_bytes(raw, max_edge=1280, quality=75)
+        ordered: list[bytes] = []
+        # Prefer compressed JPEGs for reliability; keep original only when already small.
+        for candidate in (compressed, smaller, tiniest, raw if len(raw) <= 4 * 1024 * 1024 else b""):
+            if not candidate:
+                continue
+            if candidate not in ordered:
+                ordered.append(candidate)
+        return tuple(ordered) or (raw,)
+
+    @staticmethod
+    def _compress_reference_image_bytes(raw: bytes, *, max_edge: int, quality: int) -> bytes:
+        try:
+            from io import BytesIO
+
+            from PIL import Image
+        except Exception:
+            return b""
+        try:
+            with Image.open(BytesIO(raw)) as image:
+                image.load()
+                if image.mode not in {"RGB", "L"}:
+                    image = image.convert("RGB")
+                elif image.mode == "L":
+                    image = image.convert("RGB")
+                image.thumbnail((max(256, int(max_edge)), max(256, int(max_edge))), Image.Resampling.LANCZOS)
+                buffer = BytesIO()
+                image.save(buffer, format="JPEG", quality=max(60, min(95, int(quality))), optimize=True)
+                return buffer.getvalue()
+        except Exception:
+            return b""
 
     @staticmethod
     def _extract_hosted_image_url(data: Mapping[str, Any]) -> str | None:

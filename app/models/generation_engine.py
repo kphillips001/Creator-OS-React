@@ -61,6 +61,8 @@ class GenerationFailure:
     reason: str
     retryable: bool = True
     provider_error: str | None = None
+    stage: str | None = None
+    may_have_been_accepted: bool = False
     failed_at: str = field(default_factory=utc_now)
 
 

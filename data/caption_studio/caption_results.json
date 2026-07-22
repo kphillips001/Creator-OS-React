@@ -1,5 +1,74 @@
 [
   {
+    "caption_result_id": "caption_result_0e4d2fe51fb348aaa6ef9c9698501fab",
+    "caption_request_id": "caption_request_b1ed80d8438043a18db2c4ddbf126e08",
+    "session_id": "caption_session_1c2dfd56df9b46448cc1cf7febe23fb7",
+    "platform": "telegram",
+    "variations": [
+      "Caught me daydreaming by the water \ud83c\udf0a this soft ocean breeze feels like pure happiness with you \u2600\ufe0f",
+      "Sun on my skin and this quiet moment on the pier \ud83d\udc9b wishing you were right here beside me",
+      "Something about golden light and the sea always makes me smile softer \u2728 for you",
+      "Leaning here with the waves behind me, feeling warm and a little dreamy \ud83d\ude0a\ud83c\udf0a",
+      "This easy boardwalk vibe has me thinking about slow afternoons just like this \ud83e\udd0d",
+      "Tied this tee up just right so you notice \ud83d\ude0c the ocean breeze is doing the rest \ud83c\udf0a",
+      "Caught me leaning like this on purpose \ud83d\ude0f these little shorts barely cover a thing",
+      "Boardwalk views are nice\u2026 but I think you\u2019re looking at something else \ud83d\udc40\ud83d\udd25",
+      "Knotted tight and feeling playful out here \ud83e\udd0d come closer and I\u2019ll show you more",
+      "Sun-kissed and a little too cheeky in these denim shorts \ud83d\ude08 you like the angle?"
+    ],
+    "selected_text": "Caught me leaning like this on purpose \ud83d\ude0f these little shorts barely cover a thing",
+    "formatter_metadata": {
+      "provider_neutral": true,
+      "formatter": "CaptionStudioService",
+      "workflow": "telegram_publish",
+      "vision_primary": true,
+      "vision_provider": "grok",
+      "vision": {
+        "location": "wooden boardwalk/pier overlooking the ocean",
+        "wardrobe": "white oversized t-shirt knotted tightly under the bust revealing midriff, micro-length frayed denim shorts",
+        "expression": "soft teasing smile with direct warm eye contact",
+        "body_language": "leaning casually on wooden railing, torso twisted toward camera in three-quarter view, chest-forward posture, hips angled",
+        "lighting": "bright natural daylight with soft highlights and gentle shadows",
+        "mood": "playful, intimate, confident, sun-kissed and relaxed",
+        "environment": "coastal pier with ocean horizon, wooden railings and planks, clear sky",
+        "activity": "posing while leaning against the railing"
+      },
+      "themes": [
+        {
+          "theme": "\ud83d\udc9b Romantic",
+          "persona": "romantic",
+          "captions": [
+            "Caught me daydreaming by the water \ud83c\udf0a this soft ocean breeze feels like pure happiness with you \u2600\ufe0f",
+            "Sun on my skin and this quiet moment on the pier \ud83d\udc9b wishing you were right here beside me",
+            "Something about golden light and the sea always makes me smile softer \u2728 for you",
+            "Leaning here with the waves behind me, feeling warm and a little dreamy \ud83d\ude0a\ud83c\udf0a",
+            "This easy boardwalk vibe has me thinking about slow afternoons just like this \ud83e\udd0d"
+          ]
+        },
+        {
+          "theme": "\ud83d\ude08 Teasing / Naughty",
+          "persona": "teasing_naughty",
+          "captions": [
+            "Tied this tee up just right so you notice \ud83d\ude0c the ocean breeze is doing the rest \ud83c\udf0a",
+            "Caught me leaning like this on purpose \ud83d\ude0f these little shorts barely cover a thing",
+            "Boardwalk views are nice\u2026 but I think you\u2019re looking at something else \ud83d\udc40\ud83d\udd25",
+            "Knotted tight and feeling playful out here \ud83e\udd0d come closer and I\u2019ll show you more",
+            "Sun-kissed and a little too cheeky in these denim shorts \ud83d\ude08 you like the angle?"
+          ]
+        }
+      ],
+      "personas": {
+        "romantic": "\ud83d\udc9b Romantic",
+        "teasing_naughty": "\ud83d\ude08 Teasing / Naughty"
+      },
+      "engagement_goals": [
+        "creator selects preferred caption",
+        "telegram publishing"
+      ]
+    },
+    "created_at": "2026-07-20T00:04:28.313673"
+  },
+  {
     "caption_result_id": "caption_result_b10ede2b2ec04a4f985d1b3daacb5814",
     "caption_request_id": "caption_request_bb735fe874254a65bc33a9971f735cf5",
     "session_id": "caption_session_49a1f50e642846279b6cd80831f13891",

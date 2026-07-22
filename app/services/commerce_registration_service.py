@@ -249,6 +249,10 @@ class CommerceRegistrationService:
     def get_business_asset(self, asset_id: int) -> BusinessAssetRecord | None:
         return self.registration_repository.get_by_asset_id(asset_id)
 
+    def archive_asset(self, asset_id: int) -> BusinessAssetRecord | None:
+        """Remove an Asset from active commerce without deleting durable data."""
+        return self.registration_repository.archive(int(asset_id))
+
     def get_commerce_readiness(self, asset_id: int) -> CommerceReadiness | None:
         record = self.get_business_asset(asset_id)
         return record.commerce_readiness if record else None

@@ -112,6 +112,7 @@ class ChatCommerceRegistrationService:
         *,
         idempotency_key: str | None = None,
         creator_note: str | None = None,
+        additional_block_reasons: tuple[str, ...] = (),
     ) -> ChatCommerceRegistrationResult:
         business_asset = self.registration_repository.get_by_asset_id(int(asset_id))
         fulfillment = self.fulfillment_repository.get_by_asset_and_route(
@@ -142,19 +143,22 @@ class ChatCommerceRegistrationService:
                 creator_note=creator_note,
                 idempotency_key=idempotency_key,
             )
-            return self.register(request)
+            return self.register(request, additional_block_reasons=additional_block_reasons)
         return self.register(
             self._request_from_records(
                 business_asset,
                 fulfillment,
                 idempotency_key=idempotency_key,
                 creator_note=creator_note,
-            )
+            ),
+            additional_block_reasons=additional_block_reasons,
         )
 
     def register(
         self,
         request: ChatCommerceRegistrationRequest,
+        *,
+        additional_block_reasons: tuple[str, ...] = (),
     ) -> ChatCommerceRegistrationResult:
         business_asset = self.registration_repository.get_by_asset_id(
             int(request.asset_id)
@@ -172,6 +176,7 @@ class ChatCommerceRegistrationService:
             business_asset=business_asset,
             fulfillment=fulfillment,
             asset=asset,
+            additional_block_reasons=additional_block_reasons,
         )
         warnings = self._warnings(
             business_asset=business_asset,
@@ -278,12 +283,31 @@ class ChatCommerceRegistrationService:
             created_at=existing.created_at if existing else now,
             updated_at=now,
         )
+        if existing is not None and self._registration_projection(existing) == self._registration_projection(record):
+            return ChatCommerceRegistrationResult.from_record(
+                existing,
+                success=existing.chat_ready,
+                errors=tuple(existing.block_reasons) if not existing.chat_ready else (),
+            )
         stored = self.chat_repository.upsert_record(record)
         self._project_business_lifecycle(stored, business_asset)
         return ChatCommerceRegistrationResult.from_record(
             stored,
             success=stored.chat_ready,
             errors=tuple(stored.block_reasons) if not stored.chat_ready else (),
+        )
+
+    @staticmethod
+    def _registration_projection(record: ChatCommerceAssetRecord) -> tuple[Any, ...]:
+        """Fields whose change represents a durable chat-registration transition."""
+        return (
+            record.asset_id, record.registration_id, record.fulfillment_id,
+            record.creator_profile_id, record.commerce_destination,
+            record.availability_state, record.chat_ready, record.fulfillment_ready,
+            record.recommendation_eligible, record.delivery_eligible, record.active,
+            record.temporarily_unavailable, record.retired, record.product_ids,
+            record.experience_ids, record.media_link, record.provider_media_id,
+            record.provider, record.block_reasons, record.warnings,
         )
 
     def refresh_asset(self, asset_id: int) -> ChatCommerceRegistrationResult:
@@ -473,13 +497,41 @@ class ChatCommerceRegistrationService:
         creator_profile_id: int | None = None,
         limit: int = 100,
     ) -> tuple[ChatInventoryCandidate, ...]:
-        return tuple(
+        standalone = tuple(
             ChatInventoryCandidate.from_record(record)
             for record in self.chat_repository.list_recommendation_eligible(
                 creator_profile_id=creator_profile_id,
                 limit=limit,
             )
         )
+        if creator_profile_id is None:
+            return standalone
+        from uuid import UUID
+        from app.repositories.photoshoot_commerce_repository import PhotoshootCommerceRepository
+        photoshoots = tuple(
+            ChatInventoryCandidate(
+                asset_id=int(row["hero_asset_id"]),
+                chat_registration_id=UUID(str(row["deliverable_id"])),
+                creator_profile_id=int(row["creator_profile_id"]),
+                media_link=None,
+                provider_media_id=None,
+                recommendation_eligible=True,
+                delivery_eligible=False,
+                metadata={
+                    "source": "PhotoshootCommerceDeliverable",
+                    "item_kind": "photoshoot",
+                    "deliverable_id": str(row["deliverable_id"]),
+                    "display_name": row.get("display_title") or row["display_name"],
+                    "description": row.get("display_description"),
+                    "shot_count": int(row["shot_count"]),
+                    "member_asset_ids": list(row["ordered_member_asset_ids"] or ()),
+                    "gallery_path": row["gallery_path"],
+                },
+            )
+            for row in PhotoshootCommerceRepository().list_active(int(creator_profile_id))
+            if row.get("hero_asset_id") and row.get("workflow_stage") == "READY"
+        )
+        return standalone + photoshoots
 
     def get_delivery_candidates(
         self,
@@ -617,6 +669,7 @@ class ChatCommerceRegistrationService:
         business_asset: BusinessAssetRecord | None,
         fulfillment: BusinessAssetFulfillmentRecord | None,
         asset: Any | None,
+        additional_block_reasons: tuple[str, ...] = (),
     ) -> tuple[str, ...]:
         reasons: list[str] = []
         if asset is None:
@@ -641,6 +694,8 @@ class ChatCommerceRegistrationService:
                 reasons.append("invalid_destination")
             policy = self.entry_policy.can_register_chat(business_asset)
             reasons.extend(policy.reasons)
+            if business_asset.business_lifecycle_state == BusinessAssetLifecycleState.RETIRED:
+                reasons.append("business_asset_retired")
         if fulfillment is None:
             reasons.append("fulfillment_record_not_found")
         else:
@@ -661,6 +716,7 @@ class ChatCommerceRegistrationService:
                 or fulfillment.provider_preview_media_id
             ):
                 reasons.append("provider_media_missing")
+        reasons.extend(additional_block_reasons)
         return tuple(dict.fromkeys(reasons))
 
     def _warnings(

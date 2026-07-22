@@ -37,6 +37,25 @@ class CommerceRegistrationRepository:
                 row = cursor.fetchone()
         return self._record_from_row(row) if row else None
 
+    def archive(self, asset_id: int) -> BusinessAssetRecord | None:
+        """Deactivate commerce participation while preserving its durable record."""
+        with self._connection_factory() as conn:
+            self._ensure_table(conn)
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    """
+                    UPDATE public.business_asset_registrations
+                    SET is_archived = TRUE,
+                        archived_at = COALESCE(archived_at, now()),
+                        updated_at = now()
+                    WHERE asset_id = %s
+                    RETURNING *
+                    """,
+                    (int(asset_id),),
+                )
+                row = cursor.fetchone()
+        return self._record_from_row(row) if row else None
+
     def upsert_record(self, record: BusinessAssetRecord) -> BusinessAssetRecord:
         with self._connection_factory() as conn:
             self._ensure_table(conn)
@@ -177,16 +196,23 @@ class CommerceRegistrationRepository:
 
     def list_registered(self, *, limit: int = 100) -> tuple[BusinessAssetRecord, ...]:
         return self._list_by_filter(
-            "commerce_registration_status = %s",
+            "commerce_registration_status = %s AND is_archived = FALSE",
             (CommerceRegistrationStatus.REGISTERED.value,),
             limit=limit,
         )
+
+    def list_active(self, *, limit: int = 100) -> tuple[BusinessAssetRecord, ...]:
+        """Return every non-archived Business Asset regardless of workflow stage."""
+        return self._list_by_filter("is_archived = FALSE", (), limit=limit)
+
+    def list_archived(self, *, limit: int = 100) -> tuple[BusinessAssetRecord, ...]:
+        return self._list_by_filter("is_archived = TRUE", (), limit=limit)
 
     def list_awaiting_destination(
         self, *, limit: int = 100
     ) -> tuple[BusinessAssetRecord, ...]:
         return self._list_by_filter(
-            "commerce_destination_status = %s",
+            "commerce_destination_status = %s AND is_archived = FALSE",
             (CommerceDestinationStatus.AWAITING_DESTINATION.value,),
             limit=limit,
         )
@@ -198,7 +224,7 @@ class CommerceRegistrationRepository:
         limit: int = 100,
     ) -> tuple[BusinessAssetRecord, ...]:
         return self._list_by_filter(
-            "selected_commerce_destination = %s",
+            "selected_commerce_destination = %s AND is_archived = FALSE",
             (str(destination),),
             limit=limit,
         )
@@ -207,7 +233,7 @@ class CommerceRegistrationRepository:
         self, *, limit: int = 100
     ) -> tuple[BusinessAssetRecord, ...]:
         return self._list_by_filter(
-            "business_lifecycle_state = %s",
+            "business_lifecycle_state = %s AND is_archived = FALSE",
             (BusinessAssetLifecycleState.INTELLIGENCE_PENDING.value,),
             limit=limit,
         )
@@ -226,7 +252,12 @@ class CommerceRegistrationRepository:
                     f"""
                     SELECT *
                     FROM public.business_asset_registrations
-                    WHERE {where}
+                    WHERE ({where})
+                      AND NOT EXISTS (
+                          SELECT 1 FROM public.photoshoot_asset_memberships photoshoot_member
+                          WHERE photoshoot_member.asset_id = public.business_asset_registrations.asset_id
+                            AND photoshoot_member.approved = TRUE
+                      )
                     ORDER BY updated_at DESC
                     LIMIT %s
                     """,
@@ -300,6 +331,8 @@ class CommerceRegistrationRepository:
             last_refreshed_at=cls._datetime(row.get("last_refreshed_at")),
             created_at=cls._datetime(row.get("created_at")),
             updated_at=cls._datetime(row.get("updated_at")),
+            is_archived=bool(row.get("is_archived", False)),
+            archived_at=cls._datetime(row.get("archived_at")),
             schema_version=str(
                 row.get("schema_version") or COMMERCE_REGISTRATION_SCHEMA_VERSION
             ),

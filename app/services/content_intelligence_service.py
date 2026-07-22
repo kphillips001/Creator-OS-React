@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import replace
+from types import SimpleNamespace
 from typing import Any
 
 from app.models.content_intelligence import (
@@ -92,6 +93,10 @@ class ContentIntelligenceService:
     def get_asset_intelligence(self, asset_id: int) -> ContentIntelligence | None:
         """Load existing AI understanding for an Asset without re-analysis."""
 
+        profile = self.get_asset_profile(asset_id)
+        if profile is not None and getattr(profile, "ready", False):
+            return self._from_persisted_profile(profile)
+
         getter = getattr(self.asset_understanding, "get_understanding", None)
         if not callable(getter):
             return None
@@ -99,6 +104,34 @@ class ContentIntelligenceService:
         if understanding is None:
             return None
         return self.build_from_understanding(understanding)
+
+    def _from_persisted_profile(self, profile: Any) -> ContentIntelligence:
+        """Hydrate the canonical profile consumed by recommendation services."""
+        values = dict(getattr(profile, "content_profile", None) or {})
+        content = ContentIntelligence(
+            asset_id=int(profile.asset_id), asset_understanding=SimpleNamespace(),
+            summary=values.get("summary"), classification=values.get("classification"),
+            confidence=self._float_or_none(values.get("confidence")),
+            themes=self._text_tuple(values.get("themes")),
+            tags=self._text_tuple(values.get("tags")), mood=values.get("mood"),
+            setting=values.get("setting"), outfit=values.get("outfit"),
+            pose=values.get("pose"), activity=values.get("activity"),
+            objects=self._text_tuple(values.get("objects")),
+            environment=values.get("environment"),
+            activities=self._text_tuple(values.get("activities")),
+            clothing=values.get("clothing"),
+            keywords=self._text_tuple(values.get("keywords")),
+            technical_quality=dict(values.get("technical_quality") or {}),
+            media_metadata=dict(values.get("media_metadata") or {}),
+            ai_metadata=dict(values.get("ai_metadata") or {}),
+            technical_metadata=dict(values.get("technical_metadata") or {}),
+            provenance=dict(getattr(profile, "provenance", None) or {}),
+            readiness=dict(values.get("readiness") or {}),
+            ownership=dict(values.get("ownership") or {}),
+        )
+        cover = self._suggest_cover_image(content)
+        return replace(content, suggested_cover_image=cover,
+                       recommendations={"suggested_cover_image": cover})
 
     def build_from_asset(self, asset: Any) -> ContentIntelligence:
         """Normalize existing stored AI outputs from an Asset-like object."""

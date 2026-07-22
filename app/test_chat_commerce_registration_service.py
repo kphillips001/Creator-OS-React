@@ -363,6 +363,7 @@ class ChatCommerceRegistrationServiceTests(unittest.TestCase):
 
         self.assertEqual(first.chat_registration_id, second.chat_registration_id)
         self.assertEqual(len(self.chat_repo.records), 1)
+        self.assertEqual(len(self.chat_repo.history), 1)
 
     def test_inventory_excludes_unavailable_and_retired_assets(self):
         service = self.make_service()

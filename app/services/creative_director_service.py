@@ -447,6 +447,46 @@ class CreativeDirectorService:
             continuity_locks=locks,
         )
 
+    def plan_full_photoshoot_session(
+        self,
+        *,
+        image_bytes: bytes,
+        image_mime_type: str | None = None,
+        session_context: Mapping[str, Any] | None = None,
+        creative_mode: str = "premium",
+        session_direction: str = "",
+        creator_guidance: str = "",
+        continuity_locks: Mapping[str, bool] | None = None,
+        frame_count: int = 8,
+    ) -> tuple[dict[str, Any], ...]:
+        """Plan an ordered multi-shot photoshoot arc from the seed/current image."""
+        if not image_bytes:
+            raise ValueError("Seed image is required before planning a full Photoshoot.")
+        count = max(4, min(12, int(frame_count or 8)))
+        locks = {
+            "location": True,
+            "wardrobe": True,
+            "lighting": True,
+            "hairstyle": True,
+            "makeup": True,
+            "camera_style": True,
+            **dict(continuity_locks or {}),
+        }
+        prompt = self._build_full_photoshoot_plan_prompt(
+            session_context=dict(session_context or {}),
+            creative_mode=str(creative_mode or "premium").strip().lower(),
+            session_direction=str(session_direction or "").strip(),
+            creator_guidance=str(creator_guidance or "").strip(),
+            continuity_locks=locks,
+            frame_count=count,
+        )
+        response = self.ask_anything(
+            question=prompt,
+            image_bytes=image_bytes,
+            image_mime_type=image_mime_type or "image/png",
+        )
+        return self._parse_full_photoshoot_plan(response, frame_count=count)
+
     def suggest_photoshoot_inspiration(
         self,
         *,
@@ -719,7 +759,7 @@ class CreativeDirectorService:
         prompt_count: int,
     ) -> PromptPlan:
         creator_profile_id = int((creator_profile or {}).get("id"))
-        reference = self.reference_library.get_active_reference(
+        reference = self.reference_library.get_active_canonical_reference(
             creator_profile_id=creator_profile_id,
         )
         session = self.create_session(
@@ -1021,7 +1061,7 @@ User guidance for these suggestions (optional steering — high priority):
 Guidance rules:
 - The creator is steering paid NSFW content direction with this short note.
 - Every suggestion should clearly move toward that guidance (e.g. if they wrote "topless", all ideas should be topless or immediately arriving at topless).
-- Keep continuity with the timeline (same person, room, lighting, hair, makeup) unless the guidance itself changes wardrobe/location.
+- Keep continuity with the summarized approved shoot (same person, room, lighting, hair, makeup) unless the guidance itself changes wardrobe/location.
 - Still vary pose, hands, and especially facial expression across the list.
 - Do not ignore the guidance. Do not water it down into a weaker stage unless the current image is already past it — then advance one natural step beyond it.
 - Short tags are fine: "topless", "panties off", "playing with herself", "more horny face", etc.
@@ -1029,12 +1069,12 @@ Guidance rules:
         else:
             guidance_section = """
 User guidance for these suggestions: None.
-Continue the natural next beat from the timeline arc and creative mode.
+Continue the natural next beat from the summarized approved arc and creative mode.
 """.strip()
         if mode == "explicit":
             intensity_rules = f"""
 Explicit mode — progressive photoshoot ladder:
-This is a multi-shot photoshoot that escalates naturally shot-by-shot. Study the FULL attached timeline in order, then place the LATEST shot on this ladder and suggest only the next natural beat(s):
+This is a multi-shot photoshoot that escalates naturally shot-by-shot. Use the compact Photoshoot Summary to place the latest shot on this ladder and suggest only the next natural beat(s):
 
 1. Clothed / dressed tease (outfit still on; pose, flirty eye contact, soft smile or coy look)
 2. Partial undress (unbutton, pull straps, lift top, lower bottoms slightly; smirk, bitten lip)
@@ -1053,23 +1093,24 @@ Facial expression progression (required):
 - Same face reused across the timeline is a failure. Match expression intensity to the body/wardrobe stage.
 
 Hard rules for the next shot:
-- Use the whole image sequence as evidence of pace. If shots 1→N only moved from clothed to topless, do NOT leap to hardcore masturbation.
+- Use the summarized approved progression as evidence of pace. If shots 1→N only moved from clothed to topless, do NOT leap to hardcore masturbation.
 - Measure the actual rate of escalation across approved shots. Match that pace for the next frame.
-- Base every idea on the latest image, constrained by the arc visible across earlier images.
+- Base every idea on the latest image, constrained by the approved arc captured in the Photoshoot Summary.
+- Idea ranking (required for explicit mode): Idea 1 must be your single best natural next-step progression from the full visual timeline — the default the creator should take. Ideas 2–N are nearby alternatives (same stage band, different pose/hands/face/framing), not random jumps.
 - Most ideas should advance only ONE stage from the latest shot. A minority may advance about TWO stages max.
 - Never jump from early stages (clothed/topless) straight to hard masturbation or climax.
 - If the sequence is still mild/clothed, next ideas stay in tease / partial undress / topless territory with matching mild-to-flirty face upgrades.
 - Only use direct masturbation/climax language when the latest shot and prior arc already support that stage.
 - Progressive wardrobe removal is a normal part of this photoshoot. Even if "Keep wardrobe" is yes, you may still suggest the next intentional undress stage when that is the natural next beat; otherwise keep the current dress state and escalate pose/touch/face.
 - Preserve location, lighting, hairstyle, makeup, and camera style unless Session Direction or Creative Hint changes them.
-- Avoid repeating poses, actions, OR facial expressions already visible in any attached timeline image.
-- Approved timeline frames attached: {image_count}. Progression stage: {progression_stage}.
+- Avoid repeating poses, actions, OR facial expressions recorded in the Photoshoot Summary.
+- Current approved frame attached: {image_count}. Progression stage: {progression_stage}.
 """.strip()
         elif mode == "premium":
             intensity_rules = """
 Premium mode intensity rules:
 - Keep suggestions sensual, subscription-content coded, teasing, and intimate.
-- Read the full attached timeline and continue that sensual arc one step at a time.
+- Read the Photoshoot Summary and continue that sensual arc one step at a time.
 - Progress shot-by-shot through confidence, body language, wardrobe tension, erotic atmosphere, and facial expression without full explicit sex acts.
 - Face must change each shot: soft → flirty → bitten lip → heavier bedroom eyes — never the same neutral look twice.
 - Prefer one-step escalation from the latest image, not sudden jumps or end-of-shoot climax ideas.
@@ -1078,7 +1119,7 @@ Premium mode intensity rules:
             intensity_rules = """
 Safe mode intensity rules:
 - Stay platform-safe and SFW.
-- Read the full attached timeline and continue the same story/pose progression.
+- Read the Photoshoot Summary and continue the same story/pose progression.
 - Progress through expression, pose variety, framing, confidence, and storytelling only.
 - Each idea should change the facial expression slightly (smile, glance, confidence) so faces do not look identical shot to shot.
 """.strip()
@@ -1086,16 +1127,13 @@ Safe mode intensity rules:
 You are Grok helping with creative inspiration for a Creator OS Photoshoot Studio session.
 
 This is a continuity-locked photoshoot that evolves frame by frame from one seed subject.
-You are given the approved photoshoot timeline images in chronological order (oldest → newest).
-Analyze ALL of them as a progression sequence, not only the last frame:
-- How clothing/nudity changed across shots
-- How pose, hands, and sexual intensity changed
-- How facial expression, eyes, mouth, and emotional heat changed (critical — faces should not stay frozen)
-- How fast or slow the escalation has been so far
+You are given the current/latest approved image plus a compact Photoshoot Summary in Session memory.
+Use that summary as the authoritative record of established setting, wardrobe, lighting, style, progression,
+approved poses/compositions, and remaining creative opportunities. Do not request or reconstruct complete prompt history.
 
-The last attached image is the current/latest approved shot. Propose the immediate next photoshoot frames that continue this same arc.
+The attached image is the current/latest approved shot. Propose the immediate next photoshoot frames that continue this same arc.
 
-Attached timeline images in order:
+Current approved image attachment:
 {timeline_lines}
 
 {guidance_section}
@@ -1109,13 +1147,14 @@ Output rules:
 - Each idea is one or two short conversational sentences describing the next evolving scene.
 - Every idea MUST include a concrete facial expression or eye/mouth change (not just "looks at the camera").
 - If user guidance is provided, every idea must honor that guidance.
+- In explicit mode, put the recommended natural progression first as idea 1; the UI pre-selects it for the creator.
 - Creative inspiration only.
 - Do not write a renderer prompt.
 - Do not include camera settings.
 - Do not include prompt engineering.
 - Do not explain the workflow or name the ladder stage.
 - Do not wrap the list in markdown code fences or JSON.
-- Make every idea meaningfully different (pose, wardrobe stage, hand placement, genital focus, facial expression, eye contact, or intensity), but keep all of them near the same next-stage band defined by the full timeline arc and any user guidance.
+- Make every idea meaningfully different (pose, wardrobe stage, hand placement, genital focus, facial expression, eye contact, or intensity), but keep all of them near the same next-stage band defined by the summarized approved arc and any user guidance.
 
 Creative mode: {mode}
 Provider context: {provider_text}
@@ -1123,7 +1162,7 @@ Session direction: {direction_text}
 User guidance: {guidance_text or "None."}
 Creative hint: {hint_text}
 Approved shot/direction count: {shot_count}
-Timeline images attached: {image_count}
+Current images attached: {image_count}
 Progression stage: {progression_stage}
 
 Continuity locks:
@@ -1135,6 +1174,171 @@ Session memory:
 Approved direction history:
 {history_lines}
 """.strip()
+
+    @staticmethod
+    def _build_full_photoshoot_plan_prompt(
+        *,
+        session_context: Mapping[str, Any],
+        creative_mode: str,
+        session_direction: str,
+        creator_guidance: str,
+        continuity_locks: Mapping[str, bool],
+        frame_count: int,
+    ) -> str:
+        lock_lines = "\n".join(
+            f"- Keep {name.replace('_', ' ')}: {'yes' if enabled else 'no'}"
+            for name, enabled in continuity_locks.items()
+        )
+        context_json = json.dumps(dict(session_context or {}), ensure_ascii=True, indent=2, default=str)
+        mode = str(creative_mode or "premium").strip().lower()
+        guidance = str(creator_guidance or "").strip() or "None."
+        direction = str(session_direction or "").strip() or "None."
+        if mode == "explicit":
+            progression = """
+Explicit progression (required):
+Plan a natural NSFW ladder across the full set. Start from the seed image's actual wardrobe/pose state.
+Escalate gradually shot-by-shot — one logical stage at a time — through tease → partial undress → topless → nude reveal → sexual teasing → masturbation → intensified play → climax/afterglow as frame count allows.
+Do not jump from clothed to hardcore in one step. Match facial expression intensity to body/wardrobe stage each shot.
+""".strip()
+        elif mode == "premium":
+            progression = """
+Premium progression (required):
+Plan a sensual subscription-content arc. Escalate through confidence, wardrobe tension, body language, and bedroom-eye intensity without full explicit sex acts.
+""".strip()
+        else:
+            progression = """
+Safe progression (required):
+Stay platform-safe. Progress through expression, pose variety, framing, confidence, and storytelling only.
+""".strip()
+        return f"""
+You are the Shot Director planning an entire Creator OS Photoshoot Studio session from one seed image.
+
+Analyze the attached seed/current image and return exactly {frame_count} ordered shot plans that form one continuous photoshoot.
+
+Creative mode: {mode}
+Session direction: {direction}
+Creator guidance: {guidance}
+
+Continuity locks:
+{lock_lines}
+
+Session memory:
+{context_json}
+
+{progression}
+
+Rules:
+- Shot 1 must begin from the seed's real visual state (same wardrobe level, location, lighting, identity).
+- Each later shot is the next natural frame of the same session — not a new concept.
+- Preserve identity, face, body, hairstyle, makeup, location, lighting, and camera style unless guidance changes them.
+- Vary pose, hands, framing, and especially facial expression every shot.
+- Progressive wardrobe removal is allowed in explicit mode when that is the natural next beat.
+- If creator guidance is provided, the arc should clearly move toward it without ignoring continuity.
+- Do not write renderer prompts. Do not include camera settings or prompt engineering.
+
+Return ONLY valid JSON:
+{{
+  "shots": [
+    {{
+      "shot_number": 1,
+      "title": "short title",
+      "creative_direction": "1-2 sentences describing this shot",
+      "reasoning": "why this is the right beat in the arc",
+      "emotion": "specific facial expression",
+      "camera_framing": "framing",
+      "lighting": "lighting note",
+      "pose_composition": "pose/composition",
+      "continuity_notes": "what stays locked"
+    }}
+  ]
+}}
+
+Exactly {frame_count} objects in shots, numbered 1..{frame_count} in order.
+""".strip()
+
+    @classmethod
+    def _parse_full_photoshoot_plan(cls, response: str, *, frame_count: int) -> tuple[dict[str, Any], ...]:
+        text = str(response or "").strip()
+        count = max(4, min(12, int(frame_count or 8)))
+        data: Any = None
+        cleaned = text
+        if cleaned.startswith("```"):
+            cleaned = re.sub(r"^```(?:json)?", "", cleaned.strip(), flags=re.IGNORECASE).strip()
+            cleaned = re.sub(r"```$", "", cleaned).strip()
+        try:
+            data = json.loads(cleaned)
+        except Exception:
+            data = None
+        raw_shots: list[Any] = []
+        if isinstance(data, Mapping):
+            for key in ("shots", "plan", "frames", "scenes"):
+                value = data.get(key)
+                if isinstance(value, list):
+                    raw_shots = list(value)
+                    break
+        elif isinstance(data, list):
+            raw_shots = list(data)
+        if not raw_shots:
+            # Fallback: numbered prose lines become simple plan beats.
+            numbered = re.findall(
+                r"(?:^|\n)\s*(?:\d+[\).\:\-])\s+(.+?)(?=(?:\n\s*\d+[\).\:\-]\s+)|\Z)",
+                cleaned,
+                flags=re.IGNORECASE | re.DOTALL,
+            )
+            raw_shots = [{"creative_direction": line.strip()} for line in numbered if str(line or "").strip()]
+        shots: list[dict[str, Any]] = []
+        for index, item in enumerate(raw_shots[:count], start=1):
+            if isinstance(item, Mapping):
+                direction = str(
+                    item.get("creative_direction")
+                    or item.get("direction")
+                    or item.get("description")
+                    or ""
+                ).strip()
+                title = str(item.get("title") or f"Shot {index}").strip()
+                shots.append({
+                    "shot_number": index,
+                    "title": title or f"Shot {index}",
+                    "creative_direction": direction or f"Continue the photoshoot for shot {index}.",
+                    "reasoning": str(item.get("reasoning") or "").strip(),
+                    "emotion": str(item.get("emotion") or "").strip(),
+                    "camera_framing": str(item.get("camera_framing") or item.get("camera") or "").strip(),
+                    "lighting": str(item.get("lighting") or "").strip(),
+                    "pose_composition": str(item.get("pose_composition") or item.get("pose") or "").strip(),
+                    "continuity_notes": str(item.get("continuity_notes") or "").strip(),
+                    "status": "pending",
+                })
+            else:
+                text_item = cls._short_inspiration_text(str(item))
+                shots.append({
+                    "shot_number": index,
+                    "title": f"Shot {index}",
+                    "creative_direction": text_item,
+                    "reasoning": "",
+                    "emotion": "",
+                    "camera_framing": "",
+                    "lighting": "",
+                    "pose_composition": text_item,
+                    "continuity_notes": "",
+                    "status": "pending",
+                })
+        while len(shots) < count:
+            index = len(shots) + 1
+            shots.append({
+                "shot_number": index,
+                "title": f"Shot {index}",
+                "creative_direction": f"Advance the session naturally for shot {index} while preserving continuity.",
+                "reasoning": "Filled to match the requested frame count.",
+                "emotion": "",
+                "camera_framing": "",
+                "lighting": "",
+                "pose_composition": "",
+                "continuity_notes": "Preserve locked continuity.",
+                "status": "pending",
+            })
+        if shots:
+            shots[0]["status"] = "current"
+        return tuple(shots)
 
     @staticmethod
     def _short_inspiration_text(response: str) -> str:

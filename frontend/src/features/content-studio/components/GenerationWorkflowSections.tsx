@@ -3,16 +3,23 @@ import { useEffect, useState, type CSSProperties } from "react";
 import { getContentStudioGeneration, submitContentStudioGeneration } from "../../../infrastructure/api/contentStudioApi";
 import type { ContentStudioContext } from "../types/contentStudioContext";
 import type { ContentStudioGeneration, GenerationSubmission } from "../types/generation";
+import { LiveProgressPanel } from "../../../shared/ui/LiveProgressPanel";
 
 type GenerationWorkflowSectionsProps = {
   context: ContentStudioContext;
   disabled: boolean;
+  onAskAnotherQuestion: () => void;
+  onContinueExploring: () => void;
+  onStartNewSession: () => void;
   request: Omit<GenerationSubmission, "creatorContext">;
 };
 
 const TERMINAL = new Set(["succeeded", "partial", "failed"]);
+const NEXT_STEP_STATUSES = new Set(["succeeded", "partial"]);
 
-export function GenerationWorkflowSections({ context, disabled, request }: GenerationWorkflowSectionsProps) {
+export function GenerationWorkflowSections({
+  context, disabled, onAskAnotherQuestion, onContinueExploring, onStartNewSession, request,
+}: GenerationWorkflowSectionsProps) {
   const [runId, setRunId] = useState("");
   const [generation, setGeneration] = useState<ContentStudioGeneration | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -54,6 +61,9 @@ export function GenerationWorkflowSections({ context, disabled, request }: Gener
 
   const active = submitting || Boolean(runId && (!generation || !TERMINAL.has(generation.status)));
   const slotCount = runId ? reservedCount : request.promptCount;
+  const showNextStep = Boolean(
+    generation && NEXT_STEP_STATUSES.has(generation.status) && generation.images.length > 0,
+  );
   return (
     <>
       <section aria-disabled={disabled || undefined} aria-label="Generate Images" className="workflow-section generate-images">
@@ -63,21 +73,21 @@ export function GenerationWorkflowSections({ context, disabled, request }: Gener
         {error && <p className="generation-live__error" role="alert">{error}</p>}
       </section>
       {(active || generation) && <section aria-label="Live Generation" className="workflow-section generation-live">
-        <h2>Live Generation</h2>
         {!generation && !active && <p>Generated images will appear here as each provider result completes.</p>}
-        {active && !generation && <p role="status">Queued Image 1 of {request.promptCount}</p>}
-        {generation && (
-          <p className={`generation-live__status generation-live__status--${generation.status}`} role="status">
-            {generation.message}
-          </p>
-        )}
-        <progress aria-label="Generation progress" max="100" value={generation?.progress ?? 0} />
-        <div className="generation-live__metrics">
-          <span>Completed: {generation?.completedCount ?? 0}</span>
-          <span>Failed: {generation?.failedCount ?? 0}</span>
-          <span>Processed: {generation?.processedCount ?? 0} / {generation?.totalCount ?? slotCount}</span>
-          <span>Provider: {generation?.provider ?? request.provider}</span>
-        </div>
+        <LiveProgressPanel
+          active={active}
+          progressLabel={`${generation?.processedCount ?? 0} of ${generation?.totalCount ?? slotCount} Processed`}
+          progressPercent={generation?.progress ?? 0}
+          status={generation?.message || (active ? `Queued Image 1 of ${request.promptCount}` : "Ready")}
+          title="Live Generation"
+          tone={generation?.status === "failed" ? "failed" : generation && NEXT_STEP_STATUSES.has(generation.status) ? "complete" : "active"}
+        >
+          <div className="generation-live__metrics">
+            <span>Completed: {generation?.completedCount ?? 0}</span>
+            <span>Failed: {generation?.failedCount ?? 0}</span>
+            <span>Provider: {generation?.provider ?? request.provider}</span>
+          </div>
+        </LiveProgressPanel>
         <div
           aria-label="Generated image slots"
           className="generation-live__images"
@@ -101,6 +111,15 @@ export function GenerationWorkflowSections({ context, disabled, request }: Gener
             );
           })}
         </div>
+        {showNextStep && <section aria-label="Next Step" className="generation-next-step">
+          <h2>Next Step</h2>
+          <p>Continue building on this creative direction or begin a new one.</p>
+          <div className="generation-next-step__actions">
+            <button onClick={onContinueExploring} type="button"><strong>✨ Continue Exploring</strong><span>Continue using ideas from the current Creative Director response.</span></button>
+            <button onClick={onAskAnotherQuestion} type="button"><strong>📝 Ask Another Question</strong><span>Continue brainstorming within the current creative conversation.</span></button>
+            <button onClick={onStartNewSession} type="button"><strong>🗑 Start New Session</strong><span>Begin a completely new creative direction.</span></button>
+          </div>
+        </section>}
       </section>}
     </>
   );

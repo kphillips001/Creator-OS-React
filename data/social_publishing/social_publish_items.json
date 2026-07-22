@@ -1,5 +1,127 @@
 [
   {
+    "publish_request_id": "social_publish_item_e342f5b957ce4779994a06b94e737bbe",
+    "queue_item_id": "social_queue_item_648b4d9016824e80a5a72060db650eda",
+    "platform": "x",
+    "caption_id": null,
+    "scheduled_for": null,
+    "status": "posted",
+    "created_at": "2026-07-21T15:31:33.308661",
+    "metadata": {
+      "posting_implemented": true,
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "provider_post_id": "2079590111302304202",
+      "provider_media_id": "2079590109523918848",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2079590111302304202",
+      "provider_metadata": {
+        "tweet_data": {
+          "edit_history_tweet_ids": [
+            ""
+          ],
+          "id": "2079590111302304202",
+          "text": "Okay\u2026 your turn to plan the afternoon. What's first? \ud83d\udc47 https://t.co/HyEhoh64sL"
+        }
+      }
+    }
+  },
+  {
+    "publish_request_id": "social_publish_item_c4685270a8bc4ebb8f1f3e8b529fa3b3",
+    "queue_item_id": "social_queue_item_19046c6a819845778165ed855fd92eac",
+    "platform": "x",
+    "caption_id": null,
+    "scheduled_for": null,
+    "status": "posted",
+    "created_at": "2026-07-20T14:44:12.544929",
+    "metadata": {
+      "posting_implemented": true,
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "provider_post_id": "2079215808211718283",
+      "provider_media_id": "2079215806462689280",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2079215808211718283",
+      "provider_metadata": {
+        "tweet_data": {
+          "edit_history_tweet_ids": [
+            ""
+          ],
+          "id": "2079215808211718283",
+          "text": "Okay\u2026 what's the first thing you'd ask me? \ud83d\udc40\ud83d\udc47 https://t.co/mhSxoB7wUm"
+        }
+      }
+    }
+  },
+  {
+    "publish_request_id": "social_publish_item_d290fc1e4cff40f387653b760b959fb2",
+    "queue_item_id": "social_queue_item_bb23ea82e3614b6298f7e7efda6ccfb7",
+    "platform": "telegram",
+    "caption_id": "caption_result_0e4d2fe51fb348aaa6ef9c9698501fab",
+    "scheduled_for": null,
+    "status": "posted",
+    "created_at": "2026-07-20T00:04:42.077420",
+    "metadata": {
+      "posting_implemented": true,
+      "account_name": null,
+      "telegram_post_to": "main",
+      "provider_post_id": "86",
+      "provider_media_id": null,
+      "provider_output_url": null,
+      "provider_metadata": {
+        "status_code": 200,
+        "message_id": 86,
+        "response": {
+          "ok": true,
+          "result": {
+            "message_id": 86,
+            "sender_chat": {
+              "id": -1002507455539,
+              "title": "Ava Blackthorne",
+              "type": "channel"
+            },
+            "chat": {
+              "id": -1002507455539,
+              "title": "Ava Blackthorne",
+              "type": "channel"
+            },
+            "date": 1784505883,
+            "photo": [
+              {
+                "file_id": "AgACAgEAAyEGAASVdLwzAANWal1mGwABE6sJ6iGMzpEltgvmksF1AALADGsbFWnpRt3Yy7zmO3NrAQADAgADcwADPQQ",
+                "file_unique_id": "AQADwAxrGxVp6UZ4",
+                "file_size": 1510,
+                "width": 67,
+                "height": 90
+              },
+              {
+                "file_id": "AgACAgEAAyEGAASVdLwzAANWal1mGwABE6sJ6iGMzpEltgvmksF1AALADGsbFWnpRt3Yy7zmO3NrAQADAgADbQADPQQ",
+                "file_unique_id": "AQADwAxrGxVp6UZy",
+                "file_size": 17106,
+                "width": 240,
+                "height": 320
+              },
+              {
+                "file_id": "AgACAgEAAyEGAASVdLwzAANWal1mGwABE6sJ6iGMzpEltgvmksF1AALADGsbFWnpRt3Yy7zmO3NrAQADAgADeAADPQQ",
+                "file_unique_id": "AQADwAxrGxVp6UZ9",
+                "file_size": 78089,
+                "width": 600,
+                "height": 800
+              },
+              {
+                "file_id": "AgACAgEAAyEGAASVdLwzAANWal1mGwABE6sJ6iGMzpEltgvmksF1AALADGsbFWnpRt3Yy7zmO3NrAQADAgADeQADPQQ",
+                "file_unique_id": "AQADwAxrGxVp6UZ-",
+                "file_size": 175222,
+                "width": 864,
+                "height": 1152
+              }
+            ],
+            "caption": "Caught me leaning like this on purpose \ud83d\ude0f these little shorts barely cover a thing"
+          }
+        },
+        "post_to": "main"
+      }
+    }
+  },
+  {
     "publish_request_id": "social_publish_item_642cd08b50e34cde85336e0daa97fb71",
     "queue_item_id": "social_queue_item_7ae9395c8eee4b909c6a4bc2537a5bce",
     "platform": "x",

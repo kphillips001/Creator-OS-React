@@ -9,7 +9,7 @@ describe("Business navigation", () => {
     expect(content?.label).toBe("Content Creation");
     expect(business?.label).toBe("Business");
     expect(business?.items.map((item) => [item.label, item.path])).toEqual([
-      ["Assets", "/business/assets"],
+      ["Commerce Library", "/business/commerce-library"],
       ["Products", "/business/products"],
       ["Customers", "/business/customers"],
       ["Sales", "/business/sales"],

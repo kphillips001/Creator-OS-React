@@ -104,6 +104,29 @@ def test_register_generated_image_prevents_duplicate_insert(tmp_path):
     assert intelligence.pending == [(44, 2)]
 
 
+def test_register_generated_image_rejects_protected_reference_role(tmp_path):
+    source = tmp_path / "reference.png"
+    source.write_bytes(b"reference")
+    record = generated_record(source)
+    record = GeneratedImageRecord(**{
+        **record.__dict__,
+        "generation_metadata": {"reference_library": {"is_reference": True, "protected": True, "role": "creator_identity"}},
+    })
+    inserts = []
+    service = AssetRegistrationService(
+        asset_repository=FakeAssetRepository(), generation_library_service=FakeGenerationLibrary(),
+        asset_intelligence_service=FakeAssetIntelligenceService(),
+        content_item_inserter=lambda payload: inserts.append(payload) or 100,
+        analyze_on_registration=False,
+    )
+
+    result = service.register_generated_image(record, creator_profile_id=2)
+
+    assert result.success is False
+    assert "Protected Reference" in result.message
+    assert inserts == []
+
+
 def test_generation_library_ui_exposes_registration_dialog_and_states():
     source = Path("app/dashboard/pages/content_studio.py").read_text(
         encoding="utf-8"

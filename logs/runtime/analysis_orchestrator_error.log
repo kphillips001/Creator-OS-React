@@ -1,0 +1,512 @@
+ERROR:analysis-orchestrator:Analysis orchestration cycle failed
+Traceback (most recent call last):
+  File "C:\Creator-OS-React\app\workers\analysis_orchestrator.py", line 26, in run
+    decision = orchestrator.orchestrate_next()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\services\business_asset_analysis_orchestrator.py", line 87, in orchestrate_next
+    return self.advance(asset_id) if asset_id is not None else None
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\services\business_asset_analysis_orchestrator.py", line 78, in advance
+    changed = self.repository.transition(asset_id, state, target)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\repositories\business_asset_analysis_workflow_repository.py", line 47, in transition
+    cursor.execute(
+  File "C:\Users\knphi\AppData\Local\Programs\Python\Python311\Lib\site-packages\psycopg\cursor.py", line 117, in execute
+    raise ex.with_traceback(None)
+psycopg.errors.IndeterminateDatatype: could not determine data type of parameter $2
+ERROR:analysis-orchestrator:Analysis orchestration cycle failed
+Traceback (most recent call last):
+  File "C:\Creator-OS-React\app\workers\analysis_orchestrator.py", line 26, in run
+    decision = orchestrator.orchestrate_next()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\services\business_asset_analysis_orchestrator.py", line 87, in orchestrate_next
+    return self.advance(asset_id) if asset_id is not None else None
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\services\business_asset_analysis_orchestrator.py", line 78, in advance
+    changed = self.repository.transition(asset_id, state, target)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\repositories\business_asset_analysis_workflow_repository.py", line 47, in transition
+    cursor.execute(
+  File "C:\Users\knphi\AppData\Local\Programs\Python\Python311\Lib\site-packages\psycopg\cursor.py", line 117, in execute
+    raise ex.with_traceback(None)
+psycopg.errors.IndeterminateDatatype: could not determine data type of parameter $2
+ERROR:analysis-orchestrator:Analysis orchestration cycle failed
+Traceback (most recent call last):
+  File "C:\Creator-OS-React\app\workers\analysis_orchestrator.py", line 26, in run
+    decision = orchestrator.orchestrate_next()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\services\business_asset_analysis_orchestrator.py", line 87, in orchestrate_next
+    return self.advance(asset_id) if asset_id is not None else None
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\services\business_asset_analysis_orchestrator.py", line 78, in advance
+    changed = self.repository.transition(asset_id, state, target)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\repositories\business_asset_analysis_workflow_repository.py", line 47, in transition
+    cursor.execute(
+  File "C:\Users\knphi\AppData\Local\Programs\Python\Python311\Lib\site-packages\psycopg\cursor.py", line 117, in execute
+    raise ex.with_traceback(None)
+psycopg.errors.IndeterminateDatatype: could not determine data type of parameter $2
+ERROR:analysis-orchestrator:Analysis orchestration cycle failed
+Traceback (most recent call last):
+  File "C:\Creator-OS-React\app\workers\analysis_orchestrator.py", line 26, in run
+    decision = orchestrator.orchestrate_next()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\services\business_asset_analysis_orchestrator.py", line 87, in orchestrate_next
+    return self.advance(asset_id) if asset_id is not None else None
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\services\business_asset_analysis_orchestrator.py", line 78, in advance
+    changed = self.repository.transition(asset_id, state, target)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\repositories\business_asset_analysis_workflow_repository.py", line 47, in transition
+    cursor.execute(
+  File "C:\Users\knphi\AppData\Local\Programs\Python\Python311\Lib\site-packages\psycopg\cursor.py", line 117, in execute
+    raise ex.with_traceback(None)
+psycopg.errors.IndeterminateDatatype: could not determine data type of parameter $2
+ERROR:analysis-orchestrator:Analysis orchestration cycle failed
+Traceback (most recent call last):
+  File "C:\Creator-OS-React\app\workers\analysis_orchestrator.py", line 26, in run
+    decision = orchestrator.orchestrate_next()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\services\business_asset_analysis_orchestrator.py", line 87, in orchestrate_next
+    return self.advance(asset_id) if asset_id is not None else None
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\services\business_asset_analysis_orchestrator.py", line 78, in advance
+    changed = self.repository.transition(asset_id, state, target)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\repositories\business_asset_analysis_workflow_repository.py", line 47, in transition
+    cursor.execute(
+  File "C:\Users\knphi\AppData\Local\Programs\Python\Python311\Lib\site-packages\psycopg\cursor.py", line 117, in execute
+    raise ex.with_traceback(None)
+psycopg.errors.IndeterminateDatatype: could not determine data type of parameter $2
+ERROR:analysis-orchestrator:Analysis orchestration cycle failed
+Traceback (most recent call last):
+  File "C:\Creator-OS-React\app\workers\analysis_orchestrator.py", line 26, in run
+    decision = orchestrator.orchestrate_next()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\services\business_asset_analysis_orchestrator.py", line 87, in orchestrate_next
+    return self.advance(asset_id) if asset_id is not None else None
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\services\business_asset_analysis_orchestrator.py", line 78, in advance
+    changed = self.repository.transition(asset_id, state, target)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\repositories\business_asset_analysis_workflow_repository.py", line 47, in transition
+    cursor.execute(
+  File "C:\Users\knphi\AppData\Local\Programs\Python\Python311\Lib\site-packages\psycopg\cursor.py", line 117, in execute
+    raise ex.with_traceback(None)
+psycopg.errors.IndeterminateDatatype: could not determine data type of parameter $2
+ERROR:analysis-orchestrator:Analysis orchestration cycle failed
+Traceback (most recent call last):
+  File "C:\Creator-OS-React\app\workers\analysis_orchestrator.py", line 26, in run
+    decision = orchestrator.orchestrate_next()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\services\business_asset_analysis_orchestrator.py", line 87, in orchestrate_next
+    return self.advance(asset_id) if asset_id is not None else None
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\services\business_asset_analysis_orchestrator.py", line 78, in advance
+    changed = self.repository.transition(asset_id, state, target)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\repositories\business_asset_analysis_workflow_repository.py", line 47, in transition
+    cursor.execute(
+  File "C:\Users\knphi\AppData\Local\Programs\Python\Python311\Lib\site-packages\psycopg\cursor.py", line 117, in execute
+    raise ex.with_traceback(None)
+psycopg.errors.IndeterminateDatatype: could not determine data type of parameter $2
+ERROR:analysis-orchestrator:Analysis orchestration cycle failed
+Traceback (most recent call last):
+  File "C:\Creator-OS-React\app\workers\analysis_orchestrator.py", line 26, in run
+    decision = orchestrator.orchestrate_next()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\services\business_asset_analysis_orchestrator.py", line 87, in orchestrate_next
+    return self.advance(asset_id) if asset_id is not None else None
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\services\business_asset_analysis_orchestrator.py", line 78, in advance
+    changed = self.repository.transition(asset_id, state, target)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\repositories\business_asset_analysis_workflow_repository.py", line 47, in transition
+    cursor.execute(
+  File "C:\Users\knphi\AppData\Local\Programs\Python\Python311\Lib\site-packages\psycopg\cursor.py", line 117, in execute
+    raise ex.with_traceback(None)
+psycopg.errors.IndeterminateDatatype: could not determine data type of parameter $2
+ERROR:analysis-orchestrator:Analysis orchestration cycle failed
+Traceback (most recent call last):
+  File "C:\Creator-OS-React\app\workers\analysis_orchestrator.py", line 26, in run
+    decision = orchestrator.orchestrate_next()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\services\business_asset_analysis_orchestrator.py", line 87, in orchestrate_next
+    return self.advance(asset_id) if asset_id is not None else None
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\services\business_asset_analysis_orchestrator.py", line 78, in advance
+    changed = self.repository.transition(asset_id, state, target)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\repositories\business_asset_analysis_workflow_repository.py", line 47, in transition
+    cursor.execute(
+  File "C:\Users\knphi\AppData\Local\Programs\Python\Python311\Lib\site-packages\psycopg\cursor.py", line 117, in execute
+    raise ex.with_traceback(None)
+psycopg.errors.IndeterminateDatatype: could not determine data type of parameter $2
+ERROR:analysis-orchestrator:Analysis orchestration cycle failed
+Traceback (most recent call last):
+  File "C:\Creator-OS-React\app\workers\analysis_orchestrator.py", line 26, in run
+    decision = orchestrator.orchestrate_next()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\services\business_asset_analysis_orchestrator.py", line 87, in orchestrate_next
+    return self.advance(asset_id) if asset_id is not None else None
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\services\business_asset_analysis_orchestrator.py", line 78, in advance
+    changed = self.repository.transition(asset_id, state, target)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\repositories\business_asset_analysis_workflow_repository.py", line 47, in transition
+    cursor.execute(
+  File "C:\Users\knphi\AppData\Local\Programs\Python\Python311\Lib\site-packages\psycopg\cursor.py", line 117, in execute
+    raise ex.with_traceback(None)
+psycopg.errors.IndeterminateDatatype: could not determine data type of parameter $2
+ERROR:analysis-orchestrator:Analysis orchestration cycle failed
+Traceback (most recent call last):
+  File "C:\Creator-OS-React\app\workers\analysis_orchestrator.py", line 26, in run
+    decision = orchestrator.orchestrate_next()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\services\business_asset_analysis_orchestrator.py", line 87, in orchestrate_next
+    return self.advance(asset_id) if asset_id is not None else None
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\services\business_asset_analysis_orchestrator.py", line 78, in advance
+    changed = self.repository.transition(asset_id, state, target)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\repositories\business_asset_analysis_workflow_repository.py", line 47, in transition
+    cursor.execute(
+  File "C:\Users\knphi\AppData\Local\Programs\Python\Python311\Lib\site-packages\psycopg\cursor.py", line 117, in execute
+    raise ex.with_traceback(None)
+psycopg.errors.IndeterminateDatatype: could not determine data type of parameter $2
+ERROR:analysis-orchestrator:Analysis orchestration cycle failed
+Traceback (most recent call last):
+  File "C:\Creator-OS-React\app\workers\analysis_orchestrator.py", line 26, in run
+    decision = orchestrator.orchestrate_next()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\services\business_asset_analysis_orchestrator.py", line 87, in orchestrate_next
+    return self.advance(asset_id) if asset_id is not None else None
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\services\business_asset_analysis_orchestrator.py", line 78, in advance
+    changed = self.repository.transition(asset_id, state, target)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\repositories\business_asset_analysis_workflow_repository.py", line 47, in transition
+    cursor.execute(
+  File "C:\Users\knphi\AppData\Local\Programs\Python\Python311\Lib\site-packages\psycopg\cursor.py", line 117, in execute
+    raise ex.with_traceback(None)
+psycopg.errors.IndeterminateDatatype: could not determine data type of parameter $2
+ERROR:analysis-orchestrator:Analysis orchestration cycle failed
+Traceback (most recent call last):
+  File "C:\Creator-OS-React\app\workers\analysis_orchestrator.py", line 26, in run
+    decision = orchestrator.orchestrate_next()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\services\business_asset_analysis_orchestrator.py", line 87, in orchestrate_next
+    return self.advance(asset_id) if asset_id is not None else None
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\services\business_asset_analysis_orchestrator.py", line 78, in advance
+    changed = self.repository.transition(asset_id, state, target)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\repositories\business_asset_analysis_workflow_repository.py", line 47, in transition
+    cursor.execute(
+  File "C:\Users\knphi\AppData\Local\Programs\Python\Python311\Lib\site-packages\psycopg\cursor.py", line 117, in execute
+    raise ex.with_traceback(None)
+psycopg.errors.IndeterminateDatatype: could not determine data type of parameter $2
+ERROR:analysis-orchestrator:Analysis orchestration cycle failed
+Traceback (most recent call last):
+  File "C:\Creator-OS-React\app\workers\analysis_orchestrator.py", line 26, in run
+    decision = orchestrator.orchestrate_next()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\services\business_asset_analysis_orchestrator.py", line 87, in orchestrate_next
+    return self.advance(asset_id) if asset_id is not None else None
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\services\business_asset_analysis_orchestrator.py", line 78, in advance
+    changed = self.repository.transition(asset_id, state, target)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\repositories\business_asset_analysis_workflow_repository.py", line 47, in transition
+    cursor.execute(
+  File "C:\Users\knphi\AppData\Local\Programs\Python\Python311\Lib\site-packages\psycopg\cursor.py", line 117, in execute
+    raise ex.with_traceback(None)
+psycopg.errors.IndeterminateDatatype: could not determine data type of parameter $2
+ERROR:analysis-orchestrator:Analysis orchestration cycle failed
+Traceback (most recent call last):
+  File "C:\Creator-OS-React\app\workers\analysis_orchestrator.py", line 26, in run
+    decision = orchestrator.orchestrate_next()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\services\business_asset_analysis_orchestrator.py", line 87, in orchestrate_next
+    return self.advance(asset_id) if asset_id is not None else None
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\services\business_asset_analysis_orchestrator.py", line 78, in advance
+    changed = self.repository.transition(asset_id, state, target)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\repositories\business_asset_analysis_workflow_repository.py", line 47, in transition
+    cursor.execute(
+  File "C:\Users\knphi\AppData\Local\Programs\Python\Python311\Lib\site-packages\psycopg\cursor.py", line 117, in execute
+    raise ex.with_traceback(None)
+psycopg.errors.IndeterminateDatatype: could not determine data type of parameter $2
+ERROR:analysis-orchestrator:Analysis orchestration cycle failed
+Traceback (most recent call last):
+  File "C:\Creator-OS-React\app\workers\analysis_orchestrator.py", line 26, in run
+    decision = orchestrator.orchestrate_next()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\services\business_asset_analysis_orchestrator.py", line 87, in orchestrate_next
+    return self.advance(asset_id) if asset_id is not None else None
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\services\business_asset_analysis_orchestrator.py", line 78, in advance
+    changed = self.repository.transition(asset_id, state, target)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\repositories\business_asset_analysis_workflow_repository.py", line 47, in transition
+    cursor.execute(
+  File "C:\Users\knphi\AppData\Local\Programs\Python\Python311\Lib\site-packages\psycopg\cursor.py", line 117, in execute
+    raise ex.with_traceback(None)
+psycopg.errors.IndeterminateDatatype: could not determine data type of parameter $2
+ERROR:analysis-orchestrator:Analysis orchestration cycle failed
+Traceback (most recent call last):
+  File "C:\Creator-OS-React\app\workers\analysis_orchestrator.py", line 26, in run
+    decision = orchestrator.orchestrate_next()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\services\business_asset_analysis_orchestrator.py", line 87, in orchestrate_next
+    return self.advance(asset_id) if asset_id is not None else None
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\services\business_asset_analysis_orchestrator.py", line 78, in advance
+    changed = self.repository.transition(asset_id, state, target)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\repositories\business_asset_analysis_workflow_repository.py", line 47, in transition
+    cursor.execute(
+  File "C:\Users\knphi\AppData\Local\Programs\Python\Python311\Lib\site-packages\psycopg\cursor.py", line 117, in execute
+    raise ex.with_traceback(None)
+psycopg.errors.IndeterminateDatatype: could not determine data type of parameter $2
+ERROR:analysis-orchestrator:Analysis orchestration cycle failed
+Traceback (most recent call last):
+  File "C:\Creator-OS-React\app\workers\analysis_orchestrator.py", line 26, in run
+    decision = orchestrator.orchestrate_next()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\services\business_asset_analysis_orchestrator.py", line 87, in orchestrate_next
+    return self.advance(asset_id) if asset_id is not None else None
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\services\business_asset_analysis_orchestrator.py", line 78, in advance
+    changed = self.repository.transition(asset_id, state, target)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\repositories\business_asset_analysis_workflow_repository.py", line 47, in transition
+    cursor.execute(
+  File "C:\Users\knphi\AppData\Local\Programs\Python\Python311\Lib\site-packages\psycopg\cursor.py", line 117, in execute
+    raise ex.with_traceback(None)
+psycopg.errors.IndeterminateDatatype: could not determine data type of parameter $2
+ERROR:analysis-orchestrator:Analysis orchestration cycle failed
+Traceback (most recent call last):
+  File "C:\Creator-OS-React\app\workers\analysis_orchestrator.py", line 26, in run
+    decision = orchestrator.orchestrate_next()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\services\business_asset_analysis_orchestrator.py", line 87, in orchestrate_next
+    return self.advance(asset_id) if asset_id is not None else None
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\services\business_asset_analysis_orchestrator.py", line 78, in advance
+    changed = self.repository.transition(asset_id, state, target)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\repositories\business_asset_analysis_workflow_repository.py", line 47, in transition
+    cursor.execute(
+  File "C:\Users\knphi\AppData\Local\Programs\Python\Python311\Lib\site-packages\psycopg\cursor.py", line 117, in execute
+    raise ex.with_traceback(None)
+psycopg.errors.IndeterminateDatatype: could not determine data type of parameter $2
+ERROR:analysis-orchestrator:Analysis orchestration cycle failed
+Traceback (most recent call last):
+  File "C:\Creator-OS-React\app\workers\analysis_orchestrator.py", line 26, in run
+    decision = orchestrator.orchestrate_next()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\services\business_asset_analysis_orchestrator.py", line 87, in orchestrate_next
+    return self.advance(asset_id) if asset_id is not None else None
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\services\business_asset_analysis_orchestrator.py", line 78, in advance
+    changed = self.repository.transition(asset_id, state, target)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\repositories\business_asset_analysis_workflow_repository.py", line 47, in transition
+    cursor.execute(
+  File "C:\Users\knphi\AppData\Local\Programs\Python\Python311\Lib\site-packages\psycopg\cursor.py", line 117, in execute
+    raise ex.with_traceback(None)
+psycopg.errors.IndeterminateDatatype: could not determine data type of parameter $2
+ERROR:analysis-orchestrator:Analysis orchestration cycle failed
+Traceback (most recent call last):
+  File "C:\Creator-OS-React\app\workers\analysis_orchestrator.py", line 26, in run
+    decision = orchestrator.orchestrate_next()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\services\business_asset_analysis_orchestrator.py", line 87, in orchestrate_next
+    return self.advance(asset_id) if asset_id is not None else None
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\services\business_asset_analysis_orchestrator.py", line 78, in advance
+    changed = self.repository.transition(asset_id, state, target)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\repositories\business_asset_analysis_workflow_repository.py", line 47, in transition
+    cursor.execute(
+  File "C:\Users\knphi\AppData\Local\Programs\Python\Python311\Lib\site-packages\psycopg\cursor.py", line 117, in execute
+    raise ex.with_traceback(None)
+psycopg.errors.IndeterminateDatatype: could not determine data type of parameter $2
+ERROR:analysis-orchestrator:Analysis orchestration cycle failed
+Traceback (most recent call last):
+  File "C:\Creator-OS-React\app\workers\analysis_orchestrator.py", line 26, in run
+    decision = orchestrator.orchestrate_next()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\services\business_asset_analysis_orchestrator.py", line 87, in orchestrate_next
+    return self.advance(asset_id) if asset_id is not None else None
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\services\business_asset_analysis_orchestrator.py", line 78, in advance
+    changed = self.repository.transition(asset_id, state, target)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\repositories\business_asset_analysis_workflow_repository.py", line 47, in transition
+    cursor.execute(
+  File "C:\Users\knphi\AppData\Local\Programs\Python\Python311\Lib\site-packages\psycopg\cursor.py", line 117, in execute
+    raise ex.with_traceback(None)
+psycopg.errors.IndeterminateDatatype: could not determine data type of parameter $2
+ERROR:analysis-orchestrator:Analysis orchestration cycle failed
+Traceback (most recent call last):
+  File "C:\Creator-OS-React\app\workers\analysis_orchestrator.py", line 26, in run
+    decision = orchestrator.orchestrate_next()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\services\business_asset_analysis_orchestrator.py", line 87, in orchestrate_next
+    return self.advance(asset_id) if asset_id is not None else None
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\services\business_asset_analysis_orchestrator.py", line 78, in advance
+    changed = self.repository.transition(asset_id, state, target)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\repositories\business_asset_analysis_workflow_repository.py", line 47, in transition
+    cursor.execute(
+  File "C:\Users\knphi\AppData\Local\Programs\Python\Python311\Lib\site-packages\psycopg\cursor.py", line 117, in execute
+    raise ex.with_traceback(None)
+psycopg.errors.IndeterminateDatatype: could not determine data type of parameter $2
+ERROR:analysis-orchestrator:Analysis orchestration cycle failed
+Traceback (most recent call last):
+  File "C:\Creator-OS-React\app\workers\analysis_orchestrator.py", line 26, in run
+    decision = orchestrator.orchestrate_next()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\services\business_asset_analysis_orchestrator.py", line 87, in orchestrate_next
+    return self.advance(asset_id) if asset_id is not None else None
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\services\business_asset_analysis_orchestrator.py", line 78, in advance
+    changed = self.repository.transition(asset_id, state, target)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\repositories\business_asset_analysis_workflow_repository.py", line 47, in transition
+    cursor.execute(
+  File "C:\Users\knphi\AppData\Local\Programs\Python\Python311\Lib\site-packages\psycopg\cursor.py", line 117, in execute
+    raise ex.with_traceback(None)
+psycopg.errors.IndeterminateDatatype: could not determine data type of parameter $2
+ERROR:analysis-orchestrator:Analysis orchestration cycle failed
+Traceback (most recent call last):
+  File "C:\Creator-OS-React\app\workers\analysis_orchestrator.py", line 26, in run
+    decision = orchestrator.orchestrate_next()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\services\business_asset_analysis_orchestrator.py", line 87, in orchestrate_next
+    return self.advance(asset_id) if asset_id is not None else None
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\services\business_asset_analysis_orchestrator.py", line 78, in advance
+    changed = self.repository.transition(asset_id, state, target)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\repositories\business_asset_analysis_workflow_repository.py", line 47, in transition
+    cursor.execute(
+  File "C:\Users\knphi\AppData\Local\Programs\Python\Python311\Lib\site-packages\psycopg\cursor.py", line 117, in execute
+    raise ex.with_traceback(None)
+psycopg.errors.IndeterminateDatatype: could not determine data type of parameter $2
+ERROR:analysis-orchestrator:Analysis orchestration cycle failed
+Traceback (most recent call last):
+  File "C:\Creator-OS-React\app\workers\analysis_orchestrator.py", line 26, in run
+    decision = orchestrator.orchestrate_next()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\services\business_asset_analysis_orchestrator.py", line 87, in orchestrate_next
+    return self.advance(asset_id) if asset_id is not None else None
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\services\business_asset_analysis_orchestrator.py", line 78, in advance
+    changed = self.repository.transition(asset_id, state, target)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\repositories\business_asset_analysis_workflow_repository.py", line 47, in transition
+    cursor.execute(
+  File "C:\Users\knphi\AppData\Local\Programs\Python\Python311\Lib\site-packages\psycopg\cursor.py", line 117, in execute
+    raise ex.with_traceback(None)
+psycopg.errors.IndeterminateDatatype: could not determine data type of parameter $2
+ERROR:analysis-orchestrator:Analysis orchestration cycle failed
+Traceback (most recent call last):
+  File "C:\Creator-OS-React\app\workers\analysis_orchestrator.py", line 26, in run
+    decision = orchestrator.orchestrate_next()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\services\business_asset_analysis_orchestrator.py", line 87, in orchestrate_next
+    return self.advance(asset_id) if asset_id is not None else None
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\services\business_asset_analysis_orchestrator.py", line 78, in advance
+    changed = self.repository.transition(asset_id, state, target)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\repositories\business_asset_analysis_workflow_repository.py", line 47, in transition
+    cursor.execute(
+  File "C:\Users\knphi\AppData\Local\Programs\Python\Python311\Lib\site-packages\psycopg\cursor.py", line 117, in execute
+    raise ex.with_traceback(None)
+psycopg.errors.IndeterminateDatatype: could not determine data type of parameter $2
+ERROR:analysis-orchestrator:Analysis orchestration cycle failed
+Traceback (most recent call last):
+  File "C:\Creator-OS-React\app\workers\analysis_orchestrator.py", line 26, in run
+    decision = orchestrator.orchestrate_next()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\services\business_asset_analysis_orchestrator.py", line 87, in orchestrate_next
+    return self.advance(asset_id) if asset_id is not None else None
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\services\business_asset_analysis_orchestrator.py", line 78, in advance
+    changed = self.repository.transition(asset_id, state, target)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\repositories\business_asset_analysis_workflow_repository.py", line 47, in transition
+    cursor.execute(
+  File "C:\Users\knphi\AppData\Local\Programs\Python\Python311\Lib\site-packages\psycopg\cursor.py", line 117, in execute
+    raise ex.with_traceback(None)
+psycopg.errors.IndeterminateDatatype: could not determine data type of parameter $2
+ERROR:analysis-orchestrator:Analysis orchestration cycle failed
+Traceback (most recent call last):
+  File "C:\Creator-OS-React\app\workers\analysis_orchestrator.py", line 26, in run
+    decision = orchestrator.orchestrate_next()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\services\business_asset_analysis_orchestrator.py", line 87, in orchestrate_next
+    return self.advance(asset_id) if asset_id is not None else None
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\services\business_asset_analysis_orchestrator.py", line 78, in advance
+    changed = self.repository.transition(asset_id, state, target)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\repositories\business_asset_analysis_workflow_repository.py", line 47, in transition
+    cursor.execute(
+  File "C:\Users\knphi\AppData\Local\Programs\Python\Python311\Lib\site-packages\psycopg\cursor.py", line 117, in execute
+    raise ex.with_traceback(None)
+psycopg.errors.IndeterminateDatatype: could not determine data type of parameter $2
+ERROR:analysis-orchestrator:Analysis orchestration cycle failed
+Traceback (most recent call last):
+  File "C:\Creator-OS-React\app\workers\analysis_orchestrator.py", line 26, in run
+    decision = orchestrator.orchestrate_next()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\services\business_asset_analysis_orchestrator.py", line 87, in orchestrate_next
+    return self.advance(asset_id) if asset_id is not None else None
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\services\business_asset_analysis_orchestrator.py", line 78, in advance
+    changed = self.repository.transition(asset_id, state, target)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\repositories\business_asset_analysis_workflow_repository.py", line 47, in transition
+    cursor.execute(
+  File "C:\Users\knphi\AppData\Local\Programs\Python\Python311\Lib\site-packages\psycopg\cursor.py", line 117, in execute
+    raise ex.with_traceback(None)
+psycopg.errors.IndeterminateDatatype: could not determine data type of parameter $2
+ERROR:analysis-orchestrator:Analysis orchestration cycle failed
+Traceback (most recent call last):
+  File "C:\Creator-OS-React\app\workers\analysis_orchestrator.py", line 26, in run
+    decision = orchestrator.orchestrate_next()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\services\business_asset_analysis_orchestrator.py", line 87, in orchestrate_next
+    return self.advance(asset_id) if asset_id is not None else None
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\services\business_asset_analysis_orchestrator.py", line 78, in advance
+    changed = self.repository.transition(asset_id, state, target)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\repositories\business_asset_analysis_workflow_repository.py", line 47, in transition
+    cursor.execute(
+  File "C:\Users\knphi\AppData\Local\Programs\Python\Python311\Lib\site-packages\psycopg\cursor.py", line 117, in execute
+    raise ex.with_traceback(None)
+psycopg.errors.IndeterminateDatatype: could not determine data type of parameter $2
+ERROR:analysis-orchestrator:Analysis orchestration cycle failed
+Traceback (most recent call last):
+  File "C:\Creator-OS-React\app\workers\analysis_orchestrator.py", line 26, in run
+    decision = orchestrator.orchestrate_next()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\services\business_asset_analysis_orchestrator.py", line 87, in orchestrate_next
+    return self.advance(asset_id) if asset_id is not None else None
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\services\business_asset_analysis_orchestrator.py", line 78, in advance
+    changed = self.repository.transition(asset_id, state, target)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Creator-OS-React\app\repositories\business_asset_analysis_workflow_repository.py", line 47, in transition
+    cursor.execute(
+  File "C:\Users\knphi\AppData\Local\Programs\Python\Python311\Lib\site-packages\psycopg\cursor.py", line 117, in execute
+    raise ex.with_traceback(None)
+psycopg.errors.IndeterminateDatatype: could not determine data type of parameter $2

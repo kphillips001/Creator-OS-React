@@ -26,12 +26,14 @@ from app.api.reference_library import router as reference_library_router
 from app.api.asset_library import router as asset_library_router
 from app.api.test_chat import router as test_chat_router
 from app.api.business_assets import router as business_assets_router
+from app.api.photoshoot_gallery import router as photoshoot_gallery_router
 from app.api.products import router as products_router
 from app.api.customers import router as customers_router
 from app.api.sales import router as sales_router
 from app.api.operations import router as operations_router
 from app.services.worker_heartbeat_instrumentation import record_heartbeat_safely
 from app.services.worker_heartbeat_service import WorkerHeartbeatService
+from app.services.canonical_reference_service import recover_all_active_creator_references
 
 
 _heartbeat_logger = logging.getLogger("fastapi-worker-heartbeat")
@@ -47,6 +49,7 @@ async def _fastapi_heartbeat_loop(service: WorkerHeartbeatService) -> None:
 async def _application_lifespan(application: FastAPI):
     service = WorkerHeartbeatService(worker_name="FastAPI", worker_type="application_runtime", poll_interval_seconds=30)
     await asyncio.to_thread(record_heartbeat_safely, _heartbeat_logger, "startup", service.register_startup)
+    await asyncio.to_thread(recover_all_active_creator_references)
     task = asyncio.create_task(_fastapi_heartbeat_loop(service))
     application.state.worker_heartbeat_service = service
     application.state.worker_heartbeat_task = task
@@ -73,6 +76,7 @@ app.include_router(reference_library_router)
 app.include_router(asset_library_router)
 app.include_router(test_chat_router)
 app.include_router(business_assets_router)
+app.include_router(photoshoot_gallery_router)
 app.include_router(products_router)
 app.include_router(customers_router)
 app.include_router(sales_router)

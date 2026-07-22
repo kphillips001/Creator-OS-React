@@ -11,11 +11,11 @@ $ProjectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $FrontendRoot = Join-Path $ProjectRoot "frontend"
 $BackendPort = 8001
 $FrontendPort = 5174
-$BackendHealthUrl = "http://127.0.0.1:$BackendPort/api/v1/content-studio/context"
+$BackendHealthUrl = "http://127.0.0.1:$BackendPort/openapi.json"
 $FrontendHealthUrl = "http://127.0.0.1:$FrontendPort/"
 $FrontendUrl = "http://127.0.0.1:$FrontendPort/"
 $BackendCommand = "python.exe"
-$BackendArguments = @("-m", "uvicorn", "app.fanvue_callback_server:app", "--port", "$BackendPort")
+$BackendArguments = @("-m", "uvicorn", "app.fanvue_callback_server:app", "--app-dir", $ProjectRoot, "--port", "$BackendPort")
 $FrontendCommand = "npm.cmd"
 $FrontendArguments = @("run", "dev", "--", "--host", "127.0.0.1", "--port", "$FrontendPort")
 $ProcessStopTimeoutSeconds = 20
@@ -28,8 +28,99 @@ $BackendErrorLog = Join-Path $LogDirectory "fastapi_error.log"
 $FrontendOutputLog = Join-Path $LogDirectory "react.log"
 $FrontendErrorLog = Join-Path $LogDirectory "react_error.log"
 $LauncherLog = Join-Path $LogDirectory "launcher.log"
+$LauncherFailureLog = Join-Path $LogDirectory "launcher_failure.txt"
+$ServiceStatePath = Join-Path $LogDirectory "launcher_services.json"
 $WorkerSupervisorModule = "tools.launcher.worker_supervisor"
 $DesktopShortcutHelper = Join-Path $PSScriptRoot "create_desktop_shortcut.ps1"
+$script:CurrentStep = "initialization"
+
+# Core Business Asset analysis is part of the Creator_OS application lifecycle,
+# not optional automation. Explicit user environment values still win.
+foreach ($workerSwitch in @(
+    "CREATOR_OS_LAUNCH_ANALYSIS_ORCHESTRATOR",
+    "CREATOR_OS_LAUNCH_NUDENET_ANALYSIS",
+    "CREATOR_OS_LAUNCH_VISION_ANALYSIS",
+    "CREATOR_OS_LAUNCH_GROK_ANALYSIS",
+    "CREATOR_OS_LAUNCH_CONTENT_INTELLIGENCE_MERGE",
+    "CREATOR_OS_LAUNCH_PHOTOSHOOT_ANALYSIS",
+    "CREATOR_OS_LAUNCH_PHOTOSHOOT_AUTO_RUN"
+)) {
+    if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($workerSwitch))) {
+        [Environment]::SetEnvironmentVariable($workerSwitch, "true", "Process")
+    }
+}
+
+function Write-LauncherEvent {
+    param(
+        [Parameter(Mandatory)][string]$Message,
+        [ValidateSet("INFO", "ERROR")][string]$Level = "INFO"
+    )
+    $line = "[$([DateTime]::UtcNow.ToString('o'))] [$Level] [$($script:CurrentStep)] $Message"
+    Add-Content -LiteralPath $LauncherLog -Value $line -Encoding UTF8
+    Write-Host $line
+}
+
+function Set-LauncherStep {
+    param([Parameter(Mandatory)][string]$Name)
+    $script:CurrentStep = $Name
+    Write-LauncherEvent -Message "Starting step."
+}
+
+function Format-LaunchCommand {
+    param([string]$Command, [string[]]$Arguments)
+    return "$Command $($Arguments -join ' ')"
+}
+
+function Save-ServiceState {
+    param([string]$Name, [int[]]$ProcessIds, [string]$CommandLine)
+    $state = @{}
+    if (Test-Path -LiteralPath $ServiceStatePath) {
+        try {
+            $savedState = Get-Content -LiteralPath $ServiceStatePath -Raw | ConvertFrom-Json
+            foreach ($property in $savedState.PSObject.Properties) {
+                $state[$property.Name] = $property.Value
+            }
+        } catch { $state = @{} }
+    }
+    $state[$Name] = @{
+        processIds = @($ProcessIds)
+        command = $CommandLine
+        projectRoot = $ProjectRoot
+        recordedAt = [DateTime]::UtcNow.ToString("o")
+    }
+    $state | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $ServiceStatePath -Encoding UTF8
+}
+
+function Test-CreatorOsProcess {
+    param(
+        [Parameter(Mandatory)][int[]]$ProcessIds,
+        [Parameter(Mandatory)][ValidateSet("Backend", "Frontend")][string]$ServiceType
+    )
+    $savedIds = @()
+    if (Test-Path -LiteralPath $ServiceStatePath) {
+        try {
+            $state = Get-Content -LiteralPath $ServiceStatePath -Raw | ConvertFrom-Json
+            $saved = $state.PSObject.Properties[$ServiceType].Value
+            if ($saved.projectRoot -eq $ProjectRoot) { $savedIds = @($saved.processIds) }
+        } catch {}
+    }
+    foreach ($processId in $ProcessIds) {
+        $process = Get-CimInstance Win32_Process -Filter "ProcessId = $processId" -ErrorAction SilentlyContinue
+        if ($null -eq $process) { return $false }
+        $commandLine = [string]$process.CommandLine
+        if ($ServiceType -eq "Backend") {
+            $signatureMatches = $commandLine -match 'uvicorn\s+app\.fanvue_callback_server:app' -and
+                $commandLine -match "--port\s+$BackendPort" -and
+                ($commandLine -match [regex]::Escape($ProjectRoot) -or $savedIds -contains $processId)
+        } else {
+            $signatureMatches = $commandLine -match 'vite' -and
+                $commandLine -match "--port\s+$FrontendPort" -and
+                $commandLine -match [regex]::Escape($FrontendRoot)
+        }
+        if (-not $signatureMatches) { return $false }
+    }
+    return $ProcessIds.Count -gt 0
+}
 
 function Test-CreatorOsReady {
     param(
@@ -48,11 +139,10 @@ function Test-CreatorOsReady {
         }
 
         $payload = $response.Content | ConvertFrom-Json
-        $properties = @($payload.PSObject.Properties.Name)
-        return $payload.success -eq $true -and
-            $properties -contains "creatorProfileExists" -and
-            $properties -contains "activeReferenceExists" -and
-            $properties -contains "activeReferenceAssetId"
+        $paths = @($payload.paths.PSObject.Properties.Name)
+        return $payload.info.title -eq "FastAPI" -and
+            $paths -contains "/api/v1/content-studio/context" -and
+            $paths -contains "/api/v1/operations/workers"
     }
     catch {
         return $false
@@ -133,7 +223,10 @@ function Stop-CreatorService {
         return @()
     }
     if (-not (Test-CreatorOsReady -Url $HealthUrl -ServiceType $ServiceType)) {
-        throw "Port $Port is occupied by another application or an unhealthy process; it is not a valid Creator_OS $Name service. The process was not stopped."
+        if (-not (Test-CreatorOsProcess -ProcessIds $listenerIds -ServiceType $ServiceType)) {
+            throw "Port $Port is occupied by another application or an unverified process; it is not a valid Creator_OS $Name service. The process was not stopped."
+        }
+        Write-LauncherEvent -Message "$Name health check failed, but listener PID(s) $($listenerIds -join ', ') match the recorded $ProjectRoot Creator_OS command. Recovering by restarting only those processes."
     }
 
     Write-Host "Stopping $Name..."
@@ -181,6 +274,8 @@ function Start-CreatorService {
         throw "Required command '$Command' was not found. Install the project prerequisites and try again."
     }
 
+    $commandDisplay = Format-LaunchCommand -Command $resolvedCommand.Source -Arguments $Arguments
+    Write-LauncherEvent -Message "Command: $commandDisplay; working directory: $WorkingDirectory"
     Write-Host "Starting $Name..."
     $process = Start-Process `
         -FilePath $resolvedCommand.Source `
@@ -195,7 +290,9 @@ function Start-CreatorService {
         throw "$Name did not respond within $StartupTimeoutSeconds seconds. Review '$ErrorLog'."
     }
     Write-Host "$SuccessMark $Name running" -ForegroundColor Green
-    return @(Get-ListeningProcessIds -Port $Port)
+    $listenerIds = @(Get-ListeningProcessIds -Port $Port)
+    Save-ServiceState -Name $ServiceType -ProcessIds $listenerIds -CommandLine $commandDisplay
+    return $listenerIds
 }
 
 function Invoke-WorkerSupervisor {
@@ -205,8 +302,10 @@ function Invoke-WorkerSupervisor {
     if ($null -eq $python) {
         throw "Python is required for worker supervision."
     }
+    $commandDisplay = "$($python.Source) -m $WorkerSupervisorModule $Action"
+    Write-LauncherEvent -Message "Command: $commandDisplay; working directory: $ProjectRoot"
     $output = & $python.Source -m $WorkerSupervisorModule $Action 2>&1
-    $output | Tee-Object -FilePath $LauncherLog -Append | ForEach-Object { Write-Host $_ }
+    $output | ForEach-Object { Write-LauncherEvent -Message ([string]$_) }
     if ($LASTEXITCODE -ne 0) {
         throw "Worker supervision action '$Action' failed. Review '$LauncherLog'."
     }
@@ -231,11 +330,19 @@ function Wait-ForFastApiHeartbeat {
     throw "FastAPI HTTP became ready but its persisted heartbeat did not become healthy within $TimeoutSeconds seconds."
 }
 
+$launcherMutex = [Threading.Mutex]::new($false, "Global\Creator_OS_React_Launcher")
+$mutexAcquired = $false
 try {
+    $mutexAcquired = $launcherMutex.WaitOne(1000)
+    if (-not $mutexAcquired) {
+        throw "Another Creator_OS launch is already in progress. Wait for it to finish before launching again."
+    }
     Write-Host "Starting Creator_OS..." -ForegroundColor Cyan
     New-Item -ItemType Directory -Path $LogDirectory -Force | Out-Null
-    Add-Content -Path $LauncherLog -Value "[$([DateTime]::UtcNow.ToString('o'))] Creator_OS restart requested."
+    Remove-Item -LiteralPath $LauncherFailureLog -Force -ErrorAction SilentlyContinue
+    Write-LauncherEvent -Message "Creator_OS restart requested from $ProjectRoot."
 
+    Set-LauncherStep -Name "desktop-shortcut"
     try {
         & $DesktopShortcutHelper -ProjectRoot $ProjectRoot
     }
@@ -243,8 +350,10 @@ try {
         Write-Host "Desktop shortcut could not be created: $($_.Exception.Message)" -ForegroundColor Yellow
     }
 
+    Set-LauncherStep -Name "stop-workers"
     Invoke-WorkerSupervisor -Action "stop-managed"
 
+    Set-LauncherStep -Name "stop-frontend"
     $previousFrontendIds = @(Stop-CreatorService `
         -Name "React" `
         -ServiceType "Frontend" `
@@ -252,6 +361,7 @@ try {
         -HealthUrl $FrontendHealthUrl `
         -TimeoutSeconds $ProcessStopTimeoutSeconds)
 
+    Set-LauncherStep -Name "stop-backend"
     $previousBackendIds = @(Stop-CreatorService `
         -Name "Backend" `
         -ServiceType "Backend" `
@@ -259,6 +369,7 @@ try {
         -HealthUrl $BackendHealthUrl `
         -TimeoutSeconds $ProcessStopTimeoutSeconds)
 
+    Set-LauncherStep -Name "start-backend"
     $backendIds = @(Start-CreatorService `
         -Name "Backend" `
         -ServiceType "Backend" `
@@ -274,9 +385,12 @@ try {
         throw "Backend restart reused a previous listener PID unexpectedly."
     }
 
+    Set-LauncherStep -Name "backend-heartbeat"
     Wait-ForFastApiHeartbeat -TimeoutSeconds $BackendStartupTimeoutSeconds
+    Set-LauncherStep -Name "start-workers"
     Invoke-WorkerSupervisor -Action "start-enabled"
 
+    Set-LauncherStep -Name "start-frontend"
     $frontendIds = @(Start-CreatorService `
         -Name "React" `
         -ServiceType "Frontend" `
@@ -292,15 +406,26 @@ try {
         throw "React restart reused a previous listener PID unexpectedly."
     }
 
-    Write-Host "Opening browser..."
+    Set-LauncherStep -Name "open-browser"
+    Write-LauncherEvent -Message "Command: Start-Process $FrontendUrl"
     Start-Process $FrontendUrl
+    Write-LauncherEvent -Message "Creator_OS launch completed successfully."
     Write-Host "Done." -ForegroundColor Green
     exit 0
 }
 catch {
+    $failure = "Creator_OS failed during '$($script:CurrentStep)': $($_.Exception.Message)`r`n$($_.ScriptStackTrace)"
+    try {
+        New-Item -ItemType Directory -Path $LogDirectory -Force | Out-Null
+        Write-LauncherEvent -Message $failure -Level "ERROR"
+        Set-Content -LiteralPath $LauncherFailureLog -Value $failure -Encoding UTF8
+    } catch {}
     Write-Host ""
-    Write-Host "Creator_OS failed to start: $($_.Exception.Message)" -ForegroundColor Red
+    Write-Host $failure -ForegroundColor Red
     Write-Host "Launcher logs are stored in '$LogDirectory'." -ForegroundColor Yellow
-    Read-Host "Press Enter to close"
     exit 1
+}
+finally {
+    if ($mutexAcquired) { $launcherMutex.ReleaseMutex() }
+    $launcherMutex.Dispose()
 }

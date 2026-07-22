@@ -24,6 +24,8 @@ from app.services.content_archive_service import ContentArchiveService
 from app.services.creator_approval_service import CreatorApprovalService
 from app.services.generation_engine_service import GenerationEngineService
 from app.services.generation_result_ingestion_service import GenerationResultIngestionService
+from app.services.reference_asset_protection import is_protected_generation_metadata, is_protected_reference_asset
+from app.repositories.asset_repository import AssetRepository
 
 
 class GenerationLibraryService:
@@ -38,12 +40,14 @@ class GenerationLibraryService:
         storage_dir: str | Path | None = None,
         archive_service: ContentArchiveService | None = None,
         creator_approval_service: CreatorApprovalService | None = None,
+        asset_repository: AssetRepository | None = None,
     ):
         self.storage_dir = Path(storage_dir or self.DEFAULT_STORAGE_DIR)
         self.archive_service = archive_service or ContentArchiveService()
         self.creator_approval = creator_approval_service or CreatorApprovalService(
             storage_dir=self.storage_dir / "creator_approvals"
         )
+        self.assets = asset_repository or AssetRepository()
 
     @property
     def records_path(self) -> Path:
@@ -185,6 +189,103 @@ class GenerationLibraryService:
         self._replace_record(updated)
         return updated
 
+    def mark_business_registered(self, image_id: str, asset_id: int) -> GeneratedImageRecord:
+        """Persist successful promotion and remove the item from staged views."""
+        record = self.get(str(image_id))
+        updated = replace(
+            record,
+            status="business_asset_registered",
+            review_state="business_asset_registered",
+            selected=False,
+            imported_asset_id=int(asset_id),
+            generation_metadata={
+                **dict(record.generation_metadata or {}),
+                "asset_registration_phase": 4,
+                "registered_asset_id": int(asset_id),
+                "business_asset_analysis_status": "PENDING",
+            },
+            updated_at=utc_now(),
+        )
+        self._replace_record(updated)
+        return updated
+
+    def move_to_asset_library(self, image_id: str) -> tuple[GeneratedImageRecord, bool]:
+        """Stage an existing generation without creating a canonical Asset."""
+        record = self.get(str(image_id))
+        if is_protected_generation_metadata(record.generation_metadata):
+            raise ValueError("Protected Reference assets cannot be moved to Asset Library.")
+        if record.imported_asset_id is not None:
+            asset = self.assets.get_by_id(int(record.imported_asset_id))
+            if asset is not None and is_protected_reference_asset(asset):
+                raise ValueError("Protected Reference assets cannot be moved to Asset Library.")
+        if record.status == "staged_asset_library":
+            return record, True
+        if record.status != "active":
+            raise ValueError("Generated image is not available to move to Asset Library.")
+        staged_at = utc_now()
+        updated = replace(
+            record,
+            status="staged_asset_library",
+            review_state="staged_asset_library",
+            selected=False,
+            generation_metadata={
+                **dict(record.generation_metadata or {}),
+                "asset_library_item_kind": "staged_generation",
+                "asset_library_staged_at": staged_at,
+            },
+            updated_at=staged_at,
+        )
+        self._replace_record(updated)
+        return updated, False
+
+    def stage_photoshoot_image_in_asset_library(self, image_id: str) -> tuple[GeneratedImageRecord, bool]:
+        """Create an Asset Library projection for existing canonical Photoshoot media."""
+        record = self.get(str(image_id))
+        metadata = dict(record.generation_metadata or {})
+        if record.status == "staged_asset_library" and metadata.get("curated_from_photoshoot"):
+            return record, True
+        if record.status not in {"photoshoot_session", "photoshoot_completed", "staged_asset_library"}:
+            raise ValueError("Photoshoot image is not available for Asset Library curation.")
+        staged_at = utc_now()
+        updated = replace(
+            record, status="staged_asset_library", review_state="staged_asset_library", selected=False,
+            generation_metadata={
+                **metadata, "asset_library_item_kind": "staged_generation",
+                "asset_library_staged_at": metadata.get("asset_library_staged_at") or staged_at,
+                "curated_from_photoshoot": True,
+                "canonical_asset_id": record.imported_asset_id,
+            }, updated_at=staged_at,
+        )
+        self._replace_record(updated)
+        return updated, False
+
+    def move_back_to_generation_library(self, image_id: str) -> tuple[GeneratedImageRecord, bool]:
+        """Return a staged generation to the active library without duplicating it."""
+        record = self.get(str(image_id))
+        if is_protected_generation_metadata(record.generation_metadata):
+            raise ValueError("Protected Reference assets cannot be moved back.")
+        if record.imported_asset_id is not None:
+            asset = self.assets.get_by_id(int(record.imported_asset_id))
+            if asset is not None and is_protected_reference_asset(asset):
+                raise ValueError("Protected Reference assets cannot be moved back.")
+        if record.status == "active":
+            return record, True
+        if record.status != "staged_asset_library":
+            raise ValueError("Only staged Asset Library items can move back to Generation Library.")
+        metadata = {
+            key: value for key, value in dict(record.generation_metadata or {}).items()
+            if key not in {"asset_library_item_kind", "asset_library_staged_at"}
+        }
+        updated = replace(
+            record,
+            status="active",
+            review_state="unreviewed",
+            generation_metadata=metadata,
+            updated_at=utc_now(),
+        )
+        self._replace_record(updated)
+        return updated, False
+
     def bulk_select(self, filters: GenerationLibraryFilter) -> GenerationLibraryActionResult:
         result = self.browse(filters)
         return self.select(tuple(record.image_id for record in result.records), selected=True)
@@ -195,6 +296,18 @@ class GenerationLibraryService:
     def archive(self, image_ids: Iterable[str]) -> GenerationLibraryActionResult:
         ids = tuple(str(image_id) for image_id in image_ids)
         records_by_id = {record.image_id: record for record in self.list_records()}
+        already_completed = [records_by_id[image_id] for image_id in ids
+                             if image_id in records_by_id and records_by_id[image_id].status == "photoshoot_completed"]
+        if len(already_completed) == len(ids):
+            gallery_dir = Path(already_completed[0].output_reference).parent
+            self._write_photoshoot_session_manifest(
+                gallery_dir, session_id=session_id, records=self.list_records()
+            )
+            return GenerationLibraryActionResult(
+                success=True,
+                message="Photoshoot Gallery was already finalized and has been reconciled.",
+                image_ids=ids,
+            )
         archived = []
         errors = []
         for image_id in ids:

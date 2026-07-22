@@ -26,7 +26,7 @@ def _active_profile() -> dict:
 @router.get("/active")
 def active_reference():
     profile = _active_profile()
-    reference = ReferenceLibraryService().get_active_reference(
+    reference = ReferenceLibraryService().get_active_canonical_reference(
         creator_profile_id=int(profile["id"]),
     )
     if reference is None:
@@ -57,12 +57,12 @@ def active_reference():
 @router.get("/active/image", response_class=FileResponse)
 def active_reference_image():
     profile = _active_profile()
-    reference = ReferenceLibraryService().get_active_reference(
+    reference = ReferenceLibraryService().get_active_canonical_reference(
         creator_profile_id=int(profile["id"]),
     )
     if reference is None:
         raise HTTPException(status_code=404, detail="Active Reference Image not found.")
-    path = Path(reference.asset.preview_path or reference.asset.original_path or "").expanduser()
+    path = Path(reference.asset.original_path or "").expanduser()
     if not path.is_file():
         raise HTTPException(status_code=404, detail="Active Reference Image file not found.")
     return FileResponse(path)

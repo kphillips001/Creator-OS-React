@@ -375,6 +375,7 @@ class PhotoshootQueueService:
                 "seed_image_id": record.image_id,
                 "seed_output_reference": record.output_reference,
                 "seed_prompt_text": record.prompt_text,
+                "original_photoshoot_direction": record.prompt_text,
                 "seed_generation_job_id": record.generation_job_id,
                 "seed_generation_request_id": record.generation_request_id,
                 "seed_generation_result_id": record.generation_result_id,
@@ -600,6 +601,35 @@ class PhotoshootQueueService:
         )
         return request
 
+    def update_request_continuity_reference(
+        self,
+        request_id: str,
+        *,
+        image_id: str | None,
+        output_reference: str | None,
+    ) -> PhotoshootRequest:
+        request = self.get_request(request_id)
+        metadata = dict(request.metadata or {})
+        prompt_metadata = dict(metadata.get("prompt_metadata") or {})
+        image_value = str(image_id or "").strip()
+        reference_value = str(output_reference or "").strip()
+        updated = replace(
+            request,
+            metadata={
+                **metadata,
+                "active_reference_image_id": image_value,
+                "active_reference_output_reference": reference_value,
+                "prompt_metadata": {
+                    **prompt_metadata,
+                    "active_reference_image_id": image_value,
+                    "active_reference_output_reference": reference_value,
+                },
+            },
+            updated_at=utc_now(),
+        )
+        self._replace_request(updated)
+        return updated
+
     def finish_session(self, session_id: str) -> PhotoshootSession:
         session = self.get_session(session_id)
         continuity = dict(session.creative_continuity or {})
@@ -612,6 +642,35 @@ class PhotoshootQueueService:
                 "completed_at": utc_now(),
                 "gallery_ready": True,
             },
+            updated_at=utc_now(),
+        )
+        self._replace_session(updated)
+        return updated
+
+    def archive_curated_session(self, session_id: str, *, curation: Mapping[str, Any]) -> PhotoshootSession:
+        """Archive a reviewed session while preserving its complete creative history."""
+        session = self.get_session(session_id)
+        continuity = dict(session.creative_continuity or {})
+        updated = replace(
+            session, status="archived", current_request_id=None,
+            creative_continuity={
+                **continuity, "completed_at": continuity.get("completed_at") or utc_now(),
+                "gallery_ready": bool(curation.get("photoshoot_created")),
+                "curation": dict(curation), "workflow_stage": "curation_complete",
+            }, updated_at=utc_now(),
+        )
+        self._replace_session(updated)
+        return updated
+
+    def reconcile_curation(self, session_id: str, *, curation: Mapping[str, Any]) -> PhotoshootSession:
+        """Persist an idempotently normalized legacy curation decision."""
+        session = self.get_session(session_id)
+        continuity = dict(session.creative_continuity or {})
+        if dict(continuity.get("curation") or {}) == dict(curation):
+            return session
+        updated = replace(
+            session,
+            creative_continuity={**continuity, "curation": dict(curation)},
             updated_at=utc_now(),
         )
         self._replace_session(updated)
@@ -996,7 +1055,7 @@ class PhotoshootQueueService:
         active_sessions = tuple(
             session
             for session in self.list_sessions(creator_profile_id=creator_profile_id)
-            if session.status not in {"completed", "cancelled", "junked"}
+            if session.status not in {"completed", "archived", "cancelled", "junked"}
         )
         if not active_sessions:
             return None
@@ -1021,6 +1080,11 @@ class PhotoshootQueueService:
         grok_guidance: str | None = None,
         inspiration_ideas: tuple[str, ...] | list[str] | None = None,
         selected_inspiration: str | None = None,
+        planning_mode: str | None = None,
+        plan_frame_count: int | None = None,
+        session_plan: tuple[Mapping[str, Any], ...] | list[Mapping[str, Any]] | None = None,
+        session_plan_index: int | None = None,
+        session_plan_approved: bool | None = None,
     ) -> PhotoshootSession:
         session = self.get_session(session_id)
         continuity = dict(session.creative_continuity or {})
@@ -1045,11 +1109,36 @@ class PhotoshootQueueService:
             continuity["inspiration_ideas"] = tuple(str(item) for item in inspiration_ideas)
         if selected_inspiration is not None:
             continuity["selected_inspiration"] = str(selected_inspiration)
+        if planning_mode is not None:
+            mode = str(planning_mode or "frame_by_frame").strip().lower()
+            continuity["planning_mode"] = mode if mode in {"frame_by_frame", "full_plan"} else "frame_by_frame"
+        if plan_frame_count is not None:
+            continuity["plan_frame_count"] = max(4, min(12, int(plan_frame_count)))
+        if session_plan is not None:
+            continuity["session_plan"] = tuple(dict(item or {}) for item in session_plan)
+        if session_plan_index is not None:
+            continuity["session_plan_index"] = max(0, int(session_plan_index))
+        if session_plan_approved is not None:
+            continuity["session_plan_approved"] = bool(session_plan_approved)
         updated = replace(
             session,
             provider_id=str(provider_id or session.provider_id),
             creative_mode=str(creative_mode or session.creative_mode),
             creative_continuity=continuity,
+            updated_at=utc_now(),
+        )
+        self._replace_session(updated)
+        return updated
+
+    def record_photoshoot_summary(self, *, session_id: str, summary: Mapping[str, Any]) -> PhotoshootSession:
+        session = self.get_session(session_id)
+        updated = replace(
+            session,
+            creative_continuity={
+                **dict(session.creative_continuity or {}),
+                "photoshoot_summary": dict(summary or {}),
+                "photoshoot_summary_updated_at": utc_now(),
+            },
             updated_at=utc_now(),
         )
         self._replace_session(updated)

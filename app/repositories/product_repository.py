@@ -555,6 +555,38 @@ class ProductRepository:
         if status:
             filters.append("status = %s")
             params.append(status.value)
+            if status == ProductStatus.ACTIVE:
+                filters.append(
+                    """NOT EXISTS (
+                        SELECT 1
+                        FROM public.business_asset_registrations business_asset
+                        WHERE business_asset.is_archived = TRUE
+                          AND (
+                              business_asset.asset_id = public.products.legacy_content_item_id
+                              OR EXISTS (
+                                  SELECT 1
+                                  FROM public.product_assets product_asset
+                                  WHERE product_asset.product_id = public.products.id
+                                    AND product_asset.asset_id = business_asset.asset_id
+                              )
+                          )
+                    )"""
+                )
+                filters.append(
+                    """NOT EXISTS (
+                        SELECT 1
+                        FROM public.photoshoot_asset_memberships photoshoot_member
+                        WHERE photoshoot_member.approved = TRUE
+                          AND (
+                              photoshoot_member.asset_id = public.products.legacy_content_item_id
+                              OR EXISTS (
+                                  SELECT 1 FROM public.product_assets product_asset
+                                  WHERE product_asset.product_id = public.products.id
+                                    AND product_asset.asset_id = photoshoot_member.asset_id
+                              )
+                          )
+                    )"""
+                )
         elif not include_archived:
             filters.append("status <> 'ARCHIVED'")
         if product_type:

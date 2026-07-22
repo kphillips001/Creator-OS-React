@@ -11,8 +11,14 @@ class FakeReferenceService:
         self.active = active
         self.restore_calls = []
 
-    def get_active_reference(self, *, creator_profile_id):
-        return self.active
+    def get_active_canonical_asset_id(self, *, creator_profile_id):
+        return 91 if self.active is not None else None
+
+    def get_active_reference(self, **_kwargs):
+        raise AssertionError("startup recovery must not use full enrichment")
+
+    def list_references(self, *_args, **_kwargs):
+        raise AssertionError("startup recovery must not enumerate references")
 
     def restore_canonical_reference(self, **kwargs):
         self.restore_calls.append(kwargs)
@@ -70,11 +76,12 @@ def test_recovery_uses_reference_service_only_when_active_reference_is_missing(t
 
     assert recovered == "restored-reference"
     assert len(references.restore_calls) == 1
+    assert references.restore_calls[0]["canonical_metadata"]["permanent_identity_asset"] is True
     assert references.restore_calls[0]["creator_profile_id"] == 2
     assert references.restore_calls[0]["original_filename"] == "original.png"
 
     references.active = "already-active"
-    assert service.recover_creator(profile(), reference_service=references) == "already-active"
+    assert service.recover_creator(profile(), reference_service=references) == 91
     assert len(references.restore_calls) == 1
 
 
@@ -86,11 +93,11 @@ def test_missing_canonical_never_blocks_startup_recovery(tmp_path):
     assert references.restore_calls == []
 
 
-def test_reference_service_requires_explicit_canonical_confirmation():
+def test_reference_service_permanently_blocks_canonical_removal():
     source = Path("app/services/reference_library_service.py").read_text(encoding="utf-8")
     assert "confirm_canonical: bool = False" in source
     assert "confirm_replace_canonical: bool = False" in source
-    assert "Canonical Reference removal requires explicit confirmation." in source
+    assert "Protected Reference assets cannot be removed." in source
     assert "Replacing the Canonical Reference requires explicit confirmation." in source
 
 
@@ -105,3 +112,11 @@ def test_canonical_restore_registers_an_active_asset():
         encoding="utf-8"
     )
     assert '"is_active": True' in source
+
+
+def test_bulk_archive_sql_excludes_protected_reference_roles():
+    source = Path("app/repositories/asset_repository.py").read_text(encoding="utf-8")
+    archive = source[source.index("def archive_assets"):]
+    assert "reference_library" in archive
+    assert "protected" in archive
+    assert "canonical" in archive

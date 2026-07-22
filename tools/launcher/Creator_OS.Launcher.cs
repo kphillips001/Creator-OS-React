@@ -56,8 +56,13 @@ internal static class CreatorOsLauncher
                 process.WaitForExit();
                 if (process.ExitCode != 0)
                 {
+                    string failurePath = Path.Combine(projectRoot, "logs", "runtime", "launcher_failure.txt");
+                    string failure = File.Exists(failurePath)
+                        ? File.ReadAllText(failurePath).Trim()
+                        : "No detailed failure report was produced.";
                     MessageBox.Show(
-                        "Creator_OS did not start successfully. Review the launcher logs in the project logs directory.",
+                        "Creator_OS did not start successfully.\n\n" + failure +
+                        "\n\nReview logs\\runtime\\launcher.log for full diagnostics.",
                         "Creator_OS",
                         MessageBoxButtons.OK,
                         MessageBoxIcon.Error

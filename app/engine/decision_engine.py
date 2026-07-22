@@ -345,7 +345,7 @@ class DecisionEngine:
                 candidate.asset_id,
                 customer_context=working_memory,
             )
-            if eligibility.recommendation_eligible:
+            if candidate.metadata.get("item_kind") == "photoshoot" or eligibility.recommendation_eligible:
                 payload = candidate.to_legacy_payload(
                     self.settings.DEFAULT_PERSONA,
                     offer_type,

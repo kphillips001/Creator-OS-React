@@ -1,5 +1,8 @@
 export type AssetLibraryItem = {
-  assetId: number;
+  libraryItemId: string;
+  itemKind: "staged_generation" | "registered_asset" | "photoshoot";
+  assetId: number | null;
+  generationId: string | null;
   fileName: string | null;
   mediaType: string;
   classification: string | null;
@@ -12,6 +15,11 @@ export type AssetLibraryItem = {
   mediaAvailable: boolean;
   imageUrl: string | null;
   registrationSource?: string | null;
+  prompt?: string | null;
+  provider?: string | null;
+  deliverableId?: string | null;
+  description?: string | null;
+  shotCount?: number | null;
 };
 
 export type AssetLibraryResponse = {

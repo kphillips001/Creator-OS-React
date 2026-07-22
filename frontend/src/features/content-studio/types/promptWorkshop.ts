@@ -20,3 +20,11 @@ export type PromptWorkshopArchiveResponse = {
   error: string | null;
   batches: PromptWorkshopBatch[];
 };
+
+export const PROMPT_WORKSHOP_ARCHIVE_HANDOFF_KEY = "creator-os:prompt-workshop-archive-handoff";
+
+export type PromptWorkshopArchiveHandoff = {
+  action: "use" | "load";
+  batch: PromptWorkshopBatch;
+  promptNumber: number;
+};

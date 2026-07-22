@@ -69,7 +69,15 @@ def test_authoritative_entry_points_and_defaults_are_safe(tmp_path):
     modules = {item["key"]: item["module"] for item in configuration}
     assert modules == {"telegram": "app.integrations.telegram.telethon_runtime",
                        "outreach": "app.workers.outreach_queue", "delayed_messages": "app.workers.delayed_messages",
-                       "mass_ppv": "app.workers.mass_ppv", "wall": "app.workers.wall"}
+                       "mass_ppv": "app.workers.mass_ppv", "wall": "app.workers.wall",
+                       "nudenet_analysis": "app.workers.nudenet_analysis",
+                       "analysis_orchestrator": "app.workers.analysis_orchestrator",
+                       "vision_analysis": "app.workers.vision_analysis",
+                           "grok_analysis": "app.workers.grok_analysis",
+                           "content_intelligence_merge": "app.workers.content_intelligence_merge",
+                           "photoshoot_analysis": "app.workers.photoshoot_analysis",
+                           "photoshoot_auto_run": "app.workers.photoshoot_auto_run",
+                           "ready_asset_chat_registration": "app.workers.ready_asset_chat_registration"}
     assert "app.outreach_worker" not in modules.values()
     value.start_enabled()
     assert processes.started == []
@@ -135,9 +143,57 @@ def test_graceful_and_forced_shutdown_validate_owned_pid(tmp_path):
     assert result["lastLauncherAction"] == "shutdown_blocked" and 999 not in processes.forced
 
 
+def test_stale_launcher_pid_is_cleared_without_blocking_restart(tmp_path):
+    definition = WORKERS[5]
+    value, processes, _, _ = service(tmp_path, {definition.environment_switch: "true"})
+
+    result = value.stop_worker(definition, 33704)
+
+    assert result["lastLauncherAction"] == "stopped"
+    assert result["pid"] is None
+    assert processes.graceful == [] and processes.forced == []
+
+
+def test_worker_disappearing_during_graceful_shutdown_is_cleanly_stopped(tmp_path):
+    definition = WORKERS[7]
+    value, processes, heartbeats, clock = service(
+        tmp_path, {definition.environment_switch: "true"}
+    )
+    processes.running.add(36140)
+    processes.matches_by_module[definition.module] = 36140
+    heartbeats.auto_register = False
+    heartbeats.rows = [heartbeat(definition, 36140, clock.now())]
+
+    result = value.stop_worker(definition, 36140)
+
+    assert result["lastLauncherAction"] == "stopped"
+    assert result["pid"] is None
+    assert processes.graceful == [36140]
+    assert processes.forced == []
+
+
+def test_shutdown_exception_identifies_exact_worker_pid_and_operation(tmp_path):
+    definition = WORKERS[7]
+    value, processes, _, _ = service(tmp_path, {definition.environment_switch: "true"})
+    processes.running.add(36140)
+    processes.matches_by_module[definition.module] = 36140
+    processes.graceful_stop = lambda pid: (_ for _ in ()).throw(OSError(87, "The parameter is incorrect"))
+    value._record(definition, "started", launcher_enabled=True, pid=36140)
+
+    try:
+        value.stop_managed()
+        assert False, "Expected the worker-specific shutdown diagnostic."
+    except RuntimeError as error:
+        message = str(error)
+        assert "Vision Analysis" in message
+        assert "36140" in message
+        assert "OSError" in message
+
+
 def test_reverse_shutdown_and_startup_order_and_no_runtime_mutation(tmp_path):
     environment = {item.environment_switch: "true" for item in WORKERS}
-    environment.update({"TG_API_ID": "1", "TG_API_HASH": "hash", "AVA_FANVUE_ACCOUNT_ID": "2"})
+    environment.update({"TG_API_ID": "1", "TG_API_HASH": "hash", "AVA_FANVUE_ACCOUNT_ID": "2",
+                        "GROK_API_KEY": "test-key"})
     original = dict(environment)
     value, processes, heartbeats, clock = service(tmp_path, environment)
     assert [item["workerName"] for item in value.start_enabled()] == [item.name for item in WORKERS]
@@ -160,3 +216,13 @@ def test_supervision_boundary_contains_no_queue_or_send_mutation():
     for forbidden in ("claim_due_items", "release_claim", "recover_stale_claims", "send_message",
                       "GLOBAL_SENDS_ENABLED =", "GLOBAL_AUTOMATION_ENABLED =", "RUNTIME_MODE ="):
         assert forbidden not in source
+
+
+def test_pid_ownership_validation_does_not_spawn_nested_powershell():
+    import inspect
+    from app.services.worker_launcher_supervision_service import ProcessAdapter
+
+    source = inspect.getsource(ProcessAdapter)
+    assert "Get-CimInstance" not in source
+    assert '"powershell.exe"' not in source
+    assert "os.kill(pid, signal.CTRL_BREAK_EVENT)" not in source

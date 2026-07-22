@@ -133,6 +133,9 @@ class ChatCommerceInventoryService:
         return self._summary(tuple(items))
 
     def _business_assets(self, *, limit: int) -> tuple[Any, ...]:
+        active_getter = getattr(self.commerce_registrations, "list_active", None)
+        if callable(active_getter):
+            return tuple(active_getter(limit=limit))
         records: list[Any] = []
         for getter_name in (
             "list_registered",
@@ -142,10 +145,7 @@ class ChatCommerceInventoryService:
             getter = getattr(self.commerce_registrations, getter_name, None)
             if not callable(getter):
                 continue
-            try:
-                records.extend(getter(limit=limit))
-            except Exception:
-                continue
+            records.extend(getter(limit=limit))
         by_asset: dict[int, Any] = {}
         for record in records:
             by_asset[int(record.asset_id)] = record

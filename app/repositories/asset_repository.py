@@ -140,6 +140,195 @@ class AssetRepository:
         with self._connection_factory() as conn:
             return self.get_by_id(asset_id, connection=conn)
 
+    def get_active_canonical_reference_asset_id(
+        self,
+        creator_profile_id: int,
+        *,
+        connection=None,
+    ) -> int | None:
+        """Return the creator's active canonical Reference Asset ID only."""
+        if connection is not None:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT id
+                    FROM public.content_items
+                    WHERE creator_profile_id = %s
+                      AND COALESCE(
+                            media_metadata->'reference_library'->>'is_reference',
+                            'false'
+                          ) = 'true'
+                      AND COALESCE(
+                            media_metadata->'reference_library'->>'active',
+                            'false'
+                          ) = 'true'
+                      AND COALESCE(
+                            media_metadata->'reference_library'->>'canonical',
+                            'false'
+                          ) = 'true'
+                    ORDER BY id
+                    LIMIT 1
+                    """,
+                    (int(creator_profile_id),),
+                )
+                row = cursor.fetchone()
+            return int(row["id"]) if row else None
+        with self._connection_factory() as conn:
+            return self.get_active_canonical_reference_asset_id(
+                creator_profile_id,
+                connection=conn,
+            )
+
+    def get_active_canonical_reference_asset(
+        self,
+        creator_profile_id: int,
+        *,
+        connection=None,
+    ) -> Asset | None:
+        """Return the creator's canonical Asset without library enrichment."""
+        if connection is not None:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    f"""
+                    SELECT {_ASSET_COLUMNS}
+                    FROM public.content_items
+                    WHERE creator_profile_id = %s
+                      AND COALESCE(
+                            media_metadata->'reference_library'->>'is_reference',
+                            'false'
+                          ) = 'true'
+                      AND COALESCE(
+                            media_metadata->'reference_library'->>'active',
+                            'false'
+                          ) = 'true'
+                      AND COALESCE(
+                            media_metadata->'reference_library'->>'canonical',
+                            'false'
+                          ) = 'true'
+                    ORDER BY id
+                    LIMIT 1
+                    """,
+                    (int(creator_profile_id),),
+                )
+                row = cursor.fetchone()
+            return Asset.from_row(row) if row else None
+        with self._connection_factory() as conn:
+            return self.get_active_canonical_reference_asset(
+                creator_profile_id,
+                connection=conn,
+            )
+
+    def clear_active_reference_flags(self, creator_profile_id: int, *, connection=None) -> int:
+        """Clear active flags for one creator without enumerating references."""
+        if connection is not None:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    UPDATE public.content_items
+                    SET media_metadata = jsonb_set(
+                        COALESCE(media_metadata, '{}'::jsonb),
+                        '{reference_library,active}', 'false'::jsonb, true
+                    )
+                    WHERE creator_profile_id = %s
+                      AND COALESCE(media_metadata->'reference_library'->>'is_reference', 'false') = 'true'
+                      AND COALESCE(media_metadata->'reference_library'->>'active', 'false') = 'true'
+                    """,
+                    (int(creator_profile_id),),
+                )
+                return int(cursor.rowcount or 0)
+        with self._connection_factory() as conn:
+            return self.clear_active_reference_flags(creator_profile_id, connection=conn)
+
+    @staticmethod
+    def _library_grid_where(
+        *,
+        search: str | None,
+        media_type: str | None,
+        classification: str | None,
+        creator_profile_id: int,
+    ) -> tuple[str, list[Any]]:
+        filters = [
+            "COALESCE(is_active, TRUE) = TRUE",
+            "COALESCE(is_test, FALSE) = FALSE",
+            "COALESCE(status, '') = 'approved'",
+            "creator_profile_id = %s",
+            "COALESCE(media_metadata->'reference_library'->>'is_reference', 'false') <> 'true'",
+        ]
+        params: list[Any] = [int(creator_profile_id)]
+        if search:
+            filters.append(
+                "(file_name ILIKE %s OR file_path ILIKE %s OR EXISTS ("
+                "SELECT 1 FROM public.asset_intelligence_profiles aip "
+                "WHERE aip.asset_id = content_items.id "
+                "AND aip.profile_data::text ILIKE %s))"
+            )
+            term = f"%{search.strip()}%"
+            params.extend((term, term, term))
+        if classification:
+            filters.append("classification = %s")
+            params.append(classification)
+        if media_type == "image":
+            filters.append(
+                "(LOWER(COALESCE(media_metadata->>'media_type', '')) = 'image' "
+                "OR LOWER(COALESCE(file_path, '')) ~ '\\.(gif|jpe?g|png|webp)$')"
+            )
+        elif media_type == "video":
+            filters.append(
+                "(LOWER(COALESCE(media_metadata->>'media_type', '')) = 'video' "
+                "OR LOWER(COALESCE(file_path, '')) ~ '\\.(m4v|mov|mp4|webm)$')"
+            )
+        elif media_type == "story":
+            filters.append("LOWER(COALESCE(media_metadata->>'media_type', '')) = 'story'")
+        elif media_type:
+            filters.append("FALSE")
+        return " AND ".join(filters), params
+
+    def asset_library_grid_summary(
+        self,
+        *,
+        search: str | None,
+        media_type: str | None,
+        classification: str | None,
+        creator_profile_id: int,
+        limit: int,
+    ) -> tuple[tuple[dict, ...], int, tuple[str, ...]]:
+        """Return bounded grid identities plus aggregate data, without Assets."""
+        where, params = self._library_grid_where(
+            search=search,
+            media_type=media_type,
+            classification=classification,
+            creator_profile_id=creator_profile_id,
+        )
+        with self._connection_factory() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    f"""
+                    SELECT id, created_at
+                    FROM public.content_items
+                    WHERE {where}
+                    ORDER BY created_at DESC NULLS LAST, id DESC
+                    LIMIT %s OFFSET 0
+                    """,
+                    (*params, max(0, int(limit))),
+                )
+                candidates = tuple(dict(row) for row in cursor.fetchall())
+                cursor.execute(
+                    f"""
+                    SELECT COUNT(*) AS total,
+                           ARRAY_REMOVE(ARRAY_AGG(DISTINCT classification), NULL)
+                               AS classifications
+                    FROM public.content_items
+                    WHERE {where}
+                    """,
+                    tuple(params),
+                )
+                summary = cursor.fetchone()
+        return (
+            candidates,
+            int(summary["total"] or 0),
+            tuple(sorted(str(value) for value in (summary["classifications"] or ()))),
+        )
+
     def get_by_generation_image_id(self, image_id: str) -> Asset | None:
         with self._connection_factory() as conn:
             with conn.cursor() as cursor:
@@ -254,6 +443,8 @@ class AssetRepository:
                 "OR LOWER(COALESCE(file_path, '')) ~ '\\.(m4v|mov|mp4|webm)$'"
                 ")"
             )
+        elif media_type == "story":
+            filters.append("LOWER(COALESCE(media_metadata->>'media_type', '')) = 'story'")
         tags = tuple(tag for tag in (tags or ()) if str(tag).strip())
         if tags:
             filters.append("suggested_tags && %s")
@@ -455,6 +646,13 @@ class AssetRepository:
                 is_active = FALSE,
                 ready_for_rotation = FALSE
             WHERE id = ANY(%s)
+              AND NOT (
+                COALESCE(media_metadata->'reference_library'->>'is_reference', 'false') = 'true'
+                AND (
+                    COALESCE(media_metadata->'reference_library'->>'protected', 'false') = 'true'
+                    OR COALESCE(media_metadata->'reference_library'->>'canonical', 'false') = 'true'
+                )
+              )
         """
         if connection is not None:
             with connection.cursor() as cursor:
@@ -462,3 +660,47 @@ class AssetRepository:
                 return cursor.rowcount
         with self._connection_factory() as conn:
             return self.archive_assets(ids, connection=conn)
+
+    def archive_asset_library_item(self, asset_id: int, creator_profile_id: int):
+        with self._connection_factory() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute("""
+                    UPDATE public.content_items
+                    SET media_metadata = jsonb_set(
+                            COALESCE(media_metadata, '{}'::jsonb),
+                            '{asset_library_archive}',
+                            jsonb_build_object(
+                                'archived_at', now(),
+                                'previous_status', status,
+                                'previous_ready_for_rotation', ready_for_rotation
+                            )
+                        ),
+                        status = 'archived', is_active = FALSE, ready_for_rotation = FALSE
+                    WHERE id = %s AND creator_profile_id = %s
+                      AND COALESCE(is_active, TRUE) = TRUE
+                      AND COALESCE(media_metadata->'reference_library'->>'is_reference', 'false') <> 'true'
+                    RETURNING id
+                """, (int(asset_id), int(creator_profile_id)))
+                return cursor.fetchone()
+
+    def restore_asset_library_item(self, asset_id: int, creator_profile_id: int):
+        with self._connection_factory() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute("""
+                    UPDATE public.content_items
+                    SET status = COALESCE(NULLIF(media_metadata->'asset_library_archive'->>'previous_status', ''), 'approved'),
+                        is_active = TRUE,
+                        ready_for_rotation = COALESCE((media_metadata->'asset_library_archive'->>'previous_ready_for_rotation')::boolean, FALSE),
+                        media_metadata = COALESCE(media_metadata, '{}'::jsonb) - 'asset_library_archive'
+                    WHERE id = %s AND creator_profile_id = %s
+                      AND status = 'archived' AND COALESCE(is_active, TRUE) = FALSE
+                      AND media_metadata ? 'asset_library_archive'
+                    RETURNING id
+                """, (int(asset_id), int(creator_profile_id)))
+                return cursor.fetchone()
+
+    def list_asset_library_archived(self, creator_profile_id: int):
+        return self.search_assets(
+            creator_profile_id=int(creator_profile_id), status="archived",
+            eligible_only=False, limit=5000,
+        )

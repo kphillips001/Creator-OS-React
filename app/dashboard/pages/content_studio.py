@@ -1,4 +1,4 @@
-﻿"""Content Studio shell pages.
+"""Content Studio shell pages.
 
 This module defines Creator OS Content Studio presentation and delegates
 generation execution to Generation Engine/provider registry services.
@@ -753,16 +753,21 @@ def _render_commerce_destination_group_selector(
                 st.rerun()
 
 
+_UNRESOLVED_REFERENCE = object()
+
+
 def _render_active_reference(
     *,
     creator_profile: dict | None,
     reference_service: ReferenceLibraryService,
     show_preview: bool = True,
+    reference=_UNRESOLVED_REFERENCE,
 ) -> None:
     creator_profile_id = _creator_profile_id(creator_profile)
-    reference = reference_service.get_active_reference(
-        creator_profile_id=creator_profile_id,
-    )
+    if reference is _UNRESOLVED_REFERENCE:
+        reference = reference_service.get_active_canonical_reference(
+            creator_profile_id=creator_profile_id,
+        )
     st.markdown("### Active Reference")
     if not creator_profile_id:
         st.warning("Creator Profile required before selecting a Reference Image.")
@@ -1320,7 +1325,7 @@ def create_social_studio_generation_request(
     creator_profile_id = _creator_profile_id(creator_profile)
     if not creator_profile_id:
         raise ValueError("Creator Profile required before generating.")
-    active_reference = reference_service.get_active_reference(
+    active_reference = reference_service.get_active_canonical_reference(
         creator_profile_id=creator_profile_id,
     )
     if active_reference is None:
@@ -1395,7 +1400,7 @@ def create_premium_studio_generation_request(
     creator_profile_id = _creator_profile_id(creator_profile)
     if not creator_profile_id:
         raise ValueError("Creator Profile required before generating.")
-    active_reference = reference_service.get_active_reference(
+    active_reference = reference_service.get_active_canonical_reference(
         creator_profile_id=creator_profile_id,
     )
     if active_reference is None:
@@ -1826,7 +1831,7 @@ def create_social_photoshoot_session(
     creator_profile_id = _creator_profile_id(creator_profile)
     if not creator_profile_id:
         raise ValueError("Creator Profile required before starting a Photoshoot.")
-    active_reference = reference_service.get_active_reference(
+    active_reference = reference_service.get_active_canonical_reference(
         creator_profile_id=creator_profile_id,
     )
     if active_reference is None:
@@ -1869,7 +1874,7 @@ def create_premium_photoshoot_session(
     creator_profile_id = _creator_profile_id(creator_profile)
     if not creator_profile_id:
         raise ValueError("Creator Profile required before starting a Photoshoot.")
-    active_reference = reference_service.get_active_reference(
+    active_reference = reference_service.get_active_canonical_reference(
         creator_profile_id=creator_profile_id,
     )
     if active_reference is None:
@@ -1961,13 +1966,14 @@ def _render_social_studio(
     st.title("Social Studio")
     st.caption("SFW creator workflow for reference-led image generation.")
     _render_content_studio_reset_notice()
-    active_reference = reference_service.get_active_reference(
+    active_reference = reference_service.get_active_canonical_reference(
         creator_profile_id=creator_profile_id,
     )
     _render_active_reference(
         creator_profile=creator_profile,
         reference_service=reference_service,
         show_preview=False,
+        reference=active_reference,
     )
     if not creator_profile_id:
         st.error("Creator Profile required before using Social Studio.")
@@ -2645,13 +2651,14 @@ def _render_premium_studio(
     st.title("Content Studio")
     st.caption("Premium creator workflow for provider-neutral prompt planning and generation review.")
     _render_content_studio_reset_notice()
-    active_reference = reference_service.get_active_reference(
+    active_reference = reference_service.get_active_canonical_reference(
         creator_profile_id=creator_profile_id,
     )
     _render_active_reference(
         creator_profile=creator_profile,
         reference_service=reference_service,
         show_preview=False,
+        reference=active_reference,
     )
     if not creator_profile_id:
         st.error("Creator Profile required before using Content Studio.")
@@ -7061,12 +7068,13 @@ def _render_creative_director(
         return
 
     settings = creative_director.load_settings(creator_profile_id)
-    active_reference = reference_service.get_active_reference(
+    active_reference = reference_service.get_active_canonical_reference(
         creator_profile_id=creator_profile_id,
     )
     _render_active_reference(
         creator_profile=creator_profile,
         reference_service=reference_service,
+        reference=active_reference,
     )
     st.divider()
 

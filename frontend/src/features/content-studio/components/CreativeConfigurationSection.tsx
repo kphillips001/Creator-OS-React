@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 
 import { useContentStudioConfiguration } from "../hooks/useContentStudioConfiguration";
 
-const TITLE = "Premium Creative Mode / Prompt Count / Provider";
+const TITLE = "Creative Settings";
 const STANDARD_MODE_VALUE = "premium_teaser";
 const SPICY_MODE_VALUE = "spicy";
 const MODE_LABELS: Record<string, string> = {
@@ -89,17 +89,20 @@ export function CreativeConfigurationSection({
               <output>{promptCount}</output>
             </div>
           </label>
-          <label>
-            <span>Provider</span>
-            <select value={provider} onChange={(event) => {
-              setProvider(event.target.value);
-              onProviderChange(event.target.value);
-            }}>
-              {configuration.providers.map((option) => (
-                <option key={option.value} value={option.value}>{option.label}</option>
-              ))}
-            </select>
-          </label>
+          <details className="creative-configuration__advanced">
+            <summary>Advanced Settings</summary>
+            <label>
+              <span>Provider</span>
+              <select value={provider} onChange={(event) => {
+                setProvider(event.target.value);
+                onProviderChange(event.target.value);
+              }}>
+                {configuration.providers.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+            </label>
+          </details>
         </div>
       )}
     </section>

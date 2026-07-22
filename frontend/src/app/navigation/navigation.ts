@@ -46,6 +46,12 @@ export const navigationGroups: NavigationGroup[] = [
           "Review and organize generated creative outputs.",
       },
       {
+        label: "Photoshoot Gallery",
+        path: "/library/photoshoots",
+        icon: Camera,
+        description: "Browse completed multi-image Photoshoot sets.",
+      },
+      {
         label: "Content Studio",
         path: "/studio/content",
         icon: Sparkles,
@@ -96,10 +102,10 @@ export const navigationGroups: NavigationGroup[] = [
     label: "Business",
     items: [
       {
-        label: "Assets",
-        path: "/business/assets",
+        label: "Commerce Library",
+        path: "/business/commerce-library",
         icon: BriefcaseBusiness,
-        description: "Monitor approved assets from intelligence through commerce readiness.",
+        description: "Review registered Business Assets and their commerce readiness.",
       },
       {
         label: "Products",

@@ -46,7 +46,10 @@ def _session():
         status="running",
         provider_id="flux",
         creator_notes=None,
-        creative_continuity={"seed_image_id": "seed-1", "continuity_locks": {"wardrobe": False, "camera_style": False}},
+        creative_continuity={
+            "seed_image_id": "seed-1", "original_photoshoot_direction": "Seed prompt",
+            "continuity_locks": {"wardrobe": False, "camera_style": False},
+        },
         request_ids=("request-1", "request-2"),
         current_request_id=None,
         created_at="2026-07-18T12:00:00Z",
@@ -258,6 +261,35 @@ def test_manual_request_persists_settings_uses_latest_approved_reference_and_dis
     )
 
 
+def test_manual_request_reuses_provider_url_for_approved_shot_continuity():
+    session = SimpleNamespace(**{**_session().__dict__, "creative_continuity": {
+        "current_shot_image_id": "approved-1",
+    }})
+    latest = _record("approved-1", status="photoshoot_session")
+    queue = Mock()
+    queue.get_session.return_value = session
+    queue.requests_for_session.return_value = ()
+    queue.update_session_settings.return_value = session
+    queue.add_studio_shot_request.return_value = SimpleNamespace(request_id="manual-remote")
+    queue.queue_next_prompt.return_value = SimpleNamespace(job_id="job-next")
+    library = Mock()
+    library.get.return_value = latest
+    engine = Mock()
+    engine.get_job.return_value = SimpleNamespace(result=SimpleNamespace(
+        output_references=("https://provider.test/approved-1.png",),
+    ))
+
+    PhotoshootManualService(queue=queue, engine=engine, library=library, ingestion=Mock()).create_manual_request(
+        creator_profile_id=7, session_id="session-1", provider_id="flux", creative_mode="premium",
+        prompt="Next shot", continuity_locks={}, session_direction="", creative_hint="",
+    )
+
+    engine.get_job.assert_called_once_with(latest.generation_job_id)
+    assert queue.add_studio_shot_request.call_args.kwargs["active_reference_output_reference"] == (
+        "https://provider.test/approved-1.png"
+    )
+
+
 def test_manual_candidate_actions_reuse_junk_and_queue_lifecycle():
     session = _session()
     request = SimpleNamespace(request_id="request-2", session_id="session-1", status="awaiting_review",
@@ -362,13 +394,15 @@ def test_finish_is_the_only_session_completion_transition():
     queue.get_session.return_value = session
     queue.requests_for_session.return_value = ()
     queue.finish_session.return_value = completed
-    service = PhotoshootManualService(queue=queue, engine=Mock(), library=Mock(), ingestion=Mock())
+    commerce = Mock()
+    commerce.complete.return_value = (completed, {"deliverable_id": "deliverable-1"})
+    service = PhotoshootManualService(queue=queue, engine=Mock(), library=Mock(), ingestion=Mock(), commerce_deliverables=commerce)
 
     finish_result = service.finish_session(creator_profile_id=7, session_id="session-1")
     assert finish_result.status == "completed"
     assert finish_result.creative_continuity["gallery_ready"] is True
     assert finish_result.creative_continuity["current_shot_image_id"] == "approved-2"
-    queue.finish_session.assert_called_once_with("session-1")
+    commerce.complete.assert_called_once_with("session-1", 7)
 
 
 def test_creative_director_context_restores_persisted_workflow_state():
@@ -418,7 +452,12 @@ def test_creative_director_recommendation_delegates_and_persists(monkeypatch):
     assert result["title"] == "Next"
     director.recommend_photoshoot_direction.assert_called_once()
     assert director.recommend_photoshoot_direction.call_args.kwargs["creative_hint"] == "Turn"
-    assert director.recommend_photoshoot_direction.call_args.kwargs["session_direction"] == "Balcony"
+    call = director.recommend_photoshoot_direction.call_args.kwargs
+    assert call["session_direction"] == "Seed prompt"
+    assert call["session_context"]["original_photoshoot_direction"] == "Seed prompt"
+    assert call["session_context"]["optional_user_guidance"] == "Balcony"
+    assert call["approved_history"] == ()
+    assert call["session_context"]["progression_stage"] == 0
     queue.record_pending_recommendation.assert_called_once_with(session_id="session-1", recommendation=result)
 
 
@@ -459,7 +498,7 @@ def test_different_ideas_reuses_session_and_returns_a_fresh_ten(monkeypatch):
     assert director.suggest_photoshoot_inspiration.call_count == 2
 
 
-def test_all_modes_request_ten_ideas_with_full_ordered_timeline_and_guidance(monkeypatch):
+def test_all_modes_request_ten_ideas_with_summary_original_direction_and_guidance(monkeypatch):
     for mode, guidance in (("safe", ""), ("premium", "More eye contact"), ("explicit", "Slow the progression")):
         session = replace(_session(), creative_mode=mode, creative_continuity={
             **_session().creative_continuity, "current_shot_image_id": "shot-2",
@@ -467,8 +506,8 @@ def test_all_modes_request_ten_ideas_with_full_ordered_timeline_and_guidance(mon
             "approved_directions": ({"title": "Second"},), "progression_stage": 2,
         })
         requests = (
-            SimpleNamespace(status="approved", metadata={"generated_image_ids": ("seed-1",), "is_seed_image": True}),
-            SimpleNamespace(status="approved", metadata={"generated_image_ids": ("shot-2",)}),
+            SimpleNamespace(status="approved", prompt_text="Seed prompt", metadata={"generated_image_ids": ("seed-1",), "is_seed_image": True}),
+            SimpleNamespace(status="approved", prompt_text="Second prompt", metadata={"generated_image_ids": ("shot-2",)}),
         )
         queue, library, director = Mock(), Mock(), Mock()
         queue.get_session.return_value = session
@@ -485,15 +524,33 @@ def test_all_modes_request_ten_ideas_with_full_ordered_timeline_and_guidance(mon
         )
 
         assert len(result["ideas"]) == 10
-        assert result["selected_inspiration"] == ""
+        expected_selected = f"{mode} idea 1" if mode == "explicit" else ""
+        assert result["selected_inspiration"] == expected_selected
         call = director.suggest_photoshoot_inspiration.call_args.kwargs
         assert call["creative_mode"] == mode
         assert call["idea_count"] == 10
-        assert [item["label"] for item in call["timeline_images"]] == ["Shot 1 (Seed)", "Shot 2 — current"]
         assert call["image_bytes"] == _record("shot-2").output_reference.encode()
+        timeline = call["timeline_images"]
+        assert len(timeline) == 2
+        assert timeline[0]["label"] == "Shot 1 (Seed)"
+        assert timeline[1]["label"] == "Shot 2 — current"
+        assert timeline[0]["bytes"] == b"D:/Ava_CMS/Content/Pending_Photoshoot/seed-1.png"
+        assert timeline[1]["bytes"] == b"D:/Ava_CMS/Content/Pending_Photoshoot/shot-2.png"
         assert call["approved_history"] == ({"title": "Second"},)
         assert call["grok_guidance"] == guidance
-        assert call["session_direction"] == guidance
+        assert call["session_direction"] == "Seed prompt"
+        assert call["session_context"]["original_photoshoot_direction"] == "Seed prompt"
+        assert call["session_context"]["optional_user_guidance"] == guidance
+        assert call["session_context"]["current_photoshoot_summary"]["approved_shot_count"] == 2
+        assert call["session_context"]["progression_stage"] == 2
+        assert call["session_context"]["timeline_image_count"] == 2
+        settings_call = queue.update_session_settings.call_args_list[-1]
+        assert settings_call.args[0] == "session-1"
+        assert settings_call.kwargs["selected_inspiration"] == expected_selected
+        assert settings_call.kwargs["creative_hint"] == expected_selected
+        assert settings_call.kwargs["workflow_stage"] == (
+            "inspiration_selected" if mode == "explicit" else "inspiration_ready"
+        )
 
 
 def test_creative_director_approval_uses_canonical_planner_and_existing_queue_history():
@@ -523,8 +580,91 @@ def test_creative_director_routes_are_registered():
     from app.fanvue_callback_server import app
     paths = {getattr(route, "path", None): route.methods for route in app.routes}
     assert paths["/api/v1/photoshoot/creative-director/context"] == {"GET"}
-    for action in ("inspiration", "selection", "guidance", "recommendation", "approve", "choose-another"):
+    for action in ("inspiration", "selection", "guidance", "recommendation", "approve", "choose-another", "planning-mode", "session-plan"):
         assert paths[f"/api/v1/photoshoot/creative-director/{action}"] == {"POST"}
+    assert paths["/api/v1/photoshoot/creative-director/session-plan/approve"] == {"POST"}
+    assert paths["/api/v1/photoshoot/auto-run/runtime"] == {"GET"}
+    for action in ("start", "pause", "resume", "stop", "retry"):
+        assert paths[f"/api/v1/photoshoot/auto-run/{action}"] == {"POST"}
+    assert paths["/api/v1/photoshoot/curation"] == {"GET"}
+    assert paths["/api/v1/photoshoot/curation/confirm"] == {"POST"}
+    assert paths["/api/v1/photoshoot/creative-director/session-plan/develop"] == {"POST"}
+    assert paths["/api/v1/photoshoot/creative-director/session-plan/advance"] == {"POST"}
+
+
+def test_full_session_plan_generation_approve_develop_and_advance(monkeypatch):
+    session = replace(_session(), creative_mode="explicit", creative_continuity={
+        **_session().creative_continuity, "current_shot_image_id": "seed-1", "planning_mode": "full_plan", "plan_frame_count": 4,
+    })
+    plan = tuple(
+        {
+            "shot_number": index,
+            "title": f"Shot {index}",
+            "creative_direction": f"Direction {index}",
+            "reasoning": "Arc",
+            "emotion": "Flirty",
+            "camera_framing": "Medium",
+            "lighting": "Soft",
+            "pose_composition": "Seated",
+            "continuity_notes": "Keep bed",
+            "status": "current" if index == 1 else "pending",
+        }
+        for index in range(1, 5)
+    )
+    queue, library, director = Mock(), Mock(), Mock()
+    queue.get_session.return_value = session
+    queue.update_session_settings.return_value = session
+    queue.requests_for_session.return_value = (
+        SimpleNamespace(status="approved", prompt_text="Seed", metadata={"generated_image_ids": ("seed-1",), "is_seed_image": True}),
+    )
+    library.get.return_value = _record("seed-1")
+    director.plan_full_photoshoot_session.return_value = plan
+    service = PhotoshootCreativeDirectorWorkflowService(queue=queue, library=library, creative_director=director)
+    monkeypatch.setattr(service, "_image_bytes", lambda _: (b"seed", "image/png"))
+
+    generated = service.generate_session_plan(
+        creator_profile_id=7, session_id="session-1", creative_mode="explicit",
+        creator_guidance="Slow tease", continuity_locks={"location": True}, plan_frame_count=4,
+    )
+    assert generated["plan_frame_count"] == 4
+    assert len(generated["session_plan"]) == 4
+    assert generated["session_plan_approved"] is False
+    director.plan_full_photoshoot_session.assert_called_once()
+    assert director.plan_full_photoshoot_session.call_args.kwargs["frame_count"] == 4
+
+    approved_session = replace(session, creative_continuity={
+        **session.creative_continuity, "session_plan": list(plan), "session_plan_index": 0, "session_plan_approved": False, "planning_mode": "full_plan",
+    })
+    queue.get_session.return_value = approved_session
+    approved = service.approve_session_plan(creator_profile_id=7, session_id="session-1")
+    assert approved["session_plan_approved"] is True
+    assert approved["session_plan"][0]["status"] == "current"
+
+    ready_session = replace(session, creative_continuity={
+        **session.creative_continuity,
+        "session_plan": list(approved["session_plan"]),
+        "session_plan_index": 0,
+        "session_plan_approved": True,
+        "planning_mode": "full_plan",
+    })
+    queue.get_session.return_value = ready_session
+    recommendation = service.develop_planned_shot(creator_profile_id=7, session_id="session-1")
+    assert recommendation["title"] == "Shot 1"
+    assert recommendation["creative_direction"] == "Direction 1"
+    queue.record_pending_recommendation.assert_called_once()
+
+    advanced_session = replace(session, creative_continuity={
+        **session.creative_continuity,
+        "session_plan": list(approved["session_plan"]),
+        "session_plan_index": 0,
+        "session_plan_approved": True,
+        "planning_mode": "full_plan",
+    })
+    queue.get_session.return_value = advanced_session
+    advanced = service.advance_session_plan(creator_profile_id=7, session_id="session-1")
+    assert advanced["session_plan_index"] == 1
+    assert advanced["session_plan_complete"] is False
+    assert advanced["next_planned_shot"]["title"] == "Shot 2"
 
 
 def test_creator_guidance_persists_without_invoking_ai():
@@ -536,7 +676,7 @@ def test_creator_guidance_persists_without_invoking_ai():
     assert result["creator_guidance"] == "Try more varied camera angles."
     queue.update_session_settings.assert_called_once_with(
         "session-1", creator_guidance="Try more varied camera angles.",
-        session_direction="Try more varied camera angles.", grok_guidance="Try more varied camera angles.",
+        grok_guidance="Try more varied camera angles.",
     )
     director.assert_not_called()
 

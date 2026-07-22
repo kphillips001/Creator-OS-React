@@ -90,7 +90,7 @@ def prompt_plan():
 
 
 class NoReferenceLibraryService:
-    def get_active_reference(self, *, creator_profile_id):
+    def get_active_canonical_reference(self, *, creator_profile_id):
         return None
 
 
@@ -364,6 +364,12 @@ class GenerationProviderTests(unittest.TestCase):
 
         self.assertEqual(completed.status, GenerationStatus.SUCCEEDED.value)
         self.assertEqual(http.posts[0][0], "https://api.imgbb.com/1/upload")
+        self.assertEqual(http.posts[0][1]["params"], {"key": "imgbb-test-key"})
+        upload_name, upload_bytes, upload_type = http.posts[0][1]["files"]["image"]
+        self.assertEqual(upload_name, "reference.jpg")
+        self.assertEqual(upload_bytes, b"fake image bytes")
+        self.assertEqual(upload_type, "image/jpeg")
+        self.assertEqual(http.posts[0][1]["data"], {"name": "reference"})
         self.assertEqual(http.posts[1][0], provider.endpoint)
         self.assertEqual(http.posts[1][1]["json"]["images"], ["https://cdn.test/hosted-reference.png"])
 

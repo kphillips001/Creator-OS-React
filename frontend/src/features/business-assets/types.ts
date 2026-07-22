@@ -8,8 +8,15 @@ export type BusinessAssetMetrics = {
 
 export type BusinessAssetItem = {
   asset_id: number;
+  itemKind?: "asset" | "photoshoot";
+  deliverableId?: string;
+  shotCount?: number;
+  description?: string | null;
   asset_name: string | null;
   imageUrl: string;
+  analysisStatus: "PENDING" | "NUDENET_RUNNING" | "NUDENET_COMPLETE" | "NUDENET_FAILED" | string;
+  downstreamStatus: "ANALYSIS_PENDING" | "ANALYSIS_READY" | "AWAITING_DESTINATION" | "AWAITING_FULFILLMENT" | "CHAT_REGISTRATION_BLOCKED" | "CHAT_INVENTORY_READY" | string;
+  commerceStatus: CommerceStatus;
   source_workflow: string | null;
   commerce_destination: string | null;
   current_lifecycle: string | null;
@@ -29,6 +36,16 @@ export type BusinessAssetItem = {
   lifecycle_steps: [string, string][];
   metrics: BusinessAssetMetrics;
 };
+
+export type PhotoshootBusinessDetail = {
+  item: BusinessAssetItem;
+  photoshootIntelligence: Record<string, unknown>;
+  members: { assetId: number; shotOrder: number; imageUrl: string }[];
+  commerceStatus: string;
+  technical: Record<string, unknown>;
+};
+
+export type CommerceStatus = "Analyzing" | "Analysis Failed" | "Ready" | "Needs Upload" | "Needs Media Link" | "Chat Ready";
 
 export type BusinessAssetSummary = {
   total_business_assets: number;
@@ -53,6 +70,8 @@ export type BusinessAssetDetail = {
   item: BusinessAssetItem;
   asset: Record<string, unknown>;
   contentIntelligence: Record<string, unknown> | null;
+  analysis: Record<"NUDENET" | "VISION" | "GROK" | "CONTENT_INTELLIGENCE", string>;
+  analysisResults: Record<"NUDENET" | "VISION" | "GROK" | "CONTENT_INTELLIGENCE", Record<string, unknown>>;
   commerceRegistration: Record<string, unknown>;
   destination: { history: Record<string, unknown>[]; routingIntents: Record<string, unknown>[] };
   fulfillment: Record<string, unknown> | null;

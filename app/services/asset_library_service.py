@@ -35,6 +35,7 @@ from app.services.local_vault_service import LocalVaultService
 from app.services.media_processing_service import MediaProcessingService
 from app.services.publishing_service import PublishingService
 from app.services.runtime_media_resolver import RuntimeMediaResolver
+from app.services.reference_asset_protection import is_reference_asset
 
 
 class AssetLibraryService:
@@ -110,6 +111,29 @@ class AssetLibraryService:
             items=items,
             filters=filters,
             total=len(items),
+        )
+
+    def asset_library_grid_summary(
+        self,
+        filters: AssetLibraryFilter,
+        *,
+        candidate_limit: int,
+    ) -> tuple[tuple[dict, ...], int, tuple[str, ...]]:
+        return self.assets.asset_library_grid_summary(
+            search=filters.search,
+            media_type=filters.media_type,
+            classification=filters.classification,
+            creator_profile_id=int(filters.creator_profile_id or 0),
+            limit=candidate_limit,
+        )
+
+    def build_items_by_ids(self, asset_ids: tuple[int, ...]) -> tuple[AssetLibraryItem, ...]:
+        assets = self.assets.list_by_ids(asset_ids)
+        by_id = {asset.id: asset for asset in assets}
+        return tuple(
+            self.build_item(by_id[asset_id])
+            for asset_id in asset_ids
+            if asset_id in by_id
         )
 
     def get_asset_details(self, asset_id: int) -> AssetLibraryDetails | None:
@@ -618,8 +642,4 @@ class AssetLibraryService:
 
     @classmethod
     def _is_reference_image(cls, asset: Asset) -> bool:
-        media_metadata = cls._coerce_mapping(asset.media_metadata)
-        reference_metadata = cls._coerce_mapping(
-            media_metadata.get("reference_library")
-        )
-        return bool(reference_metadata.get("is_reference"))
+        return is_reference_asset(asset)

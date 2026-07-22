@@ -9,6 +9,9 @@ from app.models.asset import Asset
 from app.models.asset_library import AssetLibraryFilter, AssetLibraryItem
 from app.models.creator_intent import CreatorIntent
 from app.models.reference_library import (
+    CanonicalReferenceAsset,
+    CanonicalReferenceProjection,
+    LightweightReferenceProjection,
     ReferenceAsset,
     ReferenceLibraryActionResult,
     ReferenceLibraryFilter,
@@ -19,6 +22,8 @@ from app.repositories.asset_repository import AssetRepository
 from app.services.ai_import_workflow_service import AIImportWorkflowService
 from app.services.asset_library_service import AssetLibraryService
 from app.repositories.content_repository import insert_content_item
+from app.services.reference_asset_protection import is_protected_reference_asset
+from app.services.runtime_media_resolver import RuntimeMediaResolver
 
 
 REFERENCE_METADATA_KEY = "reference_library"
@@ -240,10 +245,10 @@ class ReferenceLibraryService:
                 message="Reference belongs to a different Creator Profile.",
                 asset_id=asset_id,
             )
-        if metadata.get("canonical") and not confirm_canonical:
+        if is_protected_reference_asset(asset):
             return ReferenceLibraryActionResult(
                 success=False,
-                message="Canonical Reference removal requires explicit confirmation.",
+                message="Protected Reference assets cannot be removed.",
                 asset_id=asset_id,
             )
         updated = {
@@ -287,7 +292,9 @@ class ReferenceLibraryService:
                 asset_id=asset_id,
             )
 
-        current = self.get_active_reference(creator_profile_id=creator_profile_id)
+        current = self.get_active_canonical_reference(
+            creator_profile_id=creator_profile_id
+        )
         if (
             current is not None
             and current.asset_id != asset_id
@@ -355,6 +362,114 @@ class ReferenceLibraryService:
         )
         return result.active_reference or (result.references[0] if result.references else None)
 
+    def get_active_canonical_asset_id(
+        self,
+        *,
+        creator_profile_id: int | None,
+    ) -> int | None:
+        """Return the active canonical Reference ID without library enrichment."""
+        if not creator_profile_id:
+            return None
+        return self.assets.get_active_canonical_reference_asset_id(
+            int(creator_profile_id)
+        )
+
+    def get_active_reference_context(
+        self,
+        *,
+        creator_profile_id: int | None,
+    ) -> dict[str, int | str | None] | None:
+        """Return only the canonical fields needed by lightweight context gates."""
+        reference = self.get_active_canonical_reference(
+            creator_profile_id=creator_profile_id,
+        )
+        if reference is None:
+            return None
+        return {
+            "asset_id": reference.asset_id,
+            "last_used_at": reference.last_used_at,
+        }
+
+    def get_active_canonical_reference(
+        self,
+        *,
+        creator_profile_id: int | None,
+    ) -> CanonicalReferenceProjection | None:
+        """Return canonical Asset and reference fields without library enrichment."""
+        if not creator_profile_id:
+            return None
+        asset = self.assets.get_active_canonical_reference_asset(
+            int(creator_profile_id)
+        )
+        if asset is None or int(asset.creator_profile_id or 0) != int(creator_profile_id):
+            return None
+        metadata = self._reference_metadata(asset)
+        if not (
+            metadata.get("is_reference")
+            and metadata.get("active")
+            and metadata.get("canonical")
+        ):
+            return None
+        original = RuntimeMediaResolver().resolve_original_path_string(asset)
+        preview_candidate = Path(asset.blurred_preview_path).expanduser() if asset.blurred_preview_path else None
+        preview = str(preview_candidate) if preview_candidate and preview_candidate.is_file() else original
+        return CanonicalReferenceProjection(
+            asset=CanonicalReferenceAsset(
+                asset_id=asset.id,
+                file_name=asset.file_name,
+                media_type=asset.media_type,
+                classification=asset.classification,
+                status=asset.status,
+                is_active=asset.is_active,
+                preview_path=preview,
+                original_path=original,
+            ),
+            creator_profile_id=int(asset.creator_profile_id),
+            is_active=bool(metadata.get("active")),
+            is_favorite=bool(metadata.get("favorite")),
+            added_at=metadata.get("added_at"),
+            last_used_at=metadata.get("last_used_at"),
+            metadata=metadata,
+        )
+
+    def get_owned_reference(
+        self,
+        asset_id: int,
+        *,
+        creator_profile_id: int,
+    ) -> LightweightReferenceProjection | None:
+        """Return one owned Reference record without Asset Library enrichment."""
+        asset = self.assets.get_by_id(int(asset_id))
+        if asset is None:
+            return None
+        metadata = self._reference_metadata(asset)
+        if not metadata.get("is_reference"):
+            return None
+        owner_id = self._reference_creator_profile_id(asset)
+        if owner_id not in (None, int(creator_profile_id)):
+            return None
+        original = RuntimeMediaResolver().resolve_original_path_string(asset)
+        preview_candidate = Path(asset.blurred_preview_path).expanduser() if asset.blurred_preview_path else None
+        preview = str(preview_candidate) if preview_candidate and preview_candidate.is_file() else original
+        return LightweightReferenceProjection(
+            asset=CanonicalReferenceAsset(
+                asset_id=asset.id,
+                file_name=asset.file_name,
+                media_type=asset.media_type,
+                classification=asset.classification,
+                status=asset.status,
+                is_active=asset.is_active,
+                preview_path=preview,
+                original_path=original,
+            ),
+            creator_profile_id=int(owner_id or creator_profile_id),
+            is_active=bool(metadata.get("active")),
+            is_favorite=bool(metadata.get("favorite")),
+            added_at=metadata.get("added_at"),
+            last_used_at=metadata.get("last_used_at"),
+            metadata=metadata,
+        )
+
     def get_reference(self, asset_id: int) -> ReferenceAsset | None:
         asset = self.assets.get_by_id(asset_id)
         if not asset:
@@ -418,23 +533,7 @@ class ReferenceLibraryService:
         )
 
     def _clear_active_reference(self, creator_profile_id: int) -> None:
-        current = self.list_references(
-            ReferenceLibraryFilter(
-                creator_profile_id=creator_profile_id,
-                active_only=True,
-                has_local_vault_original=None,
-                limit=500,
-            )
-        )
-        for reference in current.references:
-            asset = self.assets.get_by_id(reference.asset_id)
-            if not asset:
-                continue
-            metadata = self._reference_metadata(asset)
-            self.assets.update_reference_metadata(
-                reference.asset_id,
-                {**metadata, "active": False},
-            )
+        self.assets.clear_active_reference_flags(int(creator_profile_id))
 
     def _build_reference(
         self,

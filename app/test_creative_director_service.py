@@ -66,7 +66,7 @@ class FakeReferenceLibraryService:
         self.active_reference = active_reference
         self.calls = []
 
-    def get_active_reference(self, *, creator_profile_id):
+    def get_active_canonical_reference(self, *, creator_profile_id):
         self.calls.append(creator_profile_id)
         if (
             self.active_reference
@@ -74,6 +74,12 @@ class FakeReferenceLibraryService:
         ):
             return self.active_reference
         return None
+
+    def get_active_reference(self, **_kwargs):
+        raise AssertionError("prompt planning must not use full enrichment")
+
+    def list_references(self, *_args, **_kwargs):
+        raise AssertionError("prompt planning must not enumerate references")
 
 
 class CreativeDirectorServiceTests(unittest.TestCase):
@@ -320,7 +326,8 @@ class CreativeDirectorServiceTests(unittest.TestCase):
         self.assertIn("Seedream 5.0 Pro", captured["question"])
         self.assertIn("Premium mode intensity rules", captured["question"])
         self.assertIn("Shot 1 (Seed)", captured["question"])
-        self.assertIn("Analyze ALL of them as a progression sequence", captured["question"])
+        self.assertIn("compact Photoshoot Summary", captured["question"])
+        self.assertIn("Do not request or reconstruct complete prompt history", captured["question"])
 
     def test_photoshoot_ask_grok_explicit_mode_requests_escalating_nsfw_options(self):
         captured = {}

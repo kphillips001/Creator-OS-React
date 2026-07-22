@@ -28,7 +28,7 @@ def request(path):
     )
 
 
-def test_existing_provider_adapters_normalize_only_kiss_fields(tmp_path):
+def test_existing_provider_adapters_normalize_their_owned_fields(tmp_path):
     image = tmp_path / "image.png"
     image.write_bytes(b"image")
     gpt = GptVisionAssetIntelligenceAdapter(runner=lambda _: {
@@ -46,10 +46,11 @@ def test_existing_provider_adapters_normalize_only_kiss_fields(tmp_path):
         {"class": "FEMALE_BREAST_EXPOSED", "score": .99},
     ]).analyze(request(image))
 
-    allowed = {"short_description", "tags", "themes", "safety_classification", "quality_score", "keywords"}
-    assert set(gpt.normalized_fields) == allowed
-    assert set(grok.normalized_fields) == allowed
-    assert set(nude.normalized_fields) <= allowed
+    vision_fields = {"short_description", "tags", "themes", "safety_classification", "quality_score", "keywords"}
+    semantic_fields = vision_fields | {"content_summary", "search_phrases"}
+    assert set(gpt.normalized_fields) == vision_fields
+    assert set(grok.normalized_fields) == semantic_fields
+    assert set(nude.normalized_fields) <= vision_fields
     assert nude.normalized_fields["safety_classification"] == "NUDITY"
     assert "reasoning" not in gpt.normalized_fields
     assert "private" not in grok.normalized_fields

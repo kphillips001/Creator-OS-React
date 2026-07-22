@@ -177,6 +177,17 @@ class ChatCommerceRegistrationRepository:
             "active = TRUE",
             "temporarily_unavailable = FALSE",
             "retired = FALSE",
+            """EXISTS (
+                SELECT 1
+                FROM public.business_asset_registrations business_asset
+                WHERE business_asset.asset_id = public.chat_commerce_registrations.asset_id
+                  AND business_asset.is_archived = FALSE
+            )""",
+            """NOT EXISTS (
+                SELECT 1 FROM public.photoshoot_asset_memberships photoshoot_member
+                WHERE photoshoot_member.asset_id = public.chat_commerce_registrations.asset_id
+                  AND photoshoot_member.approved = TRUE
+            )""",
         ]
         params: list[Any] = [ChatAvailabilityState.CHAT_READY.value]
         if creator_profile_id is not None:
@@ -191,7 +202,11 @@ class ChatCommerceRegistrationRepository:
         limit: int = 100,
     ) -> tuple[ChatCommerceAssetRecord, ...]:
         value = state.value if isinstance(state, ChatAvailabilityState) else str(state)
-        return self._list_by_filter("availability_state = %s", (value,), limit=limit)
+        return self._list_by_filter(
+            "availability_state = %s AND " + self._active_business_asset_clause(),
+            (value,),
+            limit=limit,
+        )
 
     def list_by_product(
         self,
@@ -200,7 +215,7 @@ class ChatCommerceRegistrationRepository:
         limit: int = 100,
     ) -> tuple[ChatCommerceAssetRecord, ...]:
         return self._list_by_filter(
-            "product_ids ? %s",
+            "product_ids ? %s AND " + self._active_business_asset_clause(),
             (str(product_id),),
             limit=limit,
         )
@@ -212,10 +227,23 @@ class ChatCommerceRegistrationRepository:
         limit: int = 100,
     ) -> tuple[ChatCommerceAssetRecord, ...]:
         return self._list_by_filter(
-            "experience_ids ? %s",
+            "experience_ids ? %s AND " + self._active_business_asset_clause(),
             (str(experience_id),),
             limit=limit,
         )
+
+    @staticmethod
+    def _active_business_asset_clause() -> str:
+        return """EXISTS (
+            SELECT 1
+            FROM public.business_asset_registrations business_asset
+            WHERE business_asset.asset_id = public.chat_commerce_registrations.asset_id
+              AND business_asset.is_archived = FALSE
+        ) AND NOT EXISTS (
+            SELECT 1 FROM public.photoshoot_asset_memberships photoshoot_member
+            WHERE photoshoot_member.asset_id = public.chat_commerce_registrations.asset_id
+              AND photoshoot_member.approved = TRUE
+        )"""
 
     def list_recommendation_eligible(
         self,
