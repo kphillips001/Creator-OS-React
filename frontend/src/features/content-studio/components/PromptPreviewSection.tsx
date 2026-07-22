@@ -1,15 +1,16 @@
-import { useEffect, useMemo, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useState } from "react";
 
 import { createPromptPreview } from "../../../infrastructure/api/contentStudioApi";
-import type {
-  PromptPreview,
-  PromptPreviewSignature,
-} from "../types/promptPreview";
+import type { PromptPreview, PromptPreviewSignature } from "../types/promptPreview";
 
 type PromptPreviewSectionProps = {
   disabled: boolean;
   signature: PromptPreviewSignature;
   onPromptBatchChange: (prompts: string[]) => void;
+};
+
+export type PromptPreviewHandle = {
+  buildPrompts: (signature: PromptPreviewSignature) => Promise<void>;
 };
 
 function signaturesMatch(left: PromptPreviewSignature, right: PromptPreviewSignature) {
@@ -22,12 +23,17 @@ function promptBatchText(prompts: string[]) {
   return prompts.map((prompt, index) => `Prompt ${index + 1}: ${prompt}`).join("\n\n");
 }
 
-export function PromptPreviewSection({ disabled, onPromptBatchChange, signature }: PromptPreviewSectionProps) {
+export const PromptPreviewSection = forwardRef<PromptPreviewHandle, PromptPreviewSectionProps>(function PromptPreviewSection({
+  disabled,
+  onPromptBatchChange,
+  signature,
+}, ref) {
   const [preview, setPreview] = useState<PromptPreview | null>(null);
   const [editedPrompts, setEditedPrompts] = useState<string[]>([]);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [reviewOpen, setReviewOpen] = useState(false);
 
   const valid = Boolean(preview && signaturesMatch(preview.signature, signature));
   const cleanPrompts = useMemo(
@@ -41,19 +47,24 @@ export function PromptPreviewSection({ disabled, onPromptBatchChange, signature 
     onPromptBatchChange(valid ? cleanPrompts : []);
   }, [cleanPrompts, onPromptBatchChange, valid]);
 
-  const create = async (regenerate: boolean) => {
+  useEffect(() => {
+    if (!valid) setReviewOpen(false);
+  }, [valid]);
+
+  const create = async (regenerate: boolean, requestedSignature = signature) => {
     setPending(true);
     setError("");
     setMessage("");
     try {
       const result = await createPromptPreview(
-        signature.creativeMode,
-        signature.creativeTags,
-        signature.promptCount,
+        requestedSignature.creativeMode,
+        requestedSignature.creativeTags,
+        requestedSignature.promptCount,
       );
       setPreview(result);
       setEditedPrompts([...result.prompts]);
       setMessage(regenerate ? "Premium Prompt Preview regenerated." : "Premium Prompt Preview created.");
+      if (regenerate) setReviewOpen(true);
     } catch (reason: unknown) {
       setError(reason instanceof Error ? reason.message : "Prompt Preview failed");
     } finally {
@@ -61,59 +72,80 @@ export function PromptPreviewSection({ disabled, onPromptBatchChange, signature 
     }
   };
 
+  useImperativeHandle(ref, () => ({
+    buildPrompts: (requestedSignature) => create(false, requestedSignature),
+  }));
+
   return (
-    <section
-      aria-disabled={disabled || undefined}
-      aria-label="Prompt Preview"
-      className={`workflow-section prompt-preview${disabled ? " workflow-section--disabled" : ""}`}
-    >
-      <h2>Prompt Preview</h2>
-      <p className="prompt-preview__caption">
-        These editable prompts are the prompts sent to Generation Engine for this batch.
-      </p>
-      <div className="prompt-preview__actions">
-        <button disabled={disabled || pending} onClick={() => create(false)} type="button">
-          Create Prompt Preview
-        </button>
-        <button disabled={disabled || pending} onClick={() => create(true)} type="button">
-          Regenerate Prompt Preview
-        </button>
-        {valid && cleanPrompts.length > 0 && (
-          <a download="premium_studio_prompt_batch.txt" href={copyHref}>Copy Prompt Batch</a>
-        )}
-      </div>
-
-      {valid && preview ? (
-        <div className="prompt-preview__content">
-          {editedPrompts.map((prompt, index) => (
-            <label key={`${preview.planId}-${index + 1}`}>
-              <span>Prompt {index + 1}</span>
-              <textarea
-                onChange={(event) => setEditedPrompts((current) => current.map((item, itemIndex) => (
-                  itemIndex === index ? event.target.value : item
-                )))}
-                rows={7}
-                value={prompt}
-              />
-            </label>
-          ))}
-          <details className="prompt-preview__advanced">
-            <summary>Advanced Details</summary>
-            <p>Prompt Plan: {preview.planId}</p>
-            <p>Creative Mode: {preview.creativeMode}</p>
-            <p>{preview.creativeRationale}</p>
-            <pre>{JSON.stringify(preview.promptMetadata, null, 2)}</pre>
-          </details>
+    <>
+      <section
+        aria-disabled={disabled || undefined}
+        aria-label="Generate Prompts"
+        className={`workflow-section prompt-preview-launcher${disabled ? " workflow-section--disabled" : ""}`}
+      >
+        <h2>Generate Prompts</h2>
+        <div className="prompt-preview__actions">
+          <button disabled={disabled || pending} onClick={() => create(false)} type="button">
+            Generate Prompts
+          </button>
+          {valid && cleanPrompts.length > 0 && (
+            <button onClick={() => setReviewOpen(true)} type="button">Review Prompts</button>
+          )}
         </div>
-      ) : (
-        <p className="prompt-preview__empty">
-          Prompt Preview is ready when you create, regenerate, or generate images.
-        </p>
-      )}
+        {pending && <p className="prompt-preview__status">Working…</p>}
+        {message && <p className="prompt-preview__status">{message}</p>}
+        {error && <p className="prompt-preview__status prompt-preview__status--error" role="alert">{error}</p>}
+      </section>
 
-      {pending && <p className="prompt-preview__status">Working…</p>}
-      {message && <p className="prompt-preview__status">{message}</p>}
-      {error && <p className="prompt-preview__status prompt-preview__status--error" role="alert">{error}</p>}
-    </section>
+      {reviewOpen && valid && preview && (
+        <div
+          className="prompt-review-modal"
+          onMouseDown={(event) => { if (event.target === event.currentTarget) setReviewOpen(false); }}
+          role="presentation"
+        >
+          <section aria-label="Prompt Preview" aria-modal="true" className="prompt-review-modal__dialog prompt-preview" role="dialog">
+            <h2>Prompt Preview</h2>
+            <p className="prompt-preview__caption">
+              These editable prompts are the prompts sent to Generation Engine for this batch.
+            </p>
+            <div className="prompt-preview__actions">
+              <button disabled={pending} onClick={() => create(true)} type="button">
+                Regenerate Prompt Preview
+              </button>
+              {cleanPrompts.length > 0 && (
+                <a download="premium_studio_prompt_batch.txt" href={copyHref}>Copy Prompt Batch</a>
+              )}
+            </div>
+            <div className="prompt-preview__content">
+              {editedPrompts.map((prompt, index) => (
+                <label key={`${preview.planId}-${index + 1}`}>
+                  <span>Prompt {index + 1}</span>
+                  <textarea
+                    onChange={(event) => setEditedPrompts((current) => current.map((item, itemIndex) => (
+                      itemIndex === index ? event.target.value : item
+                    )))}
+                    rows={7}
+                    value={prompt}
+                  />
+                </label>
+              ))}
+              <details className="prompt-preview__advanced">
+                <summary>Advanced Details</summary>
+                <p>Prompt Plan: {preview.planId}</p>
+                <p>Creative Mode: {preview.creativeMode}</p>
+                <p>{preview.creativeRationale}</p>
+                <pre>{JSON.stringify(preview.promptMetadata, null, 2)}</pre>
+              </details>
+            </div>
+            {pending && <p className="prompt-preview__status">Working…</p>}
+            {message && <p className="prompt-preview__status">{message}</p>}
+            {error && <p className="prompt-preview__status prompt-preview__status--error" role="alert">{error}</p>}
+            <div className="prompt-review-modal__footer">
+              <button onClick={() => setReviewOpen(false)} type="button">Save &amp; Close</button>
+            </div>
+          </section>
+        </div>
+      )}
+    </>
   );
-}
+});

@@ -22,9 +22,35 @@ from app.api.content_studio import (
     _generate_prompt_workshop_batch,
     _mark_prompt_workshop_used,
     _read_content_studio_configuration,
+    _creative_director_context,
     _read_prompt_workshop_archive,
     _surprise_tags,
 )
+
+
+def test_creative_director_guard_uses_direct_creator_scoped_canonical_lookup():
+    calls = []
+
+    class ReferenceService:
+        def get_active_canonical_asset_id(self, *, creator_profile_id):
+            calls.append(creator_profile_id)
+            return 84
+
+        def get_active_reference(self, **_kwargs):
+            raise AssertionError("Content Studio guard must not use full enrichment")
+
+        def list_references(self, *_args, **_kwargs):
+            raise AssertionError("Content Studio guard must not enumerate references")
+
+    with (
+        patch("app.api.content_studio._current_account_id", return_value=7),
+        patch("app.api.content_studio.get_active_creator_profile", return_value={"id": 2}),
+        patch("app.api.content_studio.ReferenceLibraryService", return_value=ReferenceService()),
+    ):
+        creator, _director = _creative_director_context()
+
+    assert creator == {"id": 2}
+    assert calls == [2]
 from app.services.content_studio_configuration_service import (
     ContentStudioConfiguration,
     ContentStudioConfigurationService,

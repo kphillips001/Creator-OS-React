@@ -51,6 +51,18 @@ class SchemaManagerService:
     """Owns Creator OS schema discovery, migration history, and reconciliation."""
 
     REQUIRED_TABLES: Mapping[str, Mapping[str, Any]] = {
+        "hosted_asset_references": {
+            "owner": "Canonical Reference Hosting",
+            "migration": "20260721_008_hosted_asset_references.sql",
+            "repository": "HostedAssetReferenceRepository",
+            "service": "HostedAssetReferenceService",
+            "dashboard": (),
+            "columns": (
+                "reference_id", "asset_id", "host_name", "hosted_url",
+                "source_checksum", "source_path", "status", "is_current",
+                "verified_at", "last_used_at",
+            ),
+        },
         "content_items": {
             "owner": "Asset Library / CMS Import",
             "migration": "20260702_001_content_item_local_vault_path.sql",
@@ -209,6 +221,12 @@ class SchemaManagerService:
     }
 
     MIGRATION_SCHEMA_REQUIREMENTS: Mapping[str, Mapping[str, tuple[str, ...]]] = {
+        "20260721_008_hosted_asset_references.sql": {
+            "hosted_asset_references": (
+                "reference_id", "asset_id", "host_name", "hosted_url",
+                "source_checksum", "source_path", "status", "is_current",
+            ),
+        },
         "20260715_002_asset_intelligence_provider_execution.sql": {
             "asset_intelligence_runs": ("run_id", "asset_id", "status", "is_current"),
             "asset_intelligence_provider_executions": ("execution_id", "run_id", "provider_name", "attempt_number", "status"),
@@ -347,6 +365,51 @@ class SchemaManagerService:
 
     TABLE_OWNERSHIP: Mapping[str, Mapping[str, Any]] = {
         **REQUIRED_TABLES,
+        "photoshoot_asset_memberships": {
+            "owner": "Photoshoot Commerce",
+            "migration": "20260721_001_photoshoot_commerce_deliverables.sql",
+            "repository": "PhotoshootCommerceRepository",
+            "service": "PhotoshootCommerceDeliverableService",
+            "dashboard": ("Photoshoot Gallery", "Commerce Library"),
+            "columns": ("photoshoot_session_id", "asset_id", "shot_order", "approved", "is_hero"),
+            "legacy": "current", "compatibility": "CANONICAL",
+        },
+        "photoshoot_intelligence_profiles": {
+            "owner": "Photoshoot Intelligence",
+            "migration": "20260721_001_photoshoot_commerce_deliverables.sql",
+            "repository": "PhotoshootCommerceRepository",
+            "service": "PhotoshootCommerceDeliverableService",
+            "dashboard": ("Photoshoot Gallery", "Commerce Library"),
+            "columns": ("photoshoot_session_id", "status", "profile_data"),
+            "legacy": "current", "compatibility": "CANONICAL",
+        },
+        "photoshoot_commerce_deliverables": {
+            "owner": "Photoshoot Commerce",
+            "migration": "20260721_001_photoshoot_commerce_deliverables.sql",
+            "repository": "PhotoshootCommerceRepository",
+            "service": "PhotoshootCommerceDeliverableService",
+            "dashboard": ("Photoshoot Gallery", "Commerce Library"),
+            "columns": ("deliverable_id", "photoshoot_session_id", "creator_profile_id", "shot_count", "is_active", "is_archived"),
+            "legacy": "current", "compatibility": "CANONICAL",
+        },
+        "photoshoot_analysis_workflows": {
+            "owner": "Photoshoot Analysis",
+            "migration": "20260721_006_photoshoot_analysis_orchestrator.sql",
+            "repository": "PhotoshootAnalysisWorkflowRepository",
+            "service": "PhotoshootAnalysisOrchestratorService",
+            "dashboard": ("Commerce Library",),
+            "columns": ("deliverable_id", "current_stage", "worker_id", "lease_expires_at", "attempt_count"),
+            "legacy": "current", "compatibility": "CANONICAL",
+        },
+        "photoshoot_auto_runs": {
+            "owner": "Photoshoot Auto Run",
+            "migration": "20260721_007_photoshoot_auto_run.sql",
+            "repository": "PhotoshootAutoRunRepository",
+            "service": "PhotoshootAutoRunService",
+            "dashboard": ("Photoshoot",),
+            "columns": ("session_id", "state", "current_plan_index", "total_frames", "worker_id", "lease_expires_at", "attempt_count"),
+            "legacy": "current", "compatibility": "CANONICAL",
+        },
         "automated_reactions": {
             "owner": "Automated Reaction",
             "migration": "20260707_004_legacy_provider_schema_hardening.sql",
@@ -630,6 +693,9 @@ class SchemaManagerService:
     }
 
     REQUIRED_INDEXES: Mapping[str, tuple[str, ...]] = {
+        "hosted_asset_references": (
+            "hosted_asset_reference_current_idx", "hosted_asset_reference_lookup_idx",
+        ),
         "content_items": ("idx_content_items_creator_profile_status", "idx_content_items_local_vault_path"),
         "content_opportunity_records": ("idx_content_opportunity_records_type", "idx_content_opportunity_records_payload"),
         "customer_entitlements": ("idx_customer_entitlements_product", "idx_customer_entitlements_legacy_user"),
@@ -651,6 +717,7 @@ class SchemaManagerService:
     }
 
     CRITICAL_FOREIGN_KEYS: Mapping[str, tuple[str, ...]] = {
+        "hosted_asset_references": ("hosted_asset_references_asset_id_fkey",),
         "products": ("products_creator_profile_id_fkey",),
         "product_assets": ("product_assets_product_id_fkey", "product_assets_asset_id_fkey"),
         "customer_entitlements": ("customer_entitlements_product_id_fkey",),

@@ -105,7 +105,7 @@ def _read_content_studio_context() -> dict[str, bool | int | str | None]:
     )
     creator_profile_id = int(creator_profile.get("id") or 0)
     active_reference = (
-        ReferenceLibraryService().get_active_reference(
+        ReferenceLibraryService().get_active_reference_context(
             creator_profile_id=creator_profile_id,
         )
         if creator_profile_id
@@ -117,10 +117,10 @@ def _read_content_studio_context() -> dict[str, bool | int | str | None]:
         "creatorProfileExists": bool(creator_profile_id),
         "activeReferenceExists": active_reference is not None,
         "activeReferenceAssetId": (
-            active_reference.asset_id if active_reference is not None else None
+            active_reference["asset_id"] if active_reference is not None else None
         ),
         "activeReferenceLastUsedAt": (
-            active_reference.last_used_at if active_reference is not None else None
+            active_reference["last_used_at"] if active_reference is not None else None
         ),
     }
 
@@ -185,7 +185,7 @@ def _creative_director_context(*, require_reference: bool = True):
     if not creator_profile_id:
         raise ValueError("Creator Profile required before using Content Studio.")
     reference_service = ReferenceLibraryService()
-    if require_reference and reference_service.get_active_reference(creator_profile_id=creator_profile_id) is None:
+    if require_reference and reference_service.get_active_canonical_asset_id(creator_profile_id=creator_profile_id) is None:
         raise ValueError("Select an active Reference Image before creating premium work.")
     return creator_profile, CreativeDirectorService(
         reference_library_service=reference_service,

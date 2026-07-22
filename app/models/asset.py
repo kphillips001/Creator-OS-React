@@ -136,6 +136,9 @@ class Asset:
 
     @property
     def media_type(self) -> str:
+        declared = str((self.media_metadata or {}).get("media_type") or "").strip().lower()
+        if declared in {"image", "story", "video"}:
+            return declared
         suffix = Path(self.file_name or self.file_path).suffix.lower()
         if suffix in _IMAGE_SUFFIXES:
             return "image"

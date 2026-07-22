@@ -69,6 +69,7 @@ class ContentIntelligenceProfile:
             "provenance": dict(self.provenance),
             "content_profile": dict(self.content_profile),
             "normalized_context": dict(self.normalized_context),
+            "search_document": self.search_document,
             "error_code": self.error_code,
             "error_message": self.error_message,
             "reanalysis_reason": self.reanalysis_reason,

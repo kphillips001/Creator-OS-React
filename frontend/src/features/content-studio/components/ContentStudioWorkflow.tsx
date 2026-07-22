@@ -1,12 +1,12 @@
-import { useState } from "react";
+import { useCallback, useRef, useState } from "react";
 
 import { ActiveReferenceSection } from "./ActiveReferenceSection";
-import { CanonicalPromptPlannerSection } from "./CanonicalPromptPlannerSection";
+import { CanonicalPromptPlannerSection, type CanonicalPromptPlannerHandle } from "./CanonicalPromptPlannerSection";
 import { CreativeConfigurationSection } from "./CreativeConfigurationSection";
 import { CreativeDirectorToolsSection } from "./CreativeDirectorToolsSection";
 import { ManualPromptSection } from "./ManualPromptSection";
 import { GenerationWorkflowSections } from "./GenerationWorkflowSections";
-import { PromptPreviewSection } from "./PromptPreviewSection";
+import { PromptPreviewSection, type PromptPreviewHandle } from "./PromptPreviewSection";
 import { PromptWorkshopSection } from "./PromptWorkshopSection";
 import { WorkflowSection } from "./WorkflowSection";
 import type { ContentStudioContext } from "../types/contentStudioContext";
@@ -16,21 +16,20 @@ import type {
 } from "../types/contentStudioCreativeTools";
 
 const WORKFLOW_SECTIONS = [
-  "Premium Creative Mode / Prompt Count / Provider",
-  "Creative Director Tools",
-  "Canonical Prompt Planner Q&A",
+  "Creative Settings",
+  "Creative Direction",
   "Prompt Workshop",
   "Manual Prompt",
-  "Prompt Preview",
+  "Generate Prompts",
   "Generate Images",
   "Live Generation",
 ] as const;
 
 const REFERENCE_DEPENDENT_SECTIONS = new Set<string>([
-  "Creative Director Tools",
+  "Creative Direction",
   "Prompt Workshop",
   "Manual Prompt",
-  "Prompt Preview",
+  "Generate Prompts",
   "Generate Images",
   "Live Generation",
 ]);
@@ -49,16 +48,20 @@ const EMPTY_CREATIVE_INPUTS: CreativeToolInputs = {
   surpriseTags: "",
 };
 
+function enhancedPromptInput(originalTags: string, enhancedTags: string) {
+  return (
+    `[ORIGINAL USER TAGS — mandatory: ${originalTags.trim().replaceAll("\n", ", ")}] `
+    + `[ENHANCED SUGGESTIONS — vary any wardrobe detail not present in ORIGINAL USER TAGS: ${enhancedTags.trim().replaceAll("\n", ", ")}]`
+  );
+}
+
 function selectedPromptInput(source: PromptSource, inputs: CreativeToolInputs, manualPrompt: string) {
   const manual = manualPrompt.trim();
   if (manual) return manual;
   if (source === "Enhanced Tags") {
     const enhanced = inputs.enhancedTags.trim();
     if (!enhanced) return "";
-    return (
-      `[ORIGINAL USER TAGS — mandatory: ${inputs.creativeTags.trim().replaceAll("\n", ", ")}] `
-      + `[ENHANCED SUGGESTIONS — vary any wardrobe detail not present in ORIGINAL USER TAGS: ${enhanced.replaceAll("\n", ", ")}]`
-    );
+    return enhancedPromptInput(inputs.creativeTags, enhanced);
   }
   if (source === "Surprise Me Tags") return inputs.surpriseTags.trim();
   if (source === "Enhanced Explicit Tags") return inputs.enhancedExplicitTags.trim();
@@ -67,6 +70,8 @@ function selectedPromptInput(source: PromptSource, inputs: CreativeToolInputs, m
 }
 
 export function ContentStudioWorkflow({ context, error, loading }: ContentStudioWorkflowProps) {
+  const plannerRef = useRef<CanonicalPromptPlannerHandle>(null);
+  const promptPreviewRef = useRef<PromptPreviewHandle>(null);
   const [promptCount, setPromptCount] = useState<number | null>(null);
   const [creativeMode, setCreativeMode] = useState<string | null>(null);
   const [creativeInputs, setCreativeInputs] = useState<CreativeToolInputs>(EMPTY_CREATIVE_INPUTS);
@@ -74,13 +79,18 @@ export function ContentStudioWorkflow({ context, error, loading }: ContentStudio
   const [manualPrompt, setManualPrompt] = useState("");
   const [provider, setProvider] = useState<string | null>(null);
   const [previewPromptBatch, setPreviewPromptBatch] = useState<string[]>([]);
-  const [workshopBatch, setWorkshopBatch] = useState({ prompts: [] as string[], source: "" });
+  const [, setWorkshopBatch] = useState({ prompts: [] as string[], source: "" });
+  const [ideaEnhancement, setIdeaEnhancement] = useState<{ id: string; text: string } | null>(null);
   const blocked = Boolean(error) || context?.status === "profile_missing";
   const referenceMissing = context?.status === "reference_missing";
   const effectivePromptInput = selectedPromptInput(promptSource, creativeInputs, manualPrompt);
   const authoringDisabled = Boolean(referenceMissing) || promptCount === null;
   const previewDisabled = authoringDisabled || creativeMode === null || !effectivePromptInput;
   const generationDisabled = previewDisabled || provider === null;
+  const requestIdeaEnhancement = useCallback((id: string, text: string) => {
+    setIdeaEnhancement((current) => current ?? { id, text });
+  }, []);
+  const completeIdeaEnhancement = useCallback(() => setIdeaEnhancement(null), []);
 
   return (
     <div className="content-studio__workflow">
@@ -104,17 +114,26 @@ export function ContentStudioWorkflow({ context, error, loading }: ContentStudio
           />
           <CreativeDirectorToolsSection
             disabled={authoringDisabled}
+            ideaEnhancement={ideaEnhancement}
+            onIdeaEnhancementComplete={completeIdeaEnhancement}
             onInputsChange={setCreativeInputs}
+            onPremiumEnhanced={(originalTags, enhancedTags) => promptPreviewRef.current?.buildPrompts({
+              creativeMode: creativeMode ?? "",
+              creativeTags: enhancedPromptInput(originalTags, enhancedTags),
+              promptCount: promptCount ?? 1,
+            }) ?? Promise.resolve()}
             onPromptSourceChange={setPromptSource}
-            promptCount={promptCount ?? 1}
-            promptSource={promptSource}
-            promptWorkshopHasValue={Boolean(
-              manualPrompt.trim() || workshopBatch.prompts.some((prompt) => prompt.trim()),
+            planner={(
+              <CanonicalPromptPlannerSection
+                disabled={false}
+                enhancingIdeaId={ideaEnhancement?.id ?? null}
+                onEnhanceIdea={requestIdeaEnhancement}
+                ref={plannerRef}
+              />
             )}
+            promptCount={promptCount ?? 1}
           />
-          {WORKFLOW_SECTIONS.slice(2).map((title) => title === "Canonical Prompt Planner Q&A" ? (
-            <CanonicalPromptPlannerSection disabled={false} key={title} />
-          ) : title === "Prompt Workshop" ? (
+          {WORKFLOW_SECTIONS.slice(2).map((title) => title === "Prompt Workshop" ? (
             <PromptWorkshopSection
               disabled={authoringDisabled}
               key={title}
@@ -133,11 +152,12 @@ export function ContentStudioWorkflow({ context, error, loading }: ContentStudio
               onChange={setManualPrompt}
               value={manualPrompt}
             />
-          ) : title === "Prompt Preview" ? (
+          ) : title === "Generate Prompts" ? (
             <PromptPreviewSection
               disabled={previewDisabled}
               key={title}
               onPromptBatchChange={setPreviewPromptBatch}
+              ref={promptPreviewRef}
               signature={{
                 creativeMode: creativeMode ?? "",
                 creativeTags: effectivePromptInput,
@@ -149,6 +169,9 @@ export function ContentStudioWorkflow({ context, error, loading }: ContentStudio
               context={context}
               disabled={generationDisabled}
               key={title}
+              onAskAnotherQuestion={() => plannerRef.current?.askAnotherQuestion()}
+              onContinueExploring={() => plannerRef.current?.continueExploring()}
+              onStartNewSession={() => plannerRef.current?.startNewSession()}
               request={{
                 creativeMode: creativeMode ?? "",
                 promptBatch: previewPromptBatch,

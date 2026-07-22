@@ -45,6 +45,56 @@ export type CreativeDirectorRecommendation = {
   pose_composition: string;
 };
 
+export type PlanningMode = "frame_by_frame" | "full_plan";
+
+export type PlannedShot = {
+  shot_number: number;
+  title: string;
+  creative_direction: string;
+  reasoning?: string;
+  emotion?: string;
+  camera_framing?: string;
+  lighting?: string;
+  pose_composition?: string;
+  continuity_notes?: string;
+  status?: "pending" | "current" | "completed" | string;
+};
+
+export type PhotoshootAutoRunState = "READY" | "PREPARING" | "GENERATING" | "WAITING_FOR_REVIEW" |
+  "APPROVING" | "ADVANCING" | "PAUSED" | "FAILED" | "PLAN_COMPLETE" | "PHOTOSHOOT_COMPLETE";
+
+export type PhotoshootAutoRunRuntime = {
+  session_id: string; auto_run_state: PhotoshootAutoRunState; is_running: boolean; is_paused: boolean;
+  is_failed: boolean; plan_complete: boolean; photoshoot_complete: boolean; completed_frames: number;
+  total_frames: number; progress_percent: number; current_frame_index: number | null;
+  current_frame_number: number | null; current_frame_title: string | null; current_frame_status: string;
+  current_request_id: string | null; generation_job_id: string | null; candidate: GenerationRecord | null;
+  spinner_active: boolean; waiting_for_review: boolean;
+  failure: null | { error_code: string | null; error_message: string; stage: string | null };
+  last_updated_at: string | null; auto_approve_enabled: boolean; review_mode: "AUTO_APPROVE" | "MANUAL_REVIEW";
+  available_actions: string[];
+};
+
+export type PhotoshootReviewShot = {
+  image_id: string; asset_id: number | null; shot_number: number; title: string;
+  description: string; image_url: string; keep: boolean; is_seed: boolean;
+};
+
+export type PhotoshootCurationReview = {
+  session_id: string; session_title: string; seed_image: PhotoshootReviewShot | null;
+  shots: PhotoshootReviewShot[]; photoshoot_decision: PhotoshootDecision;
+  confirmed: boolean; curation: Record<string, unknown>;
+};
+
+export type PhotoshootDecision = "PENDING" | "APPROVED" | "DECLINED";
+
+export type PhotoshootCurationResult = {
+  session_id: string; status: string; already_confirmed: boolean;
+  photoshoot_decision: PhotoshootDecision; photoshoot_decided_at: string | null;
+  selected_image_ids: string[]; photoshoot_created: boolean;
+  photoshoot_deliverable_id: string | null; image_asset_generation_ids: string[];
+};
+
 export type CreativeDirectorContext = {
   sessionId: string;
   creativeMode: "safe" | "premium" | "explicit";
@@ -55,6 +105,11 @@ export type CreativeDirectorContext = {
   selectedInspiration: string;
   recommendation: CreativeDirectorRecommendation | null;
   directionApproved: boolean;
+  planningMode: PlanningMode;
+  planFrameCount: number;
+  sessionPlan: PlannedShot[];
+  sessionPlanIndex: number;
+  sessionPlanApproved: boolean;
 };
 
 export type PhotoshootContext =

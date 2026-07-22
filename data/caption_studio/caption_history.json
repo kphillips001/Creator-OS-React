@@ -1,5 +1,31 @@
 [
   {
+    "history_id": "caption_history_7ad8d2c8bed1466998c1ded1ab349fa6",
+    "session_id": "caption_session_1c2dfd56df9b46448cc1cf7febe23fb7",
+    "caption_request_id": "caption_request_b1ed80d8438043a18db2c4ddbf126e08",
+    "caption_result_id": "caption_result_0e4d2fe51fb348aaa6ef9c9698501fab",
+    "platform": "telegram",
+    "selected_text": "Caught me leaning like this on purpose \ud83d\ude0f these little shorts barely cover a thing",
+    "created_at": "2026-07-20T00:04:42.009404",
+    "metadata": {
+      "source_generated_image_id": "generated_image_2cd6611c4d162a0c0b1daba5",
+      "social_queue_item_id": null
+    }
+  },
+  {
+    "history_id": "caption_history_4050c46882f84e789f9a95b557be3b0c",
+    "session_id": "caption_session_1c2dfd56df9b46448cc1cf7febe23fb7",
+    "caption_request_id": "caption_request_b1ed80d8438043a18db2c4ddbf126e08",
+    "caption_result_id": "caption_result_0e4d2fe51fb348aaa6ef9c9698501fab",
+    "platform": "telegram",
+    "selected_text": null,
+    "created_at": "2026-07-20T00:04:28.318675",
+    "metadata": {
+      "source_generated_image_id": "generated_image_2cd6611c4d162a0c0b1daba5",
+      "social_queue_item_id": null
+    }
+  },
+  {
     "history_id": "caption_history_61a4fbd0e4834dd7a8a51a87f9fd41b4",
     "session_id": "caption_session_49a1f50e642846279b6cd80831f13891",
     "caption_request_id": "caption_request_bb735fe874254a65bc33a9971f735cf5",

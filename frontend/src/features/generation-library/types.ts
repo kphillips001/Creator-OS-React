@@ -23,7 +23,7 @@ export type GenerationCardAction =
   | "edit"
   | "photoshoot"
   | "video"
-  | "register"
+  | "move-to-asset-library"
   | "remove";
 
 export type GenerationActionResponse = {
@@ -38,9 +38,8 @@ export type GenerationActionResponse = {
   source_image_url?: string;
   context_refresh?: boolean;
   session_id?: string;
-  asset_id?: number;
   generation_id?: string;
-  already_registered?: boolean;
+  already_moved?: boolean;
 };
 
 export type GenerationLibraryResponse = {

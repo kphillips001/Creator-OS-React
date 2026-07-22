@@ -12,7 +12,12 @@ def _reference(path: Path):
 def test_active_reference_returns_canonical_asset_and_creator(monkeypatch, tmp_path):
     image = tmp_path / "ava-reference.png"
     image.write_bytes(b"image")
-    service = SimpleNamespace(get_active_reference=lambda **kwargs: _reference(image))
+    calls = []
+    service = SimpleNamespace(
+        get_active_canonical_reference=lambda **kwargs: calls.append(kwargs) or _reference(image),
+        get_active_reference=lambda **_kwargs: (_ for _ in ()).throw(AssertionError("heavy lookup must not run")),
+        list_references=lambda **_kwargs: (_ for _ in ()).throw(AssertionError("collection lookup must not run")),
+    )
     monkeypatch.setattr(api, "_current_account_id", lambda: 1)
     monkeypatch.setattr(api, "get_active_creator_profile", lambda account_id: {"id": 2, "name": "Ava"})
     monkeypatch.setattr(api, "ReferenceLibraryService", lambda: service)
@@ -26,3 +31,4 @@ def test_active_reference_returns_canonical_asset_and_creator(monkeypatch, tmp_p
     assert result["active_reference"]["image_url"].startswith("/api/v1/reference-library/active/image")
     response = api.active_reference_image()
     assert Path(response.path) == image
+    assert calls == [{"creator_profile_id": 2}, {"creator_profile_id": 2}]

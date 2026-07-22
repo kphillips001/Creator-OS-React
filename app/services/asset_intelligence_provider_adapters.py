@@ -19,12 +19,6 @@ from app.services.llm_json_parser import parse_llm_json
 from app.config import GROK_VISION_MODEL
 
 
-_KISS_FIELDS = {
-    "short_description", "tags", "themes", "safety_classification",
-    "quality_score", "keywords",
-}
-
-
 def _clean_list(value: Any) -> tuple[str, ...]:
     if isinstance(value, str):
         value = value.split(",")
@@ -152,9 +146,12 @@ class GrokVisionAssetIntelligenceAdapter(_CallableAdapter):
             model=GROK_VISION_MODEL,
             input=[{"role": "user", "content": [
                 {"type": "input_text", "text": (
-                    "Analyze this image for an asset inventory. Return only JSON with: "
-                    "short_description (string), tags (string array), themes (string array), "
-                    "safety_classification (string), quality_score (0 to 1 number), keywords (string array)."
+                    "Interpret the semantic and creative meaning of this image. Vision already handles factual "
+                    "clothing, object, pose, lighting, and environment detection, so do not repeat those tasks. "
+                    "Return only JSON with: descriptive_summary (string), themes (string array), mood (string), "
+                    "atmosphere (string), emotional_tone (string), visual_style (string), "
+                    "suggested_collections (string array), search_phrases (string array), "
+                    "lifestyle_context (string), and tags (semantic string array)."
                 )},
                 {"type": "input_image", "image_url": image_url},
             ]}],
@@ -163,9 +160,26 @@ class GrokVisionAssetIntelligenceAdapter(_CallableAdapter):
 
     def normalize(self, raw_response: Any) -> Mapping[str, Any]:
         raw = dict(raw_response or {})
-        return {
-            key: _clean_list(raw.get(key)) if key in {"tags", "themes", "keywords"}
-            else _quality(raw.get(key)) if key == "quality_score" else raw.get(key)
-            for key in _KISS_FIELDS
-            if raw.get(key) is not None
+        summary = raw.get("descriptive_summary") or raw.get("natural_language_description") or raw.get("short_description")
+        search_phrases = _clean_list(raw.get("search_phrases") or raw.get("keywords"))
+        fields = {
+            "short_description": summary,
+            "content_summary": summary,
+            "themes": _clean_list(raw.get("themes")),
+            "mood": raw.get("mood"),
+            "atmosphere": raw.get("atmosphere"),
+            "emotional_tone": raw.get("emotional_tone"),
+            "visual_style": raw.get("visual_style"),
+            "suggested_collections": _clean_list(raw.get("suggested_collections")),
+            "search_phrases": search_phrases,
+            "keywords": search_phrases,
+            "lifestyle_context": raw.get("lifestyle_context"),
+            "tags": _clean_list(raw.get("tags") or raw.get("themes")),
         }
+        # Retain compatibility with historical stored responses without asking Grok
+        # to duplicate factual Vision or NudeNet responsibilities.
+        if raw.get("safety_classification") is not None:
+            fields["safety_classification"] = raw.get("safety_classification")
+        if raw.get("quality_score") is not None:
+            fields["quality_score"] = _quality(raw.get("quality_score"))
+        return {key: value for key, value in fields.items() if value not in (None, (), "")}

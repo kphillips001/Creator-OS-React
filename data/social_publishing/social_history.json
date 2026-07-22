@@ -1,5 +1,64 @@
 [
   {
+    "history_id": "social_publish_history_b7c7944fef7544538b04a98558d7ff40",
+    "queue_item_id": "social_queue_item_648b4d9016824e80a5a72060db650eda",
+    "platform": "x",
+    "status": "posted",
+    "message": "Posted to X.",
+    "created_at": "2026-07-21T15:31:34.460676",
+    "metadata": {
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "caption_id": null,
+      "provider_post_id": "2079590111302304202",
+      "provider_media_id": "2079590109523918848",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2079590111302304202"
+    }
+  },
+  {
+    "history_id": "social_publish_history_10980ba3226e44f5ac056f13a26862d0",
+    "queue_item_id": "social_queue_item_19046c6a819845778165ed855fd92eac",
+    "platform": "x",
+    "status": "posted",
+    "message": "Posted to X.",
+    "created_at": "2026-07-20T14:44:13.603102",
+    "metadata": {
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "caption_id": null,
+      "provider_post_id": "2079215808211718283",
+      "provider_media_id": "2079215806462689280",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2079215808211718283"
+    }
+  },
+  {
+    "history_id": "social_publish_history_ad8a646c40ef4dc992c225592c617907",
+    "queue_item_id": "social_queue_item_bb23ea82e3614b6298f7e7efda6ccfb7",
+    "platform": "telegram",
+    "status": "posted",
+    "message": "Posted to Telegram.",
+    "created_at": "2026-07-20T00:04:43.741151",
+    "metadata": {
+      "account_name": null,
+      "telegram_post_to": "main",
+      "caption_id": "caption_result_0e4d2fe51fb348aaa6ef9c9698501fab",
+      "provider_post_id": "86",
+      "provider_media_id": null,
+      "provider_output_url": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_c84db75a2cdb442ab000a9e66b92e901",
+    "queue_item_id": "social_queue_item_bb23ea82e3614b6298f7e7efda6ccfb7",
+    "platform": "telegram",
+    "status": "caption_attached",
+    "message": "Caption Studio result attached to Social Queue item.",
+    "created_at": "2026-07-20T00:04:42.071418",
+    "metadata": {
+      "caption_id": "caption_result_0e4d2fe51fb348aaa6ef9c9698501fab"
+    }
+  },
+  {
     "history_id": "social_publish_history_fa6c1415ebae42b081f4e9b9c7ed2812",
     "queue_item_id": "social_queue_item_7ae9395c8eee4b909c6a4bc2537a5bce",
     "platform": "x",

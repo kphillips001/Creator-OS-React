@@ -3,6 +3,7 @@ import {
   ArrowRight,
   ChevronLeft,
   ChevronRight,
+  MoveRight,
   Search,
   SlidersHorizontal,
   Sparkles,
@@ -189,7 +190,7 @@ export function GenerationLibraryPage() {
       )) throw new Error("Photoshoot handoff returned an unexpected seed image.");
       setActionMessage(result.message || `${action} completed.`);
       if (action === "remove") setLibraryVersion((current) => current + 1);
-      if (action === "register") setLibraryVersion((current) => current + 1);
+      if (action === "move-to-asset-library") setLibraryVersion((current) => current + 1);
       if (result.redirect) navigate(result.redirect);
     } catch (reason: unknown) {
       setActionMessage(reason instanceof Error ? reason.message : `${action} failed`);
@@ -297,11 +298,7 @@ export function GenerationLibraryPage() {
                 <button disabled={pendingAction === `${record.image_id}:photoshoot`} onClick={() => runCardAction(record, "photoshoot")} title="Create Photoshoot" type="button"><span>📸</span>Create Photoshoot</button>
                 <button onClick={showStoryNotice} title="Create Story" type="button"><span>🎬</span>Create Story</button>
                 <button disabled title="Video Studio Coming Soon" type="button"><span>🎥</span>Create Video · Coming Soon</button>
-                {record.imported_asset_id !== null && record.imported_asset_id !== undefined ? (
-                  <button disabled title="Already Registered" type="button"><span>✅</span>Already Registered</button>
-                ) : (
-                  <button disabled={pendingAction === `${record.image_id}:register`} onClick={() => runCardAction(record, "register")} title="Register Asset ⭐" type="button"><span>⭐</span>Register Asset ⭐</button>
-                )}
+                <button aria-label="Move to Asset Library" disabled={pendingAction === `${record.image_id}:move-to-asset-library`} onClick={() => runCardAction(record, "move-to-asset-library")} title="Move to Asset Library" type="button"><MoveRight aria-hidden="true" size={16} />Move to Asset Library</button>
                 <button disabled={pendingAction === `${record.image_id}:remove`} onClick={() => runCardAction(record, "remove")} title="Remove Content" type="button"><span>🗑️</span>Remove</button>
               </div>
             </article>

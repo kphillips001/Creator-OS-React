@@ -159,7 +159,12 @@ class FakeCommerceRegistrationRepository:
         )[:limit]
 
     def list_blocked_by_incomplete_intelligence(self, limit=500):
-        return ()
+        return tuple(
+            record
+            for record in self.records
+            if record.business_lifecycle_state
+            == BusinessAssetLifecycleState.INTELLIGENCE_PENDING
+        )[:limit]
 
 
 class FakeChatCommerceRegistrationService:
@@ -273,6 +278,70 @@ class ChatCommerceInventoryServiceTests(unittest.TestCase):
         self.assertEqual(ready_item.metrics.purchase_count, 1)
         self.assertEqual(ready_item.metrics.delivery_count, 1)
         self.assertEqual(ready_item.metrics.conversion_rate, 1.0)
+
+    def test_pending_registration_appears_in_business_asset_inventory(self):
+        pending = business_asset(
+            404,
+            lifecycle=BusinessAssetLifecycleState.INTELLIGENCE_PENDING,
+            destination_status=CommerceDestinationStatus.NOT_READY,
+            destination=None,
+            product_ids=(),
+            experience_ids=(),
+            source_workflow="staged_asset_library_registration",
+        )
+        pending = BusinessAssetRecord(
+            **{
+                **pending.__dict__,
+                "content_intelligence_status": "PENDING",
+                "content_intelligence_ready": False,
+                "commerce_registration_status": CommerceRegistrationStatus.PENDING,
+            }
+        )
+
+        result = self.build_service(records=(pending,)).build_inventory()
+
+        self.assertEqual(tuple(item.asset_id for item in result.items), (404,))
+        self.assertEqual(result.items[0].current_lifecycle, "INTELLIGENCE_PENDING")
+        self.assertEqual(result.items[0].availability, "Pending")
+        self.assertFalse(result.items[0].chat_ready)
+        self.assertFalse(result.items[0].fulfillment_ready)
+
+    def test_active_projection_keeps_ready_pending_registration_visible(self):
+        ready = business_asset(
+            405,
+            lifecycle=BusinessAssetLifecycleState.INTELLIGENCE_READY,
+            destination_status=CommerceDestinationStatus.NOT_READY,
+            destination=None,
+        )
+        ready = BusinessAssetRecord(**{
+            **ready.__dict__,
+            "content_intelligence_status": "READY",
+            "content_intelligence_ready": True,
+            "commerce_registration_status": CommerceRegistrationStatus.PENDING,
+        })
+
+        class ActiveRepository(FakeCommerceRegistrationRepository):
+            def list_active(self, limit=500):
+                return self.records[:limit]
+
+        service = self.build_service(records=())
+        service.commerce_registrations = ActiveRepository((ready,))
+
+        result = service.build_inventory()
+
+        self.assertEqual(tuple(item.asset_id for item in result.items), (405,))
+        self.assertEqual(result.items[0].current_lifecycle, "INTELLIGENCE_READY")
+
+    def test_inventory_query_failure_is_not_reported_as_empty_inventory(self):
+        service = self.build_service(records=())
+
+        def fail(*, limit):
+            raise RuntimeError("commerce schema is unavailable")
+
+        service.commerce_registrations.list_registered = fail
+
+        with self.assertRaisesRegex(RuntimeError, "commerce schema is unavailable"):
+            service.build_inventory()
 
     def test_filters_by_status_and_relationships(self):
         service = self.build_service(

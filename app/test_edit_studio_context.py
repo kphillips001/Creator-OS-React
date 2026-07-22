@@ -155,6 +155,39 @@ def test_reference_request_defaults_role_for_backend_compatibility():
     assert reference.role == "Other"
 
 
+def test_reference_image_uses_lightweight_owned_validation(monkeypatch, tmp_path):
+    from app.api import edit_studio as api
+
+    image = tmp_path / "reference.png"
+    image.write_bytes(b"reference")
+    calls = []
+
+    class ReferenceService:
+        def get_owned_reference(self, asset_id, *, creator_profile_id):
+            calls.append((asset_id, creator_profile_id))
+            return SimpleNamespace(
+                asset=SimpleNamespace(preview_path=str(image), original_path=str(image))
+            )
+
+        def get_reference(self, *_args, **_kwargs):
+            raise AssertionError("Edit Studio validation must not build enriched references")
+
+    monkeypatch.setattr(api, "_creator_profile", lambda: {"id": 7})
+    monkeypatch.setattr(api, "ReferenceLibraryService", ReferenceService)
+
+    response = api.edit_studio_reference_image(84)
+
+    assert Path(response.path) == image
+    assert calls == [(84, 7)]
+
+
+def test_edit_studio_api_has_no_enriched_single_reference_lookup():
+    source = Path("app/api/edit_studio.py").read_text(encoding="utf-8")
+
+    assert ".get_owned_reference(" in source
+    assert ".get_reference(" not in source
+
+
 def _reference(asset_id, filename, *, active=False, metadata=None, tags=()):
     return SimpleNamespace(
         asset_id=asset_id,

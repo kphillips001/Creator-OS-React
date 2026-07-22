@@ -7,11 +7,18 @@ from pathlib import Path
 from typing import Callable
 
 from app.models.generation_library import GeneratedImageRecord
+from app.models.asset_provenance import (
+    ASSET_PROVENANCE_METADATA_KEY,
+    AssetProvenanceClassification,
+    provenance_context,
+)
+from app.models.generation_engine import utc_now
 from app.repositories.asset_repository import AssetRepository
 from app.repositories.content_repository import insert_content_item, update_content_item
 from app.services.asset_intelligence_service import AssetIntelligenceService
 from app.services.asset_intelligence_analysis_service import AssetIntelligenceAnalysisService
 from app.services.generation_library_service import GenerationLibraryService
+from app.services.reference_asset_protection import is_protected_generation_metadata, is_protected_reference_asset
 
 
 @dataclass(frozen=True)
@@ -55,11 +62,22 @@ class AssetRegistrationService:
         creator_profile_id: int,
         progress: Callable[[str], None] | None = None,
     ) -> AssetRegistrationResult:
+        if is_protected_generation_metadata(record.generation_metadata):
+            return AssetRegistrationResult(success=False, message="Protected Reference assets cannot be registered.")
         existing_id = record.imported_asset_id
         if existing_id is None:
             existing = self.assets.get_by_generation_image_id(record.image_id)
             existing_id = existing.id if existing else None
         if existing_id is not None:
+            get_by_id = getattr(self.assets, "get_by_id", None)
+            existing_asset = get_by_id(int(existing_id)) if callable(get_by_id) else None
+            if existing_asset is not None and is_protected_reference_asset(existing_asset):
+                return AssetRegistrationResult(success=False, message="Protected Reference assets cannot be registered.")
+            if (
+                existing_asset is not None
+                and int(existing_asset.creator_profile_id or 0) != int(creator_profile_id)
+            ):
+                return AssetRegistrationResult(success=False, message="Asset belongs to another Creator Profile.")
             profile = self.asset_intelligence.initialize_pending(
                 asset_id=int(existing_id),
                 creator_profile_id=int(creator_profile_id),
@@ -109,6 +127,21 @@ class AssetRegistrationService:
                 "creator_profile_id": int(creator_profile_id),
                 "media_metadata": {
                     "media_type": "image",
+                    "creator_approval": {
+                        "source_workflow": "staged_asset_library_registration",
+                        "source_item_id": record.image_id,
+                        "idempotency_key": f"staged-asset-registration:{record.image_id}",
+                        "approved_at": utc_now(),
+                    },
+                    ASSET_PROVENANCE_METADATA_KEY: provenance_context(
+                        AssetProvenanceClassification.CREATOR_APPROVAL,
+                        source="AssetRegistrationService",
+                        source_workflow="staged_asset_library_registration",
+                        metadata={
+                            "source_item_id": record.image_id,
+                            "idempotency_key": f"staged-asset-registration:{record.image_id}",
+                        },
+                    ),
                     "asset_registration": {
                         "phase": 1,
                         "source": "generation_library",
@@ -116,6 +149,17 @@ class AssetRegistrationService:
                         "generation_job_id": record.generation_job_id,
                         "generation_request_id": record.generation_request_id,
                         "generation_result_id": record.generation_result_id,
+                        "prompt_plan_id": record.prompt_plan_id,
+                        "prompt_text": record.prompt_text,
+                        "provider_id": record.provider_id,
+                        "creative_mode": record.creative_mode,
+                        "reference_asset_id": record.reference_asset_id,
+                        "photoshoot_session_id": record.photoshoot_session_id,
+                        "photoshoot_request_id": record.photoshoot_request_id,
+                        "provider_metadata": dict(record.provider_metadata or {}),
+                        "prompt_metadata": dict(record.prompt_metadata or {}),
+                        "generation_metadata": dict(record.generation_metadata or {}),
+                        "output_reference": record.output_reference,
                     },
                 },
             }

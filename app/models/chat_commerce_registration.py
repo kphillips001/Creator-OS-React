@@ -212,6 +212,7 @@ class ChatInventoryCandidate:
         )
 
     def to_legacy_payload(self, persona: str, offer_type: str) -> dict[str, Any]:
+        photoshoot = str(self.metadata.get("item_kind") or "") == "photoshoot"
         return {
             "id": self.asset_id,
             "content_item_id": self.asset_id,
@@ -222,14 +223,14 @@ class ChatInventoryCandidate:
             "type": offer_type,
             "tier": "chat_ready",
             "price": 0,
-            "caption": None,
+            "caption": self.metadata.get("description") if photoshoot else None,
             "checkout_url": self.media_link,
             "fanvue_link": self.media_link,
             "persona": persona,
             "classification": str(offer_type or "chat").upper(),
-            "file_path": None,
-            "file_name": f"Asset {self.asset_id}",
-            "source": "chat_commerce_inventory",
+            "file_path": self.metadata.get("gallery_path") if photoshoot else None,
+            "file_name": self.metadata.get("display_name") if photoshoot else f"Asset {self.asset_id}",
+            "source": "photoshoot_commerce_deliverable" if photoshoot else "chat_commerce_inventory",
             "recommendation_reason": "chat_ready_inventory",
             "recommendation_score": 0,
             "delivery_type": "PAID" if self.media_link else None,
@@ -241,6 +242,8 @@ class ChatInventoryCandidate:
             "product_ids": list(self.product_ids),
             "experience_ids": list(self.experience_ids),
             "chat_inventory_metadata": dict(self.metadata or {}),
+            "deliverable_id": self.metadata.get("deliverable_id") if photoshoot else None,
+            "deliverable_type": "photoshoot" if photoshoot else "asset",
         }
 
 

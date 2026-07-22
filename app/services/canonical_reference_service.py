@@ -123,11 +123,11 @@ class CanonicalReferenceService:
 
         service = reference_service or ReferenceLibraryService()
         creator_profile_id = int(creator_profile["id"])
-        existing = service.get_active_reference(
+        existing_asset_id = service.get_active_canonical_asset_id(
             creator_profile_id=creator_profile_id
         )
-        if existing is not None:
-            return existing
+        if existing_asset_id is not None:
+            return existing_asset_id
 
         display_name = self._display_name(creator_profile)
         valid, detail = self.verify(display_name)
@@ -170,3 +170,21 @@ class CanonicalReferenceService:
             or creator_profile.get("name")
             or f"Creator_{creator_profile.get('id')}"
         )
+
+
+def recover_all_active_creator_references() -> None:
+    """Best-effort database rebuild recovery from permanent role metadata/media."""
+    try:
+        from app.database import get_db_connection
+        from app.services.reference_library_service import ReferenceLibraryService
+
+        with get_db_connection() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT * FROM creator_profiles WHERE COALESCE(is_active, TRUE) = TRUE")
+                profiles = tuple(dict(row) for row in cursor.fetchall())
+        canonical = CanonicalReferenceService()
+        references = ReferenceLibraryService()
+        for profile in profiles:
+            canonical.recover_creator(profile, reference_service=references)
+    except Exception as exc:
+        LOGGER.warning("Canonical reference startup recovery was skipped: %s", exc)

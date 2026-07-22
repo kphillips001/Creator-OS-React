@@ -60,6 +60,10 @@ Done.
 - Already-running Creator_OS services are stopped and restarted.
 - Newly started services continue running after the launcher exits.
 - Process output is written to the project's `logs` directory.
-- On failure, the launcher shows the reason and waits for Enter so the message remains visible.
+- On failure, the native launcher shows the failing step and exception. Full commands and diagnostics are recorded in `logs\runtime\launcher.log`.
 
 The launcher requires the same prerequisites as manual startup: Python with the project's backend dependencies, Node.js, npm, and installed frontend packages.
+
+The supervised runtimes include the standalone Image orchestrator and NudeNet, Vision, Grok, and Content Intelligence workers, the Photoshoot Analysis worker, and the durable Photoshoot Auto Run worker. Both Photoshoot workers use the same PID validation, heartbeat, lease recovery, restart, and process-tree shutdown protections as the existing workers. Photoshoot Auto Run owns full-plan generation after the UI issues start, pause, resume, stop, or retry commands.
+
+Canonical reference hosting is configured through `HOSTED_REFERENCE_VERIFY_TTL_SECONDS`, `HOSTED_REFERENCE_RETRY_COUNT`, `HOSTED_REFERENCE_RETRY_BACKOFF_SECONDS`, `HOSTED_REFERENCE_VERIFY_TIMEOUT_SECONDS`, and `WAVESPEED_TRANSPORT_TIMEOUT_SECONDS`. These settings are consumed by the generation runtime; the launcher does not override them.

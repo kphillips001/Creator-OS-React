@@ -1,6 +1,6 @@
 import { environment } from "../config/environment";
 import type { GenerationRecord } from "../../features/generation-library/types";
-import type { CreativeDirectorContext, CreativeDirectorRecommendation, PhotoshootContext, PhotoshootProvider } from "../../features/photoshoot/types";
+import type { CreativeDirectorContext, CreativeDirectorRecommendation, PhotoshootAutoRunRuntime, PhotoshootContext, PhotoshootCurationResult, PhotoshootCurationReview, PhotoshootProvider, PlannedShot, PlanningMode } from "../../features/photoshoot/types";
 
 type PhotoshootContextResponse = {
   creator_profile_exists: boolean;
@@ -145,6 +145,8 @@ async function photoshootMutation<T>(path: string, body: unknown): Promise<T> {
 type CreativeDirectorContextResponse = {
   session_id: string; creative_mode: "safe" | "premium" | "explicit"; session_direction: string;
   creator_guidance: string; workflow_stage: string; current_prompt: string;
+  planning_mode?: PlanningMode; plan_frame_count?: number; session_plan?: PlannedShot[];
+  session_plan_index?: number; session_plan_approved?: boolean;
   recommendation_state: { inspiration_ideas: string[]; selected_inspiration: string; recommendation: CreativeDirectorRecommendation; direction_approved: boolean };
 };
 
@@ -153,7 +155,22 @@ export async function getCreativeDirectorContext(sessionId: string, signal?: Abo
   const result = await response.json().catch(() => ({})) as CreativeDirectorContextResponse & { detail?: string };
   if (!response.ok) throw new Error(result.detail || "Unable to restore Creative Director state.");
   const recommendation = result.recommendation_state?.recommendation || null;
-  return { sessionId: result.session_id, creativeMode: result.creative_mode, creatorGuidance: result.creator_guidance || "", workflowStage: result.workflow_stage || "ready_for_direction", currentPrompt: result.current_prompt || "", ideas: result.recommendation_state?.inspiration_ideas || [], selectedInspiration: result.recommendation_state?.selected_inspiration || "", recommendation: recommendation && (recommendation.title || recommendation.creative_direction) ? recommendation : null, directionApproved: Boolean(result.recommendation_state?.direction_approved) };
+  return {
+    sessionId: result.session_id,
+    creativeMode: result.creative_mode,
+    creatorGuidance: result.creator_guidance || "",
+    workflowStage: result.workflow_stage || "ready_for_direction",
+    currentPrompt: result.current_prompt || "",
+    ideas: result.recommendation_state?.inspiration_ideas || [],
+    selectedInspiration: result.recommendation_state?.selected_inspiration || "",
+    recommendation: recommendation && (recommendation.title || recommendation.creative_direction) ? recommendation : null,
+    directionApproved: Boolean(result.recommendation_state?.direction_approved),
+    planningMode: result.planning_mode === "full_plan" ? "full_plan" : "frame_by_frame",
+    planFrameCount: Math.max(4, Math.min(12, Number(result.plan_frame_count || 8))),
+    sessionPlan: Array.isArray(result.session_plan) ? result.session_plan : [],
+    sessionPlanIndex: Math.max(0, Number(result.session_plan_index || 0)),
+    sessionPlanApproved: Boolean(result.session_plan_approved),
+  };
 }
 
 export const requestPhotoshootInspiration = (body: unknown) => photoshootMutation<{ ideas: string[]; selected_inspiration: string }>("/creative-director/inspiration", body);
@@ -162,6 +179,11 @@ export const persistPhotoshootGuidance = (body: unknown) => photoshootMutation<{
 export const requestPhotoshootRecommendation = (body: unknown) => photoshootMutation<CreativeDirectorRecommendation>("/creative-director/recommendation", body);
 export const approvePhotoshootRecommendation = (body: unknown) => photoshootMutation<{ prompt: string; workflow_stage: string }>("/creative-director/approve", body);
 export const chooseAnotherPhotoshootIdea = (body: unknown) => photoshootMutation<{ workflow_stage: string; selected_inspiration: string }>("/creative-director/choose-another", body);
+export const setPhotoshootPlanningMode = (body: unknown) => photoshootMutation<{ planning_mode: PlanningMode; plan_frame_count: number; session_plan: PlannedShot[]; session_plan_approved: boolean }>("/creative-director/planning-mode", body);
+export const generatePhotoshootSessionPlan = (body: unknown) => photoshootMutation<{ planning_mode: PlanningMode; plan_frame_count: number; session_plan: PlannedShot[]; session_plan_index: number; session_plan_approved: boolean }>("/creative-director/session-plan", body);
+export const approvePhotoshootSessionPlan = (body: unknown) => photoshootMutation<{ session_plan: PlannedShot[]; session_plan_index: number; session_plan_approved: boolean; workflow_stage: string }>("/creative-director/session-plan/approve", body);
+export const developPhotoshootPlannedShot = (body: unknown) => photoshootMutation<CreativeDirectorRecommendation>("/creative-director/session-plan/develop", body);
+export const advancePhotoshootSessionPlan = (body: unknown) => photoshootMutation<{ session_plan: PlannedShot[]; session_plan_index: number; session_plan_complete: boolean; next_planned_shot: PlannedShot | null; workflow_stage: string }>("/creative-director/session-plan/advance", body);
 
 export const generatePhotoshootShot = (body: unknown) => photoshootMutation<{ request_id: string; status: string }>("/generate", body);
 export const approvePhotoshootCandidate = (body: unknown) => photoshootMutation<{
@@ -172,7 +194,20 @@ export const approvePhotoshootCandidate = (body: unknown) => photoshootMutation<
 export const regeneratePhotoshootCandidate = (body: unknown) => photoshootMutation("/candidate/regenerate", body);
 export const editPhotoshootCandidatePrompt = (body: unknown) => photoshootMutation<{ prompt: string }>("/candidate/edit-prompt", body);
 export const rejectPhotoshootCandidate = (body: unknown) => photoshootMutation("/candidate/reject", body);
-export const finishPhotoshoot = (body: unknown) => photoshootMutation<{ status: "completed"; approved_shot_count: number; gallery_ready: boolean }>("/finish", body);
+export const finishPhotoshoot = (body: unknown) => photoshootMutation<PhotoshootCurationReview>("/finish", body);
+export const confirmPhotoshootCuration = (body: unknown) => photoshootMutation<PhotoshootCurationResult>("/curation/confirm", body);
+export const startPhotoshootAutoRun = (body: unknown) => photoshootMutation<PhotoshootAutoRunRuntime>("/auto-run/start", body);
+export const pausePhotoshootAutoRun = (body: unknown) => photoshootMutation<PhotoshootAutoRunRuntime>("/auto-run/pause", body);
+export const resumePhotoshootAutoRun = (body: unknown) => photoshootMutation<PhotoshootAutoRunRuntime>("/auto-run/resume", body);
+export const stopPhotoshootAutoRun = (body: unknown) => photoshootMutation<PhotoshootAutoRunRuntime>("/auto-run/stop", body);
+export const retryPhotoshootAutoRun = (body: unknown) => photoshootMutation<PhotoshootAutoRunRuntime>("/auto-run/retry", body);
+
+export async function getPhotoshootAutoRunRuntime(sessionId: string, signal?: AbortSignal): Promise<PhotoshootAutoRunRuntime> {
+  const response = await fetch(`${environment.apiBaseUrl}/photoshoot/auto-run/runtime?session_id=${encodeURIComponent(sessionId)}`, { cache: "no-store", signal });
+  const result = await response.json().catch(() => ({})) as PhotoshootAutoRunRuntime & { detail?: string };
+  if (!response.ok) throw new Error(result.detail || "Unable to refresh Auto Generation status.");
+  return result;
+}
 
 export async function getPhotoshootStatus(sessionId: string, signal?: AbortSignal): Promise<PhotoshootStatus> {
   const response = await fetch(`${environment.apiBaseUrl}/photoshoot/status?session_id=${encodeURIComponent(sessionId)}`, { cache: "no-store", signal });

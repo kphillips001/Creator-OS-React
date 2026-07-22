@@ -172,9 +172,12 @@ def edit_studio_references():
 
 @router.get("/references/{asset_id}/image", response_class=FileResponse)
 def edit_studio_reference_image(asset_id: int):
-    reference = ReferenceLibraryService().get_reference(asset_id)
     creator_profile_id = int(_creator_profile().get("id") or 0)
-    if reference is None or reference.creator_profile_id not in (None, creator_profile_id):
+    reference = ReferenceLibraryService().get_owned_reference(
+        asset_id,
+        creator_profile_id=creator_profile_id,
+    )
+    if reference is None:
         raise HTTPException(status_code=404, detail="Reference image not found.")
     path = Path(reference.asset.preview_path or reference.asset.original_path or "").expanduser()
     if not path.is_file():
@@ -263,8 +266,11 @@ def edit_studio_generate(request: GenerateEditRequest, background_tasks: Backgro
     references = [reference.model_dump() for reference in request.references]
     reference_service = ReferenceLibraryService()
     for reference_input in references:
-        reference = reference_service.get_reference(reference_input["asset_id"])
-        if reference is None or reference.creator_profile_id not in (None, creator_profile_id):
+        reference = reference_service.get_owned_reference(
+            reference_input["asset_id"],
+            creator_profile_id=creator_profile_id,
+        )
+        if reference is None:
             raise HTTPException(status_code=400, detail="Selected reference image is unavailable.")
     first_reference_asset_id = references[0]["asset_id"] if references else None
     try:

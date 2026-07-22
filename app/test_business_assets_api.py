@@ -48,7 +48,7 @@ class Inventory:
 
 class CommerceRepository:
     def get_by_asset_id(self, asset_id):
-        return SimpleNamespace(asset_id=asset_id, creator_profile_id=7, to_context=lambda: {
+        return SimpleNamespace(asset_id=asset_id, creator_profile_id=7, content_intelligence_status="READY", content_intelligence_ready=True, to_context=lambda: {
             "asset_id": asset_id, "creator_profile_id": 7,
             "commerce_registration_status": "REGISTERED",
         })
@@ -59,6 +59,7 @@ def _client(monkeypatch):
     monkeypatch.setattr(business_assets, "_creator_profile", lambda: {"id": 7})
     monkeypatch.setattr(business_assets, "_inventory_service", lambda: inventory)
     monkeypatch.setattr(business_assets, "_commerce_repository", CommerceRepository)
+    monkeypatch.setattr(business_assets, "_photoshoot_repository", lambda: SimpleNamespace(list_active=lambda creator_id: ()))
     api = FastAPI(); api.include_router(business_assets.router)
     return TestClient(api), inventory
 
@@ -71,6 +72,8 @@ def test_lists_existing_inventory_without_mutating_services(monkeypatch):
     assert body["items"][0]["asset_id"] == 42
     assert body["items"][0]["recommendation_ready"] is True
     assert body["items"][0]["imageUrl"] == "/api/v1/assets/42/media"
+    assert body["items"][0]["downstreamStatus"] == "CHAT_INVENTORY_READY"
+    assert body["items"][0]["commerceStatus"] == "Chat Ready"
     assert inventory.calls[0]["filters"].recommendation_ready is True
 
 
@@ -82,6 +85,11 @@ def test_returns_composed_read_only_details(monkeypatch):
     )
     monkeypatch.setattr(business_assets, "_asset_library_service", lambda: SimpleNamespace(get_asset_details=lambda asset_id: detail))
     monkeypatch.setattr(business_assets, "_content_intelligence_repository", lambda: SimpleNamespace(get_by_asset_id=lambda asset_id: SimpleNamespace(to_context=lambda: {"status": "COMPLETE", "ready": True})))
+    monkeypatch.setattr(business_assets, "_asset_intelligence_repository", lambda: SimpleNamespace(list_provider_results=lambda asset_id: (
+        SimpleNamespace(provider="nudenet", provider_version="nudenet-1", status="READY", metadata={"stage": "NUDENET"}, normalized_fields={"safety_classification": "SAFE", "keywords": ["FACE_FEMALE"]}, field_confidence={"safety_classification": .91}, raw_response={"must_not": "leak"}),
+        SimpleNamespace(provider="gpt-vision", provider_version="vision-1", status="READY", metadata={"stage": "VISION"}, normalized_fields={"short_description": "Studio portrait", "tags": ["portrait"]}, field_confidence={}, raw_response={"must_not": "leak"}),
+        SimpleNamespace(provider="grok-vision", provider_version="grok-1", status="READY", metadata={"stage": "GROK"}, normalized_fields={"mood": "calm", "content_summary": "Quiet confidence"}, field_confidence={}, raw_response={"must_not": "leak"}),
+    )))
     monkeypatch.setattr(business_assets, "_destination_repository", lambda: SimpleNamespace(list_history=lambda asset_id: (), list_routing_intents=lambda asset_id: ()))
     monkeypatch.setattr(business_assets, "_fulfillment_service", lambda: SimpleNamespace(get_fulfillment_by_asset_id=lambda asset_id: None))
     monkeypatch.setattr(business_assets, "_chat_service", lambda: SimpleNamespace(get_by_asset_id=lambda asset_id: SimpleNamespace(to_context=lambda: {"chat_ready": True, "recommendation_eligible": True})))
@@ -89,6 +97,11 @@ def test_returns_composed_read_only_details(monkeypatch):
     assert response.status_code == 200
     body = response.json()
     assert body["contentIntelligence"]["status"] == "COMPLETE"
+    assert body["analysis"] == {"NUDENET": "COMPLETE", "VISION": "COMPLETE", "GROK": "COMPLETE", "CONTENT_INTELLIGENCE": "COMPLETE"}
+    assert body["analysisResults"]["NUDENET"] == {"status": "READY", "providerVersion": "nudenet-1", "classification": "SAFE", "confidence": .91, "detectedCategories": ["FACE_FEMALE"]}
+    assert body["analysisResults"]["VISION"]["shortDescription"] == "Studio portrait"
+    assert body["analysisResults"]["GROK"]["semanticSummary"] == "Quiet confidence"
+    assert "raw_response" not in str(body) and "must_not" not in str(body)
     assert body["chatCommerce"]["recommendation_eligible"] is True
     assert body["destination"] == {"history": [], "routingIntents": []}
 
@@ -99,3 +112,54 @@ def test_hides_assets_owned_by_another_creator(monkeypatch):
     response = client.get("/api/v1/business-assets")
     assert response.status_code == 200
     assert response.json()["items"] == []
+
+
+def test_filters_by_projected_commerce_status(monkeypatch):
+    client, _ = _client(monkeypatch)
+    response = client.get("/api/v1/business-assets?commerce_status=Needs%20Upload")
+    assert response.status_code == 200
+    assert response.json()["items"] == []
+
+
+def test_projects_analysis_failure_instead_of_indefinite_analyzing(monkeypatch):
+    client, _ = _client(monkeypatch)
+    monkeypatch.setattr(
+        business_assets,
+        "_commerce_repository",
+        lambda: SimpleNamespace(get_by_asset_id=lambda asset_id: SimpleNamespace(
+            asset_id=asset_id,
+            creator_profile_id=7,
+            content_intelligence_status="VISION_FAILED",
+            content_intelligence_ready=False,
+            error_code="PROVIDER_UNAVAILABLE",
+            error_message="OpenAI API key is not configured.",
+        )),
+    )
+
+    response = client.get("/api/v1/business-assets")
+
+    assert response.status_code == 200
+    item = response.json()["items"][0]
+    assert item["analysisStatus"] == "VISION_FAILED"
+    assert item["commerceStatus"] == "Analysis Failed"
+    assert item["downstreamStatus"] == "ANALYSIS_FAILED"
+
+
+def test_archives_owned_business_asset_without_deleting_related_data(monkeypatch):
+    client, _ = _client(monkeypatch)
+    archived = SimpleNamespace(
+        asset_id=42,
+        is_archived=True,
+        archived_at="2026-07-20T20:00:00+00:00",
+    )
+    service = SimpleNamespace(archive_asset=lambda asset_id: archived)
+    monkeypatch.setattr(business_assets, "_commerce_service", lambda: service)
+
+    response = client.post("/api/v1/business-assets/42/archive")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "assetId": 42,
+        "isArchived": True,
+        "archivedAt": "2026-07-20T20:00:00+00:00",
+    }

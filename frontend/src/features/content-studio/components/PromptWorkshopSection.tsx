@@ -2,12 +2,12 @@ import { useEffect, useMemo, useState } from "react";
 
 import {
   generatePromptWorkshopBatch,
-  getPromptWorkshopArchive,
   markPromptWorkshopPromptUsed,
 } from "../../../infrastructure/api/contentStudioApi";
-import type {
-  PromptWorkshopBatch,
-  PromptWorkshopLane,
+import {
+  PROMPT_WORKSHOP_ARCHIVE_HANDOFF_KEY,
+  type PromptWorkshopArchiveHandoff,
+  type PromptWorkshopLane,
 } from "../types/promptWorkshop";
 
 type PromptWorkshopSectionProps = {
@@ -30,32 +30,35 @@ export function PromptWorkshopSection({
   const [batchId, setBatchId] = useState("");
   const [prompts, setPrompts] = useState<string[]>([]);
   const [selectedNumber, setSelectedNumber] = useState(1);
-  const [archive, setArchive] = useState<PromptWorkshopBatch[]>([]);
-  const [selectedArchiveId, setSelectedArchiveId] = useState("");
-  const [archiveNumber, setArchiveNumber] = useState(1);
   const [copiedPrompt, setCopiedPrompt] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
 
-  const loadArchive = async (signal?: AbortSignal) => {
-    const batches = await getPromptWorkshopArchive(signal);
-    setArchive(batches);
-    setSelectedArchiveId((current) => (
-      batches.some((batch) => batch.batchId === current)
-        ? current
-        : batches[0]?.batchId ?? ""
-    ));
-  };
-
   useEffect(() => {
-    const controller = new AbortController();
-    loadArchive(controller.signal).catch((reason: unknown) => {
-      if (reason instanceof DOMException && reason.name === "AbortError") return;
-      setError(reason instanceof Error ? reason.message : "Prompt Workshop archive failed");
-    });
-    return () => controller.abort();
-  }, []);
+    const serialized = sessionStorage.getItem(PROMPT_WORKSHOP_ARCHIVE_HANDOFF_KEY);
+    if (!serialized) return;
+    sessionStorage.removeItem(PROMPT_WORKSHOP_ARCHIVE_HANDOFF_KEY);
+    try {
+      const handoff = JSON.parse(serialized) as PromptWorkshopArchiveHandoff;
+      const prompt = handoff.batch.prompts[handoff.promptNumber - 1] ?? "";
+      if (handoff.action === "use" && prompt) {
+        onUsePrompt(prompt);
+        onSelectPromptSource();
+        setMessage("Archived prompt selected.");
+        return;
+      }
+      if (handoff.action === "load") {
+        setBatchId(handoff.batch.batchId);
+        setPrompts([...handoff.batch.prompts]);
+        setSelectedNumber(1);
+        onStoreBatch(handoff.batch.prompts, "Prompt Workshop Archive");
+        setMessage("Archived prompt batch loaded.");
+      }
+    } catch {
+      setError("Archived Prompt Workshop selection could not be loaded.");
+    }
+  }, [onSelectPromptSource, onStoreBatch, onUsePrompt]);
 
   const cleanPrompts = useMemo(
     () => prompts.map((prompt) => prompt.trim()).filter(Boolean),
@@ -63,11 +66,6 @@ export function PromptWorkshopSection({
   );
   const safeSelectedNumber = Math.min(Math.max(1, selectedNumber), Math.max(1, cleanPrompts.length));
   const selectedPrompt = cleanPrompts[safeSelectedNumber - 1] ?? "";
-  const selectedArchive = archive.find((batch) => batch.batchId === selectedArchiveId) ?? null;
-  const safeArchiveNumber = Math.min(
-    Math.max(1, archiveNumber),
-    Math.max(1, selectedArchive?.prompts.length ?? 0),
-  );
 
   const run = async (action: () => Promise<void>) => {
     setPending(true);
@@ -89,7 +87,6 @@ export function PromptWorkshopSection({
     setSelectedNumber(1);
     setCopiedPrompt("");
     onStoreBatch(batch.prompts, "Prompt Workshop");
-    await loadArchive();
     setMessage("Prompt Workshop prompts created.");
   });
 
@@ -98,11 +95,6 @@ export function PromptWorkshopSection({
     if (batchId) await markPromptWorkshopPromptUsed(batchId, safeSelectedNumber);
     onUsePrompt(selectedPrompt);
     onSelectPromptSource();
-    setArchive((batches) => batches.map((batch) => (
-      batch.batchId === batchId && !batch.usedPromptNumbers.includes(safeSelectedNumber)
-        ? { ...batch, usedPromptNumbers: [...batch.usedPromptNumbers, safeSelectedNumber] }
-        : batch
-    )));
     setMessage("Selected prompt accepted.");
   });
 
@@ -120,30 +112,6 @@ export function PromptWorkshopSection({
     } catch {
       setMessage("Prompt ready to copy below.");
     }
-  };
-
-  const useArchived = () => run(async () => {
-    if (!selectedArchive) return;
-    const prompt = selectedArchive.prompts[safeArchiveNumber - 1] ?? "";
-    if (!prompt) return;
-    await markPromptWorkshopPromptUsed(selectedArchive.batchId, safeArchiveNumber);
-    onUsePrompt(prompt);
-    onSelectPromptSource();
-    setArchive((batches) => batches.map((batch) => (
-      batch.batchId === selectedArchive.batchId && !batch.usedPromptNumbers.includes(safeArchiveNumber)
-        ? { ...batch, usedPromptNumbers: [...batch.usedPromptNumbers, safeArchiveNumber] }
-        : batch
-    )));
-    setMessage("Archived prompt selected.");
-  });
-
-  const loadBatch = () => {
-    if (!selectedArchive) return;
-    setBatchId(selectedArchive.batchId);
-    setPrompts([...selectedArchive.prompts]);
-    setSelectedNumber(1);
-    onStoreBatch(selectedArchive.prompts, "Prompt Workshop Archive");
-    setMessage("Archived prompt batch loaded.");
   };
 
   return (
@@ -217,55 +185,6 @@ export function PromptWorkshopSection({
           )}
           {copiedPrompt && <pre className="prompt-workshop__copied">{copiedPrompt}</pre>}
         </div>
-      )}
-
-      {archive.length > 0 && (
-        <details className="prompt-workshop__archive">
-          <summary>Prompt Workshop Archive</summary>
-          <label>
-            <span>Archived prompt batch</span>
-            <select
-              onChange={(event) => {
-                setSelectedArchiveId(event.target.value);
-                setArchiveNumber(1);
-              }}
-              value={selectedArchiveId}
-            >
-              {archive.map((batch) => (
-                <option key={batch.batchId} value={batch.batchId}>
-                  {`${batch.createdAt.slice(0, 19)} | ${batch.lane} | ${batch.requestText.slice(0, 60)}`}
-                </option>
-              ))}
-            </select>
-          </label>
-          {selectedArchive && (
-            <>
-              <p>{selectedArchive.requestText}</p>
-              <ol>
-                {selectedArchive.prompts.map((prompt, index) => (
-                  <li key={`${selectedArchive.batchId}-${index + 1}`}>
-                    {selectedArchive.usedPromptNumbers.includes(index + 1) && <strong>used </strong>}
-                    {prompt}
-                  </li>
-                ))}
-              </ol>
-              <label className="prompt-workshop__number">
-                <span>Use archived prompt number</span>
-                <input
-                  max={Math.max(1, selectedArchive.prompts.length)}
-                  min={1}
-                  onChange={(event) => setArchiveNumber(Number(event.target.value))}
-                  type="number"
-                  value={safeArchiveNumber}
-                />
-              </label>
-              <div className="prompt-workshop__actions">
-                <button disabled={pending} onClick={useArchived} type="button">Use Archived</button>
-                <button disabled={pending} onClick={loadBatch} type="button">Load Batch</button>
-              </div>
-            </>
-          )}
-        </details>
       )}
 
       {pending && <p className="prompt-workshop__status">Working…</p>}

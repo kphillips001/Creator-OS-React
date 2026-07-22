@@ -125,6 +125,8 @@ class BusinessAssetRecord:
     last_refreshed_at: datetime | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
+    is_archived: bool = False
+    archived_at: datetime | None = None
     schema_version: str = COMMERCE_REGISTRATION_SCHEMA_VERSION
 
     @property
@@ -203,6 +205,8 @@ class BusinessAssetRecord:
             ),
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "is_archived": self.is_archived,
+            "archived_at": self.archived_at.isoformat() if self.archived_at else None,
             "schema_version": self.schema_version,
         }
 

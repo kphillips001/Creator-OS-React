@@ -8,14 +8,18 @@ from app.services.generation_engine_service import GenerationEngineService
 from app.services.generation_library_service import GenerationLibraryService
 from app.services.generation_result_ingestion_service import GenerationResultIngestionService
 from app.services.photoshoot_queue_service import PhotoshootQueueService
+from app.services.photoshoot_summary_service import PhotoshootSummaryService
 
 
 class PhotoshootManualService:
-    def __init__(self, *, queue=None, engine=None, library=None, ingestion=None):
+    def __init__(self, *, queue=None, engine=None, library=None, ingestion=None, summary_service=None,
+                 commerce_deliverables=None):
         self.queue = queue or PhotoshootQueueService()
         self.engine = engine or GenerationEngineService()
         self.library = library or GenerationLibraryService()
         self.ingestion = ingestion or GenerationResultIngestionService()
+        self.summary = summary_service or PhotoshootSummaryService(queue=self.queue)
+        self._commerce_deliverables = commerce_deliverables
 
     def session_for_creator(self, session_id: str, creator_profile_id: int):
         session = self.queue.get_session(session_id)
@@ -42,14 +46,22 @@ class PhotoshootManualService:
             creative_hint=creative_hint, workflow_stage="ready_to_generate",
         )
         reference = self._latest_approved_record(session)
-        request = active if retryable else self.queue.add_studio_shot_request(
-            session_id=session_id, prompt_text=prompt,
-            shot_direction="\n".join(value for value in (session_direction.strip(), creative_hint.strip()) if value),
-            provider_id=provider_id,
-            active_reference_image_id=reference.image_id if reference else None,
-            active_reference_output_reference=reference.output_reference if reference else None,
-            creative_direction=dict(session.creative_continuity or {}).get("current_direction") or {},
-        )
+        continuity_reference = self._provider_output_reference(reference) if reference else None
+        if retryable:
+            request = self.queue.update_request_continuity_reference(
+                active.request_id,
+                image_id=reference.image_id if reference else None,
+                output_reference=continuity_reference,
+            )
+        else:
+            request = self.queue.add_studio_shot_request(
+                session_id=session_id, prompt_text=prompt,
+                shot_direction="\n".join(value for value in (session_direction.strip(), creative_hint.strip()) if value),
+                provider_id=provider_id,
+                active_reference_image_id=reference.image_id if reference else None,
+                active_reference_output_reference=continuity_reference,
+                creative_direction=dict(session.creative_continuity or {}).get("current_direction") or {},
+            )
         job = self.queue.queue_next_prompt(session_id=session_id, generation_engine=self.engine)
         if job is None:
             raise ValueError("A Photoshoot request is already active.")
@@ -103,16 +115,17 @@ class PhotoshootManualService:
         promoted = self.library.approve_photoshoot_records(image_ids, session_id=session_id, session_title=session.title)
         if not promoted.success:
             raise RuntimeError("; ".join(promoted.errors) or promoted.message)
-        return self.queue.approve_request(request_id, imported_asset_ids=approval.imported_asset_ids)
+        approved = self.queue.approve_request(request_id, imported_asset_ids=approval.imported_asset_ids)
+        self.summary.refresh(session_id)
+        return approved
 
     def finish_session(self, *, creator_profile_id: int, session_id: str):
-        session = self.session_for_creator(session_id, creator_profile_id)
-        if session.status == "completed":
-            return session
-        active = self._active_request(session_id)
-        if active is not None:
-            raise ValueError("Review the current candidate before finishing this Photoshoot.")
-        return self.queue.finish_session(session_id)
+        from app.services.photoshoot_commerce_deliverable_service import PhotoshootCommerceDeliverableService
+        service = self._commerce_deliverables or PhotoshootCommerceDeliverableService(
+            queue=self.queue, library=self.library,
+        )
+        session, _deliverable = service.complete(session_id, creator_profile_id)
+        return session
 
     def stop_and_return_seed(self, *, creator_profile_id: int):
         session = self.queue.current_session(creator_profile_id=creator_profile_id)
@@ -192,6 +205,21 @@ class PhotoshootManualService:
             return self.library.get(str(image_id)) if image_id else None
         except KeyError:
             return None
+
+    def _provider_output_reference(self, record) -> str:
+        """Prefer the provider-hosted result while it is available for Photoshoot continuity."""
+        try:
+            job = self.engine.get_job(str(record.generation_job_id))
+            references = tuple(job.result.output_references or ()) if job.result else ()
+            remote = next(
+                (str(value) for value in references if str(value).startswith(("http://", "https://"))),
+                "",
+            )
+            if remote:
+                return remote
+        except Exception:
+            pass
+        return str(record.output_reference)
 
     def _junk_candidate(self, session, request, reason: str) -> None:
         result = self.library.move_photoshoot_records_to_junk(

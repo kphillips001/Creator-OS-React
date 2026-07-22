@@ -7,9 +7,11 @@ import { EditStudioPage } from "../../features/edit-studio/EditStudioPage";
 import { VersionHistoryPage } from "../../features/version-history/VersionHistoryPage";
 import { PostedContentPage } from "../../features/posted-content/PostedContentPage";
 import { ArchivePage } from "../../features/archive/ArchivePage";
+import { PromptWorkshopArchivePage } from "../../features/archive/PromptWorkshopArchivePage";
 import { RemovedContentPage } from "../../features/removed-content/RemovedContentPage";
 import { StoryStudioPage } from "../../features/story-studio/StoryStudioPage";
 import { PhotoshootPage } from "../../features/photoshoot/PhotoshootPage";
+import { PhotoshootGalleryPage } from "../../features/photoshoot-gallery/PhotoshootGalleryPage";
 import { ReferenceLibraryPage } from "../../features/reference-library/ReferenceLibraryPage";
 import { AssetLibraryPage } from "../../features/asset-library/AssetLibraryPage";
 import { BusinessAssetsPage } from "../../features/business-assets/BusinessAssetsPage";
@@ -35,6 +37,7 @@ export const router = createBrowserRouter([
         .filter(
           (item) =>
             item.path !== "/library/generations" &&
+            item.path !== "/library/photoshoots" &&
             item.path !== "/studio/content" &&
             item.path !== "/content/edit" &&
             item.path !== "/content/photoshoot" &&
@@ -44,6 +47,7 @@ export const router = createBrowserRouter([
             item.path !== "/system/archive" &&
             item.path !== "/developer/test-chat" &&
             item.path !== "/business/assets" &&
+            item.path !== "/business/commerce-library" &&
             item.path !== "/business/products" &&
             item.path !== "/business/customers" &&
             item.path !== "/business/sales" &&
@@ -87,8 +91,16 @@ export const router = createBrowserRouter([
         element: <GenerationLibraryPage />,
       },
       {
-        path: "/business/assets",
+        path: "/library/photoshoots",
+        element: <PhotoshootGalleryPage />,
+      },
+      {
+        path: "/business/commerce-library",
         element: <BusinessAssetsPage />,
+      },
+      {
+        path: "/business/assets",
+        element: <Navigate to="/business/commerce-library" replace />,
       },
       {
         path: "/business/products",
@@ -117,6 +129,10 @@ export const router = createBrowserRouter([
       {
         path: "/system/archive/edited",
         element: <VersionHistoryPage />,
+      },
+      {
+        path: "/system/archive/prompts",
+        element: <PromptWorkshopArchivePage />,
       },
       {
         path: "/system/archive/published",

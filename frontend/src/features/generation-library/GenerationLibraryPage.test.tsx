@@ -135,47 +135,49 @@ describe("Generation Library Edit Studio handoff", () => {
   });
 });
 
-describe("Generation Library Asset registration", () => {
-  it("registers an Asset and refreshes the card into its registered state", async () => {
-    let registered = false;
+describe("Generation Library Asset Library move", () => {
+  it("uses a directional icon and reserves the star for future registration", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(() => jsonResponse({
+      records: [selected], total: 1, page: 1, pageSize: 18, totalPages: 1, providers: [], modes: [],
+    }));
+    render(<MemoryRouter><GenerationLibraryPage /></MemoryRouter>);
+
+    const button = await screen.findByRole("button", { name: "Move to Asset Library" });
+    expect(button).toHaveAttribute("title", "Move to Asset Library");
+    expect(button).not.toHaveTextContent("⭐");
+    expect(button.querySelector(".lucide-move-right")).toBeInTheDocument();
+  });
+
+  it("moves a generation and refreshes it out of Generation Library", async () => {
+    let moved = false;
     const fetch = vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
       const url = String(input);
       if (url.includes("/api/v1/generation-library?")) return jsonResponse({
-        records: [{ ...selected, imported_asset_id: registered ? 42 : null }], total: 1,
+        records: moved ? [] : [selected], total: moved ? 0 : 1,
         page: 1, pageSize: 18, totalPages: 1, providers: [], modes: [],
       });
-      if (url.endsWith("/selected-image/register")) {
-        registered = true;
-        return jsonResponse({ success: true, asset_id: 42, generation_id: "selected-image", already_registered: false, status: "registered", message: "Asset registered." });
+      if (url.endsWith("/selected-image/move-to-asset-library")) {
+        moved = true;
+        return jsonResponse({ success: true, generation_id: "selected-image", already_moved: false, status: "staged_asset_library", message: "Image moved to Asset Library." });
       }
       return jsonResponse({ detail: "Unexpected request" }, 500);
     });
     render(<MemoryRouter><GenerationLibraryPage /></MemoryRouter>);
 
-    fireEvent.click(await screen.findByRole("button", { name: /Register Asset/ }));
-    expect(await screen.findByText("Asset registered.")).toBeInTheDocument();
-    expect(await screen.findByRole("button", { name: /Already Registered/ })).toBeDisabled();
-    expect(fetch).toHaveBeenCalledWith("/api/v1/generation-library/selected-image/register", { method: "POST" });
+    fireEvent.click(await screen.findByRole("button", { name: "Move to Asset Library" }));
+    expect(await screen.findByText("Image moved to Asset Library.")).toBeInTheDocument();
+    expect(await screen.findByText("No generated images match these filters.")).toBeInTheDocument();
+    expect(fetch).toHaveBeenCalledWith("/api/v1/generation-library/selected-image/move-to-asset-library", { method: "POST" });
   });
 
-  it("shows an existing registration without offering another registration", async () => {
-    vi.spyOn(globalThis, "fetch").mockImplementation(() => jsonResponse({
-      records: [{ ...selected, imported_asset_id: 42 }], total: 1,
-      page: 1, pageSize: 18, totalPages: 1, providers: [], modes: [],
-    }));
-    render(<MemoryRouter><GenerationLibraryPage /></MemoryRouter>);
-    expect(await screen.findByRole("button", { name: /Already Registered/ })).toBeDisabled();
-    expect(screen.queryByRole("button", { name: /Register Asset/ })).not.toBeInTheDocument();
-  });
-
-  it("surfaces registration failures and keeps the action available", async () => {
+  it("surfaces move failures and keeps the action available", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation((input) => String(input).includes("generation-library?")
       ? jsonResponse({ records: [selected], total: 1, page: 1, pageSize: 18, totalPages: 1, providers: [], modes: [] })
       : jsonResponse({ detail: "Generated image file is missing." }, 409));
     render(<MemoryRouter><GenerationLibraryPage /></MemoryRouter>);
-    fireEvent.click(await screen.findByRole("button", { name: /Register Asset/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Move to Asset Library" }));
     expect(await screen.findByText("Generated image file is missing.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Register Asset/ })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Move to Asset Library" })).toBeEnabled();
   });
 
   it("keeps Create Video disabled and does not call a video endpoint", async () => {

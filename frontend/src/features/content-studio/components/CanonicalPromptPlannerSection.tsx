@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { forwardRef, useImperativeHandle, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 
 import { askPromptPlanner } from "../../../infrastructure/api/contentStudioApi";
@@ -8,9 +8,34 @@ const ACCEPTED_IMAGES = ".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp";
 
 type CanonicalPromptPlannerSectionProps = {
   disabled: boolean;
+  enhancingIdeaId?: string | null;
+  onEnhanceIdea?: (id: string, text: string) => void;
 };
 
-export function CanonicalPromptPlannerSection({ disabled }: CanonicalPromptPlannerSectionProps) {
+export type CanonicalPromptPlannerHandle = {
+  askAnotherQuestion: () => void;
+  continueExploring: () => void;
+  startNewSession: () => void;
+};
+
+function responseIdeas(answer: string) {
+  return answer.split(/\r?\n/).flatMap((line, index) => {
+    const match = line.match(/^\s*(?:\d+[.)]|[-*+])\s+(.+?)\s*$/);
+    return match?.[1] ? [{ lineIndex: index, text: match[1] }] : [];
+  });
+}
+
+function responseNarrative(answer: string) {
+  return answer.split(/\r?\n/).filter((line) => (
+    !/^\s*(?:\d+[.)]|[-*+])\s+.+?\s*$/.test(line)
+  )).join("\n").trim();
+}
+
+export const CanonicalPromptPlannerSection = forwardRef<CanonicalPromptPlannerHandle, CanonicalPromptPlannerSectionProps>(function CanonicalPromptPlannerSection({
+  disabled,
+  enhancingIdeaId = null,
+  onEnhanceIdea,
+}, ref) {
   const [question, setQuestion] = useState("");
   const [image, setImage] = useState<File | null>(null);
   const [history, setHistory] = useState<PromptPlannerHistoryItem[]>([]);
@@ -18,6 +43,25 @@ export function CanonicalPromptPlannerSection({ disabled }: CanonicalPromptPlann
   const [error, setError] = useState("");
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const responsesRef = useRef<HTMLDivElement>(null);
+
+  const focusQuestion = () => {
+    inputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    requestAnimationFrame(() => inputRef.current?.focus());
+  };
+
+  useImperativeHandle(ref, () => ({
+    askAnotherQuestion: focusQuestion,
+    continueExploring: () => responsesRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
+    startNewSession: () => {
+      setQuestion("");
+      setImage(null);
+      setHistory([]);
+      setError("");
+      if (fileRef.current) fileRef.current.value = "";
+      focusQuestion();
+    },
+  }));
 
   function resetForm() {
     setQuestion("");
@@ -50,9 +94,8 @@ export function CanonicalPromptPlannerSection({ disabled }: CanonicalPromptPlann
 
   return (
     <section aria-disabled={disabled || undefined} aria-label="Canonical Prompt Planner Q&A" className="workflow-section canonical-prompt-planner">
-      <details>
-        <summary><h2>Canonical Prompt Planner Q&amp;A</h2></summary>
-        <div className="canonical-prompt-planner__content">
+      <h2>Canonical Prompt Planner Q&amp;A</h2>
+      <div className="canonical-prompt-planner__content">
           <label>
             <span>Ask Canonical Prompt Planner</span>
             <textarea
@@ -84,9 +127,12 @@ export function CanonicalPromptPlannerSection({ disabled }: CanonicalPromptPlann
           </div>
           {error && <p className="canonical-prompt-planner__error" role="alert">{error}</p>}
           {history.length > 0 && (
-            <div className="canonical-prompt-planner__history">
+            <div className="canonical-prompt-planner__history" ref={responsesRef}>
               <h3>Canonical Prompt Planner Responses</h3>
-              {history.map((item, index) => (
+              {history.map((item, index) => {
+                const ideas = responseIdeas(item.answer);
+                const narrative = responseNarrative(item.answer);
+                return (
                 <article className="canonical-prompt-planner__response" key={`${history.length}-${index}-${item.question}`}>
                   {item.imageName && <p className="canonical-prompt-planner__image-name">{item.imageName}</p>}
                   <div className="canonical-prompt-planner__response-section">
@@ -95,22 +141,41 @@ export function CanonicalPromptPlannerSection({ disabled }: CanonicalPromptPlann
                   </div>
                   <div className="canonical-prompt-planner__response-section">
                     <h4>Answer</h4>
-                    <div className="canonical-prompt-planner__markdown">
-                      <ReactMarkdown>{item.answer}</ReactMarkdown>
+                    {narrative && <div className="canonical-prompt-planner__markdown">
+                      <ReactMarkdown>{narrative}</ReactMarkdown>
+                    </div>}
+                    {ideas.length > 0 && (
+                    <div className="canonical-prompt-planner__recommendations">
+                      {ideas.map((idea) => {
+                        const ideaId = `${history.length}-${index}-${idea.lineIndex}`;
+                        const enhancing = enhancingIdeaId === ideaId;
+                        return (
+                          <div className="canonical-prompt-planner__recommendation" key={ideaId}>
+                            <div className="canonical-prompt-planner__idea-text">
+                              <ReactMarkdown>{idea.text}</ReactMarkdown>
+                            </div>
+                            <button
+                              disabled={disabled || enhancing}
+                              onClick={() => onEnhanceIdea?.(ideaId, idea.text)}
+                              type="button"
+                            >
+                              {enhancing ? "Enhancing…" : "✨ Enhance"}
+                            </button>
+                          </div>
+                        );
+                      })}
                     </div>
-                  </div>
-                  <div className="canonical-prompt-planner__response-actions">
-                    <button onClick={() => void navigator.clipboard?.writeText(item.answer)} type="button">Copy</button>
+                    )}
                   </div>
                 </article>
-              ))}
+                );
+              })}
               <button disabled={pending} onClick={resetForm} type="button">
                 Ask Canonical Prompt Planner another question
               </button>
             </div>
           )}
-        </div>
-      </details>
+      </div>
     </section>
   );
-}
+});

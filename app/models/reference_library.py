@@ -10,6 +10,48 @@ from app.models.asset_library import AssetLibraryItem
 
 
 @dataclass(frozen=True)
+class CanonicalReferenceAsset:
+    asset_id: int
+    file_name: str | None
+    media_type: str
+    classification: str | None
+    status: str | None
+    is_active: bool
+    preview_path: str | None
+    original_path: str | None
+
+
+@dataclass(frozen=True)
+class CanonicalReferenceProjection:
+    asset: CanonicalReferenceAsset
+    creator_profile_id: int
+    is_active: bool
+    is_favorite: bool
+    added_at: str | None
+    last_used_at: str | None
+    metadata: Mapping[str, Any]
+
+    @property
+    def asset_id(self) -> int:
+        return self.asset.asset_id
+
+
+@dataclass(frozen=True)
+class LightweightReferenceProjection:
+    asset: CanonicalReferenceAsset
+    creator_profile_id: int
+    is_active: bool
+    is_favorite: bool
+    added_at: str | None
+    last_used_at: str | None
+    metadata: Mapping[str, Any]
+
+    @property
+    def asset_id(self) -> int:
+        return self.asset.asset_id
+
+
+@dataclass(frozen=True)
 class ReferenceLibraryFilter:
     search: str | None = None
     creator_profile_id: int | None = None

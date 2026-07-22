@@ -1,0 +1,19 @@
+.photoshoot-gallery-page { padding: 32px; color: #f4f4f4; }
+.photoshoot-gallery-page__eyebrow { color: #999; margin: 0; text-transform: uppercase; letter-spacing: .12em; }
+.photoshoot-gallery-grid { display: grid; grid-template-columns: repeat(auto-fill,minmax(260px,1fr)); gap: 18px; margin-top: 28px; }
+.photoshoot-gallery-card { background: #111; border: 1px solid #2b2b2b; border-radius: 12px; overflow: hidden; }
+.photoshoot-gallery-card { cursor: pointer; }
+.photoshoot-gallery-card:focus-visible { outline: 2px solid #777; outline-offset: 2px; }
+.photoshoot-gallery-card img { width: 100%; aspect-ratio: 4/3; object-fit: cover; }
+.photoshoot-gallery-card div { padding: 16px; }
+.photoshoot-gallery-card h2 { font-size: 1rem; margin: 0 0 8px; }
+.photoshoot-gallery-card__description { color: #bbb; line-height: 1.45; }
+.photoshoot-gallery-card button,.photoshoot-gallery-detail button { background: #202020; border: 1px solid #444; color: #eee; border-radius: 7px; padding: 8px 14px; }
+.photoshoot-gallery-card__registered { display: inline-block; color: #a9c9b2; border: 1px solid #344d3b; border-radius: 999px; padding: 7px 12px; }
+.photoshoot-gallery-registration { margin-top: 24px; padding: 16px; border: 1px solid #292929; border-radius: 9px; }
+.photoshoot-gallery-registration h3 { margin-top: 0; }
+.photoshoot-gallery-empty { margin-top: 28px; padding: 32px; border: 1px dashed #333; color: #999; }
+.photoshoot-gallery-detail { position: fixed; inset: 64px 0 0 auto; width: min(620px,90vw); overflow: auto; background: #0b0b0b; border-left: 1px solid #333; padding: 28px; z-index: 20; }
+.photoshoot-gallery-shots { display: grid; grid-template-columns: repeat(2,1fr); gap: 12px; }
+.photoshoot-gallery-shots figure { margin: 0; }.photoshoot-gallery-shots img { width: 100%; border-radius: 8px; }.photoshoot-gallery-shots figcaption { color: #aaa; padding-top: 5px; }
+.photoshoot-gallery-detail h3 { margin-top: 24px; }.photoshoot-gallery-detail dl { display: grid; gap: 8px; }.photoshoot-gallery-detail dl div { display: grid; grid-template-columns: 150px 1fr; gap: 12px; }.photoshoot-gallery-detail dt { color: #888; text-transform: capitalize; }.photoshoot-gallery-detail dd { margin: 0; overflow-wrap: anywhere; }

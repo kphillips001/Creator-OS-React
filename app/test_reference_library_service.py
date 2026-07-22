@@ -1,12 +1,15 @@
 import sys
 import types
 import unittest
+from types import SimpleNamespace
 from datetime import datetime, timezone
 from pathlib import Path
 
 if "streamlit" not in sys.modules:
     streamlit = types.ModuleType("streamlit")
     sys.modules["streamlit"] = streamlit
+    sys.modules["streamlit.components"] = types.ModuleType("streamlit.components")
+    sys.modules["streamlit.components.v1"] = types.ModuleType("streamlit.components.v1")
 
 if "psycopg" not in sys.modules:
     psycopg = types.ModuleType("psycopg")
@@ -91,6 +94,34 @@ class FakeAssetRepository:
 
     def get_by_id(self, asset_id, *, connection=None):
         return self.assets.get(asset_id)
+
+    def get_active_canonical_reference_asset_id(self, creator_profile_id, *, connection=None):
+        for asset in self.assets.values():
+            metadata = (asset.media_metadata or {}).get("reference_library") or {}
+            if (
+                asset.creator_profile_id == creator_profile_id
+                and metadata.get("is_reference")
+                and metadata.get("active")
+                and metadata.get("canonical")
+            ):
+                return asset.id
+        return None
+
+    def get_active_canonical_reference_asset(self, creator_profile_id, *, connection=None):
+        asset_id = self.get_active_canonical_reference_asset_id(
+            creator_profile_id,
+            connection=connection,
+        )
+        return self.get_by_id(asset_id, connection=connection) if asset_id else None
+
+    def clear_active_reference_flags(self, creator_profile_id, *, connection=None):
+        changed = 0
+        for asset in tuple(self.assets.values()):
+            metadata = dict((asset.media_metadata or {}).get("reference_library") or {})
+            if asset.creator_profile_id == creator_profile_id and metadata.get("active"):
+                self.update_reference_metadata(asset.id, {**metadata, "active": False})
+                changed += 1
+        return changed
 
     def search_assets(self, **kwargs):
         values = list(self.assets.values())
@@ -255,6 +286,123 @@ class ReferenceLibraryServiceTests(unittest.TestCase):
             repo.get_by_id(1).media_metadata["reference_library"]["active"]
         )
 
+    def test_active_canonical_id_is_direct_creator_scoped_lookup(self):
+        service, repo, _ = self.make_service()
+        repo.add_asset(10, creator_profile_id=1)
+        repo.add_asset(20, creator_profile_id=2)
+        service.mark_asset_as_reference(10, creator_profile_id=1, make_active=True)
+        service.mark_asset_as_reference(20, creator_profile_id=2, make_active=True)
+        for asset_id in (10, 20):
+            metadata = dict(repo.get_by_id(asset_id).media_metadata["reference_library"])
+            repo.update_reference_metadata(asset_id, {**metadata, "canonical": True})
+
+        service.list_references = lambda *_args, **_kwargs: self.fail(
+            "direct canonical lookup must not enumerate Reference Library"
+        )
+
+        self.assertEqual(
+            service.get_active_canonical_asset_id(creator_profile_id=1),
+            10,
+        )
+        self.assertEqual(
+            service.get_active_canonical_asset_id(creator_profile_id=2),
+            20,
+        )
+
+    def test_active_canonical_id_returns_none_safely(self):
+        service, repo, _ = self.make_service()
+        repo.add_asset(10, creator_profile_id=1)
+        service.mark_asset_as_reference(10, creator_profile_id=1, make_active=True)
+
+        self.assertIsNone(
+            service.get_active_canonical_asset_id(creator_profile_id=1)
+        )
+        self.assertIsNone(service.get_active_canonical_asset_id(creator_profile_id=None))
+
+    def test_active_reference_context_avoids_reference_library_enrichment(self):
+        service, repo, _ = self.make_service()
+        repo.add_asset(10, creator_profile_id=1)
+        service.mark_asset_as_reference(10, creator_profile_id=1, make_active=True)
+        metadata = dict(repo.get_by_id(10).media_metadata["reference_library"])
+        repo.update_reference_metadata(10, {**metadata, "canonical": True, "last_used_at": "2026-07-21T19:00:00Z"})
+        service.list_references = lambda *_args, **_kwargs: self.fail(
+            "lightweight context must not enumerate Reference Library"
+        )
+
+        self.assertEqual(service.get_active_reference_context(creator_profile_id=1), {
+            "asset_id": 10,
+            "last_used_at": "2026-07-21T19:00:00Z",
+        })
+
+    def test_active_canonical_projection_is_scoped_and_avoids_enrichment(self):
+        service, repo, _ = self.make_service()
+        repo.add_asset(10, creator_profile_id=1)
+        repo.add_asset(20, creator_profile_id=2)
+        service.mark_asset_as_reference(10, creator_profile_id=1, make_active=True)
+        service.mark_asset_as_reference(20, creator_profile_id=2, make_active=True)
+        for asset_id in (10, 20):
+            metadata = dict(repo.get_by_id(asset_id).media_metadata["reference_library"])
+            repo.update_reference_metadata(asset_id, {**metadata, "canonical": True})
+        service.list_references = lambda *_args, **_kwargs: self.fail(
+            "canonical projection must not enumerate Reference Library"
+        )
+        service.asset_library.build_item = lambda *_args, **_kwargs: self.fail(
+            "canonical projection must not build enriched Asset Library items"
+        )
+
+        projection = service.get_active_canonical_reference(creator_profile_id=2)
+
+        self.assertIsNotNone(projection)
+        self.assertEqual(projection.asset_id, 20)
+        self.assertEqual(projection.creator_profile_id, 2)
+        self.assertEqual(projection.asset.file_name, "asset_20.png")
+        self.assertIsNone(service.get_active_canonical_reference(creator_profile_id=3))
+
+    def test_owned_reference_validation_is_lightweight_and_creator_scoped(self):
+        service, repo, _ = self.make_service()
+        repo.add_asset(30, creator_profile_id=1)
+        service.mark_asset_as_reference(30, creator_profile_id=1)
+        service.asset_library.build_item = lambda *_args, **_kwargs: self.fail(
+            "owned-reference validation must not enrich Asset Library items"
+        )
+
+        reference = service.get_owned_reference(30, creator_profile_id=1)
+
+        self.assertIsNotNone(reference)
+        self.assertEqual(reference.asset_id, 30)
+        self.assertIsNone(service.get_owned_reference(30, creator_profile_id=2))
+        self.assertIsNone(service.get_owned_reference(999, creator_profile_id=1))
+
+    def test_canonical_replacement_check_and_clear_avoid_collection_enrichment(self):
+        service, repo, _ = self.make_service()
+        repo.add_asset(40, creator_profile_id=1)
+        repo.add_asset(41, creator_profile_id=1)
+        repo.add_asset(50, creator_profile_id=2)
+        service.mark_asset_as_reference(40, creator_profile_id=1, make_active=True)
+        service.mark_asset_as_reference(41, creator_profile_id=1)
+        service.mark_asset_as_reference(50, creator_profile_id=2, make_active=True)
+        metadata = dict(repo.get_by_id(40).media_metadata["reference_library"])
+        repo.update_reference_metadata(40, {**metadata, "canonical": True})
+        service.get_active_reference = lambda **_kwargs: self.fail(
+            "replacement check must not use enriched active reference"
+        )
+        service.list_references = lambda *_args, **_kwargs: self.fail(
+            "mutation must not enumerate Reference Library"
+        )
+
+        blocked = service.set_active_reference(41, creator_profile_id=1)
+        replaced = service.set_active_reference(
+            41,
+            creator_profile_id=1,
+            confirm_replace_canonical=True,
+        )
+
+        self.assertFalse(blocked.success)
+        self.assertTrue(replaced.success)
+        self.assertFalse(repo.get_by_id(40).media_metadata["reference_library"]["active"])
+        self.assertTrue(repo.get_by_id(41).media_metadata["reference_library"]["active"])
+        self.assertTrue(repo.get_by_id(50).media_metadata["reference_library"]["active"])
+
     def test_remove_reference_preserves_asset(self):
         service, repo, _ = self.make_service()
         repo.add_asset(4, creator_profile_id=1)
@@ -268,6 +416,19 @@ class ReferenceLibraryServiceTests(unittest.TestCase):
         self.assertFalse(metadata["is_reference"])
         self.assertFalse(metadata["active"])
         self.assertIsNotNone(metadata["removed_at"])
+
+    def test_protected_reference_cannot_be_removed_even_with_confirmation(self):
+        service, repo, _ = self.make_service()
+        repo.add_asset(84, creator_profile_id=1)
+        service.mark_asset_as_reference(84, creator_profile_id=1, make_active=True)
+        metadata = dict(repo.get_by_id(84).media_metadata["reference_library"])
+        repo.update_reference_metadata(84, {**metadata, "canonical": True, "protected": True, "role": "creator_identity"})
+
+        result = service.remove_reference(84, creator_profile_id=1, confirm_canonical=True)
+
+        self.assertFalse(result.success)
+        self.assertIn("Protected Reference", result.message)
+        self.assertTrue(repo.get_by_id(84).media_metadata["reference_library"]["is_reference"])
 
     def test_search_and_favorite_filters(self):
         service, repo, _ = self.make_service()
@@ -308,9 +469,43 @@ class ReferenceLibraryServiceTests(unittest.TestCase):
             encoding="utf-8"
         )
 
-        self.assertIn("get_active_reference", source)
+        self.assertIn("get_active_canonical_reference", source)
+        self.assertNotIn(".get_active_reference(", source)
         self.assertIn('"Social Studio", "Premium Studio", "Creative Director"', source)
         self.assertIn("ReferenceLibraryService", source)
+
+    def test_streamlit_active_reference_render_accepts_resolved_context(self):
+        from app.dashboard.pages import content_studio
+
+        rendered = []
+        original_st = content_studio.st
+        content_studio.st = SimpleNamespace(
+            markdown=lambda value: rendered.append(("markdown", value)),
+            success=lambda value: rendered.append(("success", value)),
+            caption=lambda value: rendered.append(("caption", value)),
+            warning=lambda value: rendered.append(("warning", value)),
+            info=lambda value: rendered.append(("info", value)),
+        )
+        service = SimpleNamespace(
+            get_active_canonical_reference=lambda **_kwargs: self.fail(
+                "resolved render context must not perform a duplicate lookup"
+            ),
+            get_active_reference=lambda **_kwargs: self.fail(
+                "render must not use enriched active reference"
+            ),
+        )
+        reference = SimpleNamespace(asset_id=84, last_used_at="2026-07-21T20:00:00Z")
+        try:
+            content_studio._render_active_reference(
+                creator_profile={"id": 2},
+                reference_service=service,
+                show_preview=False,
+                reference=reference,
+            )
+        finally:
+            content_studio.st = original_st
+
+        self.assertIn(("success", "Active Reference selected: Asset #84"), rendered)
 
 
 if __name__ == "__main__":

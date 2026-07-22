@@ -1,3 +1,4 @@
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -93,6 +94,31 @@ def test_pending_lookup_fails_with_deterministic_diagnostic_for_multiple_records
 
     assert "pending-b" in caplog.text
     assert "pending-a" in caplog.text
+
+
+def test_generation_thumbnail_uses_cache_and_media_keeps_original(monkeypatch, tmp_path):
+    source = tmp_path / "generation.png"
+    source.write_bytes(b"original")
+    thumbnail = tmp_path / "generation.webp"
+    thumbnail.write_bytes(b"thumbnail")
+    record = _record("image-1")
+    record.output_reference = str(source)
+    library = SimpleNamespace(get=lambda _image_id: record)
+    monkeypatch.setattr(api, "_creator_profile_id", lambda: 7)
+    monkeypatch.setattr(api, "GenerationLibraryService", lambda: library)
+    monkeypatch.setattr(
+        api,
+        "GridThumbnailService",
+        lambda: SimpleNamespace(
+            get_or_create=lambda path, *, identity: thumbnail
+        ),
+    )
+
+    response = api.generation_library_thumbnail("image-1")
+
+    assert Path(response.path) == thumbnail
+    assert response.media_type == "image/webp"
+    assert Path(api.generation_library_media("image-1").path) == source
 
 
 def test_generation_library_edit_route_is_registered():

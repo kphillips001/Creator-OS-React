@@ -2,6 +2,7 @@ import sys
 import tempfile
 import types
 import unittest
+from unittest.mock import Mock
 from pathlib import Path
 
 if "streamlit" not in sys.modules:
@@ -93,11 +94,17 @@ class FakeReferenceLibraryService:
         self.active_reference = active_reference
         self.calls = []
 
-    def get_active_reference(self, *, creator_profile_id):
+    def get_active_canonical_reference(self, *, creator_profile_id):
         self.calls.append(creator_profile_id)
         if self.active_reference and self.active_reference.creator_profile_id == creator_profile_id:
             return self.active_reference
         return None
+
+    def get_active_reference(self, **_kwargs):
+        raise AssertionError("generation requests must not use full enrichment")
+
+    def list_references(self, *_args, **_kwargs):
+        raise AssertionError("generation requests must not enumerate references")
 
 
 class FakeGenerationProvider:
@@ -209,6 +216,25 @@ class GenerationEngineServiceTests(unittest.TestCase):
 
         self.assertIn("99.png", first.metadata["canonical_reference_image_url"])
         self.assertIn("100.png", second.metadata["canonical_reference_image_url"])
+
+    def test_seedream_request_reuses_persisted_canonical_hosted_url(self):
+        references = FakeReferenceLibraryService(reference_asset(asset_id=99, creator_profile_id=7))
+        hosted = Mock()
+        hosted.cached_url.return_value = "https://i.ibb.test/canonical-99.jpg"
+        temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(temp_dir.cleanup)
+        service = GenerationEngineService(
+            storage_dir=temp_dir.name, reference_library_service=references, providers={},
+            hosted_reference_service=hosted,
+        )
+        request = service.create_request(
+            creator_profile={"id": 7}, prompt_plan=prompt_plan(), provider_id="seedream_5_0_pro",
+        )
+        self.assertEqual(request.metadata["canonical_reference_image_url"], "https://i.ibb.test/canonical-99.jpg")
+        self.assertEqual(request.metadata["reference_image_url"], "https://i.ibb.test/canonical-99.jpg")
+        hosted.cached_url.assert_called_once_with(
+            asset_id=99, source_path=request.reference_asset_path, host_name="imgbb",
+        )
 
     def test_generation_job_lifecycle(self):
         service = self.make_service()
