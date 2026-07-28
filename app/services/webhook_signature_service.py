@@ -1,5 +1,7 @@
 import hmac
 import hashlib
+import time
+from collections.abc import Callable
 
 from app.config import FANVUE_WEBHOOK_SIGNING_SECRET
 
@@ -16,6 +18,22 @@ class WebhookSignatureService:
     """
 
     SIGNATURE_HEADER = "x-fanvue-signature"
+    DEFAULT_TOLERANCE_SECONDS = 300
+
+    def __init__(
+        self,
+        signing_secret: str | None = None,
+        *,
+        tolerance_seconds: int = DEFAULT_TOLERANCE_SECONDS,
+        clock: Callable[[], float] = time.time,
+    ) -> None:
+        self._signing_secret = (
+            FANVUE_WEBHOOK_SIGNING_SECRET
+            if signing_secret is None
+            else signing_secret
+        )
+        self._tolerance_seconds = tolerance_seconds
+        self._clock = clock
 
     def verify_signature(
         self,
@@ -34,25 +52,26 @@ class WebhookSignatureService:
             )
 
             timestamp = parsed["timestamp"]
-            received_signature = parsed["signature"]
+            received_signatures = parsed["signatures"]
 
-            raw_body_text = raw_body.decode("utf-8")
+            timestamp_seconds = int(timestamp)
+            if abs(self._clock() - timestamp_seconds) > self._tolerance_seconds:
+                return False
 
-            signed_payload = (
-                f"{timestamp}.{raw_body_text}"
-            )
+            if not self._signing_secret:
+                return False
+
+            signed_payload = f"{timestamp}.".encode("utf-8") + raw_body
 
             expected_signature = hmac.new(
-                FANVUE_WEBHOOK_SIGNING_SECRET.encode(
-                    "utf-8"
-                ),
-                signed_payload.encode("utf-8"),
+                self._signing_secret.encode("utf-8"),
+                signed_payload,
                 hashlib.sha256,
             ).hexdigest()
 
-            is_valid = hmac.compare_digest(
-                expected_signature,
-                received_signature,
+            is_valid = any(
+                hmac.compare_digest(expected_signature, received_signature)
+                for received_signature in received_signatures
             )
 
             print("\n[SIGNATURE VERIFICATION]")
@@ -73,14 +92,25 @@ class WebhookSignatureService:
 
         pieces = signature_header.split(",")
 
-        parsed = {}
+        timestamp = None
+        signatures = []
 
         for piece in pieces:
-            key, value = piece.split("=", 1)
+            key, separator, value = piece.partition("=")
+            if not separator:
+                continue
 
-            parsed[key.strip()] = value.strip()
+            key = key.strip()
+            value = value.strip()
+            if key == "t":
+                timestamp = value
+            elif key == "v0":
+                signatures.append(value)
+
+        if not timestamp or not signatures:
+            raise ValueError("Fanvue signature header is missing t or v0")
 
         return {
-            "timestamp": parsed["t"],
-            "signature": parsed["v0"],
+            "timestamp": timestamp,
+            "signatures": signatures,
         }

@@ -218,9 +218,360 @@ class SchemaManagerService:
             "legacy": "canonicalized",
             "compatibility": "CANONICAL",
         },
+        "customer_commerce_profiles": {
+            "owner": "Customer Commerce Intelligence",
+            "migration": "20260725_006_customer_commerce_intelligence.sql",
+            "repository": "CustomerCommerceRepository",
+            "service": "CustomerCommerceService",
+            "dashboard": ("Customer Commerce",),
+            "columns": (
+                "customer_commerce_profile_id", "creator_profile_id",
+                "fanvue_account_id", "external_fanvue_user_uuid",
+                "lifetime_gross_minor", "purchase_count",
+            ),
+        },
+        "customer_commerce_transactions": {
+            "owner": "Customer Commerce Intelligence",
+            "migration": "20260725_006_customer_commerce_intelligence.sql",
+            "repository": "CustomerCommerceRepository",
+            "service": "CustomerCommerceService",
+            "dashboard": ("Customer Commerce",),
+            "columns": (
+                "customer_commerce_transaction_id",
+                "customer_commerce_profile_id", "fanvue_account_id",
+                "transaction_order_id", "gross_minor", "net_minor",
+            ),
+        },
+        "purchase_intents": {
+            "owner": "Offer Lifecycle",
+            "migration": "20260725_007_purchase_intent_offer_lifecycle.sql",
+            "repository": "PurchaseIntentRepository",
+            "service": "PurchaseIntentService",
+            "dashboard": ("Purchase Intents",),
+            "columns": (
+                "purchase_intent_id", "creator_profile_id",
+                "fanvue_account_id", "commercial_offering_id",
+                "commercial_publication_id", "status", "expires_at",
+            ),
+        },
+        "developer_agent_tasks": {
+            "owner": "Developer Agent Task Approval",
+            "migration": "20260726_012_developer_agent_execution.sql",
+            "repository": "DeveloperAgentExecutionRepository",
+            "service": "DeveloperAgentExecutionService",
+            "dashboard": ("Creator Intelligence", "Notification Center"),
+            "columns": (
+                "task_id", "issue_identifier", "investigation_package",
+                "implementation_task", "repository_path", "expected_branch",
+                "status", "approved_at",
+            ),
+        },
+        "developer_agent_executions": {
+            "owner": "Developer Agent Execution",
+            "migration": "20260726_012_developer_agent_execution.sql",
+            "repository": "DeveloperAgentExecutionRepository",
+            "service": "DeveloperAgentExecutionService",
+            "dashboard": ("Creator Intelligence", "Notification Center"),
+            "columns": (
+                "execution_id", "task_id", "status", "codex_session_id",
+                "initial_git_status", "initial_branch", "initial_head",
+                "final_report",
+            ),
+        },
+        "developer_agent_events": {
+            "owner": "Developer Agent Event Stream",
+            "migration": "20260726_012_developer_agent_execution.sql",
+            "repository": "DeveloperAgentExecutionRepository",
+            "service": "DeveloperAgentExecutionService",
+            "dashboard": ("Creator Intelligence",),
+            "columns": (
+                "event_id", "execution_id", "event_type", "message",
+                "event_data", "created_at",
+            ),
+        },
+        "developer_agent_notifications": {
+            "owner": "Developer Agent Notifications",
+            "migration": "20260726_012_developer_agent_execution.sql",
+            "repository": "DeveloperAgentExecutionRepository",
+            "service": "DeveloperAgentExecutionService",
+            "dashboard": ("Notification Center",),
+            "columns": (
+                "notification_id", "task_id", "execution_id",
+                "notification_type", "title", "detail", "is_read",
+            ),
+        },
+        "developer_agent_reviews": {
+            "owner": "Developer Agent Result Review",
+            "migration": "20260726_012_developer_agent_execution.sql",
+            "repository": "DeveloperAgentExecutionRepository",
+            "service": "DeveloperAgentExecutionService",
+            "dashboard": ("Creator Intelligence",),
+            "columns": ("review_id", "execution_id", "status", "reviewed_at"),
+        },
+        "autonomous_issue_resolutions": {
+            "owner": "Autonomous Issue Resolution",
+            "migration": "20260726_013_autonomous_issue_resolution.sql",
+            "repository": "AutonomousIssueResolutionRepository",
+            "service": "AutonomousIssueResolutionService",
+            "dashboard": ("Creator Intelligence",),
+            "columns": (
+                "resolution_id", "issue_identifier", "issue_snapshot",
+                "decision", "decision_reason", "developer_agent_task_id",
+                "developer_agent_execution_id", "validation_status",
+                "validation_evidence", "outcome", "resolved_at",
+            ),
+        },
+        "ava_personality_versions": {
+            "owner": "Ava Coach Version History",
+            "migration": "20260726_014_ava_coach_phase1.sql",
+            "repository": "AvaCoachRepository",
+            "service": "AvaCoachService",
+            "dashboard": ("Ava Coach",),
+            "columns": (
+                "version_id", "version_label", "status",
+                "parent_version_id", "notes",
+            ),
+        },
+        "ava_coach_snapshots": {
+            "owner": "Ava Coach Conversation Overview",
+            "migration": "20260726_014_ava_coach_phase1.sql",
+            "repository": "AvaCoachRepository",
+            "service": "AvaCoachService",
+            "dashboard": ("Ava Coach",),
+            "columns": (
+                "snapshot_id", "fanvue_account_id", "overview",
+                "evidence_metadata", "created_at",
+            ),
+        },
+        "ava_conversation_insights": {
+            "owner": "Ava Coach Evidence",
+            "migration": "20260726_014_ava_coach_phase1.sql",
+            "repository": "AvaCoachRepository",
+            "service": "AvaCoachService",
+            "dashboard": ("Ava Coach",),
+            "columns": (
+                "insight_id", "snapshot_id", "fanvue_account_id",
+                "insight_type", "evidence", "confidence",
+            ),
+        },
+        "ava_coaching_recommendations": {
+            "owner": "Ava Coach Recommendation Approval",
+            "migration": "20260726_014_ava_coach_phase1.sql",
+            "repository": "AvaCoachRepository",
+            "service": "AvaCoachService",
+            "dashboard": ("Ava Coach",),
+            "columns": (
+                "recommendation_id", "fanvue_account_id",
+                "recommendation_key", "target_version_id", "evidence",
+                "confidence", "status",
+            ),
+        },
+        "ava_applied_improvements": {
+            "owner": "Ava Coach Applied History",
+            "migration": "20260726_014_ava_coach_phase1.sql",
+            "repository": "AvaCoachRepository",
+            "service": "AvaCoachService",
+            "dashboard": ("Ava Coach",),
+            "columns": (
+                "improvement_id", "recommendation_id", "version_id",
+                "evidence", "status", "applied_at",
+            ),
+        },
+        "social_creative_directions": {
+            "owner": "Creator Social Creative Direction",
+            "migration": "20260727_016_social_creative_direction.sql",
+            "repository": "SocialCreativeDirectionRepository",
+            "service": "Creator Social Creative Direction API",
+            "dashboard": ("Social Creative Direction",),
+            "columns": (
+                "id", "creator_profile_id", "fanvue_account_id", "purpose",
+                "wardrobe", "visual_style", "seasonal_guidance",
+                "things_to_avoid", "created_at", "updated_at",
+            ),
+        },
+        "creator_lifestyles": {
+            "owner": "Creator Lifestyle",
+            "migration": "20260727_017_creator_lifestyle.sql",
+            "repository": "CreatorLifestyleRepository",
+            "service": "Creator Lifestyle API",
+            "dashboard": ("Lifestyle",),
+            "columns": (
+                "id", "creator_profile_id", "fanvue_account_id", "career",
+                "lifestyle_overview", "favorite_activities",
+                "weekend_escapes", "small_town_roots", "outdoor_lifestyle",
+                "personal_style", "created_at", "updated_at",
+            ),
+        },
+        "creator_world_models": {
+            "owner": "Creator World Model",
+            "migration": "20260727_018_creator_world_model.sql",
+            "repository": "CreatorWorldModelRepository",
+            "service": "Creator World Model API",
+            "dashboard": ("World Model",),
+            "columns": (
+                "id", "creator_profile_id", "fanvue_account_id",
+                "internal_home_base", "public_location_description",
+                "home_and_indoor_environments", "coastal_environments",
+                "mountains_lakes_and_small_town_escapes",
+                "climate_and_seasonal_behavior", "seasonal_activities",
+                "holiday_rhythm", "travel_and_variety_guidance",
+                "created_at", "updated_at",
+            ),
+        },
+        "creative_intelligence_profiles": {
+            "owner": "Creator Creative Intelligence",
+            "migration": "20260727_019_creative_intelligence_learning.sql",
+            "repository": "CreativeIntelligenceRepository",
+            "service": "CreativeIntelligenceLearningService",
+            "dashboard": (),
+            "columns": (
+                "id", "creator_profile_id", "fanvue_account_id",
+                "positive_event_count", "negative_event_count",
+                "analyzed_image_count", "learned_attributes",
+                "created_at", "updated_at",
+            ),
+        },
+        "creative_intelligence_events": {
+            "owner": "Creator Creative Intelligence Events",
+            "migration": "20260727_019_creative_intelligence_learning.sql",
+            "repository": "CreativeIntelligenceRepository",
+            "service": "CreativeIntelligenceLearningService",
+            "dashboard": (),
+            "columns": (
+                "id", "event_key", "creator_profile_id", "fanvue_account_id",
+                "source_image_id", "source_asset_id", "image_reference",
+                "event_type", "source_workflow", "signal", "analysis",
+                "analysis_status", "analysis_provider", "analysis_error",
+                "operational_metadata", "created_at",
+            ),
+        },
+        "commerce_signal_reconciliations": {
+            "owner": "Commerce Signal Integration",
+            "migration": "20260725_008_commerce_signal_integration.sql",
+            "repository": "CommerceSignalRepository",
+            "service": "CommerceSignalService",
+            "dashboard": (
+                "Customer Commerce", "Purchase Intents",
+                "Fanvue Webhook Monitor",
+            ),
+            "columns": (
+                "reconciliation_id", "fanvue_account_id",
+                "creator_profile_id", "provider_event_id",
+                "observed_transaction_id", "state", "next_attempt_at",
+            ),
+        },
     }
 
     MIGRATION_SCHEMA_REQUIREMENTS: Mapping[str, Mapping[str, tuple[str, ...]]] = {
+        "20260727_019_creative_intelligence_learning.sql": {
+            "creative_intelligence_profiles": (
+                "id", "creator_profile_id", "fanvue_account_id",
+                "positive_event_count", "negative_event_count",
+                "analyzed_image_count", "learned_attributes",
+            ),
+            "creative_intelligence_events": (
+                "id", "event_key", "creator_profile_id", "fanvue_account_id",
+                "image_reference", "event_type", "source_workflow", "signal",
+                "analysis", "analysis_status",
+            ),
+        },
+        "20260727_018_creator_world_model.sql": {
+            "creator_world_models": (
+                "id", "creator_profile_id", "fanvue_account_id",
+                "internal_home_base", "public_location_description",
+                "home_and_indoor_environments", "coastal_environments",
+                "mountains_lakes_and_small_town_escapes",
+                "climate_and_seasonal_behavior", "seasonal_activities",
+                "holiday_rhythm", "travel_and_variety_guidance",
+            ),
+        },
+        "20260727_017_creator_lifestyle.sql": {
+            "creator_lifestyles": (
+                "id", "creator_profile_id", "fanvue_account_id", "career",
+                "lifestyle_overview", "favorite_activities",
+                "weekend_escapes", "small_town_roots", "outdoor_lifestyle",
+                "personal_style",
+            ),
+        },
+        "20260727_016_social_creative_direction.sql": {
+            "social_creative_directions": (
+                "id", "creator_profile_id", "fanvue_account_id", "purpose",
+                "wardrobe", "visual_style", "seasonal_guidance",
+                "things_to_avoid",
+            ),
+        },
+        "20260726_014_ava_coach_phase1.sql": {
+            "ava_personality_versions": (
+                "version_id", "version_label", "status",
+            ),
+            "ava_coach_snapshots": (
+                "snapshot_id", "fanvue_account_id", "overview",
+            ),
+            "ava_conversation_insights": (
+                "insight_id", "snapshot_id", "evidence",
+            ),
+            "ava_coaching_recommendations": (
+                "recommendation_id", "target_version_id", "status",
+            ),
+            "ava_applied_improvements": (
+                "improvement_id", "recommendation_id", "status",
+            ),
+        },
+        "20260726_013_autonomous_issue_resolution.sql": {
+            "autonomous_issue_resolutions": (
+                "resolution_id", "issue_identifier", "decision", "outcome",
+                "validation_status", "developer_agent_execution_id",
+            ),
+        },
+        "20260726_012_developer_agent_execution.sql": {
+            "developer_agent_tasks": (
+                "task_id", "implementation_task", "status",
+            ),
+            "developer_agent_executions": (
+                "execution_id", "task_id", "status", "final_report",
+            ),
+            "developer_agent_events": (
+                "event_id", "execution_id", "event_type",
+            ),
+            "developer_agent_notifications": (
+                "notification_id", "execution_id", "is_read",
+            ),
+            "developer_agent_reviews": (
+                "review_id", "execution_id", "status",
+            ),
+        },
+        "20260725_010_commerce_recommendation_learning.sql": {
+            "commerce_recommendation_outcomes": (
+                "outcome_id", "creator_profile_id", "source_event_key",
+                "recommendation_trace",
+            ),
+            "customer_commerce_learning_profiles": (
+                "learning_profile_id", "creator_profile_id",
+                "external_fanvue_user_uuid", "preferences",
+            ),
+        },
+        "20260725_008_commerce_signal_integration.sql": {
+            "commerce_signal_reconciliations": (
+                "reconciliation_id", "fanvue_account_id",
+                "creator_profile_id", "provider_event_id",
+                "observed_transaction_id", "state",
+            ),
+        },
+        "20260725_007_purchase_intent_offer_lifecycle.sql": {
+            "purchase_intents": (
+                "purchase_intent_id", "creator_profile_id",
+                "fanvue_account_id", "status", "expires_at",
+            ),
+        },
+        "20260725_006_customer_commerce_intelligence.sql": {
+            "customer_commerce_profiles": (
+                "customer_commerce_profile_id", "creator_profile_id",
+                "external_fanvue_user_uuid",
+            ),
+            "customer_commerce_transactions": (
+                "customer_commerce_transaction_id", "transaction_order_id",
+            ),
+        },
         "20260721_008_hosted_asset_references.sql": {
             "hosted_asset_references": (
                 "reference_id", "asset_id", "host_name", "hosted_url",
@@ -365,6 +716,169 @@ class SchemaManagerService:
 
     TABLE_OWNERSHIP: Mapping[str, Mapping[str, Any]] = {
         **REQUIRED_TABLES,
+        "commerce_recommendation_outcomes": {
+            "owner": "Commerce Recommendation Learning",
+            "migration": "20260725_010_commerce_recommendation_learning.sql",
+            "repository": "CommerceLearningRepository",
+            "service": "CommerceLearningService",
+            "dashboard": (
+                "Commerce Learning", "Recommendation Diagnostics",
+            ),
+            "columns": (
+                "outcome_id", "creator_profile_id", "fanvue_account_id",
+                "external_fanvue_user_uuid", "commercial_offering_id",
+                "outcome_type", "source_event_key", "recommendation_trace",
+            ),
+        },
+        "customer_commerce_learning_profiles": {
+            "owner": "Commerce Recommendation Learning",
+            "migration": "20260725_010_commerce_recommendation_learning.sql",
+            "repository": "CommerceLearningRepository",
+            "service": "CommerceLearningService",
+            "dashboard": (
+                "Commerce Learning", "Recommendation Diagnostics",
+            ),
+            "columns": (
+                "learning_profile_id", "creator_profile_id",
+                "fanvue_account_id", "external_fanvue_user_uuid",
+                "preferences", "outcome_counts", "confidence",
+            ),
+        },
+        "asset_content_destinations": {
+            "owner": "Content Destination",
+            "migration": "20260723_001_content_destination_foundation.sql",
+            "repository": "ContentDestinationRepository",
+            "service": "ContentDestinationService",
+            "dashboard": ("Available Inventory", "Commerce"),
+            "columns": ("asset_id", "destination", "creator_profile_id", "assigned_at"),
+            "legacy": "current", "compatibility": "CANONICAL",
+        },
+        "asset_content_destination_history": {
+            "owner": "Content Destination Audit",
+            "migration": "20260723_001_content_destination_foundation.sql",
+            "repository": "ContentDestinationRepository",
+            "service": "ContentDestinationService",
+            "dashboard": (),
+            "columns": ("history_id", "asset_id", "event_type", "new_destination", "created_at"),
+            "legacy": "current", "compatibility": "CANONICAL",
+        },
+        "content_intelligence_profiles": {
+            "owner": "Content Intelligence",
+            "migration": "20260712_001_content_intelligence_profiles.sql",
+            "repository": "ContentIntelligenceProfileRepository",
+            "service": "ContentIntelligenceService",
+            "dashboard": ("Asset Library", "Commerce Library"),
+            "columns": ("asset_id", "status", "schema_version", "content_profile", "updated_at"),
+            "legacy": "current", "compatibility": "CANONICAL",
+        },
+        "business_asset_registrations": {
+            "owner": "Business Asset Registration",
+            "migration": "20260712_002_business_asset_registrations.sql",
+            "repository": "CommerceRegistrationRepository",
+            "service": "CommerceRegistrationService",
+            "dashboard": ("Asset Library", "Commerce Library"),
+            "columns": ("registration_id", "asset_id", "creator_profile_id", "business_lifecycle_state"),
+            "legacy": "current", "compatibility": "CANONICAL",
+        },
+        "commerce_destination_history": {
+            "owner": "Commerce Destination Audit",
+            "migration": "20260712_003_commerce_destinations.sql",
+            "repository": "CommerceDestinationRepository",
+            "service": "CommerceDestinationService",
+            "dashboard": (),
+            "columns": ("history_id", "asset_id", "new_destination", "created_at"),
+            "legacy": "current", "compatibility": "CANONICAL",
+        },
+        "commerce_destination_routing_intents": {
+            "owner": "Commerce Destination Routing",
+            "migration": "20260712_003_commerce_destinations.sql",
+            "repository": "CommerceDestinationRepository",
+            "service": "CommerceDestinationService",
+            "dashboard": ("Commerce Library",),
+            "columns": ("routing_intent_id", "asset_id", "selected_destination", "routing_status"),
+            "legacy": "current", "compatibility": "CANONICAL",
+        },
+        "business_asset_fulfillment_registrations": {
+            "owner": "Business Asset Fulfillment",
+            "migration": "20260712_004_fulfillment_registrations.sql",
+            "repository": "FulfillmentRegistrationRepository",
+            "service": "FulfillmentRegistrationService",
+            "dashboard": ("Commerce Library",),
+            "columns": ("fulfillment_id", "asset_id", "route", "lifecycle_state"),
+            "legacy": "current", "compatibility": "CANONICAL",
+        },
+        "business_asset_fulfillment_history": {
+            "owner": "Business Asset Fulfillment Audit",
+            "migration": "20260712_004_fulfillment_registrations.sql",
+            "repository": "FulfillmentRegistrationRepository",
+            "service": "FulfillmentRegistrationService",
+            "dashboard": (),
+            "columns": ("history_id", "fulfillment_id", "asset_id", "lifecycle_state"),
+            "legacy": "current", "compatibility": "CANONICAL",
+        },
+        "chat_commerce_registrations": {
+            "owner": "Chat Commerce Registration",
+            "migration": "20260712_005_chat_commerce_registrations.sql",
+            "repository": "ChatCommerceRegistrationRepository",
+            "service": "ChatCommerceRegistrationService",
+            "dashboard": ("Commerce Library",),
+            "columns": ("chat_registration_id", "asset_id", "availability_state", "chat_ready"),
+            "legacy": "current", "compatibility": "CANONICAL",
+        },
+        "chat_commerce_registration_history": {
+            "owner": "Chat Commerce Registration Audit",
+            "migration": "20260712_005_chat_commerce_registrations.sql",
+            "repository": "ChatCommerceRegistrationRepository",
+            "service": "ChatCommerceRegistrationService",
+            "dashboard": (),
+            "columns": ("history_id", "chat_registration_id", "asset_id", "created_at"),
+            "legacy": "current", "compatibility": "CANONICAL",
+        },
+        "ready_asset_chat_registration_jobs": {
+            "owner": "Ready Asset Chat Registration",
+            "migration": "20260720_006_ready_asset_chat_bridge.sql",
+            "repository": "ReadyAssetChatRegistrationJobRepository",
+            "service": "ReadyAssetChatRegistrationWorkerService",
+            "dashboard": ("Business Operations",),
+            "columns": ("asset_id", "status", "attempt_count", "updated_at"),
+            "legacy": "current", "compatibility": "CANONICAL",
+        },
+        "commercial_offerings": {
+            "owner": "Commercial Offerings",
+            "migration": "20260723_002_commercial_offerings_foundation.sql",
+            "repository": "CommercialOfferingRepository",
+            "service": "CommercialOfferingService",
+            "dashboard": ("Commerce",),
+            "columns": ("offering_id", "creator_profile_id", "offering_type", "status"),
+            "legacy": "current", "compatibility": "CANONICAL",
+        },
+        "commercial_offering_assets": {
+            "owner": "Commercial Offering Composition",
+            "migration": "20260723_002_commercial_offerings_foundation.sql",
+            "repository": "CommercialOfferingRepository",
+            "service": "CommercialOfferingService",
+            "dashboard": ("Commerce",),
+            "columns": ("offering_id", "asset_id", "position", "is_hero"),
+            "legacy": "current", "compatibility": "CANONICAL",
+        },
+        "commercial_publications": {
+            "owner": "Commercial Publications",
+            "migration": "20260723_003_commercial_publications_foundation.sql",
+            "repository": "CommercialPublicationRepository",
+            "service": "CommercialPublicationService",
+            "dashboard": ("Commerce",),
+            "columns": ("publication_id", "commercial_offering_id", "provider", "status"),
+            "legacy": "current", "compatibility": "CANONICAL",
+        },
+        "commercial_publication_uploads": {
+            "owner": "Commercial Publication Upload Checkpoints",
+            "migration": "20260723_004_fanvue_media_link_automation.sql",
+            "repository": "CommercialPublicationUploadRepository",
+            "service": "FanvueMediaLinkPublicationExecutor",
+            "dashboard": ("Commerce",),
+            "columns": ("publication_upload_id", "publication_id", "asset_id", "upload_status"),
+            "legacy": "current", "compatibility": "CANONICAL",
+        },
         "photoshoot_asset_memberships": {
             "owner": "Photoshoot Commerce",
             "migration": "20260721_001_photoshoot_commerce_deliverables.sql",
@@ -714,6 +1228,16 @@ class SchemaManagerService:
         "mass_ppv_queue": ("idx_mass_ppv_queue_status_due", "idx_mass_ppv_queue_active_lease"),
         "wall_post_queue": ("idx_wall_post_queue_due", "idx_wall_post_queue_active_lease"),
         "webhook_events": ("idx_webhook_events_status_retry", "idx_webhook_events_active_lease"),
+        "commerce_signal_reconciliations": (
+            "idx_commerce_signal_reconciliation_due",
+            "idx_commerce_signal_reconciliation_transaction",
+        ),
+        "developer_agent_events": (
+            "developer_agent_events_execution_idx",
+        ),
+        "developer_agent_notifications": (
+            "developer_agent_notifications_created_idx",
+        ),
     }
 
     CRITICAL_FOREIGN_KEYS: Mapping[str, tuple[str, ...]] = {
@@ -723,6 +1247,19 @@ class SchemaManagerService:
         "customer_entitlements": ("customer_entitlements_product_id_fkey",),
         "publishing_jobs": ("publishing_jobs_product_id_fkey", "publishing_jobs_asset_id_fkey"),
         "telegram_identity_map": ("telegram_identity_map_fanvue_account_id_fkey", "telegram_identity_map_local_fanvue_user_id_fkey"),
+        "commerce_signal_reconciliations": (
+            "commerce_signal_reconciliations_fanvue_account_id_fkey",
+            "commerce_signal_reconciliations_creator_profile_id_fkey",
+        ),
+        "developer_agent_executions": (
+            "developer_agent_executions_task_id_fkey",
+        ),
+        "developer_agent_events": (
+            "developer_agent_events_execution_id_fkey",
+        ),
+        "developer_agent_reviews": (
+            "developer_agent_reviews_execution_id_fkey",
+        ),
     }
 
     DOCUMENTED_FK_DEBT: Mapping[str, str] = {
@@ -828,6 +1365,41 @@ class SchemaManagerService:
             migrations_recorded=tuple(migrations_recorded),
         )
 
+    def reconcile_one(self, migration_name: str) -> SchemaCertificationReport:
+        """Apply or record exactly one named forward migration."""
+        migration = next((
+            item for item in self.load_forward_migrations()
+            if item.name == migration_name
+        ), None)
+        if migration is None:
+            raise LookupError(f"Migration was not found: {migration_name}")
+        applied_names: list[str] = []
+        recorded_names: list[str] = []
+        with self._connection_factory() as connection:
+            self.ensure_history_table(connection)
+            applied = self.applied_migrations(connection)
+            prior_checksum = applied.get(migration.name)
+            if prior_checksum is not None and prior_checksum != migration.checksum:
+                raise ValueError(
+                    f"Applied migration checksum differs: {migration.name}"
+                )
+            if prior_checksum == migration.checksum:
+                return self.certify()
+            if self._migration_schema_already_present(
+                connection, migration.name
+            ):
+                self._record_migration(connection, migration)
+                recorded_names.append(migration.name)
+            else:
+                with connection.cursor() as cursor:
+                    cursor.execute(migration.sql)
+                self._record_migration(connection, migration)
+                applied_names.append(migration.name)
+        return self.certify(
+            migrations_applied=tuple(applied_names),
+            migrations_recorded=tuple(recorded_names),
+        )
+
     def certify(
         self,
         *,
@@ -919,6 +1491,8 @@ class SchemaManagerService:
         current = schema or self.discover_schema()
         audits: list[SchemaTableAudit] = []
         for table_name, metadata in sorted(self.TABLE_OWNERSHIP.items()):
+            if table_name not in current:
+                continue
             columns = current.get(table_name, set())
             missing = tuple(
                 column for column in metadata["columns"] if column not in columns

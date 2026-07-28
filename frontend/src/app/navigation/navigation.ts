@@ -15,10 +15,19 @@ import {
   Settings,
   Sparkles,
   BriefcaseBusiness,
-  Boxes,
   Users,
   BadgeDollarSign,
   Activity,
+  Warehouse,
+  ShoppingBasket,
+  ShieldCheck,
+  ScanSearch,
+  RadioTower,
+  UserRoundSearch,
+  UserRound,
+  ListChecks,
+  BrainCircuit,
+  ListFilter,
   type LucideIcon,
 } from "lucide-react";
 
@@ -35,6 +44,39 @@ export type NavigationGroup = {
 };
 
 export const navigationGroups: NavigationGroup[] = [
+  {
+    label: "Creator",
+    items: [
+      {
+        label: "Personality",
+        path: "/creator/personality",
+        icon: UserRound,
+        description:
+          "Review and edit the canonical creator personality.",
+      },
+      {
+        label: "Social Creative Direction",
+        path: "/creator/social-creative-direction",
+        icon: Paintbrush,
+        description:
+          "Maintain the canonical creative vision for public social content.",
+      },
+      {
+        label: "Lifestyle",
+        path: "/creator/lifestyle",
+        icon: BookOpen,
+        description:
+          "Maintain the canonical description of the creator's everyday life.",
+      },
+      {
+        label: "World Model",
+        path: "/creator/world-model",
+        icon: CircleGauge,
+        description:
+          "Maintain canonical environments, location privacy, and seasonal context.",
+      },
+    ],
+  },
   {
     label: "Content Creation",
     items: [
@@ -102,16 +144,22 @@ export const navigationGroups: NavigationGroup[] = [
     label: "Business",
     items: [
       {
+        label: "Commerce",
+        path: "/commerce",
+        icon: BadgeDollarSign,
+        description: "Author, manage, and publish AI Chat commercial offerings.",
+      },
+      {
         label: "Commerce Library",
         path: "/business/commerce-library",
         icon: BriefcaseBusiness,
         description: "Review registered Business Assets and their commerce readiness.",
       },
       {
-        label: "Products",
-        path: "/business/products",
-        icon: Boxes,
-        description: "Build and manage the offers available to the Sales Agent.",
+        label: "Available Inventory",
+        path: "/inventory/available",
+        icon: Warehouse,
+        description: "Browse canonical, analyzed content that has not been commercially committed.",
       },
       {
         label: "Customers",
@@ -131,6 +179,12 @@ export const navigationGroups: NavigationGroup[] = [
         icon: Activity,
         description: "Monitor business workflows, fulfillment, and items needing attention.",
       },
+      {
+        label: "Intelligence Center",
+        path: "/home",
+        icon: CircleGauge,
+        description: "Operational priorities, opportunities, and evidence in one executive console.",
+      },
     ],
   },
   {
@@ -141,13 +195,19 @@ export const navigationGroups: NavigationGroup[] = [
         path: "/publishing",
         icon: Send,
         description:
-          "Coordinate content queues, destinations, and publishing history.",
+          "Publication history and distribution across every platform.",
       },
     ],
   },
   {
     label: "AI",
     items: [
+      {
+        label: "Ava Coach",
+        path: "/agents/ava-coach",
+        icon: Sparkles,
+        description: "Evidence-based conversation coaching for operator review.",
+      },
       {
         label: "Creator Agent",
         path: "/agents/creator",
@@ -172,6 +232,71 @@ export const navigationGroups: NavigationGroup[] = [
         path: "/developer/test-chat",
         icon: MessagesSquare,
         description: "Exercise the Sales Agent brain with a synthetic customer.",
+      },
+      {
+        label: "Commerce Learning",
+        path: "/developer/commerce-learning",
+        icon: BrainCircuit,
+        description: "Inspect observed customer recommendation preferences and outcomes.",
+      },
+      {
+        label: "Recommendation Diagnostics",
+        path: "/developer/recommendations",
+        icon: ListFilter,
+        description: "Inspect exact ranking traces and observed outcomes.",
+      },
+      {
+        label: "Commerce Sales Explorer",
+        path: "/developer/commerce-sales",
+        icon: ShoppingBasket,
+        description: "Inspect the fulfillable offerings currently available to AI Chat.",
+      },
+      {
+        label: "Fanvue API Explorer",
+        path: "/developer/fanvue-api-explorer",
+        icon: ScanSearch,
+        description: "Inspect official Fanvue API responses through the authenticated creator connection.",
+      },
+      {
+        label: "Fanvue Webhook Monitor",
+        path: "/developer/fanvue-webhook-monitor",
+        icon: RadioTower,
+        description: "Monitor incoming Fanvue webhook traffic in this process.",
+      },
+      {
+        label: "Customer Commerce",
+        path: "/developer/customer-commerce",
+        icon: UserRoundSearch,
+        description: "Inspect read-only customer purchase aggregates and commerce identity state.",
+      },
+      {
+        label: "Purchase Intents",
+        path: "/developer/purchase-intents",
+        icon: ListChecks,
+        description: "Inspect read-only offer presentation and payment-reference lifecycle state.",
+      },
+      {
+        label: "Customer Sales Brain",
+        path: "/developer/customer-sales-brain",
+        icon: BrainCircuit,
+        description: "Inspect deterministic customer commercial-action decisions.",
+      },
+      {
+        label: "Commercial Offering Selector",
+        path: "/developer/offering-selector",
+        icon: ListFilter,
+        description: "Inspect deterministic offering eligibility, exclusions, and selection.",
+      },
+    ],
+  },
+  {
+    label: "Administration",
+    items: [
+      {
+        label: "Administration",
+        path: "/administration",
+        icon: ShieldCheck,
+        description: "Manage provider connections and operational configuration.",
       },
     ],
   },

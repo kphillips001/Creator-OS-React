@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AssetLibraryPage } from "./AssetLibraryPage";
 
 const stylesheetText = readFileSync(resolve("src/features/asset-library/asset-library.css"), "utf8");
+const sharedStylesheetText = readFileSync(resolve("src/shared/ui/shared-ui.css"), "utf8");
 
 const asset = {
   libraryItemId: "asset:42",
@@ -53,7 +54,7 @@ describe("AssetLibraryPage", () => {
     await openAssetType("Photoshoots");
     expect(await screen.findByText("Sunlit Serenity")).toBeInTheDocument();
     expect(screen.getByText(/Photoshoot.*6 Images/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Register" }));
+    fireEvent.click(screen.getByRole("button", { name: "Register Asset" }));
     expect(await screen.findByText("Photoshoot registered for Commerce.")).toBeInTheDocument();
     expect(fetch).toHaveBeenCalledWith("/api/v1/assets/photoshoots/set-1/register", { method: "POST" });
   });
@@ -70,7 +71,7 @@ describe("AssetLibraryPage", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Open Image" }));
     expect(await screen.findByText("generation_library")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Close asset details" }));
-    fireEvent.click(screen.getByRole("button", { name: "Open" }));
+    fireEvent.click(screen.getByRole("button", { name: "Move to Generation Library" }));
 
     expect(await screen.findByText("generation_library")).toBeInTheDocument();
     expect(fetch).toHaveBeenCalledWith("/api/v1/assets/42", { cache: "no-store" });
@@ -93,15 +94,16 @@ describe("AssetLibraryPage", () => {
     const previews = await screen.findAllByRole("button", { name: "Open Image" });
     expect(previews).toHaveLength(2);
     const card = previews[0]!.closest("article")!;
-    expect(screen.getAllByRole("button", { name: "Register" })).toHaveLength(2);
-    expect(screen.getAllByRole("button", { name: "Open" })).toHaveLength(2);
-    expect(screen.getAllByRole("button", { name: "Archive" })).toHaveLength(2);
-    const register = within(card).getByRole("button", { name: "Register" });
-    expect(register).toHaveAttribute("title", "Register");
-    expect(within(card).getByRole("button", { name: "Archive" })).toHaveAttribute("title", "Archive");
+    expect(screen.getAllByRole("button", { name: "Register Asset" })).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: "Move to Generation Library" })).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: "Delete" })).toHaveLength(2);
+    const register = within(card).getByRole("button", { name: "Register Asset" });
+    expect(within(card).getByRole("button", { name: "Move to Generation Library" })).toHaveAttribute("title", "Move to Generation Library");
+    expect(register).toHaveAttribute("title", "Register Asset");
+    expect(within(card).getByRole("button", { name: "Delete" })).toHaveAttribute("title", "Delete");
     fireEvent.click(register);
     expect(await screen.findByText("Asset registered. Analysis is pending.")).toBeInTheDocument();
-    await waitFor(() => expect(screen.getAllByRole("button", { name: "Register" })).toHaveLength(1));
+    await waitFor(() => expect(screen.getAllByRole("button", { name: "Register Asset" })).toHaveLength(1));
     expect(fetch).toHaveBeenCalledWith("/api/v1/assets/staged/generated-1/register", { method: "POST" });
     expect(within(card).queryByText("Staged generation")).not.toBeInTheDocument();
     expect(within(card).queryByText("Type")).not.toBeInTheDocument();
@@ -114,7 +116,9 @@ describe("AssetLibraryPage", () => {
     expect(stylesheetText).toMatch(/\.asset-card__image img\s*\{[^}]*object-fit:\s*cover/);
     expect(within(card).queryByText("portrait.png")).not.toBeInTheDocument();
     expect(within(card).queryByText("Staged Image")).not.toBeInTheDocument();
-    expect(stylesheetText).toMatch(/\.asset-card__actions--icons\s*\{[^}]*grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\)/);
+    expect(stylesheetText).not.toMatch(/\.asset-card__actions(?:--icons)?\s*\{/);
+    expect(sharedStylesheetText).toMatch(/\.library-action-group\s*\{[^}]*grid-auto-columns:\s*minmax\(0,1fr\)[^}]*width:\s*100%/);
+    expect(sharedStylesheetText).toMatch(/\.library-action-button\s*\{[^}]*width:\s*100%[^}]*height:\s*34px/);
     expect(stylesheetText).toMatch(/@media\s*\(max-width:\s*600px\)[\s\S]*\.asset-library-grid\s*\{[^}]*repeat\(2, minmax\(0, 1fr\)\)/);
   });
 
@@ -125,7 +129,7 @@ describe("AssetLibraryPage", () => {
       : response({ assets: [staged], total: 1, page: 1, pageSize: 18, totalPages: 1, classifications: [] }));
     render(<AssetLibraryPage />);
     await openAssetType("Images");
-    fireEvent.click(await screen.findByRole("button", { name: "Register" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Register Asset" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Only staged Asset Library items can be registered.");
     expect(screen.queryByText(/JSON\.parse/)).not.toBeInTheDocument();
   });
@@ -137,7 +141,7 @@ describe("AssetLibraryPage", () => {
       : response({ assets: [staged], total: 1, page: 1, pageSize: 18, totalPages: 1, classifications: [] }));
     render(<AssetLibraryPage />);
     await openAssetType("Images");
-    fireEvent.click(await screen.findByRole("button", { name: "Register" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Register Asset" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Database unavailable");
     expect(screen.queryByText(/unexpected character|JSON\.parse/i)).not.toBeInTheDocument();
   });
@@ -155,7 +159,7 @@ describe("AssetLibraryPage", () => {
     });
     render(<AssetLibraryPage />);
     await openAssetType("Images");
-    fireEvent.click(await screen.findByRole("button", { name: "Archive" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Delete" }));
     expect(await screen.findByText("Asset archived.")).toBeInTheDocument();
     expect(await screen.findByText("No assets found.")).toBeInTheDocument();
     expect(fetch).toHaveBeenCalledWith("/api/v1/assets/staged/generated-1/archive", { method: "POST" });

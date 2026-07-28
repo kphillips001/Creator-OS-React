@@ -70,7 +70,6 @@ def run_test():
     )
 
     print("\nREFRESH PAYLOAD:")
-    print(refresh_payload)
 
     injection_result = (
         injection_service.build_injection(

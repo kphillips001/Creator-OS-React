@@ -7,11 +7,12 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.encoders import jsonable_encoder
+from pydantic import BaseModel
 
 from app.api.asset_library import _creator_profile
-from app.models.chat_commerce_inventory import ChatCommerceInventoryFilter
 from app.repositories.commerce_destination_repository import CommerceDestinationRepository
 from app.repositories.commerce_registration_repository import CommerceRegistrationRepository
+from app.repositories.commerce_library_repository import CommerceLibraryRepository
 from app.repositories.content_intelligence_repository import ContentIntelligenceProfileRepository
 from app.repositories.asset_intelligence_repository import AssetIntelligenceRepository
 from app.repositories.photoshoot_commerce_repository import PhotoshootCommerceRepository
@@ -27,12 +28,37 @@ router = APIRouter(prefix="/api/v1/business-assets", tags=["business-assets"])
 _ANALYSIS_STAGES = ("NUDENET", "VISION", "GROK", "CONTENT_INTELLIGENCE")
 
 
+class CommerceLibraryListItemResponse(BaseModel):
+    itemId: str
+    itemKind: str
+    asset_id: int
+    asset_name: str | None
+    imageUrl: str
+    analysisStatus: str
+    current_lifecycle: str
+    commerceStatus: str
+    deliverableId: str | None = None
+    shotCount: int | None = None
+
+
+class CommerceLibraryListResponse(BaseModel):
+    items: list[CommerceLibraryListItemResponse]
+    total: int
+    page: int
+    pageSize: int
+    totalPages: int
+
+
 def _inventory_service() -> ChatCommerceInventoryService:
     return ChatCommerceInventoryService()
 
 
 def _commerce_repository() -> CommerceRegistrationRepository:
     return CommerceRegistrationRepository()
+
+
+def _commerce_library_repository() -> CommerceLibraryRepository:
+    return CommerceLibraryRepository()
 
 
 def _commerce_service() -> CommerceRegistrationService:
@@ -251,7 +277,7 @@ def _item_payload(item: Any, business_asset: Any | None = None) -> dict[str, Any
     return payload
 
 
-@router.get("")
+@router.get("", response_model=CommerceLibraryListResponse)
 def list_business_assets(
     search: str | None = None,
     status: str | None = None,
@@ -268,67 +294,43 @@ def list_business_assets(
     page_size: int = Query(24, ge=1, le=100),
 ):
     creator_profile_id = int(_creator_profile()["id"])
-    service = _inventory_service()
-    result = service.build_inventory(
-        filters=ChatCommerceInventoryFilter(
-            status=str(status or "").strip() or None,
-            destination=str(destination or "").strip() or None,
-            source_workflow=str(source_workflow or "").strip() or None,
-            chat_ready=chat_ready,
-            fulfillment_ready=fulfillment_ready,
-            recommendation_ready=recommendation_ready,
-            awaiting_destination=awaiting_destination,
-            waiting_for_media_link=waiting_for_media_link,
-            blocked=blocked,
-        ),
-        limit=5000,
+    result = _commerce_library_repository().list_page(
+        creator_profile_id=creator_profile_id,
+        search=search,
+        commerce_status=commerce_status,
+        page_size=page_size,
+        page=page,
+        status=status,
+        destination=destination,
+        source_workflow=source_workflow,
+        chat_ready=chat_ready,
+        fulfillment_ready=fulfillment_ready,
+        recommendation_ready=recommendation_ready,
+        awaiting_destination=awaiting_destination,
+        waiting_for_media_link=waiting_for_media_link,
+        blocked=blocked,
     )
-    records = _commerce_repository()
-    items = [
-        item
-        for item in result.items
-        if (
-            (record := records.get_by_asset_id(int(item.asset_id))) is not None
-            and int(record.creator_profile_id or 0) == creator_profile_id
-        )
-    ]
-    needle = str(search or "").strip().lower()
-    if needle:
-        items = [
-            item for item in items
-            if needle in str(item.asset_name or "").lower()
-            or needle in str(item.asset_id)
-        ]
-    requested_commerce_status = str(commerce_status or "").strip().lower()
-    if requested_commerce_status:
-        items = [
-            item for item in items
-            if _commerce_status(
-                item, records.get_by_asset_id(int(item.asset_id))
-            ).lower() == requested_commerce_status
-        ]
-    payloads = [_item_payload(item, records.get_by_asset_id(int(item.asset_id))) for item in items]
-    photoshoots = [_photoshoot_payload(row) for row in _photoshoot_repository().list_active(creator_profile_id)]
-    if needle:
-        photoshoots = [item for item in photoshoots if needle in str(item["asset_name"]).lower()]
-    if requested_commerce_status:
-        photoshoots = [item for item in photoshoots if str(item["commerceStatus"]).lower() == requested_commerce_status]
-    combined = payloads + photoshoots
-    summary = service.summarize_items(items)
-    total = len(combined)
-    total_pages = max(1, (total + page_size - 1) // page_size)
-    current_page = min(page, total_pages)
-    start = (current_page - 1) * page_size
+    total_pages = max(1, (result.total + page_size - 1) // page_size)
     return {
         "items": [
-            item for item in combined[start:start + page_size]
+            {
+                "itemId": item.item_id,
+                "itemKind": item.item_kind,
+                "asset_id": item.asset_id,
+                "asset_name": item.asset_name,
+                "imageUrl": f"/api/v1/assets/{item.asset_id}/thumbnail" if item.asset_id else "",
+                "analysisStatus": item.analysis_status,
+                "current_lifecycle": item.current_lifecycle,
+                "commerceStatus": item.commerce_status,
+                "deliverableId": item.deliverable_id,
+                "shotCount": item.shot_count,
+            }
+            for item in result.items
         ],
-        "summary": _context(summary),
-        "total": total,
-        "page": current_page,
+        "total": result.total,
+        "page": result.page,
         "pageSize": page_size,
         "totalPages": total_pages,
-        "generatedAt": result.generated_at,
     }
 
 

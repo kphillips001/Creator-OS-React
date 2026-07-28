@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import type { PhotoshootCurationReview } from "../types";
@@ -33,5 +33,32 @@ describe("PhotoshootCurationPanel", () => {
     expect(screen.queryByRole("list", { name: "Photoshoot sequence" })).not.toBeInTheDocument();
     expect(screen.getAllByRole("checkbox")).toHaveLength(2);
     expect(screen.getAllByRole("checkbox").every((input) => !(input as HTMLInputElement).checked)).toBe(true);
+  });
+
+  it("defaults approved shots selected, locks the seed, updates counts, and submits selected IDs only", async () => {
+    const onConfirm = vi.fn().mockResolvedValue({
+      session_id: "session-1", status: "archived", already_confirmed: false,
+      photoshoot_decision: "APPROVED", photoshoot_decided_at: "now",
+      selected_image_ids: ["three"], photoshoot_created: true,
+      photoshoot_deliverable_id: "set-1", image_asset_generation_ids: [],
+    });
+    render(<PhotoshootCurationPanel busy={false} review={review} onConfirm={onConfirm} />);
+
+    const seed = screen.getByRole("checkbox", { name: "Include Seed Image in Photoset" });
+    const first = screen.getByRole("checkbox", { name: "Include Window Turn in Photoset" });
+    const second = screen.getByRole("checkbox", { name: "Include Seated Pose in Photoset" });
+    expect(seed).toBeChecked();
+    expect(seed).toBeDisabled();
+    expect(first).toBeChecked();
+    expect(second).toBeChecked();
+    expect(screen.getByLabelText("Photoset membership counts")).toHaveTextContent("3Approved3Selected0Remaining Available Inventory");
+
+    fireEvent.click(first);
+    expect(screen.getByLabelText("Photoset membership counts")).toHaveTextContent("3Approved2Selected1Remaining Available Inventory");
+    fireEvent.click(screen.getByRole("radio", { name: "Yes" }));
+    fireEvent.click(first);
+    fireEvent.click(screen.getByRole("button", { name: "Finish" }));
+
+    await waitFor(() => expect(onConfirm).toHaveBeenCalledWith(["three"], "APPROVED"));
   });
 });

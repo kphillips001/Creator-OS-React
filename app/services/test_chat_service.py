@@ -8,10 +8,17 @@ from typing import Any
 from uuid import uuid4
 
 from app.main import decision_engine, memory_service
-from app.models.conversation_gateway import ConversationGatewayInput
+from app.models.conversation_gateway import (
+    ConversationBrainContext,
+    ConversationGatewayInput,
+)
 from app.repositories.fanvue_account_repository import get_account_by_id
 from app.repositories.user_repository import get_or_create_user_with_memory
 from app.services.conversation_gateway import ConversationGateway
+from app.services.chat_commerce_service import ChatCommerceService
+from app.services.customer_sales_brain_service import CustomerSalesBrainService
+from app.repositories.creator_profile_repository import get_active_creator_profile
+from app.repositories.commerce_learning_repository import CommerceLearningRepository
 
 
 __test__ = False
@@ -24,11 +31,17 @@ class TestChatService:
     _sessions: dict[str, list[dict[str, str]]] = {}
     _lock = RLock()
 
-    def __init__(self, *, account_id: int, engine: Any = decision_engine) -> None:
+    def __init__(
+        self, *, account_id: int, engine: Any = decision_engine,
+        chat_commerce_service=None,
+        customer_sales_brain_service=None,
+        commerce_learning_repository=None,
+    ) -> None:
         account = get_account_by_id(account_id)
         if not account:
             raise ValueError("Active account not found")
         self._account = dict(account)
+        self._account_id = int(account_id)
         context = get_or_create_user_with_memory(
             fanvue_account_id=account_id,
             fanvue_user_uuid=self.TEST_USER_UUID,
@@ -41,11 +54,25 @@ class TestChatService:
         )
         self._user = dict(context["user"])
         self._engine_user_id = f"{account_id}:{self._user['id']}"
+        profile = get_active_creator_profile(str(account_id)) or {}
+        self._creator_profile_id = int(profile.get("id") or 0)
+        self._chat_commerce = chat_commerce_service or ChatCommerceService(
+            commerce_mode=ChatCommerceService.AUTHORITATIVE_MODE
+        )
+        self._customer_sales_brain = (
+            customer_sales_brain_service or CustomerSalesBrainService()
+        )
+        self._commerce_learning = (
+            commerce_learning_repository or CommerceLearningRepository()
+        )
         # Deliberately omit TelegramCommerceService and RuntimeControlService.
         # The gateway can only execute the brain and cannot send or fulfill.
         self._gateway = ConversationGateway(
             engine,
             allowed_fanvue_hostnames=("fanvue.com", "www.fanvue.com"),
+            chat_commerce_service=self._chat_commerce,
+            customer_sales_brain_service=self._customer_sales_brain,
+            creator_profile_id=self._creator_profile_id,
             raise_engine_exceptions=True,
         )
 
@@ -74,6 +101,14 @@ class TestChatService:
                     message_text=message.strip(),
                     chat_history=list(history),
                     correlation_id=f"test-chat:{session_id}:{uuid4()}",
+                    brain_context=ConversationBrainContext(
+                        creator_profile_id=self._creator_profile_id or None,
+                        customer_identifier=self._engine_user_id,
+                        conversation_identifier=session_id,
+                        developer_mode=True,
+                        fanvue_account_id=self._account_id,
+                        external_fanvue_buyer_uuid=self.TEST_USER_UUID,
+                    ),
                 )
             )
         except Exception as error:
@@ -81,17 +116,72 @@ class TestChatService:
         if output.error_code:
             raise RuntimeError(output.error_code)
 
+        diagnostics = output.diagnostic_metadata
+        decision = self._decision_summary(diagnostics)
+        commerce = self._commerce_diagnostics(diagnostics)
+        reply = output.response_text
+
         with self._lock:
             history.extend(
                 (
                     {"role": "user", "content": message.strip()},
-                    {"role": "assistant", "content": output.response_text},
+                    {"role": "assistant", "content": reply},
                 )
             )
 
-        diagnostics = output.diagnostic_metadata
-        decision = self._decision_summary(diagnostics)
-        return {"reply": output.response_text, **decision}
+        return {
+            "reply": reply,
+            **decision,
+            **commerce,
+            "recommendation_diagnostics": diagnostics.get(
+                "recommendation_diagnostics"
+            ),
+            "commerce_learning_profile": self._learning_profile(),
+        }
+
+    def _learning_profile(self):
+        try:
+            available = getattr(self._commerce_learning, "is_available", None)
+            if callable(available) and not available():
+                return None
+            profile = self._commerce_learning.get_profile(
+                creator_profile_id=self._creator_profile_id,
+                fanvue_account_id=self._account_id,
+                external_fanvue_user_uuid=self.TEST_USER_UUID,
+            )
+        except Exception:
+            return None
+        if profile is None:
+            return None
+        return {
+            "preferences": dict(profile.preferences),
+            "outcomeCounts": dict(profile.outcome_counts),
+            "preferredOfferingType": profile.preferred_offering_type,
+            "preferredPriceMinMinor": profile.preferred_price_min_minor,
+            "preferredPriceMaxMinor": profile.preferred_price_max_minor,
+            "repeatPurchaseFrequency": profile.repeat_purchase_frequency,
+            "confidence": profile.confidence,
+            "evidenceCount": profile.evidence_count,
+        }
+
+    @staticmethod
+    def _commerce_diagnostics(diagnostics):
+        keys = (
+            "commerce_lookup_attempted", "requested_media_type",
+            "requested_themes", "offering_selected", "offering_id",
+            "offering_type", "offering_title", "price_minor", "currency",
+            "primary_sales_channel", "provider", "fulfillable",
+            "recommendation_reason", "no_offering_reason", "delivery_url",
+            "legacy_offer_requested", "commerce_offer_authorized",
+            "final_offer_authorized", "commerce_execution_policy",
+            "customer_sales_decision", "customer_sales_reason_code",
+            "authoritative_offering_selected", "selection_source",
+            "commerce_prompt_mode", "legacy_recommendation_used",
+            "commerce_mode", "compatibility_mode", "delivery_source",
+            "memory_source", "eligibility_source", "recommendation_source",
+            "legacy_memory_mutated", "legacy_delivery_used",
+        )
+        return {key: diagnostics.get(key) for key in keys}
 
     def clear_chat(self, session_id: str) -> dict[str, Any]:
         self._history(session_id)
@@ -131,20 +221,18 @@ class TestChatService:
         intent = diagnostics.get("intent") or {}
         selected = diagnostics.get("selected_content") or {}
         offer = diagnostics.get("final_offer") or {}
-        classifier = route.get("classifier_result") or {} if isinstance(route, dict) else {}
         wants_to_sell = bool(
-            diagnostics.get("send_offer")
-            or diagnostics.get("should_send_offer_behavior")
-            or classifier.get("buying_intent")
-            or classifier.get("close_ready")
+            diagnostics.get("offer_authorized")
+            if "offer_authorized" in diagnostics
+            else diagnostics.get("send_offer")
         )
         product = selected.get("product_id") or offer.get("product_id")
         asset = selected.get("content_item_id") or selected.get("asset_id") or selected.get("id")
 
-        if wants_to_sell and product is None:
-            reason = "No eligible products"
-        elif wants_to_sell and asset is None:
-            reason = "No eligible assets"
+        if diagnostics.get("recommendation_reason"):
+            reason = str(diagnostics["recommendation_reason"])
+        elif diagnostics.get("no_offering_reason"):
+            reason = str(diagnostics["no_offering_reason"])
         elif diagnostics.get("ownership_blocked"):
             reason = "Owned content was not eligible"
         elif diagnostics.get("delivery_prepared") is False:
@@ -168,6 +256,10 @@ class TestChatService:
             "reason": reason,
             "product": str(product) if product is not None else None,
             "asset": str(asset) if asset is not None else None,
+            "provider_selected": (
+                diagnostics.get("selected_provider")
+                or diagnostics.get("provider")
+            ),
         }
 
 

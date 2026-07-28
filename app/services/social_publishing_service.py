@@ -28,6 +28,7 @@ from app.providers.social.x_provider import XPublishingProvider
 from app.services.generation_engine_service import GenerationEngineService
 from app.services.generation_library_service import GenerationLibraryService
 from app.services.generation_result_ingestion_service import GenerationResultIngestionService
+from app.services.creative_intelligence_learning_service import CreativeIntelligenceLearningService
 
 
 logger = logging.getLogger(__name__)
@@ -45,10 +46,12 @@ class SocialPublishingService:
         storage_dir: str | Path | None = None,
         x_provider: XPublishingProvider | None = None,
         telegram_provider: TelegramPublishingProvider | None = None,
+        creative_intelligence: CreativeIntelligenceLearningService | None = None,
     ):
         self.storage_dir = Path(storage_dir or self.DEFAULT_STORAGE_DIR)
         self.x_provider = x_provider or XPublishingProvider()
         self.telegram_provider = telegram_provider or TelegramPublishingProvider()
+        self.creative_intelligence = creative_intelligence or CreativeIntelligenceLearningService()
 
     @property
     def queue_path(self) -> Path:
@@ -111,6 +114,47 @@ class SocialPublishingService:
         items = list(self.list_queue_items())
         items.insert(0, item)
         self._write_queue(items)
+        return item
+
+    def create_commerce_queue_item(
+        self,
+        *,
+        commercial_offering_id: str,
+        creator_profile_id: int,
+        hero_asset_id: int,
+        image_reference: str,
+        title: str,
+    ) -> SocialQueueItem:
+        """Create a Telegram queue item whose authoritative source is Commerce."""
+        source_id = f"commercial-offering:{str(commercial_offering_id).strip()}"
+        existing = self.find_queue_item(
+            source_id, platform=SocialPlatform.TELEGRAM.value
+        )
+        if existing and existing.status != SocialPublishStatus.ARCHIVED.value:
+            return existing
+        item = SocialQueueItem(
+            queue_item_id=new_generation_id("social_queue_item"),
+            generated_image_id=source_id,
+            creator_profile_id=int(creator_profile_id),
+            platform=SocialPlatform.TELEGRAM.value,
+            generation_metadata={
+                "source_type": "commercial_offering",
+                "commercial_offering_id": str(commercial_offering_id),
+                "destination": "telegram_content_vault",
+                "title": str(title or "").strip(),
+            },
+            reference_asset_id=int(hero_asset_id),
+            output_reference=str(image_reference),
+        )
+        items = list(self.list_queue_items())
+        items.insert(0, item)
+        self._write_queue(items)
+        self._append_history(
+            item,
+            status=SocialPublishStatus.QUEUED.value,
+            message="Commercial Offering queued for Telegram Content Vault.",
+            metadata=dict(item.generation_metadata),
+        )
         return item
 
     def queue_many(
@@ -375,6 +419,18 @@ class SocialPublishingService:
                 "provider_post_id": result.provider_post_id,
                 "provider_media_id": getattr(result, "provider_media_id", None),
                 "provider_output_url": getattr(result, "provider_output_url", None),
+            },
+        )
+        self.creative_intelligence.record_positive_safely(
+            creator_profile_id=item.creator_profile_id,
+            image_reference=item.output_reference or "",
+            event_type="published",
+            source_workflow="social_publishing",
+            source_image_id=item.generated_image_id,
+            source_asset_id=item.reference_asset_id,
+            operational_metadata={
+                "platform": item.platform,
+                "publish_id": result.provider_post_id,
             },
         )
         if item.platform == SocialPlatform.X.value:

@@ -228,57 +228,6 @@
   background: transparent;
   color: var(--color-text-primary);
 }
-.asset-card__actions {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.5rem;
-  padding: 0.65rem;
-}
-.asset-card__actions button {
-  width: 100%;
-  height: 42px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.4rem;
-  padding: 0 0.35rem;
-  border-radius: 8px;
-  background: #26202f;
-  color: var(--color-text-primary);
-  font-size: 0.68rem;
-  white-space: nowrap;
-}
-.asset-card__actions button svg {
-  flex: 0 0 auto;
-}
-.asset-card__actions--single {
-  grid-template-columns: 1fr;
-}
-.asset-card__actions--icons {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.25rem;
-  padding: 0.55rem 0.6rem 0.6rem;
-}
-.asset-card__actions--icons button {
-  min-width: 0;
-  min-height: 34px;
-  height: 34px;
-  padding: 0.25rem;
-  overflow: hidden;
-  border: 1px solid var(--color-border);
-  border-radius: 7px;
-  background: var(--color-surface-inset);
-  color: var(--color-text-secondary);
-  cursor: pointer;
-}
-.asset-card__actions--icons button:hover:not(:disabled) {
-  border-color: var(--color-accent-border);
-  background: var(--color-accent-surface);
-}
-.asset-card__actions--icons button:disabled {
-  opacity: 0.42;
-  cursor: not-allowed;
-}
 .asset-card__photoshoot {
   display: grid;
   gap: 0.25rem;

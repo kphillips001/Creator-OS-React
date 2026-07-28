@@ -23,4 +23,12 @@ export type GenerationSubmission = {
   creativeMode: string;
   promptCount: number;
   creatorContext: { status: string; activeReferenceAssetId: number | null };
+  origin?: "canonical_planner";
+  plannerLineage?: {
+    plannerQuestion: string;
+    plannerItemId: string;
+    plannerItemTitle: string;
+    selectedPlannerItem: string;
+    enhancedResult: string;
+  };
 };

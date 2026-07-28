@@ -24,4 +24,14 @@
 .test-chat-error-card dl { display: grid; gap: var(--space-3); margin: 0 0 var(--space-4); }
 .test-chat-error-card pre { overflow: auto; padding: var(--space-3); border-radius: 7px; background: var(--color-background); color: var(--color-text-secondary); font-size: .7rem; white-space: pre-wrap; }
 .test-chat-error-card summary { cursor: pointer; color: #e88989; }
+.test-chat-recommendation > summary { cursor:pointer; color:var(--color-text-primary); font-size:.9rem; font-weight:700; }
+.test-chat-recommendation__body { display:grid; gap:var(--space-4); margin-top:var(--space-4); }
+.test-chat-recommendation h3 { margin:0; font-size:.78rem; }
+.test-chat-recommendation table { width:100%; border-collapse:collapse; font-size:.72rem; }
+.test-chat-recommendation th,.test-chat-recommendation td { padding:.55rem; border-bottom:1px solid var(--color-border); text-align:left; vertical-align:top; }
+.test-chat-recommendation ol { display:grid; gap:var(--space-2); margin:0; padding-left:1.5rem; }
+.test-chat-recommendation li { padding:.55rem; color:var(--color-text-secondary); }
+.test-chat-recommendation li span { display:block; margin-top:.25rem; font-size:.7rem; }
+.test-chat-recommendation li.is-selected { border:1px solid var(--color-accent-border); border-radius:7px; color:var(--color-text-primary); }
+.test-chat-recommendation pre { max-height:240px; overflow:auto; padding:var(--space-3); background:var(--color-background); font-size:.68rem; white-space:pre-wrap; }
 @media (max-width: 620px) { .test-chat-user dl, .test-chat-decision { grid-template-columns: 1fr; } }

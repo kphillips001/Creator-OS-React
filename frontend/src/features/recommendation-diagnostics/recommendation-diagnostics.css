@@ -1,0 +1,15 @@
+.recommendation-diagnostics { display:grid; gap:var(--space-4); }
+.recommendation-diagnostics__filters { display:flex; flex-wrap:wrap; align-items:end; gap:var(--space-3); }
+.recommendation-diagnostics__filters label { display:grid; gap:.3rem; color:var(--color-text-secondary); font-size:.7rem; }
+.recommendation-diagnostics__filters input,.recommendation-diagnostics__filters select,.recommendation-diagnostics__filters button { min-height:38px; padding:0 var(--space-3); border:1px solid var(--color-border); border-radius:7px; background:var(--color-surface); color:var(--color-text-primary); }
+.recommendation-diagnostics__summary { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:var(--space-3); }
+.recommendation-diagnostics__summary article { display:grid; gap:.25rem; padding:var(--space-4); border:1px solid var(--color-border); border-radius:10px; background:var(--color-surface); }
+.recommendation-diagnostics__summary strong { font-size:1.3rem; }.recommendation-diagnostics__summary span { color:var(--color-text-secondary); font-size:.7rem; }
+.recommendation-diagnostics__workspace { display:grid; grid-template-columns:minmax(0,1.35fr) minmax(20rem,.8fr); gap:var(--space-4); }
+.recommendation-diagnostics table { width:100%; border-collapse:collapse; font-size:.72rem; }
+.recommendation-diagnostics th,.recommendation-diagnostics td { padding:.65rem; border-bottom:1px solid var(--color-border); text-align:left; vertical-align:top; }
+.recommendation-diagnostics aside { max-height:75vh; overflow:auto; padding:var(--space-4); border:1px solid var(--color-border); border-radius:10px; background:var(--color-surface); }
+.recommendation-diagnostics aside h2 { margin:1rem 0 .6rem; font-size:.82rem; }.recommendation-diagnostics aside h2:first-child { margin-top:0; }
+.recommendation-diagnostics aside dl div { display:flex; justify-content:space-between; gap:var(--space-3); padding:.3rem 0; }
+.recommendation-diagnostics aside dd { margin:0; }.recommendation-diagnostics aside pre { overflow:auto; font-size:.67rem; white-space:pre-wrap; }
+@media(max-width:900px){.recommendation-diagnostics__workspace{grid-template-columns:1fr}.recommendation-diagnostics__summary{grid-template-columns:repeat(2,1fr)}}

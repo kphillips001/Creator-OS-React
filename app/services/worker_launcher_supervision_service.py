@@ -76,6 +76,17 @@ WORKERS = (
                            "CREATOR_OS_LAUNCH_READY_ASSET_CHAT_REGISTRATION",
                            "app.workers.ready_asset_chat_registration", "READY Asset Chat Registration",
                            30, 30, "ready_asset_chat_registration.log"),
+    WorkerLaunchDefinition("fanvue_commercial_publications", "Fanvue Commercial Publications",
+                           "CREATOR_OS_LAUNCH_FANVUE_COMMERCIAL_PUBLICATIONS",
+                           "app.workers.fanvue_commercial_publications",
+                           "Fanvue Commercial Publications", 30, 30,
+                           "fanvue_commercial_publications.log"),
+    WorkerLaunchDefinition(
+        "commerce_reconciliation", "Commerce Reconciliation",
+        "CREATOR_OS_LAUNCH_COMMERCE_RECONCILIATION",
+        "app.workers.commerce_reconciliation", "Commerce Reconciliation",
+        30, 30, "commerce_reconciliation.log",
+    ),
 )
 
 

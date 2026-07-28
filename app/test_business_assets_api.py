@@ -9,6 +9,7 @@ from app.models.chat_commerce_inventory import (
     ChatCommerceInventoryResult,
     ChatCommerceInventorySummary,
 )
+from app.repositories.commerce_library_repository import CommerceLibraryListItem, CommerceLibraryPage
 
 
 def _item(asset_id=42):
@@ -54,31 +55,52 @@ class CommerceRepository:
         })
 
 
+class CommerceListRepository:
+    def __init__(self):
+        self.calls = []
+
+    def list_page(self, **kwargs):
+        self.calls.append(kwargs)
+        status = "Chat Ready"
+        items = () if kwargs.get("commerce_status") and kwargs["commerce_status"] != status else (
+            CommerceLibraryListItem(
+                item_id="asset:42", item_kind="asset", asset_id=42,
+                creator_profile_id=7, asset_name="portrait.png",
+                analysis_status="READY", current_lifecycle="CHAT_READY",
+                commerce_status=status,
+            ),
+        )
+        return CommerceLibraryPage(items=items, total=len(items), page=1)
+
+
 def _client(monkeypatch):
     inventory = Inventory()
+    listing = CommerceListRepository()
     monkeypatch.setattr(business_assets, "_creator_profile", lambda: {"id": 7})
     monkeypatch.setattr(business_assets, "_inventory_service", lambda: inventory)
+    monkeypatch.setattr(business_assets, "_commerce_library_repository", lambda: listing)
     monkeypatch.setattr(business_assets, "_commerce_repository", CommerceRepository)
     monkeypatch.setattr(business_assets, "_photoshoot_repository", lambda: SimpleNamespace(list_active=lambda creator_id: ()))
     api = FastAPI(); api.include_router(business_assets.router)
-    return TestClient(api), inventory
+    return TestClient(api), inventory, listing
 
 
 def test_lists_existing_inventory_without_mutating_services(monkeypatch):
-    client, inventory = _client(monkeypatch)
+    client, inventory, listing = _client(monkeypatch)
     response = client.get("/api/v1/business-assets?recommendation_ready=true")
     assert response.status_code == 200
     body = response.json()
     assert body["items"][0]["asset_id"] == 42
-    assert body["items"][0]["recommendation_ready"] is True
-    assert body["items"][0]["imageUrl"] == "/api/v1/assets/42/media"
-    assert body["items"][0]["downstreamStatus"] == "CHAT_INVENTORY_READY"
+    assert body["items"][0]["imageUrl"] == "/api/v1/assets/42/thumbnail"
     assert body["items"][0]["commerceStatus"] == "Chat Ready"
-    assert inventory.calls[0]["filters"].recommendation_ready is True
+    assert "summary" not in body and "analysisResults" not in str(body)
+    assert inventory.calls == []
+    assert listing.calls[0]["creator_profile_id"] == 7
+    assert listing.calls[0]["page_size"] == 24
 
 
 def test_returns_composed_read_only_details(monkeypatch):
-    client, _ = _client(monkeypatch)
+    client, _, _ = _client(monkeypatch)
     detail = SimpleNamespace(
         creator_profile_id=7,
         item=SimpleNamespace(file_name="portrait.png", media_type="image", classification="premium", status="approved", created_at=None, tags=("portrait",), themes=("studio",)),
@@ -107,34 +129,27 @@ def test_returns_composed_read_only_details(monkeypatch):
 
 
 def test_hides_assets_owned_by_another_creator(monkeypatch):
-    client, _ = _client(monkeypatch)
-    monkeypatch.setattr(business_assets, "_commerce_repository", lambda: SimpleNamespace(get_by_asset_id=lambda asset_id: SimpleNamespace(asset_id=asset_id, creator_profile_id=99)))
+    client, _, listing = _client(monkeypatch)
+    listing.list_page = lambda **kwargs: CommerceLibraryPage(items=(), total=0, page=1)
     response = client.get("/api/v1/business-assets")
     assert response.status_code == 200
     assert response.json()["items"] == []
 
 
 def test_filters_by_projected_commerce_status(monkeypatch):
-    client, _ = _client(monkeypatch)
+    client, _, _ = _client(monkeypatch)
     response = client.get("/api/v1/business-assets?commerce_status=Needs%20Upload")
     assert response.status_code == 200
     assert response.json()["items"] == []
 
 
 def test_projects_analysis_failure_instead_of_indefinite_analyzing(monkeypatch):
-    client, _ = _client(monkeypatch)
-    monkeypatch.setattr(
-        business_assets,
-        "_commerce_repository",
-        lambda: SimpleNamespace(get_by_asset_id=lambda asset_id: SimpleNamespace(
-            asset_id=asset_id,
-            creator_profile_id=7,
-            content_intelligence_status="VISION_FAILED",
-            content_intelligence_ready=False,
-            error_code="PROVIDER_UNAVAILABLE",
-            error_message="OpenAI API key is not configured.",
-        )),
-    )
+    client, _, listing = _client(monkeypatch)
+    listing.list_page = lambda **kwargs: CommerceLibraryPage(items=(CommerceLibraryListItem(
+        item_id="asset:42", item_kind="asset", asset_id=42, creator_profile_id=7,
+        asset_name="portrait.png", analysis_status="VISION_FAILED",
+        current_lifecycle="INTELLIGENCE_PENDING", commerce_status="Analysis Failed",
+    ),), total=1, page=1)
 
     response = client.get("/api/v1/business-assets")
 
@@ -142,11 +157,10 @@ def test_projects_analysis_failure_instead_of_indefinite_analyzing(monkeypatch):
     item = response.json()["items"][0]
     assert item["analysisStatus"] == "VISION_FAILED"
     assert item["commerceStatus"] == "Analysis Failed"
-    assert item["downstreamStatus"] == "ANALYSIS_FAILED"
 
 
 def test_archives_owned_business_asset_without_deleting_related_data(monkeypatch):
-    client, _ = _client(monkeypatch)
+    client, _, _ = _client(monkeypatch)
     archived = SimpleNamespace(
         asset_id=42,
         is_archived=True,

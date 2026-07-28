@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Outlet } from "react-router-dom";
 
+import { DeveloperAgentExecutionProvider } from "../../features/developer-agent/DeveloperAgentExecutionContext";
 import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
 import "./app-shell.css";
@@ -10,7 +11,7 @@ export function AppShell() {
   const [isSidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   return (
-    <div
+    <DeveloperAgentExecutionProvider><div
       className={`app-shell${
         isSidebarCollapsed ? " app-shell--sidebar-collapsed" : ""
       }`}
@@ -37,6 +38,6 @@ export function AppShell() {
           <Outlet />
         </main>
       </div>
-    </div>
+    </div></DeveloperAgentExecutionProvider>
   );
 }

@@ -30,6 +30,34 @@ class SchemaManagerServiceTests(unittest.TestCase):
     def test_repository_schema_creation_removed(self):
         self.assertEqual(self.service.detect_repository_schema_creation(), ())
 
+    def test_commerce_era_tables_have_evidenced_ownership(self):
+        expected = {
+            "asset_content_destinations",
+            "asset_content_destination_history",
+            "content_intelligence_profiles",
+            "business_asset_registrations",
+            "commerce_destination_history",
+            "commerce_destination_routing_intents",
+            "business_asset_fulfillment_registrations",
+            "business_asset_fulfillment_history",
+            "chat_commerce_registrations",
+            "chat_commerce_registration_history",
+            "ready_asset_chat_registration_jobs",
+            "commercial_offerings",
+            "commercial_offering_assets",
+            "commercial_publications",
+            "commercial_publication_uploads",
+        }
+        matrix = self.service.TABLE_OWNERSHIP
+        self.assertTrue(expected.issubset(matrix))
+        for table_name in expected:
+            with self.subTest(table=table_name):
+                metadata = matrix[table_name]
+                self.assertTrue(metadata["migration"].endswith(".sql"))
+                self.assertNotEqual(metadata["repository"], "None")
+                self.assertNotEqual(metadata["service"], "None")
+                self.assertEqual(metadata["compatibility"], "CANONICAL")
+
     def test_required_indexes_are_present(self):
         self.assertEqual(self.service.detect_missing_indexes(), ())
 

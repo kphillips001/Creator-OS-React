@@ -6,8 +6,7 @@ import type { BusinessAssetDetail, BusinessAssetItem, BusinessAssetListResponse,
 import "./business-assets.css";
 
 const filters: ("All" | CommerceStatus)[] = ["All", "Analyzing", "Analysis Failed", "Ready", "Needs Upload", "Needs Media Link", "Chat Ready"];
-const emptySummary = { total_business_assets: 0, chat_ready: 0, fulfillment_ready: 0, awaiting_destination: 0, waiting_for_media_link: 0, blocked: 0, recommendation_ready: 0 };
-const emptyData: BusinessAssetListResponse = { items: [], summary: emptySummary, total: 0, page: 1, pageSize: 24, totalPages: 1 };
+const emptyData: BusinessAssetListResponse = { items: [], total: 0, page: 1, pageSize: 24, totalPages: 1 };
 
 const label = (value: unknown) => String(value || "Not available").replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 const valueOf = (data: Record<string, unknown> | null, ...keys: string[]) => {
@@ -22,6 +21,12 @@ function Status({ value }: { value: string }) {
 
 function ReadOnlyRow({ name, value }: { name: string; value: string }) {
   return <div><dt>{name}</dt><dd><Status value={value} /></dd></div>;
+}
+
+function CommercePreviewImage({ item, priority }: { item: BusinessAssetItem; priority: boolean }) {
+  const [failed, setFailed] = useState(false);
+  if (!item.imageUrl || failed) return <ImageOff />;
+  return <img alt="" decoding="async" height={58} loading={priority ? "eager" : "lazy"} onError={() => setFailed(true)} src={item.imageUrl} width={72} />;
 }
 
 const providerFieldLabels: Record<string, string> = {
@@ -143,9 +148,9 @@ export function BusinessAssetsPage() {
     {!loading && !error && !data.items.length && <div className="business-state"><strong>No Business Assets found.</strong><span>Registered Business Assets will appear here automatically.</span></div>}
     {!loading && data.items.length > 0 && <div className="commerce-table" role="table" aria-label="Commerce Library">
       <div className="commerce-table__header" role="row"><span>Preview</span><span>Asset Name</span><span>Current Status</span><span>Commerce Status</span><span>Actions</span></div>
-      {data.items.map((item) => <div className="commerce-table__row" key={item.deliverableId || item.asset_id} role="row">
+      {data.items.map((item, index) => <div className="commerce-table__row" key={item.itemId || item.deliverableId || item.asset_id} role="row">
         <button aria-label={`View details for ${item.asset_name || `Business Asset ${item.asset_id}`}`} className="commerce-table__row-details" disabled={detailLoading} onClick={() => void openDetail(item)} type="button">
-          <span className="business-asset__media" role="cell">{item.imageUrl ? <img src={item.imageUrl} alt="" /> : <ImageOff />}</span>
+          <span className="business-asset__media" role="cell"><CommercePreviewImage item={item} priority={index < 4} /></span>
           <span className="business-asset__identity" role="cell"><strong>{item.asset_name || `Business Asset ${item.asset_id}`}</strong><small>{item.itemKind === "photoshoot" ? `Photoshoot • ${item.shotCount} Images` : `Asset #${item.asset_id}`}</small></span>
           <span role="cell"><Status value={item.analysisStatus?.endsWith("_FAILED") ? item.analysisStatus : item.current_lifecycle || item.analysisStatus || "Analyzing"} /></span>
           <span role="cell"><Status value={item.commerceStatus} /></span>

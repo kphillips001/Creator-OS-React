@@ -11,10 +11,18 @@ export function PhotoshootCurationPanel({ busy, review, onConfirm, onOpenAssetLi
   const [decision, setDecision] = useState<Decision | null>(
     review.photoshoot_decision === "APPROVED" || review.photoshoot_decision === "DECLINED" ? review.photoshoot_decision : null,
   );
-  const [selected, setSelected] = useState(() => new Set<string>());
+  const [selected, setSelected] = useState(() => new Set(review.shots.map((shot) => shot.image_id)));
   const [result, setResult] = useState<PhotoshootCurationResult | null>(null);
   const [error, setError] = useState("");
   const selectedIds = useMemo(() => review.shots.filter((shot) => selected.has(shot.image_id)).map((shot) => shot.image_id), [review.shots, selected]);
+  const approvedCount = review.shots.length + (review.seed_image ? 1 : 0);
+  const selectedCount = selectedIds.length + (review.seed_image ? 1 : 0);
+  const remainingCount = review.shots.length - selectedIds.length;
+  const toggleShot = (imageId: string) => setSelected((current) => {
+    const next = new Set(current);
+    if (next.has(imageId)) next.delete(imageId); else next.add(imageId);
+    return next;
+  });
   const scrollFilmstrip = (event: WheelEvent<HTMLDivElement>) => {
     if (Math.abs(event.deltaY) <= Math.abs(event.deltaX) || event.currentTarget.scrollWidth <= event.currentTarget.clientWidth) return;
     event.preventDefault();
@@ -42,16 +50,28 @@ export function PhotoshootCurationPanel({ busy, review, onConfirm, onOpenAssetLi
     <div className="photoshoot-curation__filmstrip" onWheel={scrollFilmstrip} role="list" aria-label="Photoshoot sequence">
       {review.seed_image && <article className="photoshoot-curation__shot photoshoot-curation__shot--kept photoshoot-curation__shot--seed" role="listitem">
         <img src={review.seed_image.image_url} alt={review.seed_image.title} /><div className="photoshoot-curation__caption"><span>⭐ Seed Image</span>{review.seed_image.title && <strong>{review.seed_image.title}</strong>}</div>
+        <label><input aria-label="Include Seed Image in Photoset" type="checkbox" checked disabled />Required hero</label>
       </article>}
-      {review.shots.map((shot, index) => <article key={shot.image_id} className="photoshoot-curation__shot photoshoot-curation__shot--kept" role="listitem">
+      {review.shots.map((shot, index) => <article key={shot.image_id} className={selected.has(shot.image_id) ? "photoshoot-curation__shot photoshoot-curation__shot--kept" : "photoshoot-curation__shot"} role="listitem">
         <img src={shot.image_url} alt={shot.title} /><div className="photoshoot-curation__caption"><span>Shot {index + 2}</span>{shot.title && <strong>{shot.title}</strong>}</div>
+        <label><input aria-label={`Include ${shot.title || `Shot ${index + 2}`} in Photoset`} type="checkbox" checked={selected.has(shot.image_id)} disabled={busy} onChange={() => toggleShot(shot.image_id)} />Include in Photoset</label>
       </article>)}
+    </div>
+    <div className="photoshoot-curation__counts" aria-label="Photoset membership counts">
+      <span><strong>{approvedCount}</strong>Approved</span>
+      <span><strong>{selectedCount}</strong>Selected</span>
+      <span><strong>{remainingCount}</strong>Remaining Available Inventory</span>
+    </div>
+    <div className="photoshoot-curation__commitment">
+      <p><strong>Selected images:</strong> become part of this Photoset permanently.</p>
+      <p><strong>Unselected approved images:</strong> remain Available Inventory for future use.</p>
+      <p><strong>Rejected images:</strong> remain excluded.</p>
     </div>
     <fieldset className="photoshoot-curation__modes"><legend>Approve this Photoshoot?</legend>
       <label><input type="radio" name="photoshoot-decision" checked={decision === "APPROVED"} onChange={() => { setDecision("APPROVED"); setSelected(new Set(review.shots.map((shot) => shot.image_id))); }} /><span><strong>Yes</strong></span></label>
       <label><input type="radio" name="photoshoot-decision" checked={false} onChange={() => { setDecision("DECLINED"); setSelected(new Set()); }} /><span><strong>No</strong></span></label>
     </fieldset>
     {error && <p className="photoshoot-curation__error" role="alert">{error}</p>}
-    <footer><button className="photoshoot-button photoshoot-button--primary" disabled={busy || decision !== "APPROVED"} onClick={() => { setError(""); void onConfirm(review.shots.map((shot) => shot.image_id), "APPROVED").then((next) => { setResult(next); onOpenAssetLibrary?.(); }).catch((reason) => setError(reason instanceof Error ? reason.message : "Unable to finish curation.")); }} type="button">Finish</button></footer>
+    <footer><button className="photoshoot-button photoshoot-button--primary" disabled={busy || decision !== "APPROVED"} onClick={() => { setError(""); void onConfirm(selectedIds, "APPROVED").then((next) => { setResult(next); onOpenAssetLibrary?.(); }).catch((reason) => setError(reason instanceof Error ? reason.message : "Unable to finish curation.")); }} type="button">Finish</button></footer>
   </section>;
 }

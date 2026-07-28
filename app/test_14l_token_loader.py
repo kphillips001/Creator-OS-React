@@ -8,7 +8,6 @@ def run_test():
     access_token = service.get_valid_access_token()
 
     print("Access token loaded:", bool(access_token))
-    print("Access token preview:", access_token[:25] + "...")
 
 
 if __name__ == "__main__":

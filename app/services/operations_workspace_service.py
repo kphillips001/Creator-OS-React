@@ -80,6 +80,7 @@ class OperationsWorkspaceService:
             "manualPause": runtime["manualPause"], "queueTotals": queues["totals"],
             "failureCount": failures["total"], "publishingAttention": publishing["summary"]["attention"],
             "providerWarnings": health["providerWarnings"],
+            "failingChecks": health["failingChecks"],
             "workerCounts": worker_counts,
             "warnings": workers["warnings"],
         }
@@ -260,10 +261,33 @@ class OperationsWorkspaceService:
         report = self.health_service.build_report()
         sections = [{"name": section.name, "status": section.status, "checks": [self._plain(check) for check in section.checks]} for section in report.sections]
         provider = next((section for section in sections if section["name"] == "Provider Connectivity"), {"checks": []})
-        configuration = next((section for section in sections if section["name"] == "Configuration"), {"checks": []})
+        configuration_section = next(
+            (section for section in sections if section["name"] == "Configuration"),
+            {"checks": []},
+        )
+        failing_checks = []
+        for section in sections:
+            for check in section["checks"]:
+                if check["status"] == "healthy":
+                    continue
+                requires_configuration = section["name"] in {
+                    "Configuration", "Provider Connectivity",
+                }
+                failing_checks.append({
+                    "section": section["name"], "check": check["name"],
+                    "reason": check.get("detail") or check.get("summary")
+                              or "The check did not provide a failure reason.",
+                    "impact": (
+                        "Provider capability is unavailable or degraded."
+                        if requires_configuration else "Operational readiness or health score is reduced."
+                    ),
+                    "automaticRepair": not requires_configuration,
+                    "status": check["status"],
+                })
         return {"overallStatus": report.overall_status, "score": report.score, "headline": report.headline, "sections": sections,
                 "providerWarnings": [item for item in provider["checks"] if item["status"] != "healthy"],
-                "configurationWarnings": [item for item in configuration["checks"] if item["status"] != "healthy"]}
+                "configurationWarnings": [item for item in configuration_section["checks"] if item["status"] != "healthy"],
+                "failingChecks": failing_checks}
 
     def _queue_projection(self, name: str, rows: list[dict[str, Any]], status_key: str, complete: str, error_key: str) -> dict[str, Any]:
         normalized = [(row, str(row.get(status_key) or "").lower()) for row in rows]

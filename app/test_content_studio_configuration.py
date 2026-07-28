@@ -5,16 +5,16 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from app.api.content_studio import (
-    LuckyTagsRequest,
+    AutonomousInspirationRequest,
     PromptWorkshopRequest,
     PromptWorkshopUseRequest,
     PromptPreviewRequest,
     GenerationSubmissionRequest,
     TransformTagsRequest,
-    _create_lucky_tags,
     _create_prompt_preview,
     _ask_prompt_planner,
     _execute_content_studio_generation,
+    _execute_autonomous_inspiration,
     _generation_run_content,
     _generation_runs,
     ask_content_studio_prompt_planner,
@@ -278,19 +278,39 @@ class ContentStudioCreativeTagActionTests(unittest.TestCase):
             return_value=({"id": 42}, self.director),
         )
         self.context.start()
+        self.creator_aware_planner = patch(
+            "app.api.content_studio.CreatorAwareCanonicalPromptPlanner.build_question",
+            side_effect=lambda *, fanvue_account_id, question: (
+                f"creator-aware planner context\n{question}"
+            ),
+        )
+        self.creator_aware_planner_mock = self.creator_aware_planner.start()
 
     def tearDown(self):
+        self.creator_aware_planner.stop()
         self.context.stop()
 
-    def test_lucky_actions_delegate_prompt_count_and_lane_to_creative_director(self):
-        premium = _create_lucky_tags(LuckyTagsRequest(promptCount=5))
-        explicit = _create_lucky_tags(LuckyTagsRequest(promptCount=3, explicit=True))
+    @patch("app.api.content_studio._execute_content_studio_generation")
+    @patch("app.api.content_studio._current_account_id", return_value=2)
+    @patch(
+        "app.services.autonomous_inspiration_engine."
+        "AutonomousInspirationEngine.create_directions",
+        return_value=tuple(f"private direction {index}" for index in range(6)),
+    )
+    def test_autonomous_inspiration_privately_queues_six_images(
+        self, create_directions, _account, execute_generation,
+    ):
+        _execute_autonomous_inspiration(
+            "run-inspire",
+            AutonomousInspirationRequest(provider="seedream_5_0_pro"),
+        )
 
-        self.assertEqual(premium["tags"], "lucky premium")
-        self.assertEqual(explicit["tags"], "lucky explicit")
-        self.assertEqual(self.director.calls[0][1]["prompt_count"], 5)
-        self.assertFalse(self.director.calls[0][1]["explicit"])
-        self.assertTrue(self.director.calls[1][1]["explicit"])
+        create_directions.assert_called_once_with(fanvue_account_id=2)
+        queued = execute_generation.call_args.args[1]
+        self.assertEqual(queued.promptCount, 6)
+        self.assertEqual(queued.provider, "seedream_5_0_pro")
+        self.assertEqual(queued.promptBatch, [])
+        self.assertIn("private direction 0", queued.promptSource)
 
     def test_transform_actions_delegate_to_existing_services(self):
         enhanced = _enhance_tags(TransformTagsRequest(tags="  hotel robe  "))
@@ -406,11 +426,18 @@ class ContentStudioCreativeTagActionTests(unittest.TestCase):
     def test_prompt_planner_delegates_text_only_request_without_reference(self):
         result = _ask_prompt_planner(question="  critique this pose  ")
 
-        self.assertEqual(result["answer"], "planner answer: critique this pose")
+        self.assertEqual(
+            result["answer"],
+            "planner answer: creator-aware planner context\ncritique this pose",
+        )
+        self.creator_aware_planner_mock.assert_called_once_with(
+            fanvue_account_id=2,
+            question="critique this pose",
+        )
         call = self.director.calls[-1]
         self.assertEqual(call[0], "planner")
         self.assertEqual(call[1], {
-            "question": "critique this pose",
+            "question": "creator-aware planner context\ncritique this pose",
             "image_bytes": None,
             "image_mime_type": None,
             "image_name": None,
@@ -428,6 +455,31 @@ class ContentStudioCreativeTagActionTests(unittest.TestCase):
         self.assertEqual(call["image_bytes"], b"image-data")
         self.assertEqual(call["image_mime_type"], "image/webp")
         self.assertEqual(call["image_name"], "pose.webp")
+
+    def test_planner_origin_uses_isolated_creator_aware_enhancement(self):
+        request = TransformTagsRequest(
+            tags="Golden Hour Marina Walk — coral crop top while walking at sunset",
+            origin="canonical_planner",
+            plannerQuestion="Give me marina ideas",
+            plannerItemId="planner-1",
+            plannerItemTitle="Golden Hour Marina Walk",
+        )
+        with (
+            patch("app.api.content_studio._current_account_id", return_value=2),
+            patch(
+                "app.services.canonical_planner_enhancement_service."
+                "CanonicalPlannerEnhancementService.enhance",
+                return_value="creator-aware enhanced marina scene",
+            ) as enhance,
+        ):
+            result = _enhance_tags(request)
+
+        self.assertEqual(result["tags"], "creator-aware enhanced marina scene")
+        enhance.assert_called_once_with(
+            fanvue_account_id=2,
+            selected_item=request.tags,
+        )
+        self.assertFalse(any(call[0] == "enhance" for call in self.director.calls))
 
     def test_prompt_planner_rejects_empty_question_and_unsupported_image(self):
         with self.assertRaisesRegex(ValueError, "Enter a question"):

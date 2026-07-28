@@ -38,8 +38,9 @@ const renderPage = () => render(
 describe("EditStudioPage", () => {
   it("is registered in Content Creation at the required route", () => {
     const content = navigationGroups.find((group) => group.label === "Content Creation");
-    expect(content?.items.slice(0, 6).map(({ label }) => label)).toEqual([
-      "Generation Library", "Content Studio", "Edit Studio", "Photoshoot Studio", "Story Studio", "Video Studio",
+    expect(content?.items.slice(0, 8).map(({ label }) => label)).toEqual([
+      "Generation Library", "Available Inventory", "Photoshoot Gallery", "Content Studio",
+      "Edit Studio", "Photoshoot Studio", "Story Studio", "Video Studio",
     ]);
     expect(content?.items.find(({ label }) => label === "Edit Studio")?.path).toBe("/content/edit");
   });

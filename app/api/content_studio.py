@@ -16,6 +16,9 @@ from pydantic import BaseModel, Field
 from app.dashboard.config import load_dashboard_config
 from app.repositories.creator_profile_repository import get_active_creator_profile
 from app.repositories.fanvue_account_repository import get_all_accounts
+from app.services.creator_aware_canonical_prompt_planner import (
+    CreatorAwareCanonicalPromptPlanner,
+)
 from app.services.reference_library_service import ReferenceLibraryService
 
 
@@ -33,14 +36,13 @@ _generation_runs: dict[str, dict] = {}
 _generation_runs_lock = threading.Lock()
 
 
-class LuckyTagsRequest(BaseModel):
-    promptCount: int
-    explicit: bool = False
-
-
 class TransformTagsRequest(BaseModel):
     tags: str
     explicit: bool = False
+    origin: str | None = None
+    plannerQuestion: str | None = None
+    plannerItemId: str | None = None
+    plannerItemTitle: str | None = None
 
 
 class PromptWorkshopRequest(BaseModel):
@@ -67,6 +69,12 @@ class GenerationSubmissionRequest(BaseModel):
     creativeMode: str
     promptCount: int
     creatorContext: dict
+    origin: str | None = None
+    plannerLineage: dict | None = None
+
+
+class AutonomousInspirationRequest(BaseModel):
+    provider: str
 
 
 def _current_account_id() -> int | None:
@@ -203,41 +211,30 @@ def _prompt_workshop_batch_content(batch) -> dict:
     }
 
 
-def _create_lucky_tags(request: LuckyTagsRequest) -> dict:
-    from app.services.content_studio_configuration_service import (
-        PREMIUM_STUDIO_PROMPT_COUNT_MAXIMUM,
-        PREMIUM_STUDIO_PROMPT_COUNT_MINIMUM,
-    )
-
-    creator_profile, creative_director = _creative_director_context()
-    if not (
-        PREMIUM_STUDIO_PROMPT_COUNT_MINIMUM
-        <= request.promptCount
-        <= PREMIUM_STUDIO_PROMPT_COUNT_MAXIMUM
-    ):
-        raise ValueError(
-            "Prompt Count must be between "
-            f"{PREMIUM_STUDIO_PROMPT_COUNT_MINIMUM} and "
-            f"{PREMIUM_STUDIO_PROMPT_COUNT_MAXIMUM}."
-        )
-    tags = creative_director.premium_lucky_tags(
-        creator_profile=creator_profile,
-        prompt_count=request.promptCount,
-        explicit=request.explicit,
-    )
-    return {"success": True, "error": None, "tags": tags}
-
-
 def _enhance_tags(request: TransformTagsRequest) -> dict:
     creator_profile, creative_director = _creative_director_context()
     tags = request.tags.strip()
     if not tags:
         raise ValueError("Tags are required.")
-    enhanced_tags = creative_director.enhance_premium_tags(
-        simple_tags=tags,
-        creator_profile=creator_profile,
-        explicit=request.explicit,
-    )
+    if request.origin == "canonical_planner":
+        if request.explicit:
+            raise ValueError("Canonical Planner enhancement must use the premium lane.")
+        from app.services.canonical_planner_enhancement_service import (
+            CanonicalPlannerEnhancementService,
+        )
+        account_id = creator_profile.get("fanvue_account_id") or _current_account_id()
+        if account_id is None:
+            raise ValueError("Creator account required before enhancing planner ideas.")
+        enhanced_tags = CanonicalPlannerEnhancementService().enhance(
+            fanvue_account_id=account_id,
+            selected_item=tags,
+        )
+    else:
+        enhanced_tags = creative_director.enhance_premium_tags(
+            simple_tags=tags,
+            creator_profile=creator_profile,
+            explicit=request.explicit,
+        )
     return {"success": True, "error": None, "tags": enhanced_tags}
 
 
@@ -387,9 +384,18 @@ def _ask_prompt_planner(
             raise ValueError("The selected image is empty.")
         if len(image_bytes) > PLANNER_IMAGE_MAX_BYTES:
             raise ValueError("The selected image exceeds the 200 MB upload limit.")
-    _, creative_director = _creative_director_context(require_reference=False)
-    answer = creative_director.ask_anything(
+    creator_profile, creative_director = _creative_director_context(
+        require_reference=False
+    )
+    account_id = creator_profile.get("fanvue_account_id") or _current_account_id()
+    if account_id is None:
+        raise ValueError("Creator account required before using Content Studio.")
+    creator_aware_question = CreatorAwareCanonicalPromptPlanner().build_question(
+        fanvue_account_id=account_id,
         question=prompt,
+    )
+    answer = creative_director.ask_anything(
+        question=creator_aware_question,
         image_bytes=image_bytes,
         image_mime_type=image_mime_type,
         image_name=image_name,
@@ -471,6 +477,8 @@ def _execute_content_studio_generation(run_id: str, request: GenerationSubmissio
             prompt_count=request.promptCount,
             provider_id=request.provider,
             prompt_batch=prompts,
+            origin=request.origin,
+            planner_lineage=request.plannerLineage,
         )
         _update_generation_run(run_id, status="queued", jobId=job.job_id, message="Queued Image 1")
 
@@ -525,6 +533,59 @@ def _execute_content_studio_generation(run_id: str, request: GenerationSubmissio
     except Exception:
         logger.exception("Content Studio generation failed")
         _update_generation_run(run_id, status="failed", message="Generation failed. Please try again.", failedCount=request.promptCount, processedCount=request.promptCount, progress=100.0)
+
+
+def _execute_autonomous_inspiration(
+    run_id: str,
+    request: AutonomousInspirationRequest,
+) -> None:
+    from app.services.autonomous_inspiration_engine import (
+        AutonomousInspirationEngine,
+    )
+
+    try:
+        account_id = _current_account_id()
+        if account_id is None:
+            raise ValueError(
+                "Creator account required before using autonomous inspiration."
+            )
+        _update_generation_run(
+            run_id,
+            status="planning",
+            message="Creating autonomous inspiration",
+        )
+        directions = AutonomousInspirationEngine().create_directions(
+            fanvue_account_id=account_id,
+        )
+        generation_request = GenerationSubmissionRequest(
+            provider=request.provider,
+            promptSource="\n".join(directions),
+            promptSourceLabel="Original Tags",
+            promptBatch=[],
+            creativeMode="premium_teaser",
+            promptCount=AutonomousInspirationEngine.IMAGE_COUNT,
+            creatorContext={},
+        )
+        _execute_content_studio_generation(run_id, generation_request)
+    except ValueError as error:
+        _update_generation_run(
+            run_id,
+            status="failed",
+            message=str(error),
+            failedCount=AutonomousInspirationEngine.IMAGE_COUNT,
+            processedCount=AutonomousInspirationEngine.IMAGE_COUNT,
+            progress=100.0,
+        )
+    except Exception:
+        logger.exception("Autonomous inspiration failed")
+        _update_generation_run(
+            run_id,
+            status="failed",
+            message="Autonomous inspiration failed. Please try again.",
+            failedCount=AutonomousInspirationEngine.IMAGE_COUNT,
+            processedCount=AutonomousInspirationEngine.IMAGE_COUNT,
+            progress=100.0,
+        )
 
 
 async def _run_tag_action(action) -> JSONResponse:
@@ -617,11 +678,6 @@ async def get_content_studio_configuration() -> JSONResponse:
         return JSONResponse(status_code=503, content=content)
 
 
-@router.post("/creative-tags/lucky")
-async def create_content_studio_lucky_tags(request: LuckyTagsRequest) -> JSONResponse:
-    return await _run_tag_action(lambda: _create_lucky_tags(request))
-
-
 @router.post("/creative-tags/enhance")
 async def enhance_content_studio_tags(request: TransformTagsRequest) -> JSONResponse:
     return await _run_tag_action(lambda: _enhance_tags(request))
@@ -710,6 +766,38 @@ async def submit_content_studio_generation(
             "outputReferences": (),
         }
     background_tasks.add_task(_execute_content_studio_generation, run_id, request)
+    return JSONResponse(
+        status_code=202,
+        content={"success": True, "error": None, "runId": run_id},
+    )
+
+
+@router.post("/inspire")
+async def submit_autonomous_inspiration(
+    request: AutonomousInspirationRequest,
+    background_tasks: BackgroundTasks,
+) -> JSONResponse:
+    run_id = f"content_studio_inspiration_{uuid4().hex}"
+    with _generation_runs_lock:
+        _generation_runs[run_id] = {
+            "runId": run_id,
+            "jobId": None,
+            "promptPlanId": None,
+            "status": "queued",
+            "message": "Preparing inspiration",
+            "provider": request.provider,
+            "completedCount": 0,
+            "failedCount": 0,
+            "processedCount": 0,
+            "totalCount": 6,
+            "progress": 0.0,
+            "outputReferences": (),
+        }
+    background_tasks.add_task(
+        _execute_autonomous_inspiration,
+        run_id,
+        request,
+    )
     return JSONResponse(
         status_code=202,
         content={"success": True, "error": None, "runId": run_id},

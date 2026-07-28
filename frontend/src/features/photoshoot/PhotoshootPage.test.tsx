@@ -204,7 +204,8 @@ describe("PhotoshootPage Phase 1", () => {
     expect(sequence.children[1]).toHaveTextContent("Shot 2");
     expect(sequence.children[1]).toHaveTextContent("Window Light");
     fireEvent.click(screen.getByRole("radio", { name: "Yes" }));
-    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "Include Seed Image in Photoset" })).toBeDisabled();
+    expect(screen.getByRole("checkbox", { name: "Include Window Light in Photoset" })).toBeChecked();
     fireEvent.click(screen.getByRole("button", { name: "Finish" }));
     expect(await screen.findByText("Asset Library destination")).toBeInTheDocument();
   });

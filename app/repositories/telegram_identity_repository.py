@@ -91,6 +91,34 @@ class TelegramIdentityRepository:
 
         return self._to_mapping(row)
 
+    def get_by_external_fanvue_user_uuid(
+        self,
+        fanvue_account_id: int,
+        external_fanvue_user_uuid: UUID,
+        *,
+        include_inactive: bool = False,
+    ) -> TelegramIdentityMapping | None:
+        active_filter = "" if include_inactive else "AND tim.is_active = TRUE"
+        query = f"""
+            SELECT tim.*
+            FROM public.telegram_identity_map tim
+            INNER JOIN public.fanvue_users fu
+                ON fu.id = tim.local_fanvue_user_id
+               AND fu.fanvue_account_id = tim.fanvue_account_id
+               AND fu.fanvue_user_uuid = tim.external_fanvue_user_uuid
+            WHERE tim.fanvue_account_id = %s
+              AND tim.external_fanvue_user_uuid = %s
+              {active_filter}
+            LIMIT 1;
+        """
+        with self._connection_factory() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    query, (fanvue_account_id, external_fanvue_user_uuid)
+                )
+                row = cursor.fetchone()
+        return self._to_mapping(row)
+
     def get_by_id(
         self,
         mapping_id: int,

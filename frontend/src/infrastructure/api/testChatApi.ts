@@ -1,5 +1,6 @@
 import type { TestChatSession, TestChatTurn } from "../../features/test-chat/types";
 import { environment } from "../config/environment";
+import { developerFetch } from "./developerFetch";
 
 export type TestChatErrorDetails = {
   exception_type: string; exception_message: string; file: string;
@@ -18,8 +19,23 @@ type ApiSession = {
   messages: Array<{ role: "user" | "assistant"; content: string }>;
   reply?: string;
   decision?: {
-    intent: string; relationship: string; sell: boolean; reason: string;
+    intent: string; relationship: string; sell: boolean;
+    provider_selected: string | null; reason: string;
     product: string | null; asset: string | null;
+    commerce_lookup_attempted: boolean; requested_media_type: string | null;
+    requested_themes: string[]; offering_selected: boolean;
+    offering_id: string | null; offering_type: string | null;
+    offering_title: string | null; price_minor: number | null;
+    currency: string | null; primary_sales_channel: string;
+    provider: string | null; fulfillable: boolean;
+    recommendation_reason: string | null; no_offering_reason: string | null;
+    delivery_url: string | null;
+    legacy_offer_requested?: boolean; commerce_offer_authorized?: boolean;
+    final_offer_authorized?: boolean; commerce_execution_policy?: string | null;
+    customer_sales_decision?: string | null;
+    customer_sales_reason_code?: string | null;
+    authoritative_offering_selected?: boolean; selection_source?: string | null;
+    commerce_prompt_mode?: string | null; legacy_recommendation_used?: boolean;
   };
   external_sends_disabled: boolean;
 };
@@ -38,7 +54,7 @@ const mapSession = (body: ApiSession): TestChatSession => ({
 });
 
 async function post(path: string, body?: object): Promise<TestChatSession> {
-  const response = await fetch(`${environment.apiBaseUrl}/developer/test-chat${path}`, {
+  const response = await developerFetch(`${environment.apiBaseUrl}/developer/test-chat${path}`, {
     method: "POST",
     headers: body ? { "content-type": "application/json" } : undefined,
     body: body ? JSON.stringify(body) : undefined,
@@ -50,7 +66,7 @@ async function post(path: string, body?: object): Promise<TestChatSession> {
 
 export const newTestChat = () => post("/sessions");
 export async function sendTestChatMessage(sessionId: string, customerMessage: string): Promise<TestChatTurn> {
-  const response = await fetch(`${environment.apiBaseUrl}/developer/test-chat/turns`, {
+  const response = await developerFetch(`${environment.apiBaseUrl}/developer/test-chat/turns`, {
     method: "POST", headers: { "content-type": "application/json" },
     body: JSON.stringify({ session_id: sessionId, customer_message: customerMessage }),
   });

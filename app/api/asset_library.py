@@ -18,11 +18,13 @@ from app.services.asset_library_service import AssetLibraryService
 from app.services.generation_library_service import GenerationLibraryService
 from app.services.grid_thumbnail_service import GridThumbnailService
 from app.services.reference_library_service import ReferenceLibraryService
+from app.services.runtime_media_resolver import RuntimeMediaResolver
 from app.services.staged_asset_registration_service import (
     StagedAssetRegistrationService,
 )
 from app.repositories.photoshoot_commerce_repository import PhotoshootCommerceRepository
 from app.services.photoshoot_commerce_deliverable_service import PhotoshootCommerceDeliverableService
+from app.services.creative_intelligence_learning_service import CreativeIntelligenceLearningService
 
 
 router = APIRouter(prefix="/api/v1/assets", tags=["asset-library"])
@@ -35,6 +37,10 @@ def _creator_profile() -> dict:
     if not profile or not int(profile.get("id") or 0):
         raise HTTPException(status_code=400, detail="Creator Profile required before using Asset Library.")
     return profile
+
+
+def _asset_repository() -> AssetRepository:
+    return AssetRepository()
 
 
 def _canonical_asset_id(creator_profile_id: int) -> int | None:
@@ -317,18 +323,55 @@ def register_photoshoot_asset(deliverable_id: str):
 @router.post("/photoshoots/{deliverable_id}/archive")
 def archive_photoshoot_asset(deliverable_id: str):
     creator_profile_id = int(_creator_profile()["id"])
-    row = PhotoshootCommerceRepository().archive_asset_library(deliverable_id, creator_profile_id)
+    repository = PhotoshootCommerceRepository()
+    existing = repository.get(deliverable_id)
+    members = (
+        repository.members(str(existing["photoshoot_session_id"]))
+        if existing and int(existing.get("creator_profile_id") or 0) == creator_profile_id
+        else ()
+    )
+    row = repository.archive_asset_library(deliverable_id, creator_profile_id)
     if row is None:
         raise HTTPException(status_code=404, detail="Active Photoshoot Asset was not found.")
+    assets = AssetRepository()
+    learner = CreativeIntelligenceLearningService()
+    for member in members:
+        asset = assets.get_by_id(int(member["asset_id"]))
+        if asset is None:
+            continue
+        learner.record_negative_safely(
+            creator_profile_id=creator_profile_id,
+            image_reference=asset.local_vault_path or asset.file_path,
+            event_type="archived",
+            source_workflow="photoshoot",
+            source_image_id=f"asset:{asset.id}",
+            source_asset_id=asset.id,
+            operational_metadata={
+                "photoshoot_session_id": str(existing["photoshoot_session_id"]),
+                "archive_reason": "photoshoot_archive",
+            },
+        )
     return {"success": True, "message": "Photoshoot archived.", "deliverableId": deliverable_id}
 
 
 @router.post("/{asset_id}/archive")
 def archive_registered_asset(asset_id: int):
     creator_profile_id = int(_creator_profile()["id"])
-    row = AssetRepository().archive_asset_library_item(asset_id, creator_profile_id)
+    repository = AssetRepository()
+    asset = repository.get_by_id(asset_id)
+    row = repository.archive_asset_library_item(asset_id, creator_profile_id)
     if row is None:
         raise HTTPException(status_code=404, detail="Active Asset was not found.")
+    if asset is not None and int(asset.creator_profile_id or 0) == creator_profile_id:
+        CreativeIntelligenceLearningService().record_negative_safely(
+            creator_profile_id=creator_profile_id,
+            image_reference=asset.local_vault_path or asset.file_path,
+            event_type="archived",
+            source_workflow="asset_library",
+            source_image_id=f"asset:{asset.id}",
+            source_asset_id=asset.id,
+            operational_metadata={"archive_reason": "asset_library_archive"},
+        )
     return {"success": True, "message": "Asset archived.", "assetId": asset_id}
 
 
@@ -438,11 +481,10 @@ def asset_media(asset_id: int):
 @router.get("/{asset_id}/thumbnail", response_class=FileResponse)
 def asset_thumbnail(asset_id: int):
     profile = _creator_profile()
-    details = AssetLibraryService().get_asset_details(asset_id)
-    if details is None or details.creator_profile_id != int(profile["id"]):
+    projection = _asset_repository().get_media_projection(asset_id)
+    if projection is None or int(projection.get("creator_profile_id") or 0) != int(profile["id"]):
         raise HTTPException(status_code=404, detail="Asset not found.")
-    path_value = details.storage.original_path if details.storage else None
-    source = Path(path_value).expanduser() if path_value else None
+    source = RuntimeMediaResolver().resolve_original_path(projection, require_exists=True)
     if source is None or not source.is_file():
         raise HTTPException(status_code=404, detail="Asset media is unavailable.")
     try:
@@ -455,5 +497,5 @@ def asset_thumbnail(asset_id: int):
     return FileResponse(
         path,
         media_type=media_type,
-        headers={"Cache-Control": "private, no-cache"},
+        headers={"Cache-Control": "private, max-age=3600"},
     )

@@ -118,7 +118,7 @@ def browse_generation_library(
         creator_profile_id=_creator_profile_id() or None,
         sort=sort,
     ))
-    page_size = 18
+    page_size = 20
     total_pages = max(1, (result.total + page_size - 1) // page_size)
     current_page = min(page, total_pages)
     start = (current_page - 1) * page_size

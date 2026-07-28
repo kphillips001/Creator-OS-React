@@ -61,6 +61,5 @@ class PayloadBuilderService:
         }
 
         print("[PAYLOAD BUILT - PAID PPV]")
-        print(payload)
 
         return payload

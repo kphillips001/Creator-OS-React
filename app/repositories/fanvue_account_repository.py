@@ -115,11 +115,6 @@ def save_oauth_tokens_for_account(
 
 
 def load_oauth_tokens_for_account(account_id: int):
-    print("\n==============================")
-    print("[LOAD TOKENS FOR ACCOUNT]")
-    print(f"account_id={account_id}")
-    print("==============================")
-
     query = """
         SELECT
             oauth_access_token,
@@ -136,18 +131,11 @@ def load_oauth_tokens_for_account(account_id: int):
             cur.execute(query, (account_id,))
             row = cur.fetchone()
 
-    print("[DB TOKEN ROW]")
-    print(row)
-
     if not row:
-        print("[NO ACCOUNT FOUND]")
         return None
 
     if not row.get("oauth_access_token"):
-        print("[NO ACCESS TOKEN FOUND]")
         return None
-
-    print("[TOKENS LOADED SUCCESSFULLY]")
 
     return {
         "access_token": row.get("oauth_access_token"),
@@ -187,5 +175,37 @@ def update_oauth_tokens_for_account(
                     token_data.get("token_type"),
                     account_id,
                 ),
+            )
+            return cur.fetchone()
+
+
+def get_account_by_fanvue_user_uuid(fanvue_user_uuid: str):
+    query = """
+        SELECT *
+        FROM fanvue_accounts
+        WHERE fanvue_user_uuid = %s
+        LIMIT 1;
+    """
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(query, (str(fanvue_user_uuid),))
+            return cur.fetchone()
+
+
+def get_account_by_creator_uuid(creator_uuid: str):
+    query = """
+        SELECT *
+        FROM fanvue_accounts
+        WHERE fanvue_creator_uuid = %s
+           OR fanvue_user_uuid = %s
+           OR fanvue_identity ->> 'uuid' = %s
+        LIMIT 1;
+    """
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            normalized_uuid = str(creator_uuid)
+            cur.execute(
+                query,
+                (normalized_uuid, normalized_uuid, normalized_uuid),
             )
             return cur.fetchone()

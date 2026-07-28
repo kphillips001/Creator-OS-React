@@ -246,6 +246,7 @@ class AssetRepository:
         media_type: str | None,
         classification: str | None,
         creator_profile_id: int,
+        availability_predicate: str | None = None,
     ) -> tuple[str, list[Any]]:
         filters = [
             "COALESCE(is_active, TRUE) = TRUE",
@@ -255,6 +256,8 @@ class AssetRepository:
             "COALESCE(media_metadata->'reference_library'->>'is_reference', 'false') <> 'true'",
         ]
         params: list[Any] = [int(creator_profile_id)]
+        if availability_predicate:
+            filters.append(str(availability_predicate))
         if search:
             filters.append(
                 "(file_name ILIKE %s OR file_path ILIKE %s OR EXISTS ("
@@ -291,6 +294,7 @@ class AssetRepository:
         classification: str | None,
         creator_profile_id: int,
         limit: int,
+        availability_predicate: str | None = None,
     ) -> tuple[tuple[dict, ...], int, tuple[str, ...]]:
         """Return bounded grid identities plus aggregate data, without Assets."""
         where, params = self._library_grid_where(
@@ -298,6 +302,7 @@ class AssetRepository:
             media_type=media_type,
             classification=classification,
             creator_profile_id=creator_profile_id,
+            availability_predicate=availability_predicate,
         )
         with self._connection_factory() as conn:
             with conn.cursor() as cursor:
@@ -392,6 +397,7 @@ class AssetRepository:
         has_derivative_preview: bool | None = None,
         is_reference_image: bool | None = None,
         legacy_content_id: int | None = None,
+        availability_predicate: str | None = None,
     ) -> list[Asset]:
         filters = []
         params: list = []
@@ -403,6 +409,8 @@ class AssetRepository:
                     "COALESCE(status, '') = 'approved'",
                 ]
             )
+            if availability_predicate:
+                filters.append(str(availability_predicate))
         if search:
             filters.append(
                 "(file_name ILIKE %s OR file_path ILIKE %s OR EXISTS ("
@@ -704,3 +712,20 @@ class AssetRepository:
             creator_profile_id=int(creator_profile_id), status="archived",
             eligible_only=False, limit=5000,
         )
+
+    def get_media_projection(self, asset_id: int) -> dict | None:
+        """Return only ownership and paths required to serve Asset media."""
+        with self._connection_factory() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT id, creator_profile_id, file_path, file_name,
+                           blurred_preview_path, local_vault_path, media_metadata,
+                           updated_at
+                    FROM public.content_items
+                    WHERE id = %s
+                    """,
+                    (int(asset_id),),
+                )
+                row = cursor.fetchone()
+        return dict(row) if row else None

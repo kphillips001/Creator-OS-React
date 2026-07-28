@@ -18,11 +18,15 @@ load_dotenv()
 
 
 class FanvueOAuthService:
-    def __init__(self, fanvue_account_id: int | None = None):
+    def __init__(
+        self,
+        fanvue_account_id: int | None = None,
+        redirect_uri: str | None = None,
+    ):
         self.fanvue_account_id = fanvue_account_id
         self.client_id = os.getenv("FANVUE_CLIENT_ID")
         self.client_secret = os.getenv("FANVUE_CLIENT_SECRET")
-        self.redirect_uri = os.getenv("FANVUE_REDIRECT_URI")
+        self.redirect_uri = redirect_uri or os.getenv("FANVUE_REDIRECT_URI")
         self.auth_url = "https://auth.fanvue.com/oauth2/auth"
         self.token_url = "https://auth.fanvue.com/oauth2/token"
 
@@ -74,7 +78,7 @@ class FanvueOAuthService:
             "scope": (
                 "openid offline_access offline "
                 "read:self read:creator read:fan read:media "
-                "write:media write:post read:chat write:chat read:insights"
+                "write:creator write:media write:post read:chat write:chat read:insights"
             ),
             "state": state,
             "code_challenge": code_challenge,
@@ -84,11 +88,6 @@ class FanvueOAuthService:
         url = f"{self.auth_url}?{urlencode(params)}"
 
         print("[FANVUE OAUTH URL GENERATED]")
-        print("[FANVUE PKCE SAVE THIS CODE_VERIFIER]")
-        print(code_verifier)
-        print("[FANVUE STATE SAVE THIS]")
-        print(state)
-
         return {
             "authorization_url": url,
             "code_verifier": code_verifier,
@@ -289,3 +288,19 @@ class FanvueOAuthService:
         print(f"[FANVUE TOKEN VALID] seconds_left={seconds_left}")
 
         return access_token
+
+    def has_scopes(self, *required_scopes: str) -> bool:
+        tokens = self.load_tokens() or {}
+        granted = set(str(tokens.get("scope") or "").split())
+        return set(required_scopes).issubset(granted)
+
+    def require_scopes(self, *required_scopes: str) -> None:
+        missing = [scope for scope in required_scopes if not self.has_scopes(scope)]
+        if missing:
+            raise FanvueReauthorizationRequired(
+                "Fanvue reauthorization required for scopes: " + ", ".join(missing)
+            )
+
+
+class FanvueReauthorizationRequired(RuntimeError):
+    pass

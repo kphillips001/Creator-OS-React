@@ -336,6 +336,15 @@
   gap: var(--space-2);
 }
 
+.topbar__notifications{position:relative}
+.topbar__notification-count{position:absolute;top:-4px;right:-4px;display:grid;min-width:16px;height:16px;box-sizing:border-box;place-items:center;padding:0 4px;border:2px solid var(--color-background);border-radius:999px;background:var(--color-danger,#b94d63);color:#fff;font-size:9px}
+.topbar__notification-panel{position:absolute;top:42px;right:0;z-index:40;width:min(360px,calc(100vw - 24px));overflow:hidden;border:1px solid var(--color-border-strong);border-radius:11px;background:var(--color-surface-raised);box-shadow:0 18px 50px rgb(0 0 0 / 42%)}
+.topbar__notification-panel header{display:flex;align-items:center;justify-content:space-between;padding:11px 13px;border-bottom:1px solid var(--color-border)}
+.topbar__notification-panel header strong{font-size:12px}.topbar__notification-panel header span,.topbar__notification-panel>p{color:var(--color-text-tertiary);font-size:10px}
+.topbar__notification-panel>p{margin:0;padding:16px}
+.topbar__notification-panel>button{display:grid;width:100%;gap:4px;padding:11px 13px;border:0;border-bottom:1px solid var(--color-border-subtle);background:transparent;color:var(--color-text-primary);font:inherit;text-align:left;cursor:pointer}
+.topbar__notification-panel>button:hover{background:var(--color-surface-hover)}.topbar__notification-panel>button strong{font-size:11px}.topbar__notification-panel>button span,.topbar__notification-panel>button time{color:var(--color-text-tertiary);font-size:9px}
+
 .topbar__search {
   display: flex;
   width: clamp(220px, 25vw, 360px);

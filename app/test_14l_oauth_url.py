@@ -24,7 +24,7 @@ def run_test():
     })
 
     print("\nAUTHORIZATION URL:")
-    print(result["authorization_url"])
+    print("Authorization URL generated:", bool(result["authorization_url"]))
 
     print("\nSaved OAuth session to:")
     print(SESSION_FILE)

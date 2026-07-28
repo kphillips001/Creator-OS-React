@@ -26,6 +26,7 @@ from app.services.generation_engine_service import GenerationEngineService
 from app.services.generation_result_ingestion_service import GenerationResultIngestionService
 from app.services.reference_asset_protection import is_protected_generation_metadata, is_protected_reference_asset
 from app.repositories.asset_repository import AssetRepository
+from app.services.creative_intelligence_learning_service import CreativeIntelligenceLearningService
 
 
 class GenerationLibraryService:
@@ -41,6 +42,7 @@ class GenerationLibraryService:
         archive_service: ContentArchiveService | None = None,
         creator_approval_service: CreatorApprovalService | None = None,
         asset_repository: AssetRepository | None = None,
+        creative_intelligence: CreativeIntelligenceLearningService | None = None,
     ):
         self.storage_dir = Path(storage_dir or self.DEFAULT_STORAGE_DIR)
         self.archive_service = archive_service or ContentArchiveService()
@@ -48,6 +50,7 @@ class GenerationLibraryService:
             storage_dir=self.storage_dir / "creator_approvals"
         )
         self.assets = asset_repository or AssetRepository()
+        self.creative_intelligence = creative_intelligence or CreativeIntelligenceLearningService()
 
     @property
     def records_path(self) -> Path:
@@ -236,6 +239,7 @@ class GenerationLibraryService:
             updated_at=staged_at,
         )
         self._replace_record(updated)
+        self._learn_positive(updated, "generation_library_retained", "generation_library")
         return updated, False
 
     def stage_photoshoot_image_in_asset_library(self, image_id: str) -> tuple[GeneratedImageRecord, bool]:
@@ -327,6 +331,8 @@ class GenerationLibraryService:
                 errors.append(str(exc))
         if archived:
             self._remove_records(archived)
+            for image_id in archived:
+                self._learn_negative(records_by_id[image_id], "archived", "generation_library")
         return GenerationLibraryActionResult(
             success=not errors,
             message="Generated image(s) archived." if not errors else "Some generated images could not be archived.",
@@ -380,6 +386,15 @@ class GenerationLibraryService:
                 errors.append(str(exc))
         if junked:
             self._remove_records(junked)
+            for image_id in junked:
+                record = records_by_id[image_id]
+                source = str(
+                    dict(record.generation_metadata or {}).get("source")
+                    or dict(record.generation_metadata or {}).get("workflow_type")
+                    or "generation_library"
+                )
+                event_type = "inspire_discarded" if "inspir" in source else "deleted"
+                self._learn_negative(record, event_type, source)
         return GenerationLibraryActionResult(
             success=not errors,
             message="Content moved to Archive / Removed Content.",
@@ -475,6 +490,11 @@ class GenerationLibraryService:
                     review_state="added_to_creator_os",
                     imported_asset_id=asset_id,
                     updated_at=utc_now(),
+                )
+                self._learn_positive(
+                    archived_record,
+                    "generation_library_retained",
+                    "generation_library",
                 )
                 self.archive_service.archive_imported(archived_record, imported_asset_id=asset_id)
                 self._remove_records((record.image_id,))
@@ -596,6 +616,7 @@ class GenerationLibraryService:
                 caption=caption,
                 metadata=metadata,
             )
+            self._learn_positive(record, "published", "generation_library_publishing")
             self._remove_records((image_id,))
         except Exception as exc:
             return GenerationLibraryActionResult(
@@ -1497,6 +1518,19 @@ class GenerationLibraryService:
                     records.append(record)
             self._write_records(records)
             self._record_reviewed_edit_output(edited_record, action="approved")
+            self.creative_intelligence.record_positive_safely(
+                creator_profile_id=updated_source.creator_profile_id,
+                image_reference=updated_source.output_reference,
+                event_type="edit_saved",
+                source_workflow="edit_studio",
+                source_image_id=updated_source.image_id,
+                source_asset_id=updated_source.imported_asset_id,
+                event_key=(
+                    f"creative-intelligence:{updated_source.creator_profile_id}:"
+                    f"edit_saved:{edited_record.image_id}"
+                ),
+                operational_metadata={"version": source_version + 1},
+            )
             self._delete_local_file(source_record.output_reference)
             self._delete_local_file(edited_record.output_reference)
         except Exception as exc:
@@ -1633,6 +1667,30 @@ class GenerationLibraryService:
             success=True,
             message="Edited image discarded.",
             image_ids=(str(edited_image_id),),
+        )
+
+    def _learn_positive(
+        self, record: GeneratedImageRecord, event_type: str, source_workflow: str
+    ) -> None:
+        self.creative_intelligence.record_positive_safely(
+            creator_profile_id=record.creator_profile_id,
+            image_reference=record.output_reference,
+            event_type=event_type,
+            source_workflow=source_workflow,
+            source_image_id=record.image_id,
+            source_asset_id=record.imported_asset_id,
+        )
+
+    def _learn_negative(
+        self, record: GeneratedImageRecord, event_type: str, source_workflow: str
+    ) -> None:
+        self.creative_intelligence.record_negative_safely(
+            creator_profile_id=record.creator_profile_id,
+            image_reference=record.output_reference,
+            event_type=event_type,
+            source_workflow=source_workflow,
+            source_image_id=record.image_id,
+            source_asset_id=record.imported_asset_id,
         )
 
     def get(self, image_id: str) -> GeneratedImageRecord:

@@ -112,34 +112,20 @@ export async function getContentStudioConfiguration(
   return result;
 }
 
-export function createLuckyTags(
-  promptCount: number,
-  explicit: boolean,
-  signal?: AbortSignal,
-): Promise<string> {
-  return postCreativeTagAction(
-    "/content-studio/creative-tags/lucky",
-    { explicit, promptCount },
-    signal,
-  );
-}
-
 export function enhanceCreativeTags(
   tags: string,
   explicit: boolean,
   signal?: AbortSignal,
+  planner?: {
+    origin: "canonical_planner";
+    plannerQuestion: string;
+    plannerItemId: string;
+    plannerItemTitle: string;
+  },
 ): Promise<string> {
   return postCreativeTagAction(
     "/content-studio/creative-tags/enhance",
-    { explicit, tags },
-    signal,
-  );
-}
-
-export function surpriseCreativeTags(tags: string, signal?: AbortSignal): Promise<string> {
-  return postCreativeTagAction(
-    "/content-studio/creative-tags/surprise",
-    { tags },
+    { explicit, tags, ...planner },
     signal,
   );
 }
@@ -240,6 +226,27 @@ export async function submitContentStudioGeneration(request: GenerationSubmissio
     },
   ));
   if (!result.success || result.error) throw new Error(result.error || "Generation submission failed");
+  return result.runId;
+}
+
+export async function submitAutonomousInspiration(
+  provider: string,
+): Promise<string> {
+  const result = await readJsonResponse<{
+    success: boolean;
+    error: string | null;
+    runId: string;
+  }>(await fetch(
+    `${environment.apiBaseUrl}/content-studio/inspire`,
+    {
+      body: JSON.stringify({ provider }),
+      headers: { "Content-Type": "application/json" },
+      method: "POST",
+    },
+  ));
+  if (!result.success || result.error) {
+    throw new Error(result.error || "Autonomous inspiration failed");
+  }
   return result.runId;
 }
 

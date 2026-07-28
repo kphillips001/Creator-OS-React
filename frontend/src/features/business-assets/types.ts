@@ -7,6 +7,7 @@ export type BusinessAssetMetrics = {
 };
 
 export type BusinessAssetItem = {
+  itemId?: string;
   asset_id: number;
   itemKind?: "asset" | "photoshoot";
   deliverableId?: string;
@@ -17,24 +18,24 @@ export type BusinessAssetItem = {
   analysisStatus: "PENDING" | "NUDENET_RUNNING" | "NUDENET_COMPLETE" | "NUDENET_FAILED" | string;
   downstreamStatus: "ANALYSIS_PENDING" | "ANALYSIS_READY" | "AWAITING_DESTINATION" | "AWAITING_FULFILLMENT" | "CHAT_REGISTRATION_BLOCKED" | "CHAT_INVENTORY_READY" | string;
   commerceStatus: CommerceStatus;
-  source_workflow: string | null;
-  commerce_destination: string | null;
+  source_workflow?: string | null;
+  commerce_destination?: string | null;
   current_lifecycle: string | null;
-  chat_ready: boolean;
-  fulfillment_ready: boolean;
-  recommendation_ready: boolean;
-  fanvue_upload_status: string | null;
-  media_link_status: string | null;
-  product_ids: string[];
-  experience_ids: string[];
-  availability: string;
-  waiting_for_media_link: boolean;
-  awaiting_destination: boolean;
-  blocked: boolean;
-  block_reasons: string[];
-  warnings: string[];
-  lifecycle_steps: [string, string][];
-  metrics: BusinessAssetMetrics;
+  chat_ready?: boolean;
+  fulfillment_ready?: boolean;
+  recommendation_ready?: boolean;
+  fanvue_upload_status?: string | null;
+  media_link_status?: string | null;
+  product_ids?: string[];
+  experience_ids?: string[];
+  availability?: string;
+  waiting_for_media_link?: boolean;
+  awaiting_destination?: boolean;
+  blocked?: boolean;
+  block_reasons?: string[];
+  warnings?: string[];
+  lifecycle_steps?: [string, string][];
+  metrics?: BusinessAssetMetrics;
 };
 
 export type PhotoshootBusinessDetail = {
@@ -59,7 +60,6 @@ export type BusinessAssetSummary = {
 
 export type BusinessAssetListResponse = {
   items: BusinessAssetItem[];
-  summary: BusinessAssetSummary;
   total: number;
   page: number;
   pageSize: number;

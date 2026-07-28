@@ -1,0 +1,7 @@
+.commerce-learning { display:grid; gap:1rem; }
+.commerce-learning__workspace { display:grid; grid-template-columns:minmax(0,1.4fr) minmax(18rem,.8fr); gap:1rem; }
+.commerce-learning table { width:100%; border-collapse:collapse; }
+.commerce-learning th,.commerce-learning td { padding:.7rem; text-align:left; border-bottom:1px solid var(--color-border); }
+.commerce-learning aside { padding:1rem; border:1px solid var(--color-border); border-radius:.75rem; overflow:auto; }
+.commerce-learning dl div { display:flex; justify-content:space-between; gap:1rem; padding:.4rem 0; }
+@media (max-width:900px) { .commerce-learning__workspace { grid-template-columns:1fr; } }
