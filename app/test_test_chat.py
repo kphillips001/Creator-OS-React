@@ -4,6 +4,7 @@ from app.api import test_chat as api
 from app.services import test_chat_service as service_module
 from app.services.test_chat_service import TestChatService as DeveloperTestChatService
 from app.services.test_chat_service import TestChatExecutionError
+from app.services.chat_commerce_service import ChatCommerceService
 
 
 class FakeMemory:
@@ -33,7 +34,7 @@ class FakeDecisionEngine:
                 "classifier_result": {"buying_intent": True},
             },
             "intent": {"tier": "high"},
-            "send_offer": False,
+            "send_offer": True,
             "selected_content": None,
         }
 
@@ -54,7 +55,16 @@ def _service(monkeypatch):
             "user": {"id": 9, "display_name": "Test User", "relationship_status": "follower"}
         },
     )
-    return DeveloperTestChatService(account_id=4, engine=engine), memory, engine
+    monkeypatch.setattr(
+        service_module, "get_active_creator_profile", lambda _account_id: {"id": 2}
+    )
+    commerce = ChatCommerceService(
+        sales_service=SimpleNamespace(recommend_best=lambda **_kwargs: None),
+        commerce_mode="AUTHORITATIVE",
+    )
+    return DeveloperTestChatService(
+        account_id=4, engine=engine, chat_commerce_service=commerce
+    ), memory, engine
 
 
 def test_real_gateway_path_returns_narrow_summary_without_transport(monkeypatch):
@@ -68,10 +78,48 @@ def test_real_gateway_path_returns_narrow_summary_without_transport(monkeypatch)
         "reply": "I can help with that.",
         "intent": "high",
         "relationship": "sales",
-        "sell": True,
-        "reason": "No eligible products",
+        "sell": False,
+        "reason": "IDENTITY_UNRESOLVED",
         "product": None,
         "asset": None,
+        "commerce_lookup_attempted": False,
+        "requested_media_type": None,
+        "requested_themes": [],
+        "offering_selected": False,
+        "offering_id": None,
+        "offering_type": None,
+        "offering_title": None,
+        "price_minor": None,
+        "currency": None,
+        "primary_sales_channel": "AI_CHAT",
+        "provider": None,
+        "fulfillable": False,
+        "recommendation_reason": None,
+        "no_offering_reason": "IDENTITY_UNRESOLVED",
+        "delivery_url": None,
+        "provider_selected": None,
+        "legacy_offer_requested": True,
+        "commerce_offer_authorized": False,
+        "final_offer_authorized": False,
+        "commerce_execution_policy": "COMMERCE_MANUAL_REVIEW",
+        "customer_sales_decision": "MANUAL_REVIEW",
+        "customer_sales_reason_code": "IDENTITY_UNRESOLVED",
+        "authoritative_offering_selected": False,
+        "selection_source": "NONE",
+        "commerce_prompt_mode": "MANUAL_REVIEW",
+        "legacy_recommendation_used": False,
+        "commerce_mode": "AUTHORITATIVE",
+        "compatibility_mode": False,
+        "delivery_source": "AUTHORITATIVE_CONVERSATION",
+        "memory_source": "CANONICAL_COMMERCE",
+        "eligibility_source": (
+            "COMMERCIAL_OFFERING_SELECTOR_AND_SALES_SAFETY"
+        ),
+        "recommendation_source": "NONE",
+        "legacy_memory_mutated": False,
+        "legacy_delivery_used": False,
+        "recommendation_diagnostics": None,
+        "commerce_learning_profile": None,
     }
     assert not hasattr(service._gateway, "telegram_transport")
     assert not hasattr(service._gateway, "fanvue_transport")

@@ -357,6 +357,100 @@ OWNERSHIP RULES:
         buyer_tier = user_memory.get("buyer_tier", "none")
         intent_score = user_memory.get("intent_score", 0)
         conversation_mode = user_memory.get("conversation_mode", mode)
+        commerce_decision = (
+            user_memory.get("commerce_decision")
+            or (user_memory.get("runtime_injection") or {}).get(
+                "commerce_decision"
+            )
+            or {}
+        )
+        commerce_execution_policy = (
+            user_memory.get("commerce_execution_policy")
+            or (user_memory.get("runtime_injection") or {}).get(
+                "commerce_execution_policy"
+            )
+        )
+        authoritative_commerce = bool(commerce_execution_policy)
+        commerce_decision_instruction = ""
+        if commerce_decision:
+            selected_offering = commerce_decision.get("selected_offering") or {}
+            selected_offering_lines = ""
+            if selected_offering:
+                price_minor = selected_offering.get("price_minor")
+                currency = selected_offering.get("currency") or "USD"
+                display_price = (
+                    f"{currency} {int(price_minor) / 100:.2f}"
+                    if price_minor is not None else "UNAVAILABLE"
+                )
+                selected_offering_lines = f"""
+SELECTED COMMERCIAL OFFERING
+- Title: {selected_offering.get("title") or ""}
+- Short description: {selected_offering.get("short_description") or ""}
+- Price: {display_price}
+"""
+            policy_guidance = {
+                "COMMERCE_PRESENTATION_ALLOWED": (
+                    "Paid-offer presentation is authorized. Refer only to the "
+                    "selected Commercial Offering below. Do not invent another "
+                    "item, price, URL, product, or content recommendation. The "
+                    "deterministic Commerce composer owns the delivery link."
+                ),
+                "COMMERCE_NUDGE_ALLOWED": (
+                    "Follow up naturally on the existing active Purchase Intent "
+                    "and only its selected offering below. Do not create, "
+                    "replace, or select another offer. Do not claim purchase."
+                ),
+                "COMMERCE_ACKNOWLEDGEMENT_ALLOWED": (
+                    "Acknowledge the verified purchase warmly. Do not present "
+                    "another paid offer, upsell, or cross-sell."
+                ),
+                "COMMERCE_PAYMENT_PENDING": (
+                    "No paid offer is authorized. Continue naturally while "
+                    "payment is pending. Do not claim ownership, payment "
+                    "success, purchase, or delivery."
+                ),
+                "COMMERCE_MANUAL_REVIEW": (
+                    "No paid offer is authorized. Continue naturally without "
+                    "ownership, payment, purchase, or delivery claims."
+                ),
+                "COMMERCE_DISABLED_FOR_TURN": (
+                    "No paid offer is authorized. Continue naturally without "
+                    "selling or ownership, payment, purchase, or delivery claims."
+                ),
+            }.get(
+                commerce_execution_policy,
+                "Follow the deterministic Commerce decision.",
+            )
+            commerce_decision_instruction = f"""
+AUTHORITATIVE COMMERCE
+- Decision: {commerce_decision.get("decision")}
+- Reason Code: {commerce_decision.get("reason_code")}
+- Buyer Stage: {commerce_decision.get("buyer_stage")}
+- Current Offer: {commerce_decision.get("current_offer_status") or "NONE"}
+- Conversion State: {commerce_decision.get("conversion_state")}
+- Execution Policy: {commerce_execution_policy}
+{selected_offering_lines}
+
+Treat this deterministic commerce decision as authoritative for this turn.
+Keep all existing personality, relationship, memory, safety, and pacing behavior.
+{policy_guidance}
+"""
+            self.logger.info(
+                "event=commerce_prompt_built mode=%s "
+                "authoritative_offering_selected=%s",
+                commerce_execution_policy,
+                bool(selected_offering),
+            )
+            self.logger.info(
+                "event=authoritative_commerce_prompt_injected "
+                "legacy_commerce_prompt_suppressed=%s",
+                authoritative_commerce,
+            )
+            if authoritative_commerce:
+                self.logger.info(
+                    "event=conflicting_commerce_prompt_prevented mode=%s",
+                    commerce_execution_policy,
+                )
 
         # --------------------------------------------------
         # 15.6 BEHAVIOR ENGINE INJECTION
@@ -370,6 +464,10 @@ OWNERSHIP RULES:
         should_handle_objection = behavior.get("should_handle_objection", False)
         should_downgrade_effort = behavior.get("should_downgrade_effort", False)
         behavior_notes = behavior.get("behavior_notes", [])
+        if authoritative_commerce:
+            # Legacy behavior strategy must not re-enable SELL/CLOSE prompt mode.
+            response_strategy = "chat"
+            pressure_level = "low"
         intimacy_strategy = (
             behavior.get("intimacy_strategy")
             or user_memory.get("intimacy_strategy")
@@ -600,7 +698,9 @@ SOFT STABILIZATION RULES:
         )
 
         runtime_offer_escalation_instruction = (
-            self.runtime_offer_escalation_service.build_instruction(
+            ""
+            if authoritative_commerce
+            else self.runtime_offer_escalation_service.build_instruction(
                 user_memory
             )
         )
@@ -757,7 +857,23 @@ NOT:
 sexual message → instant CTA
 """
 
-        behavior_instruction = f"""
+        if authoritative_commerce:
+            behavior_instruction = f"""
+--- BEHAVIOR CONTROL (15.6) ---
+Strategy: chat
+Tone Mode: {tone_mode}
+Pressure Level: low
+Handle Objection: {should_handle_objection}
+Low Effort Mode: {should_downgrade_effort}
+
+STRICT BEHAVIOR RULES:
+- Match tone_mode while preserving personality and relationship context.
+- Handle objections conversationally without independently authorizing Commerce.
+- Keep the response natural and appropriately paced.
+- If low effort mode is True, keep the response shorter.
+"""
+        else:
+            behavior_instruction = f"""
 --- BEHAVIOR CONTROL (15.6) ---
 Strategy: {response_strategy}
 Tone Mode: {tone_mode}
@@ -783,7 +899,10 @@ STRICT BEHAVIOR RULES:
         response_length = behavior_config.get("response_length", "medium")
         pacing_level = behavior_config.get("pacing_level", "normal")
 
-        if send_offer and offer_type != "none":
+        if authoritative_commerce:
+            offer_instruction = ""
+            ownership_gpt_context = ""
+        elif send_offer and offer_type != "none":
             if should_include_link_now:
                 offer_instruction = f"""
 You are now in CLOSE MODE.
@@ -870,7 +989,11 @@ If no offer is provided by the system, you are forbidden from creating one.
 
         no_sales_intimacy_instruction = ""
 
-        if explicit_without_buying_intent and not monetization_intent:
+        if (
+            explicit_without_buying_intent
+            and not monetization_intent
+            and not authoritative_commerce
+        ):
             no_sales_intimacy_instruction = """
 --------------------------------------------------
 ABSOLUTE NO-SALES INTIMACY MODE
@@ -933,7 +1056,7 @@ Use fewer words and increase intrigue.
 """
 
         # 🔥 7F — SOFT TRANSITION TO SELLING
-        if soft_transition:
+        if soft_transition and not authoritative_commerce:
             mode_override += """
 
 SOFT TRANSITION MODE:
@@ -957,7 +1080,15 @@ STYLE EXAMPLES:
 """
 
         # 🔥 7G — REWARM CONVERSATION MODE
-        if subscriber_rewarm_required:
+        if subscriber_rewarm_required and authoritative_commerce:
+            mode_override += """
+
+REWARM CONVERSATION MODE:
+The user is returning after inactivity or fatigue.
+Reconnect naturally with warm, relaxed, lightly curious pacing.
+Ask one simple conversational question.
+"""
+        elif subscriber_rewarm_required:
             mode_override += """
 
 REWARM CONVERSATION MODE:
@@ -978,8 +1109,21 @@ GOAL:
 Rebuild comfort and engagement before any monetization resumes.
 """
 
+        legacy_current_state = ""
+        if not authoritative_commerce:
+            legacy_current_state = f"""
+- Buyer tier: {buyer_tier}
+- Buying intent: {buying_intent}
+- Close ready: {close_ready}
+- Recommended action: {recommended_action}
+- Last offer type: {last_offer_type}
+- Offers shown so far: {offers_shown_count}
+"""
+
         system_prompt = f"""
 {behavior_instruction}
+
+{commerce_decision_instruction}
 
 {intimacy_strategy_instruction}
 
@@ -1030,18 +1174,13 @@ CURRENT STATE:
 - Mode: {conversation_mode}
 - Subscriber engagement mode: {subscriber_engagement_mode}
 - Soft transition active: {soft_transition}
-- Buyer tier: {buyer_tier}
 - Intent score: {intent_score}
-- Buying intent: {buying_intent}
-- Close ready: {close_ready}
-- Recommended action: {recommended_action}
 - Message count: {message_count}
-- Last offer type: {last_offer_type}
-- Offers shown so far: {offers_shown_count}
 - Attention tier: {attention_tier}
 - Effort mode: {effort_mode}
 - User type: {user_type}
 - Value score: {value_score}
+{legacy_current_state}
 
 --- SUBSCRIBER BEHAVIOR RULES ---
 Tone Style: {tone_style}
@@ -1265,7 +1404,11 @@ If any answer is no, rewrite before sending.
                 }
             )
 
-        if explicit_without_buying_intent and not monetization_intent:
+        if (
+            explicit_without_buying_intent
+            and not monetization_intent
+            and not authoritative_commerce
+        ):
             messages.append(
                 {
                     "role": "system",

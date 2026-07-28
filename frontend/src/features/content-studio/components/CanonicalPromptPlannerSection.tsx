@@ -1,15 +1,17 @@
-import { forwardRef, useImperativeHandle, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 
 import { askPromptPlanner } from "../../../infrastructure/api/contentStudioApi";
-import type { PromptPlannerHistoryItem } from "../types/promptPlanner";
+import type { CanonicalPlannerItem, PromptPlannerHistoryItem } from "../types/promptPlanner";
 
 const ACCEPTED_IMAGES = ".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp";
 
 type CanonicalPromptPlannerSectionProps = {
   disabled: boolean;
-  enhancingIdeaId?: string | null;
-  onEnhanceIdea?: (id: string, text: string) => void;
+  generateDisabled?: boolean;
+  generationProgress?: { current: number; total: number } | null;
+  onEnhanceAndGenerateIdeas?: (ideas: CanonicalPlannerItem[]) => void;
+  processing?: boolean;
 };
 
 export type CanonicalPromptPlannerHandle = {
@@ -18,32 +20,94 @@ export type CanonicalPromptPlannerHandle = {
   startNewSession: () => void;
 };
 
-function responseIdeas(answer: string) {
-  return answer.split(/\r?\n/).flatMap((line, index) => {
-    const match = line.match(/^\s*(?:\d+[.)]|[-*+])\s+(.+?)\s*$/);
-    return match?.[1] ? [{ lineIndex: index, text: match[1] }] : [];
-  });
+function plainTitle(value: string) {
+  return value
+    .replace(/\*\*(.*?)\*\*/g, "$1")
+    .replace(/__(.*?)__/g, "$1")
+    .replace(/`(.*?)`/g, "$1")
+    .replace(/[*_~]/g, "")
+    .trim();
 }
 
-function responseNarrative(answer: string) {
-  return answer.split(/\r?\n/).filter((line) => (
-    !/^\s*(?:\d+[.)]|[-*+])\s+.+?\s*$/.test(line)
-  )).join("\n").trim();
+export function parsePlannerResponse(answer: string, plannerQuestion: string) {
+  const narrative: string[] = [];
+  const parsed: Array<{ lineIndex: number; titleLine: string; continuation: string[] }> = [];
+  let current: (typeof parsed)[number] | null = null;
+  let separated = false;
+
+  answer.split(/\r?\n/).forEach((line, lineIndex) => {
+    const match = line.match(/^\s*(?:\d+[.)]|[-*+])\s+(.+?)\s*$/);
+    if (match?.[1]) {
+      current = { lineIndex, titleLine: match[1], continuation: [] };
+      parsed.push(current);
+      separated = false;
+      return;
+    }
+    if (!line.trim()) {
+      if (current) current.continuation.push("");
+      return;
+    }
+    const globalSection = /^#{1,6}\s+/.test(line)
+      || /^```/.test(line.trim())
+      || /^\*[^*].*\*$/.test(line.trim())
+      || (
+      Boolean(current?.continuation.some((item) => item.trim()))
+      && /^[A-Z][^.!?]{1,80}:$/.test(line.trim())
+    );
+    if (!current || separated || globalSection) {
+      separated = separated || globalSection;
+      narrative.push(line);
+      return;
+    }
+    current.continuation.push(line.trim());
+  });
+
+  const ideas = parsed.map((item) => {
+    const description = item.continuation.join("\n").trim();
+    const title = plainTitle(item.titleLine);
+    return {
+      description,
+      fullText: description ? `${title} — ${description}` : title,
+      id: `line-${item.lineIndex}`,
+      origin: "canonical_planner" as const,
+      plannerQuestion,
+      title,
+    };
+  });
+  return { ideas, narrative: narrative.join("\n").trim() };
 }
 
 export const CanonicalPromptPlannerSection = forwardRef<CanonicalPromptPlannerHandle, CanonicalPromptPlannerSectionProps>(function CanonicalPromptPlannerSection({
   disabled,
-  enhancingIdeaId = null,
-  onEnhanceIdea,
+  generateDisabled = false,
+  generationProgress = null,
+  onEnhanceAndGenerateIdeas,
+  processing = false,
 }, ref) {
   const [question, setQuestion] = useState("");
   const [image, setImage] = useState<File | null>(null);
   const [history, setHistory] = useState<PromptPlannerHistoryItem[]>([]);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
+  const [selectedIdeaIds, setSelectedIdeaIds] = useState<Set<string>>(() => new Set());
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const responsesRef = useRef<HTMLDivElement>(null);
+  const selectAllRef = useRef<HTMLInputElement>(null);
+  const visibleIdeas = useMemo(() => history.flatMap((item, index) => (
+    parsePlannerResponse(item.answer, item.question).ideas.map((idea) => ({
+      ...idea,
+      id: `${history.length}-${index}-${idea.id}`,
+    }))
+  )), [history]);
+  const allSelected = visibleIdeas.length > 0 && visibleIdeas.every((idea) => selectedIdeaIds.has(idea.id));
+  const selectedIdeas = visibleIdeas.filter((idea) => selectedIdeaIds.has(idea.id));
+
+  useEffect(() => {
+    if (selectAllRef.current) {
+      selectAllRef.current.indeterminate = selectedIdeas.length > 0 && !allSelected;
+    }
+  }, [allSelected, selectedIdeas.length]);
 
   const focusQuestion = () => {
     inputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -57,6 +121,7 @@ export const CanonicalPromptPlannerSection = forwardRef<CanonicalPromptPlannerHa
       setQuestion("");
       setImage(null);
       setHistory([]);
+      setSelectedIdeaIds(new Set());
       setError("");
       if (fileRef.current) fileRef.current.value = "";
       focusQuestion();
@@ -79,6 +144,7 @@ export const CanonicalPromptPlannerSection = forwardRef<CanonicalPromptPlannerHa
     try {
       const answer = await askPromptPlanner(submittedQuestion, image);
       if (answer) {
+        setSelectedIdeaIds(new Set());
         setHistory((items) => [{
           answer,
           imageName: image?.name ?? "",
@@ -123,15 +189,33 @@ export const CanonicalPromptPlannerSection = forwardRef<CanonicalPromptPlannerHa
             <button disabled={disabled || pending || !question.trim()} onClick={() => void submit()} type="button">
               {pending ? "Asking Canonical Prompt Planner..." : "Ask Planner"}
             </button>
-            <button disabled={pending} onClick={() => { resetForm(); setHistory([]); }} type="button">Clear</button>
+            <button disabled={pending} onClick={() => { resetForm(); setHistory([]); setSelectedIdeaIds(new Set()); }} type="button">Clear</button>
           </div>
           {error && <p className="canonical-prompt-planner__error" role="alert">{error}</p>}
           {history.length > 0 && (
             <div className="canonical-prompt-planner__history" ref={responsesRef}>
               <h3>Canonical Prompt Planner Responses</h3>
+              {visibleIdeas.length > 0 && (
+                <div className="canonical-prompt-planner__selection-toolbar">
+                  <label>
+                    <input
+                      checked={allSelected}
+                      disabled={processing}
+                      onChange={(event) => setSelectedIdeaIds(event.target.checked
+                        ? new Set(visibleIdeas.map((idea) => idea.id))
+                        : new Set())}
+                      ref={selectAllRef}
+                      type="checkbox"
+                    />
+                    <span>Select All</span>
+                  </label>
+                  <span>Selected: {selectedIdeas.length}</span>
+                </div>
+              )}
               {history.map((item, index) => {
-                const ideas = responseIdeas(item.answer);
-                const narrative = responseNarrative(item.answer);
+                const parsed = parsePlannerResponse(item.answer, item.question);
+                const ideas = parsed.ideas;
+                const narrative = parsed.narrative;
                 return (
                 <article className="canonical-prompt-planner__response" key={`${history.length}-${index}-${item.question}`}>
                   {item.imageName && <p className="canonical-prompt-planner__image-name">{item.imageName}</p>}
@@ -147,21 +231,29 @@ export const CanonicalPromptPlannerSection = forwardRef<CanonicalPromptPlannerHa
                     {ideas.length > 0 && (
                     <div className="canonical-prompt-planner__recommendations">
                       {ideas.map((idea) => {
-                        const ideaId = `${history.length}-${index}-${idea.lineIndex}`;
-                        const enhancing = enhancingIdeaId === ideaId;
+                        const ideaId = `${history.length}-${index}-${idea.id}`;
                         return (
-                          <div className="canonical-prompt-planner__recommendation" key={ideaId}>
+                          <label className="canonical-prompt-planner__recommendation" key={ideaId}>
+                            <input
+                              aria-label={`Select ${idea.fullText}`}
+                              checked={selectedIdeaIds.has(ideaId)}
+                              disabled={processing}
+                              onChange={(event) => setSelectedIdeaIds((current) => {
+                                const next = new Set(current);
+                                if (event.target.checked) next.add(ideaId);
+                                else next.delete(ideaId);
+                                return next;
+                              })}
+                              type="checkbox"
+                            />
                             <div className="canonical-prompt-planner__idea-text">
-                              <ReactMarkdown>{idea.text}</ReactMarkdown>
+                              <ReactMarkdown>{
+                                idea.description
+                                  ? `**${idea.title}** — ${idea.description}`
+                                  : `**${idea.title}**`
+                              }</ReactMarkdown>
                             </div>
-                            <button
-                              disabled={disabled || enhancing}
-                              onClick={() => onEnhanceIdea?.(ideaId, idea.text)}
-                              type="button"
-                            >
-                              {enhancing ? "Enhancing…" : "✨ Enhance"}
-                            </button>
-                          </div>
+                          </label>
                         );
                       })}
                     </div>
@@ -170,6 +262,24 @@ export const CanonicalPromptPlannerSection = forwardRef<CanonicalPromptPlannerHa
                 </article>
                 );
               })}
+              {visibleIdeas.length > 0 && (
+                <div className="canonical-prompt-planner__bulk-actions">
+                  <button
+                    className="canonical-prompt-planner__enhance-generate"
+                    disabled={disabled || generateDisabled || processing || selectedIdeas.length === 0}
+                    onClick={() => onEnhanceAndGenerateIdeas?.(selectedIdeas)}
+                    type="button"
+                  >
+                    {processing ? "Enhancing & Generating…" : `🚀 Enhance & Generate (${selectedIdeas.length})`}
+                  </button>
+                  <button disabled={processing || selectedIdeas.length === 0} onClick={() => setSelectedIdeaIds(new Set())} type="button">
+                    Clear Selection
+                  </button>
+                  {processing && generationProgress && (
+                    <span aria-live="polite">Processing {generationProgress.current} of {generationProgress.total}</span>
+                  )}
+                </div>
+              )}
               <button disabled={pending} onClick={resetForm} type="button">
                 Ask Canonical Prompt Planner another question
               </button>

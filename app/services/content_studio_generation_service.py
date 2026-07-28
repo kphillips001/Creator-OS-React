@@ -30,12 +30,22 @@ class ContentStudioGenerationService:
         self.generation_library = generation_library
         self.reference_service = reference_service
 
-    def queue(self, *, creator_profile: dict, creative_tags: str, creative_mode: str, prompt_count: int, provider_id: str, prompt_batch: tuple[str, ...]):
+    def queue(
+        self, *, creator_profile: dict, creative_tags: str,
+        creative_mode: str, prompt_count: int, provider_id: str,
+        prompt_batch: tuple[str, ...], origin: str | None = None,
+        planner_lineage: dict | None = None,
+    ):
+        lineage = dict(planner_lineage or {})
         plan = self.creative_director.create_prompt_plan(
             creator_profile=creator_profile,
             creative_tags=creative_tags,
             creative_mode=creative_mode,
             prompt_count=prompt_count,
+            metadata={
+                **({"workflow_origin": origin} if origin else {}),
+                **({"planner_lineage": lineage} if lineage else {}),
+            },
         )
         plan = plan_with_prompt_batch(plan, prompt_batch)
         variations = tuple(plan.prompt_metadata.get("prompt_variations") or ())
@@ -53,6 +63,8 @@ class ContentStudioGenerationService:
                 "premium_workflow": True,
                 "prompt_variations": variations,
                 "prompt_batch_count": len(variations) or prompt_count,
+                **({"workflow_origin": origin} if origin else {}),
+                **({"planner_lineage": lineage} if lineage else {}),
             },
         )
         return plan, job

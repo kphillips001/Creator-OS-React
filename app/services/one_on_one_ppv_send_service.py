@@ -644,7 +644,6 @@ class OneOnOnePPVSendService:
 
         if dry_run:
             print("[PAYLOAD BUILT - PAID PPV]")
-            print(payload)
             print("[1:1 DRY RUN] payload ready")
 
             return {

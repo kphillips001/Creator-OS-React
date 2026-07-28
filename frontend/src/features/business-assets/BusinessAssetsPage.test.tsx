@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { BusinessAssetsPage } from "./BusinessAssetsPage";
 
 const item = {
-  asset_id: 42, asset_name: "portrait.png", imageUrl: "/api/v1/assets/42/media",
+  asset_id: 42, asset_name: "portrait.png", imageUrl: "/api/v1/assets/42/thumbnail",
   analysisStatus: "READY", downstreamStatus: "CHAT_INVENTORY_READY", commerceStatus: "Chat Ready",
   source_workflow: "photoshoot", commerce_destination: "CUSTOMER_CONVERSATIONS", current_lifecycle: "CHAT_READY",
   chat_ready: true, fulfillment_ready: true, recommendation_ready: true, fanvue_upload_status: "COMPLETE", media_link_status: "VERIFIED",
@@ -24,6 +24,12 @@ describe("Commerce Library", () => {
     expect(await screen.findByRole("heading", { name: "Commerce Library" })).toBeInTheDocument();
     for (const heading of ["Preview", "Asset Name", "Current Status", "Commerce Status"]) expect(screen.getByText(heading)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Archive portrait.png" })).toBeVisible();
+    const preview = screen.getByRole("button", { name: "View details for portrait.png" }).querySelector("img")!;
+    expect(preview).toHaveAttribute("src", "/api/v1/assets/42/thumbnail");
+    expect(preview).toHaveAttribute("loading", "eager");
+    expect(preview).toHaveAttribute("decoding", "async");
+    expect(preview).toHaveAttribute("width", "72");
+    expect(preview).toHaveAttribute("height", "58");
     fireEvent.click(screen.getByRole("button", { name: "View details for portrait.png" }));
     expect(await screen.findByRole("complementary", { name: "Business Asset details" })).toBeInTheDocument();
     for (const name of ["NudeNet", "Vision", "Grok", "Content Intelligence", "Fanvue", "Media Link", "Chat Status"]) expect(screen.getByText(name)).toBeInTheDocument();
@@ -53,6 +59,22 @@ describe("Commerce Library", () => {
     fireEvent.click(screen.getByRole("button", { name: "Needs Upload" }));
     await waitFor(() => expect(fetch.mock.calls.some(([input]) => String(input).includes("commerce_status=Needs+Upload"))).toBe(true));
     for (const name of ["All", "Analyzing", "Analysis Failed", "Ready", "Needs Upload", "Needs Media Link", "Chat Ready"]) expect(screen.getByRole("button", { name })).toBeInTheDocument();
+  });
+
+  it("eager-loads only the initial four Commerce thumbnails", async () => {
+    const items = Array.from({ length: 5 }, (_, index) => ({
+      ...item,
+      itemId: `asset:${index + 1}`,
+      asset_id: index + 1,
+      asset_name: `asset-${index + 1}.png`,
+      imageUrl: `/api/v1/assets/${index + 1}/thumbnail`,
+    }));
+    vi.spyOn(globalThis, "fetch").mockImplementation(() => response({ ...listing, items, total: 5 }));
+    render(<BusinessAssetsPage />);
+    await screen.findByText("asset-5.png");
+    const images = document.querySelectorAll(".business-asset__media img");
+    expect(Array.from(images).filter((image) => image.getAttribute("loading") === "eager")).toHaveLength(4);
+    expect(Array.from(images).filter((image) => image.getAttribute("loading") === "lazy")).toHaveLength(1);
   });
 
   it("confirms and archives without offering permanent deletion", async () => {

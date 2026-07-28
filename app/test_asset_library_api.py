@@ -46,6 +46,11 @@ def test_registered_asset_archive_and_restore_preserve_identity_and_creator_scop
         def restore_asset_library_item(self, asset_id, creator_profile_id):
             calls.append(("restore", asset_id, creator_profile_id)); return {"id": asset_id}
     monkeypatch.setattr(asset_api, "_creator_profile", lambda: {"id": 7})
+    monkeypatch.setattr(
+        asset_api,
+        "AssetLibraryService",
+        lambda: SimpleNamespace(get_asset_details=lambda _asset_id: details),
+    )
     monkeypatch.setattr(asset_api, "AssetRepository", Repository)
 
     assert asset_api.archive_registered_asset(42)["assetId"] == 42
@@ -532,10 +537,16 @@ def test_asset_thumbnail_uses_cache_and_preserves_original_route(monkeypatch, tm
         storage=AssetStorageSummary(original_path=str(source), original_exists=True),
     )
     monkeypatch.setattr(asset_api, "_creator_profile", lambda: {"id": 7})
+    monkeypatch.setattr(asset_api, "AssetLibraryService", lambda: SimpleNamespace(get_asset_details=lambda _asset_id: details))
+    media_projection = {
+        "id": 42, "creator_profile_id": 7, "file_path": str(source),
+        "file_name": source.name, "blurred_preview_path": None,
+        "local_vault_path": None, "media_metadata": {}, "updated_at": None,
+    }
     monkeypatch.setattr(
         asset_api,
-        "AssetLibraryService",
-        lambda: SimpleNamespace(get_asset_details=lambda _asset_id: details),
+        "_asset_repository",
+        lambda: SimpleNamespace(get_media_projection=lambda _asset_id: media_projection),
     )
     monkeypatch.setattr(
         asset_api,
@@ -550,6 +561,23 @@ def test_asset_thumbnail_uses_cache_and_preserves_original_route(monkeypatch, tm
     assert Path(response.path) == thumbnail
     assert response.media_type == "image/webp"
     assert Path(asset_api.asset_media(42).path) == source
+
+
+def test_asset_thumbnail_authorizes_with_narrow_media_projection(monkeypatch, tmp_path: Path):
+    source = tmp_path / "source.png"
+    source.write_bytes(b"image")
+    monkeypatch.setattr(asset_api, "_creator_profile", lambda: {"id": 7})
+    monkeypatch.setattr(asset_api, "AssetLibraryService", lambda: (_ for _ in ()).throw(AssertionError("full details must not be built")))
+    monkeypatch.setattr(asset_api, "_asset_repository", lambda: SimpleNamespace(get_media_projection=lambda _asset_id: {
+        "id": 42, "creator_profile_id": 7, "file_path": str(source),
+        "file_name": source.name, "blurred_preview_path": None,
+        "local_vault_path": None, "media_metadata": {}, "updated_at": None,
+    }))
+    monkeypatch.setattr(asset_api, "GridThumbnailService", lambda: SimpleNamespace(get_or_create=lambda path, *, identity: source))
+
+    response = asset_api.asset_thumbnail(42)
+
+    assert Path(response.path) == source
 
 
 def test_asset_media_reports_missing_file(monkeypatch):

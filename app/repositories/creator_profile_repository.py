@@ -19,6 +19,78 @@ def get_active_creator_profile(fanvue_account_id: str) -> dict:
             return dict(row) if row else {}
 
 
+def update_creator_profile(
+    creator_profile_id: int,
+    fanvue_account_id: str,
+    profile: dict,
+) -> dict:
+    """Update one existing account-scoped creator profile without inserting."""
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE creator_profiles
+                SET persona_name = %(persona_name)s,
+                    display_name = %(persona_name)s,
+                    age = %(age)s,
+                    gender = %(gender)s,
+                    location = %(location)s,
+                    is_active = %(is_active)s,
+                    archetype = %(archetype)s,
+                    personality_description = %(personality_description)s,
+                    backstory = %(backstory)s,
+                    lifestyle_context = %(lifestyle_context)s,
+                    lifestyle_vibe = %(lifestyle_vibe)s,
+                    daily_routine = %(daily_routine)s,
+                    hobbies = %(hobbies)s,
+                    likes = %(likes)s,
+                    dislikes = %(dislikes)s,
+                    ideal_user_type = %(ideal_user_type)s,
+                    turn_ons = %(turn_ons)s,
+                    turn_offs = %(turn_offs)s,
+                    sexual_style = %(sexual_style)s,
+                    sexual_likes = %(sexual_likes)s,
+                    sexual_dislikes = %(sexual_dislikes)s,
+                    kinks = %(kinks)s,
+                    fantasy_style = %(fantasy_style)s,
+                    tone_style = %(tone_style)s,
+                    flirt_style = %(flirt_style)s,
+                    tease_intensity = %(tease_intensity)s,
+                    push_pull_style = %(push_pull_style)s,
+                    mystery_level = %(mystery_level)s,
+                    response_style = %(response_style)s,
+                    pacing_style = %(pacing_style)s,
+                    question_frequency = %(question_frequency)s,
+                    emotional_depth = %(emotional_depth)s,
+                    affection_style = %(affection_style)s,
+                    jealousy_style = %(jealousy_style)s,
+                    availability_style = %(availability_style)s,
+                    conversation_hooks = %(conversation_hooks)s,
+                    retention_hooks = %(retention_hooks)s,
+                    escalation_style = %(escalation_style)s,
+                    escalation_triggers = %(escalation_triggers)s,
+                    self_value_style = %(self_value_style)s,
+                    persona_intensity = %(persona_intensity)s,
+                    boundaries = %(boundaries)s,
+                    sexual_boundaries = %(sexual_boundaries)s,
+                    hard_limits = %(hard_limits)s,
+                    response_rules = %(response_rules)s,
+                    updated_at = NOW()
+                WHERE id = %(creator_profile_id)s
+                  AND fanvue_account_id = %(fanvue_account_id)s
+                RETURNING *;
+                """,
+                {
+                    **profile,
+                    "creator_profile_id": int(creator_profile_id),
+                    "fanvue_account_id": str(fanvue_account_id),
+                },
+            )
+            row = cur.fetchone()
+            conn.commit()
+            return dict(row) if row else {}
+
+
 def upsert_creator_profile(profile: dict) -> dict:
     with get_db_connection() as conn:
         with conn.cursor() as cur:

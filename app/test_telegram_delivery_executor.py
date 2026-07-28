@@ -10,6 +10,11 @@ from app.models.telegram_commerce import TelegramDeliveryPayload
 from app.services.telegram_delivery_executor import TelegramDeliveryExecutor
 
 
+class AllowingSafetyService:
+    def check_global_safety(self):
+        return {"allowed": True, "reason": None, "source": "isolated_test"}
+
+
 class RecordingTextSender:
     def __init__(self):
         self.calls = []
@@ -28,7 +33,7 @@ class AsyncRecordingTextSender:
 
 class TelegramDeliveryExecutorTests(unittest.TestCase):
     def test_execute_defers_runtime_transport_for_normalized_payload(self):
-        executor = TelegramDeliveryExecutor()
+        executor = TelegramDeliveryExecutor(global_safety_service=AllowingSafetyService())
 
         result = executor.execute(
             TelegramDeliveryPayload(
@@ -61,7 +66,7 @@ class TelegramDeliveryExecutorTests(unittest.TestCase):
 
     def test_execute_sends_existing_text_capability_through_sender(self):
         sender = RecordingTextSender()
-        executor = TelegramDeliveryExecutor()
+        executor = TelegramDeliveryExecutor(global_safety_service=AllowingSafetyService())
 
         result = executor.execute(
             TelegramDeliveryPayload(
@@ -84,7 +89,7 @@ class TelegramDeliveryExecutorTests(unittest.TestCase):
 
     def test_execute_accepts_provider_neutral_runtime_intent(self):
         sender = RecordingTextSender()
-        executor = TelegramDeliveryExecutor()
+        executor = TelegramDeliveryExecutor(global_safety_service=AllowingSafetyService())
 
         result = executor.execute(
             RuntimeExecutionIntent(
@@ -111,7 +116,7 @@ class TelegramDeliveryExecutorTests(unittest.TestCase):
     def test_execute_async_sends_existing_text_capability(self):
         async def run():
             sender = AsyncRecordingTextSender()
-            executor = TelegramDeliveryExecutor()
+            executor = TelegramDeliveryExecutor(global_safety_service=AllowingSafetyService())
 
             result = await executor.execute_async(
                 TelegramDeliveryPayload(

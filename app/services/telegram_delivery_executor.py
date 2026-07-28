@@ -118,7 +118,7 @@ class TelegramDeliveryExecutor:
         raise_on_failure: bool,
     ) -> TelegramDeliveryExecutionResult:
         try:
-            sender.send_text(chat_id=chat_id, message_text=message_text)
+            sent = sender.send_text(chat_id=chat_id, message_text=message_text)
         except Exception as error:
             if raise_on_failure:
                 raise
@@ -130,6 +130,9 @@ class TelegramDeliveryExecutor:
                 "text_length": len(message_text),
             }
         )
+        message_id = getattr(sent, "id", sent)
+        if isinstance(message_id, int) and not isinstance(message_id, bool):
+            metadata["telegram_message_id"] = message_id
         return TelegramDeliveryExecutionResult(
             status="success",
             executed=True,
@@ -151,7 +154,7 @@ class TelegramDeliveryExecutor:
         try:
             result = sender.send_text(chat_id=chat_id, message_text=message_text)
             if inspect.isawaitable(result):
-                await result
+                result = await result
         except Exception as error:
             if raise_on_failure:
                 raise
@@ -163,6 +166,9 @@ class TelegramDeliveryExecutor:
                 "text_length": len(message_text),
             }
         )
+        message_id = getattr(result, "id", result)
+        if isinstance(message_id, int) and not isinstance(message_id, bool):
+            metadata["telegram_message_id"] = message_id
         return TelegramDeliveryExecutionResult(
             status="success",
             executed=True,

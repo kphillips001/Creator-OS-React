@@ -25,7 +25,6 @@ class SystemHealthTests(unittest.TestCase):
         self.addCleanup(temp_dir.cleanup)
         root = Path(temp_dir.name)
         for path in (
-            root / "data" / "reference_library",
             root / "data" / "generation_library",
             root / "data" / "content_archive",
             root / "data" / "social_publishing",
@@ -64,6 +63,12 @@ class SystemHealthTests(unittest.TestCase):
         self.assertEqual(runtime.checks[0].value, sys.executable)
         self.assertEqual(runtime.checks[0].status, HealthStatus.HEALTHY.value)
 
+    def test_backend_dependencies_exclude_superseded_streamlit_ui(self):
+        dependency_names = {spec.label for spec in SystemHealthService.DEPENDENCIES}
+
+        self.assertNotIn("Streamlit", dependency_names)
+        self.assertIn("OpenAI", dependency_names)
+
     def test_dependency_detection_reports_missing_and_guidance(self):
         service = SystemHealthService(project_root=self.make_root(), environ=self.healthy_env())
 
@@ -96,6 +101,9 @@ class SystemHealthTests(unittest.TestCase):
         database = service.database_section()
         queues = service.queue_health()
 
+        self.assertFalse((root / "data" / "reference_library").exists())
+        self.assertNotIn("Reference Library", {check.name for check in storage.checks})
+        self.assertTrue(all(check.status == HealthStatus.HEALTHY.value for check in storage.checks))
         self.assertTrue(any(check.name == "Generation Library" for check in storage.checks))
         self.assertTrue(any(check.name == "Database Connection" and check.status == HealthStatus.HEALTHY.value for check in database.checks))
         self.assertEqual(next(queue.count for queue in queues if queue.name == "Publishing Queue"), 2)

@@ -36,12 +36,14 @@ class MemoryInitializingDecisionEngine:
         user_id: str,
         message: str,
         chat_history=None,
+        runtime_injection=None,
     ):
         self._decision_engine.memory.get_or_create_user_memory(user_id)
         return self._decision_engine.process_message(
             user_id,
             message,
             chat_history=chat_history,
+            runtime_injection=runtime_injection,
         )
 
 
@@ -57,6 +59,7 @@ class TelethonRuntime:
         logger: logging.Logger | None = None,
         heartbeat_service: WorkerHeartbeatService | None = None,
         global_safety_service: Any | None = None,
+        purchase_intent_service: Any | None = None,
     ) -> None:
         if transport is None:
             raise ValueError("transport is required")
@@ -69,6 +72,7 @@ class TelethonRuntime:
             from app.services.global_automation_safety_service import GlobalAutomationSafetyService
             global_safety_service = GlobalAutomationSafetyService()
         self._global_safety_service = global_safety_service
+        self._purchase_intents = purchase_intent_service
         self._logger = logger or logging.getLogger("telethon-runtime")
         self._heartbeat = heartbeat_service or WorkerHeartbeatService(
             worker_name="Telegram", worker_type="transport_runtime", poll_interval_seconds=30,
@@ -141,17 +145,56 @@ class TelethonRuntime:
                     payload,
                 )
                 if result.response_text:
-                    execution = await self._delivery_executor.execute_async(
-                        result.delivery_payload,
-                        context={
-                            "chat_id": payload.telegram_chat_id,
-                            "correlation_id": result.correlation_id,
-                            "engine_user_id": result.engine_user_id,
-                            "fallback_message_text": result.response_text,
-                            "raise_on_failure": True,
-                            "transport": self._transport,
-                        },
-                    )
+                    intent = None
+                    if self._purchase_intents is not None:
+                        intent = await asyncio.to_thread(
+                            self._purchase_intents.create_before_delivery,
+                            result, payload,
+                        )
+                    try:
+                        execution = await self._delivery_executor.execute_async(
+                            result.delivery_payload,
+                            context={
+                                "chat_id": payload.telegram_chat_id,
+                                "correlation_id": result.correlation_id,
+                                "engine_user_id": result.engine_user_id,
+                                "fallback_message_text": result.response_text,
+                                "raise_on_failure": True,
+                                "transport": self._transport,
+                            },
+                        )
+                    except Exception:
+                        if self._purchase_intents is not None:
+                            await asyncio.to_thread(
+                                self._purchase_intents.abandon_delivery, intent,
+                            )
+                        raise
+                    if execution.executed and self._purchase_intents is not None:
+                        await asyncio.to_thread(
+                            self._purchase_intents.confirm_delivery, intent,
+                            telegram_message_id=execution.metadata.get(
+                                "telegram_message_id"
+                            ),
+                        )
+                        acknowledgement_id = (
+                            result.diagnostic_metadata.get(
+                                "purchase_acknowledgement_intent_id"
+                            )
+                        )
+                        if (
+                            acknowledgement_id
+                            and result.diagnostic_metadata.get(
+                                "customer_sales_decision"
+                            ) == "CONGRATULATE_PURCHASE"
+                        ):
+                            await asyncio.to_thread(
+                                self._purchase_intents.acknowledge_purchase,
+                                acknowledgement_id,
+                            )
+                    elif self._purchase_intents is not None:
+                        await asyncio.to_thread(
+                            self._purchase_intents.abandon_delivery, intent,
+                        )
                     if not execution.executed:
                         self._logger.warning(
                             "Telegram response not sent: "
@@ -203,9 +246,19 @@ def build_default_runtime_from_environment() -> TelethonRuntime:
     from app.services.memory_service import MemoryService
     from app.services.offer_service import OfferService
     from app.services.post_offer_service import PostOfferService
-    from app.services.telegram_commerce_service import TelegramCommerceService
+    from app.services.chat_commerce_service import ChatCommerceService
+    from app.services.customer_sales_brain_service import (
+        CustomerSalesBrainService,
+    )
+    from app.services.runtime_control_service import RuntimeControlService
+    from app.services.telegram_purchase_intent_service import (
+        TelegramPurchaseIntentService,
+    )
     from app.services.timing_engine import TimingEngine
     from app.services.user_value_service import UserValueService
+    from app.repositories.creator_profile_repository import (
+        get_active_creator_profile,
+    )
 
     api_id = _required_positive_int("TG_API_ID")
     api_hash = _required_text("TG_API_HASH")
@@ -221,7 +274,7 @@ def build_default_runtime_from_environment() -> TelethonRuntime:
         host.strip()
         for host in os.getenv(
             "TELEGRAM_ALLOWED_FANVUE_HOSTNAMES",
-            "fanvue.com",
+            "fanvue.com,www.fanvue.com",
         ).split(",")
         if host.strip()
     ]
@@ -241,20 +294,33 @@ def build_default_runtime_from_environment() -> TelethonRuntime:
         logger=logging.getLogger("telegram-decision-engine"),
     )
     global_safety = GlobalAutomationSafetyService()
+    creator_profile = get_active_creator_profile(str(engine_account_id)) or {}
+    creator_profile_id = int(creator_profile.get("id") or 0)
     gateway = ConversationGateway(
         MemoryInitializingDecisionEngine(decision_engine),
         allowed_fanvue_hostnames=allowed_hosts,
-        telegram_commerce_service=TelegramCommerceService(
-            decision_engine=decision_engine,
-            memory_service=memory_service,
+        chat_commerce_service=ChatCommerceService(
+            commerce_mode=ChatCommerceService.AUTHORITATIVE_MODE
         ),
+        customer_sales_brain_service=CustomerSalesBrainService(),
+        creator_profile_id=creator_profile_id or None,
+        runtime_control_service=RuntimeControlService(),
         global_automation_safety_service=global_safety,
+    )
+    purchase_intents = (
+        TelegramPurchaseIntentService(
+            creator_profile_id=creator_profile_id,
+            fanvue_account_id=engine_account_id,
+        ) if creator_profile_id else None
     )
     inbound_adapter = TelegramInboundAdapter(
         identity_adapter=TelegramIdentityAdapter(
             engine_account_id=engine_account_id,
         ),
         conversation_gateway=gateway,
+        creator_profile_id=creator_profile_id or None,
+        fanvue_account_id=engine_account_id,
+        purchase_intent_service=purchase_intents,
     )
     client = TelegramClient(session_path, api_id, api_hash)
     transport = TelethonUserTransport(client=client)
@@ -266,6 +332,7 @@ def build_default_runtime_from_environment() -> TelethonRuntime:
             account_id=engine_account_id, poll_interval_seconds=30,
         ),
         global_safety_service=global_safety,
+        purchase_intent_service=purchase_intents,
     )
 
 

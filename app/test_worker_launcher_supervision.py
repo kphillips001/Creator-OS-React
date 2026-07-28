@@ -76,8 +76,10 @@ def test_authoritative_entry_points_and_defaults_are_safe(tmp_path):
                            "grok_analysis": "app.workers.grok_analysis",
                            "content_intelligence_merge": "app.workers.content_intelligence_merge",
                            "photoshoot_analysis": "app.workers.photoshoot_analysis",
-                           "photoshoot_auto_run": "app.workers.photoshoot_auto_run",
-                           "ready_asset_chat_registration": "app.workers.ready_asset_chat_registration"}
+                               "photoshoot_auto_run": "app.workers.photoshoot_auto_run",
+                               "ready_asset_chat_registration": "app.workers.ready_asset_chat_registration",
+                                   "fanvue_commercial_publications": "app.workers.fanvue_commercial_publications",
+                                   "commerce_reconciliation": "app.workers.commerce_reconciliation"}
     assert "app.outreach_worker" not in modules.values()
     value.start_enabled()
     assert processes.started == []

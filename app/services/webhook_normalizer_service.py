@@ -100,6 +100,13 @@ class WebhookNormalizerService:
 
         return (
             payload.get("sender", {}).get("uuid")
+            or (
+                payload.get("data", {}).get("purchaser", {}).get("uuid")
+                if isinstance(payload.get("data", {}).get("purchaser"), dict)
+                else None
+            )
+            or payload.get("data", {}).get("purchaserUuid")
+            or payload.get("data", {}).get("buyerUuid")
             or payload.get("fanvue_user_id")
             or payload.get("user_id")
             or payload.get("subscriber_id")
@@ -115,6 +122,12 @@ class WebhookNormalizerService:
 
         return (
             payload.get("recipientUuid")
+            or payload.get("data", {}).get("creatorUuid")
+            or (
+                payload.get("data", {}).get("creator", {}).get("uuid")
+                if isinstance(payload.get("data", {}).get("creator"), dict)
+                else None
+            )
             or payload.get("fanvue_account_id")
             or payload.get("account_id")
             or payload.get("creator_id")

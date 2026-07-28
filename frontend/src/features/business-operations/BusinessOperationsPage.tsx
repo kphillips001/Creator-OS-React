@@ -13,8 +13,9 @@ const when = (value: unknown) => value ? new Date(String(value)).toLocaleString(
 const state = (value: boolean) => value ? "Enabled" : "Disabled";
 
 export function BusinessOperationsPage() {
-  const [tab, setTab] = useState<Tab>("overview"); const [data, setData] = useState<Data | null>(null); const [loading, setLoading] = useState(true); const [error, setError] = useState(""); const [selected, setSelected] = useState<OperationsFailure | null>(null);
-  useEffect(() => { const controller = new AbortController(); setLoading(true); setError(""); setData(null); operationsApi[tab](controller.signal).then((result) => { if (!controller.signal.aborted) setData(result); }).catch((reason: unknown) => { if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : "Unable to load Operations workspace."); }).finally(() => { if (!controller.signal.aborted) setLoading(false); }); return () => controller.abort(); }, [tab]);
+  const [tab, setTab] = useState<Tab>("overview"); const [data, setData] = useState<Data | null>(null); const [loading, setLoading] = useState(true); const [error, setError] = useState(""); const [selected, setSelected] = useState<OperationsFailure | null>(null); const [refreshVersion, setRefreshVersion] = useState(0);
+  useEffect(() => { const refresh = () => setRefreshVersion((value) => value + 1); window.addEventListener("creator-os:diagnostics-invalidated", refresh); return () => window.removeEventListener("creator-os:diagnostics-invalidated", refresh); }, []);
+  useEffect(() => { const controller = new AbortController(); setLoading(true); setError(""); setData(null); operationsApi[tab](controller.signal).then((result) => { if (!controller.signal.aborted) setData(result); }).catch((reason: unknown) => { if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : "Unable to load Operations workspace."); }).finally(() => { if (!controller.signal.aborted) setLoading(false); }); return () => controller.abort(); }, [tab, refreshVersion]);
   return <section className="business-operations-page">
     <header className="page-header"><div><p className="page-header__eyebrow">Business operations</p><h1>Operations</h1><p className="page-header__description">Read-only evidence for runtime configuration, queues, publishing, and operational failures.</p></div></header>
     <nav aria-label="Operations workspace sections" className="operations-tabs">{tabs.map(([value, label]) => <button aria-selected={tab === value} className={tab === value ? "is-active" : ""} key={value} onClick={() => { setSelected(null); setData(null); setTab(value); }} role="tab">{label}</button>)}</nav>
@@ -35,9 +36,32 @@ function Runtime({ data }: { data: OperationsRuntime }) { return <div className=
 function ModuleSwitches({ data, changed }: { data: OperationsModuleSwitches; changed: (data: Data) => void }) {
   const [saving, setSaving] = useState(""); const [message, setMessage] = useState(""); const [saveError, setSaveError] = useState("");
   const update = async (key: string, value: boolean | string) => { setSaving(key); setMessage(""); setSaveError(""); try { changed(await operationsApi.updateModuleSwitch(key, value)); setMessage(`${key === "global_automation" ? "Autonomous Sales & Messaging" : title(key)} updated.`); } catch (reason) { setSaveError(reason instanceof Error ? reason.message : "Unable to update module switch."); } finally { setSaving(""); } };
+  const changeRuntime = (mode: "OFFLINE" | "OBSERVE" | "LIVE") => {
+    if (mode === data.runtime.configuredMode) return;
+    if (mode === "LIVE" && !window.confirm("Switch Creator_OS Runtime to LIVE?\n\nLIVE allows replies, offers, and deliveries when all existing safety controls permit them.")) return;
+    void update("runtime", mode);
+  };
   const health = data.globalStatus.workerHealthSummary;
   const master = data.masterControl;
-  return <div className="operations-panel module-switches"><section className="operations-card module-switches__master"><div><p className="page-header__eyebrow">Master autonomous execution control</p><h2>{master.label}</h2><div className="module-switches__master-states"><span>Configured: <strong>{master.configured ? "ON" : "OFF"}</strong></span><span>Effective: <strong className={master.effective === "ACTIVE" ? "is-good" : "needs-attention"}>{master.effective}</strong></span><span>Reason: <strong>{master.reason ? title(master.reason) : "No block recorded"}</strong></span><span>Last changed: <strong>{master.lastChanged ? new Date(master.lastChanged).toLocaleString() : "Unavailable"}</strong></span></div></div><button className={master.configured ? "is-on" : "is-off"} disabled={Boolean(saving)} aria-label="Toggle Autonomous Sales & Messaging" onClick={() => update(master.key, !master.configured)}>{saving === master.key ? "Saving…" : master.configured ? "Turn Off" : "Turn On"}</button></section>
+  const commerceMode = data.commerceMode ?? { configuredMode: "LIVE" as const, effectiveMode: "LIVE" as const, description: "Commerce evaluation and authorized execution are enabled.", editable: true };
+  const runtimeDescriptions = {
+    OFFLINE: "Decision processing, replies, offers, and deliveries are paused.",
+    OBSERVE: "Conversations may be evaluated, but no replies, offers, or deliveries are sent.",
+    LIVE: "Replies, offers, and deliveries may execute when every existing safety control permits them.",
+  };
+  return <div className="operations-panel module-switches">
+    <section className="operations-card runtime-mode-control">
+      <div className="runtime-mode-control__header"><div><p className="page-header__eyebrow">Authoritative runtime control</p><h2>Creator_OS Runtime</h2></div><strong className={`runtime-mode-control__state runtime-mode-control__state--${data.runtime.status.toLowerCase()}`}>{data.runtime.status}</strong></div>
+      <p>{runtimeDescriptions[data.runtime.effectiveMode as keyof typeof runtimeDescriptions] ?? "Runtime state is unavailable."}</p>
+      <div className="runtime-mode-control__facts"><span>Current state: <strong>{data.runtime.effectiveMode}</strong></span><span>Last changed: <strong>{data.runtime.lastChanged ? new Date(data.runtime.lastChanged).toLocaleString() : "Unavailable"}</strong></span></div>
+      <fieldset aria-label="Runtime Mode" disabled={Boolean(saving) || !data.runtime.editable}>
+        <legend>Runtime mode</legend>
+        {(["OFFLINE", "OBSERVE", "LIVE"] as const).map((mode) => <label className={data.runtime.configuredMode === mode ? "is-active" : ""} key={mode}><input checked={data.runtime.configuredMode === mode} name="runtime-mode" onChange={() => changeRuntime(mode)} type="radio" value={mode} /><span><strong>{mode}</strong><small>{runtimeDescriptions[mode]}</small></span></label>)}
+      </fieldset>
+      <small>Runtime mode controls execution eligibility only. Worker and launcher behavior remains unchanged.</small>
+    </section>
+    <section className="operations-card module-switches__master"><div><p className="page-header__eyebrow">Master autonomous execution control</p><h2>{master.label}</h2><div className="module-switches__master-states"><span>Configured: <strong>{master.configured ? "ON" : "OFF"}</strong></span><span>Effective: <strong className={master.effective === "ACTIVE" ? "is-good" : "needs-attention"}>{master.effective}</strong></span><span>Reason: <strong>{master.reason ? title(master.reason) : "No block recorded"}</strong></span><span>Last changed: <strong>{master.lastChanged ? new Date(master.lastChanged).toLocaleString() : "Unavailable"}</strong></span></div></div><button className={master.configured ? "is-on" : "is-off"} disabled={Boolean(saving)} aria-label="Toggle Autonomous Sales & Messaging" onClick={() => update(master.key, !master.configured)}>{saving === master.key ? "Saving…" : master.configured ? "Turn Off" : "Turn On"}</button></section>
+    <section className="operations-card commerce-mode-control"><div><p className="page-header__eyebrow">Read only</p><h2>Commerce Mode</h2><strong>{title(commerceMode.configuredMode)}</strong><p>{commerceMode.description}</p><small>Commerce Mode is managed from Creator Intelligence Center.</small></div></section>
     {!master.configured && <div className="operations-warning module-switches__off-banner"><AlertTriangle size={16} /><span>Autonomous sales and messaging are disabled. Workers remain online, but no autonomous messages or sales actions will execute.</span></div>}
     <Metrics values={[["Autonomous Sales & Messaging", master.effective], ["Global Sends", state(data.globalStatus.globalSends)], ["Manual Pause", data.globalStatus.manualPause ? "Paused" : "Clear"], ["Healthy Workers", health.healthy ?? 0], ["Stale / Failed", (health.stale ?? 0) + (health.failed ?? 0)]]} />
     {data.globalStatus.effectiveSafety === "BLOCKED" && <Warning>Effective safety is blocked: {title(data.globalStatus.reason)}</Warning>}

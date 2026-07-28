@@ -78,6 +78,9 @@ def create_webhook_event(event: dict):
             %s::jsonb,
             %s
         )
+        ON CONFLICT (external_event_id)
+            WHERE external_event_id IS NOT NULL
+        DO NOTHING
         RETURNING id;
     """
 
@@ -100,7 +103,9 @@ def create_webhook_event(event: dict):
 
             row = cursor.fetchone()
 
-            if isinstance(row, dict):
+            if row is None:
+                webhook_event_id = None
+            elif isinstance(row, dict):
                 webhook_event_id = row["id"]
             else:
                 webhook_event_id = row[0]

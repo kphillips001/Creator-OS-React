@@ -5,6 +5,22 @@ from typing import Any
 
 
 @dataclass(frozen=True)
+class ConversationBrainContext:
+    """Transport-neutral identity and execution context for one brain turn."""
+
+    creator_profile_id: int | None
+    customer_identifier: str
+    conversation_identifier: str
+    primary_sales_channel: str = "AI_CHAT"
+    developer_mode: bool = False
+    telegram_user_id: int | None = None
+    fanvue_account_id: int | None = None
+    external_fanvue_buyer_uuid: str | None = None
+    purchase_acknowledgement_pending: bool = False
+    purchase_acknowledgement_intent_id: str | None = None
+
+
+@dataclass(frozen=True)
 class ConversationGatewayInput:
     """Normalized input accepted at the application/brain boundary."""
 
@@ -12,6 +28,7 @@ class ConversationGatewayInput:
     message_text: str
     chat_history: list[Any]
     correlation_id: str
+    brain_context: ConversationBrainContext | None = None
 
 
 @dataclass(frozen=True)

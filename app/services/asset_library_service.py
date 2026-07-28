@@ -30,6 +30,7 @@ from app.repositories.product_repository import ProductRepository
 from app.services.asset_lifecycle_service import AssetLifecycleService
 from app.services.asset_understanding_service import AssetUnderstandingService
 from app.services.asset_intelligence_service import AssetIntelligenceService
+from app.services.content_destination_service import ContentDestinationService
 from app.services.experience_service import ExperienceService
 from app.services.local_vault_service import LocalVaultService
 from app.services.media_processing_service import MediaProcessingService
@@ -56,6 +57,7 @@ class AssetLibraryService:
         asset_understanding_service: AssetUnderstandingService | None = None,
         content_opportunity_service=None,
         asset_intelligence_service: AssetIntelligenceService | None = None,
+        content_destination_service: ContentDestinationService | None = None,
     ):
         self.assets = asset_repository or AssetRepository()
         self.runtime_media_resolver = runtime_media_resolver or RuntimeMediaResolver()
@@ -80,6 +82,10 @@ class AssetLibraryService:
         )
         self.content_opportunity_service = content_opportunity_service
         self.asset_intelligence = asset_intelligence_service or AssetIntelligenceService()
+        self.content_destinations = (
+            content_destination_service
+            or ContentDestinationService(asset_repository=self.assets)
+        )
 
     def search_assets(
         self,
@@ -105,6 +111,13 @@ class AssetLibraryService:
             has_derivative_preview=filters.has_derivative_preview,
             is_reference_image=filters.is_reference_image,
             legacy_content_id=filters.legacy_content_id,
+            availability_predicate=(
+                self.content_destinations.available_inventory_predicate(
+                    "content_items.id"
+                )
+                if filters.eligible_only
+                else None
+            ),
         )
         items = tuple(self.build_item(asset) for asset in assets)
         return AssetLibraryResult(
@@ -125,6 +138,11 @@ class AssetLibraryService:
             classification=filters.classification,
             creator_profile_id=int(filters.creator_profile_id or 0),
             limit=candidate_limit,
+            availability_predicate=(
+                self.content_destinations.available_inventory_predicate(
+                    "content_items.id"
+                )
+            ),
         )
 
     def build_items_by_ids(self, asset_ids: tuple[int, ...]) -> tuple[AssetLibraryItem, ...]:

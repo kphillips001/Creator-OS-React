@@ -77,10 +77,12 @@ def test_reads_configured_effective_and_unimplemented_states():
     assert result["globalStatus"]["heartbeatSummary"]["account"] == 7
     assert [item["label"] for item in result["deploymentReadiness"]] == [
         "Fanvue Live Replies", "Mass PPV Live Transport", "Reaction Live Execution",
-        "Telegram Runtime Readiness", "Webhook Processing",
+        "Telegram Runtime Readiness", "Webhook Processing", "Developer Agent",
     ]
     assert all(item["editable"] is False and item["source"] == "Environment"
-               for item in result["deploymentReadiness"])
+               for item in result["deploymentReadiness"][:-1])
+    assert result["deploymentReadiness"][-1]["editable"] is False
+    assert result["deploymentReadiness"][-1]["source"] == "Official Codex SDK"
 
 
 def test_operator_projections_ignore_deployment_permits(monkeypatch):
@@ -139,6 +141,16 @@ def test_runtime_updates_are_creator_scoped_and_do_not_rewrite_module_config():
     service.update("runtime", "LIVE", creator_profile_id=8)
     assert runtime.calls == [("7", "OBSERVE"), ("8", "LIVE")]
     assert store == original and saved == []
+
+
+def test_commerce_mode_is_independent_and_persisted():
+    service, store, runtime, saved = boundary()
+    assert service.read(creator_profile_id=7)["commerceMode"]["configuredMode"] == "LIVE"
+    result = service.update("commerce_mode", "RELATIONSHIP", creator_profile_id=7)
+    assert store["commerce_mode"] == "RELATIONSHIP"
+    assert result["commerceMode"]["description"] == "Conversation continues. Commerce disabled."
+    assert runtime.calls == []
+    assert len(saved) == 1
 
 
 def test_validation_rejects_unknown_informational_and_invalid_values():

@@ -29,7 +29,7 @@ describe("Generation Library Edit Studio handoff", () => {
   it("awaits the Photoshoot handoff and navigates with the selected seed", async () => {
     const fetch = vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
       const url = String(input);
-      if (url.includes("/api/v1/generation-library?")) return jsonResponse({ records: [selected], total: 1, page: 1, pageSize: 18, totalPages: 1, providers: [], modes: [] });
+      if (url.includes("/api/v1/generation-library?")) return jsonResponse({ records: [selected], total: 1, page: 1, pageSize: 20, totalPages: 1, providers: [], modes: [] });
       if (url.endsWith("/selected-image/photoshoot")) return jsonResponse({ success: true, image_id: "selected-image", session_id: "session-1", status: "pending_photoshoot", redirect: "/content/photoshoot" });
       if (url.endsWith("/api/v1/photoshoot/context")) return jsonResponse({ creator_profile_exists: true, pending_photoshoot: { ...selected, status: "pending_photoshoot" }, active_session: { session_id: "session-1", title: "Photoshoot Studio", provider_id: selected.provider_id }, provider_list: [], creative_mode: "premium", continuity_settings: { location: true, wardrobe: true, lighting: true, hairstyle: true, makeup: true, camera_style: true }, timeline_summary: [{ request_id: "seed-request", sequence_index: 1, shot_number: 1, label: "Shot 1 (Seed)", is_seed: true, image: { ...selected, status: "pending_photoshoot" } }] });
       return jsonResponse({ error: "Unexpected request" }, 500);
@@ -46,7 +46,7 @@ describe("Generation Library Edit Studio handoff", () => {
     const handoff = new Promise<Response>((resolve) => { resolveHandoff = resolve; });
     const fetch = vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
       const url = String(input);
-      if (url.includes("/api/v1/generation-library?")) return jsonResponse({ records: [selected], total: 1, page: 1, pageSize: 18, totalPages: 1, providers: [], modes: [] });
+      if (url.includes("/api/v1/generation-library?")) return jsonResponse({ records: [selected], total: 1, page: 1, pageSize: 20, totalPages: 1, providers: [], modes: [] });
       if (url.endsWith("/selected-image/photoshoot")) return handoff;
       return jsonResponse({ error: "Unexpected request" }, 500);
     });
@@ -61,7 +61,7 @@ describe("Generation Library Edit Studio handoff", () => {
     const fetch = vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
       const url = String(input);
       if (url.includes("/api/v1/generation-library?")) return jsonResponse({
-        records: [selected], total: 1, page: 1, pageSize: 18, totalPages: 1,
+        records: [selected], total: 1, page: 1, pageSize: 20, totalPages: 1,
         providers: ["seedream_5_0_pro"], modes: ["premium_teaser"],
       });
       if (url.endsWith("/api/v1/generation-library/selected-image/edit")) return jsonResponse({
@@ -109,7 +109,7 @@ describe("Generation Library Edit Studio handoff", () => {
     const fetch = vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
       const url = String(input);
       if (url.includes("/api/v1/generation-library?")) return jsonResponse({
-        records: [selected], total: 1, page: 1, pageSize: 18, totalPages: 1, providers: [], modes: [],
+        records: [selected], total: 1, page: 1, pageSize: 20, totalPages: 1, providers: [], modes: [],
       });
       if (url.endsWith("/api/v1/generation-library/selected-image/edit")) return handoff;
       return jsonResponse({ error: "Unexpected request" }, 500);
@@ -138,7 +138,7 @@ describe("Generation Library Edit Studio handoff", () => {
 describe("Generation Library Asset Library move", () => {
   it("uses a directional icon and reserves the star for future registration", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(() => jsonResponse({
-      records: [selected], total: 1, page: 1, pageSize: 18, totalPages: 1, providers: [], modes: [],
+      records: [selected], total: 1, page: 1, pageSize: 20, totalPages: 1, providers: [], modes: [],
     }));
     render(<MemoryRouter><GenerationLibraryPage /></MemoryRouter>);
 
@@ -154,7 +154,7 @@ describe("Generation Library Asset Library move", () => {
       const url = String(input);
       if (url.includes("/api/v1/generation-library?")) return jsonResponse({
         records: moved ? [] : [selected], total: moved ? 0 : 1,
-        page: 1, pageSize: 18, totalPages: 1, providers: [], modes: [],
+        page: 1, pageSize: 20, totalPages: 1, providers: [], modes: [],
       });
       if (url.endsWith("/selected-image/move-to-asset-library")) {
         moved = true;
@@ -172,7 +172,7 @@ describe("Generation Library Asset Library move", () => {
 
   it("surfaces move failures and keeps the action available", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation((input) => String(input).includes("generation-library?")
-      ? jsonResponse({ records: [selected], total: 1, page: 1, pageSize: 18, totalPages: 1, providers: [], modes: [] })
+      ? jsonResponse({ records: [selected], total: 1, page: 1, pageSize: 20, totalPages: 1, providers: [], modes: [] })
       : jsonResponse({ detail: "Generated image file is missing." }, 409));
     render(<MemoryRouter><GenerationLibraryPage /></MemoryRouter>);
     fireEvent.click(await screen.findByRole("button", { name: "Move to Asset Library" }));
@@ -182,7 +182,7 @@ describe("Generation Library Asset Library move", () => {
 
   it("keeps Create Video disabled and does not call a video endpoint", async () => {
     const fetch = vi.spyOn(globalThis, "fetch").mockImplementation(() => jsonResponse({
-      records: [selected], total: 1, page: 1, pageSize: 18, totalPages: 1, providers: [], modes: [],
+      records: [selected], total: 1, page: 1, pageSize: 20, totalPages: 1, providers: [], modes: [],
     }));
     render(<MemoryRouter><GenerationLibraryPage /></MemoryRouter>);
     const button = await screen.findByRole("button", { name: /Create Video/ });

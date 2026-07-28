@@ -1,6 +1,7 @@
 """Narrow developer-only API for exercising the Sales Agent brain."""
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
+from app.api.developer_authorization import require_developer_authorization
 from pydantic import BaseModel, Field
 
 from app.api.content_studio import _current_account_id
@@ -10,7 +11,11 @@ from app.services.test_chat_service import TestChatExecutionError, TestChatServi
 __test__ = False
 
 
-router = APIRouter(prefix="/api/v1/developer/test-chat", tags=["developer-test-chat"])
+router = APIRouter(
+    prefix="/api/v1/developer/test-chat",
+    tags=["developer-test-chat"],
+    dependencies=[Depends(require_developer_authorization)],
+)
 
 
 class TestChatTurnRequest(BaseModel):

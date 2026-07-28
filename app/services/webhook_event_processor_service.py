@@ -1,3 +1,4 @@
+import logging
 from uuid import uuid4
 
 from app.repositories.webhook_event_repository import claim_due_items, renew_claim, complete_claim, fail_claim
@@ -24,15 +25,14 @@ class WebhookEventProcessorService:
     def __init__(self, worker_instance_id: str | None = None):
         self.router = WebhookEventRouterService()
         self.worker_instance_id = worker_instance_id or f"webhook-processor-{uuid4()}"
+        self.logger = logging.getLogger("webhook-event-processor")
 
     def process_pending_events(self):
         events = claim_due_items(worker_instance_id=self.worker_instance_id)
 
-        print("\n===================================")
-        print(" PROCESSING WEBHOOK EVENTS ")
-        print("===================================")
-
-        print(f"pending_events={len(events)}")
+        self.logger.info(
+            "event=webhook_batch_claimed pending_count=%s", len(events)
+        )
 
         processing_results = []
 
@@ -40,7 +40,16 @@ class WebhookEventProcessorService:
             result = self._process_single_event(event)
             processing_results.append(result)
 
-        print("===================================\n")
+        reconciliation_results = (
+            self.router.commerce_signal_service.retry_pending(limit=25)
+        )
+        processing_results.extend(
+            {
+                "pipeline": "commerce_signal_reconciliation",
+                "result": result,
+            }
+            for result in reconciliation_results
+        )
 
         return processing_results
 
@@ -48,9 +57,12 @@ class WebhookEventProcessorService:
         webhook_event_id = event["id"]
         event_type = event["event_type"]
 
-        print("\n[PROCESSING EVENT]")
-        print(f"id={webhook_event_id}")
-        print(f"event_type={event_type}")
+        self.logger.info(
+            "event=webhook_processing_started webhook_event_id=%s "
+            "event_type=%s",
+            webhook_event_id,
+            event_type,
+        )
 
         try:
             if not renew_claim(webhook_event_id, worker_instance_id=self.worker_instance_id):
@@ -58,33 +70,32 @@ class WebhookEventProcessorService:
 
             route_result = self.router.route_event(event)
 
-            print(f"route_result={route_result}")
-
             complete_claim(webhook_event_id, worker_instance_id=self.worker_instance_id)
 
-            print("[EVENT PROCESSED]")
+            self.logger.info(
+                "event=webhook_processing_completed webhook_event_id=%s "
+                "event_type=%s",
+                webhook_event_id,
+                event_type,
+            )
 
             return route_result
 
         except Exception as e:
-            print("\n[EVENT PROCESSING FAILED]")
-            print(str(e))
-
-            import traceback
-
-            traceback_text = traceback.format_exc()
-            print(traceback_text)
-
             fail_claim(
                 webhook_event_id=webhook_event_id,
                 worker_instance_id=self.worker_instance_id,
-                error_message=str(e),
+                error_message=type(e).__name__,
             )
-
-            print("[EVENT MARKED FAILED]")
+            self.logger.exception(
+                "event=webhook_processing_failed webhook_event_id=%s "
+                "event_type=%s error_type=%s",
+                webhook_event_id,
+                event_type,
+                type(e).__name__,
+            )
 
             return {
                 "success": False,
-                "error": str(e),
-                "traceback": traceback_text,
+                "error": type(e).__name__,
             }

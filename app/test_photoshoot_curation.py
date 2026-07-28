@@ -34,7 +34,22 @@ def fixture(existing=None):
     library.stage_photoshoot_image_in_asset_library.side_effect = lambda image_id: (records[image_id], False)
     deliverables = Mock()
     auto = Mock()
-    return PhotoshootCurationService(queue=queue, library=library, deliverables=deliverables, auto_run=auto), queue, library, deliverables
+    destinations = Mock()
+    creative_intelligence = Mock()
+    return (
+        PhotoshootCurationService(
+            queue=queue,
+            library=library,
+            deliverables=deliverables,
+            auto_run=auto,
+            content_destinations=destinations,
+            creative_intelligence=creative_intelligence,
+        ),
+        queue,
+        library,
+        deliverables,
+        destinations,
+    )
 
 
 def test_review_displays_seed_first_and_preserves_generated_order_and_descriptions():
@@ -50,7 +65,7 @@ def test_review_displays_seed_first_and_preserves_generated_order_and_descriptio
 
 @pytest.mark.parametrize("selected,staged", [(["image-2"], 1), ([], 0)])
 def test_declined_session_optionally_stages_images_and_creates_no_photoshoot(selected, staged):
-    service, queue, library, deliverables = fixture()
+    service, queue, library, deliverables, _ = fixture()
     result = service.confirm(creator_profile_id=2, session_id="session-1", selected_image_ids=selected, photoshoot_decision="DECLINED")
     assert result["status"] == "archived"
     assert library.stage_photoshoot_image_in_asset_library.call_count == staged
@@ -61,7 +76,7 @@ def test_declined_session_optionally_stages_images_and_creates_no_photoshoot(sel
 def test_repeated_confirmation_returns_persisted_result_without_duplicate_writes():
     existing = {"mode": "BOTH", "selected_image_ids": ["image-1"], "photoshoot_created": True,
                 "photoshoot_deliverable_id": "set-1", "image_asset_generation_ids": ["image-1"]}
-    service, queue, library, deliverables = fixture(existing)
+    service, queue, library, deliverables, _ = fixture(existing)
     result = service.confirm(creator_profile_id=2, session_id="session-1", selected_image_ids=["image-2"], photoshoot_decision="DECLINED")
     assert result["already_confirmed"] is True
     assert result["photoshoot_decision"] == "APPROVED"
@@ -85,8 +100,8 @@ def test_legacy_modes_reconcile_idempotently(mode, decision):
     queue.reconcile_curation.assert_called_once()
 
 
-def test_approved_photoshoot_includes_seed_and_creates_no_standalone_images():
-    service, queue, library, deliverables = fixture()
+def test_approved_photoshoot_includes_seed_and_leaves_commitment_to_offering_creation():
+    service, queue, library, deliverables, destinations = fixture()
     row = {"deliverable_id": "set-1", "registration_state": "PHOTOSHOOT_COMPLETE"}
     deliverables.repository.upsert_deliverable.return_value = row
     deliverables.repository.add_to_asset_library.return_value = {**row, "registration_state": "IN_ASSET_LIBRARY"}
@@ -100,5 +115,80 @@ def test_approved_photoshoot_includes_seed_and_creates_no_standalone_images():
     library.approve_creator_content.assert_called_once()
     library.stage_photoshoot_image_in_asset_library.assert_not_called()
     deliverables.repository.replace_members.assert_called_once_with("session-1", ((90, 1), (92, 2), (91, 3)), 90)
+    library.finish_photoshoot_session.assert_called_once_with(
+        session_id="session-1",
+        approved_image_ids=("seed", "image-2", "image-1"),
+        session_title="Shoot",
+    )
+    destinations.commit_to_destination.assert_not_called()
     deliverables.repository.add_to_asset_library.assert_called_once_with("set-1", 2)
     deliverables.workflows.enqueue.assert_not_called()
+
+
+def test_approved_photoshoot_does_not_commercially_commit_selected_members():
+    service, _, library, deliverables, destinations = fixture()
+    row = {"deliverable_id": "set-1"}
+    deliverables.repository.upsert_deliverable.return_value = row
+    deliverables.repository.add_to_asset_library.return_value = row
+    deliverables.repository.get.return_value = row
+    deliverables.naming.generate.return_value = ("Shoot", "Description")
+    deliverables._completed_at.return_value = "now"
+
+    service.confirm(
+        creator_profile_id=2,
+        session_id="session-1",
+        selected_image_ids=["image-2"],
+        photoshoot_decision="APPROVED",
+    )
+
+    deliverables.repository.replace_members.assert_called_once_with(
+        "session-1", ((90, 1), (92, 2)), 90
+    )
+    library.finish_photoshoot_session.assert_called_once_with(
+        session_id="session-1",
+        approved_image_ids=("seed", "image-2"),
+        session_title="Shoot",
+    )
+    destinations.commit_to_destination.assert_not_called()
+
+
+def test_selected_photoshoot_images_feed_the_shared_learning_pipeline():
+    service, _, _, deliverables, _ = fixture()
+    row = {"deliverable_id": "set-1"}
+    deliverables.repository.upsert_deliverable.return_value = row
+    deliverables.repository.add_to_asset_library.return_value = row
+    deliverables.repository.get.return_value = row
+    deliverables.naming.generate.return_value = ("Shoot", "Description")
+    deliverables._completed_at.return_value = "now"
+
+    service.confirm(
+        creator_profile_id=2,
+        session_id="session-1",
+        selected_image_ids=["image-1"],
+        photoshoot_decision="APPROVED",
+    )
+
+    learned_ids = {
+        call.kwargs["source_image_id"]
+        for call in service.creative_intelligence.record_positive_safely.call_args_list
+    }
+    assert learned_ids == {"seed", "image-1"}
+    assert all(
+        call.kwargs["event_type"] == "photoshoot_added"
+        for call in service.creative_intelligence.record_positive_safely.call_args_list
+    )
+
+
+def test_invalid_candidate_is_rejected_before_finalization():
+    service, queue, library, deliverables, destinations = fixture()
+    with pytest.raises(ValueError, match="not an approved candidate"):
+        service.confirm(
+            creator_profile_id=2,
+            session_id="session-1",
+            selected_image_ids=["rejected-image"],
+            photoshoot_decision="APPROVED",
+        )
+    library.finish_photoshoot_session.assert_not_called()
+    deliverables.repository.replace_members.assert_not_called()
+    destinations.commit_to_destination.assert_not_called()
+    queue.archive_curated_session.assert_not_called()

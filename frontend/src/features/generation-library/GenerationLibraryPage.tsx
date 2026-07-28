@@ -1,16 +1,24 @@
 import {
   ArrowLeft,
   ArrowRight,
+  Camera,
   ChevronLeft,
   ChevronRight,
+  Clapperboard,
   MoveRight,
+  Pencil,
+  Rocket,
   Search,
   SlidersHorizontal,
   Sparkles,
+  Trash2,
+  Video,
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+
+import { LibraryActionButton, LibraryActionGroup } from "../../shared/ui/LibraryActionButton";
 
 import type {
   GenerationActionResponse,
@@ -26,7 +34,7 @@ const EMPTY_RESULT: GenerationLibraryResponse = {
   records: [],
   total: 0,
   page: 1,
-  pageSize: 18,
+  pageSize: 20,
   totalPages: 1,
   providers: [],
   modes: [],
@@ -292,15 +300,15 @@ export function GenerationLibraryPage() {
               >
                 <LibraryImage priority={index < 4} record={record} />
               </button>
-              <div className="generation-card__workflow-actions" aria-label="Generation actions">
-                <button onClick={() => setPublishRecord(record)} title="Publish" type="button"><span>🚀</span>Publish</button>
-                <button disabled={pendingAction.endsWith(":edit")} onClick={() => runCardAction(record, "edit")} title="Edit Image" type="button"><span>✏️</span>Edit Image</button>
-                <button disabled={pendingAction === `${record.image_id}:photoshoot`} onClick={() => runCardAction(record, "photoshoot")} title="Create Photoshoot" type="button"><span>📸</span>Create Photoshoot</button>
-                <button onClick={showStoryNotice} title="Create Story" type="button"><span>🎬</span>Create Story</button>
-                <button disabled title="Video Studio Coming Soon" type="button"><span>🎥</span>Create Video · Coming Soon</button>
-                <button aria-label="Move to Asset Library" disabled={pendingAction === `${record.image_id}:move-to-asset-library`} onClick={() => runCardAction(record, "move-to-asset-library")} title="Move to Asset Library" type="button"><MoveRight aria-hidden="true" size={16} />Move to Asset Library</button>
-                <button disabled={pendingAction === `${record.image_id}:remove`} onClick={() => runCardAction(record, "remove")} title="Remove Content" type="button"><span>🗑️</span>Remove</button>
-              </div>
+              <LibraryActionGroup label="Generation actions">
+                <LibraryActionButton icon={Rocket} onClick={() => setPublishRecord(record)} tooltip="Publish" />
+                <LibraryActionButton disabled={pendingAction.endsWith(":edit")} icon={Pencil} onClick={() => runCardAction(record, "edit")} tooltip="Edit Image" />
+                <LibraryActionButton disabled={pendingAction === `${record.image_id}:photoshoot`} icon={Camera} onClick={() => runCardAction(record, "photoshoot")} tooltip="Create Photoshoot" />
+                <LibraryActionButton icon={Clapperboard} onClick={showStoryNotice} tooltip="Create Story" />
+                <LibraryActionButton aria-label="Create Video · Coming Soon" disabled icon={Video} tooltip="Video Studio Coming Soon" />
+                <LibraryActionButton disabled={pendingAction === `${record.image_id}:move-to-asset-library`} icon={MoveRight} onClick={() => runCardAction(record, "move-to-asset-library")} tooltip="Move to Asset Library" />
+                <LibraryActionButton disabled={pendingAction === `${record.image_id}:remove`} icon={Trash2} onClick={() => runCardAction(record, "remove")} tooltip="Remove Content" />
+              </LibraryActionGroup>
             </article>
           );
         })}

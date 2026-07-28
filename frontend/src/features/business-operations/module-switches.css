@@ -7,12 +7,33 @@
 .module-switch-row button:disabled { opacity: .55; cursor: not-allowed; }
 .module-switch-row__info { color: var(--color-text-tertiary); font-size: .7rem; }
 .module-switches__success { padding: .7rem .85rem; border: 1px solid rgba(34, 197, 94, .3); border-radius: 10px; color: #86efac; background: rgba(34, 197, 94, .06); font-size: .72rem; }
+.runtime-mode-control { display: grid; gap: .8rem; border-color: var(--color-accent-border); }
+.runtime-mode-control__header { display: flex; align-items: start; justify-content: space-between; gap: 1rem; }
+.runtime-mode-control h2,.runtime-mode-control p { margin: .2rem 0; }
+.runtime-mode-control > p,.runtime-mode-control > small { color: var(--color-text-secondary); font-size: .72rem; }
+.runtime-mode-control__state { padding: .3rem .55rem; border: 1px solid var(--color-border); border-radius: 999px; font-size: .68rem; }
+.runtime-mode-control__state--live { color: #86efac; border-color: rgba(34,197,94,.4); }
+.runtime-mode-control__state--observe { color: #fde68a; border-color: rgba(234,179,8,.4); }
+.runtime-mode-control__state--offline { color: #fca5a5; border-color: rgba(239,68,68,.4); }
+.runtime-mode-control__facts { display: flex; flex-wrap: wrap; gap: .4rem 1rem; color: var(--color-text-secondary); font-size: .72rem; }
+.runtime-mode-control fieldset { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: .55rem; margin: 0; padding: 0; border: 0; }
+.runtime-mode-control legend { margin-bottom: .45rem; color: var(--color-text-tertiary); font-size: .68rem; }
+.runtime-mode-control label { display: flex; align-items: start; gap: .55rem; padding: .7rem; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-surface); cursor: pointer; }
+.runtime-mode-control label.is-active { border-color: var(--color-accent-border); background: var(--color-accent-surface); }
+.runtime-mode-control label small { display: block; margin-top: .25rem; color: var(--color-text-secondary); font-size: .65rem; line-height: 1.4; }
+.runtime-mode-control input { margin-top: .15rem; accent-color: var(--color-accent); }
+.runtime-mode-control fieldset:disabled label { cursor: not-allowed; opacity: .6; }
 .module-switches__master { display: flex; align-items: center; justify-content: space-between; gap: 1rem; border-color: rgba(239, 68, 68, .35); }
 .module-switches__master h2 { margin: .2rem 0 .7rem; }
 .module-switches__master-states { display: flex; flex-wrap: wrap; gap: .45rem 1rem; font-size: .72rem; color: var(--text-muted); }
 .module-switches__master button { min-width: 110px; border: 1px solid #ef4444; border-radius: 10px; padding: .7rem 1rem; color: #fca5a5; background: #080808; font-weight: 700; }
 .module-switches__master button.is-off { color: #86efac; border-color: #22c55e; }
 .module-switches__off-banner { border-color: rgba(239, 68, 68, .45); color: #fecaca; }
+.commerce-mode-control { display:grid; gap:.7rem; }
+.commerce-mode-control h2,.commerce-mode-control p { margin:.2rem 0; }
+.commerce-mode-control [role="group"] { display:flex; flex-wrap:wrap; gap:.45rem; }
+.commerce-mode-control button { padding:.5rem .8rem; border:1px solid var(--color-border); border-radius:8px; background:var(--color-surface-raised); color:var(--color-text-secondary); }
+.commerce-mode-control button.is-active { border-color:var(--color-accent-border); background:var(--color-accent-surface); color:var(--color-accent); }
 .deployment-readiness { border-color: rgba(148, 163, 184, .22); background: rgba(148, 163, 184, .035); }
 .deployment-readiness__header { display: flex; align-items: start; justify-content: space-between; gap: 1rem; }
 .deployment-readiness__header h2 { margin-top: .2rem; }
@@ -28,3 +49,4 @@
 .deployment-readiness__card p { margin: 0; color: var(--color-text-secondary); font-size: .68rem; line-height: 1.45; }
 @media (max-width: 700px) { .module-switches__grid { grid-template-columns: 1fr; } }
 @media (max-width: 700px) { .module-switches__master { align-items: stretch; flex-direction: column; } }
+@media (max-width: 700px) { .runtime-mode-control fieldset { grid-template-columns: 1fr; } }

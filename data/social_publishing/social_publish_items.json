@@ -1,5 +1,161 @@
 [
   {
+    "publish_request_id": "social_publish_item_9f1dd10d0bb14d43abe2e5216ae7ae4b",
+    "queue_item_id": "social_queue_item_6b073e08a77145e1986b7ca5434031f0",
+    "platform": "x",
+    "caption_id": null,
+    "scheduled_for": null,
+    "status": "posted",
+    "created_at": "2026-07-27T15:22:07.091711",
+    "metadata": {
+      "posting_implemented": true,
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "provider_post_id": "2081762064977059879",
+      "provider_media_id": "2081762062376620032",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2081762064977059879",
+      "provider_metadata": {
+        "tweet_data": {
+          "edit_history_tweet_ids": [
+            ""
+          ],
+          "id": "2081762064977059879",
+          "text": "If we had this whole beach to ourselves, what's the plan? \u2600\ufe0f\ud83d\udc47 https://t.co/xEmuJPPu6a"
+        }
+      }
+    }
+  },
+  {
+    "publish_request_id": "social_publish_item_02838368084d4623979243da230be927",
+    "queue_item_id": "social_queue_item_449c33875d8942d08a91596c9a1af97b",
+    "platform": "x",
+    "caption_id": null,
+    "scheduled_for": null,
+    "status": "posted",
+    "created_at": "2026-07-26T16:25:35.194193",
+    "metadata": {
+      "posting_implemented": true,
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "provider_post_id": "2081415648266088780",
+      "provider_media_id": "2081415646391173120",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2081415648266088780",
+      "provider_metadata": {
+        "tweet_data": {
+          "edit_history_tweet_ids": [
+            ""
+          ],
+          "id": "2081415648266088780",
+          "text": "If we started talking right now, what's the first topic you'd bring up? \ud83d\udc47 https://t.co/CscmlaQ2dS"
+        }
+      }
+    }
+  },
+  {
+    "publish_request_id": "social_publish_item_39e38d0afb3541a99c6f6207ea4ad57b",
+    "queue_item_id": "social_queue_item_d3cbd001b3cc4021b417a221290cbb42",
+    "platform": "x",
+    "caption_id": null,
+    "scheduled_for": null,
+    "status": "posted",
+    "created_at": "2026-07-25T16:12:57.568805",
+    "metadata": {
+      "posting_implemented": true,
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "provider_post_id": "2081050082443411613",
+      "provider_media_id": "2081050080673509376",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2081050082443411613",
+      "provider_metadata": {
+        "tweet_data": {
+          "edit_history_tweet_ids": [
+            ""
+          ],
+          "id": "2081050082443411613",
+          "text": "What's one thing that instantly gets your attention about someone? \ud83d\udc47 https://t.co/2DDf8GfgTI"
+        }
+      }
+    }
+  },
+  {
+    "publish_request_id": "social_publish_item_6ff56e9654b44563bad1574dd9608f55",
+    "queue_item_id": "social_queue_item_2e0ed2d3930b4658ac0c45198d9e8ebe",
+    "platform": "x",
+    "caption_id": null,
+    "scheduled_for": null,
+    "status": "posted",
+    "created_at": "2026-07-24T15:59:58.526982",
+    "metadata": {
+      "posting_implemented": true,
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "provider_post_id": "2080684426963366005",
+      "provider_media_id": "2080684425239547904",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2080684426963366005",
+      "provider_metadata": {
+        "tweet_data": {
+          "edit_history_tweet_ids": [
+            ""
+          ],
+          "id": "2080684426963366005",
+          "text": "Okay... what's your excuse for showing up at my place? \ud83d\ude0f\ud83d\udc47 https://t.co/TJli1tHwUv"
+        }
+      }
+    }
+  },
+  {
+    "publish_request_id": "social_publish_item_3a4800dca384433abac647a8e3f29843",
+    "queue_item_id": "social_queue_item_568a238a41854a2a912296a907e1300f",
+    "platform": "x",
+    "caption_id": null,
+    "scheduled_for": null,
+    "status": "posted",
+    "created_at": "2026-07-23T15:23:06.236764",
+    "metadata": {
+      "posting_implemented": true,
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "provider_post_id": "2080312760114569442",
+      "provider_media_id": "2080312758239723520",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2080312760114569442",
+      "provider_metadata": {
+        "tweet_data": {
+          "edit_history_tweet_ids": [
+            ""
+          ],
+          "id": "2080312760114569442",
+          "text": "If we stayed here until sunset, what would we end up talking about? \ud83d\udc40\ud83d\udc47 https://t.co/P2vTR9F2ve"
+        }
+      }
+    }
+  },
+  {
+    "publish_request_id": "social_publish_item_70983dd71f934915a88f614bc2398eb0",
+    "queue_item_id": "social_queue_item_d309f2cddbbf4f65ad4131cffc169a47",
+    "platform": "x",
+    "caption_id": null,
+    "scheduled_for": null,
+    "status": "posted",
+    "created_at": "2026-07-22T18:24:32.635218",
+    "metadata": {
+      "posting_implemented": true,
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "provider_post_id": "2079996032801263628",
+      "provider_media_id": "2079996030993518592",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2079996032801263628",
+      "provider_metadata": {
+        "tweet_data": {
+          "edit_history_tweet_ids": [
+            ""
+          ],
+          "id": "2079996032801263628",
+          "text": "We just crossed paths\u2026 are you saying hi or letting me walk away? \ud83d\udc40\ud83d\udc47 https://t.co/rzewwCkVYH"
+        }
+      }
+    }
+  },
+  {
     "publish_request_id": "social_publish_item_e342f5b957ce4779994a06b94e737bbe",
     "queue_item_id": "social_queue_item_648b4d9016824e80a5a72060db650eda",
     "platform": "x",

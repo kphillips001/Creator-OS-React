@@ -41,7 +41,6 @@ def run_test():
     )
 
     print("\n--- PAYLOAD RESULT ---")
-    print(payload)
 
     if payload is None:
         print("\n✅ PASS: Duplicate payload was blocked")

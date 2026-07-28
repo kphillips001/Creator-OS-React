@@ -76,7 +76,7 @@ class TelethonUserTransport:
         except Exception as error:
             self._log_error("disconnect", error)
 
-    async def send_text(self, *, chat_id: int, message_text: str) -> None:
+    async def send_text(self, *, chat_id: int, message_text: str) -> int | None:
         if isinstance(chat_id, bool) or not isinstance(chat_id, int) or chat_id <= 0:
             raise ValueError("chat_id must be a positive private-chat identifier")
         if not isinstance(message_text, str) or not message_text.strip():
@@ -88,7 +88,9 @@ class TelethonUserTransport:
             len(message_text),
         )
         try:
-            await self._client.send_message(chat_id, message_text)
+            message = await self._client.send_message(chat_id, message_text)
+            message_id = getattr(message, "id", None)
+            return message_id if isinstance(message_id, int) else None
         except Exception as error:
             self._log_error("send", error, chat_id=chat_id)
             raise TelethonTransportError("Telethon send failed.") from None

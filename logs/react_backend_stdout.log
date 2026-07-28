@@ -1,15 +1,1988 @@
-INFO:     127.0.0.1:62507 - "GET /api/v1/generation-library/generated_image_ec2a0abae340dc76498c65cc/publish HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62545 - "GET /api/v1/generation-library/generated_image_ec2a0abae340dc76498c65cc/publish HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59797 - "GET /api/v1/generation-library/generated_image_ec2a0abae340dc76498c65cc/publish HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59798 - "GET /api/v1/generation-library/generated_image_ec2a0abae340dc76498c65cc/publish HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59896 - "GET /api/v1/generation-library/generated_image_ec2a0abae340dc76498c65cc/publish HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51123 - "GET /api/v1/content-studio/context HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49730 - "GET /api/v1/content-studio/context HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52682 - "GET /api/v1/content-studio/context HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52743 - "GET /api/v1/content-studio/context HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50226 - "GET /api/status HTTP/1.1" 404 Not Found
-INFO:     127.0.0.1:58953 - "GET /api/v1/photoshoot/status?session_id=photoshoot_session_f40435069c2349b4829a7e0684005c00 HTTP/1.1" 404 Not Found
-INFO:     127.0.0.1:55752 - "GET /api/v1/photoshoot/context HTTP/1.1" 404 Not Found
-INFO:     127.0.0.1:54477 - "GET /api/v1/assets?page=1&page_size=18 HTTP/1.1" 404 Not Found
-INFO:     127.0.0.1:50461 - "GET /api/v1/assets?page=1&page_size=18 HTTP/1.1" 404 Not Found
-INFO:     127.0.0.1:63009 - "GET /api/v1/reference-library/active HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:52298 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52299 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61641 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61642 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56320 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56319 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56315 - "GET /api/v1/developer-agent/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55559 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55560 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57045 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57046 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63746 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63747 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57574 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57575 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56633 - "POST /api/v1/developer-agent/tasks/dispatch HTTP/1.1" 202 Accepted
+INFO:     127.0.0.1:56648 - "GET /api/v1/developer-agent/executions/8583670a-a5bd-42ad-b79b-821a10b45594 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56654 - "GET /api/v1/developer-agent/executions/8583670a-a5bd-42ad-b79b-821a10b45594 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56675 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56676 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58271 - "GET /api/v1/developer-agent/executions/8583670a-a5bd-42ad-b79b-821a10b45594 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58282 - "GET /api/v1/developer-agent/executions/8583670a-a5bd-42ad-b79b-821a10b45594 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53739 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53740 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53744 - "GET /api/v1/developer-agent/executions/8583670a-a5bd-42ad-b79b-821a10b45594 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56990 - "GET /api/v1/developer-agent/executions/8583670a-a5bd-42ad-b79b-821a10b45594 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57008 - "GET /api/v1/developer-agent/executions/8583670a-a5bd-42ad-b79b-821a10b45594 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57017 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57016 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55661 - "GET /api/v1/developer-agent/executions/8583670a-a5bd-42ad-b79b-821a10b45594 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55668 - "GET /api/v1/developer-agent/executions/8583670a-a5bd-42ad-b79b-821a10b45594 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54839 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54838 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54844 - "GET /api/v1/developer-agent/executions/8583670a-a5bd-42ad-b79b-821a10b45594 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58264 - "GET /api/v1/developer-agent/executions/8583670a-a5bd-42ad-b79b-821a10b45594 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54693 - "GET /api/v1/developer-agent/executions/8583670a-a5bd-42ad-b79b-821a10b45594 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54705 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54706 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54710 - "GET /api/v1/developer-agent/executions/8583670a-a5bd-42ad-b79b-821a10b45594 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56926 - "GET /api/v1/developer-agent/executions/8583670a-a5bd-42ad-b79b-821a10b45594 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56935 - "GET /api/v1/developer-agent/executions/8583670a-a5bd-42ad-b79b-821a10b45594 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56940 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56941 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62072 - "GET /api/v1/developer-agent/executions/8583670a-a5bd-42ad-b79b-821a10b45594 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62085 - "GET /api/v1/developer-agent/executions/8583670a-a5bd-42ad-b79b-821a10b45594 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62088 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62099 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62098 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50801 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50802 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53729 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53730 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62192 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62193 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63912 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63913 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57771 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57770 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52115 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52116 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54409 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54410 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58575 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58576 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51643 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51644 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65186 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65187 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62929 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62930 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58398 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58399 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49441 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49442 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60594 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60593 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51662 - "GET /api/v1/developer-agent/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51678 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51677 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59963 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59964 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59199 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59200 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53771 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53772 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57116 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57117 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57939 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57940 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53843 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53844 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55499 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55500 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65191 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65192 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61126 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61127 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61903 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61904 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63383 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63384 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58828 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58829 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53579 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53580 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50654 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50655 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52189 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52190 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57659 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57660 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52467 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52466 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52446 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52445 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56936 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56937 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52094 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52095 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58364 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58365 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49460 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49461 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57192 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57191 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65460 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65461 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56596 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56597 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62592 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62593 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50732 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50733 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61233 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61234 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63164 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63163 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49210 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49211 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62040 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62041 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54830 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54831 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49634 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49635 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50847 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50848 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56783 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56784 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63200 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63201 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55886 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55887 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64540 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64541 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57176 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57177 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51943 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51944 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63358 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63357 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53830 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53829 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63990 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63991 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51890 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51891 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56419 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56420 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62340 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62339 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64733 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64734 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65396 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65397 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57594 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57595 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51133 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51134 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60412 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60413 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56663 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56664 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50995 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50996 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53617 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53616 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51286 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51287 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59867 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59868 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54083 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54082 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64433 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64434 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64970 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64971 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52965 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52964 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58643 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58644 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57854 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57855 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51340 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51341 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63592 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63593 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62578 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62579 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49978 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49977 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64099 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64100 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54912 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54913 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53166 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53167 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59530 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59531 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62953 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62954 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55367 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55368 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55454 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55455 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50153 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50154 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57989 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57988 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64691 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64692 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61713 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61714 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53067 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53068 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50073 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50074 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56861 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56862 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52172 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52173 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56424 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56425 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55565 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55564 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53892 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53893 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51458 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51459 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63020 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63021 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60123 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60124 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54508 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54509 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65268 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65269 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61664 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61665 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51424 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51425 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55855 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55856 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53503 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53504 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54059 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54058 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59722 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59723 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49260 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49259 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65163 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65162 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55653 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55654 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54001 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54002 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50046 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50045 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62806 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62807 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62827 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62830 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62826 - "GET /api/v1/developer-agent/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62845 - "GET /api/v1/developer-agent/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56495 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56502 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57944 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57943 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62824 - "GET /api/v1/operations/module-switches HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62842 - "GET /api/v1/operations/module-switches HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55607 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55608 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62822 - "GET /api/v1/creator-intelligence HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61146 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61145 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62831 - "GET /api/v1/creator-intelligence HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61154 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61153 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61142 - "GET /api/v1/developer-agent/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61152 - "GET /api/v1/developer-agent/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61175 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61174 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59734 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59735 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62454 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62455 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63801 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63802 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58814 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58815 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59601 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59600 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59599 - "GET /api/v1/developer-agent/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59615 - "GET /api/v1/developer-agent/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59624 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59635 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54720 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54721 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59611 - "GET /api/v1/operations/module-switches HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59598 - "GET /api/v1/operations/module-switches HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57459 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57460 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59602 - "GET /api/v1/creator-intelligence HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58762 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59597 - "GET /api/v1/creator-intelligence HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58761 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53420 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53419 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58760 - "GET /api/v1/developer-agent/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53417 - "GET /api/v1/developer-agent/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53437 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53438 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50731 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50732 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62649 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62648 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50271 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50272 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56629 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56628 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59597 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59598 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60147 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60148 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60165 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60166 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60164 - "GET /api/v1/developer-agent/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60182 - "GET /api/v1/developer-agent/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60191 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60201 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53283 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53282 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60178 - "GET /api/v1/operations/module-switches HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60162 - "GET /api/v1/operations/module-switches HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59277 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59278 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60167 - "GET /api/v1/creator-intelligence HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53002 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53003 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60159 - "GET /api/v1/creator-intelligence HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53001 - "GET /api/v1/developer-agent/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53028 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53027 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53026 - "GET /api/v1/developer-agent/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53045 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53044 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64172 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64171 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62933 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62934 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50288 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50289 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56079 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56080 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56075 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56074 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57113 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57112 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55475 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55474 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60644 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60645 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63684 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63685 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54958 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54959 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50058 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50059 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52838 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52837 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58389 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58390 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50355 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50354 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51227 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51228 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51223 - "GET /api/v1/developer-agent/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57846 - "GET /api/v1/developer-agent/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57858 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57866 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58014 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58015 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51222 - "GET /api/v1/operations/module-switches HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57843 - "GET /api/v1/operations/module-switches HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64606 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64605 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52505 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52506 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51220 - "GET /api/v1/creator-intelligence HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64808 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64809 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51230 - "GET /api/v1/creator-intelligence HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64822 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64821 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64807 - "GET /api/v1/developer-agent/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64820 - "GET /api/v1/developer-agent/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64887 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64886 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57518 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57519 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50289 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50290 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57703 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57704 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49670 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49675 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63942 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63943 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65136 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65137 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60035 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60036 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64385 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64386 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61827 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61828 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64693 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64694 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61444 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61443 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56402 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56403 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53137 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53138 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65457 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65458 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53510 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53511 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65198 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65199 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57413 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57414 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61332 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61331 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51232 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51233 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61402 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61403 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58018 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58019 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58689 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58688 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62192 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62193 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56164 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56165 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54131 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54132 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55162 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55163 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55023 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55024 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53052 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53053 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52143 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52144 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58950 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58951 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49882 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49883 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61380 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61381 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53608 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53609 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50994 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50995 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51546 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51545 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54951 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54950 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55406 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55407 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52318 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52319 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54142 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54141 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49573 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49574 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57261 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57262 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49910 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49911 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59197 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59196 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54108 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54109 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52468 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52475 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51948 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51947 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53521 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53520 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58411 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58412 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64840 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64841 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57173 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57172 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62803 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62804 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52296 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52295 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54742 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54743 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51542 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51545 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51074 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51073 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51575 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51574 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50047 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50048 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58822 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58821 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59956 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59957 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52999 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52998 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53270 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53271 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63540 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63541 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62887 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62888 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61581 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61582 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51667 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51668 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64589 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64588 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59378 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59377 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60529 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60528 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62546 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62550 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62545 - "GET /api/v1/developer-agent/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62564 - "GET /api/v1/developer-agent/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62573 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62582 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60996 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60995 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62543 - "GET /api/v1/operations/module-switches HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62560 - "GET /api/v1/operations/module-switches HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64171 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64172 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62551 - "GET /api/v1/creator-intelligence HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62542 - "GET /api/v1/creator-intelligence HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62374 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62375 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62383 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62382 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62373 - "GET /api/v1/developer-agent/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62381 - "GET /api/v1/developer-agent/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60280 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60281 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59271 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59272 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50460 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50461 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60078 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60079 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55932 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55933 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50726 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50727 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53244 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53245 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55528 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55529 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61357 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61358 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55542 - "POST /api/v1/developer-agent/tasks/dispatch HTTP/1.1" 202 Accepted
+INFO:     127.0.0.1:61372 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61373 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63823 - "GET /api/v1/developer-agent/executions/ff5c9039-e896-406b-af56-ae14d26700c3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63835 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63836 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63119 - "GET /api/v1/developer-agent/executions/ff5c9039-e896-406b-af56-ae14d26700c3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58747 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58748 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58771 - "GET /api/v1/developer-agent/executions/ff5c9039-e896-406b-af56-ae14d26700c3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58095 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58096 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49455 - "GET /api/v1/developer-agent/executions/ff5c9039-e896-406b-af56-ae14d26700c3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49471 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49472 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51777 - "GET /api/v1/developer-agent/executions/ff5c9039-e896-406b-af56-ae14d26700c3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49325 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49326 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49339 - "GET /api/v1/developer-agent/executions/ff5c9039-e896-406b-af56-ae14d26700c3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54318 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54319 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49422 - "GET /api/v1/developer-agent/executions/ff5c9039-e896-406b-af56-ae14d26700c3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49438 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49439 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50211 - "GET /api/v1/developer-agent/executions/ff5c9039-e896-406b-af56-ae14d26700c3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54184 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54185 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54202 - "GET /api/v1/developer-agent/executions/ff5c9039-e896-406b-af56-ae14d26700c3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62773 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62774 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62792 - "GET /api/v1/developer-agent/executions/ff5c9039-e896-406b-af56-ae14d26700c3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51150 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51151 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60548 - "GET /api/v1/developer-agent/executions/ff5c9039-e896-406b-af56-ae14d26700c3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56234 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56235 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56250 - "GET /api/v1/developer-agent/executions/ff5c9039-e896-406b-af56-ae14d26700c3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50354 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50355 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50370 - "GET /api/v1/developer-agent/executions/ff5c9039-e896-406b-af56-ae14d26700c3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49358 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49359 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55961 - "GET /api/v1/developer-agent/executions/ff5c9039-e896-406b-af56-ae14d26700c3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58724 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58725 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58741 - "GET /api/v1/developer-agent/executions/ff5c9039-e896-406b-af56-ae14d26700c3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56640 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56641 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56649 - "GET /api/v1/developer-agent/executions/ff5c9039-e896-406b-af56-ae14d26700c3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52971 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52972 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58376 - "GET /api/v1/developer-agent/executions/ff5c9039-e896-406b-af56-ae14d26700c3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58392 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58391 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53973 - "GET /api/v1/developer-agent/executions/ff5c9039-e896-406b-af56-ae14d26700c3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53985 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53986 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57037 - "GET /api/v1/developer-agent/executions/ff5c9039-e896-406b-af56-ae14d26700c3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53342 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53343 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61320 - "GET /api/v1/developer-agent/executions/ff5c9039-e896-406b-af56-ae14d26700c3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53769 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53770 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62852 - "GET /api/v1/developer-agent/executions/ff5c9039-e896-406b-af56-ae14d26700c3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62866 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62867 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60306 - "GET /api/v1/developer-agent/executions/ff5c9039-e896-406b-af56-ae14d26700c3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61238 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61239 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61182 - "GET /api/v1/developer-agent/executions/ff5c9039-e896-406b-af56-ae14d26700c3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61190 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61191 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63429 - "GET /api/v1/developer-agent/executions/ff5c9039-e896-406b-af56-ae14d26700c3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63440 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63441 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59798 - "GET /api/v1/developer-agent/executions/ff5c9039-e896-406b-af56-ae14d26700c3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51437 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51438 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59330 - "GET /api/v1/developer-agent/executions/ff5c9039-e896-406b-af56-ae14d26700c3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59339 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59338 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57948 - "GET /api/v1/developer-agent/executions/ff5c9039-e896-406b-af56-ae14d26700c3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57967 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57968 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58483 - "GET /api/v1/developer-agent/executions/ff5c9039-e896-406b-af56-ae14d26700c3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59792 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59793 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56937 - "GET /api/v1/developer-agent/executions/ff5c9039-e896-406b-af56-ae14d26700c3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56949 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56950 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53933 - "GET /api/v1/developer-agent/executions/ff5c9039-e896-406b-af56-ae14d26700c3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53946 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53947 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50317 - "GET /api/v1/developer-agent/executions/ff5c9039-e896-406b-af56-ae14d26700c3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60728 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60729 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54188 - "GET /api/v1/developer-agent/executions/ff5c9039-e896-406b-af56-ae14d26700c3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54222 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54223 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60370 - "GET /api/v1/developer-agent/executions/ff5c9039-e896-406b-af56-ae14d26700c3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60383 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60384 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50527 - "GET /api/v1/developer-agent/executions/ff5c9039-e896-406b-af56-ae14d26700c3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64965 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64966 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64978 - "GET /api/v1/developer-agent/executions/ff5c9039-e896-406b-af56-ae14d26700c3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64482 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64483 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51033 - "GET /api/v1/developer-agent/executions/ff5c9039-e896-406b-af56-ae14d26700c3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51051 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51052 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61338 - "GET /api/v1/developer-agent/executions/ff5c9039-e896-406b-af56-ae14d26700c3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61348 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61350 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50673 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50674 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61351 - "GET /api/v1/operations/module-switches HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57951 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57952 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61349 - "GET /api/v1/creator-intelligence HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61361 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61360 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61359 - "GET /api/v1/developer-agent/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61395 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61396 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53838 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53839 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50041 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50042 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55224 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55225 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56428 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56429 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64461 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64462 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55353 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55354 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65509 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65508 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56302 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56303 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53268 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53269 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54862 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54863 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51720 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51719 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62321 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62322 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50465 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50466 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54446 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54447 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60324 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60323 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49847 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49848 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56306 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56307 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58694 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58695 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61355 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61356 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58092 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58093 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55355 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55354 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61934 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61935 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63219 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63220 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63896 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63897 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63481 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63480 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64947 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64948 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52745 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52746 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55484 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55485 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61713 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61714 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61256 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61257 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58513 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58514 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52439 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52440 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57881 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57882 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49586 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49587 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55176 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55177 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51952 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51953 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55286 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55287 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58199 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58200 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54088 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54089 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60002 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60003 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51009 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51010 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51244 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51243 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49430 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49429 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53651 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53652 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57813 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57814 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57760 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57759 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62496 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62497 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64973 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64974 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61907 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61906 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49338 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49339 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58016 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58017 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50355 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50356 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53375 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53376 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50105 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50106 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53932 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53933 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53599 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53601 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54011 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54012 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62387 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62388 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52668 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52669 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51387 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51388 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51022 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51023 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63808 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63809 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52725 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52726 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65107 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65108 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55205 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55206 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54590 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54591 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52503 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52502 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64519 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64518 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52765 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52766 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52430 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52431 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52631 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52632 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49235 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49236 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59556 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59557 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64349 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64350 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59728 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59729 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59090 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59091 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51868 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51869 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65517 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65518 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50850 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50849 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58997 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58998 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49952 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49951 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65468 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65467 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54028 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54029 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63851 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63852 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58251 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58252 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64953 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64954 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62522 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62523 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63112 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63111 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57546 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57547 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64217 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64218 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63232 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63233 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54298 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54299 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57988 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57989 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58920 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58921 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60882 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60881 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51809 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51810 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59201 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59202 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56808 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56809 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49313 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49312 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51280 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51279 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63470 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63471 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56552 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56551 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65131 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65132 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51536 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51537 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59669 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59670 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64433 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64434 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59354 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59355 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54794 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54795 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59886 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59885 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52783 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52784 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50062 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50061 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64914 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64915 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57564 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57563 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51553 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51552 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60786 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60787 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50971 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50972 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55761 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55762 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63371 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63372 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54629 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54630 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57432 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57433 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49698 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49699 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59677 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59676 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58496 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58495 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54507 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54508 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65498 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65497 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54642 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54641 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50400 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50399 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57243 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57244 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62586 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62585 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54050 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54051 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63317 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63316 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58248 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58249 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49834 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:49832 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49833 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49857 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:49854 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49828 - "GET /api/v1/developer-agent/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49856 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49851 - "GET /api/v1/developer-agent/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49876 - "GET /api/v1/developer-agent/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49886 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49900 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:49897 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52496 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52510 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:52497 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49827 - "GET /api/v1/operations/module-switches HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49849 - "GET /api/v1/operations/module-switches HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51503 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:49872 - "GET /api/v1/operations/module-switches HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51501 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51502 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58186 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:58184 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58185 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49826 - "GET /api/v1/creator-intelligence HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49860 - "GET /api/v1/creator-intelligence HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58491 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49848 - "GET /api/v1/creator-intelligence HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58490 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58502 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58501 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58489 - "GET /api/v1/developer-agent/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58500 - "GET /api/v1/developer-agent/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58518 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:58517 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58519 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55863 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:55862 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55864 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60361 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:60360 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60362 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55108 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:55109 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55107 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55665 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:55664 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55666 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50752 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:50747 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50750 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50745 - "GET /api/v1/developer-agent/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50769 - "GET /api/v1/developer-agent/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50780 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50793 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:50790 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50620 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64503 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:50621 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50744 - "GET /api/v1/operations/module-switches HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50766 - "GET /api/v1/operations/module-switches HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64576 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:64574 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64575 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50757 - "GET /api/v1/creator-intelligence HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55484 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50743 - "GET /api/v1/creator-intelligence HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55483 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50177 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50176 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55482 - "GET /api/v1/developer-agent/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50174 - "GET /api/v1/developer-agent/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50195 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:50194 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50196 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50114 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:50113 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50115 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51382 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51381 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51383 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49826 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:49819 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49821 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49818 - "GET /api/v1/developer-agent/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49848 - "GET /api/v1/developer-agent/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49864 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54508 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:54503 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58930 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58939 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:58931 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49817 - "GET /api/v1/operations/module-switches HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49844 - "GET /api/v1/operations/module-switches HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58979 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:58977 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58978 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49816 - "GET /api/v1/creator-intelligence HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57821 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57820 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49835 - "GET /api/v1/creator-intelligence HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57819 - "GET /api/v1/developer-agent/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57847 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57848 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57846 - "GET /api/v1/developer-agent/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57864 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:57863 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57865 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61948 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:61947 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61949 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57088 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:57086 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57087 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54096 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:54095 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54097 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49397 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:49396 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49398 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61663 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:61660 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61662 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54765 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:54763 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54764 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51201 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51199 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51200 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54650 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:54649 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54646 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51297 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51296 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51298 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54326 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:54327 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54325 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63655 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:63656 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63654 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53104 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:53103 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53105 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53198 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:53197 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53199 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62101 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:62102 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62100 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54862 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:54861 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54863 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50577 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:50578 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50576 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58127 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:58126 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58128 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60096 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:60095 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60097 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65095 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:65094 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65096 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64826 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:64825 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64827 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51462 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51461 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51463 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50529 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:50528 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50530 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60656 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:60655 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60657 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57662 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:57661 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57663 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64328 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:64327 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64329 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61855 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:61854 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61856 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60513 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:60512 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60514 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62339 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:62338 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62340 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52585 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:52584 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52586 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54306 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:54305 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54307 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62312 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:62310 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62311 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59358 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:59357 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59359 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53637 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:53636 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53638 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62380 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:62379 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62381 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61919 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:61918 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61920 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52093 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:52092 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52094 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61602 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:61601 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61603 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54247 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:54245 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54246 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64148 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:64146 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64147 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57584 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:57583 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57582 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63111 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:63110 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63112 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57364 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:57363 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57365 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61021 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:61020 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61022 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56596 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:56597 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56595 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65238 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:65237 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65239 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49247 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:49245 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49246 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49263 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:49262 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49261 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49260 - "GET /api/v1/developer-agent/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49290 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49281 - "GET /api/v1/developer-agent/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49304 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:49301 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52849 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52858 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:52850 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49258 - "GET /api/v1/operations/module-switches HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49277 - "GET /api/v1/operations/module-switches HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60337 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:60335 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60336 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49254 - "GET /api/v1/creator-intelligence HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60173 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60172 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60186 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:60184 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60171 - "GET /api/v1/developer-agent/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60185 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49267 - "GET /api/v1/creator-intelligence HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60202 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60201 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60200 - "GET /api/v1/developer-agent/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64433 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:64432 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64434 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59733 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:59732 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59734 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50324 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:50323 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50325 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65393 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:65391 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65392 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59701 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:59700 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59702 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57640 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:57639 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57641 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55605 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:55604 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55606 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60097 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:60095 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60098 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57178 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:57177 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57179 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57200 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:57196 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57198 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57193 - "GET /api/v1/developer-agent/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63775 - "GET /api/v1/developer-agent/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63786 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63799 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:63797 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53181 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53192 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:53182 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57192 - "GET /api/v1/operations/module-switches HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63771 - "GET /api/v1/operations/module-switches HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61035 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:61034 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61033 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57203 - "GET /api/v1/creator-intelligence HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64246 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57190 - "GET /api/v1/creator-intelligence HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64261 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64247 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64260 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64245 - "GET /api/v1/developer-agent/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64259 - "GET /api/v1/developer-agent/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64285 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:64284 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64286 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59789 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:59788 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59790 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58421 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:58420 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58419 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60860 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:60859 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60861 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59747 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:59746 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59748 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62879 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:62878 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62880 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57036 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:57032 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57035 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57732 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:57731 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57733 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62215 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:62214 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62216 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60019 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:60018 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60020 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63655 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:63654 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63656 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60173 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:60172 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60174 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52194 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:52193 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52195 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50614 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:50612 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50613 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58081 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:58080 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58082 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57709 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:57706 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57708 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57704 - "GET /api/v1/developer-agent/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57723 - "GET /api/v1/developer-agent/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57734 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57747 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:57744 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55375 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55385 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:55376 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58097 - "GET /api/v1/operations/module-switches HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57719 - "GET /api/v1/operations/module-switches HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50990 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:50986 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50989 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58096 - "GET /api/v1/creator-intelligence HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57376 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57378 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57375 - "GET /api/v1/developer-agent/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57712 - "GET /api/v1/creator-intelligence HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57396 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57397 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57395 - "GET /api/v1/developer-agent/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57414 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:57412 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57413 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50462 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:50458 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50461 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59770 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:59769 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59771 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51645 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51644 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51646 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49245 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:49239 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49236 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59574 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:59573 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59572 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64275 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:64270 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64273 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62865 - "POST /api/v1/developer-agent/resolutions HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:59780 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:59779 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59781 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50838 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:50837 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50839 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56361 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:56360 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56362 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54299 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:54298 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54300 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63004 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:63002 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63003 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50700 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:50698 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50699 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50093 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:50092 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50094 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58561 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:58558 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58560 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61875 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:61874 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61876 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51518 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51517 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51519 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62755 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:62754 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62756 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51363 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51362 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51364 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63149 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:63146 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63148 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60628 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:60626 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60627 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51928 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51927 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51929 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65135 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:65134 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65136 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52767 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:52765 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52766 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56744 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:56743 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56745 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59884 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:59883 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59885 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64741 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:64740 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64742 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49478 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:49477 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49479 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63563 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:63564 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63562 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64024 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:64023 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64025 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59514 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:59513 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59515 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49389 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:49388 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49390 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49600 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:49599 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49601 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56924 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:56923 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56925 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50951 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:50950 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50952 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64184 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:64183 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64185 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63537 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:63536 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63538 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60799 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:60797 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60798 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63435 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:63436 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63434 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49658 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:49655 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49657 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56097 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:56095 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56096 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63260 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:63259 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63261 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63858 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:63857 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63859 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51763 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51762 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51764 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50132 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:50131 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50133 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52915 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:52914 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52916 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55957 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:55958 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55956 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63947 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:63946 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63948 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55638 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:55637 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55639 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60434 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:60433 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60435 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62368 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:62367 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62369 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55294 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:55293 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55291 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63117 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:63114 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63116 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65231 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:65230 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65232 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61030 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:61027 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61029 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52747 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:52745 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52746 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53660 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:53658 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53659 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53689 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:53688 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53690 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50316 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:50314 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50315 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57864 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:57863 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57865 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58239 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:58240 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58238 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57024 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:57023 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57025 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62500 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:62498 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62499 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54651 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:54650 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54652 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60029 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:60028 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60030 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55475 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:55473 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55474 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54423 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:54421 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54424 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50260 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:50259 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50261 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54143 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:54142 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54144 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64393 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:64392 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64390 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64387 - "GET /api/v1/developer-agent/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64410 - "GET /api/v1/developer-agent/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64422 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51882 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51877 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61787 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61798 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:61788 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64384 - "GET /api/v1/operations/module-switches HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64406 - "GET /api/v1/operations/module-switches HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61375 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:61371 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61374 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61370 - "GET /api/v1/developer-agent/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55357 - "GET /api/v1/developer-agent/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55367 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55383 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:55379 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50154 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50166 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:50155 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64383 - "GET /api/v1/creator-intelligence HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64397 - "GET /api/v1/creator-intelligence HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61390 - "GET /api/v1/operations/module-switches HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61369 - "GET /api/v1/operations/module-switches HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57445 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:57443 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57444 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57440 - "GET /api/v1/developer-agent/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57464 - "GET /api/v1/developer-agent/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57477 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57493 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:57488 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59704 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59717 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:59705 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57438 - "GET /api/v1/operations/module-switches HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51183 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:57461 - "GET /api/v1/operations/module-switches HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51181 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51182 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61379 - "GET /api/v1/creator-intelligence HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61368 - "GET /api/v1/creator-intelligence HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61888 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:61886 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61887 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61882 - "GET /api/v1/developer-agent/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61911 - "GET /api/v1/developer-agent/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61924 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61939 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:61932 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57666 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57678 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:57667 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57437 - "GET /api/v1/creator-intelligence HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61881 - "GET /api/v1/operations/module-switches HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51660 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:61908 - "GET /api/v1/operations/module-switches HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51658 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51659 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57449 - "GET /api/v1/creator-intelligence HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54276 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:54274 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54275 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61880 - "GET /api/v1/creator-intelligence HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61892 - "GET /api/v1/creator-intelligence HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54313 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54312 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54321 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54320 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54311 - "GET /api/v1/developer-agent/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54319 - "GET /api/v1/developer-agent/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53922 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:53921 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53923 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53505 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:53504 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53506 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59746 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:59744 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59745 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63018 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:63016 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63017 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51160 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51158 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51159 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51202 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51201 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51203 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61537 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:61536 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61538 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62503 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:62502 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62504 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50180 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:50179 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50181 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54952 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:54951 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54953 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64520 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:64517 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64519 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50372 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:50371 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50373 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52120 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:52119 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52121 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62011 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:62009 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62012 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64905 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:64903 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64904 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62342 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:62341 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62343 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50725 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:50724 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50726 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60985 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:60984 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60986 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63670 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:63669 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63671 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62242 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:62241 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62243 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57189 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:57188 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57190 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60807 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:60806 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60808 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60583 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:60582 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60584 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61217 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:61216 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61218 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62706 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:62705 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62707 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55779 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:55778 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55780 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61300 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:61299 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61301 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62322 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:62321 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62323 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56936 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:56935 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56937 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64846 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:64843 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64845 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54702 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:54701 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54703 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50160 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:50159 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50161 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62768 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:62766 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62767 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51781 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51780 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51782 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59756 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:59753 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59755 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62396 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:62394 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62395 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63752 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:63751 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63753 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53689 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:53688 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53690 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54409 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:54408 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54410 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51642 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51641 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51643 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50960 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:50959 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50961 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59289 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:59288 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59287 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53796 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:53795 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53797 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63442 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:63441 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63443 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51505 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51504 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51506 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64334 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:64332 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64333 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52037 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:52036 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52038 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51147 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51146 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51148 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55037 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:55036 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55038 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55179 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:55177 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55178 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62901 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:62900 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62902 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58833 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:58832 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58834 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55106 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:55107 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55105 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56385 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:56384 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56386 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58467 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:58463 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58466 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53963 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:53962 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53964 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61551 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:61548 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61550 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61622 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:61621 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61623 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62445 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:62444 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62446 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55325 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:55323 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55324 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55329 - "POST /api/v1/developer-agent/resolutions HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:58618 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:58617 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58619 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60433 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:60432 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60434 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56779 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:56778 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56780 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54067 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:54066 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54068 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54957 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:54956 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54958 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63203 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:63201 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63202 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63208 - "POST /api/v1/developer-agent/resolutions HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51857 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51855 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51856 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62985 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:62984 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62986 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58320 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:58321 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58319 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49830 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:49828 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49829 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59162 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:59161 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59163 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57162 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:57161 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57163 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60678 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:60679 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60677 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52504 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:52503 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52505 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53184 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:53183 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53185 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60277 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:60275 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60276 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63332 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:63331 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63333 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57580 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:57578 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57579 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58042 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:58040 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58041 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49594 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:49593 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49592 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55039 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:55038 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55040 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51031 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51030 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51032 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64996 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:64994 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64995 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62013 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:62012 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62014 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56372 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:56370 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56371 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56456 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:56455 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56457 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60961 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:60960 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60962 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49353 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:49350 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49352 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51459 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51458 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51460 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49317 - "GET /api/v1/creator-intelligence HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64617 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:64616 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64618 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60903 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:60902 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60904 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63719 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:63717 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63718 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64438 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:64435 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64436 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63047 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:63044 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63046 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63285 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:63283 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63284 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56773 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:56772 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56774 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49681 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:49677 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49680 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54414 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:54413 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54415 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64157 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:64155 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64156 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63543 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:63541 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63542 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62615 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:62613 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62614 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65214 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:65213 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65215 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50671 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:50670 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50669 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57077 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:57076 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57075 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62805 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:62802 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62803 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49996 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:49995 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49997 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59964 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:59961 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59963 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55396 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:55395 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55397 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62477 - "GET /api/v1/developer-agent/resolutions?limit=20 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:62476 - "GET /api/v1/developer-agent/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62478 - "GET /api/v1/developer-agent/history?limit=20 HTTP/1.1" 200 OK

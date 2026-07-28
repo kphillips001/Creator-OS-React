@@ -3,16 +3,16 @@
                     "command":  "C:\\Users\\knphi\\AppData\\Local\\Programs\\Python\\Python311\\python.exe -m uvicorn app.fanvue_callback_server:app --app-dir C:\\Creator-OS-React --port 8001",
                     "projectRoot":  "C:\\Creator-OS-React",
                     "processIds":  [
-                                       73868
+                                       28260
                                    ],
-                    "recordedAt":  "2026-07-21T23:10:19.8910167Z"
+                    "recordedAt":  "2026-07-28T01:58:18.2087435Z"
                 },
     "Frontend":  {
                      "command":  "C:\\Program Files\\nodejs\\npm.cmd run dev -- --host 127.0.0.1 --port 5174",
                      "projectRoot":  "C:\\Creator-OS-React",
                      "processIds":  [
-                                        39372
+                                        48072
                                     ],
-                     "recordedAt":  "2026-07-21T23:10:39.0747415Z"
+                     "recordedAt":  "2026-07-28T01:58:40.7848559Z"
                  }
 }

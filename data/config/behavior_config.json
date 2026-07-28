@@ -22,5 +22,6 @@
     "click_to_reveal_enabled": true
   },
   "global_automation_enabled": false,
-  "global_sends_enabled": true
+  "global_sends_enabled": true,
+  "commerce_mode": "RELATIONSHIP"
 }

@@ -1,9 +1,5 @@
-INFO:     Started server process [77436]
+INFO:     Started server process [28260]
 INFO:     Waiting for application startup.
 Canonical reference recovery skipped for Amanda Cayne: Canonical reference metadata is missing.
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://127.0.0.1:8001 (Press CTRL+C to quit)
-INFO:     Content Studio context request received
-INFO:     Content Studio context response status=200
-INFO:     Content Studio configuration request received
-INFO:     Content Studio configuration response status=200

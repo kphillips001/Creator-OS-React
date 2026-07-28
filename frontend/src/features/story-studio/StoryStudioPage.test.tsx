@@ -8,8 +8,9 @@ describe("StoryStudioPage", () => {
   it("appears in the requested Content Creation order", () => {
     const content = navigationGroups.find((group) => group.label === "Content Creation");
     expect(content?.items.map((item) => item.label)).toEqual([
-      "Generation Library", "Content Studio", "Edit Studio", "Photoshoot Studio",
-      "Story Studio", "Video Studio", "Reference Library", "Asset Library",
+      "Generation Library", "Available Inventory", "Photoshoot Gallery", "Content Studio",
+      "Edit Studio", "Photoshoot Studio", "Story Studio", "Video Studio",
+      "Reference Library", "Asset Library",
     ]);
     expect(content?.items.find((item) => item.label === "Story Studio")?.path).toBe("/content/story");
   });

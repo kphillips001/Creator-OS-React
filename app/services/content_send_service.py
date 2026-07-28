@@ -111,7 +111,6 @@ class ContentSendService:
         payload = payload_result
 
         print("[13F PAYLOAD BUILT]")
-        print(payload)
 
         safety_result = self.global_safety.check_global_safety()
 

@@ -6,10 +6,14 @@ from app.integrations.telegram.telethon_runtime import (
     TelethonRuntimeError,
     build_default_runtime_from_environment,
 )
-from app.models.telegram_inbound import TelegramInboundPayload
+from app.models.telegram_inbound import TelegramInboundPayload, TelegramInboundResult
 from app.services.conversation_gateway import ConversationGateway
 from app.services.telegram_identity_adapter import TelegramIdentityAdapter
 from app.services.telegram_inbound_adapter import TelegramInboundAdapter
+from app.services.telegram_delivery_executor import (
+    TelegramDeliveryExecutionResult,
+    TelegramDeliveryExecutor,
+)
 
 
 class EchoDecisionEngine:
@@ -83,9 +87,18 @@ class TelethonRuntimeTests(unittest.IsolatedAsyncioTestCase):
             conversation_gateway=gateway,
         )
         transport = FakeTransport()
+        safety = type(
+            "AllowedSafety",
+            (),
+            {"check_global_safety": lambda self: {"allowed": True}},
+        )()
         runtime = TelethonRuntime(
             transport=transport,
             inbound_adapter=adapter,
+            global_safety_service=safety,
+            delivery_executor=TelegramDeliveryExecutor(
+                global_safety_service=safety
+            ),
         )
         return runtime, transport, engine
 
@@ -174,9 +187,18 @@ class TelethonRuntimeTests(unittest.IsolatedAsyncioTestCase):
             ),
         )
         transport = FakeTransport()
+        safety = type(
+            "AllowedSafety",
+            (),
+            {"check_global_safety": lambda self: {"allowed": True}},
+        )()
         runtime = TelethonRuntime(
             transport=transport,
             inbound_adapter=adapter,
+            global_safety_service=safety,
+            delivery_executor=TelegramDeliveryExecutor(
+                global_safety_service=safety
+            ),
         )
 
         await runtime.handle_payload(
@@ -197,6 +219,120 @@ class TelethonRuntimeTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertTrue(transport.started)
         self.assertTrue(transport.disconnected)
+
+    async def test_purchase_acknowledgement_is_written_only_after_delivery(self):
+        result = TelegramInboundResult(
+            correlation_id="correlation-1", telegram_chat_id=12,
+            telegram_user_id=34, message_id=56, engine_user_id="2:34",
+            response_text="Thank you.", offer_authorized=False,
+            offer_link=None, blocked=False, error_code=None,
+            delivery_payload={"message_text": "Thank you."},
+            diagnostic_metadata={
+                "customer_sales_decision": "CONGRATULATE_PURCHASE",
+                "purchase_acknowledgement_intent_id": "intent-1",
+            },
+        )
+        inbound = type(
+            "Inbound", (), {"execute": lambda self, _payload: result}
+        )()
+        successful_delivery = type(
+            "Delivery", (), {
+                "execute_async": lambda self, *_args, **_kwargs:
+                    _async_result(TelegramDeliveryExecutionResult(
+                        status="SENT", executed=True,
+                        metadata={"telegram_message_id": 91},
+                    ))
+            },
+        )()
+
+        class PurchaseIntents:
+            def __init__(self):
+                self.acknowledged = []
+
+            def create_before_delivery(self, *_args):
+                return None
+
+            def confirm_delivery(self, *_args, **_kwargs):
+                return None
+
+            def acknowledge_purchase(self, intent_id):
+                self.acknowledged.append(intent_id)
+
+        purchases = PurchaseIntents()
+        runtime = TelethonRuntime(
+            transport=FakeTransport(), inbound_adapter=inbound,
+            delivery_executor=successful_delivery,
+            global_safety_service=type(
+                "Safety", (), {
+                    "check_global_safety": lambda self: {"allowed": True}
+                },
+            )(),
+            purchase_intent_service=purchases,
+        )
+        await runtime.handle_payload(TelegramInboundPayload(
+            telegram_user_id=34, telegram_chat_id=12,
+            message_text="hello", message_id=56,
+        ))
+        self.assertEqual(purchases.acknowledged, ["intent-1"])
+
+    async def test_failed_delivery_does_not_acknowledge_purchase(self):
+        result = TelegramInboundResult(
+            correlation_id="correlation-1", telegram_chat_id=12,
+            telegram_user_id=34, message_id=56, engine_user_id="2:34",
+            response_text="Thank you.", offer_authorized=False,
+            offer_link=None, blocked=False, error_code=None,
+            delivery_payload={"message_text": "Thank you."},
+            diagnostic_metadata={
+                "customer_sales_decision": "CONGRATULATE_PURCHASE",
+                "purchase_acknowledgement_intent_id": "intent-1",
+            },
+        )
+        inbound = type(
+            "Inbound", (), {"execute": lambda self, _payload: result}
+        )()
+        failed_delivery = type(
+            "Delivery", (), {
+                "execute_async": lambda self, *_args, **_kwargs:
+                    _async_result(TelegramDeliveryExecutionResult(
+                        status="FAILED", executed=False,
+                    ))
+            },
+        )()
+
+        class PurchaseIntents:
+            acknowledged = []
+            abandoned = []
+
+            def create_before_delivery(self, *_args):
+                return None
+
+            def abandon_delivery(self, intent):
+                self.abandoned.append(intent)
+
+            def acknowledge_purchase(self, intent_id):
+                self.acknowledged.append(intent_id)
+
+        purchases = PurchaseIntents()
+        runtime = TelethonRuntime(
+            transport=FakeTransport(), inbound_adapter=inbound,
+            delivery_executor=failed_delivery,
+            global_safety_service=type(
+                "Safety", (), {
+                    "check_global_safety": lambda self: {"allowed": True}
+                },
+            )(),
+            purchase_intent_service=purchases,
+        )
+        await runtime.handle_payload(TelegramInboundPayload(
+            telegram_user_id=34, telegram_chat_id=12,
+            message_text="hello", message_id=56,
+        ))
+        self.assertEqual(purchases.acknowledged, [])
+        self.assertEqual(purchases.abandoned, [None])
+
+
+async def _async_result(value):
+    return value
 
 
 if __name__ == "__main__":

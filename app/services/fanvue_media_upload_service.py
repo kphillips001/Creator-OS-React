@@ -1115,7 +1115,6 @@ class FanvueMediaUploadService:
         }
 
         print("[PTV SET] Payload:")
-        print(payload)
 
         return payload
 
@@ -1158,7 +1157,6 @@ class FanvueMediaUploadService:
         }
 
         print("[PPV] PAID Payload:")
-        print(payload)
 
         url = "https://www.fanvue.com/trpc/chat.sendSingleChatMessage"
 

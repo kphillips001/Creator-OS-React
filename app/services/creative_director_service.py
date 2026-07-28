@@ -686,6 +686,14 @@ class CreativeDirectorService:
                 if planning_result
                 else None,
                 "planning_mode": planning_result.mode if planning_result else None,
+                **(
+                    {"workflow_origin": session.metadata["workflow_origin"]}
+                    if session.metadata.get("workflow_origin") else {}
+                ),
+                **(
+                    {"planner_lineage": dict(session.metadata["planner_lineage"])}
+                    if session.metadata.get("planner_lineage") else {}
+                ),
             },
         )
         self.save_prompt_plan(plan)
@@ -757,6 +765,7 @@ class CreativeDirectorService:
         creative_tags: str | list[str] | tuple[str, ...],
         creative_mode: str,
         prompt_count: int,
+        metadata: Mapping[str, Any] | None = None,
     ) -> PromptPlan:
         creator_profile_id = int((creator_profile or {}).get("id"))
         reference = self.reference_library.get_active_canonical_reference(
@@ -768,7 +777,7 @@ class CreativeDirectorService:
             creative_mode=creative_mode,
             prompt_count=prompt_count,
             reference_asset=reference,
-            metadata={"raw_creative_tags": creative_tags},
+            metadata={"raw_creative_tags": creative_tags, **dict(metadata or {})},
         )
         return self.build_prompt_plan(
             session,

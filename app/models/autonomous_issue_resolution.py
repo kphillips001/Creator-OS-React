@@ -1,0 +1,19 @@
+"""Persisted decisions and outcomes for autonomous diagnostic resolution."""
+from enum import Enum
+
+
+class ResolutionDecision(str, Enum):
+    AUTO_FIX = "AUTO_FIX"
+    USER_ACTION_REQUIRED = "USER_ACTION_REQUIRED"
+    CONFIGURATION_REQUIRED = "CONFIGURATION_REQUIRED"
+    NOT_FIXABLE = "NOT_FIXABLE"
+    ALREADY_RESOLVED = "ALREADY_RESOLVED"
+
+
+class ResolutionOutcome(str, Enum):
+    IN_PROGRESS = "IN_PROGRESS"
+    RESOLVED = "RESOLVED"
+    PARTIALLY_RESOLVED = "PARTIALLY_RESOLVED"
+    COULD_NOT_RESOLVE = "COULD_NOT_RESOLVE"
+    USER_ACTION_REQUIRED = "USER_ACTION_REQUIRED"
+    ALREADY_RESOLVED = "ALREADY_RESOLVED"

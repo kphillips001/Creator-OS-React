@@ -13,6 +13,7 @@ from app.models.runtime_control import RuntimeMode
 from app.services.global_automation_safety_service import GlobalAutomationSafetyService
 from app.services.operations_workspace_service import OperationsWorkspaceService
 from app.services.runtime_control_service import RuntimeControlService
+from app.services.commerce_mode_service import CommerceModeService
 
 
 class ModuleSwitchesService:
@@ -44,6 +45,9 @@ class ModuleSwitchesService:
         self.config_loader = config_loader
         self.config_saver = config_saver
         self.operations_service = operations_service or OperationsWorkspaceService()
+        self.commerce_modes = CommerceModeService(
+            config_loader=config_loader, config_saver=config_saver
+        )
 
     def read(self, *, creator_profile_id: str | int) -> dict[str, Any]:
         config, _ = self.config_loader()
@@ -54,6 +58,7 @@ class ModuleSwitchesService:
         cards: dict[str, list[dict[str, Any]]] = {name: [] for name in ("Messaging", "Sales", "Publishing", "AI")}
         modules = dict(config.get("modules") or {})
         global_check = safety.check_global_safety()
+        commerce_mode = self.commerce_modes.get_mode()
         for key, (card, label, config_key) in self.MODULES.items():
             configured = bool(modules.get(config_key, False))
             cards[card].append(self._switch(key, label, configured, global_check))
@@ -93,6 +98,12 @@ class ModuleSwitchesService:
                 "status": runtime.status.value, "lastChanged": runtime.updated_at,
                 "reason": decision.reason, "editable": True,
             },
+            "commerceMode": {
+                "configuredMode": commerce_mode.value,
+                "effectiveMode": commerce_mode.value,
+                "description": self.commerce_modes.description(commerce_mode),
+                "editable": True,
+            },
             "cards": cards,
             "deploymentReadiness": self._deployment_readiness(),
         }
@@ -111,6 +122,9 @@ class ModuleSwitchesService:
             if mode == RuntimeMode.OFFLINE: self.runtime_service.stop(creator_profile_id=creator_profile_id)
             elif mode == RuntimeMode.OBSERVE: self.runtime_service.observe(creator_profile_id=creator_profile_id)
             else: self.runtime_service.start(creator_profile_id=creator_profile_id)
+            return self.read(creator_profile_id=creator_profile_id)
+        if module == "commerce_mode":
+            self.commerce_modes.set_mode(value)
             return self.read(creator_profile_id=creator_profile_id)
         definition = self.MODULES.get(module)
         if definition is None:
@@ -155,7 +169,7 @@ class ModuleSwitchesService:
 
     @classmethod
     def _deployment_readiness(cls) -> list[dict[str, Any]]:
-        return [
+        items = [
             cls._environment_permit("fanvue_live_replies", "Fanvue Live Replies",
                                     "ENABLE_REALTIME_FANVUE_SEND",
                                     "Final deployment permit for live Fanvue chat sends."),
@@ -172,6 +186,31 @@ class ModuleSwitchesService:
                                     "FANVUE_WEBHOOK_SIGNING_SECRET",
                                     "Fanvue webhook signature verification is configured.", secret=True),
         ]
+        try:
+            from app.services.developer_agent_execution_service import (
+                DeveloperAgentExecutionService,
+            )
+            readiness = DeveloperAgentExecutionService().readiness()
+            items.append({
+                "key": "developer_agent",
+                "label": "Developer Agent",
+                "status": readiness["overallReadiness"],
+                "environmentVariable": None,
+                "currentValue": readiness["overallReadiness"],
+                "source": "Official Codex SDK",
+                "restartRequired": False,
+                "description": readiness["reason"],
+                "editable": False,
+            })
+        except Exception as exc:
+            items.append({
+                "key": "developer_agent", "label": "Developer Agent",
+                "status": "UNAVAILABLE", "environmentVariable": None,
+                "currentValue": "Unavailable", "source": "Official Codex SDK",
+                "restartRequired": False,
+                "description": f"Readiness check failed: {exc}", "editable": False,
+            })
+        return items
 
     @staticmethod
     def _environment_permit(key: str, label: str, variable: str, description: str,

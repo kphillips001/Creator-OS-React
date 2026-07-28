@@ -38,7 +38,6 @@ class SystemHealthService:
     """Builds read-only health reports without mutating application state."""
 
     DEPENDENCIES = (
-        DependencySpec("Streamlit", "streamlit", "streamlit"),
         DependencySpec("OpenAI", "openai", "openai"),
         DependencySpec("Tweepy", "tweepy", "tweepy", "tweepy==4.15.0"),
         DependencySpec("Pillow", "PIL", "Pillow"),
@@ -210,7 +209,6 @@ class SystemHealthService:
 
     def storage_section(self) -> HealthSection:
         paths = (
-            ("Reference Library", self.project_root / "data" / "reference_library"),
             ("Generation Library", self.project_root / "data" / "generation_library"),
             ("Archive", self.project_root / "data" / "content_archive"),
             ("Logs", self.project_root / "logs"),

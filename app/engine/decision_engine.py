@@ -21,6 +21,7 @@ from app.models.content_recommendation import RecommendationRequest
 from app.services.content_recommendation_service import (
     ContentRecommendationService,
 )
+from app.services.commerce_execution_policy import CommerceExecutionPolicy
 from app.models.chat_commerce_delivery import ChatDeliveryRequest
 from app.services.chat_commerce_delivery_service import ChatCommerceDeliveryService
 from app.services.cms_contract_service import CMSContractService
@@ -1020,7 +1021,50 @@ class DecisionEngine:
                 else "buying_or_non_explicit_context"
             ),
         }
-    
+
+    @staticmethod
+    def _commerce_readiness(message, classifier_result, explicit_profile):
+        """Return compact flags only; never prompt text or model reasoning."""
+        text = str(message or "").lower()
+        classifier = classifier_result or {}
+        requested_purchase = any(
+            word in text for word in (
+                "buy", "purchase", "unlock", "pay", "paid", "ppv",
+            )
+        )
+        requested_link = any(
+            word in text for word in (
+                "link", "url", "where can i get", "send it",
+            )
+        )
+        requested_price = any(
+            word in text for word in ("price", "cost", "how much")
+        )
+        requested_content = any(
+            word in text for word in (
+                "photo", "picture", "image", "set", "video", "content",
+            )
+        )
+        buying_intent = bool(
+            classifier.get("buying_intent")
+            or classifier.get("close_ready")
+            or requested_purchase
+            or requested_link
+            or requested_price
+        )
+        suppressed = bool(
+            (explicit_profile or {}).get("suppress_sales_pressure")
+        )
+        return {
+            "conversation_ready_for_offer": bool(
+                buying_intent and not suppressed
+            ),
+            "current_buying_intent": buying_intent,
+            "customer_requested_content": requested_content,
+            "customer_requested_price": requested_price,
+            "customer_requested_purchase": requested_purchase,
+            "customer_requested_link": requested_link,
+        }
 
     def process_message(
             self, 
@@ -1033,12 +1077,42 @@ class DecisionEngine:
             chat_history = []
         
         runtime_injection = runtime_injection or {}
+        commerce_execution_policy = runtime_injection.get(
+            "commerce_execution_policy"
+        )
+        authoritative_commerce = bool(commerce_execution_policy)
+        presentation_allowed = (
+            commerce_execution_policy
+            == CommerceExecutionPolicy.PRESENTATION_ALLOWED.value
+        )
+        nudge_allowed = (
+            commerce_execution_policy
+            == CommerceExecutionPolicy.NUDGE_ALLOWED.value
+        )
+        acknowledgement_allowed = (
+            commerce_execution_policy
+            == CommerceExecutionPolicy.ACKNOWLEDGEMENT_ALLOWED.value
+        )
+        legacy_commerce_enabled = not authoritative_commerce
+        legacy_commerce_evaluation_allowed = (
+            legacy_commerce_enabled or presentation_allowed
+        )
 
         if runtime_injection:
             self.logger.info(
                 f"[3D.17.6 RUNTIME INJECTION] "
                 f"{runtime_injection}"
             )
+        if authoritative_commerce:
+            self.logger.info(
+                "event=commerce_execution_policy_applied policy=%s",
+                commerce_execution_policy,
+            )
+            if not presentation_allowed:
+                self.logger.info(
+                    "event=legacy_commerce_suppressed policy=%s",
+                    commerce_execution_policy,
+                )
 
         # 1. Load memory
         user_memory = self.memory.get_user_memory(user_id)
@@ -1321,7 +1395,11 @@ class DecisionEngine:
         last_offer_timestamp = user_memory.get("last_offer_timestamp")
         offer_state = user_memory.get("offer_state")
 
-        if last_offer_timestamp and offer_state in ["offered", "nudged"]:
+        if (
+            legacy_commerce_enabled
+            and last_offer_timestamp
+            and offer_state in ["offered", "nudged"]
+        ):
             route = "sales"
             route_reason = "Forced to sales due to active post-offer state."
             route_signals = self._normalize_route_signals(
@@ -1334,7 +1412,11 @@ class DecisionEngine:
         effective_route = route
 
         subscriber_profile = user_memory.get("subscriber_profile")
-        offer_state = user_memory.get("offer_state")
+        offer_state = (
+            user_memory.get("offer_state")
+            if legacy_commerce_enabled
+            else None
+        )
 
         subscriber_override_allowed = (
             relationship_route == "subscriber"
@@ -2622,10 +2704,7 @@ class DecisionEngine:
             working_memory["conversation_mode"] = "tension"
 
         # Persist only existing DB-safe interpreted fields
-        self.memory.update_user_memory(
-            user_id,
-            {
-                "buyer_tier": intent_result["tier"],
+        interpreted_memory = {
                 "intent_score": intent_result["score"],
                 "message_score": intent_result["message_score"],
                 "behavior_score": intent_result["behavior_score"],
@@ -2633,8 +2712,6 @@ class DecisionEngine:
                 "conversation_mode": conversation_mode,
                 "active_persona": self.settings.DEFAULT_PERSONA,
                 "last_user_message": message,
-                "user_value_tier": user_value_tier,
-                "is_whale": is_whale,
                 "user_type": user_type,
                 "value_score": value_score,
                 "attention_tier": attention_tier,
@@ -2654,15 +2731,39 @@ class DecisionEngine:
                 "conversation_streak": conversation_streak,
                 "engagement_tier": engagement_tier,
                 "subscriber_engagement_mode": subscriber_engagement_mode,
-            },
-        )
+        }
+        if legacy_commerce_evaluation_allowed:
+            interpreted_memory.update({
+                "buyer_tier": intent_result["tier"],
+                "user_value_tier": user_value_tier,
+                "is_whale": is_whale,
+            })
+        else:
+            self.logger.info(
+                "event=legacy_memory_mutation_skipped "
+                "fields=buyer_tier,user_value_tier,is_whale "
+                "memory_source=canonical_commerce"
+            )
+        self.memory.update_user_memory(user_id, interpreted_memory)
 
         # 8. Offer logic + timing engine
-        offer_result = self.offer.determine_offer(
-            intent_result["tier"],
-            conversation_mode,
-            working_memory,
-        )
+        if legacy_commerce_evaluation_allowed:
+            offer_result = self.offer.determine_offer(
+                intent_result["tier"],
+                conversation_mode,
+                working_memory,
+            )
+        else:
+            offer_result = {
+                "offer_type": "none",
+                "price": 0,
+                "description": "Commerce suppressed by authoritative policy",
+            }
+            self.logger.info(
+                "event=legacy_mutation_skipped operation=offer_determination "
+                "policy=%s",
+                commerce_execution_policy,
+            )
 
         self.logger.info(f"[OFFER RESULT] {offer_result}")
 
@@ -2700,10 +2801,25 @@ class DecisionEngine:
 
         print(f"[CONTENT DEBUG] should_send={should_send_content} type={selected_content_type}")
 
-        timing_result = self.timing.evaluate_timing(
-            working_memory,
-            intent_result,
-        )
+        if legacy_commerce_evaluation_allowed:
+            timing_result = self.timing.evaluate_timing(
+                working_memory,
+                intent_result,
+            )
+        else:
+            timing_result = {
+                "action": "continue_conversation",
+                "send_offer": False,
+                "send_nudge": False,
+                "wait_hours": 0,
+                "reason": "Authoritative Commerce policy suppressed legacy timing.",
+                "signals": ["customer_sales_brain_authority"],
+            }
+            self.logger.info(
+                "event=legacy_mutation_skipped operation=offer_timing "
+                "policy=%s",
+                commerce_execution_policy,
+            )
 
         # ✅ 4B.3 — Subscriber offer timing integration
         subscriber_profile_for_timing = working_memory.get("subscriber_profile", "none")
@@ -2764,20 +2880,24 @@ class DecisionEngine:
         # 🔥 15H-X STEP 1 — BUYER SESSION AUTO-TRIGGER
         # --------------------------------------------------
 
-        hot_result = self.hot_buyer_service.is_hot_buyer(
-            fanvue_account_id=fanvue_account_id,
-            fanvue_user_id=fanvue_user_id,
-            memory={
-                **working_memory,
-                "offer_result": offer_result,
-                "timing_result": timing_result,
-                "last_user_message": message,
-            },
+        hot_result = (
+            self.hot_buyer_service.is_hot_buyer(
+                fanvue_account_id=fanvue_account_id,
+                fanvue_user_id=fanvue_user_id,
+                memory={
+                    **working_memory,
+                    "offer_result": offer_result,
+                    "timing_result": timing_result,
+                    "last_user_message": message,
+                },
+            )
+            if legacy_commerce_enabled
+            else {"is_hot": False, "reason": "authoritative_commerce_policy"}
         )
 
         self.logger.info(f"[15H-X HOT BUYER CHECK] result={hot_result}")
 
-        should_start_buyer_session = (
+        should_start_buyer_session = legacy_commerce_enabled and (
             hot_result.get("is_hot")
             or (
                 timing_result.get("send_offer") is True
@@ -2816,7 +2936,10 @@ class DecisionEngine:
         # 🔥 15H-X STEP 4 — BUYER SESSION STEP ADVANCEMENT
         # --------------------------------------------------
 
-        buyer_session_active_for_step = bool(working_memory.get("buyer_session_active", False))
+        buyer_session_active_for_step = (
+            legacy_commerce_enabled
+            and bool(working_memory.get("buyer_session_active", False))
+        )
         buyer_session_step = int(working_memory.get("buyer_session_step") or 0)
 
         if (
@@ -2853,7 +2976,10 @@ class DecisionEngine:
         # 🔥 15H-X STEP 2 — BUYER SESSION PRIORITY OVERRIDE
         # --------------------------------------------------
 
-        buyer_session_active = bool(working_memory.get("buyer_session_active", False))
+        buyer_session_active = (
+            legacy_commerce_enabled
+            and bool(working_memory.get("buyer_session_active", False))
+        )
         buyer_session_step = int(working_memory.get("buyer_session_step") or 0)
         buyer_session_ppv_count = int(working_memory.get("buyer_session_ppv_count") or 0)
 
@@ -2964,7 +3090,11 @@ class DecisionEngine:
                 working_memory["last_route_reason"] = "Buyer session close mode activated after PPV intent."
 
         # 🔥 7F — Soft Transition Detection
-        soft_transition = self._should_enter_soft_transition(working_memory)
+        soft_transition = (
+            self._should_enter_soft_transition(working_memory)
+            if legacy_commerce_enabled
+            else False
+        )
 
         # 🔥 7F — Transition → Offer Bridge
         last_message_type = working_memory.get("last_message_type")
@@ -3035,7 +3165,22 @@ class DecisionEngine:
         # 🔥 15H-X STEP 5 — CONTROLLED PPV PREP
         # --------------------------------------------------
 
-        if buyer_session_action == "prepare_ppv":
+        legacy_offer_requested = bool(send_offer)
+        if authoritative_commerce:
+            send_offer = presentation_allowed and legacy_offer_requested
+            buyer_session_action = None
+            self.logger.info(
+                "event=legacy_offer_requested requested=%s policy=%s",
+                legacy_offer_requested,
+                commerce_execution_policy,
+            )
+            if not send_offer:
+                self.logger.info(
+                    "event=conversation_continued_without_commerce policy=%s",
+                    commerce_execution_policy,
+                )
+
+        if legacy_commerce_enabled and buyer_session_action == "prepare_ppv":
             self.logger.info("[15H-X STEP 5] Preparing controlled PPV for buyer session")
 
             normalized_offer_type = "vip"
@@ -3120,7 +3265,7 @@ class DecisionEngine:
                 send_offer = False
                 buyer_session_action = "no_content"
 
-        elif send_offer:
+        elif legacy_commerce_enabled and send_offer:
             raw_offer_type = offer_result.get("offer_type", "none")
             self.logger.info(f"[SEND OFFER BLOCK ENTERED] raw_offer_type={raw_offer_type}")
 
@@ -3398,7 +3543,11 @@ class DecisionEngine:
             final_offer = {
                 "offer_type": "none",
                 "price": 0,
-                "description": "Offer suppressed by timing engine",
+                "description": (
+                    "Legacy offer suppressed by authoritative Commerce policy"
+                    if authoritative_commerce
+                    else "Offer suppressed by timing engine"
+                ),
                 "content": None,
             }
 
@@ -3509,35 +3658,65 @@ class DecisionEngine:
         # 9. Memory after offer
         updated_memory = self.memory.get_user_memory(user_id)
 
-        updated_memory = self.post_offer.increment_post_offer_message_count(updated_memory)
-        updated_memory = self.post_offer.expire_offer_if_needed(updated_memory)
-
         nudge_payload = {
-            "send_nudge": False,
-            "nudge_type": None,
+            "send_nudge": nudge_allowed,
+            "nudge_type": (
+                "purchase_intent_follow_up" if nudge_allowed else None
+            ),
         }
 
-        if not send_offer and not buyer_session_active:
-            nudge_payload = self.post_offer.build_nudge_payload(
-                updated_memory,
-                message,
-                classifier_result=gpt_classifier_result,
+        if legacy_commerce_enabled:
+            updated_memory = self.post_offer.increment_post_offer_message_count(
+                updated_memory
+            )
+            updated_memory = self.post_offer.expire_offer_if_needed(
+                updated_memory
             )
 
-            if nudge_payload.get("send_nudge"):
-                self.logger.info(f"🔥 NUDGE TRIGGERED: {nudge_payload.get('nudge_type')}")
-                updated_memory = self.post_offer.apply_nudge_update(updated_memory, nudge_payload)
+            if not send_offer and not buyer_session_active:
+                nudge_payload = self.post_offer.build_nudge_payload(
+                    updated_memory,
+                    message,
+                    classifier_result=gpt_classifier_result,
+                )
 
-        self.memory.update_user_memory(
-            user_id,
-            {
-                "offer_state": updated_memory.get("offer_state"),
-                "post_offer_nudge_count": updated_memory.get("post_offer_nudge_count"),
-                "last_nudge_timestamp": updated_memory.get("last_nudge_timestamp"),
-                "last_nudge_type": updated_memory.get("last_nudge_type"),
-                "messages_since_last_offer": updated_memory.get("messages_since_last_offer"),
-            },
-        )
+                if nudge_payload.get("send_nudge"):
+                    self.logger.info(
+                        "Legacy nudge triggered: %s",
+                        nudge_payload.get("nudge_type"),
+                    )
+                    updated_memory = self.post_offer.apply_nudge_update(
+                        updated_memory, nudge_payload
+                    )
+
+            self.memory.update_user_memory(
+                user_id,
+                {
+                    "offer_state": updated_memory.get("offer_state"),
+                    "post_offer_nudge_count": updated_memory.get(
+                        "post_offer_nudge_count"
+                    ),
+                    "last_nudge_timestamp": updated_memory.get(
+                        "last_nudge_timestamp"
+                    ),
+                    "last_nudge_type": updated_memory.get("last_nudge_type"),
+                    "messages_since_last_offer": updated_memory.get(
+                        "messages_since_last_offer"
+                    ),
+                },
+            )
+        else:
+            self.logger.info(
+                "event=legacy_mutation_skipped operation=post_offer_lifecycle "
+                "policy=%s",
+                commerce_execution_policy,
+            )
+            if nudge_allowed:
+                self.logger.info("event=purchase_intent_reused action=nudge")
+            if acknowledgement_allowed:
+                self.logger.info(
+                    "event=acknowledgement_workflow_selected"
+                )
 
         # --------------------------------------------------
         # 19E — GPT-BASED CONTENT OUTCOME DETECTION
@@ -3561,7 +3740,7 @@ class DecisionEngine:
             elif user_state in ["rejecting", "hesitant"] or recommended_action == "exit":
                 content_outcome = "ignored"
 
-        if content_outcome:
+        if content_outcome and legacy_commerce_enabled:
             update_payload = {
                 "last_content_outcome": content_outcome,
             }
@@ -3663,17 +3842,21 @@ class DecisionEngine:
             "offer_caption": (
                 self._cms_content_caption(final_offer.get("content"))
             ),
-            "buyer_session_active": working_memory.get(
-                "buyer_session_active"
+            "buyer_session_active": (
+                working_memory.get("buyer_session_active")
+                if legacy_commerce_enabled else False
             ),
-            "buyer_session_step": working_memory.get(
-                "buyer_session_step"
+            "buyer_session_step": (
+                working_memory.get("buyer_session_step")
+                if legacy_commerce_enabled else None
             ),
-            "buyer_session_last_action": working_memory.get(
-                "buyer_session_last_action"
+            "buyer_session_last_action": (
+                working_memory.get("buyer_session_last_action")
+                if legacy_commerce_enabled else None
             ),
-            "buyer_session_ppv_count": working_memory.get(
-                "buyer_session_ppv_count"
+            "buyer_session_ppv_count": (
+                working_memory.get("buyer_session_ppv_count")
+                if legacy_commerce_enabled else 0
             ),
             "buyer_session_action": buyer_session_action,
 
@@ -3933,10 +4116,14 @@ class DecisionEngine:
             ),
         }
 
-        offer_copy = self.offer.build_offer_copy(
-            self.settings.DEFAULT_PERSONA,
-            final_offer,
-            working_memory_after_offer,
+        offer_copy = (
+            self.offer.build_offer_copy(
+                self.settings.DEFAULT_PERSONA,
+                final_offer,
+                working_memory_after_offer,
+            )
+            if legacy_commerce_enabled
+            else ""
         )
 
         adult_generation_allowed = bool(
@@ -4644,11 +4831,14 @@ class DecisionEngine:
         response_text_preview = response[:100] if isinstance(response, str) else None
         self.logger.info(
             "[DECISION ENGINE RETURN] response_text_length=%s "
-            "response_text_preview=%r blocked=%s send_offer=%s",
+            "response_text_preview=%r blocked=%s send_offer=%s "
+            "legacy_offer_requested=%s commerce_policy=%s",
             response_text_length,
             response_text_preview,
             False,
             send_offer,
+            legacy_offer_requested,
+            commerce_execution_policy,
         )
 
         return self._runtime_decision_result({
@@ -4661,6 +4851,19 @@ class DecisionEngine:
             "mode": conversation_mode,
             "offer": final_offer,
             "send_offer": send_offer,
+            "legacy_offer_requested": legacy_offer_requested,
+            "commerce_execution_policy": commerce_execution_policy,
+            "commerce_offer_authorized": presentation_allowed,
+            "final_offer_authorized": (
+                send_offer and presentation_allowed
+                if authoritative_commerce
+                else send_offer
+            ),
+            "commerce_readiness": self._commerce_readiness(
+                message,
+                gpt_classifier_result,
+                explicit_vs_buying_profile,
+            ),
             "delivery_type": (final_offer or {}).get("delivery_type"),
             "delivery_permission_mode": (
                 (final_offer or {}).get("delivery_permission_mode")
@@ -4704,6 +4907,9 @@ class DecisionEngine:
                 )
             ),
             "runtime_injection": runtime_injection,
+            "commerce_decision": runtime_injection.get(
+                "commerce_decision"
+            ),
             "runtime_suppression_result": (
                 runtime_suppression_result
             ),

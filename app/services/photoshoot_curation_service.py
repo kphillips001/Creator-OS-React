@@ -13,6 +13,7 @@ from app.services.generation_result_ingestion_service import GenerationResultIng
 from app.services.photoshoot_auto_run_service import PhotoshootAutoRunService
 from app.services.photoshoot_commerce_deliverable_service import PhotoshootCommerceDeliverableService
 from app.services.photoshoot_queue_service import PhotoshootQueueService
+from app.services.creative_intelligence_learning_service import CreativeIntelligenceLearningService
 
 
 class PhotoshootCurationService:
@@ -25,13 +26,15 @@ class PhotoshootCurationService:
     _session_locks = {}
 
     def __init__(self, *, queue=None, library=None, deliverables=None, auto_run=None,
-                 generation_engine=None, ingestion=None):
+                 generation_engine=None, ingestion=None, content_destinations=None,
+                 creative_intelligence=None):
         self.queue = queue or PhotoshootQueueService()
         self.library = library or GenerationLibraryService()
         self.deliverables = deliverables or PhotoshootCommerceDeliverableService(queue=self.queue, library=self.library)
         self.auto_run = auto_run or PhotoshootAutoRunService(queue=self.queue)
         self.generation_engine = generation_engine or GenerationEngineService()
         self.ingestion = ingestion or GenerationResultIngestionService()
+        self.creative_intelligence = creative_intelligence or CreativeIntelligenceLearningService()
 
     def review(self, *, creator_profile_id: int, session_id: str):
         session = self._session(creator_profile_id, session_id)
@@ -94,7 +97,14 @@ class PhotoshootCurationService:
             return self._result(session, existing, already_confirmed=True)
         review = self.review(creator_profile_id=creator_profile_id, session_id=session_id)
         available = {shot["image_id"]: shot for shot in review["shots"]}
-        selected = tuple(dict.fromkeys(str(value) for value in selected_image_ids if str(value) in available))
+        requested = tuple(dict.fromkeys(str(value) for value in selected_image_ids))
+        invalid = tuple(value for value in requested if value not in available)
+        if invalid:
+            raise ValueError(
+                "Selected Photoshoot image is not an approved candidate: "
+                + ", ".join(invalid)
+            )
+        selected = tuple(value for value in requested if value in available)
         seed = review.get("seed_image")
         if decision == "APPROVED" and seed is None:
             raise ValueError("The canonical Seed Image is required to create a Photoshoot.")
@@ -109,10 +119,24 @@ class PhotoshootCurationService:
             if not approval.success or not approval.imported_asset_ids:
                 raise RuntimeError("; ".join(approval.errors) or "The Photoshoot Seed Image could not be created as an Asset.")
             seed = {**seed, "asset_id": int(approval.imported_asset_ids[0])}
-        all_ids = tuple(([seed["image_id"]] if seed else []) + list(available))
+        finalized_ids = tuple(([seed["image_id"]] if seed and decision == "APPROVED" else []) + list(selected))
         finalized = self.library.finish_photoshoot_session(
-            session_id=session_id, approved_image_ids=all_ids, session_title=session.title)
+            session_id=session_id, approved_image_ids=finalized_ids, session_title=session.title)
         if not finalized.success: raise RuntimeError("; ".join(finalized.errors) or finalized.message)
+        for image_id in finalized_ids:
+            try:
+                record = self.library.get(image_id)
+            except KeyError:
+                continue
+            self.creative_intelligence.record_positive_safely(
+                creator_profile_id=int(getattr(record, "creator_profile_id", creator_profile_id)),
+                image_reference=record.output_reference,
+                event_type="photoshoot_added",
+                source_workflow="photoshoot",
+                source_image_id=record.image_id,
+                source_asset_id=getattr(record, "imported_asset_id", None),
+                operational_metadata={"photoshoot_session_id": session_id},
+            )
         image_assets = []
         if decision == "DECLINED":
             for image_id in selected:

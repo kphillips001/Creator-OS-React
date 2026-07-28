@@ -11,6 +11,8 @@ class MonetizationEventNormalizerService:
         "tip_received",
         "subscription_created",
         "subscription_cancelled",
+        "purchase_new",
+        "creator_payment_succeeded",
     }
 
     def normalize(self, event: dict) -> dict:

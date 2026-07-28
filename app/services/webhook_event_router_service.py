@@ -42,6 +42,8 @@ class WebhookEventRouterService:
         self.realtime_monetization_service = (
             RealtimeMonetizationEventService()
         )
+        from app.services.commerce_signal_service import CommerceSignalService
+        self.commerce_signal_service = CommerceSignalService()
 
     def route_event(self, event: dict):
         event_type = event["event_type"]
@@ -71,6 +73,12 @@ class WebhookEventRouterService:
             return self._route_monetization_event(
                 event
             )
+
+        elif event_type in ("purchase_new", "creator_payment_succeeded"):
+            return {
+                "pipeline": "commerce_signal_pipeline",
+                "result": self.commerce_signal_service.process_webhook(event),
+            }
 
         #
         # UNKNOWN

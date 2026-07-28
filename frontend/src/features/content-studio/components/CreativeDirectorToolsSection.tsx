@@ -1,59 +1,56 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useState, type ReactNode } from "react";
 
-import {
-  createLuckyTags,
-  enhanceCreativeTags,
-  surpriseCreativeTags,
-} from "../../../infrastructure/api/contentStudioApi";
+import { enhanceCreativeTags } from "../../../infrastructure/api/contentStudioApi";
 import type { CreativeToolInputs, PromptSource } from "../types/contentStudioCreativeTools";
+import type { CanonicalPlannerItem } from "../types/promptPlanner";
 
 type CreativeDirectorToolsSectionProps = {
+  creatingImages: boolean;
   disabled: boolean;
-  ideaEnhancement: { id: string; text: string } | null;
-  onIdeaEnhancementComplete: () => void;
+  onCreateImages: (creativeConcept: string) => Promise<void>;
   onInputsChange: (inputs: CreativeToolInputs) => void;
-  onPremiumEnhanced: (originalTags: string, enhancedTags: string) => Promise<void>;
   onPromptSourceChange: (source: PromptSource) => void;
   planner: ReactNode;
   promptCount: number;
 };
 
-type ActionName = "premiumLucky" | "premiumEnhance" | "surprise" | "explicitLucky" | "explicitEnhance";
+export type CreativeDirectorToolsHandle = {
+  enhanceIdea: (item: CanonicalPlannerItem) => Promise<string | null>;
+};
 
-export function CreativeDirectorToolsSection({
+export const CreativeDirectorToolsSection = forwardRef<CreativeDirectorToolsHandle, CreativeDirectorToolsSectionProps>(function CreativeDirectorToolsSection({
+  creatingImages,
   disabled,
-  ideaEnhancement,
-  onIdeaEnhancementComplete,
+  onCreateImages,
   onInputsChange,
-  onPremiumEnhanced,
   onPromptSourceChange,
   planner,
-  promptCount,
-}: CreativeDirectorToolsSectionProps) {
+}, ref) {
   const [creativeTags, setCreativeTags] = useState("");
   const [explicitTags, setExplicitTags] = useState("");
   const [enhancedTags, setEnhancedTags] = useState("");
-  const [surpriseTags, setSurpriseTags] = useState("");
   const [enhancedExplicitTags, setEnhancedExplicitTags] = useState("");
-  const [pendingAction, setPendingAction] = useState<ActionName | null>(null);
+  const [explicitPending, setExplicitPending] = useState(false);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    if (!ideaEnhancement) return;
-    let active = true;
-    setError("");
-    enhanceCreativeTags(ideaEnhancement.text, false)
-      .then((tags) => {
-        if (!active) return;
+  useImperativeHandle(ref, () => ({
+    enhanceIdea: async (item: CanonicalPlannerItem) => {
+      try {
+        const tags = await enhanceCreativeTags(item.fullText, false, undefined, {
+          origin: item.origin,
+          plannerItemId: item.id,
+          plannerItemTitle: item.title,
+          plannerQuestion: item.plannerQuestion,
+        });
         setEnhancedTags(tags);
         onPromptSourceChange("Enhanced Tags");
-      })
-      .catch((reason: unknown) => {
-        if (active) setError(reason instanceof Error ? reason.message : "Creative tag action failed");
-      })
-      .finally(() => { if (active) onIdeaEnhancementComplete(); });
-    return () => { active = false; };
-  }, [ideaEnhancement, onIdeaEnhancementComplete, onPromptSourceChange]);
+        return tags;
+      } catch (reason: unknown) {
+        setError(reason instanceof Error ? reason.message : "Creative tag action failed");
+        return null;
+      }
+    },
+  }), [onPromptSourceChange]);
 
   useEffect(() => {
     onInputsChange({
@@ -61,59 +58,23 @@ export function CreativeDirectorToolsSection({
       enhancedExplicitTags,
       enhancedTags,
       explicitTags,
-      surpriseTags,
     });
-  }, [creativeTags, enhancedExplicitTags, enhancedTags, explicitTags, onInputsChange, surpriseTags]);
+  }, [creativeTags, enhancedExplicitTags, enhancedTags, explicitTags, onInputsChange]);
 
-  const runAction = async (action: ActionName, request: () => Promise<string>) => {
-    setPendingAction(action);
+  const enhanceExplicit = async () => {
+    setExplicitPending(true);
     setError("");
     try {
-      return await request();
+      const tags = await enhanceCreativeTags(explicitTags, true);
+      setEnhancedExplicitTags(tags);
+      onPromptSourceChange("Enhanced Explicit Tags");
     } catch (reason: unknown) {
       setError(reason instanceof Error ? reason.message : "Creative tag action failed");
-      return null;
     } finally {
-      setPendingAction(null);
+      setExplicitPending(false);
     }
   };
 
-  const premiumLucky = async () => {
-    const tags = await runAction("premiumLucky", () => createLuckyTags(promptCount, false));
-    if (tags === null) return;
-    setCreativeTags(tags);
-    onPromptSourceChange("Original Tags");
-  };
-
-  const explicitLucky = async () => {
-    const tags = await runAction("explicitLucky", () => createLuckyTags(promptCount, true));
-    if (tags !== null) setExplicitTags(tags);
-  };
-
-  const enhancePremium = async () => {
-    const tags = await runAction("premiumEnhance", () => enhanceCreativeTags(creativeTags, false));
-    if (tags === null) return;
-    setEnhancedTags(tags);
-    onPromptSourceChange("Enhanced Tags");
-    await onPremiumEnhanced(creativeTags, tags);
-  };
-
-  const surprisePremium = async () => {
-    const tags = await runAction("surprise", () => surpriseCreativeTags(creativeTags));
-    if (tags === null) return;
-    setSurpriseTags(tags);
-    onInputsChange({ creativeTags, enhancedExplicitTags, enhancedTags, explicitTags, surpriseTags: tags });
-    onPromptSourceChange("Surprise Me Tags");
-  };
-
-  const enhanceExplicit = async () => {
-    const tags = await runAction("explicitEnhance", () => enhanceCreativeTags(explicitTags, true));
-    if (tags === null) return;
-    setEnhancedExplicitTags(tags);
-    onPromptSourceChange("Enhanced Explicit Tags");
-  };
-
-  const busy = pendingAction !== null;
   return (
     <section
       aria-disabled={disabled || undefined}
@@ -122,52 +83,33 @@ export function CreativeDirectorToolsSection({
     >
       <h2>Creative Direction</h2>
       <p className="creative-director-tools__caption">
-        Premium prompt helpers, enhanced tags, Surprise Me, and explicit-ready planning.
+        Create images from a manual concept or use the Canonical Prompt Planner.
       </p>
 
       <div className="creative-director-tools__group">
         <label>
-          <span>Creative Direction</span>
+          <span>Creative Concept</span>
           <textarea
-            disabled={disabled}
+            disabled={disabled || creatingImages}
             onChange={(event) => {
               setCreativeTags(event.target.value);
               onPromptSourceChange("Original Tags");
             }}
-            placeholder="Enter premium scene, wardrobe, setting, mood, continuity, and framing direction."
+            placeholder="Enter a believable moment or activity from Ava’s life."
             rows={5}
             value={creativeTags}
           />
         </label>
-        {planner}
         <div className="creative-director-tools__actions">
-          <button disabled={disabled || busy} onClick={premiumLucky} type="button">
-            🎲 I Feel Lucky
-          </button>
-          <button disabled={disabled || busy || !creativeTags.trim()} onClick={enhancePremium} type="button">
-            ✨ Enhance &amp; Build Prompts
-          </button>
-          <button disabled={disabled || busy || !creativeTags.trim()} onClick={surprisePremium} type="button">
-            🎭 Surprise Me
+          <button
+            disabled={disabled || creatingImages || !creativeTags.trim()}
+            onClick={() => void onCreateImages(creativeTags)}
+            type="button"
+          >
+            {creatingImages ? "Creating Images..." : "🚀 Create Images"}
           </button>
         </div>
-      </div>
-
-      <div className="creative-director-tools__derived-grid">
-        <label>
-          <span>Enhanced Premium Tags</span>
-          <textarea disabled={disabled} onChange={(event) => {
-            setEnhancedTags(event.target.value);
-            onPromptSourceChange("Enhanced Tags");
-          }} rows={4} value={enhancedTags} />
-        </label>
-        <label>
-          <span>Surprise Me Tags</span>
-          <textarea disabled={disabled} onChange={(event) => {
-            setSurpriseTags(event.target.value);
-            onPromptSourceChange("Surprise Me Tags");
-          }} rows={4} value={surpriseTags} />
-        </label>
+        {planner}
       </div>
 
       <div className="creative-director-tools__group creative-director-tools__group--explicit">
@@ -182,10 +124,7 @@ export function CreativeDirectorToolsSection({
           />
         </label>
         <div className="creative-director-tools__actions">
-          <button disabled={disabled || busy} onClick={explicitLucky} type="button">
-            🔥 I Feel Lucky
-          </button>
-          <button disabled={disabled || busy || !explicitTags.trim()} onClick={enhanceExplicit} type="button">
+          <button disabled={disabled || explicitPending || !explicitTags.trim()} onClick={() => void enhanceExplicit()} type="button">
             ✨ Enhance Explicit Tags
           </button>
         </div>
@@ -203,8 +142,8 @@ export function CreativeDirectorToolsSection({
         </label>
       </div>
 
-      {pendingAction && <p className="creative-director-tools__status">Working…</p>}
+      {explicitPending && <p className="creative-director-tools__status">Working…</p>}
       {error && <p className="creative-director-tools__status creative-director-tools__status--error" role="alert">{error}</p>}
     </section>
   );
-}
+});

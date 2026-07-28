@@ -316,6 +316,165 @@ class TelegramBrainCompositionTests(unittest.TestCase):
         self.assertTrue(output.offer_authorized)
         self.assertEqual(output.offer_link, FANVUE_LINK)
 
+    def test_authoritative_wait_skips_legacy_commerce_side_effects(self):
+        engine, memory = self.build_engine(
+            content_service=OfflineContentService(),
+            buying=True,
+        )
+        identity = self.identity()
+        original_commerce = {
+            "offers_shown_count": 2,
+            "last_offer_timestamp": "2026-07-20T12:00:00",
+            "last_offer_type": "vip",
+            "offer_state": "offered",
+            "post_offer_nudge_count": 1,
+        }
+        memory.rows[identity.engine_user_id] = {
+            "fanvue_account_id": 7,
+            "fanvue_user_id": -123456789,
+            **original_commerce,
+        }
+        injection = {
+            "commerce_execution_policy": "COMMERCE_DISABLED_FOR_TURN",
+            "commerce_decision": {
+                "decision": "WAIT",
+                "reason_code": "ACTIVE_OFFER_NOT_YET_ELIGIBLE_FOR_NUDGE",
+                "buyer_stage": "FIRST_TIME_BUYER",
+                "current_offer_status": "PRESENTED",
+                "conversion_state": "OFFER_PRESENTED",
+            },
+        }
+
+        with (
+            patch.object(
+                engine.decision_runtime_boundary,
+                "get_active_creator_profile",
+                return_value=self.creator_profile(),
+            ),
+            patch.object(
+                engine.decision_runtime_boundary,
+                "get_user_by_account_and_id",
+                return_value=None,
+            ),
+            patch.object(engine.decision_runtime_boundary, "log_send_event"),
+            patch.object(
+                engine.offer, "determine_offer",
+                wraps=engine.offer.determine_offer,
+            ) as determine_offer,
+            patch.object(
+                engine.timing, "evaluate_timing",
+                wraps=engine.timing.evaluate_timing,
+            ) as evaluate_timing,
+            patch.object(
+                engine.product_recommendation_service, "get_content",
+                wraps=engine.product_recommendation_service.get_content,
+            ) as select_product,
+            patch.object(
+                engine.post_offer, "increment_post_offer_message_count",
+                wraps=engine.post_offer.increment_post_offer_message_count,
+            ) as increment_post_offer,
+            patch.object(
+                engine.post_offer, "expire_offer_if_needed",
+                wraps=engine.post_offer.expire_offer_if_needed,
+            ) as expire_offer,
+            patch.object(
+                engine.post_offer, "build_nudge_payload",
+                wraps=engine.post_offer.build_nudge_payload,
+            ) as build_nudge,
+            patch("builtins.print"),
+        ):
+            result = engine.process_message(
+                identity.engine_user_id,
+                "yes, send it now",
+                chat_history=[],
+                runtime_injection=injection,
+            )
+
+        self.assertFalse(result["send_offer"])
+        self.assertEqual(
+            result["commerce_execution_policy"],
+            "COMMERCE_DISABLED_FOR_TURN",
+        )
+        determine_offer.assert_not_called()
+        evaluate_timing.assert_not_called()
+        select_product.assert_not_called()
+        increment_post_offer.assert_not_called()
+        expire_offer.assert_not_called()
+        build_nudge.assert_not_called()
+        row = memory.rows[identity.engine_user_id]
+        for key, value in original_commerce.items():
+            self.assertEqual(row.get(key), value)
+
+    def test_authoritative_presentation_never_selects_legacy_content(self):
+        engine, memory = self.build_engine(
+            content_service=OfflineContentService(),
+            buying=True,
+        )
+        identity = self.identity()
+        memory.rows[identity.engine_user_id] = {
+            "fanvue_account_id": 7,
+            "fanvue_user_id": -123456789,
+            "intent_score": 90,
+            "messages_since_last_offer": 5,
+            "conversation_streak": 5,
+            "engagement_depth_score": 6,
+            "offers_shown_count": 0,
+        }
+        injection = {
+            "commerce_execution_policy": "COMMERCE_PRESENTATION_ALLOWED",
+            "commerce_decision": {
+                "decision": "PRESENT_OFFER",
+                "reason_code": "NO_ACTIVE_OFFER",
+                "buyer_stage": "PROSPECT",
+                "current_offer_status": None,
+                "conversion_state": "NO_ACTIVE_OFFER",
+            },
+        }
+
+        with (
+            patch.object(
+                engine.decision_runtime_boundary,
+                "get_active_creator_profile",
+                return_value=self.creator_profile(),
+            ),
+            patch.object(
+                engine.decision_runtime_boundary,
+                "get_user_by_account_and_id",
+                return_value=None,
+            ),
+            patch.object(engine.decision_runtime_boundary, "log_send_event"),
+            patch.object(
+                engine.product_recommendation_service, "get_content",
+                wraps=engine.product_recommendation_service.get_content,
+            ) as select_product,
+            patch.object(
+                engine.post_offer, "mark_offer_sent",
+                wraps=engine.post_offer.mark_offer_sent,
+            ) as mark_offer_sent,
+            patch("builtins.print"),
+        ):
+            result = engine.process_message(
+                identity.engine_user_id,
+                "yes, send it now",
+                chat_history=[],
+                runtime_injection=injection,
+            )
+
+        self.assertEqual(
+            result["send_offer"],
+            result["legacy_offer_requested"],
+        )
+        self.assertIsNone(result["offer"]["content"])
+        select_product.assert_not_called()
+        mark_offer_sent.assert_not_called()
+        self.assertEqual(
+            memory.rows[identity.engine_user_id].get("offers_shown_count"),
+            0,
+        )
+        self.assertIsNone(
+            memory.rows[identity.engine_user_id].get("last_offer_timestamp")
+        )
+
     def test_real_brain_creator_profile_block_is_normalized(self):
         engine, _ = self.build_engine()
         received_engine_keys = []

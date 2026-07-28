@@ -86,6 +86,15 @@ class FakeAssetRepository:
         raise AssertionError("AssetLibraryService must not mutate assets")
 
 
+class FakeContentDestinationService:
+    def __init__(self):
+        self.expressions = []
+
+    def available_inventory_predicate(self, expression):
+        self.expressions.append(expression)
+        return "content_destination.destination = 'AVAILABLE_INVENTORY'"
+
+
 class FakeMediaProcessingService:
     def __init__(self, preview_path=None):
         self.preview_path = preview_path
@@ -206,6 +215,7 @@ class AssetLibraryServiceTests(unittest.TestCase):
             product_asset_repository=FakeProductAssetRepository(),
             product_repository=FakeProductRepository(),
             publishing_service=FakePublishingService(),
+            experience_service=FakeExperienceService(),
         )
 
         result = service.search_assets(
@@ -269,10 +279,60 @@ class AssetLibraryServiceTests(unittest.TestCase):
                 "publishing_status": "uploaded",
                 "has_local_vault_original": True,
                 "has_derivative_preview": False,
+                "is_reference_image": None,
                 "legacy_content_id": 10,
+                "availability_predicate": None,
             },
         )
         self.assertEqual(media.resolve_calls, [(asset.id, "blurred_preview")])
+
+    def test_eligible_canonical_assets_use_content_destination_authority(self):
+        asset = make_asset()
+        repo = FakeAssetRepository([asset])
+        destinations = FakeContentDestinationService()
+        service = AssetLibraryService(
+            asset_repository=repo,
+            media_processing_service=FakeMediaProcessingService(),
+            runtime_media_resolver=RuntimeMediaResolver(),
+            product_asset_repository=FakeProductAssetRepository(),
+            product_repository=FakeProductRepository(),
+            publishing_service=FakePublishingService(),
+            content_destination_service=destinations,
+        )
+
+        result = service.search_assets(
+            AssetLibraryFilter(eligible_only=True, creator_profile_id=7)
+        )
+
+        self.assertEqual(result.total, 1)
+        self.assertEqual(
+            repo.search_kwargs["availability_predicate"],
+            "content_destination.destination = 'AVAILABLE_INVENTORY'",
+        )
+        self.assertEqual(destinations.expressions, ["content_items.id"])
+
+    def test_committed_canonical_asset_is_hidden_while_available_asset_is_visible(self):
+        available = make_asset(id=10, file_name="available.jpg")
+        committed = make_asset(id=11, file_name="committed.jpg")
+
+        class DestinationAwareAssets(FakeAssetRepository):
+            def search_assets(self, **kwargs):
+                self.search_kwargs = kwargs
+                return [available] if kwargs.get("availability_predicate") else self.assets
+
+        service = AssetLibraryService(
+            asset_repository=DestinationAwareAssets([available, committed]),
+            media_processing_service=FakeMediaProcessingService(),
+            runtime_media_resolver=RuntimeMediaResolver(),
+            product_asset_repository=FakeProductAssetRepository(),
+            product_repository=FakeProductRepository(),
+            publishing_service=FakePublishingService(),
+            content_destination_service=FakeContentDestinationService(),
+        )
+
+        result = service.search_assets(AssetLibraryFilter(eligible_only=True))
+
+        self.assertEqual(tuple(item.asset_id for item in result.items), (10,))
 
     def test_relationship_summary_reads_experiences_from_experience_service(self):
         asset = make_asset()

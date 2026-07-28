@@ -1,7 +1,8 @@
-import { Archive, ArrowLeft, BookOpen, Camera, ChevronLeft, ChevronRight, FolderOpen, Image as ImageIcon, ImageOff, Search, Star, Video, X } from "lucide-react";
+import { ArrowLeft, BookOpen, Camera, ChevronLeft, ChevronRight, Image as ImageIcon, ImageOff, MoveRight, PackagePlus, Search, Trash2, Video, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { PageHeader } from "../../shared/ui/PageHeader";
+import { LibraryActionButton, LibraryActionGroup } from "../../shared/ui/LibraryActionButton";
 import type { AssetLibraryItem, AssetLibraryResponse } from "./types";
 import "./asset-library.css";
 
@@ -264,11 +265,11 @@ export function AssetLibraryPage() {
               <dl><div><dt>Type</dt><dd>{asset.mediaType}</dd></div><div><dt>Classification</dt><dd>{asset.classification || "Unclassified"}</dd></div><div><dt>Registered</dt><dd>{dateLabel(asset.createdAt)}</dd></div></dl>
             </div>
           ) : null}
-          <div className="asset-card__actions asset-card__actions--icons">
-            <button aria-label="Open" onClick={() => openAsset(asset)} title="Open" type="button"><FolderOpen size={18} /></button>
-            <button aria-label="Register" disabled={asset.itemKind === "registered_asset" || Boolean(registeringId)} onClick={() => void registerAsset(asset)} title="Register" type="button"><Star size={18} /></button>
-            <button aria-label="Archive" disabled={Boolean(archivingId)} onClick={() => void archiveAsset(asset)} title="Archive" type="button"><Archive size={18} /></button>
-          </div>
+          <LibraryActionGroup label="Asset actions">
+            <LibraryActionButton icon={MoveRight} onClick={() => openAsset(asset)} tooltip="Move to Generation Library" />
+            <LibraryActionButton disabled={asset.itemKind === "registered_asset" || Boolean(registeringId)} icon={PackagePlus} onClick={() => void registerAsset(asset)} tooltip="Register Asset" />
+            <LibraryActionButton disabled={Boolean(archivingId)} icon={Trash2} onClick={() => void archiveAsset(asset)} tooltip="Delete" />
+          </LibraryActionGroup>
         </article>)}
       </div>
       {selected && <aside className="asset-details" aria-label="Selected asset details"><header><div><small>Selected Asset</small><h2>Asset #{selected.assetId}</h2></div><button aria-label="Close asset details" onClick={() => setSelected(null)} type="button"><X size={17} /></button></header><dl><div><dt>Filename</dt><dd>{selected.fileName || "Not recorded"}</dd></div><div><dt>Media type</dt><dd>{selected.mediaType}</dd></div><div><dt>Classification</dt><dd>{selected.classification || "Unclassified"}</dd></div><div><dt>Created</dt><dd>{dateLabel(selected.createdAt)}</dd></div><div><dt>Registration source</dt><dd>{selected.registrationSource || "Existing Creator Asset"}</dd></div><div><dt>Status</dt><dd>{selected.status || "Not recorded"}</dd></div><div><dt>Canonical reference</dt><dd>{selected.isCanonicalReference ? "Yes - Protected" : "No"}</dd></div><div><dt>Tags</dt><dd>{selected.tags.length ? selected.tags.join(", ") : "None"}</dd></div><div><dt>Themes</dt><dd>{selected.themes.length ? selected.themes.join(", ") : "None"}</dd></div></dl></aside>}

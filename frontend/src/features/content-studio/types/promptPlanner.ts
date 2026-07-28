@@ -9,3 +9,12 @@ export type PromptPlannerHistoryItem = {
   answer: string;
   imageName: string;
 };
+
+export type CanonicalPlannerItem = {
+  id: string;
+  title: string;
+  fullText: string;
+  description: string;
+  plannerQuestion: string;
+  origin: "canonical_planner";
+};

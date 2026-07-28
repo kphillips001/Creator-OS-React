@@ -3,6 +3,7 @@
 from typing import Protocol
 
 from app.models.conversation_gateway import (
+    ConversationBrainContext,
     ConversationGatewayInput,
     ConversationGatewayOutput,
 )
@@ -38,6 +39,9 @@ class TelegramInboundAdapter:
         *,
         identity_adapter: TelegramIdentityAdapter,
         conversation_gateway: ConversationGatewayCompatible,
+        creator_profile_id: int | None = None,
+        fanvue_account_id: int | None = None,
+        purchase_intent_service=None,
     ) -> None:
         if identity_adapter is None:
             raise ValueError("identity_adapter is required")
@@ -45,6 +49,9 @@ class TelegramInboundAdapter:
             raise ValueError("conversation_gateway is required")
         self._identity_adapter = identity_adapter
         self._conversation_gateway = conversation_gateway
+        self._creator_profile_id = creator_profile_id
+        self._fanvue_account_id = fanvue_account_id
+        self._purchase_intents = purchase_intent_service
 
     def execute(
         self,
@@ -71,15 +78,48 @@ class TelegramInboundAdapter:
             )
         )
 
+        acknowledgement = None
+        if (
+            self._purchase_intents is not None
+            and self._creator_profile_id
+            and self._fanvue_account_id
+        ):
+            acknowledgement = (
+                self._purchase_intents.get_unacknowledged_purchase(
+                    creator_profile_id=self._creator_profile_id,
+                    fanvue_account_id=self._fanvue_account_id,
+                    telegram_user_id=payload.telegram_user_id,
+                )
+            )
+
         gateway_output = self._conversation_gateway.execute(
             ConversationGatewayInput(
                 engine_user_id=identity.engine_user_id,
                 message_text=payload.message_text,
                 chat_history=payload.chat_history,
                 correlation_id=correlation_id,
+                brain_context=ConversationBrainContext(
+                    creator_profile_id=self._creator_profile_id,
+                    customer_identifier=identity.engine_user_id,
+                    conversation_identifier=correlation_id,
+                    telegram_user_id=payload.telegram_user_id,
+                    fanvue_account_id=self._fanvue_account_id,
+                    purchase_acknowledgement_pending=(
+                        acknowledgement is not None
+                    ),
+                    purchase_acknowledgement_intent_id=(
+                        str(acknowledgement.purchase_intent_id)
+                        if acknowledgement else None
+                    ),
+                ),
             )
         )
 
+        diagnostics = dict(gateway_output.diagnostic_metadata)
+        if acknowledgement is not None:
+            diagnostics["purchase_acknowledgement_intent_id"] = str(
+                acknowledgement.purchase_intent_id
+            )
         return TelegramInboundResult(
             correlation_id=gateway_output.correlation_id,
             telegram_chat_id=payload.telegram_chat_id,
@@ -95,7 +135,7 @@ class TelegramInboundAdapter:
             delivery_mode=gateway_output.delivery_mode,
             delivery_requires_payment=gateway_output.delivery_requires_payment,
             delivery_payload=dict(gateway_output.delivery_payload),
-            diagnostic_metadata=dict(gateway_output.diagnostic_metadata),
+            diagnostic_metadata=diagnostics,
         )
 
     @staticmethod
