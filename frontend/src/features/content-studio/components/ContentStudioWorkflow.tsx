@@ -203,7 +203,12 @@ export function ContentStudioWorkflow({ context, error, loading }: ContentStudio
     setManualWorkflowPending(true);
     setManualWorkflowError("");
     try {
-      const enhancedTags = await enhanceCreativeTags(creativeConcept, false);
+      const enhancedTags = await enhanceCreativeTags(
+        creativeConcept,
+        false,
+        undefined,
+        { origin: "manual_creative_concept" },
+      );
       const promptInput = enhancedPromptInput(creativeConcept, enhancedTags);
       const preview = await createPromptPreview(
         creativeMode ?? "",

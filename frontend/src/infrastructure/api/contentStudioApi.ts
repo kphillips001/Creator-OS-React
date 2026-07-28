@@ -116,16 +116,16 @@ export function enhanceCreativeTags(
   tags: string,
   explicit: boolean,
   signal?: AbortSignal,
-  planner?: {
-    origin: "canonical_planner";
-    plannerQuestion: string;
-    plannerItemId: string;
-    plannerItemTitle: string;
+  context?: {
+    origin: "canonical_planner" | "manual_creative_concept";
+    plannerQuestion?: string;
+    plannerItemId?: string;
+    plannerItemTitle?: string;
   },
 ): Promise<string> {
   return postCreativeTagAction(
     "/content-studio/creative-tags/enhance",
-    { explicit, tags, ...planner },
+    { explicit, tags, ...context },
     signal,
   );
 }

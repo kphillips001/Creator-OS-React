@@ -229,6 +229,19 @@ def _enhance_tags(request: TransformTagsRequest) -> dict:
             fanvue_account_id=account_id,
             selected_item=tags,
         )
+    elif request.origin == "manual_creative_concept":
+        if request.explicit:
+            raise ValueError("Manual Creative Concept enhancement must use the premium lane.")
+        from app.services.manual_creative_concept_enhancement_service import (
+            ManualCreativeConceptEnhancementService,
+        )
+        account_id = creator_profile.get("fanvue_account_id") or _current_account_id()
+        if account_id is None:
+            raise ValueError("Creator account required before enhancing a Creative Concept.")
+        enhanced_tags = ManualCreativeConceptEnhancementService().enhance(
+            fanvue_account_id=account_id,
+            creative_concept=tags,
+        )
     else:
         enhanced_tags = creative_director.enhance_premium_tags(
             simple_tags=tags,

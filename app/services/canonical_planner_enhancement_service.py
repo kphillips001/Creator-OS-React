@@ -8,6 +8,10 @@ from typing import Any
 from app.services.creator_aware_canonical_prompt_planner import (
     CreatorAwareCanonicalPromptPlanner,
 )
+from app.services.editorial_quality_guidance import (
+    UNSUPPORTED_CREATOR_FACT_GUARD,
+    editorial_quality_guidance,
+)
 from app.services.grok_anything_service import ask_grok_anything
 
 
@@ -46,16 +50,12 @@ Add only relevant canonical Ava context. Ask internally: "How would Ava
 naturally bring this selected concept to life?" Do not force coastal,
 athletic, or other context when it is unrelated.
 
-Apply Editorial Cinematography: favor an authentic observed moment, natural
-movement or environmental interaction, candid body language, asymmetry, and
-natural eye direction when appropriate to the concept. Do not collapse the
-concept into a static centered portrait or generic apartment scene unless
-the selected item explicitly requires one. Do not use pose quotas or a pose
-rotation.
+{editorial_quality_guidance(workflow="canonical_planner")}
 
-Do not invent pets, partners, properties, possessions, relationships, or
-biographical facts. Return only the enhanced creative direction, without
-headings, analysis, bullets, or internal context.""",
+{UNSUPPORTED_CREATOR_FACT_GUARD}
+
+Return only the enhanced creative direction, without headings, analysis,
+bullets, or internal context.""",
         )
         enhanced = str(self.text_generator(private_brief) or "").strip()
         return enhanced or concept

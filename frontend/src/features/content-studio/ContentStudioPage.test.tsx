@@ -485,6 +485,11 @@ describe("ContentStudioPage", () => {
     const postCalls = vi.mocked(fetch).mock.calls.filter(([, options]) => options?.method === "POST");
     expect(postCalls).toHaveLength(4);
     expect(postCalls[0]![0]).toBe("/api/v1/content-studio/creative-tags/enhance");
+    expect(JSON.parse(String(postCalls[0]![1]?.body))).toEqual({
+      explicit: false,
+      origin: "manual_creative_concept",
+      tags: "hotel robe",
+    });
     expect(postCalls[1]![0]).toBe("/api/v1/content-studio/prompt-preview");
     expect(postCalls[2]![0]).toBe("/api/v1/content-studio/generations");
     expect(JSON.parse(String(postCalls[1]![1]?.body))).toEqual({

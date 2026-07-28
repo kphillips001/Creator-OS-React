@@ -481,6 +481,28 @@ class ContentStudioCreativeTagActionTests(unittest.TestCase):
         )
         self.assertFalse(any(call[0] == "enhance" for call in self.director.calls))
 
+    def test_manual_origin_uses_creator_aware_editorial_enhancement(self):
+        request = TransformTagsRequest(
+            tags="tight booty daisy duke shorts, crop top, hiking",
+            origin="manual_creative_concept",
+        )
+        with (
+            patch("app.api.content_studio._current_account_id", return_value=2),
+            patch(
+                "app.services.manual_creative_concept_enhancement_service."
+                "ManualCreativeConceptEnhancementService.enhance",
+                return_value="creator-aware candid hiking direction",
+            ) as enhance,
+        ):
+            result = _enhance_tags(request)
+
+        self.assertEqual(result["tags"], "creator-aware candid hiking direction")
+        enhance.assert_called_once_with(
+            fanvue_account_id=2,
+            creative_concept=request.tags,
+        )
+        self.assertFalse(any(call[0] == "enhance" for call in self.director.calls))
+
     def test_prompt_planner_rejects_empty_question_and_unsupported_image(self):
         with self.assertRaisesRegex(ValueError, "Enter a question"):
             _ask_prompt_planner(question="  ")
