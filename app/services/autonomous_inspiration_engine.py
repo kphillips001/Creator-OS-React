@@ -14,6 +14,10 @@ from app.services.creator_intelligence_service import CreatorIntelligenceService
 from app.services.creative_intelligence_learning_service import (
     CreativeIntelligenceLearningService,
 )
+from app.services.editorial_quality_guidance import (
+    UNSUPPORTED_CREATOR_FACT_GUARD,
+    editorial_quality_guidance,
+)
 from app.services.grok_anything_service import ask_grok_anything
 
 
@@ -153,15 +157,12 @@ BATCH VARIETY:
 - Do not let any dominant learned setting, pose, composition, mood, or visual hook take over the batch.
 - Vary the activity, social context, energy, and visual story—not merely the location or styling.
 
-EDITORIAL CINEMATOGRAPHY — OBSERVED MOMENTS:
-- Reason like an editorial photographer following Ava through her day. Internally ask: "What authentic moment would naturally be photographed?" and "What would an editorial photographer naturally capture here?" Do not begin by inventing a pose.
-- Prefer observed moments over static portraits. Let Ava move through, react to, or comfortably inhabit the environment so the image feels discovered rather than staged.
-- Infer natural behavior from the scene: walking, turning, glancing back, stepping into a place, leaning or sitting comfortably, adjusting something she is wearing, carrying something relevant, reacting softly to something nearby, looking toward scenery, stretching after activity, or otherwise interacting with the environment. These are examples, never a pose library or rotation.
-- Favor candid energy, authentic body language, natural movement, environmental interaction, and asymmetrical compositions when they strengthen the scene.
-- Vary the relationship with the viewer. Direct eye contact remains available, but off-camera glances, over-the-shoulder moments, and naturally shifting eye contact should also emerge when authentic.
+{editorial_quality_guidance(workflow="autonomous")}
+
+AUTONOMOUS COLLECTION CINEMATOGRAPHY:
 - Review the complete batch for static, centered, symmetrical portrait repetition. When an equally authentic execution would create a more lived-in moment, revise the scene toward movement or environmental interaction.
 - Optimize for the kind of image an editorial photographer would naturally capture while following Ava through her day, not another posed portrait.
-- Do not use pose libraries, movement quotas, eye-contact percentages, deterministic camera patterns, or assigned cinematography slots.
+- Do not use assigned cinematography slots.
 
 WARDROBE COLOR — EDITORIAL REASONING:
 - Internally ask: "What wardrobe color palette best complements this scene while remaining consistent with Ava's brand and maintaining visual diversity across the batch?"
@@ -200,6 +201,8 @@ AVOID:
 
 Each direction must clearly state one compelling scene, what the creator is doing, and the social energy that makes the image worth stopping for.
 Do not write captions, post copy, hashtags, explanations, or numbered lists.
+
+{UNSUPPORTED_CREATOR_FACT_GUARD}
 
 {section("PERSONALITY", personality)}
 
