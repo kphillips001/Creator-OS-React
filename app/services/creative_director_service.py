@@ -645,12 +645,17 @@ class CreativeDirectorService:
         raw_tag_text = str(session.metadata.get("raw_creative_tags") or "").strip()
         tag_text = raw_tag_text or ", ".join(session.creative_tags)
         planning_result: CanonicalPromptPlanningResult | None = None
-        if session.creative_mode in {"premium_teaser", "story_sequence"}:
+        if session.creative_mode in {
+            "premium_teaser", "spicy", "story_sequence", "explicit"
+        }:
             planning_result = self.plan_prompts(
                 mode=session.creative_mode,
                 creative_tags=tag_text,
                 prompt_count=session.prompt_count,
-                metadata={"source": "prompt_plan"},
+                metadata={
+                    "source": "prompt_plan",
+                    **dict(session.metadata.get("explicit_input") or {}),
+                },
             )
             prompt_variations = planning_result.prompts
         else:
@@ -673,19 +678,32 @@ class CreativeDirectorService:
             creative_tags=session.creative_tags,
             reference_asset_id=reference_asset.asset_id if reference_asset else None,
             reference_asset_path=self._reference_path(reference_asset),
-            creative_rationale="Prompt Plan created by the transplanted Wavespeed Content Studio Generation Brain.",
+            creative_rationale=(
+                "Prompt Plan created by the Creator_OS canonical planning engine."
+            ),
             prompt_metadata={
                 "prompt_variations": prompt_variations,
-                "generation_brain": "wavespeed_canonical",
-                "wavespeed_source": "Wavespeed_App",
-                "reference_conditioning": "wavespeed",
+                "generation_brain": (
+                    "seedream_premium_canonical"
+                    if planning_result and planning_result.mode == "premium"
+                    else "creator_os_canonical"
+                    if planning_result
+                    else "wavespeed_canonical"
+                ),
+                "reference_conditioning": (
+                    "seedream_5_0_pro"
+                    if planning_result and planning_result.mode == "premium"
+                    else "provider_adapter"
+                    if planning_result
+                    else "wavespeed"
+                ),
                 "prompt_builder": planning_result.prompt_builder
                 if planning_result
                 else self._prompt_builder_name(session.creative_mode),
-                "canonical_planner": planning_result.metadata.get("canonical_planner")
-                if planning_result
-                else None,
-                "planning_mode": planning_result.mode if planning_result else None,
+                **(dict(planning_result.metadata) if planning_result else {
+                    "canonical_planner": None,
+                    "planning_mode": None,
+                }),
                 **(
                     {"workflow_origin": session.metadata["workflow_origin"]}
                     if session.metadata.get("workflow_origin") else {}
@@ -702,7 +720,7 @@ class CreativeDirectorService:
     def build_wavespeed_generation_contract(self, *, creative_mode: str, prompt_count: int, tag_text: str) -> str:
         mode = self.normalize_mode(creative_mode)
         count = max(1, int(prompt_count or 1))
-        if mode in {"premium_teaser", "story_sequence"}:
+        if mode in {"premium_teaser", "spicy", "story_sequence", "explicit"}:
             return self.plan_prompts(
                 mode=mode,
                 creative_tags=tag_text,
@@ -730,7 +748,12 @@ class CreativeDirectorService:
     ) -> tuple[str, ...]:
         count = max(1, int(prompt_count or 1))
         mode = self.normalize_mode(creative_mode)
-        if mode in {"premium_teaser", "story_sequence"}:
+        if mode == "explicit":
+            raise RuntimeError(
+                "Explicit Content must use CanonicalPromptPlanner; "
+                "social prompt planning is forbidden."
+            )
+        if mode in {"premium_teaser", "spicy", "story_sequence"}:
             planning_result = self.plan_prompts(
                 mode=mode,
                 creative_tags=tag_text,
@@ -784,6 +807,74 @@ class CreativeDirectorService:
             reference_asset=reference,
             creator_profile=creator_profile,
         )
+
+    def create_provider_prompt_plan(
+        self,
+        *,
+        creator_profile: Mapping[str, Any],
+        creative_tags: str,
+        creative_mode: str,
+        prompts: tuple[str, ...],
+        metadata: Mapping[str, Any] | None = None,
+    ) -> PromptPlan:
+        """Persist an already reviewed provider batch without replanning it."""
+        clean = tuple(str(prompt).strip() for prompt in prompts if str(prompt).strip())
+        if not clean:
+            raise ValueError("A provider-ready prompt batch is required.")
+        creator_profile_id = int((creator_profile or {}).get("id"))
+        reference = self.reference_library.get_active_canonical_reference(
+            creator_profile_id=creator_profile_id,
+        )
+        session_metadata = {
+            "raw_creative_tags": creative_tags,
+            **dict(metadata or {}),
+        }
+        session = self.create_session(
+            creator_profile_id=creator_profile_id,
+            creative_tags=creative_tags,
+            creative_mode=creative_mode,
+            prompt_count=len(clean),
+            reference_asset=reference,
+            metadata=session_metadata,
+        )
+        normalized_mode = self.normalize_mode(creative_mode)
+        is_explicit = normalized_mode == "explicit"
+        plan = PromptPlan(
+            plan_id=new_id("prompt_plan"),
+            session_id=session.session_id,
+            creator_profile_id=creator_profile_id,
+            prompt_text="\n\n".join(clean),
+            creative_mode=session.creative_mode,
+            creative_tags=session.creative_tags,
+            reference_asset_id=reference.asset_id if reference else None,
+            reference_asset_path=self._reference_path(reference),
+            creative_rationale=(
+                "Provider-ready prompt plan approved by Canonical Prompt Preview."
+            ),
+            prompt_metadata={
+                "prompt_variations": clean,
+                "prompt_count": len(clean),
+                "provider_prompt_preview": True,
+                "canonical_planner": "creator_os",
+                "planning_mode": "explicit" if is_explicit else "premium",
+                "prompt_builder": (
+                    "canonical_explicit_prompt_planner"
+                    if is_explicit
+                    else "canonical_seedream_premium_planner"
+                ),
+                "provider_target": (
+                    "provider_selected" if is_explicit else "seedream_5_0_pro"
+                ),
+                "provider_optimization": (
+                    "explicit_provider_optimization"
+                    if is_explicit
+                    else "seedream_5_0_pro_native"
+                ),
+                **dict(metadata or {}),
+            },
+        )
+        self.save_prompt_plan(plan)
+        return plan
 
     def load_settings(self, creator_profile_id: int) -> CreativeDirectorSettings:
         data = self._read_json(self.settings_path, {})
@@ -1460,10 +1551,8 @@ Exactly {frame_count} objects in shots, numbered 1..{frame_count} in order.
     @classmethod
     def _prompt_builder_name(cls, creative_mode: str) -> str:
         mode = cls.normalize_mode(creative_mode)
-        if mode in {"premium_teaser", "story_sequence"}:
-            return "wavespeed_premium_prompt_builder"
-        if mode == "spicy":
-            return "wavespeed_social_prompt_builder_spicy"
+        if mode in {"premium_teaser", "spicy", "story_sequence"}:
+            return "canonical_seedream_premium_planner"
         return "wavespeed_social_prompt_builder"
 
     @staticmethod

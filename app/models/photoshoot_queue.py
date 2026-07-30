@@ -3,12 +3,162 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Mapping
+import re
+from typing import Any, Iterable, Mapping
 
 from app.models.generation_engine import utc_now
 
 
 PHOTOSHOOT_ASSET_METADATA_KEY = "photoshoot_session"
+
+
+@dataclass(frozen=True)
+class CanonicalPhotoshootSeedSummary:
+    """Provider-neutral creative foundation extracted from one seed-image prompt."""
+
+    scene: str
+    wardrobe: str = ""
+    mood_and_editorial_intent: str = ""
+    creator_identity: str = ""
+    artistic_intent: str = ""
+
+    _SECTION_PATTERN = re.compile(
+        r"(?m)^(SCENE|EXPLICIT EDITORIAL GUIDANCE|EDITORIAL DIRECTION|WARDROBE|"
+        r"CREATOR IDENTITY|VISUAL QUALITY|PROVIDER OPTIMIZATION|"
+        r"FINAL REFERENCE BODY LOCK[^\n]*|WAN BUST VISIBILITY LOCK|"
+        r"SEEDREAM[^\n]*LOCK)\s*:?[ \t]*$"
+    )
+    _QUALITY_START = re.compile(
+        r"(?i)(?:,?\s+)(?:photorealistic|ultra-realistic|masterpiece|best quality)"
+    )
+
+    @classmethod
+    def from_provider_prompt(
+        cls,
+        prompt_text: str,
+        *,
+        creative_tags: Iterable[str] = (),
+    ) -> "CanonicalPhotoshootSeedSummary":
+        source = str(prompt_text or "").strip()
+        source = re.sub(r"^Prompt\s+\d+\s*:\s*", "", source, count=1, flags=re.IGNORECASE)
+        sections = cls._sections(source)
+        scene = str(sections.get("SCENE") or cls._leading_scene(source)).strip()
+        clean_tags = tuple(
+            " ".join(str(tag or "").split())
+            for tag in creative_tags
+            if str(tag or "").strip()
+        )
+        if not sections and len(scene) > 4000 and clean_tags:
+            scene = "; ".join(clean_tags)
+        quality_match = cls._QUALITY_START.search(scene)
+        if quality_match:
+            scene = scene[:quality_match.start()].rstrip(" ,.;")
+        if not scene:
+            scene = "Continue the approved seed image as one cohesive Photoshoot."
+        return cls(
+            scene=scene,
+            wardrobe=str(sections.get("WARDROBE") or "").strip(),
+            mood_and_editorial_intent=str(sections.get("EDITORIAL DIRECTION") or "").strip(),
+            creator_identity=str(sections.get("CREATOR IDENTITY") or "").strip(),
+            artistic_intent=str(sections.get("EXPLICIT EDITORIAL GUIDANCE") or "").strip(),
+        )
+
+    @classmethod
+    def from_dict(cls, value: Mapping[str, Any]) -> "CanonicalPhotoshootSeedSummary":
+        return cls(
+            scene=str(value.get("scene") or "").strip(),
+            wardrobe=str(value.get("wardrobe") or "").strip(),
+            mood_and_editorial_intent=str(value.get("mood_and_editorial_intent") or "").strip(),
+            creator_identity=str(value.get("creator_identity") or "").strip(),
+            artistic_intent=str(value.get("artistic_intent") or "").strip(),
+        )
+
+    def to_dict(self) -> dict[str, str]:
+        return {
+            "scene": self.scene,
+            "wardrobe": self.wardrobe,
+            "mood_and_editorial_intent": self.mood_and_editorial_intent,
+            "creator_identity": self.creator_identity,
+            "artistic_intent": self.artistic_intent,
+        }
+
+    def to_prompt_text(self) -> str:
+        values = (
+            ("Original scene", self.scene),
+            ("Wardrobe foundation", self.wardrobe),
+            ("Mood and editorial intent", self.mood_and_editorial_intent),
+            ("Creator identity", self.creator_identity),
+            ("Overall artistic intent", self.artistic_intent),
+        )
+        return " ".join(
+            f"{label}: {' '.join(value.split())}"
+            for label, value in values
+            if value.strip()
+        )
+
+    @classmethod
+    def _sections(cls, source: str) -> dict[str, str]:
+        matches = tuple(cls._SECTION_PATTERN.finditer(source))
+        sections: dict[str, str] = {}
+        for index, match in enumerate(matches):
+            heading = match.group(1)
+            end = matches[index + 1].start() if index + 1 < len(matches) else len(source)
+            sections.setdefault(heading, source[match.end():end].strip())
+        return sections
+
+    @classmethod
+    def _leading_scene(cls, source: str) -> str:
+        match = cls._SECTION_PATTERN.search(source)
+        return source[:match.start()].strip() if match else source.strip()
+
+
+@dataclass(frozen=True)
+class PhotoshootPlanningContext:
+    """Creative-only continuity passed into canonical Photoshoot planning."""
+
+    photoshoot_summary: str
+    latest_approved_direction: str
+    current_wardrobe: str
+    current_location: str
+    current_lighting: str
+    camera_style: str
+    hairstyle: str
+    makeup: str
+    continuity_locks: Mapping[str, bool]
+    progression_stage: int
+    operator_guidance: str
+    required_identity_instructions: str
+    latest_approved_shot_reference: str
+    repetition_avoidance: str
+
+    def to_prompt_text(self) -> str:
+        values = (
+            ("Photoshoot summary", self.photoshoot_summary),
+            ("Latest approved direction", self.latest_approved_direction),
+            ("Current wardrobe", self.current_wardrobe),
+            ("Current location", self.current_location),
+            ("Current lighting", self.current_lighting),
+            ("Camera style", self.camera_style),
+            ("Hairstyle", self.hairstyle),
+            ("Makeup", self.makeup),
+            ("Continuity locks", self._locks_text()),
+            ("Progression stage", str(max(0, int(self.progression_stage)))),
+            ("Operator guidance", self.operator_guidance),
+            ("Required identity instructions", self.required_identity_instructions),
+            ("Latest approved shot reference", self.latest_approved_shot_reference),
+            ("Repetition avoidance", self.repetition_avoidance),
+        )
+        return " ".join(
+            f"{label}: {' '.join(str(value or '').split())}"
+            for label, value in values
+            if str(value or "").strip()
+        )
+
+    def _locks_text(self) -> str:
+        return ", ".join(
+            f"{str(name).replace('_', ' ')}={'locked' if enabled else 'flexible'}"
+            for name, enabled in sorted(self.continuity_locks.items())
+        ) or "Use established Photoshoot continuity defaults."
 
 
 @dataclass(frozen=True)

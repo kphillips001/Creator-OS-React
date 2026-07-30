@@ -213,8 +213,8 @@ class CreativeDirectorServiceTests(unittest.TestCase):
         variations = plan.prompt_metadata["prompt_variations"]
 
         self.assertEqual(enhanced, "enhanced premium crop tank with medium-close creator framing")
-        self.assertEqual(plan.prompt_metadata["generation_brain"], "wavespeed_canonical")
-        self.assertEqual(plan.prompt_metadata["prompt_builder"], "canonical_premium_prompt_planner")
+        self.assertEqual(plan.prompt_metadata["generation_brain"], "seedream_premium_canonical")
+        self.assertEqual(plan.prompt_metadata["prompt_builder"], "canonical_seedream_premium_planner")
         self.assertIn("medium-close creator framing", variations[0])
 
     def test_photoshoot_creative_director_returns_structured_direction(self):
@@ -488,7 +488,7 @@ class CreativeDirectorServiceTests(unittest.TestCase):
         self.assertIn("CreativeDirectorService", source)
         self.assertIn("create_prompt_plan", source)
         self.assertIn("latest_session", source)
-        self.assertIn("get_active_reference", source)
+        self.assertIn("get_active_canonical_reference", source)
         self.assertIn('"Social Studio", "Premium Studio"', source)
         self.assertNotIn("submit_wavespeed_task", source)
 

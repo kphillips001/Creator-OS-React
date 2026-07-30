@@ -9,7 +9,9 @@ from typing import Any, Iterable, Mapping
 
 from app.models.creative_director import PromptPlan, new_id
 from app.models.generation_engine import GenerationMediaType, GenerationType, utc_now
+from app.models.render_policy import photoshoot_render_policy
 from app.models.photoshoot_queue import (
+    CanonicalPhotoshootSeedSummary,
     PHOTOSHOOT_ASSET_METADATA_KEY,
     PhotoshootProgress,
     PhotoshootRequest,
@@ -145,6 +147,7 @@ class PhotoshootQueueService:
             metadata={
                 "source": "photoshoot_queue",
                 "workflow_type": "photoshoot",
+                "render_policy": photoshoot_render_policy(session.creative_mode).value,
                 "generation_mode_behavior": "photoshoot_queue",
                 "wavespeed_generation_mode_key": "photoshoot_set",
                 "wavespeed_mode_decision": (
@@ -363,6 +366,10 @@ class PhotoshootQueueService:
                 **dict(record.prompt_metadata or {}),
             },
         )
+        seed_summary = CanonicalPhotoshootSeedSummary.from_provider_prompt(
+            record.prompt_text,
+            creative_tags=tuple(record.prompt_metadata.get("creative_tags") or ()),
+        )
         session = self.create_session(
             creator_profile_id=record.creator_profile_id,
             prompt_plans=(plan,),
@@ -375,7 +382,7 @@ class PhotoshootQueueService:
                 "seed_image_id": record.image_id,
                 "seed_output_reference": record.output_reference,
                 "seed_prompt_text": record.prompt_text,
-                "original_photoshoot_direction": record.prompt_text,
+                "canonical_seed_summary": seed_summary.to_dict(),
                 "seed_generation_job_id": record.generation_job_id,
                 "seed_generation_request_id": record.generation_request_id,
                 "seed_generation_result_id": record.generation_result_id,

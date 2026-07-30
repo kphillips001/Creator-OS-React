@@ -31,14 +31,15 @@ describe("PhotoshootPage Phase 1", () => {
   it("selects one inspiration idea and renders the backend recommendation contract", () => {
     const select = vi.fn();
     const ideas = Array.from({ length: 10 }, (_, index) => `Next-shot idea ${index + 1}`);
-    render(<CreativeDirectionPanel disabled={false} busy={false} guidance="" ideas={ideas} selectedIdea={ideas[1]!} directionApproved={false} recommendation={{ title: "Closer", creative_direction: "Move into a closer portrait", reasoning: "Advances the sequence", emotion: "Confident", camera_framing: "Medium close-up", lighting: "Warm window light", pose_composition: "Turn toward camera", continuity_notes: "Keep wardrobe" }} onGuidance={vi.fn()} onAsk={vi.fn()} onDifferentIdeas={vi.fn()} onSelectIdea={select} onDevelop={vi.fn()} onApprove={vi.fn()} onChooseAnother={vi.fn()} />);
+    render(<CreativeDirectionPanel disabled={false} busy={false} guidance="" ideas={ideas} selectedIdea={ideas[1]!} directionApproved={false} recommendation={{ title: "Closer", creative_direction: "Move into a closer portrait", reasoning: "Advances the sequence", emotion: "Confident", camera_framing: "Medium close-up", lighting: "Warm window light", pose_composition: "Turn toward camera", continuity_notes: "Keep wardrobe" }} onGuidance={vi.fn()} onDirect={vi.fn()} onAsk={vi.fn()} onDifferentIdeas={vi.fn()} onSelectIdea={select} onGenerateSelected={vi.fn()} onChooseAnother={vi.fn()} />);
     expect(screen.getAllByRole("radio")).toHaveLength(10);
     expect(screen.getByRole("radio", { name: /Next-shot idea 2/ })).toBeChecked();
     fireEvent.click(screen.getByRole("radio", { name: /^1\. Next-shot idea 1$/ }));
     expect(select).toHaveBeenCalledWith("Next-shot idea 1");
     expect(screen.getByRole("heading", { name: "Closer" })).toBeInTheDocument();
     for (const value of ["Move into a closer portrait", "Advances the sequence", "Confident", "Medium close-up", "Warm window light", "Turn toward camera", "Keep wardrobe"]) expect(screen.getByText(value)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Approve Direction" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Generate Selected Shot" })).toBeEnabled();
+    expect(screen.getByText("View Creative Direction")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Choose Another Idea" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Ask for Different Ideas" })).toBeEnabled();
   });
@@ -90,8 +91,8 @@ describe("PhotoshootPage Phase 1", () => {
     expect(screen.getByRole("radio", { name: "Premium" })).toBeChecked();
     expect(screen.queryByText("Continuity Locks")).not.toBeInTheDocument();
     for (const label of ["Keep location", "Keep wardrobe", "Keep lighting", "Keep hairstyle", "Keep makeup", "Keep camera style"]) expect(screen.queryByText(label)).not.toBeInTheDocument();
-    expect(screen.getByLabelText("Guide the AI (Optional)")).toBeInTheDocument();
-    expect(screen.getByPlaceholderText("Tell the Creative Director what you would like to change or emphasize...")).toBeInTheDocument();
+    expect(screen.getByLabelText("Direct the Next Shot (Optional)")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/Describe exactly what should happen next/)).toBeInTheDocument();
     expect(screen.queryByText("Session Direction")).not.toBeInTheDocument();
     expect(screen.queryByText("Creative Hint")).not.toBeInTheDocument();
     expect(screen.queryByText("Grok Guidance")).not.toBeInTheDocument();
@@ -117,7 +118,142 @@ describe("PhotoshootPage Phase 1", () => {
     expect(screen.getByRole("heading", { name: "Recovered Direction" })).toBeInTheDocument();
     expect(screen.getByLabelText("Prompt Editor")).toHaveValue("Recovered canonical prompt");
     expect(screen.getByRole("radio", { name: "Explicit" })).toBeChecked();
-    expect(screen.getByRole("button", { name: "Direction Approved" })).toBeDisabled();
+    expect(screen.getByText("View Creative Direction")).toBeInTheDocument();
+  });
+
+  it("automatically develops, approves, plans, populates the prompt, and submits the selected shot", async () => {
+    let statusCalls = 0;
+    const calls: string[] = [];
+    const candidate = { ...seed, image_id: "candidate-auto", image_url: "/candidate-auto.png", status: "photoshoot_session" };
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes("/photoshoot/status")) {
+        statusCalls += 1;
+        return response(statusCalls === 1
+          ? { request: null, candidate: null }
+          : { request: { request_id: "shot-auto", status: "awaiting_review", prompt: "Final canonical prompt", provider_id: "flux", generation_job_id: "job-auto", failure: null }, candidate });
+      }
+      if (url.includes("/creative-director/context")) return response({
+        session_id: "session-1", creative_mode: "premium", creator_guidance: "", workflow_stage: "inspiration_selected",
+        current_prompt: "", recommendation_state: { inspiration_ideas: ["Closer window portrait"], selected_inspiration: "Closer window portrait", direction_approved: false, recommendation: null },
+      });
+      if (url.endsWith("/creative-director/recommendation")) {
+        calls.push("develop");
+        return response({ title: "Window turn", creative_direction: "Turn toward the window", continuity_notes: "Keep wardrobe" });
+      }
+      if (url.endsWith("/creative-director/approve")) {
+        calls.push("approve-and-plan");
+        return response({ prompt: "Final canonical prompt", workflow_stage: "direction_approved" });
+      }
+      if (url.endsWith("/photoshoot/generate") && init?.method === "POST") {
+        calls.push("generate");
+        return response({ request_id: "shot-auto", status: "generating" });
+      }
+      if (url.includes("/creative-director/guidance")) return response({ creator_guidance: "" });
+      return response({ creator_profile_exists: true, pending_photoshoot: seed, provider_list: [{ value: "flux", label: "Flux" }], active_session: { session_id: "session-1", title: "Photoshoot Studio", provider_id: "flux", creative_continuity: {} }, creative_mode: "premium", continuity_settings: { location: true, wardrobe: true, lighting: true, hairstyle: true, makeup: true, camera_style: true }, timeline_summary: [{ request_id: "request-1", sequence_index: 1, shot_number: 1, label: "Shot 1 (Seed)", is_seed: true, image: seed }] });
+    }));
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "Generate Selected Shot" }));
+    expect(await screen.findByLabelText("Selected shot progress")).toBeInTheDocument();
+    expect((await screen.findAllByText("Rendering complete")).length).toBeGreaterThan(0);
+    expect(screen.getByLabelText("Prompt Editor")).toHaveValue("Final canonical prompt");
+    expect(screen.getByText("View Creative Direction")).toBeInTheDocument();
+    expect(calls).toEqual(["develop", "approve-and-plan", "generate"]);
+  });
+
+  it("directs a shot from operator text without requesting AI inspiration", async () => {
+    let statusCalls = 0;
+    const calls: string[] = [];
+    const requestBodies: Record<string, unknown>[] = [];
+    const candidate = { ...seed, image_id: "candidate-direct", image_url: "/candidate-direct.png", status: "photoshoot_session" };
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes("/photoshoot/status")) {
+        statusCalls += 1;
+        return response(statusCalls === 1
+          ? { request: null, candidate: null }
+          : { request: { request_id: "shot-direct", status: "awaiting_review", prompt: "Directed canonical prompt", provider_id: "flux", generation_job_id: "job-direct", failure: null }, candidate });
+      }
+      if (url.includes("/creative-director/context")) return response({
+        session_id: "session-1", creative_mode: "premium", creator_guidance: "", workflow_stage: "ready_for_direction",
+        current_prompt: "", recommendation_state: { inspiration_ideas: [], selected_inspiration: "", direction_approved: false, recommendation: null },
+      });
+      if (url.endsWith("/creative-director/direct-recommendation")) {
+        calls.push("direct-enhancement");
+        requestBodies.push(JSON.parse(String(init?.body)));
+        return response({ title: "Directed shot", creative_direction: "Lift the shirt naturally", continuity_notes: "Keep continuity" });
+      }
+      if (url.endsWith("/creative-director/approve")) {
+        calls.push("approve-and-plan");
+        return response({ prompt: "Directed canonical prompt", workflow_stage: "direction_approved" });
+      }
+      if (url.endsWith("/photoshoot/generate") && init?.method === "POST") {
+        calls.push("generate");
+        requestBodies.push(JSON.parse(String(init.body)));
+        return response({ request_id: "shot-direct", status: "generating" });
+      }
+      if (url.includes("/creative-director/inspiration")) {
+        calls.push("unexpected-inspiration");
+        return response({ ideas: [] });
+      }
+      if (url.includes("/creative-director/guidance")) return response({ creator_guidance: "" });
+      return response({ creator_profile_exists: true, pending_photoshoot: seed, provider_list: [{ value: "flux", label: "Flux" }], active_session: { session_id: "session-1", title: "Photoshoot Studio", provider_id: "flux", creative_continuity: {} }, creative_mode: "premium", continuity_settings: { location: true, wardrobe: true, lighting: true, hairstyle: true, makeup: true, camera_style: true }, timeline_summary: [{ request_id: "request-1", sequence_index: 1, shot_number: 1, label: "Shot 1 (Seed)", is_seed: true, image: seed }] });
+    }));
+    renderPage();
+    const direct = await screen.findByRole("button", { name: "Direct Shot" });
+    expect(direct).toBeDisabled();
+    const direction = screen.getByLabelText("Direct the Next Shot (Optional)");
+    expect(direction).toHaveAttribute("placeholder", expect.stringContaining("Have her lift her shirt."));
+    fireEvent.change(direction, { target: { value: "  Have her lift her shirt.  " } });
+    expect(direct).toBeEnabled();
+    fireEvent.click(direct);
+    expect(await screen.findByLabelText("Selected shot progress")).toBeInTheDocument();
+    expect((await screen.findAllByText("Rendering complete")).length).toBeGreaterThan(0);
+    expect(calls).toEqual(["direct-enhancement", "approve-and-plan", "generate"]);
+    expect(requestBodies[0]).toMatchObject({ operator_direction: "Have her lift her shirt." });
+    expect(requestBodies[1]).toMatchObject({ creative_hint: "Have her lift her shirt." });
+    expect(screen.getByText("View Creative Direction")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Candidate Review" })).toBeInTheDocument();
+  });
+
+  it("recovers the persisted canonical prompt when the approve response does not resolve", async () => {
+    let contextCalls = 0;
+    let statusCalls = 0;
+    const calls: string[] = [];
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes("/photoshoot/status")) {
+        statusCalls += 1;
+        return response(statusCalls === 1
+          ? { request: null, candidate: null }
+          : { request: { request_id: "shot-recovered", status: "generating", prompt: "Recovered canonical prompt", provider_id: "flux", generation_job_id: "job-recovered", failure: null }, candidate: null });
+      }
+      if (url.includes("/creative-director/context")) {
+        contextCalls += 1;
+        return response(contextCalls === 1
+          ? { session_id: "session-1", creative_mode: "premium", creator_guidance: "", workflow_stage: "inspiration_selected", current_prompt: "", recommendation_state: { inspiration_ideas: ["Window portrait"], selected_inspiration: "Window portrait", direction_approved: false, recommendation: null } }
+          : { session_id: "session-1", creative_mode: "premium", creator_guidance: "", workflow_stage: "direction_approved", current_prompt: "Recovered canonical prompt", recommendation_state: { inspiration_ideas: ["Window portrait"], selected_inspiration: "Window portrait", direction_approved: true, recommendation: { title: "Window turn", creative_direction: "Turn toward the window" } } });
+      }
+      if (url.endsWith("/creative-director/recommendation")) {
+        calls.push("develop");
+        return response({ title: "Window turn", creative_direction: "Turn toward the window" });
+      }
+      if (url.endsWith("/creative-director/approve")) {
+        calls.push("approve");
+        return new Promise<Response>(() => undefined);
+      }
+      if (url.endsWith("/photoshoot/generate") && init?.method === "POST") {
+        calls.push("generate");
+        return response({ request_id: "shot-recovered", status: "generating" });
+      }
+      if (url.includes("/creative-director/guidance")) return response({ creator_guidance: "" });
+      return response({ creator_profile_exists: true, pending_photoshoot: seed, provider_list: [{ value: "flux", label: "Flux" }], active_session: { session_id: "session-1", title: "Photoshoot Studio", provider_id: "flux", creative_continuity: {} }, creative_mode: "premium", continuity_settings: { location: true, wardrobe: true, lighting: true, hairstyle: true, makeup: true, camera_style: true }, timeline_summary: [{ request_id: "request-1", sequence_index: 1, shot_number: 1, label: "Shot 1 (Seed)", is_seed: true, image: seed }] });
+    }));
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "Generate Selected Shot" }));
+    await waitFor(() => expect(calls).toEqual(["develop", "approve", "generate"]), { timeout: 2_000 });
+    expect(screen.getByLabelText("Prompt Editor")).toHaveValue("Recovered canonical prompt");
+    expect(contextCalls).toBeGreaterThanOrEqual(2);
   });
 
   it("restarts status polling after Generate Shot is acknowledged and renders the candidate", async () => {

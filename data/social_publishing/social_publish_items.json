@@ -1,5 +1,153 @@
 [
   {
+    "publish_request_id": "social_publish_item_2d2332d565f94a0ca8ffd12d23cf46fe",
+    "queue_item_id": "social_queue_item_c1edcfeab88c4c59b1a9c7bd75ba9573",
+    "platform": "x",
+    "caption_id": null,
+    "scheduled_for": null,
+    "status": "posted",
+    "created_at": "2026-07-30T15:34:05.390959",
+    "metadata": {
+      "posting_implemented": true,
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "provider_post_id": "2082852241510187493",
+      "provider_media_id": "2082852238683152384",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2082852241510187493",
+      "provider_metadata": {
+        "tweet_data": {
+          "edit_history_tweet_ids": [
+            ""
+          ],
+          "id": "2082852241510187493",
+          "text": "Okay... what's your ideal way to spend a day with zero plans? \ud83d\udc40\ud83d\udc47 https://t.co/l8HGCbF4A0"
+        }
+      }
+    }
+  },
+  {
+    "publish_request_id": "social_publish_item_3b2eaff3bd8d486a816161c7babe773d",
+    "queue_item_id": "social_queue_item_5001eeb2b852409092adcd8273f33424",
+    "platform": "telegram",
+    "caption_id": "caption_result_db577dde05314e3a92a60dcd5eac435a",
+    "scheduled_for": null,
+    "status": "posted",
+    "created_at": "2026-07-29T15:40:08.502136",
+    "metadata": {
+      "posting_implemented": true,
+      "account_name": null,
+      "telegram_post_to": "main",
+      "provider_post_id": "87",
+      "provider_media_id": null,
+      "provider_output_url": null,
+      "provider_metadata": {
+        "status_code": 200,
+        "message_id": 87,
+        "response": {
+          "ok": true,
+          "result": {
+            "message_id": 87,
+            "sender_chat": {
+              "id": -1002507455539,
+              "title": "Ava Blackthorne",
+              "type": "channel"
+            },
+            "chat": {
+              "id": -1002507455539,
+              "title": "Ava Blackthorne",
+              "type": "channel"
+            },
+            "date": 1785339610,
+            "photo": [
+              {
+                "file_id": "AgACAgEAAyEGAASVdLwzAANXamoe2nikK41ZCUPBCiosxNj57ksAApEMaxs89lBHBGEUGPUB77ABAAMCAANzAAM9BA",
+                "file_unique_id": "AQADkQxrGzz2UEd4",
+                "file_size": 1483,
+                "width": 67,
+                "height": 90
+              },
+              {
+                "file_id": "AgACAgEAAyEGAASVdLwzAANXamoe2nikK41ZCUPBCiosxNj57ksAApEMaxs89lBHBGEUGPUB77ABAAMCAANtAAM9BA",
+                "file_unique_id": "AQADkQxrGzz2UEdy",
+                "file_size": 18577,
+                "width": 240,
+                "height": 320
+              },
+              {
+                "file_id": "AgACAgEAAyEGAASVdLwzAANXamoe2nikK41ZCUPBCiosxNj57ksAApEMaxs89lBHBGEUGPUB77ABAAMCAAN4AAM9BA",
+                "file_unique_id": "AQADkQxrGzz2UEd9",
+                "file_size": 81970,
+                "width": 600,
+                "height": 800
+              },
+              {
+                "file_id": "AgACAgEAAyEGAASVdLwzAANXamoe2nikK41ZCUPBCiosxNj57ksAApEMaxs89lBHBGEUGPUB77ABAAMCAAN5AAM9BA",
+                "file_unique_id": "AQADkQxrGzz2UEd-",
+                "file_size": 179946,
+                "width": 864,
+                "height": 1152
+              }
+            ],
+            "caption": "Caught me dripping in the moonlight \ud83d\ude08 this little bikini barely keeping up"
+          }
+        },
+        "post_to": "main"
+      }
+    }
+  },
+  {
+    "publish_request_id": "social_publish_item_e7ed11a8c22f4e34918cc779d701882f",
+    "queue_item_id": "social_queue_item_e0d91410a7034bc7832668e1d11b4bc8",
+    "platform": "x",
+    "caption_id": null,
+    "scheduled_for": null,
+    "status": "posted",
+    "created_at": "2026-07-29T15:07:46.324456",
+    "metadata": {
+      "posting_implemented": true,
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "provider_post_id": "2082483230612000880",
+      "provider_media_id": "2082483227931942913",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2082483230612000880",
+      "provider_metadata": {
+        "tweet_data": {
+          "edit_history_tweet_ids": [
+            ""
+          ],
+          "id": "2082483230612000880",
+          "text": "We're both trying to decide what to do today\u2026 what's your idea? \ud83d\ude0a\ud83d\udc47 https://t.co/WoOrqxBivJ"
+        }
+      }
+    }
+  },
+  {
+    "publish_request_id": "social_publish_item_88778c257ac7487c8b87c587b5dab338",
+    "queue_item_id": "social_queue_item_08b9d87bcc494ffe87a9d4ea0bdd448c",
+    "platform": "x",
+    "caption_id": null,
+    "scheduled_for": null,
+    "status": "posted",
+    "created_at": "2026-07-28T15:59:20.013072",
+    "metadata": {
+      "posting_implemented": true,
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "provider_post_id": "2082133818320802155",
+      "provider_media_id": "2082133815711932416",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2082133818320802155",
+      "provider_metadata": {
+        "tweet_data": {
+          "edit_history_tweet_ids": [
+            ""
+          ],
+          "id": "2082133818320802155",
+          "text": "Well\u2026 I'm listening \ud83d\udc40\ud83d\udc47 What's on your mind? https://t.co/biu315pJrN"
+        }
+      }
+    }
+  },
+  {
     "publish_request_id": "social_publish_item_9f1dd10d0bb14d43abe2e5216ae7ae4b",
     "queue_item_id": "social_queue_item_6b073e08a77145e1986b7ca5434031f0",
     "platform": "x",

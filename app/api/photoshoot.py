@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 from pydantic import BaseModel, Field
 
@@ -146,6 +148,12 @@ class InspirationSelectionRequest(CreativeDirectorSessionRequest):
     idea: str
 
 
+class DirectShotRequest(CreativeDirectorSessionRequest):
+    creative_mode: str
+    operator_direction: str
+    continuity_locks: ContinuitySettingsResponse
+
+
 class CreatorGuidanceRequest(CreativeDirectorSessionRequest):
     creator_guidance: str = ""
 
@@ -179,6 +187,10 @@ def _execute_manual_generation(session_id: str, job) -> None:
 
 
 def _creative_director_error(error: Exception):
+    logging.getLogger("creator_os.photoshoot.approve").exception(
+        "[Approve] Creative Director pipeline failed error_type=%s",
+        type(error).__name__,
+    )
     if isinstance(error, KeyError):
         raise HTTPException(status_code=404, detail="Photoshoot Session not found.") from error
     if isinstance(error, ValueError):
@@ -253,12 +265,31 @@ def creative_director_recommendation(request: CreativeDirectorInputRequest):
         _creative_director_error(error)
 
 
+@router.post("/creative-director/direct-recommendation")
+def creative_director_direct_recommendation(request: DirectShotRequest):
+    try:
+        return PhotoshootCreativeDirectorWorkflowService().direct_recommendation(
+            creator_profile_id=_creator_profile_id_required(),
+            session_id=request.session_id,
+            creative_mode=request.creative_mode,
+            operator_direction=request.operator_direction,
+            continuity_locks=request.continuity_locks.model_dump(),
+        )
+    except Exception as error:
+        _creative_director_error(error)
+
+
 @router.post("/creative-director/approve")
 def creative_director_approve(request: CreativeDirectorSessionRequest):
     try:
-        return PhotoshootCreativeDirectorWorkflowService().approve(
+        result = PhotoshootCreativeDirectorWorkflowService().approve(
             creator_profile_id=_creator_profile_id_required(), session_id=request.session_id,
         )
+        logging.getLogger("creator_os.photoshoot.approve").info(
+            "[Approve] HTTP response ready status=200 session_id=%s prompt_chars=%s",
+            request.session_id, len(str(result.get("prompt") or "")),
+        )
+        return result
     except Exception as error:
         _creative_director_error(error)
 

@@ -11,6 +11,12 @@ load_dotenv(dotenv_path=ENV_PATH, override=True, encoding="utf-8-sig")
 class Settings:
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
     GROK_VISION_MODEL = os.getenv("GROK_VISION_MODEL", "grok-4.5")
+    GROK_HTTP_TIMEOUT_SECONDS = float(
+        os.getenv("GROK_HTTP_TIMEOUT_SECONDS", "90")
+    )
+    CREATIVE_TAG_API_DEADLINE_SECONDS = float(
+        os.getenv("CREATIVE_TAG_API_DEADLINE_SECONDS", "100")
+    )
     FANVUE_API_KEY = os.getenv("FANVUE_API_KEY", "")
     DATABASE_URL = os.getenv("DATABASE_URL", "")
     DEFAULT_PERSONA = os.getenv("DEFAULT_PERSONA", "ava")
@@ -37,6 +43,12 @@ class Settings:
 
 
 settings = Settings()
+
+if settings.GROK_HTTP_TIMEOUT_SECONDS >= settings.CREATIVE_TAG_API_DEADLINE_SECONDS:
+    raise ValueError(
+        "GROK_HTTP_TIMEOUT_SECONDS must be shorter than "
+        "CREATIVE_TAG_API_DEADLINE_SECONDS."
+    )
 
 
 # Backward-compatible direct config export

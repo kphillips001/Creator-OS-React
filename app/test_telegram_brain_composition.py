@@ -7,6 +7,7 @@ from unittest.mock import patch
 from app.config import settings
 from app.engine.decision_engine import DecisionEngine
 from app.engine.mode_engine import ModeEngine
+from app.models.commerce_mode import CommerceMode
 from app.models.conversation_gateway import ConversationGatewayInput
 from app.models.telegram_identity import TelegramMvpIdentityInput
 from app.services.content_service import ContentService
@@ -20,6 +21,11 @@ from app.services.user_value_service import UserValueService
 
 
 FANVUE_LINK = "https://fanvue.com/ava/offline-offer"
+
+
+class LiveCommerceMode:
+    def get_mode(self):
+        return CommerceMode.LIVE
 
 
 class InMemoryMemoryService:
@@ -211,10 +217,14 @@ class TelegramBrainCompositionTests(unittest.TestCase):
         *,
         correlation_id,
         message_text="hello there",
+        commerce_mode_service=None,
     ):
         gateway = ConversationGateway(
             engine,
             allowed_fanvue_hostnames=["fanvue.com"],
+            commerce_mode_service=(
+                commerce_mode_service or LiveCommerceMode()
+            ),
         )
         identity = self.identity()
         return gateway.execute(

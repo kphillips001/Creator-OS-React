@@ -1,4 +1,5 @@
 from app.prompts.shot_types import SHOT_TYPES
+from app.services.editorial_quality_guidance import editorial_quality_guidance
 
 
 PREMIUM_INTIMACY_PROMPT_RULES = """
@@ -113,7 +114,7 @@ Do not use distant full-body, scenery-first, or wide environmental shot types un
 """
 
 
-def build_premium_grok_prompt(
+def build_seedream_premium_prompt(
     creative_tags: str,
     prompt_count: int = 10,
     optional_direction: str | None = None,
@@ -132,9 +133,34 @@ reference identity, body continuity, or user creative tags.
 """
 
     return f"""
-I need a list of {prompt_count} high-quality WAN 2.7 image-edit prompts.
+I need a list of {prompt_count} high-quality Seedream 5.0 Pro image-edit prompts.
 
 These prompts always use the SAME reference image.
+
+CANONICAL PLANNING ARCHITECTURE:
+Build every prompt in this immutable responsibility order:
+1. SCENE — preserve the authoritative creative direction and its story.
+2. EDITORIAL GUIDANCE — refine the observed-moment cinematography without replacing Scene.
+3. EDITORIAL DIRECTION — derive emotional tone, expression, gaze, body language,
+   subject awareness, camera engagement, and editorial energy from the Scene.
+4. WARDROBE — preserve requested garments and infer only unspecified styling.
+5. CREATOR IDENTITY — preserve reference face, hair, skin tone, body, and proportions.
+6. VISUAL QUALITY — add photographic realism, lighting, texture, and image quality.
+7. PROVIDER OPTIMIZATION — express the completed plan clearly for Seedream 5.0 Pro.
+
+No layer may rewrite an earlier layer. Editorial Direction must be derived from
+the matching Scene rather than defaulting every concept to a smile, direct eye
+contact, commercial portrait energy, or influencer posing.
+
+{editorial_quality_guidance(workflow="canonical_planner")}
+
+SEEDREAM 5.0 PRO OPTIMIZATION:
+- Use one coherent natural-language image-edit instruction per image.
+- State the visual subject, scene, action, composition, lighting, and required
+  continuity directly and without model syntax, weighting tokens, or parameters.
+- Keep the reference image limited to creator identity and body continuity.
+- Resolve competing instructions in favor of the authoritative Scene.
+- Do not mention another image model or transport/API implementation.
 
 REFERENCE IMAGE USAGE:
 The reference image is for identity, face, hair, skin tone, body shape, and full natural D-cup bust continuity only.
@@ -593,7 +619,7 @@ The user is only providing creative signals.
 
 Your job is to become a Premium AI Creative Director.
 
-Turn short premium tags into complete WAN 2.7 image-edit prompts.
+Turn short premium tags into complete Seedream 5.0 Pro image-edit prompts.
 
 These prompts are intended for premium creator-content generation.
 
@@ -1838,7 +1864,7 @@ Vary emotional presentation naturally.
 - Use different lingerie materials, colors, garment cuts, and accessories throughout the batch when lingerie is requested broadly
 - Mix direct eye contact, over-the-shoulder glances, playful looks, soft smiles, teasing expressions, candid moments, and relaxed expressions
 - Preserve the same woman in every image
-- Write complete WAN 2.7 image-edit prompts
+- Write complete Seedream 5.0 Pro image-edit prompts
 - Each prompt should feel close, personal, realistic, and creator-captured
 - Each prompt should prioritize the woman over the scenery
 - Each prompt should include an expression or viewer-connection detail

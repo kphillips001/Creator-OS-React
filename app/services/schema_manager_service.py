@@ -712,6 +712,30 @@ class SchemaManagerService:
             "wall_post_queue": ("worker_instance_id", "claimed_at", "lease_expires_at"),
             "webhook_events": ("worker_instance_id", "claimed_at", "lease_expires_at"),
         },
+        "20260730_025_commercial_roles.sql": {
+            "commercial_role_assignments": (
+                "assignment_id", "asset_id", "creator_profile_id",
+                "role", "state", "origin",
+            ),
+            "commercial_role_history": (
+                "history_id", "assignment_id", "asset_id",
+                "role", "event_type", "new_state",
+            ),
+        },
+        "20260730_027_sales_sessions.sql": {
+            "sales_sessions": (
+                "sales_session_id", "creator_profile_id",
+                "fanvue_account_id", "fanvue_user_id", "state",
+                "progression_stage", "commercial_foundation_reference",
+            ),
+            "sales_session_purchase_intents": (
+                "sales_session_id", "purchase_intent_id", "sequence_index",
+            ),
+            "sales_session_history": (
+                "history_id", "sales_session_id", "event_type",
+                "new_state", "new_progression_stage",
+            ),
+        },
     }
 
     TABLE_OWNERSHIP: Mapping[str, Mapping[str, Any]] = {
@@ -859,6 +883,66 @@ class SchemaManagerService:
             "service": "CommercialOfferingService",
             "dashboard": ("Commerce",),
             "columns": ("offering_id", "asset_id", "position", "is_hero"),
+            "legacy": "current", "compatibility": "CANONICAL",
+        },
+        "commercial_role_assignments": {
+            "owner": "Commercial Intelligence",
+            "migration": "20260730_025_commercial_roles.sql",
+            "repository": "CommercialRoleRepository",
+            "service": "CommercialRoleService",
+            "dashboard": ("Asset Library",),
+            "columns": (
+                "assignment_id", "asset_id", "creator_profile_id",
+                "role", "state", "origin",
+            ),
+            "legacy": "current", "compatibility": "CANONICAL",
+        },
+        "commercial_role_history": {
+            "owner": "Commercial Intelligence Audit",
+            "migration": "20260730_025_commercial_roles.sql",
+            "repository": "CommercialRoleRepository",
+            "service": "CommercialRoleService",
+            "dashboard": ("Asset Library",),
+            "columns": (
+                "history_id", "assignment_id", "asset_id",
+                "role", "event_type", "new_state",
+            ),
+            "legacy": "current", "compatibility": "CANONICAL",
+        },
+        "sales_sessions": {
+            "owner": "Commercial Intelligence",
+            "migration": "20260730_027_sales_sessions.sql",
+            "repository": "SalesSessionRepository",
+            "service": "SalesSessionService",
+            "dashboard": ("Customer Sales Brain",),
+            "columns": (
+                "sales_session_id", "creator_profile_id",
+                "fanvue_account_id", "fanvue_user_id", "state",
+                "progression_stage", "commercial_foundation_reference",
+            ),
+            "legacy": "current", "compatibility": "CANONICAL",
+        },
+        "sales_session_purchase_intents": {
+            "owner": "Commercial Intelligence",
+            "migration": "20260730_027_sales_sessions.sql",
+            "repository": "SalesSessionRepository",
+            "service": "SalesSessionService",
+            "dashboard": ("Customer Sales Brain",),
+            "columns": (
+                "sales_session_id", "purchase_intent_id", "sequence_index",
+            ),
+            "legacy": "current", "compatibility": "CANONICAL",
+        },
+        "sales_session_history": {
+            "owner": "Commercial Intelligence Audit",
+            "migration": "20260730_027_sales_sessions.sql",
+            "repository": "SalesSessionRepository",
+            "service": "SalesSessionService",
+            "dashboard": ("Customer Sales Brain",),
+            "columns": (
+                "history_id", "sales_session_id", "event_type",
+                "new_state", "new_progression_stage",
+            ),
             "legacy": "current", "compatibility": "CANONICAL",
         },
         "commercial_publications": {
@@ -1238,6 +1322,14 @@ class SchemaManagerService:
         "developer_agent_notifications": (
             "developer_agent_notifications_created_idx",
         ),
+        "sales_sessions": (
+            "uq_sales_sessions_active_customer",
+            "idx_sales_sessions_creator_activity",
+            "idx_sales_sessions_foundation",
+        ),
+        "sales_session_history": (
+            "idx_sales_session_history_session",
+        ),
     }
 
     CRITICAL_FOREIGN_KEYS: Mapping[str, tuple[str, ...]] = {
@@ -1259,6 +1351,18 @@ class SchemaManagerService:
         ),
         "developer_agent_reviews": (
             "developer_agent_reviews_execution_id_fkey",
+        ),
+        "sales_sessions": (
+            "sales_sessions_creator_profile_id_fkey",
+            "sales_sessions_fanvue_account_id_fkey",
+            "sales_sessions_fanvue_user_id_fkey",
+        ),
+        "sales_session_purchase_intents": (
+            "sales_session_purchase_intents_sales_session_id_fkey",
+            "sales_session_purchase_intents_purchase_intent_id_fkey",
+        ),
+        "sales_session_history": (
+            "sales_session_history_sales_session_id_fkey",
         ),
     }
 

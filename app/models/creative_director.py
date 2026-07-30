@@ -13,6 +13,7 @@ CREATIVE_MODE_OPTIONS = (
     "spicy",
     "premium_teaser",
     "story_sequence",
+    "explicit",
 )
 
 

@@ -6,6 +6,7 @@ import asyncio
 import json
 import logging
 import threading
+from time import perf_counter
 from pathlib import Path
 from uuid import uuid4
 
@@ -14,6 +15,7 @@ from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Resp
 from pydantic import BaseModel, Field
 
 from app.dashboard.config import load_dashboard_config
+from app.config import settings
 from app.repositories.creator_profile_repository import get_active_creator_profile
 from app.repositories.fanvue_account_repository import get_all_accounts
 from app.services.creator_aware_canonical_prompt_planner import (
@@ -55,10 +57,37 @@ class PromptWorkshopUseRequest(BaseModel):
     promptNumber: int
 
 
+class ExplicitGenerationInput(BaseModel):
+    sourceText: str
+    originalSource: str
+    sourceType: str
+    origin: str
+    conceptTier: str | None = None
+    requiredSemanticAttributes: dict = Field(default_factory=dict)
+    requestedImageCount: int = 1
+    collectionId: str | None = None
+    lineage: dict = Field(default_factory=dict)
+
+    def planning_metadata(self) -> dict:
+        return {
+            "source_text": self.sourceText.strip(),
+            "original_source": self.originalSource.strip(),
+            "source_type": self.sourceType.strip(),
+            "origin": self.origin.strip(),
+            "concept_tier": self.conceptTier,
+            "required_semantic_attributes": dict(self.requiredSemanticAttributes),
+            "requested_image_count": max(1, int(self.requestedImageCount or 1)),
+            "collection_id": self.collectionId,
+            "lineage": dict(self.lineage),
+        }
+
+
 class PromptPreviewRequest(BaseModel):
     creativeMode: str
     creativeTags: str
     promptCount: int
+    lane: str = "social"
+    explicitInput: ExplicitGenerationInput | None = None
 
 
 class GenerationSubmissionRequest(BaseModel):
@@ -71,10 +100,18 @@ class GenerationSubmissionRequest(BaseModel):
     creatorContext: dict
     origin: str | None = None
     plannerLineage: dict | None = None
+    lane: str = "social"
+    explicitInput: ExplicitGenerationInput | None = None
 
 
 class AutonomousInspirationRequest(BaseModel):
     provider: str
+
+
+class ExplicitInspirationRequest(BaseModel):
+    countPerTier: int = 5
+    # Backward-compatible alias used by older clients.
+    conceptCount: int | None = None
 
 
 def _current_account_id() -> int | None:
@@ -332,8 +369,13 @@ def _create_prompt_preview(request: PromptPreviewRequest) -> dict:
 
     creator_profile, creative_director = _creative_director_context()
     creative_mode = request.creativeMode.strip()
-    if creative_mode not in PREMIUM_CREATIVE_MODE_LABELS:
+    lane = request.lane.strip().lower()
+    if lane not in {"social", "explicit"}:
+        raise ValueError("Content Studio lane must be social or explicit.")
+    if lane == "social" and creative_mode not in PREMIUM_CREATIVE_MODE_LABELS:
         raise ValueError("Select a Premium creative mode.")
+    if lane == "explicit":
+        creative_mode = "explicit"
     creative_tags = request.creativeTags.strip()
     if not creative_tags:
         raise ValueError("Creative Tags are required.")
@@ -352,6 +394,9 @@ def _create_prompt_preview(request: PromptPreviewRequest) -> dict:
         creative_tags=creative_tags,
         creative_mode=creative_mode,
         prompt_count=request.promptCount,
+        metadata={
+            "explicit_input": request.explicitInput.planning_metadata()
+        } if request.explicitInput else None,
     )
     metadata = dict(plan.prompt_metadata or {})
     prompts = [
@@ -361,6 +406,18 @@ def _create_prompt_preview(request: PromptPreviewRequest) -> dict:
     ][: request.promptCount]
     if not prompts:
         prompts = [str(plan.prompt_text or "").strip()]
+    if lane == "explicit" or creative_mode in {
+        "premium_teaser", "spicy", "story_sequence"
+    }:
+        from app.services.seedream_premium_render_locks import (
+            enforce_premium_render_body_lock,
+        )
+
+        prompts = [enforce_premium_render_body_lock(prompt) for prompt in prompts]
+        metadata["provider_prompt_preview"] = True
+        metadata["provider_target"] = (
+            "provider_selected" if lane == "explicit" else "seedream_5_0_pro"
+        )
     return {
         "success": True,
         "error": None,
@@ -453,8 +510,12 @@ def _execute_content_studio_generation(run_id: str, request: GenerationSubmissio
 
     try:
         creator_profile, creative_director = _creative_director_context()
-        if request.creativeMode not in PREMIUM_CREATIVE_MODE_LABELS:
+        lane = request.lane.strip().lower()
+        if lane not in {"social", "explicit"}:
+            raise ValueError("Content Studio lane must be social or explicit.")
+        if lane == "social" and request.creativeMode not in PREMIUM_CREATIVE_MODE_LABELS:
             raise ValueError("Select a Premium creative mode.")
+        creative_mode = "explicit" if lane == "explicit" else request.creativeMode
         if request.promptSourceLabel not in GENERATION_PROMPT_SOURCES:
             raise ValueError("Select a valid prompt source.")
         source = request.promptSource.strip()
@@ -486,12 +547,16 @@ def _execute_content_studio_generation(run_id: str, request: GenerationSubmissio
         plan, job = generation_service.queue(
             creator_profile=creator_profile,
             creative_tags=source,
-            creative_mode=request.creativeMode,
+            creative_mode=creative_mode,
             prompt_count=request.promptCount,
             provider_id=request.provider,
             prompt_batch=prompts,
             origin=request.origin,
             planner_lineage=request.plannerLineage,
+            explicit_input=(
+                request.explicitInput.planning_metadata()
+                if request.explicitInput else None
+            ),
         )
         _update_generation_run(run_id, status="queued", jobId=job.job_id, message="Queued Image 1")
 
@@ -601,9 +666,23 @@ def _execute_autonomous_inspiration(
         )
 
 
-async def _run_tag_action(action) -> JSONResponse:
+async def _run_tag_action(
+    action,
+    *,
+    action_type: str = "creative_tag_action",
+    correlation_id: str | None = None,
+) -> JSONResponse:
+    request_id = correlation_id or uuid4().hex
+    timeout_seconds = settings.CREATIVE_TAG_API_DEADLINE_SECONDS
+    started = perf_counter()
     try:
-        content = await asyncio.wait_for(asyncio.to_thread(action), timeout=60)
+        # The synchronous Grok transport has a shorter timeout than this API
+        # deadline. Cancelling to_thread cannot stop an already-running thread,
+        # so the downstream timeout must always fire first.
+        content = await asyncio.wait_for(
+            asyncio.to_thread(action),
+            timeout=timeout_seconds,
+        )
         return JSONResponse(status_code=200, content=content)
     except ValueError as error:
         return JSONResponse(
@@ -611,6 +690,16 @@ async def _run_tag_action(action) -> JSONResponse:
             content={"success": False, "error": str(error), "tags": ""},
         )
     except asyncio.TimeoutError:
+        elapsed_seconds = perf_counter() - started
+        logger.warning(
+            "Content Studio creative tag action timed out "
+            "action_type=%s timeout_seconds=%s elapsed_seconds=%.3f request_id=%s",
+            action_type,
+            timeout_seconds,
+            elapsed_seconds,
+            request_id,
+            exc_info=True,
+        )
         return JSONResponse(
             status_code=503,
             content={"success": False, "error": "Creative tag action timed out", "tags": ""},
@@ -693,22 +782,34 @@ async def get_content_studio_configuration() -> JSONResponse:
 
 @router.post("/creative-tags/enhance")
 async def enhance_content_studio_tags(request: TransformTagsRequest) -> JSONResponse:
-    return await _run_tag_action(lambda: _enhance_tags(request))
+    return await _run_tag_action(
+        lambda: _enhance_tags(request),
+        action_type="creative_tags.enhance",
+    )
 
 
 @router.post("/creative-tags/surprise")
 async def surprise_content_studio_tags(request: TransformTagsRequest) -> JSONResponse:
-    return await _run_tag_action(lambda: _surprise_tags(request))
+    return await _run_tag_action(
+        lambda: _surprise_tags(request),
+        action_type="creative_tags.surprise",
+    )
 
 
 @router.post("/prompt-workshop/generate")
 async def generate_content_studio_prompt_workshop(request: PromptWorkshopRequest) -> JSONResponse:
-    return await _run_tag_action(lambda: _generate_prompt_workshop_batch(request))
+    return await _run_tag_action(
+        lambda: _generate_prompt_workshop_batch(request),
+        action_type="prompt_workshop.generate",
+    )
 
 
 @router.get("/prompt-workshop/archive")
 async def get_content_studio_prompt_workshop_archive() -> JSONResponse:
-    return await _run_tag_action(_read_prompt_workshop_archive)
+    return await _run_tag_action(
+        _read_prompt_workshop_archive,
+        action_type="prompt_workshop.archive.read",
+    )
 
 
 @router.post("/prompt-workshop/archive/{batch_id}/use")
@@ -716,12 +817,47 @@ async def mark_content_studio_prompt_workshop_used(
     batch_id: str,
     request: PromptWorkshopUseRequest,
 ) -> JSONResponse:
-    return await _run_tag_action(lambda: _mark_prompt_workshop_used(batch_id, request))
+    return await _run_tag_action(
+        lambda: _mark_prompt_workshop_used(batch_id, request),
+        action_type="prompt_workshop.archive.use",
+    )
 
 
 @router.post("/prompt-preview")
 async def create_content_studio_prompt_preview(request: PromptPreviewRequest) -> JSONResponse:
-    return await _run_tag_action(lambda: _create_prompt_preview(request))
+    return await _run_tag_action(
+        lambda: _create_prompt_preview(request),
+        action_type="prompt_preview.create",
+    )
+
+
+@router.post("/explicit/inspire")
+async def inspire_explicit_content(request: ExplicitInspirationRequest) -> JSONResponse:
+    def create() -> dict:
+        from app.services.explicit_inspiration_service import ExplicitInspirationService
+
+        account_id = _current_account_id()
+        if account_id is None:
+            raise ValueError("Creator account required before creating explicit inspiration.")
+        count_per_tier = request.countPerTier
+        if request.conceptCount is not None:
+            count_per_tier = request.conceptCount
+        result = ExplicitInspirationService().create_concepts(
+            fanvue_account_id=account_id,
+            count_per_tier=count_per_tier,
+        )
+        hardcore = list(result.hardcore)
+        softcore = list(result.softcore)
+        return {
+            "success": True,
+            "error": None,
+            "hardcore": hardcore,
+            "softcore": softcore,
+            # Flattened list kept for older clients / debugging.
+            "concepts": [*hardcore, *softcore],
+        }
+
+    return await _run_tag_action(create)
 
 
 @router.post("/prompt-planner/ask")

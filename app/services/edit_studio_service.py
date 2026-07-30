@@ -10,6 +10,7 @@ from typing import Any, Iterable, Mapping
 from app.models.creative_director import PromptPlan, new_id
 from app.models.edit_studio import EDIT_MODE_OPTIONS, EditHistoryEntry, EditRequest, EditSession
 from app.models.generation_engine import GenerationMediaType, GenerationType, utc_now
+from app.models.render_policy import RenderPolicy
 from app.models.generation_library import GeneratedImageRecord
 from app.services.generation_engine_service import GenerationEngineService
 from app.services.generation_library_service import GenerationLibraryService
@@ -129,6 +130,7 @@ class EditStudioService:
             metadata={
                 "source": "edit_studio",
                 "workflow_type": "edit",
+                "render_policy": RenderPolicy.EDIT.value,
                 "edit_session_id": edit_item.session_id,
                 "edit_request_id": edit_item.edit_request_id,
                 "edit_mode": edit_item.edit_mode,

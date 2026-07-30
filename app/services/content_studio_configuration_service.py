@@ -9,11 +9,7 @@ from app.services.generation_engine_service import GenerationEngineService
 
 
 PREMIUM_PROVIDER_LABELS = {
-    "seedream_4_5": "Seedream 4.5",
     "seedream_5_0_pro": "Seedream 5.0 Pro",
-    "wan_2_7_image_edit": "WAN 2.7",
-    "nano_banana_pro": "Nano Banana Pro",
-    "nano_banana": "Nano Banana 2",
     "future_provider": "Future Provider",
 }
 
@@ -28,10 +24,6 @@ PREMIUM_STUDIO_PROMPT_COUNT_MAXIMUM = 20
 PREMIUM_STUDIO_PREFERRED_PROVIDER_ID = "seedream_5_0_pro"
 PREMIUM_STUDIO_PROVIDER_ORDER = (
     "seedream_5_0_pro",
-    "nano_banana_pro",
-    "wan_2_7_image_edit",
-    "nano_banana",
-    "seedream_4_5",
 )
 
 
@@ -54,7 +46,7 @@ def premium_studio_provider_options(
 def default_provider_index(
     provider_ids: tuple[str, ...],
     *,
-    preferred_provider_id: str = "seedream_4_5",
+    preferred_provider_id: str = PREMIUM_STUDIO_PREFERRED_PROVIDER_ID,
 ) -> int:
     return provider_ids.index(preferred_provider_id) if preferred_provider_id in provider_ids else 0
 

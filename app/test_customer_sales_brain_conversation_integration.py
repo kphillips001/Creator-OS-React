@@ -100,6 +100,11 @@ class SalesBrain:
         return self.result
 
 
+class LiveCommerceMode:
+    def get_mode(self):
+        return CommerceMode.LIVE
+
+
 class Brain:
     def __init__(self, send_offer=True):
         self.send_offer = send_offer
@@ -182,7 +187,7 @@ def execute(
             sales_service=sales, commerce_mode="AUTHORITATIVE"
         ),
         customer_sales_brain_service=customer_brain,
-        commerce_mode_service=commerce_mode,
+        commerce_mode_service=commerce_mode or LiveCommerceMode(),
         relationship_mode_service=relationship_mode,
     )
     output = gateway.execute(ConversationGatewayInput(

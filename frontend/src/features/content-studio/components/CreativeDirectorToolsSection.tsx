@@ -27,10 +27,7 @@ export const CreativeDirectorToolsSection = forwardRef<CreativeDirectorToolsHand
   planner,
 }, ref) {
   const [creativeTags, setCreativeTags] = useState("");
-  const [explicitTags, setExplicitTags] = useState("");
   const [enhancedTags, setEnhancedTags] = useState("");
-  const [enhancedExplicitTags, setEnhancedExplicitTags] = useState("");
-  const [explicitPending, setExplicitPending] = useState(false);
   const [error, setError] = useState("");
 
   useImperativeHandle(ref, () => ({
@@ -55,25 +52,11 @@ export const CreativeDirectorToolsSection = forwardRef<CreativeDirectorToolsHand
   useEffect(() => {
     onInputsChange({
       creativeTags,
-      enhancedExplicitTags,
+      enhancedExplicitTags: "",
       enhancedTags,
-      explicitTags,
+      explicitTags: "",
     });
-  }, [creativeTags, enhancedExplicitTags, enhancedTags, explicitTags, onInputsChange]);
-
-  const enhanceExplicit = async () => {
-    setExplicitPending(true);
-    setError("");
-    try {
-      const tags = await enhanceCreativeTags(explicitTags, true);
-      setEnhancedExplicitTags(tags);
-      onPromptSourceChange("Enhanced Explicit Tags");
-    } catch (reason: unknown) {
-      setError(reason instanceof Error ? reason.message : "Creative tag action failed");
-    } finally {
-      setExplicitPending(false);
-    }
-  };
+  }, [creativeTags, enhancedTags, onInputsChange]);
 
   return (
     <section
@@ -112,37 +95,6 @@ export const CreativeDirectorToolsSection = forwardRef<CreativeDirectorToolsHand
         {planner}
       </div>
 
-      <div className="creative-director-tools__group creative-director-tools__group--explicit">
-        <label>
-          <span>Explicit Tags</span>
-          <textarea
-            disabled={disabled}
-            onChange={(event) => setExplicitTags(event.target.value)}
-            placeholder="Optional explicit-ready premium direction for the explicit tag lane."
-            rows={4}
-            value={explicitTags}
-          />
-        </label>
-        <div className="creative-director-tools__actions">
-          <button disabled={disabled || explicitPending || !explicitTags.trim()} onClick={() => void enhanceExplicit()} type="button">
-            ✨ Enhance Explicit Tags
-          </button>
-        </div>
-        <label>
-          <span>Enhanced Explicit Tags</span>
-          <textarea
-            disabled={disabled}
-            onChange={(event) => {
-              setEnhancedExplicitTags(event.target.value);
-              onPromptSourceChange("Enhanced Explicit Tags");
-            }}
-            rows={4}
-            value={enhancedExplicitTags}
-          />
-        </label>
-      </div>
-
-      {explicitPending && <p className="creative-director-tools__status">Working…</p>}
       {error && <p className="creative-director-tools__status creative-director-tools__status--error" role="alert">{error}</p>}
     </section>
   );

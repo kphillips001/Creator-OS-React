@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   approvePhotoshootCandidate,
@@ -18,6 +18,7 @@ import {
   regeneratePhotoshootCandidate,
   rejectPhotoshootCandidate,
   requestPhotoshootInspiration,
+  requestDirectPhotoshootRecommendation,
   requestPhotoshootRecommendation,
   resumePhotoshootAutoRun,
   retryPhotoshootAutoRun,
@@ -44,6 +45,7 @@ import { SessionPlanPanel } from "./components/SessionPlanPanel";
 import { ActivePhotoshootActions, StopPhotoshootDialog } from "./components/ShotApprovedPanel";
 import { PhotoshootCurationPanel } from "./components/PhotoshootCurationPanel";
 import { PhotoshootAutoGenerationProgress } from "./components/PhotoshootAutoGenerationProgress";
+import { SelectedShotProgress, type SelectedShotStage } from "./components/SelectedShotProgress";
 import { usePhotoshootContext } from "./usePhotoshootContext";
 import "./photoshoot.css";
 
@@ -88,6 +90,10 @@ function ManualWorkspace({
   const [confirmStop, setConfirmStop] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [selectedShotStage, setSelectedShotStage] = useState<SelectedShotStage | null>(null);
+  const [selectedShotError, setSelectedShotError] = useState("");
+  const [selectedShotSource, setSelectedShotSource] = useState<"idea" | "direct">("idea");
+  const selectionSaveRef = useRef<Promise<void>>(Promise.resolve());
   const request = status.request;
   const working =
     busy ||
@@ -105,7 +111,13 @@ function ManualWorkspace({
           controller.signal,
         );
         setStatus(next);
-        if (next.request?.failure) setError(next.request.failure);
+        if (next.request?.failure) {
+          setError(next.request.failure);
+          setSelectedShotError(next.request.failure);
+        }
+        if (next.candidate) {
+          setSelectedShotStage((current) => current === null ? null : 4);
+        }
         if (
           next.request &&
           !next.request.failure &&
@@ -307,22 +319,12 @@ function ManualWorkspace({
 
   const chooseIdea = async (idea: string) => {
     setSelectedIdea(idea); setRecommendation(null); setDirectionApproved(false); setPrompt(""); setError("");
-    try { await selectPhotoshootInspiration({ session_id: ready.session.sessionId, idea }); }
-    catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to save inspiration selection."); }
-  };
-
-  const generateRecommendation = async () => {
-    setBusy(true); setError("");
-    try { setRecommendation(await requestPhotoshootRecommendation({ session_id: ready.session.sessionId, creative_mode: mode, creator_guidance: guidance, continuity_locks: continuityBody() })); }
-    catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to generate a recommendation."); }
-    finally { setBusy(false); }
-  };
-
-  const approveRecommendation = async () => {
-    setBusy(true); setError("");
-    try { const result = await approvePhotoshootRecommendation({ session_id: ready.session.sessionId }); setPrompt(result.prompt); setDirectionApproved(true); }
-    catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to approve the recommendation."); }
-    finally { setBusy(false); }
+    const save = selectPhotoshootInspiration({ session_id: ready.session.sessionId, idea }).then(() => undefined);
+    selectionSaveRef.current = save;
+    try { await save; }
+    catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Unable to save inspiration selection.");
+    }
   };
 
   const chooseAnother = async () => {
@@ -332,10 +334,10 @@ function ManualWorkspace({
     finally { setBusy(false); }
   };
 
-  const submit = async () => {
-    if (!prompt.trim()) {
+  const submit = async (plannedPrompt = prompt, creativeHint = selectedIdea) => {
+    if (!plannedPrompt.trim()) {
       setError("Prompt is required.");
-      return;
+      return false;
     }
     setBusy(true);
     setError("");
@@ -344,7 +346,7 @@ function ManualWorkspace({
         session_id: ready.session.sessionId,
         provider_id: provider,
         creative_mode: mode,
-        prompt,
+        prompt: plannedPrompt,
         continuity_settings: {
           location: locks.location,
           wardrobe: locks.wardrobe,
@@ -354,13 +356,13 @@ function ManualWorkspace({
           camera_style: locks.cameraStyle,
         },
         session_direction: guidance,
-        creative_hint: selectedIdea,
+        creative_hint: creativeHint,
       });
       setStatus({
         request: {
           request_id: result.request_id,
           status: "generating",
-          prompt,
+          prompt: plannedPrompt,
           provider_id: provider,
           generation_job_id: null,
           failure: null,
@@ -368,15 +370,104 @@ function ManualWorkspace({
         candidate: null,
       });
       setPollRevision((current) => current + 1);
+      return true;
     } catch (reason) {
-      setError(
-        reason instanceof Error
-          ? reason.message
-          : "Generation failed. Please try again.",
-      );
+      const message = reason instanceof Error ? reason.message : "Generation failed. Please try again.";
+      setError(message);
+      setSelectedShotError(message);
+      return false;
     } finally {
       setBusy(false);
     }
+  };
+
+  const runAutomaticShot = async (
+    developDirection: () => Promise<CreativeDirectorRecommendation>,
+    creativeHint: string,
+  ) => {
+    setBusy(true);
+    setError("");
+    setSelectedShotError("");
+    setSelectedShotStage(0);
+    try {
+      const developed = await developDirection();
+      setRecommendation(developed);
+      setSelectedShotStage(1);
+      setSelectedShotStage(2);
+      const approvalRequest = approvePhotoshootRecommendation({
+        session_id: ready.session.sessionId,
+      }).then((result) => {
+        if (!String(result.prompt || "").trim()) throw new Error("Canonical Prompt Planner completed without returning a prompt.");
+        return result.prompt;
+      });
+      let recoveryCancelled = false;
+      let recoveryTimer = 0;
+      const recoverPersistedPrompt = new Promise<string>((resolve, reject) => {
+        const startedAt = Date.now();
+        const poll = async () => {
+          if (recoveryCancelled) return;
+          try {
+            const restored = await getCreativeDirectorContext(ready.session.sessionId);
+            if (restored.directionApproved && restored.currentPrompt.trim()) {
+              resolve(restored.currentPrompt);
+              return;
+            }
+          } catch {
+            // The approval request remains authoritative; transient context polling errors are ignored.
+          }
+          if (Date.now() - startedAt >= 120_000) {
+            reject(new Error("Canonical prompt planning did not complete within two minutes. Retry the selected shot."));
+            return;
+          }
+          recoveryTimer = window.setTimeout(() => { void poll(); }, 500);
+        };
+        recoveryTimer = window.setTimeout(() => { void poll(); }, 500);
+      });
+      const approvedPrompt = await Promise.race([approvalRequest, recoverPersistedPrompt]).finally(() => {
+        recoveryCancelled = true;
+        window.clearTimeout(recoveryTimer);
+      });
+      setPrompt(approvedPrompt);
+      setDirectionApproved(true);
+      setSelectedShotStage(3);
+      await submit(approvedPrompt, creativeHint);
+    } catch (reason) {
+      const message = reason instanceof Error ? reason.message : "Unable to generate the selected shot.";
+      setError(message);
+      setSelectedShotError(message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const generateSelectedShot = async () => {
+    if (!selectedIdea) return;
+    setSelectedShotSource("idea");
+    await runAutomaticShot(async () => {
+      await selectionSaveRef.current;
+      return requestPhotoshootRecommendation({
+        session_id: ready.session.sessionId,
+        creative_mode: mode,
+        creator_guidance: guidance,
+        continuity_locks: continuityBody(),
+      });
+    }, selectedIdea);
+  };
+
+  const directShot = async () => {
+    const operatorDirection = guidance.trim();
+    if (!operatorDirection) return;
+    setSelectedShotSource("direct");
+    setSelectedIdea("");
+    await runAutomaticShot(
+      () => requestDirectPhotoshootRecommendation({
+        session_id: ready.session.sessionId,
+        creative_mode: mode,
+        operator_direction: operatorDirection,
+        continuity_locks: continuityBody(),
+      }),
+      operatorDirection,
+    );
   };
 
   const action = async (kind: "approve" | "regenerate" | "edit" | "reject") => {
@@ -511,14 +602,20 @@ function ManualWorkspace({
             selectedIdea={selectedIdea}
             recommendation={recommendation}
             directionApproved={directionApproved}
-            onApprove={() => { void approveRecommendation(); }}
             onAsk={() => { void askAi(); }}
+            onDirect={() => { void directShot(); }}
             onDifferentIdeas={() => { void askAi(); }}
             onGuidance={setGuidance}
-            onDevelop={() => { void generateRecommendation(); }}
+            onGenerateSelected={() => { void generateSelectedShot(); }}
             onChooseAnother={() => { void chooseAnother(); }}
             onSelectIdea={(idea) => { void chooseIdea(idea); }}
           />
+          {selectedShotStage !== null && <SelectedShotProgress
+            activeStage={selectedShotStage}
+            error={selectedShotError}
+            onRetry={() => { void (selectedShotSource === "direct" ? directShot() : generateSelectedShot()); }}
+            providerLabel={ready.providers.find((item) => item.value === provider)?.label || provider}
+          />}
           <PromptPanel
             disabled={working || Boolean(status.candidate)}
             onPrompt={setPrompt}

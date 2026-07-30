@@ -37,6 +37,9 @@ from app.services.photoshoot_queue_service import PhotoshootQueueService
 
 
 class NoReferenceLibraryService:
+    def get_active_canonical_reference(self, *, creator_profile_id):
+        return None
+
     def get_active_reference(self, *, creator_profile_id):
         return None
 
@@ -575,6 +578,19 @@ class PhotoshootQueueServiceTests(unittest.TestCase):
         self.assertEqual(restored.creative_continuity["current_prompt"], "")
         self.assertFalse(restored.creative_continuity["direction_approved"])
         self.assertEqual(tuple(restored.creative_continuity["approved_directions"]), ())
+
+    def test_studio_session_uses_one_canonical_seed_prompt_field(self):
+        service = self.make_service()
+        seed = generated_record()
+
+        session, created = service.start_studio_session_from_generated_image(seed)
+
+        self.assertTrue(created)
+        self.assertEqual(session.creative_continuity["seed_prompt_text"], seed.prompt_text)
+        self.assertNotIn("original_photoshoot_direction", session.creative_continuity)
+        summary = session.creative_continuity["canonical_seed_summary"]
+        self.assertTrue(summary["scene"])
+        self.assertNotIn("PROVIDER OPTIMIZATION", summary["scene"])
 
     def test_another_idea_clears_pending_recommendation_until_new_recommendation_returns(self):
         service = self.make_service()

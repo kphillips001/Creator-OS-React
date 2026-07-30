@@ -1,7 +1,18 @@
 import os
 import re
+import json
+import logging
+from dataclasses import asdict, dataclass
 from dotenv import load_dotenv
+from app.services.explicit_editorial_guidance import ExplicitEditorialGuidance
+from app.services.explicit_expression_profile import (
+    EXPLICIT_EXPRESSION_SECTION,
+    ExplicitExpressionProfile,
+    ExplicitExpressionProfileService,
+)
 from app.services.wavespeed_grok_service import generate_prompts_with_grok
+
+LOGGER = logging.getLogger("creator_os.canonical_planner")
 
 load_dotenv()
 
@@ -12,12 +23,139 @@ QUALITY_SUFFIX = (
     "candid intimate atmosphere, film grain, natural body, masterpiece, best quality"
 )
 
+EDITORIAL_DIRECTION_FIELDS = (
+    "emotional_tone",
+    "facial_expression",
+    "eye_contact",
+    "body_language",
+    "editorial_energy",
+    "visual_storytelling",
+    "subject_awareness",
+    "camera_engagement",
+)
+
+EXPLICIT_EDITORIAL_GUIDANCE = ExplicitEditorialGuidance()
+
+
+@dataclass(frozen=True)
+class EditorialDirection:
+    emotional_tone: str
+    facial_expression: str
+    eye_contact: str
+    body_language: str
+    editorial_energy: str
+    visual_storytelling: str
+    subject_awareness: str
+    camera_engagement: str
+
+    def as_metadata(self) -> dict[str, str]:
+        return asdict(self)
+
+    def render(self) -> str:
+        labels = {
+            "emotional_tone": "Emotional tone",
+            "facial_expression": "Facial expression",
+            "eye_contact": "Eye contact",
+            "body_language": "Body language",
+            "editorial_energy": "Editorial energy",
+            "visual_storytelling": "Visual storytelling",
+            "subject_awareness": "Subject awareness",
+            "camera_engagement": "Camera engagement",
+        }
+        return "\n".join(
+            f"{labels[field]}: {getattr(self, field)}"
+            for field in EDITORIAL_DIRECTION_FIELDS
+        )
+
+
+def build_editorial_direction_instruction(concept: str) -> str:
+    return f"""
+Analyze the selected visual concept and derive its editorial direction naturally.
+Do not use a fixed mood mapping or default to cheerful, friendly, smiling,
+commercial portrait, or lifestyle-influencer energy.
+
+SELECTED SCENE
+{concept}
+
+{EXPLICIT_EDITORIAL_GUIDANCE.planning_instruction()}
+
+Return one JSON object with exactly these string fields:
+{", ".join(EDITORIAL_DIRECTION_FIELDS)}
+
+Each value must describe only the emotional or visual performance implied by
+the scene. Preserve explicit expression, gaze, posture, viewer engagement, or
+focus on another activity when supplied. Do not add scene, wardrobe, identity,
+quality, safety, or provider instructions. No markdown or commentary.
+""".strip()
+
+
+def parse_editorial_direction(value: str, concept: str) -> EditorialDirection:
+    cleaned = str(value or "").strip()
+    match = re.search(r"\{.*\}", cleaned, flags=re.DOTALL)
+    data = {}
+    if match:
+        try:
+            candidate = json.loads(match.group(0))
+            if isinstance(candidate, dict):
+                data = candidate
+        except (TypeError, ValueError, json.JSONDecodeError):
+            data = {}
+    fallback = (
+        "Preserve the direction naturally implied by the selected scene; "
+        "do not impose a commercial portrait expression"
+    )
+    return EditorialDirection(
+        **{
+            field: str(data.get(field) or fallback).strip()
+            for field in EDITORIAL_DIRECTION_FIELDS
+        }
+    )
+
+
+def derive_editorial_direction(concept: str, api_key: str) -> EditorialDirection:
+    response = generate_prompts_with_grok(
+        build_editorial_direction_instruction(concept),
+        api_key,
+    )
+    return parse_editorial_direction(response, concept)
+
+
+def extract_editorial_direction(prompt: str) -> dict[str, str]:
+    text = str(prompt or "")
+    match = re.search(
+        r"EDITORIAL DIRECTION\s*\n(?P<body>.*?)(?:\n\n[A-Z][A-Z ]+\n|\Z)",
+        text,
+        flags=re.DOTALL,
+    )
+    if not match:
+        return {}
+    labels = {
+        "emotional tone": "emotional_tone",
+        "facial expression": "facial_expression",
+        "eye contact": "eye_contact",
+        "body language": "body_language",
+        "editorial energy": "editorial_energy",
+        "visual storytelling": "visual_storytelling",
+        "subject awareness": "subject_awareness",
+        "camera engagement": "camera_engagement",
+    }
+    result = {}
+    for line in match.group("body").splitlines():
+        label, separator, value = line.partition(":")
+        field = labels.get(label.strip().lower())
+        if separator and field and value.strip():
+            result[field] = value.strip()
+    return result
+
 MAX_ENHANCED_EXPLICIT_TAGS_PER_LINE = 16
 MAX_ENHANCED_EXPLICIT_TAG_WORDS = 14
 
 # ==================== REALISTIC & INTIMATE EXPLICIT RULES ====================
 EXPLICIT_ACTION_RULES = """
-EXPLICIT ACTION RULES - REALISTIC & INTIMATE STYLE
+EXPLICIT ACTION RULES - REALISTIC CREATOR PPV / INTIMATE STYLE
+
+This lane is for paid NSFW PPV content. Preserve sexual explicitness; do not soften hardcore
+intent into soft teasing, lingerie editorial, or tasteful almost-nude framing.
 
 Only include a dildo or toy if the user explicitly mentions "dildo", "toy", "insertion", "riding", or similar terms.
 When a dildo is mentioned:
@@ -32,9 +170,11 @@ For general masturbation, touching, or spreading prompts (without mentioning a t
 General rules:
 - Natural wetness and arousal: glistening fluids or creamy juices ONLY if the user specifically mentions "wet", "dripping", "creamy", "soaked", or similar
 - Natural anatomy: detailed but realistic pussy, swollen clit, natural labia
-
-- Keep poses natural, sensual and intimate — like private photos taken just for the viewer
-- Focus on realistic intimate posing rather than exaggerated porn style
+- When the user/inspiration already names pussy, clit, labia, fingering, spreading, ass up,
+  oral tease, masturbation, or similar sexual acts, keep that sexual act and those anatomical
+  words — do not rewrite them into vague "sensual pose" or "state of undress" language
+- Keep poses natural and intimate like private paid-for creator photos for the viewer
+- Focus on realistic intimate sexual posing rather than cartoon gonzo exaggeration
 """
 
 IDENTITY_LOCK_RULES = """
@@ -184,10 +324,11 @@ For every batch of prompts:
 
 EXPRESSION_PERSONALITY_RULES = """
 FACIAL EXPRESSION PIPELINE
-Do not hard-code facial expression wording in generated explicit prompts.
-Do not add default smile, bedroom-eye, lip, gaze, or facial-performance phrases.
-The renderer assigns exactly one deterministic expression profile later, after the final scene prompt is built.
-Keep the scene, pose, activity, wardrobe, lighting, camera distance, and composition complete without locking the face.
+Do not invent or modify facial-expression wording inside the generated scene.
+The canonical Explicit Expression Profile is the sole facial-expression authority
+and is applied after Editorial Direction.
+Keep scene, pose, activity, wardrobe, lighting, camera distance, and composition
+complete without competing with that profile.
 """
 
 EXPLICIT_BODY_POSE_RULES = """
@@ -592,10 +733,13 @@ def normalize_body_continuity(prompt: str) -> str:
 
     prompt_lower = cleaned_prompt.lower()
     required_fragments = [
-        ("skin tone", "same natural sun-kissed skin tone as the reference image"),
-        ("d-cup", "full natural D-cup bust"),
-        ("hourglass", "feminine hourglass body"),
-        ("waist-to-hip", "same waist-to-hip proportions"),
+        (
+            "same natural sun-kissed skin tone as the reference image",
+            "same natural sun-kissed skin tone as the reference image",
+        ),
+        ("full natural d-cup bust", "full natural D-cup bust"),
+        ("feminine hourglass body", "feminine hourglass body"),
+        ("same waist-to-hip proportions", "same waist-to-hip proportions"),
         ("tight medium", "tight medium head-to-upper-thigh creator framing"),
         ("upper body", "upper body and torso dominant"),
         ("body large in frame", "body large in frame"),
@@ -638,6 +782,40 @@ def normalize_hair_continuity(prompt: str) -> str:
 
     cleaned_prompt = cleaned_prompt.rstrip(" ,.")
     return f"{cleaned_prompt}, {', '.join(missing_fragments)}"
+
+
+def enforce_explicit_concept_fidelity(
+    prompt: str,
+    concept: str,
+    editorial_direction: EditorialDirection,
+    expression_profile: ExplicitExpressionProfile,
+) -> str:
+    """Layer canonical enrichment on top of the immutable selected concept."""
+    cleaned_prompt = (prompt or "").strip()
+    cleaned_concept = (concept or "").strip()
+    if not cleaned_prompt or not cleaned_concept:
+        return cleaned_prompt
+    return "\n\n".join(
+        (
+            f"SCENE\n{cleaned_concept.rstrip(' .')}.",
+            (
+                "EXPLICIT EDITORIAL GUIDANCE\n"
+                f"{EXPLICIT_EDITORIAL_GUIDANCE.provider_section()}"
+            ),
+            f"EDITORIAL DIRECTION\n{editorial_direction.render()}",
+            f"{EXPLICIT_EXPRESSION_SECTION}\n{expression_profile.render()}",
+            (
+                "WARDROBE\nPreserve the exact wardrobe and state of undress "
+                "specified by the Scene; do not substitute or cover it."
+            ),
+            (
+                "CREATOR IDENTITY\nPreserve reference face, body, skin tone, "
+                "hair, and proportions without importing its scene."
+            ),
+            f"VISUAL QUALITY\n{cleaned_prompt}",
+        )
+    )
+
 
 def split_user_tags(raw_tags: str) -> list[str]:
     if not raw_tags:
@@ -746,8 +924,11 @@ Mood: {_format_category_items(categories["mood"])}
 Activity: {_format_category_items(categories["activity"])}
 Style: {_format_category_items(categories["style"])}
 
-Use creative freedom only for activities, poses, framing, lighting nuance, emotion, micro-location within the immutable environment, camera angle, and body orientation.
-Do not create diversity by changing the immutable environment, time, clothing, or nudity state.
+Use creative freedom only to enrich details the selected concept did not specify.
+Environment, story premise, wardrobe/undress state, framing, camera angle, body
+position/composition, lighting, mood, explicit activity, requested visibility,
+and scene progression are immutable whenever the selected concept specifies them.
+Do not create diversity by changing or replacing any specified concept field.
 """.strip()
 
 
@@ -916,12 +1097,10 @@ def compact_explicit_anchor_line(
 
     combined_text = f"{raw_line or ''}, {enhanced_line or ''}"
 
-    for tag in split_user_tags(raw_line or ""):
-        if not is_compact_explicit_tag(tag):
-            continue
-        append_unique_tag(compact_tags, tag, seen_keys)
-        if len(compact_tags) >= 8:
-            break
+    # A selected inspiration concept is an immutable creative brief, not merely
+    # a source of short tags. Keep it intact even when it is a full sentence.
+    if raw_line:
+        append_unique_tag(compact_tags, raw_line, seen_keys)
 
     anchor_tags = list(EXPLICIT_ANCHOR_TAGS)
 
@@ -1070,6 +1249,7 @@ def build_explicit_prompt_instruction(
     enhanced_explicit_tags: str,
     prompt_count: int,
     optional_setting: str | None = None,
+    editorial_directions: tuple[EditorialDirection, ...] = (),
 ) -> str:
     setting_text = (optional_setting or "").strip()
     immutable_requirements_context = build_immutable_requirements_context(
@@ -1137,11 +1317,26 @@ Do not make every prompt a bedroom, bed, robe, or warm-lamplight scene unless Op
                 "and visual setup across the batch."
             )
 
+    editorial_context = "\n\n".join(
+        f"CONCEPT {index} EDITORIAL DIRECTION — IMMUTABLE\n{direction.render()}"
+        for index, direction in enumerate(editorial_directions, 1)
+    )
+
     return f"""
 You are an expert at creating highly realistic, intimate NSFW image prompts for Seedream 4.5.
 
 Enhanced tags:
 {enhanced_explicit_tags}
+
+{EXPLICIT_EDITORIAL_GUIDANCE.planning_instruction()}
+
+{editorial_context}
+
+Editorial Direction owns body language, editorial energy, visual storytelling,
+subject awareness, and camera engagement. The canonical Explicit Expression
+Profile applied after this planning step is the sole authority for facial
+expression, emotional presentation, and eye contact. Do not invent a competing
+smile, tongue, playful performance, or commercial portrait direction.
 
 {immutable_requirements_context}
 
@@ -1170,7 +1365,7 @@ Output requirements:
 - Every prompt must explicitly include feminine hourglass body
 - Every prompt must explicitly include same waist-to-hip proportions
 - For single-line tags, every prompt must preserve the core explicit idea, nudity/topless/wardrobe state, body state, wetness, and sexual action from the Enhanced Explicit Tags
-- For single-line tags, do NOT preserve the same location, room, bed, pool, couch, furniture, time of day, lighting setup, or environmental anchor in every prompt unless it is explicitly supplied in Optional Setting / Direction
+- For single-line tags, preserve every specified location, room, furniture, time of day, lighting setup, environmental anchor, pose, framing, camera angle, wardrobe/undress state, explicit activity, requested visibility, and scene progression in every prompt; vary only unspecified details
 - For multi-line tags, each prompt must preserve every concrete Enhanced Explicit Tag from its matching concept line only
 - Across the batch, each prompt should feel like a different standalone Premium Studio image with different pose, camera angle, lighting, foreground texture, activity, emotion, and visual setup inside the immutable environment
 - Do not generate a continuation of one exact scene; that belongs in Photoshoot Queue, not Premium Studio
@@ -1187,7 +1382,7 @@ Output requirements:
 - Use natural, believable lighting in every prompt
 - Feature realistic dildo insertion and arousal when relevant
 - Maintain natural anatomy and realistic body language
-- Do not add a facial expression lock; the renderer will assign exactly one expression profile later
+- Do not add a competing facial-expression lock; the canonical Explicit Expression Profile is applied after Editorial Direction
 - Every prompt must include one concrete adult body pose detail
 - Every prompt must make the pose feel intentionally adult through hips, torso angle, hand placement, thigh position, chest-forward posture, or close viewer-facing body language
 - Avoid generic beauty-shot language, blank model posing, and overacted body performance
@@ -1244,33 +1439,71 @@ def generate_explicit_prompts(
     enhanced_explicit_tags: str,
     prompt_count: int,
     optional_setting: str | None = None,
+    original_source: str | None = None,
+    concept_tier: str | None = None,
+    operator_expression: str | None = None,
 ) -> list[str]:
     if not enhanced_explicit_tags or not enhanced_explicit_tags.strip():
         raise ValueError("Enhanced Explicit Tags are required.")
 
+    api_key = get_grok_api_key()
+    concept_lines = [
+        line.strip()
+        for line in str(enhanced_explicit_tags).splitlines()
+        if line.strip()
+    ]
+    original_lines = [
+        line.strip()
+        for line in str(original_source or enhanced_explicit_tags).splitlines()
+        if line.strip()
+    ]
+    LOGGER.info(
+        "[Planner] Explicit concept selection concepts=%s prompt_count=%s",
+        len(concept_lines), prompt_count,
+    )
+    editorial_directions = tuple(
+        derive_editorial_direction(concept, api_key)
+        for concept in concept_lines
+    )
+    expression_profile = ExplicitExpressionProfileService.build(
+        concept_tier=concept_tier,
+        operator_expression=operator_expression,
+    )
     instruction = build_explicit_prompt_instruction(
         enhanced_explicit_tags=enhanced_explicit_tags,
         prompt_count=prompt_count,
         optional_setting=optional_setting,
+        editorial_directions=editorial_directions,
     )
 
     raw_response = generate_prompts_with_grok(
         instruction,
-        get_grok_api_key(),
+        api_key,
     )
     prompts = split_numbered_prompts(raw_response)
 
-    force_topless_visibility = references_topless_content(enhanced_explicit_tags)
-    force_nudity_grooming = references_nude_lower_body_content(enhanced_explicit_tags)
+    immutable_source = str(original_source or enhanced_explicit_tags).strip()
+    force_topless_visibility = references_topless_content(immutable_source)
+    force_nudity_grooming = references_nude_lower_body_content(immutable_source)
     immutable_categories = categorize_explicit_tags(
-        tags=enhanced_explicit_tags,
+        tags=immutable_source,
         optional_setting=optional_setting,
     )
 
     normalized_prompts = []
-    for prompt in prompts:
+    for index, prompt in enumerate(prompts):
         if not prompt.strip():
             continue
+        concept = original_lines[min(index, len(original_lines) - 1)]
+        editorial_direction = editorial_directions[
+            min(index, len(editorial_directions) - 1)
+        ]
+        prompt = enforce_explicit_concept_fidelity(
+            prompt,
+            concept,
+            editorial_direction,
+            expression_profile,
+        )
         if force_topless_visibility:
             prompt = (
                 normalize_topless_visibility(prompt)

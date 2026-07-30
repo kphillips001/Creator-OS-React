@@ -177,6 +177,7 @@ export const requestPhotoshootInspiration = (body: unknown) => photoshootMutatio
 export const selectPhotoshootInspiration = (body: unknown) => photoshootMutation<{ selected_inspiration: string; creative_hint: string }>("/creative-director/selection", body);
 export const persistPhotoshootGuidance = (body: unknown) => photoshootMutation<{ creator_guidance: string }>("/creative-director/guidance", body);
 export const requestPhotoshootRecommendation = (body: unknown) => photoshootMutation<CreativeDirectorRecommendation>("/creative-director/recommendation", body);
+export const requestDirectPhotoshootRecommendation = (body: unknown) => photoshootMutation<CreativeDirectorRecommendation>("/creative-director/direct-recommendation", body);
 export const approvePhotoshootRecommendation = (body: unknown) => photoshootMutation<{ prompt: string; workflow_stage: string }>("/creative-director/approve", body);
 export const chooseAnotherPhotoshootIdea = (body: unknown) => photoshootMutation<{ workflow_stage: string; selected_inspiration: string }>("/creative-director/choose-another", body);
 export const setPhotoshootPlanningMode = (body: unknown) => photoshootMutation<{ planning_mode: PlanningMode; plan_frame_count: number; session_plan: PlannedShot[]; session_plan_approved: boolean }>("/creative-director/planning-mode", body);

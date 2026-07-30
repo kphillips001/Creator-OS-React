@@ -1,5 +1,74 @@
 [
   {
+    "caption_result_id": "caption_result_db577dde05314e3a92a60dcd5eac435a",
+    "caption_request_id": "caption_request_b915e09bc74e4701aae25dba1aff1349",
+    "session_id": "caption_session_a4ca6797dd044f47948c8968d1e22434",
+    "platform": "telegram",
+    "variations": [
+      "Moonlight caught me right here in the water \u2728 soft and quiet with you on my mind \ud83c\udf19",
+      "Wet hair, cool night, and this little smile just for the moment we're sharing \ud83d\udca7\ud83d\ude0a",
+      "The pool feels warmer when I imagine you right here with me under the moon \ud83e\udd0d",
+      "Letting the water hold me while I hold this soft look for you \u2728",
+      "Night swim thoughts turn gentle when the moonlight hits just like this \ud83c\udf19\ud83d\udc95",
+      "Caught me dripping in the moonlight \ud83d\ude08 this little bikini barely keeping up",
+      "Hand in my wet hair and eyes locked on you\u2026 come a little closer \ud83d\udca7\ud83d\udd25",
+      "Night pool rules: look but don't forget how good the view is from here \ud83d\ude0f\u2728",
+      "Sitting pretty in the water with everything on display for you tonight \ud83c\udf19",
+      "Cool water, warm skin, and this teasing little smile that knows exactly what it's doing \ud83d\ude08\ud83d\udca6"
+    ],
+    "selected_text": "Caught me dripping in the moonlight \ud83d\ude08 this little bikini barely keeping up",
+    "formatter_metadata": {
+      "provider_neutral": true,
+      "formatter": "CaptionStudioService",
+      "workflow": "telegram_publish",
+      "vision_primary": true,
+      "vision_provider": "grok",
+      "vision": {
+        "location": "submerged pool steps / edge at night",
+        "wardrobe": "light beige skimpy string triangle bikini top and matching bottoms, wet fabric",
+        "expression": "soft teasing smile with direct playful eye contact",
+        "body_language": "sitting in water, chest-forward, one hand brushing wet hair behind ear, other arm relaxed near thigh",
+        "lighting": "cool silvery moonlight with bright reflections on dark rippling water",
+        "mood": "intimate, candid, sensual nighttime",
+        "environment": "dark night pool with shimmering water surface and soft shadows",
+        "activity": "posing seated in the pool while touching her wet hair"
+      },
+      "themes": [
+        {
+          "theme": "\ud83d\udc9b Romantic",
+          "persona": "romantic",
+          "captions": [
+            "Moonlight caught me right here in the water \u2728 soft and quiet with you on my mind \ud83c\udf19",
+            "Wet hair, cool night, and this little smile just for the moment we're sharing \ud83d\udca7\ud83d\ude0a",
+            "The pool feels warmer when I imagine you right here with me under the moon \ud83e\udd0d",
+            "Letting the water hold me while I hold this soft look for you \u2728",
+            "Night swim thoughts turn gentle when the moonlight hits just like this \ud83c\udf19\ud83d\udc95"
+          ]
+        },
+        {
+          "theme": "\ud83d\ude08 Teasing / Naughty",
+          "persona": "teasing_naughty",
+          "captions": [
+            "Caught me dripping in the moonlight \ud83d\ude08 this little bikini barely keeping up",
+            "Hand in my wet hair and eyes locked on you\u2026 come a little closer \ud83d\udca7\ud83d\udd25",
+            "Night pool rules: look but don't forget how good the view is from here \ud83d\ude0f\u2728",
+            "Sitting pretty in the water with everything on display for you tonight \ud83c\udf19",
+            "Cool water, warm skin, and this teasing little smile that knows exactly what it's doing \ud83d\ude08\ud83d\udca6"
+          ]
+        }
+      ],
+      "personas": {
+        "romantic": "\ud83d\udc9b Romantic",
+        "teasing_naughty": "\ud83d\ude08 Teasing / Naughty"
+      },
+      "engagement_goals": [
+        "creator selects preferred caption",
+        "telegram publishing"
+      ]
+    },
+    "created_at": "2026-07-29T15:39:43.453745"
+  },
+  {
     "caption_result_id": "caption_result_0e4d2fe51fb348aaa6ef9c9698501fab",
     "caption_request_id": "caption_request_b1ed80d8438043a18db2c4ddbf126e08",
     "session_id": "caption_session_1c2dfd56df9b46448cc1cf7febe23fb7",

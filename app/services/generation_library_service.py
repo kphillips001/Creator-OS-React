@@ -81,9 +81,9 @@ class GenerationLibraryService:
         archived_output_references = self._archived_output_references()
         archived_image_ids = self._archived_image_ids()
         created = []
-        for output_reference in job.result.output_references:
+        for output_index, output_reference in enumerate(job.result.output_references):
             key = (job.job_id, output_reference)
-            record = self._record_from_job(job, output_reference)
+            record = self._record_from_job(job, output_reference, output_index=output_index)
             if (
                 key in existing_keys
                 or output_reference in archived_output_references
@@ -1874,7 +1874,12 @@ class GenerationLibraryService:
             path.unlink()
 
     @staticmethod
-    def _record_from_job(job: GenerationJob, output_reference: str) -> GeneratedImageRecord:
+    def _record_from_job(
+        job: GenerationJob,
+        output_reference: str,
+        *,
+        output_index: int = 0,
+    ) -> GeneratedImageRecord:
         result = job.result
         request_metadata = dict(job.request.metadata or {})
         image_id = "generated_image_" + hashlib.sha256(
@@ -1889,7 +1894,7 @@ class GenerationLibraryService:
             creator_profile_id=job.request.creator_profile_id,
             provider_id=job.request.provider_id,
             prompt_plan_id=job.request.prompt_plan_id,
-            prompt_text=job.request.prompt_text,
+            prompt_text=GenerationLibraryService._prompt_for_output(job, output_index),
             creative_mode=request_metadata.get("creative_mode"),
             reference_asset_id=job.request.reference_asset_id,
             photoshoot_session_id=request_metadata.get("photoshoot_session_id"),
@@ -1915,6 +1920,46 @@ class GenerationLibraryService:
                 "image_metadata": dict(result.image_metadata or {}),
             },
         )
+
+    @staticmethod
+    def _prompt_for_output(job: GenerationJob, output_index: int) -> str:
+        """Return the prompt variation used for one persisted provider output."""
+        request_metadata = dict(job.request.metadata or {})
+        prompt_metadata = request_metadata.get("prompt_metadata") or {}
+        candidates = (
+            request_metadata.get("prompt_variations")
+            or (
+                prompt_metadata.get("prompt_variations")
+                if isinstance(prompt_metadata, Mapping)
+                else ()
+            )
+            or ()
+        )
+        prompts = tuple(str(prompt).strip() for prompt in candidates if str(prompt).strip())
+        if not prompts:
+            return job.request.prompt_text
+
+        failed_variation_indexes = {
+            int(failure.get("index")) - 1
+            for failure in (job.result.execution_metadata or {}).get("failures", ())
+            if isinstance(failure, Mapping)
+            and str(failure.get("index") or "").isdigit()
+            and int(failure.get("index")) > 0
+        }
+        successful_variation_indexes = (
+            index
+            for index in range(max(1, int(job.request.image_count or 1)))
+            if index not in failed_variation_indexes
+        )
+        variation_index = next(
+            (
+                index
+                for success_index, index in enumerate(successful_variation_indexes)
+                if success_index == output_index
+            ),
+            output_index,
+        )
+        return prompts[variation_index % len(prompts)]
 
     @staticmethod
     def _record_from_dict(data: Mapping[str, Any]) -> GeneratedImageRecord:

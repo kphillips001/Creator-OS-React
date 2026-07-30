@@ -15,6 +15,18 @@ export type ContentStudioGeneration = {
   images: { index: number; url: string }[];
 };
 
+export type ExplicitGenerationInput = {
+  sourceText: string;
+  originalSource: string;
+  sourceType: "operator_tags_or_prose" | "selected_inspiration_concept";
+  origin: "explicit_tags" | "explicit_inspiration";
+  conceptTier?: "hardcore" | "softcore";
+  requiredSemanticAttributes: Record<string, string[]>;
+  requestedImageCount: number;
+  collectionId?: string;
+  lineage: Record<string, unknown>;
+};
+
 export type GenerationSubmission = {
   provider: string;
   promptSource: string;
@@ -23,7 +35,7 @@ export type GenerationSubmission = {
   creativeMode: string;
   promptCount: number;
   creatorContext: { status: string; activeReferenceAssetId: number | null };
-  origin?: "canonical_planner";
+  origin?: "canonical_planner" | "explicit_tags" | "explicit_inspiration";
   plannerLineage?: {
     plannerQuestion: string;
     plannerItemId: string;
@@ -31,4 +43,6 @@ export type GenerationSubmission = {
     selectedPlannerItem: string;
     enhancedResult: string;
   };
+  lane?: "social" | "explicit";
+  explicitInput?: ExplicitGenerationInput;
 };

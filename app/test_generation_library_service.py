@@ -3,6 +3,7 @@ import tempfile
 import types
 import unittest
 import hashlib
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -285,6 +286,72 @@ class GenerationLibraryServiceTests(unittest.TestCase):
         self.assertEqual(provider.total, 2)
         self.assertEqual(photoshoot.total, 2)
         self.assertEqual(sorted_result.records[0].provider_id, "flux")
+
+    def test_sync_attributes_each_output_to_its_prompt_variation(self):
+        service = self.make_service()
+        job = successful_job(
+            output_references=tuple(f"https://cdn.test/generated-{index}.png" for index in range(1, 7))
+        )
+        variations = tuple(f"Prompt Variation {index}" for index in range(1, 7))
+        request = replace(
+            job.request,
+            prompt_text="\n\n".join(variations),
+            metadata={
+                **dict(job.request.metadata),
+                "prompt_metadata": {
+                    **dict(job.request.metadata["prompt_metadata"]),
+                    "prompt_variations": variations,
+                },
+            },
+        )
+        job = replace(job, request=request)
+
+        created = service.sync_job(job)
+
+        self.assertEqual(tuple(record.prompt_text for record in created), variations)
+        self.assertTrue(all(record.prompt_text != request.prompt_text for record in created))
+        engine = FakeGenerationEngine(job)
+        service.regenerate((created[1].image_id,), generation_engine=engine)
+        self.assertEqual(engine.queued[0]["prompt_plan"].prompt_text, "Prompt Variation 2")
+
+    def test_sync_attributes_partial_success_to_original_variation_indexes(self):
+        service = self.make_service()
+        job = successful_job(
+            output_references=(
+                "https://cdn.test/generated-1.png",
+                "https://cdn.test/generated-3.png",
+            )
+        )
+        variations = ("Prompt Variation 1", "Prompt Variation 2", "Prompt Variation 3")
+        request = replace(
+            job.request,
+            image_count=3,
+            prompt_text="\n\n".join(variations),
+            metadata={**dict(job.request.metadata), "prompt_variations": variations},
+        )
+        result = replace(
+            job.result,
+            execution_metadata={
+                **dict(job.result.execution_metadata),
+                "failures": ({"index": 2, "stage": "provider_result"},),
+            },
+        )
+        job = replace(job, request=request, result=result)
+
+        created = service.sync_job(job)
+
+        self.assertEqual(
+            tuple(record.prompt_text for record in created),
+            ("Prompt Variation 1", "Prompt Variation 3"),
+        )
+
+    def test_sync_without_variations_preserves_single_prompt_attribution(self):
+        service = self.make_service()
+        job = successful_job(output_references=("https://cdn.test/generated-single.png",))
+
+        created = service.sync_job(job)
+
+        self.assertEqual(created[0].prompt_text, job.request.prompt_text)
 
     def test_bulk_selection_move_to_junk_and_archive_removes_from_active_library(self):
         service = self.make_service()

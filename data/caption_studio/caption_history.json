@@ -1,5 +1,31 @@
 [
   {
+    "history_id": "caption_history_710bc86faf924c7b9e1933f86aadefa3",
+    "session_id": "caption_session_a4ca6797dd044f47948c8968d1e22434",
+    "caption_request_id": "caption_request_b915e09bc74e4701aae25dba1aff1349",
+    "caption_result_id": "caption_result_db577dde05314e3a92a60dcd5eac435a",
+    "platform": "telegram",
+    "selected_text": "Caught me dripping in the moonlight \ud83d\ude08 this little bikini barely keeping up",
+    "created_at": "2026-07-29T15:40:08.408568",
+    "metadata": {
+      "source_generated_image_id": "generated_image_f7ae8ba6222c43ae0613a69a",
+      "social_queue_item_id": null
+    }
+  },
+  {
+    "history_id": "caption_history_9502af2f7e5a4bc596c55f29970d1be6",
+    "session_id": "caption_session_a4ca6797dd044f47948c8968d1e22434",
+    "caption_request_id": "caption_request_b915e09bc74e4701aae25dba1aff1349",
+    "caption_result_id": "caption_result_db577dde05314e3a92a60dcd5eac435a",
+    "platform": "telegram",
+    "selected_text": null,
+    "created_at": "2026-07-29T15:39:43.458340",
+    "metadata": {
+      "source_generated_image_id": "generated_image_f7ae8ba6222c43ae0613a69a",
+      "social_queue_item_id": null
+    }
+  },
+  {
     "history_id": "caption_history_7ad8d2c8bed1466998c1ded1ab349fa6",
     "session_id": "caption_session_1c2dfd56df9b46448cc1cf7febe23fb7",
     "caption_request_id": "caption_request_b1ed80d8438043a18db2c4ddbf126e08",

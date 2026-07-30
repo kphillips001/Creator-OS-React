@@ -46,6 +46,7 @@ from app.models.generation_library import GeneratedImageRecord, GenerationLibrar
 from app.models.generation_engine import GenerationJob, GenerationResult
 from app.models.reference_library import ReferenceLibraryFilter
 from app.models.generation_engine import GenerationMediaType, GenerationStatus, GenerationType
+from app.models.render_policy import content_render_policy, photoshoot_planning_mode
 from app.services.asset_library_service import AssetLibraryService
 from app.services.asset_registration_service import AssetRegistrationService
 from app.services.caption_studio_service import CaptionStudioService
@@ -1350,6 +1351,7 @@ def create_social_studio_generation_request(
             "source": "social_studio",
             "workflow_type": "social",
             "creative_mode": creative_mode,
+            "render_policy": content_render_policy(creative_mode).value,
             "prompt_variations": prompt_variations,
             "prompt_batch_count": len(prompt_variations) or prompt_count,
         },
@@ -1428,6 +1430,7 @@ def create_premium_studio_generation_request(
             "workflow_type": "premium",
             "creative_mode": creative_mode,
             "premium_workflow": True,
+            "render_policy": content_render_policy(creative_mode).value,
             "prompt_variations": prompt_variations,
             "prompt_batch_count": len(prompt_variations) or prompt_count,
         },
@@ -5554,7 +5557,7 @@ def _build_photoshoot_prompt(
             "Preserve continuity defaults unless the Session Direction explicitly overrides them.",
         )
     )
-    mode = "explicit" if str(creative_mode).lower() == "explicit" else "photoshoot"
+    mode = photoshoot_planning_mode(creative_mode)
     result = creative_director.plan_prompts(
         mode=mode,
         creative_tags=creative_tags,

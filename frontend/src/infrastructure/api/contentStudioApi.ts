@@ -13,7 +13,11 @@ import type {
   PromptPreviewResponse,
 } from "../../features/content-studio/types/promptPreview";
 import type { PromptPlannerResponse } from "../../features/content-studio/types/promptPlanner";
-import type { ContentStudioGeneration, GenerationSubmission } from "../../features/content-studio/types/generation";
+import type {
+  ContentStudioGeneration,
+  ExplicitGenerationInput,
+  GenerationSubmission,
+} from "../../features/content-studio/types/generation";
 
 type ContentStudioContextResponse = {
   success: boolean;
@@ -186,11 +190,13 @@ export async function createPromptPreview(
   creativeTags: string,
   promptCount: number,
   signal?: AbortSignal,
+  lane: "social" | "explicit" = "social",
+  explicitInput?: ExplicitGenerationInput,
 ): Promise<PromptPreview> {
   const result = await readJsonResponse<PromptPreviewResponse>(await fetch(
     `${environment.apiBaseUrl}/content-studio/prompt-preview`,
     {
-      body: JSON.stringify({ creativeMode, creativeTags, promptCount }),
+      body: JSON.stringify({ creativeMode, creativeTags, promptCount, lane, explicitInput }),
       headers: { "Content-Type": "application/json" },
       method: "POST",
       signal,
@@ -200,6 +206,40 @@ export async function createPromptPreview(
     throw new Error(result.error || "Prompt Preview failed");
   }
   return result.preview;
+}
+
+export type ExplicitInspirationConcepts = {
+  hardcore: string[];
+  softcore: string[];
+};
+
+export async function inspireExplicitContent(countPerTier = 5): Promise<ExplicitInspirationConcepts> {
+  const result = await readJsonResponse<{
+    success: boolean;
+    error: string | null;
+    hardcore?: string[];
+    softcore?: string[];
+    concepts?: string[];
+  }>(await fetch(`${environment.apiBaseUrl}/content-studio/explicit/inspire`, {
+    body: JSON.stringify({ countPerTier }),
+    headers: { "Content-Type": "application/json" },
+    method: "POST",
+  }));
+  if (!result.success || result.error) {
+    throw new Error(result.error || "Explicit inspiration failed");
+  }
+  const hardcore = Array.isArray(result.hardcore) ? result.hardcore : [];
+  const softcore = Array.isArray(result.softcore) ? result.softcore : [];
+  if (hardcore.length || softcore.length) {
+    return { hardcore, softcore };
+  }
+  // Backward-compatible fallback if an older server only returns a flat list.
+  const concepts = Array.isArray(result.concepts) ? result.concepts : [];
+  const midpoint = Math.ceil(concepts.length / 2);
+  return {
+    hardcore: concepts.slice(0, midpoint),
+    softcore: concepts.slice(midpoint),
+  };
 }
 
 export async function askPromptPlanner(question: string, image?: File | null): Promise<string> {

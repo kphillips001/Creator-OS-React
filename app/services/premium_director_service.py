@@ -4,8 +4,8 @@ import re
 from dotenv import load_dotenv
 
 from app.services.wavespeed_grok_service import generate_prompts_with_grok
-from app.prompts.premium_prompt_builder import (
-    build_premium_grok_prompt,
+from app.prompts.seedream_premium_prompt_builder import (
+    build_seedream_premium_prompt,
 )
 
 load_dotenv()
@@ -47,7 +47,7 @@ def generate_premium_prompts(
             "Missing GROK_API_KEY in .env"
         )
 
-    grok_instruction_prompt = build_premium_grok_prompt(
+    grok_instruction_prompt = build_seedream_premium_prompt(
         creative_tags=creative_tags,
         prompt_count=prompt_count,
         optional_direction=optional_direction,

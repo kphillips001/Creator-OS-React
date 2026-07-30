@@ -77,6 +77,9 @@ class FakeReferenceLibrary:
             return self.active_reference
         return None
 
+    def get_active_canonical_reference(self, *, creator_profile_id):
+        return self.get_active_reference(creator_profile_id=creator_profile_id)
+
 
 class FakeCreativeDirector:
     def __init__(self):

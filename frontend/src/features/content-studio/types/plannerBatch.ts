@@ -7,6 +7,7 @@ export type PlannerBatchItem = {
   imageUrl: string;
   jobId: string | null;
   error: string;
+  failureStage?: "enhancement" | "planning" | "generation";
 };
 
 export function updatePlannerBatchItems(

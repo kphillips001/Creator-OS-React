@@ -47,8 +47,8 @@ class PhotoshootSummaryService:
         locations = self._terms(combined, self.LOCATION_TERMS)
         wardrobe = self._terms(combined, self.WARDROBE_TERMS)
         original = str(
-            continuity.get("original_photoshoot_direction")
-            or continuity.get("seed_prompt_text")
+            continuity.get("seed_prompt_text")
+            or continuity.get("original_photoshoot_direction")
             or session.creator_notes
             or "Continue the selected seed as one cohesive photoshoot."
         ).strip()

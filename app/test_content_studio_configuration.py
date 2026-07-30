@@ -120,10 +120,6 @@ class ContentStudioConfigurationServiceTests(unittest.TestCase):
             configuration.providers,
             (
                 ("seedream_5_0_pro", "Seedream 5.0 Pro"),
-                ("nano_banana_pro", "Nano Banana Pro"),
-                ("wan_2_7_image_edit", "WAN 2.7"),
-                ("nano_banana", "Nano Banana 2"),
-                ("seedream_4_5", "Seedream 4.5"),
             ),
         )
         self.assertEqual(configuration.default_provider, "seedream_5_0_pro")
@@ -390,7 +386,15 @@ class ContentStudioCreativeTagActionTests(unittest.TestCase):
 
         preview = result["preview"]
         self.assertEqual(preview["planId"], "plan-preview")
-        self.assertEqual(preview["prompts"], ["preview one", "preview two"])
+        self.assertEqual(len(preview["prompts"]), 2)
+        self.assertTrue(preview["prompts"][0].startswith("preview one"))
+        self.assertTrue(preview["prompts"][1].startswith("preview two"))
+        self.assertIn("FINAL REFERENCE BODY LOCK", preview["prompts"][0])
+        self.assertTrue(preview["promptMetadata"]["provider_prompt_preview"])
+        self.assertEqual(
+            preview["promptMetadata"]["provider_target"],
+            "seedream_5_0_pro",
+        )
         self.assertEqual(preview["creativeRationale"], "Created by the current prompt planner.")
         self.assertEqual(
             preview["signature"],
@@ -412,6 +416,38 @@ class ContentStudioCreativeTagActionTests(unittest.TestCase):
                     creativeMode="premium_teaser",
                     creativeTags="  ",
                     promptCount=2,
+                )
+            )
+
+    def test_prompt_preview_explicit_lane_selects_canonical_explicit_mode(self):
+        result = _create_prompt_preview(
+            PromptPreviewRequest(
+                creativeMode="ignored-premium-mode",
+                creativeTags="explicit source",
+                promptCount=2,
+                lane="explicit",
+            )
+        )
+
+        self.assertEqual(result["preview"]["creativeMode"], "explicit")
+        self.assertTrue(
+            result["preview"]["promptMetadata"]["provider_prompt_preview"]
+        )
+        self.assertIn(
+            "FINAL REFERENCE BODY LOCK - NON-NEGOTIABLE:",
+            result["preview"]["prompts"][0],
+        )
+        call = next(call for call in self.director.calls if call[0] == "preview")
+        self.assertEqual(call[1]["creative_mode"], "explicit")
+
+    def test_prompt_preview_rejects_unsupported_lane(self):
+        with self.assertRaisesRegex(ValueError, "lane must be social or explicit"):
+            _create_prompt_preview(
+                PromptPreviewRequest(
+                    creativeMode="premium_teaser",
+                    creativeTags="tags",
+                    promptCount=2,
+                    lane="legacy",
                 )
             )
         with self.assertRaisesRegex(ValueError, "Premium creative mode"):

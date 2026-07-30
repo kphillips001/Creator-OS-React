@@ -41,6 +41,8 @@ def test_canonical_asset_id_uses_direct_lookup_without_reference_enrichment(monk
 def test_registered_asset_archive_and_restore_preserve_identity_and_creator_scope(monkeypatch):
     calls = []
     class Repository:
+        def get_by_id(self, asset_id):
+            return None
         def archive_asset_library_item(self, asset_id, creator_profile_id):
             calls.append(("archive", asset_id, creator_profile_id)); return {"id": asset_id}
         def restore_asset_library_item(self, asset_id, creator_profile_id):
@@ -61,6 +63,8 @@ def test_registered_asset_archive_and_restore_preserve_identity_and_creator_scop
 def test_photoshoot_archive_and_restore_preserve_deliverable_identity(monkeypatch):
     calls = []
     class Repository:
+        def get(self, deliverable_id):
+            return None
         def archive_asset_library(self, deliverable_id, creator_profile_id):
             calls.append(("archive", deliverable_id, creator_profile_id)); return {"deliverable_id": deliverable_id}
         def restore_asset_library(self, deliverable_id, creator_profile_id):

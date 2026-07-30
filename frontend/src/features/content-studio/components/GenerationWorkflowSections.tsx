@@ -85,7 +85,11 @@ export const GenerationWorkflowSections = forwardRef<GenerationWorkflowHandle, G
           setError(message);
           const batchItemId = activeBatchItemIdRef.current;
           if (batchItemId) {
-            onPlannerBatchItemChange?.(batchItemId, { error: message, status: "failed" });
+            onPlannerBatchItemChange?.(batchItemId, {
+              error: message,
+              failureStage: "generation",
+              status: "failed",
+            });
             activeBatchItemIdRef.current = null;
           }
           completionRef.current?.(false);
@@ -122,7 +126,13 @@ export const GenerationWorkflowSections = forwardRef<GenerationWorkflowHandle, G
     } catch (reason) {
       const message = reason instanceof Error ? reason.message : "Generation submission failed";
       setError(message);
-      if (batchItemId) onPlannerBatchItemChange?.(batchItemId, { error: message, status: "failed" });
+      if (batchItemId) {
+        onPlannerBatchItemChange?.(batchItemId, {
+          error: message,
+          failureStage: "generation",
+          status: "failed",
+        });
+      }
       completionRef.current?.(false);
       completionRef.current = null;
     } finally {
@@ -175,6 +185,7 @@ export const GenerationWorkflowSections = forwardRef<GenerationWorkflowHandle, G
           }
         : {
             error: generation.message || "Generation failed",
+            failureStage: "generation",
             jobId: generation.jobId,
             status: "failed",
           });
@@ -199,11 +210,31 @@ export const GenerationWorkflowSections = forwardRef<GenerationWorkflowHandle, G
   const aggregateProcessed = plannerBatchProgress
     ? plannerBatchProgress.completedIdeas + plannerBatchProgress.failedIdeas
     : 0;
+  const failedBatchItems = plannerBatchItems.filter((item) => item.status === "failed");
+  const sharedFailureReason = failedBatchItems.length > 0
+    && failedBatchItems.every((item) => item.error === failedBatchItems[0]?.error)
+    ? failedBatchItems[0]?.error ?? ""
+    : "";
+  const sharedFailureStage = failedBatchItems.length > 0
+    && failedBatchItems.every((item) => item.failureStage === failedBatchItems[0]?.failureStage)
+    ? failedBatchItems[0]?.failureStage
+    : undefined;
+  const allBatchItemsFailed = Boolean(
+    plannerBatchProgress
+    && plannerBatchProgress.failedIdeas === plannerBatchProgress.totalIdeas,
+  );
+  const providerWasContacted = plannerBatchItems.some(
+    (item) => Boolean(item.jobId) || item.status === "completed",
+  );
   const aggregateStatus = plannerBatchProgress
     ? plannerBatchProgress.phase === "complete"
       ? plannerBatchProgress.failedIdeas === 0
         ? "Generation batch completed successfully."
-        : `Generation batch completed with ${plannerBatchProgress.failedIdeas} failed.`
+        : allBatchItemsFailed && sharedFailureStage === "enhancement"
+          ? `Enhancement failed for ${plannerBatchProgress.failedIdeas} of ${plannerBatchProgress.totalIdeas} concepts.${sharedFailureReason ? ` ${sharedFailureReason}.` : ""}`
+          : allBatchItemsFailed && sharedFailureStage === "planning"
+            ? `Prompt planning failed for ${plannerBatchProgress.failedIdeas} concepts.${sharedFailureReason ? ` ${sharedFailureReason}.` : ""}`
+            : `Generation batch completed with ${plannerBatchProgress.failedIdeas} failed.`
       : plannerBatchProgress.phase === "preparing"
         ? `Preparing idea ${plannerBatchProgress.currentIdeaIndex} of ${plannerBatchProgress.totalIdeas}...`
         : `Generating idea ${plannerBatchProgress.currentIdeaIndex} of ${plannerBatchProgress.totalIdeas}...`
@@ -240,7 +271,11 @@ export const GenerationWorkflowSections = forwardRef<GenerationWorkflowHandle, G
           <div className="generation-live__metrics">
             <span>Completed: {plannerBatchProgress?.completedIdeas ?? generation?.completedCount ?? 0}</span>
             <span>Failed: {plannerBatchProgress?.failedIdeas ?? generation?.failedCount ?? 0}</span>
-            <span>Provider: {generation?.provider ?? request.provider}</span>
+            <span>
+              Provider: {plannerBatchProgress && !providerWasContacted
+                ? `Not contacted (selected: ${request.provider})`
+                : generation?.provider ?? request.provider}
+            </span>
           </div>
         </LiveProgressPanel>
         {plannerBatchProgress ? (
@@ -268,7 +303,13 @@ export const GenerationWorkflowSections = forwardRef<GenerationWorkflowHandle, G
                       className="generation-live__placeholder"
                       role="img"
                       title={item.error}
-                    />
+                    >
+                      <span className="generation-live__failure-reason">
+                        {sharedFailureReason
+                          ? item.failureStage === "enhancement" ? "Enhancement failed" : item.failureStage === "planning" ? "Planning failed" : "Generation failed"
+                          : item.error}
+                      </span>
+                    </div>
                   ) : (
                     <div
                       aria-label={`Waiting for generated image ${displayNumber} of ${plannerBatchProgress.totalIdeas}`}

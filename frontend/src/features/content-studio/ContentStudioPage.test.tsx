@@ -39,10 +39,6 @@ const configuration = {
   promptCount: { minimum: 1, maximum: 20, default: 5 },
   providers: [
     { value: "seedream_5_0_pro", label: "Seedream 5.0 Pro" },
-    { value: "nano_banana_pro", label: "Nano Banana Pro" },
-    { value: "wan_2_7_image_edit", label: "WAN 2.7" },
-    { value: "nano_banana", label: "Nano Banana 2" },
-    { value: "seedream_4_5", label: "Seedream 4.5" },
   ],
   defaults: { mode: "premium_teaser", provider: "seedream_5_0_pro" },
 };
@@ -102,7 +98,14 @@ function mockContext(
         });
       }
       const body = JSON.parse(String(options.body)) as { explicit?: boolean; tags?: string };
-      if (url.endsWith("/inspire")) {
+      if (url.endsWith("/explicit/inspire")) {
+        responseValue = {
+          success: true,
+          error: null,
+          hardcore: Array.from({ length: 5 }, (_, index) => `Ava Blackthorne hardcore scene ${index + 1}`),
+          softcore: Array.from({ length: 5 }, (_, index) => `Ava Blackthorne softcore scene ${index + 1}`),
+        };
+      } else if (url.endsWith("/inspire")) {
         responseValue = { success: true, error: null, runId: "run-inspire" };
       } else if (url.endsWith("/generations")) {
         responseValue = { success: true, error: null, runId: "run-live" };
@@ -132,7 +135,7 @@ function mockContext(
             creativeMode: previewBody.creativeMode,
             creativeRationale: "Created by the current prompt planner.",
             planId: "plan-preview",
-            promptMetadata: { canonical_planner: "creator_os", prompt_builder: "canonical_premium_prompt_planner" },
+            promptMetadata: { canonical_planner: "creator_os", prompt_builder: "canonical_seedream_premium_planner" },
             prompts: ["preview prompt one", "preview prompt two"],
             signature: previewBody,
           },
@@ -291,6 +294,135 @@ describe("ContentStudioPage", () => {
     expect(creativeStudio).toHaveAttribute("open");
   });
 
+  it("keeps Explicit Content collapsed by default and preserves state across toggles", async () => {
+    render(<ContentStudioPage />);
+    await screen.findByRole("region", { name: "Inspire Me Workspace" });
+
+    const summary = screen.getByText("🔞 Explicit Content").closest("summary") as HTMLElement;
+    const accordion = summary.closest("details") as HTMLDetailsElement;
+    expect(accordion).not.toHaveAttribute("open");
+
+    fireEvent.click(summary);
+    expect(accordion).toHaveAttribute("open");
+    const explicit = screen.getByRole("region", { name: "Explicit Content" });
+    expect(within(explicit).getByRole("region", { name: "Explicit Generation Settings" })).toBeInTheDocument();
+    expect(within(explicit).getByLabelText("Explicit Provider")).toBeInTheDocument();
+    expect(within(explicit).getByLabelText("Explicit Image Count")).toBeInTheDocument();
+    expect(within(explicit).getByText("Prompt Preview")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Explicit Tags"), {
+      target: { value: "preserved explicit direction" },
+    });
+    fireEvent.click(screen.getByRole("tab", { name: "Inspire Me" }));
+    expect(within(explicit).queryByRole("region", { name: "Explicit Generation Settings" })).not.toBeInTheDocument();
+    expect(within(explicit).queryByLabelText("Explicit Provider")).not.toBeInTheDocument();
+    expect(within(explicit).queryByLabelText("Explicit Image Count")).not.toBeInTheDocument();
+    expect(within(explicit).queryByText("Prompt Preview")).not.toBeInTheDocument();
+    expect(within(explicit).queryByText("Advanced Settings")).not.toBeInTheDocument();
+
+    fireEvent.click(summary);
+    expect(accordion).not.toHaveAttribute("open");
+    fireEvent.click(summary);
+
+    expect(accordion).toHaveAttribute("open");
+    expect(screen.getByRole("tab", { name: "Inspire Me" })).toHaveAttribute("aria-selected", "true");
+    fireEvent.click(screen.getByRole("tab", { name: "Create From Tags" }));
+    expect(screen.getByLabelText("Explicit Tags")).toHaveValue("preserved explicit direction");
+    expect(within(explicit).getByRole("region", { name: "Explicit Generation Settings" })).toBeInTheDocument();
+  });
+
+  it("starts Explicit inspiration from the tab and displays scene-first concepts", async () => {
+    render(<ContentStudioPage />);
+    await screen.findByRole("region", { name: "Inspire Me Workspace" });
+    fireEvent.click(screen.getByText("🔞 Explicit Content").closest("summary") as HTMLElement);
+
+    const explicit = screen.getByRole("region", { name: "Explicit Content" });
+    fireEvent.click(within(explicit).getByRole("tab", { name: "Inspire Me" }));
+
+    expect(within(explicit).queryByRole("button", { name: "✨ Inspire Me" })).not.toBeInTheDocument();
+    expect(within(explicit).getByText("Creating inspiration…")).toBeInTheDocument();
+    expect(await within(explicit).findByText("hardcore scene 1")).toBeInTheDocument();
+    expect(within(explicit).queryByText(/Ava Blackthorne/i)).not.toBeInTheDocument();
+    expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).endsWith("/explicit/inspire"))).toBe(true);
+  });
+
+  it("shows enhancement timeout failures without planning or contacting the provider", async () => {
+    mockContext(readyContext);
+    const defaultFetch = vi.mocked(fetch).getMockImplementation();
+    vi.mocked(fetch).mockImplementation((url: RequestInfo | URL, options?: RequestInit) => {
+      if (String(url).endsWith("/creative-tags/enhance")) {
+        return Promise.resolve({
+          headers: new Headers({ "content-type": "application/json" }),
+          json: () => Promise.resolve({
+            success: false,
+            error: "Creative tag action timed out",
+            tags: "",
+          }),
+          ok: false,
+          status: 503,
+          text: () => Promise.resolve(JSON.stringify({
+            success: false,
+            error: "Creative tag action timed out",
+            tags: "",
+          })),
+        } as Response);
+      }
+      return defaultFetch!(url, options);
+    });
+    render(<ContentStudioPage />);
+    await screen.findByRole("region", { name: "Inspire Me Workspace" });
+    fireEvent.click(screen.getByText("🔞 Explicit Content").closest("summary") as HTMLElement);
+    const explicit = screen.getByRole("region", { name: "Explicit Content" });
+    fireEvent.click(within(explicit).getByRole("tab", { name: "Inspire Me" }));
+    await within(explicit).findByText("hardcore scene 1");
+    fireEvent.click(within(explicit).getByText(/Select All \(0 selected\)/));
+    fireEvent.click(within(explicit).getByRole("button", { name: /Enhance & Generate \(10\)/ }));
+
+    const live = await within(explicit).findByRole("region", { name: "Live Generation" });
+    await waitFor(() => expect(
+      within(live).getByText(
+        "Enhancement failed for 10 of 10 concepts. Creative tag action timed out.",
+      ),
+    ).toBeInTheDocument());
+    expect(within(live).getAllByText("Enhancement failed")).toHaveLength(10);
+    expect(within(live).getByText(
+      "Provider: Not contacted (selected: seedream_5_0_pro)",
+    )).toBeInTheDocument();
+    expect(vi.mocked(fetch).mock.calls.filter(
+      ([url]) => String(url).endsWith("/creative-tags/enhance"),
+    )).toHaveLength(10);
+    expect(vi.mocked(fetch).mock.calls.some(
+      ([url]) => String(url).endsWith("/prompt-preview"),
+    )).toBe(false);
+    expect(vi.mocked(fetch).mock.calls.some(
+      ([url]) => String(url).endsWith("/generations"),
+    )).toBe(false);
+  });
+
+  it("continues Explicit generation while its accordion is collapsed", async () => {
+    const { container } = render(<ContentStudioPage />);
+    await screen.findByRole("region", { name: "Inspire Me Workspace" });
+    const summary = screen.getByText("🔞 Explicit Content").closest("summary") as HTMLElement;
+    const accordion = summary.closest("details") as HTMLDetailsElement;
+
+    fireEvent.click(summary);
+    fireEvent.change(screen.getByLabelText("Explicit Tags"), {
+      target: { value: "explicit generation while collapsed" },
+    });
+    const generate = screen.getByRole("button", { name: "🖼 Generate Images" });
+    await waitFor(() => expect(generate).toBeEnabled());
+    fireEvent.click(generate);
+    fireEvent.click(summary);
+    expect(accordion).not.toHaveAttribute("open");
+
+    await waitFor(() => expect(
+      container.querySelector('img[src="/api/v1/content-studio/generations/run-live/images/0"]'),
+    ).toBeInTheDocument());
+    fireEvent.click(summary);
+
+    expect(accordion).toHaveAttribute("open");
+    expect(screen.getByRole("img", { name: "Generated image 1 of 1" })).toBeInTheDocument();
+  });
+
   it("keeps autonomous and manual generation previews independent", async () => {
     render(<ContentStudioPage />);
     const inspire = await screen.findByRole("button", { name: "✨ Inspire Me" });
@@ -400,10 +532,11 @@ describe("ContentStudioPage", () => {
   it("loads creator defaults, provider options, and validates prompt count locally", async () => {
     render(<ContentStudioPage />);
 
-    const mode = await screen.findByLabelText("Premium Creative Mode") as HTMLSelectElement;
-    const count = await screen.findByLabelText("Prompt Count") as HTMLInputElement;
-    const provider = screen.getByLabelText("Provider") as HTMLSelectElement;
-    const advancedSettings = screen.getByText("Advanced Settings").closest("details");
+    const settings = await screen.findByRole("region", { name: "Creative Settings" });
+    const mode = await within(settings).findByLabelText("Premium Creative Mode") as HTMLSelectElement;
+    const count = within(settings).getByLabelText("Prompt Count") as HTMLInputElement;
+    const provider = within(settings).getByLabelText("Provider") as HTMLSelectElement;
+    const advancedSettings = within(settings).getByText("Advanced Settings").closest("details");
 
     expect(mode.value).toBe("premium_teaser");
     expect(Array.from(mode.options, (option) => [option.text, option.value])).toEqual([
@@ -413,26 +546,21 @@ describe("ContentStudioPage", () => {
     expect(count).toHaveAttribute("min", "1");
     expect(count).toHaveAttribute("max", "20");
     expect(advancedSettings).not.toHaveAttribute("open");
-    fireEvent.click(screen.getByText("Advanced Settings"));
+    fireEvent.click(within(settings).getByText("Advanced Settings"));
     expect(advancedSettings).toHaveAttribute("open");
     expect(provider.value).toBe("seedream_5_0_pro");
     await waitFor(() => expect(count.value).toBe("5"));
     expect(provider.value).toBe("seedream_5_0_pro");
     expect(Array.from(provider.options, (option) => option.text)).toEqual([
       "Seedream 5.0 Pro",
-      "Nano Banana Pro",
-      "WAN 2.7",
-      "Nano Banana 2",
-      "Seedream 4.5",
     ]);
 
     fireEvent.change(mode, { target: { value: "spicy" } });
     fireEvent.change(count, { target: { value: "99" } });
-    fireEvent.change(provider, { target: { value: "wan_2_7_image_edit" } });
     expect(mode.value).toBe("spicy");
     expect(count.value).toBe("20");
-    expect(provider.value).toBe("wan_2_7_image_edit");
-    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(provider.value).toBe("seedream_5_0_pro");
+    expect(fetch).toHaveBeenCalledTimes(3);
   });
 
   it("maps a historical story-sequence default to the Standard UI option", async () => {
@@ -464,7 +592,6 @@ describe("ContentStudioPage", () => {
     render(<StrictMode><ContentStudioPage /></StrictMode>);
 
     const premiumTags = await screen.findByLabelText("Creative Concept") as HTMLTextAreaElement;
-    const explicitTags = screen.getByLabelText("Explicit Tags") as HTMLTextAreaElement;
 
     fireEvent.change(premiumTags, { target: { value: "hotel robe" } });
     expect(premiumTags.value).toBe("hotel robe");
@@ -476,9 +603,12 @@ describe("ContentStudioPage", () => {
     expect(screen.queryByText("Surprise Me Tags")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Surprise Me/ })).not.toBeInTheDocument();
 
+    fireEvent.click(screen.getByText("🔞 Explicit Content").closest("summary") as HTMLElement);
+    const explicitRegion = screen.getByRole("region", { name: "Explicit Content" });
+    const explicitTags = within(explicitRegion).getByLabelText("Explicit Tags") as HTMLTextAreaElement;
     fireEvent.change(explicitTags, { target: { value: "explicit hotel" } });
-    fireEvent.click(screen.getByRole("button", { name: /Enhance Explicit Tags/ }));
-    const enhancedExplicit = screen.getByLabelText("Enhanced Explicit Tags") as HTMLTextAreaElement;
+    fireEvent.click(within(explicitRegion).getByRole("button", { name: /Enhance Tags/ }));
+    const enhancedExplicit = within(explicitRegion).getByLabelText("Enhanced Tags") as HTMLTextAreaElement;
     await waitFor(() => expect(enhancedExplicit.value).toBe("explicitly enhanced explicit hotel"));
     expect(screen.queryByText("Prompt Source")).not.toBeInTheDocument();
     expect(screen.queryByRole("radio")).not.toBeInTheDocument();
@@ -495,6 +625,7 @@ describe("ContentStudioPage", () => {
     expect(JSON.parse(String(postCalls[1]![1]?.body))).toEqual({
       creativeMode: "premium_teaser",
       creativeTags: "[ORIGINAL USER TAGS — mandatory: hotel robe] [ENHANCED SUGGESTIONS — vary any wardrobe detail not present in ORIGINAL USER TAGS: enhanced hotel robe]",
+      lane: "social",
       promptCount: 5,
     });
   });
@@ -989,7 +1120,7 @@ describe("ContentStudioPage", () => {
     fireEvent.click(within(reopenedDialog).getByText("Advanced Details"));
     expect(within(reopenedDialog).getByText("Prompt Plan: plan-preview")).toBeInTheDocument();
     expect(within(reopenedDialog).getByText("Creative Mode: premium_teaser")).toBeInTheDocument();
-    expect(within(reopenedDialog).getByText(/canonical_premium_prompt_planner/)).toBeInTheDocument();
+    expect(within(reopenedDialog).getByText(/canonical_seedream_premium_planner/)).toBeInTheDocument();
 
     fireEvent.click(within(reopenedDialog).getByRole("button", { name: "Regenerate Prompt Preview" }));
     await waitFor(() => expect(previewCalls()).toHaveLength(2));

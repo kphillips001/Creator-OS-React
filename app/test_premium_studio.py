@@ -50,7 +50,9 @@ from app.models.asset_library import (
 from app.models.creative_director import PromptPlan
 from app.models.generation_engine import GenerationJob, GenerationRequest, GenerationResult, GenerationStatus
 from app.models.reference_library import ReferenceAsset
-from app.prompts.premium_prompt_builder import build_premium_grok_prompt
+from app.prompts.seedream_premium_prompt_builder import (
+    build_seedream_premium_prompt,
+)
 from app.services.creative_director_service import CreativeDirectorService
 from app.services.premium_director_service import generate_premium_prompts
 from app.services.premium_tag_enhancer_service import build_premium_tag_enhancer_prompt
@@ -91,6 +93,9 @@ class FakeReferenceLibrary:
         if self.active_reference and self.active_reference.creator_profile_id == creator_profile_id:
             return self.active_reference
         return None
+
+    def get_active_canonical_reference(self, *, creator_profile_id):
+        return self.get_active_reference(creator_profile_id=creator_profile_id)
 
 
 class FakeCreativeDirector:
@@ -262,14 +267,14 @@ class PremiumStudioTests(unittest.TestCase):
         self.assertIn("preserve that exact requested detail", prompt)
 
     def test_premium_prompt_contract_varies_only_unspecified_wardrobe_details(self):
-        broad_prompt = build_premium_grok_prompt(
+        broad_prompt = build_seedream_premium_prompt(
             creative_tags=(
                 "[ORIGINAL USER TAGS — mandatory: tight shorts, micro crop top] "
                 "[ENHANCED SUGGESTIONS — vary: coral halter top, white high-waisted shorts]"
             ),
             prompt_count=5,
         )
-        explicit_prompt = build_premium_grok_prompt(
+        explicit_prompt = build_seedream_premium_prompt(
             creative_tags="black leather mini skirt",
             prompt_count=5,
         )
@@ -368,26 +373,13 @@ class PremiumStudioTests(unittest.TestCase):
         self.assertEqual(records, ("generated_image_premium",))
         self.assertEqual(library.synced[0].result.output_references, ("https://cdn.test/premium-output.png",))
 
-    def test_provider_selection_includes_premium_providers(self):
+    def test_provider_selection_exposes_only_seedream_5_0_pro(self):
         options = premium_studio_provider_options(FakeGenerationEngine())
 
-        self.assertIn(("seedream_4_5", PREMIUM_PROVIDER_LABELS["seedream_4_5"]), options)
-        self.assertIn(("seedream_5_0_pro", PREMIUM_PROVIDER_LABELS["seedream_5_0_pro"]), options)
-        self.assertIn(("wan_2_7_image_edit", PREMIUM_PROVIDER_LABELS["wan_2_7_image_edit"]), options)
-        self.assertIn(("nano_banana_pro", PREMIUM_PROVIDER_LABELS["nano_banana_pro"]), options)
-        self.assertIn(("nano_banana", PREMIUM_PROVIDER_LABELS["nano_banana"]), options)
         self.assertEqual(
-            tuple(provider_id for provider_id, _label in options),
-            (
-                "seedream_5_0_pro",
-                "nano_banana_pro",
-                "wan_2_7_image_edit",
-                "nano_banana",
-                "seedream_4_5",
-            ),
+            options,
+            (("seedream_5_0_pro", PREMIUM_PROVIDER_LABELS["seedream_5_0_pro"]),),
         )
-        self.assertNotIn(("flux", "Flux"), options)
-        self.assertNotIn(("unknown_provider", "unknown_provider"), options)
 
     def test_seedream_5_0_pro_is_default_provider_when_available(self):
         provider_ids = tuple(provider_id for provider_id, _label in premium_studio_provider_options(FakeGenerationEngine()))
@@ -563,7 +555,7 @@ class PremiumStudioTests(unittest.TestCase):
         self.assertEqual(history[0].batch_id, batch.batch_id)
         self.assertIn(2, history[0].used_prompt_numbers)
 
-    def test_premium_prompt_plan_uses_wavespeed_premium_builder(self):
+    def test_premium_prompt_plan_uses_seedream_canonical_builder(self):
         service = CreativeDirectorService(
             storage_dir=tempfile.mkdtemp(),
             reference_library_service=FakeReferenceLibrary(reference_asset()),
@@ -584,9 +576,9 @@ class PremiumStudioTests(unittest.TestCase):
             )
 
         self.assertIn("premium hotel mirror prompt", plan.prompt_text)
-        self.assertEqual(plan.prompt_metadata["generation_brain"], "wavespeed_canonical")
-        self.assertEqual(plan.prompt_metadata["prompt_builder"], "canonical_premium_prompt_planner")
-        self.assertEqual(plan.prompt_metadata["reference_conditioning"], "wavespeed")
+        self.assertEqual(plan.prompt_metadata["generation_brain"], "seedream_premium_canonical")
+        self.assertEqual(plan.prompt_metadata["prompt_builder"], "canonical_seedream_premium_planner")
+        self.assertEqual(plan.prompt_metadata["reference_conditioning"], "seedream_5_0_pro")
         self.assertIn("medium-close creator framing", plan.prompt_text)
 
 

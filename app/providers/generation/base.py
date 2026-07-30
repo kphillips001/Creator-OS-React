@@ -14,6 +14,7 @@ from urllib.parse import urlparse
 
 import requests
 
+from app.models.render_policy import RenderPolicy
 from app.prompts.prompt_builder import SOCIAL_CLOSE_FRAMING_RENDER_LOCK
 from app.models.generation_engine import (
     GenerationRequest,
@@ -21,7 +22,11 @@ from app.models.generation_engine import (
     GenerationStatus,
     new_generation_id,
 )
-from app.services.wavespeed_premium_render_locks import enforce_premium_render_body_lock
+from app.services.seedream_premium_render_locks import (
+    enforce_explicit_render_lock,
+    enforce_premium_render_body_lock,
+)
+from app.services.photoshoot_render_locks import enforce_photoshoot_safe_render_lock
 from app.services.hosted_asset_reference_service import HostedAssetReferenceService
 
 
@@ -133,7 +138,6 @@ class WaveSpeedProviderBase(GenerationProvider):
     result_url_template = "https://api.wavespeed.ai/api/v3/predictions/{request_id}/result"
     api_key_env = "WAVESPEED_API_KEY"
     image_host_api_key_env = "IMGBB_API_KEY"
-    SOCIAL_RENDER_LOCK = SOCIAL_CLOSE_FRAMING_RENDER_LOCK
     PREMIUM_RENDER_BODY_LOCK = """
 FINAL REFERENCE BODY LOCK - NON-NEGOTIABLE:
 Use the reference image as the identity, face, hair, skin-tone, body-size, body-shape, and bust-size source of truth only.
@@ -161,14 +165,6 @@ Preserve exact facial identity, facial structure, eyes, nose, lips, jawline, che
 Keep the face photorealistic, natural, anatomically correct, and consistent with the selected expression variation.
 Avoid goofy, silly, cartoonish, distorted, uncanny, melted, asymmetrical, cross-eyed, or over-exaggerated facial expressions.
 """.strip()
-    WAN_BUST_VISIBILITY_LOCK = """
-WAN BUST VISIBILITY LOCK:
-Preserve visibly full natural D-cup breast volume, not a petite or minimized bust.
-Do not reduce, flatten, minimize, shrink, hide, or soften her bust size.
-When wearing bikini, lingerie, bra, crop top, fitted shirt, dress, bodysuit, swimwear, or tight clothing, show realistic fabric tension from full D-cup volume.
-Make cleavage, bust projection, rounded lower-breast fullness, upper-breast fullness, and cup fill clearly visible whenever framing and wardrobe allow it.
-Use torso angle, chest-forward posture, side angle, three-quarter angle, seated lean, or close upper-body crop to make bust size obvious.
-""".strip()
     CLOTHED_PREMIUM_WARDROBE_LOCK = """
 CLOTHED PREMIUM WARDROBE LOCK - NON-NEGOTIABLE:
 This is a clothed premium teaser request, not a nude or topless request.
@@ -190,15 +186,6 @@ NUDE GROOMING LOCK - NON-NEGOTIABLE:
 If pubic area or lower nude body is visible, there must be no pubic hair.
 The pubic area must be fully smooth, hairless, and clean-shaven.
 Do not render a landing strip, stubble, trimmed pubic hair, shadow hair, peach fuzz, or visible pubic hair texture.
-""".strip()
-    WAVESPEED_SCENE_CAMERA_LOCK = """
-WAVESPEED SCENE AND CAMERA PARITY LOCK:
-The user's written prompt is the source of truth for scene, wardrobe, body state, pose, lighting, and background.
-Required user tags must remain mandatory; be creative only with pose, camera angle, framing, expression, lighting, environment detail, mood, and micro-action.
-Every generated image should feel like a real creator moment: candid timing, natural weight shift, imperfect posture, slight movement where natural, close creator-photo framing, handheld realism, realistic social-media crop, natural depth of field, and strong subject-background separation.
-Do not create fashion catalog, runway, studio glamour, professional campaign, luxury real-estate, scenery-first, architecture-first, travel-poster, distant full-body, or tiny-subject compositions.
-If a broad location is present, expand it into related micro-locations and interaction points; if a concrete location/body-state/time anchor is present, keep that anchor visible.
-Scene families available from Wavespeed include lake, beach, boat, dock, pool, porch, backyard, country roads, mountains, bookstore, coffee shop, brunch, bedroom, bathroom, kitchen, living room, couch, hotel, downtown, balcony, mirror area, gym, travel, seasonal, cabin, fireplace, window seat, garden path, field, trail overlook, private vacation room, and hotel lounge.
 """.strip()
     EXPRESSION_PROFILES = (
         (20, "relaxed natural smile, authentic creator smile, subtle warmth, relaxed cheeks, natural eye contact"),
@@ -562,15 +549,34 @@ Scene families available from Wavespeed include lake, beach, boat, dock, pool, p
 
     def _render_prompt_text(self, request: GenerationRequest) -> str:
         prompt = str(request.prompt_text or "").strip()
-        metadata = request.metadata or {}
-        workflow = str(metadata.get("workflow_type") or metadata.get("source") or "").lower()
-        creative_mode = str(metadata.get("creative_mode") or "").lower()
-        locks = []
-        if "premium" in workflow or creative_mode in {"premium_teaser", "spicy", "story_sequence"}:
+        policy = self._render_policy(request)
+        if policy == RenderPolicy.CONTENT_STANDARD:
+            return f"{prompt}\n\n{SOCIAL_CLOSE_FRAMING_RENDER_LOCK}"
+        if policy in {
+            RenderPolicy.CONTENT_SPICY,
+            RenderPolicy.PHOTOSHOOT_PREMIUM,
+        }:
             return enforce_premium_render_body_lock(prompt)
-        else:
-            locks.append(self.SOCIAL_RENDER_LOCK)
-        return f"{prompt}\n\n" + "\n\n".join(locks)
+        if policy in {
+            RenderPolicy.CONTENT_EXPLICIT,
+            RenderPolicy.PHOTOSHOOT_EXPLICIT,
+        }:
+            return enforce_explicit_render_lock(prompt)
+        if policy == RenderPolicy.PHOTOSHOOT_SAFE:
+            return enforce_photoshoot_safe_render_lock(prompt)
+        if policy == RenderPolicy.EDIT:
+            return prompt
+        raise GenerationProviderError(f"Unhandled render policy: {policy.value}")
+
+    @staticmethod
+    def _render_policy(request: GenerationRequest) -> RenderPolicy:
+        raw_policy = (request.metadata or {}).get("render_policy")
+        try:
+            return RenderPolicy(str(raw_policy))
+        except ValueError as error:
+            raise GenerationProviderError(
+                f"Unknown or missing render policy: {raw_policy!r}"
+            ) from error
 
     @staticmethod
     def _prompt_variations(request: GenerationRequest) -> tuple[str, ...]:
@@ -729,8 +735,16 @@ Scene families available from Wavespeed include lake, beach, boat, dock, pool, p
 
     def _provider_reference_images(self, request: GenerationRequest) -> list[str]:
         continuity = str(request.metadata.get("photoshoot_continuity_reference_image_url") or "").strip()
-        workflow = str(request.metadata.get("workflow_type") or "").strip().lower()
-        if workflow != "photoshoot" or self.capabilities.max_reference_images < 2 or not continuity:
+        photoshoot_policies = {
+            RenderPolicy.PHOTOSHOOT_SAFE,
+            RenderPolicy.PHOTOSHOOT_PREMIUM,
+            RenderPolicy.PHOTOSHOOT_EXPLICIT,
+        }
+        if (
+            self._render_policy(request) not in photoshoot_policies
+            or self.capabilities.max_reference_images < 2
+            or not continuity
+        ):
             return [self._provider_reference_image(request)]
         canonical = str(
             request.metadata.get("canonical_reference_image_url")

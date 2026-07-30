@@ -167,6 +167,29 @@ class PhotoshootCommerceRepository:
     def members(self, session_id: str):
         return self._all("SELECT * FROM public.photoshoot_asset_memberships WHERE photoshoot_session_id=%s AND approved=TRUE ORDER BY shot_order", (session_id,))
 
+    def commercial_role_context_for_asset(self, asset_id: int, creator_profile_id: int):
+        return self._one(
+            """SELECT membership.photoshoot_session_id,membership.shot_order,
+                      membership.is_hero,
+                      membership.shot_order=(
+                          SELECT MAX(last_member.shot_order)
+                          FROM public.photoshoot_asset_memberships last_member
+                          WHERE last_member.photoshoot_session_id=
+                                membership.photoshoot_session_id
+                            AND last_member.approved=TRUE
+                      ) AS is_last,
+                      intelligence.profile_data AS photoshoot_intelligence
+               FROM public.photoshoot_asset_memberships membership
+               JOIN public.photoshoot_commerce_deliverables deliverable
+                 USING (photoshoot_session_id)
+               LEFT JOIN public.photoshoot_intelligence_profiles intelligence
+                 USING (photoshoot_session_id)
+               WHERE membership.asset_id=%s AND membership.approved=TRUE
+                 AND deliverable.creator_profile_id=%s
+               ORDER BY membership.updated_at DESC LIMIT 1""",
+            (int(asset_id), int(creator_profile_id)),
+        )
+
     def archive(self, deliverable_id: str):
         return self._one("""UPDATE public.photoshoot_commerce_deliverables SET is_active=FALSE,is_archived=TRUE,
             archived_at=COALESCE(archived_at,now()),updated_at=now() WHERE deliverable_id=%s RETURNING *""", (deliverable_id,))

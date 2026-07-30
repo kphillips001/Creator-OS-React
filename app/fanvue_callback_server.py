@@ -29,6 +29,8 @@ from app.api.test_chat import router as test_chat_router
 from app.api.business_assets import router as business_assets_router
 from app.api.available_inventory import router as available_inventory_router
 from app.api.commercial_offerings import router as commercial_offerings_router
+from app.api.commercial_roles import router as commercial_roles_router
+from app.api.sales_sessions import router as sales_sessions_router
 from app.api.commercial_publications import router as commercial_publications_router
 from app.api.commercial_fulfillments import router as commercial_fulfillments_router
 from app.api.commerce_sales import router as commerce_sales_router
@@ -142,6 +144,8 @@ app.include_router(test_chat_router)
 app.include_router(business_assets_router)
 app.include_router(available_inventory_router)
 app.include_router(commercial_offerings_router)
+app.include_router(commercial_roles_router)
+app.include_router(sales_sessions_router)
 app.include_router(commercial_publications_router)
 app.include_router(commercial_fulfillments_router)
 app.include_router(commerce_sales_router)

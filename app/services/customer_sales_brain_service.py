@@ -16,6 +16,7 @@ from app.models.customer_sales_decision import (
 )
 from app.repositories.customer_commerce_repository import CustomerCommerceRepository
 from app.repositories.purchase_intent_repository import PurchaseIntentRepository
+from app.repositories.sales_session_repository import SalesSessionRepository
 from app.repositories.telegram_identity_repository import TelegramIdentityRepository
 from app.services.commerce_signal_service import CommerceSignalService
 from app.services.commercial_offering_selector_service import (
@@ -32,6 +33,7 @@ class CustomerSalesBrainService:
         self, *, customer_repository=None, identity_repository=None,
         intent_repository=None, commerce_signal_service=None,
         offering_selector_service=None, config=None,
+        sales_session_repository=None,
         clock=lambda: datetime.now(timezone.utc),
     ):
         self.customers = customer_repository or CustomerCommerceRepository()
@@ -40,6 +42,9 @@ class CustomerSalesBrainService:
         self.signals = commerce_signal_service or CommerceSignalService()
         self.offering_selector = (
             offering_selector_service or CommercialOfferingSelectorService()
+        )
+        self.sales_sessions = (
+            sales_session_repository or SalesSessionRepository()
         )
         self.config = config or CustomerSalesBrainConfig.from_environment()
         self.clock = clock
@@ -80,6 +85,11 @@ class CustomerSalesBrainService:
         started = _started if _started is not None else time.perf_counter()
         now = self.clock()
         context = dict(conversation_context or {})
+        context.update(self._active_sales_session_context(
+            creator_profile_id=creator_profile_id,
+            fanvue_account_id=fanvue_account_id,
+            external_fanvue_buyer_uuid=external_fanvue_buyer_uuid,
+        ))
         if not identity_resolved or telegram_user_id is None:
             return self._finish(
                 started, now, creator_profile_id=creator_profile_id,
@@ -270,6 +280,40 @@ class CustomerSalesBrainService:
             summary="No active, live, deliverable offering is available.",
             selector_result=selection,
         )
+
+    def _active_sales_session_context(
+        self, *, creator_profile_id: int, fanvue_account_id: int,
+        external_fanvue_buyer_uuid,
+    ) -> dict:
+        try:
+            identity = (
+                self.identities.get_by_external_fanvue_user_uuid(
+                    fanvue_account_id, external_fanvue_buyer_uuid
+                )
+            )
+            if identity is None:
+                return {}
+            session = self.sales_sessions.get_active_for_customer(
+                creator_profile_id=creator_profile_id,
+                fanvue_account_id=fanvue_account_id,
+                fanvue_user_id=identity.local_fanvue_user_id,
+            )
+        except Exception as error:
+            logger.warning(
+                "event=sales_session_context_unavailable error_type=%s",
+                type(error).__name__,
+            )
+            return {}
+        if session is None:
+            return {}
+        return {
+            "sales_session_id": str(session.sales_session_id),
+            "sales_session_state": session.state.value,
+            "sales_session_progression": session.progression_stage.value,
+            "sales_session_foundation": (
+                session.commercial_foundation_reference
+            ),
+        }
 
     @staticmethod
     def refine_for_readiness(

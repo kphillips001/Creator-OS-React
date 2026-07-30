@@ -461,6 +461,57 @@ def test_creative_director_recommendation_delegates_and_persists(monkeypatch):
     queue.record_pending_recommendation.assert_called_once_with(session_id="session-1", recommendation=result)
 
 
+def test_direct_shot_recommendation_bypasses_inspiration_gate_and_reuses_enhancement(monkeypatch):
+    session = replace(_session(), creative_continuity={
+        **_session().creative_continuity,
+        "canonical_seed_summary": {"scene": "Hotel window portrait"},
+        "approved_directions": ({"title": "Previous shot"},),
+        "progression_stage": 2,
+    })
+    queue = Mock()
+    queue.get_session.return_value = session
+    queue.update_session_settings.return_value = session
+    queue.requests_for_session.return_value = ()
+    library = Mock()
+    library.get.return_value = _record("seed-1")
+    director = Mock()
+    director.recommend_photoshoot_direction.return_value = PhotoshootCreativeDirection(
+        title="Directed shot", creative_direction="Lift the shirt naturally", reasoning="Operator direction",
+        continuity_notes="Keep the hotel and lighting", camera_framing="Medium", lighting="Warm",
+        emotion="Confident", pose_composition="Standing", creative_mode="premium",
+        session_direction="Seed prompt", continuity_locks={"location": True}, raw_response="{}",
+    )
+    service = PhotoshootCreativeDirectorWorkflowService(
+        queue=queue, library=library, creative_director=director,
+    )
+    monkeypatch.setattr(service, "_image_bytes", lambda _: (b"image", "image/png"))
+
+    result = service.direct_recommendation(
+        creator_profile_id=7,
+        session_id="session-1",
+        creative_mode="premium",
+        operator_direction="  Have her lift her shirt.  ",
+        continuity_locks={"location": True},
+    )
+
+    assert result["title"] == "Directed shot"
+    call = director.recommend_photoshoot_direction.call_args.kwargs
+    assert call["creative_hint"] == "Have her lift her shirt."
+    assert call["image_bytes"] == b"image"
+    assert call["approved_history"] == ({"title": "Previous shot"},)
+    assert call["session_context"]["canonical_seed_summary"].startswith(
+        "Original scene: Hotel window portrait"
+    )
+    assert call["session_context"]["progression_stage"] == 2
+    settings = queue.update_session_settings.call_args_list[-1]
+    assert settings.kwargs["creative_hint"] == "Have her lift her shirt."
+    assert settings.kwargs["selected_inspiration"] == ""
+    assert "inspiration_ideas" not in settings.kwargs
+    queue.record_pending_recommendation.assert_called_once_with(
+        session_id="session-1", recommendation=result,
+    )
+
+
 def test_one_inspiration_selection_is_validated_and_persisted():
     session = replace(_session(), creative_continuity={
         **_session().creative_continuity, "inspiration_ideas": ("First", "Second"),
@@ -570,7 +621,7 @@ def test_creative_director_approval_uses_canonical_planner_and_existing_queue_hi
         creator_profile_id=7, session_id="session-1",
     )
     assert result["prompt"] == "Canonical explicit prompt"
-    assert director.plan_prompts.call_args.kwargs["mode"] == "explicit"
+    assert director.plan_prompts.call_args.kwargs["mode"] == "photoshoot_explicit"
     queue.record_creative_direction.assert_called_once_with(
         session_id="session-1", recommendation=recommendation, final_prompt="Canonical explicit prompt",
     )
@@ -580,7 +631,7 @@ def test_creative_director_routes_are_registered():
     from app.fanvue_callback_server import app
     paths = {getattr(route, "path", None): route.methods for route in app.routes}
     assert paths["/api/v1/photoshoot/creative-director/context"] == {"GET"}
-    for action in ("inspiration", "selection", "guidance", "recommendation", "approve", "choose-another", "planning-mode", "session-plan"):
+    for action in ("inspiration", "selection", "guidance", "recommendation", "direct-recommendation", "approve", "choose-another", "planning-mode", "session-plan"):
         assert paths[f"/api/v1/photoshoot/creative-director/{action}"] == {"POST"}
     assert paths["/api/v1/photoshoot/creative-director/session-plan/approve"] == {"POST"}
     assert paths["/api/v1/photoshoot/auto-run/runtime"] == {"GET"}
@@ -707,7 +758,11 @@ def test_creative_director_endpoints_delegate_without_ai_logic(monkeypatch):
 
 
 def test_canonical_planner_mode_mapping_preserves_safe_premium_and_explicit():
-    for creative_mode, expected_planner_mode in (("safe", "photoshoot"), ("premium", "photoshoot"), ("explicit", "explicit")):
+    for creative_mode, expected_planner_mode in (
+        ("safe", "photoshoot_safe"),
+        ("premium", "photoshoot_premium"),
+        ("explicit", "photoshoot_explicit"),
+    ):
         session = _session()
         session = SimpleNamespace(**{**session.__dict__, "creative_mode": creative_mode, "creative_continuity": {
             **session.creative_continuity, "current_direction": {"title": "Next", "creative_direction": "Continue"},

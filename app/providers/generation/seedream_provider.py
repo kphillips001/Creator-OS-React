@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from app.models.generation_engine import GenerationType
+from app.models.render_policy import RenderPolicy
 from app.providers.generation.base import ProviderCapabilities, WaveSpeedProviderBase
 
 
@@ -46,7 +47,7 @@ Image 1 controls identity. Image 2 controls Photoshoot continuity.
     def _render_prompt_text(self, request):
         prompt = super()._render_prompt_text(request)
         metadata = request.metadata or {}
-        workflow = str(metadata.get("workflow_type") or "").strip().lower()
+        policy = self._render_policy(request)
         canonical = str(
             metadata.get("canonical_reference_image_url")
             or request.reference_asset_path
@@ -55,6 +56,15 @@ Image 1 controls identity. Image 2 controls Photoshoot continuity.
         continuity = str(
             metadata.get("photoshoot_continuity_reference_image_url") or ""
         ).strip()
-        if workflow == "photoshoot" and canonical and continuity and canonical != continuity:
+        if (
+            policy in {
+                RenderPolicy.PHOTOSHOOT_SAFE,
+                RenderPolicy.PHOTOSHOOT_PREMIUM,
+                RenderPolicy.PHOTOSHOOT_EXPLICIT,
+            }
+            and canonical
+            and continuity
+            and canonical != continuity
+        ):
             return f"{prompt}\n\n{self.PHOTOSHOOT_REFERENCE_ROLE_GUIDANCE}"
         return prompt

@@ -5,6 +5,7 @@ from typing import Callable
 
 from app.models.creative_director import PromptPlan
 from app.models.generation_engine import GenerationMediaType, GenerationResult, GenerationStatus, GenerationType
+from app.models.render_policy import content_render_policy
 
 
 def plan_with_prompt_batch(plan: PromptPlan, prompts: tuple[str, ...]) -> PromptPlan:
@@ -13,7 +14,7 @@ def plan_with_prompt_batch(plan: PromptPlan, prompts: tuple[str, ...]) -> Prompt
         return plan
     return replace(
         plan,
-        prompt_text="\n\n".join(f"Prompt {index}: {prompt}" for index, prompt in enumerate(clean, 1)),
+        prompt_text="\n\n".join(clean),
         prompt_metadata={
             **dict(plan.prompt_metadata or {}),
             "prompt_variations": clean,
@@ -35,19 +36,45 @@ class ContentStudioGenerationService:
         creative_mode: str, prompt_count: int, provider_id: str,
         prompt_batch: tuple[str, ...], origin: str | None = None,
         planner_lineage: dict | None = None,
+        explicit_input: dict | None = None,
     ):
         lineage = dict(planner_lineage or {})
-        plan = self.creative_director.create_prompt_plan(
-            creator_profile=creator_profile,
-            creative_tags=creative_tags,
-            creative_mode=creative_mode,
-            prompt_count=prompt_count,
-            metadata={
-                **({"workflow_origin": origin} if origin else {}),
-                **({"planner_lineage": lineage} if lineage else {}),
-            },
-        )
-        plan = plan_with_prompt_batch(plan, prompt_batch)
+        input_contract = dict(explicit_input or {})
+        metadata = {
+            **({"workflow_origin": origin} if origin else {}),
+            **({"planner_lineage": lineage} if lineage else {}),
+            **({"explicit_input": input_contract} if input_contract else {}),
+        }
+        provider_ready_modes = {
+            "explicit", "premium_teaser", "spicy", "story_sequence"
+        }
+        if creative_mode in provider_ready_modes and prompt_batch:
+            plan = self.creative_director.create_provider_prompt_plan(
+                creator_profile=creator_profile,
+                creative_tags=creative_tags,
+                creative_mode=creative_mode,
+                prompts=prompt_batch,
+                metadata=metadata,
+            )
+        else:
+            plan = self.creative_director.create_prompt_plan(
+                creator_profile=creator_profile,
+                creative_tags=creative_tags,
+                creative_mode=creative_mode,
+                prompt_count=prompt_count,
+                metadata=metadata,
+            )
+            plan = plan_with_prompt_batch(plan, prompt_batch)
+            if creative_mode in {"premium_teaser", "spicy", "story_sequence"}:
+                from app.services.seedream_premium_render_locks import (
+                    enforce_premium_render_body_lock,
+                )
+
+                locked = tuple(
+                    enforce_premium_render_body_lock(prompt)
+                    for prompt in plan.prompt_metadata.get("prompt_variations") or ()
+                )
+                plan = plan_with_prompt_batch(plan, locked)
         variations = tuple(plan.prompt_metadata.get("prompt_variations") or ())
         job = self.generation_engine.queue_prompt_plan(
             creator_profile=creator_profile,
@@ -61,10 +88,12 @@ class ContentStudioGenerationService:
                 "workflow_type": "premium",
                 "creative_mode": creative_mode,
                 "premium_workflow": True,
+                "render_policy": content_render_policy(creative_mode).value,
                 "prompt_variations": variations,
                 "prompt_batch_count": len(variations) or prompt_count,
                 **({"workflow_origin": origin} if origin else {}),
                 **({"planner_lineage": lineage} if lineage else {}),
+                **({"explicit_input": input_contract} if input_contract else {}),
             },
         )
         return plan, job

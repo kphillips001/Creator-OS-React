@@ -12,6 +12,7 @@ import {
   type PlannerBatchProgress,
 } from "./GenerationWorkflowSections";
 import { PromptWorkshopSection } from "./PromptWorkshopSection";
+import { ExplicitContentSection } from "./ExplicitContentSection";
 import type { ContentStudioContext } from "../types/contentStudioContext";
 import type {
   CreativeToolInputs,
@@ -392,6 +393,7 @@ export function ContentStudioWorkflow({ context, error, loading }: ContentStudio
               </div>
             </div>
           </details>
+          {context && <ExplicitContentSection context={context} />}
         </>
       )}
     </div>

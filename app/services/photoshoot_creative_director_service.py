@@ -3,17 +3,22 @@
 from __future__ import annotations
 
 import base64
-import json
+import logging
 import mimetypes
+import time
 import urllib.request
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Mapping
 
+from app.models.render_policy import photoshoot_planning_mode
+from app.models.photoshoot_queue import CanonicalPhotoshootSeedSummary, PhotoshootPlanningContext
 from app.services.creative_director_service import CreativeDirectorService
 from app.services.generation_library_service import GenerationLibraryService
 from app.services.photoshoot_queue_service import PhotoshootQueueService
 from app.services.photoshoot_summary_service import PhotoshootSummaryService
+
+LOGGER = logging.getLogger("creator_os.photoshoot.approve")
 
 
 class PhotoshootCreativeDirectorWorkflowService:
@@ -367,38 +372,121 @@ class PhotoshootCreativeDirectorWorkflowService:
         self.queue.record_pending_recommendation(session_id=session_id, recommendation=payload)
         return payload
 
+    def direct_recommendation(
+        self,
+        *,
+        creator_profile_id: int,
+        session_id: str,
+        creative_mode: str,
+        operator_direction: str,
+        continuity_locks: Mapping[str, bool],
+    ) -> dict[str, Any]:
+        direction = str(operator_direction or "").strip()
+        if not direction:
+            raise ValueError("Describe what should happen in the next shot.")
+        session = self._session(creator_profile_id, session_id)
+        session = self.queue.update_session_settings(session_id, creative_mode=creative_mode)
+        continuity = dict(session.creative_continuity or {})
+        current, timeline = self._vision_context(session)
+        image_bytes, mime_type = self._image_bytes(current.output_reference)
+        summary = self.summary.refresh(session.session_id)
+        original_direction = self._original_direction(session)
+        approved_history = self._approved_history(continuity)
+        ai_context = {
+            **self._ai_context(
+                original_direction,
+                summary,
+                direction,
+                progression_stage=int(continuity.get("progression_stage") or 0),
+                timeline_image_count=len(timeline) or 1,
+            ),
+            "canonical_seed_summary": self._seed_context(
+                continuity,
+                fallback=current.prompt_text,
+            ),
+        }
+        recommendation = self.creative_director.recommend_photoshoot_direction(
+            image_bytes=image_bytes,
+            image_mime_type=mime_type,
+            session_context=ai_context,
+            approved_history=approved_history,
+            creative_mode=session.creative_mode,
+            session_direction=original_direction,
+            creative_hint=direction,
+            continuity_locks=continuity_locks,
+        )
+        payload = asdict(recommendation)
+        self.queue.update_session_settings(
+            session_id,
+            creator_guidance=direction,
+            creative_hint=direction,
+            selected_inspiration="",
+            continuity_locks=continuity_locks,
+        )
+        self.queue.record_pending_recommendation(
+            session_id=session_id,
+            recommendation=payload,
+        )
+        return payload
+
     def choose_another(self, *, creator_profile_id: int, session_id: str) -> dict[str, str]:
         self._session(creator_profile_id, session_id)
         self.queue.clear_workspace_state(session_id, workflow_stage="inspiration_ready")
         self.queue.update_session_settings(session_id, creative_hint="", selected_inspiration="")
         return {"workflow_stage": "inspiration_ready", "selected_inspiration": ""}
 
-    def approve(self, *, creator_profile_id: int, session_id: str) -> dict[str, str]:
+    def approve(self, *, creator_profile_id: int, session_id: str) -> dict[str, Any]:
+        started = time.perf_counter()
+        LOGGER.info("[Approve] START approve() session_id=%s timestamp=%.6f", session_id, time.time())
+        LOGGER.info("[Approve] Loading Photoshoot session elapsed_ms=%.2f", (time.perf_counter() - started) * 1000)
         session = self._session(creator_profile_id, session_id)
+        LOGGER.info("[Approve] Session loaded creative_mode=%s elapsed_ms=%.2f", session.creative_mode, (time.perf_counter() - started) * 1000)
         continuity = dict(session.creative_continuity or {})
+        LOGGER.info("[Approve] Continuity loaded elapsed_ms=%.2f", (time.perf_counter() - started) * 1000)
         recommendation = dict(continuity.get("current_direction") or {})
+        LOGGER.info("[Approve] Selected direction loaded present=%s elapsed_ms=%.2f", bool(recommendation), (time.perf_counter() - started) * 1000)
         if not recommendation:
             raise ValueError("Generate a Creative Director recommendation before approving it.")
         current, _ = self._vision_context(session)
         direction = self._direction_text(recommendation)
-        creative_tags = "\n".join((
+        seed_context = self._seed_context(continuity, fallback=current.prompt_text)
+        planning_context = self._planning_context(continuity)
+        # A Photoshoot approval is one selected shot concept. The explicit planner
+        # treats newline-delimited input as multiple independent concepts and
+        # derives editorial guidance for every line, so preserve the full content
+        # while presenting it as one canonical concept.
+        creative_tags = " ".join(" ".join(part.split()) for part in (
             "Photoshoot Studio continuation.", f"Creative direction: {direction}",
-            f"Seed image context: {str(current.prompt_text or '').strip() or 'Use the selected image as the canonical visual reference.'}",
-            f"Session continuity: {json.dumps(continuity, ensure_ascii=True, default=str)}",
+            f"Photoshoot Seed Summary: {seed_context}",
+            f"Session continuity: {planning_context.to_prompt_text()}",
             "Preserve continuity defaults unless the Session Direction explicitly overrides them.",
-        ))
+        ) if str(part or "").strip())
+        planning_mode = photoshoot_planning_mode(session.creative_mode)
+        LOGGER.info("[Approve] Canonical planning request built mode=%s elapsed_ms=%.2f", planning_mode, (time.perf_counter() - started) * 1000)
+        LOGGER.info("[Approve] Entering Canonical Prompt Planner elapsed_ms=%.2f", (time.perf_counter() - started) * 1000)
         result = self.creative_director.plan_prompts(
-            mode="explicit" if session.creative_mode.lower() == "explicit" else "photoshoot",
+            mode=planning_mode,
             creative_tags=creative_tags, prompt_count=1, optional_direction=direction,
             metadata={"source": "photoshoot_studio"},
         )
+        LOGGER.info("[Approve] Prompt planner complete prompt_count=%s elapsed_ms=%.2f", len(result.prompts), (time.perf_counter() - started) * 1000)
         if not result.prompts:
             raise ValueError("Canonical Prompt Planner did not return a Photoshoot prompt.")
         prompt = result.prompts[0]
+        LOGGER.info("[Approve] Persisting prompt chars=%s elapsed_ms=%.2f", len(prompt), (time.perf_counter() - started) * 1000)
         self.queue.record_creative_direction(
             session_id=session_id, recommendation=recommendation, final_prompt=prompt,
         )
-        return {"prompt": prompt, "workflow_stage": "direction_approved"}
+        LOGGER.info("[Approve] Prompt persisted elapsed_ms=%.2f", (time.perf_counter() - started) * 1000)
+        response = {
+            "prompt": prompt,
+            "recommendation": recommendation,
+            "approval_state": "approved",
+            "workflow_stage": "direction_approved",
+        }
+        LOGGER.info("[Approve] Returning approve response elapsed_ms=%.2f", (time.perf_counter() - started) * 1000)
+        LOGGER.info("[Approve] END approve() elapsed_ms=%.2f", (time.perf_counter() - started) * 1000)
+        return response
 
     def _session(self, creator_profile_id: int, session_id: str | None):
         session = self.queue.get_session(session_id) if session_id else self.queue.current_session(creator_profile_id=creator_profile_id)
@@ -438,11 +526,89 @@ class PhotoshootCreativeDirectorWorkflowService:
     def _original_direction(session) -> str:
         continuity = dict(session.creative_continuity or {})
         return str(
-            continuity.get("original_photoshoot_direction")
-            or continuity.get("seed_prompt_text")
+            continuity.get("seed_prompt_text")
+            or continuity.get("original_photoshoot_direction")
             or session.creator_notes
             or "Continue the selected seed as one cohesive photoshoot."
         ).strip()
+
+    @staticmethod
+    def _seed_prompt(continuity: Mapping[str, Any], *, fallback: str = "") -> str:
+        return str(
+            continuity.get("seed_prompt_text")
+            or continuity.get("original_photoshoot_direction")
+            or fallback
+            or "Use the selected image as the canonical visual reference."
+        ).strip()
+
+    @classmethod
+    def _seed_context(cls, continuity: Mapping[str, Any], *, fallback: str = "") -> str:
+        summary = continuity.get("canonical_seed_summary")
+        if isinstance(summary, Mapping) and str(summary.get("scene") or "").strip():
+            return CanonicalPhotoshootSeedSummary.from_dict(summary).to_prompt_text()
+        if isinstance(summary, str) and summary.strip():
+            return summary.strip()
+        return cls._seed_prompt(continuity, fallback=fallback)
+
+    @classmethod
+    def _planning_context(cls, continuity: Mapping[str, Any]) -> PhotoshootPlanningContext:
+        summary = dict(continuity.get("photoshoot_summary") or {})
+        defaults = dict(continuity.get("session_defaults") or {})
+        approved = cls._approved_history(continuity)
+        latest_direction = cls._direction_text(approved[-1]) if approved else ""
+        return PhotoshootPlanningContext(
+            photoshoot_summary=str(summary.get("summary_text") or summary.get("overall_theme") or "").strip(),
+            latest_approved_direction=latest_direction,
+            current_wardrobe=str(
+                summary.get("current_wardrobe")
+                or defaults.get("wardrobe")
+                or "Preserve the established wardrobe."
+            ).strip(),
+            current_location=str(
+                summary.get("current_location")
+                or defaults.get("location")
+                or "Preserve the established location."
+            ).strip(),
+            current_lighting=str(
+                summary.get("lighting")
+                or defaults.get("lighting")
+                or "Preserve the established lighting."
+            ).strip(),
+            camera_style=str(
+                summary.get("visual_style")
+                or defaults.get("camera_style")
+                or "Preserve the established camera style."
+            ).strip(),
+            hairstyle=str(
+                defaults.get("hairstyle")
+                or "Preserve the established hairstyle unless overridden."
+            ).strip(),
+            makeup=str(
+                defaults.get("makeup")
+                or "Preserve the established makeup unless overridden."
+            ).strip(),
+            continuity_locks={
+                str(key): bool(value)
+                for key, value in dict(continuity.get("continuity_locks") or {}).items()
+            },
+            progression_stage=max(0, int(continuity.get("progression_stage") or 0)),
+            operator_guidance=str(
+                continuity.get("creator_guidance")
+                or continuity.get("grok_guidance")
+                or ""
+            ).strip(),
+            required_identity_instructions=str(
+                defaults.get("identity_continuity")
+                or "Preserve the same creator identity, face, body, skin tone, and proportions."
+            ).strip(),
+            latest_approved_shot_reference=(
+                "Use the latest approved Photoshoot image supplied downstream as the visual continuity reference."
+            ),
+            repetition_avoidance=str(
+                summary.get("avoid_repetition")
+                or "Avoid repeating the seed composition; vary pose, framing, expression, and hand placement."
+            ).strip(),
+        )
 
     @staticmethod
     def _approved_history(continuity: Mapping[str, Any]) -> tuple[dict[str, Any], ...]:
