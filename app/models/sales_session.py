@@ -44,6 +44,13 @@ class SalesSessionActorType(str, Enum):
     SYSTEM = "SYSTEM"
 
 
+class SalesSessionFoundationType(str, Enum):
+    """Approved Version 1 commercial experience origins."""
+
+    PHOTOSHOOT = "PHOTOSHOOT"
+    CONVERSATION = "CONVERSATION"
+
+
 ACTIVE_SALES_SESSION_STATES = frozenset({
     SalesSessionState.ACTIVE,
     SalesSessionState.OFFERING,
@@ -61,8 +68,8 @@ class SalesSession:
     external_fanvue_user_uuid: UUID
     telegram_identity_mapping_id: int | None
     conversation_thread_id: int | None
-    commercial_foundation_type: str
-    commercial_foundation_reference: str
+    commercial_foundation_type: SalesSessionFoundationType
+    commercial_foundation_reference: str | None
     state: SalesSessionState
     progression_stage: SalesSessionProgression
     objective: str | None

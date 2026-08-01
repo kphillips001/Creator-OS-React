@@ -12,6 +12,8 @@ const customer = {
   journey: { stage: "RELATIONSHIP_BUILDING" }, commerceAndOwnership: { entitlement_count: 2 }, recommendationHistory: { offer_count: 1 },
   conversationSummary: { message_count: 12 }, buyerSession: { active_session: true }, retentionAndGrowth: { retention_risk: "HEALTHY" },
   businessGuidance: { next_recommended_action: "Continue relationship building" },
+  salesSessions: [{ salesSessionId: "session-1", commercialFoundationType: "CONVERSATION", conversationThreadId: "thread-1" }],
+  customerIntelligenceProfile: { profile_state: "PARTIAL", identity_confidence: 1, facts: [{ authority: "Purchase Intents", record_id: "intent-1" }], spending_profile: { USD: { value: 4200 } }, purchase_preferences: [{ subject: "PHOTOSET" }], media_preferences: [], classifications: [{ label: "PURCHASER" }], recommendation_history: { presented_count: 1 }, opportunities: [{ type: "REPEATED_VIDEO_PURCHASE", provenance: { source_ids: ["video-0", "video-1"], aggregate_evidence: false } }], section_states: { spending: "SUFFICIENT", ownership: "UNAVAILABLE" }, section_state_reasons: { ownership: ["SOURCE_UNAVAILABLE:ownership:RuntimeError", "EXCLUDED_EVIDENCE_COUNT:1"] }, conflicts: [], insufficiencies: ["SOURCE_UNAVAILABLE:ownership:RuntimeError"], provenance: { included_evidence_count: 4, source_failures: { ownership: "RuntimeError" } } },
 };
 const listing = { items: [customer], summary: { total: 1, active: 1, purchasers: 1, highValue: 1, atRisk: 0, activeSessions: 1 }, total: 1, page: 1, pageSize: 24, totalPages: 1 };
 const response = (body: unknown, ok = true) => Promise.resolve({ ok, json: () => Promise.resolve(body) } as Response);
@@ -27,7 +29,12 @@ describe("BusinessCustomersPage", () => {
     expect(screen.getByText("Active buyer session")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "View details" }));
     expect(await screen.findByRole("complementary", { name: "Customer details" })).toBeInTheDocument();
-    for (const heading of ["Identity", "Relationship", "Customer Value", "Journey", "Commerce and Ownership", "Recommendation History", "Conversation Summary", "Buyer Session", "Retention and Growth", "Business Guidance"]) expect(screen.getByRole("heading", { name: heading })).toBeInTheDocument();
+    for (const heading of ["Identity", "Relationship", "Customer Value", "Journey", "Commerce and Ownership", "Recommendation History", "Conversation Summary", "Buyer Session", "Sales Session History", "Retention and Growth", "Business Guidance", "Customer Intelligence Profile"]) expect(screen.getByRole("heading", { name: heading })).toBeInTheDocument();
+    expect(screen.getByRole("complementary", { name: "Customer details" })).toHaveTextContent("CONVERSATION");
+    for (const heading of ["Authoritative facts", "Derived metrics", "Inferred preferences", "Classifications", "Interpreted opportunities and risks", "Historical decisions", "Provenance, conflicts, and insufficiencies"]) expect(screen.getByRole("heading", { name: heading })).toBeInTheDocument();
+    expect(screen.getByText("Identity confidence").nextSibling).toHaveTextContent("100%");
+    expect(screen.getByRole("complementary", { name: "Customer details" })).toHaveTextContent("UNAVAILABLE");
+    expect(screen.getByRole("complementary", { name: "Customer details" })).toHaveTextContent("video-0");
     expect(screen.queryByRole("button", { name: /edit|message|offer|fulfill|relationship/i })).not.toBeInTheDocument();
   });
 

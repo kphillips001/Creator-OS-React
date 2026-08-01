@@ -14,12 +14,10 @@ import { InspirationProgressPanel } from "./InspirationProgressPanel";
 type GenerationWorkflowSectionsProps = {
   context: ContentStudioContext;
   disabled: boolean;
-  onAskAnotherQuestion: () => void;
-  onContinueExploring: () => void;
   onManualGenerationStart?: () => void;
   onRunStart?: () => void;
   onPlannerBatchItemChange?: (id: string, changes: Partial<PlannerBatchItem>) => void;
-  onStartNewSession: () => void;
+  onStartNewGeneration?: () => void;
   plannerBatchItems?: PlannerBatchItem[];
   plannerBatchProgress?: PlannerBatchProgress | null;
   plannerBatchRunning?: boolean;
@@ -38,6 +36,7 @@ export type PlannerBatchProgress = {
 export type GenerationWorkflowHandle = {
   generate: (overrides?: Partial<Omit<GenerationSubmission, "creatorContext">> & { batchItemId?: string }) => Promise<boolean>;
   inspire: () => Promise<boolean>;
+  reset: () => void;
 };
 
 const TERMINAL = new Set(["succeeded", "partial", "failed"]);
@@ -61,8 +60,8 @@ export function inspirationProgressStage(
 }
 
 export const GenerationWorkflowSections = forwardRef<GenerationWorkflowHandle, GenerationWorkflowSectionsProps>(function GenerationWorkflowSections({
-  context, disabled, onAskAnotherQuestion, onContinueExploring, onManualGenerationStart, onPlannerBatchItemChange, onRunStart,
-  onStartNewSession, plannerBatchItems = [], plannerBatchProgress = null, plannerBatchRunning = false, request, workflow,
+  context, disabled, onManualGenerationStart, onPlannerBatchItemChange, onRunStart,
+  onStartNewGeneration, plannerBatchItems = [], plannerBatchProgress = null, plannerBatchRunning = false, request, workflow,
 }, ref) {
   const [runId, setRunId] = useState("");
   const [generation, setGeneration] = useState<ContentStudioGeneration | null>(null);
@@ -72,6 +71,18 @@ export const GenerationWorkflowSections = forwardRef<GenerationWorkflowHandle, G
   const [autonomousRun, setAutonomousRun] = useState(false);
   const completionRef = useRef<((succeeded: boolean) => void) | null>(null);
   const activeBatchItemIdRef = useRef<string | null>(null);
+
+  function reset() {
+    completionRef.current?.(false);
+    completionRef.current = null;
+    activeBatchItemIdRef.current = null;
+    setRunId("");
+    setGeneration(null);
+    setSubmitting(false);
+    setError("");
+    setReservedCount(request.promptCount);
+    setAutonomousRun(false);
+  }
 
   useEffect(() => {
     if (!runId || (generation && TERMINAL.has(generation.status))) return;
@@ -169,7 +180,7 @@ export const GenerationWorkflowSections = forwardRef<GenerationWorkflowHandle, G
     return completion;
   }
 
-  useImperativeHandle(ref, () => ({ generate, inspire }));
+  useImperativeHandle(ref, () => ({ generate, inspire, reset }));
 
   useEffect(() => {
     if (!generation || !TERMINAL.has(generation.status)) return;
@@ -202,11 +213,15 @@ export const GenerationWorkflowSections = forwardRef<GenerationWorkflowHandle, G
   const showInspirationProgress = autonomousRun && active && inspirationStage < 4;
   const showLiveGeneration = !autonomousRun || inspirationStage >= 4 || !active;
   const slotCount = runId ? reservedCount : request.promptCount;
-  const showNextStep = Boolean(
-    generation && NEXT_STEP_STATUSES.has(generation.status) && generation.images.length > 0
-    && !autonomousRun
-    && (!plannerBatchProgress || plannerBatchProgress.phase === "complete"),
-  );
+  const generationComplete = plannerBatchProgress
+    ? plannerBatchProgress.totalIdeas > 0
+      && plannerBatchProgress.completedIdeas === plannerBatchProgress.totalIdeas
+    : Boolean(
+        generation
+        && generation.totalCount > 0
+        && generation.completedCount === generation.totalCount,
+      );
+  const showCompletion = generationComplete && !autonomousRun;
   const aggregateProcessed = plannerBatchProgress
     ? plannerBatchProgress.completedIdeas + plannerBatchProgress.failedIdeas
     : 0;
@@ -347,15 +362,21 @@ export const GenerationWorkflowSections = forwardRef<GenerationWorkflowHandle, G
             })}
           </div>
         )}
-        {showNextStep && <section aria-label="Next Step" className="generation-next-step">
-          <h2>Next Step</h2>
-          <p>Continue building on this creative direction or begin a new one.</p>
-          <div className="generation-next-step__actions">
-            <button onClick={onContinueExploring} type="button"><strong>✨ Continue Exploring</strong><span>Continue using ideas from the current Creative Director response.</span></button>
-            <button onClick={onAskAnotherQuestion} type="button"><strong>📝 Ask Another Question</strong><span>Continue brainstorming within the current creative conversation.</span></button>
-            <button onClick={onStartNewSession} type="button"><strong>🗑 Start New Session</strong><span>Begin a completely new creative direction.</span></button>
-          </div>
-        </section>}
+        {showCompletion && (
+          <section aria-label="Generation Complete" className="generation-complete">
+            <h2>✓ Generation Complete</h2>
+            <button
+              className="generation-complete__button"
+              onClick={() => {
+                reset();
+                onStartNewGeneration?.();
+              }}
+              type="button"
+            >
+              Start New Generation
+            </button>
+          </section>
+        )}
       </section>}
     </>
   );

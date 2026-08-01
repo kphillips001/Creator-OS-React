@@ -176,7 +176,7 @@ class FanvueMediaLinkPublicationExecutor:
             raise ValueError("Commercial Offering is unavailable or archived.")
         if offering.primary_sales_channel != PrimarySalesChannel.AI_CHAT:
             raise ValueError("Fanvue Media Links are only available for AI_CHAT offerings.")
-        if offering.offering_type.value in {"STORY", "STORY_SET", "BUNDLE"}:
+        if offering.offering_type.value in {"STORY", "STORY_SET"}:
             raise ValueError("This offering type is not supported by Fanvue Media Link execution.")
         if offering.price_minor is None or not 300 <= offering.price_minor <= 50000:
             raise ValueError("A valid price is required before publication.")

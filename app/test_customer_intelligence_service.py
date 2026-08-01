@@ -20,7 +20,9 @@ from app.models.telegram_commerce import (
     TelegramConversationState,
     TelegramExperienceProgression,
 )
-from app.services.customer_intelligence_service import CustomerIntelligenceService
+from app.services.customer_intelligence_service import (
+    CustomerIntelligenceCompatibilityAdapter as CustomerIntelligenceService,
+)
 
 
 class FakeCustomerService:
@@ -775,7 +777,7 @@ class CustomerIntelligenceServiceTests(unittest.TestCase):
         )
         self.assertEqual(
             enriched.compatibility_metadata["enriched_by"],
-            "CustomerIntelligenceService",
+            "CustomerIntelligenceCompatibilityAdapter",
         )
 
     def test_customer_review_generation(self):

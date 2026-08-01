@@ -261,7 +261,7 @@ class SalesManagementServiceTests(unittest.TestCase):
         )
         self.assertEqual(
             compatibility["customer_intelligence_owner"],
-            "CustomerIntelligenceService",
+            "CustomerIntelligenceCompatibilityAdapter",
         )
 
 

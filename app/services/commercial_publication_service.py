@@ -203,6 +203,25 @@ class CommercialPublicationService:
                     + ", ".join(map(str, inconsistent))
                 )
             return
+        if offering.offering_type == CommercialOfferingType.BUNDLE:
+            allowed = {
+                ContentDestination.BUNDLE,
+                ContentDestination.PHOTOSET,
+                ContentDestination.SINGLE_PPV,
+                ContentDestination.VIDEOSET,
+            }
+            inconsistent = [
+                asset_id for asset_id in asset_ids
+                if self.content_destinations.get_destination(
+                    asset_id, connection=connection
+                ).destination not in allowed
+            ]
+            if inconsistent:
+                raise ValueError(
+                    "BUNDLE membership is not commercially committed: "
+                    + ", ".join(map(str, inconsistent))
+                )
+            return
         raise ValueError(
             f"No LIVE commitment rule exists for {offering.offering_type.value}."
         )

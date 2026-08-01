@@ -144,6 +144,12 @@ export const navigationGroups: NavigationGroup[] = [
     label: "Business",
     items: [
       {
+        label: "Commercial Administration",
+        path: "/commercial-administration",
+        icon: ShieldCheck,
+        description: "Operate the creator-scoped commercial platform from one supported workspace.",
+      },
+      {
         label: "Commerce",
         path: "/commerce",
         icon: BadgeDollarSign,

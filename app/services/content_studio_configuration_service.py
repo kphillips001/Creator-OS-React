@@ -10,7 +10,6 @@ from app.services.generation_engine_service import GenerationEngineService
 
 PREMIUM_PROVIDER_LABELS = {
     "seedream_5_0_pro": "Seedream 5.0 Pro",
-    "future_provider": "Future Provider",
 }
 
 PREMIUM_CREATIVE_MODE_LABELS = {
@@ -33,14 +32,14 @@ def premium_studio_provider_options(
     registry = getattr(generation_engine, "provider_registry", None)
     provider_ids = tuple(getattr(registry, "provider_ids", lambda: ())())
     if not provider_ids:
-        return (("future_provider", PREMIUM_PROVIDER_LABELS["future_provider"]),)
+        return ()
     registered_provider_ids = set(provider_ids)
     options = [
         (provider_id, PREMIUM_PROVIDER_LABELS[provider_id])
         for provider_id in PREMIUM_STUDIO_PROVIDER_ORDER
         if provider_id in registered_provider_ids
     ]
-    return tuple(options) or (("future_provider", PREMIUM_PROVIDER_LABELS["future_provider"]),)
+    return tuple(options)
 
 
 def default_provider_index(
@@ -85,6 +84,8 @@ class ContentStudioConfigurationService:
             PREMIUM_STUDIO_PROMPT_COUNT_MAXIMUM,
         )
         providers = premium_studio_provider_options(self.generation_engine)
+        if not providers:
+            raise RuntimeError("No active Content Studio generation provider is registered.")
         provider_ids = tuple(provider_id for provider_id, _ in providers)
         default_provider = provider_ids[
             default_provider_index(

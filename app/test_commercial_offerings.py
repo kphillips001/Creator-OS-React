@@ -52,18 +52,25 @@ class Offerings:
         )
 
 
+class Photoshoots:
+    def common_approved_photoshoot(self, asset_ids):
+        return "photoshoot-1" if len(asset_ids) >= 2 else None
+
+
 @pytest.mark.parametrize("offering_type,media", [
     ("SINGLE_IMAGE", {1: "image"}),
     ("PHOTOSET", {1: "image", 2: "image"}),
     ("VIDEO", {1: "video"}),
     ("STORY", {1: "story"}),
     ("STORY_SET", {1: "story", 2: "story"}),
+    ("BUNDLE", {1: "image", 2: "video"}),
 ])
 def test_create_supported_offering_shapes(offering_type, media):
     repository = Offerings()
     service = CommercialOfferingService(
         repository=repository, asset_repository=Assets(media),
         content_destinations=Destinations(),
+        photoshoot_repository=Photoshoots(),
     )
     result = service.create(
         creator_profile_id=7, offering_type=offering_type, title="Launch",
@@ -72,10 +79,10 @@ def test_create_supported_offering_shapes(offering_type, media):
     )
     assert result.offering_type.value == offering_type
     assert tuple(member.asset_id for member in result.assets) == tuple(media)
-    if offering_type == "PHOTOSET":
+    if offering_type in {"PHOTOSET", "BUNDLE"}:
         assert [item[0] for item in service.content_destinations.committed] == list(media)
         assert all(
-            item[1].value == "PHOTOSET"
+            item[1].value == offering_type
             and item[2]["source_workflow"] == "commercial_offering_creation"
             for item in service.content_destinations.committed
         )
@@ -94,6 +101,7 @@ def test_invalid_counts_and_media_types_are_rejected(offering_type, media):
     service = CommercialOfferingService(
         repository=Offerings(), asset_repository=Assets(media),
         content_destinations=Destinations(),
+        photoshoot_repository=Photoshoots(),
     )
     with pytest.raises(ValueError, match="requires"):
         service.create(
@@ -107,6 +115,7 @@ def test_invalid_channel_duplicate_membership_and_committed_asset_are_rejected()
     service = CommercialOfferingService(
         repository=Offerings(), asset_repository=Assets({1: "image"}),
         content_destinations=Destinations(),
+        photoshoot_repository=Photoshoots(),
     )
     common = dict(creator_profile_id=7, offering_type="SINGLE_IMAGE", title="One",
                   description=None, hero_asset_id=1)
@@ -118,11 +127,29 @@ def test_invalid_channel_duplicate_membership_and_committed_asset_are_rejected()
     with pytest.raises(ValueError, match="already commercially committed"):
         service.create(**common, primary_sales_channel="AI_CHAT", asset_ids=[1])
     service.content_destinations = Destinations()
-    with pytest.raises(ValueError, match="reserved"):
+    with pytest.raises(ValueError, match="requires"):
         service.create(
             **{**common, "offering_type": "BUNDLE"},
             primary_sales_channel="AI_CHAT", asset_ids=[1],
         )
+
+
+def test_bundle_reuses_already_committed_canonical_assets():
+    destinations = Destinations(False)
+    service = CommercialOfferingService(
+        repository=Offerings(),
+        asset_repository=Assets({1: "image", 2: "image"}),
+        content_destinations=destinations,
+        photoshoot_repository=Photoshoots(),
+    )
+    result = service.create(
+        creator_profile_id=7, offering_type="BUNDLE", title="Full Set",
+        description=None, hero_asset_id=1, primary_sales_channel="AI_CHAT",
+        asset_ids=[1, 2],
+    )
+    assert result.offering_type is CommercialOfferingType.BUNDLE
+    assert tuple(member.asset_id for member in result.assets) == (1, 2)
+    assert destinations.committed == []
 
 
 def test_reference_asset_cannot_become_a_commercial_offering():

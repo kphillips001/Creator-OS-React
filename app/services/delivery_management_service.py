@@ -25,7 +25,7 @@ from app.models.telegram_business import TelegramBusinessSnapshot
 if TYPE_CHECKING:
     from app.services.commerce_execution_service import CommerceExecutionService
     from app.services.conversation_operations_service import ConversationOperationsService
-    from app.services.customer_intelligence_service import CustomerIntelligenceService
+    from app.services.customer_intelligence_service import CustomerIntelligenceCompatibilityAdapter as CustomerIntelligenceService
     from app.services.product_availability_service import ProductAvailabilityService
     from app.services.publishing_service import PublishingService
     from app.services.sales_management_service import SalesManagementService
@@ -473,7 +473,7 @@ class DeliveryManagementService:
             "product_availability_owner": "ProductAvailabilityService",
             "commerce_execution_owner": "CommerceExecutionService",
             "publishing_owner": "PublishingService",
-            "customer_intelligence_owner": "CustomerIntelligenceService",
+            "customer_intelligence_owner": "CustomerIntelligenceCompatibilityAdapter",
             "sources_consumed": {key: value is not None for key, value in sources.items()},
         }
 

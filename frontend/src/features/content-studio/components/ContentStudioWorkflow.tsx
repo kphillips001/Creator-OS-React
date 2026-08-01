@@ -63,6 +63,7 @@ export function ContentStudioWorkflow({ context, error, loading }: ContentStudio
   const plannerBatchInFlight = useRef(false);
   const manualWorkflowInFlight = useRef(false);
   const queuedGenerationResolver = useRef<((succeeded: boolean) => void) | null>(null);
+  const creativeStudioRef = useRef<HTMLDetailsElement>(null);
   const [promptCount, setPromptCount] = useState<number | null>(null);
   const [creativeMode, setCreativeMode] = useState<string | null>(null);
   const [creativeInputs, setCreativeInputs] = useState<CreativeToolInputs>(EMPTY_CREATIVE_INPUTS);
@@ -231,6 +232,26 @@ export function ContentStudioWorkflow({ context, error, loading }: ContentStudio
     }
   };
 
+  const startNewGeneration = useCallback(() => {
+    generationStartedIdeaId.current = null;
+    plannerBatchInFlight.current = false;
+    manualWorkflowInFlight.current = false;
+    queuedGenerationResolver.current?.(false);
+    queuedGenerationResolver.current = null;
+    setPlannerBatchItems([]);
+    setPlannerBatchProgress(null);
+    setPlannerBatchRunning(false);
+    setQueuedIdeaGeneration(null);
+    setActivePlannerGeneration(null);
+    setManualGenerationActivated(false);
+    setManualWorkflowPending(false);
+    setManualWorkflowError("");
+    setCreativeStudioOpen(true);
+    window.requestAnimationFrame(() => {
+      creativeStudioRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }, []);
+
   return (
     <div className="content-studio__workflow">
       {blocked && <ActiveReferenceSection context={context} error={error} loading={loading} />}
@@ -267,10 +288,7 @@ export function ContentStudioWorkflow({ context, error, loading }: ContentStudio
                 <GenerationWorkflowSections
                   context={context}
                   disabled={ideaGenerationDisabled}
-                  onAskAnotherQuestion={() => undefined}
-                  onContinueExploring={() => undefined}
                   onRunStart={() => setInspirationActivated(true)}
-                  onStartNewSession={() => undefined}
                   request={{
                     creativeMode: creativeMode ?? "",
                     promptBatch: [],
@@ -290,6 +308,7 @@ export function ContentStudioWorkflow({ context, error, loading }: ContentStudio
             className="creative-studio"
             onToggle={(event) => setCreativeStudioOpen(event.currentTarget.open)}
             open={creativeStudioOpen}
+            ref={creativeStudioRef}
           >
             <summary>
               <span>🎨 Creative Studio</span>
@@ -359,12 +378,10 @@ export function ContentStudioWorkflow({ context, error, loading }: ContentStudio
                   <GenerationWorkflowSections
                     context={context}
                     disabled={generationDisabled}
-                    onAskAnotherQuestion={() => plannerRef.current?.askAnotherQuestion()}
-                    onContinueExploring={() => plannerRef.current?.continueExploring()}
                     onManualGenerationStart={() => setPlannerBatchProgress(null)}
                     onRunStart={() => setManualGenerationActivated(true)}
                     onPlannerBatchItemChange={updatePlannerBatchItem}
-                    onStartNewSession={() => plannerRef.current?.startNewSession()}
+                    onStartNewGeneration={startNewGeneration}
                     plannerBatchProgress={plannerBatchProgress}
                     plannerBatchItems={plannerBatchItems}
                     plannerBatchRunning={plannerBatchRunning}
@@ -393,7 +410,12 @@ export function ContentStudioWorkflow({ context, error, loading }: ContentStudio
               </div>
             </div>
           </details>
-          {context && <ExplicitContentSection context={context} />}
+          {context && (
+            <ExplicitContentSection
+              context={context}
+              onStartNewGeneration={startNewGeneration}
+            />
+          )}
         </>
       )}
     </div>

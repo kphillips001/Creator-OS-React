@@ -335,6 +335,8 @@ def test_telegram_intent_wraps_delivery_without_exposing_id():
     result = type("Result", (), {
         "correlation_id": "telegram:22:5",
         "diagnostic_metadata": {
+            "final_offer_authorized": True,
+            "customer_sales_brain_evaluated": True,
             "offering_selected": True, "offering_id": str(uuid4()),
             "publication_id": str(uuid4()), "provider": "FANVUE",
             "provider_resource_id": "link-1",

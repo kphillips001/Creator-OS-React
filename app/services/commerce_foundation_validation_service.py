@@ -5,6 +5,10 @@ from collections.abc import Callable
 from dataclasses import asdict, dataclass
 
 from app.database import get_db_connection
+from app.services.legacy_commerce_migration_service import (
+    LegacyCommerceMigrationService,
+    MigrationMode,
+)
 
 
 @dataclass(frozen=True)
@@ -19,6 +23,9 @@ class CommerceValidationResult:
     non_draft_asset_ids: tuple[int, ...]
     invalid_product_asset_pairs: tuple[str, ...]
     orphan_product_asset_pairs: tuple[str, ...]
+    classified_legacy_record_count: int
+    excluded_legacy_record_ids: tuple[int, ...]
+    blocked_legacy_record_ids: tuple[int, ...]
 
 
 class CommerceFoundationValidationService:
@@ -26,6 +33,9 @@ class CommerceFoundationValidationService:
         self._connection_factory = connection_factory
 
     def validate(self) -> CommerceValidationResult:
+        migration = LegacyCommerceMigrationService(
+            self._connection_factory
+        ).run(MigrationMode.REVALIDATE)
         with self._connection_factory() as conn:
             with conn.cursor() as cursor:
                 cursor.execute("SELECT COUNT(*) AS count FROM public.content_items")
@@ -123,9 +133,20 @@ class CommerceFoundationValidationService:
                     for row in cursor.fetchall()
                 )
 
+        excluded = tuple(
+            item.legacy_record_id for item in migration.decisions
+            if item.commerce_action in {"NONE", "ASSET_ONLY"}
+        )
+        blocked = tuple(
+            item.legacy_record_id for item in migration.decisions
+            if item.commerce_action == "BLOCKED"
+        )
+        # Legacy Assets do not require one Product each. Certification requires
+        # complete deterministic classification plus structurally valid
+        # canonical compositions and no unresolved active sellable record.
         valid = (
-            content_count == product_count == product_asset_count == linked_count
-            and not missing
+            migration.certification_valid
+            and len(migration.decisions) == content_count
             and not invalid
             and not orphaned
         )
@@ -140,6 +161,9 @@ class CommerceFoundationValidationService:
             non_draft_asset_ids=non_draft,
             invalid_product_asset_pairs=invalid,
             orphan_product_asset_pairs=orphaned,
+            classified_legacy_record_count=len(migration.decisions),
+            excluded_legacy_record_ids=excluded,
+            blocked_legacy_record_ids=blocked,
         )
 
 

@@ -57,7 +57,7 @@ class CommerceOutcomeSynchronizationService:
             business_learning_service = BusinessLearningService()
         if customer_intelligence_service is None:
             from app.services.customer_intelligence_service import (
-                CustomerIntelligenceService,
+                CustomerIntelligenceCompatibilityAdapter as CustomerIntelligenceService,
             )
 
             customer_intelligence_service = CustomerIntelligenceService()

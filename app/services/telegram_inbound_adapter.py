@@ -42,6 +42,7 @@ class TelegramInboundAdapter:
         creator_profile_id: int | None = None,
         fanvue_account_id: int | None = None,
         purchase_intent_service=None,
+        conversation_thread_resolver=None,
     ) -> None:
         if identity_adapter is None:
             raise ValueError("identity_adapter is required")
@@ -52,6 +53,7 @@ class TelegramInboundAdapter:
         self._creator_profile_id = creator_profile_id
         self._fanvue_account_id = fanvue_account_id
         self._purchase_intents = purchase_intent_service
+        self._conversation_thread_resolver = conversation_thread_resolver
 
     def execute(
         self,
@@ -92,6 +94,24 @@ class TelegramInboundAdapter:
                 )
             )
 
+        canonical_identity = None
+        canonical_thread = None
+        identity_repository = getattr(
+            self._purchase_intents, "identities", None
+        )
+        if identity_repository is not None:
+            canonical_identity = identity_repository.get_by_telegram_user_id(
+                payload.telegram_user_id
+            )
+        if (
+            canonical_identity is not None
+            and self._conversation_thread_resolver is not None
+        ):
+            canonical_thread = self._conversation_thread_resolver(
+                fanvue_account_id=canonical_identity.fanvue_account_id,
+                fanvue_user_id=canonical_identity.local_fanvue_user_id,
+            )
+
         gateway_output = self._conversation_gateway.execute(
             ConversationGatewayInput(
                 engine_user_id=identity.engine_user_id,
@@ -104,6 +124,18 @@ class TelegramInboundAdapter:
                     conversation_identifier=correlation_id,
                     telegram_user_id=payload.telegram_user_id,
                     fanvue_account_id=self._fanvue_account_id,
+                    fanvue_user_id=(
+                        canonical_identity.local_fanvue_user_id
+                        if canonical_identity else None
+                    ),
+                    external_fanvue_buyer_uuid=(
+                        str(canonical_identity.external_fanvue_user_uuid)
+                        if canonical_identity else None
+                    ),
+                    conversation_thread_id=(
+                        int(canonical_thread["id"])
+                        if canonical_thread else None
+                    ),
                     purchase_acknowledgement_pending=(
                         acknowledgement is not None
                     ),

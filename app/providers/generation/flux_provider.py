@@ -36,7 +36,10 @@ class FluxProvider(GenerationProvider):
             endpoint=None,
             enabled=False,
             capabilities=self.capabilities,
-            metadata={"reason": "No Flux provider implementation was present in Wavespeed_App."},
+            metadata={
+                "lifecycle": "FUTURE",
+                "reason": "No Flux provider implementation was present in Wavespeed_App.",
+            },
         )
 
     def validate_request(self, request: GenerationRequest) -> None:

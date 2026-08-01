@@ -22,9 +22,23 @@ function DetailValue({ value }: { value: unknown }) {
   return <span>{String(value)}</span>;
 }
 
-function DetailSection({ heading, data }: { heading: string; data: Record<string, unknown> | undefined }) {
+function DetailSection({ heading, data }: { heading: string; data: Record<string, unknown> | Record<string, unknown>[] | undefined }) {
   const entries = Object.entries(data || {}).filter(([key]) => !["metadata", "compatibility", "compatibility_metadata"].includes(key)).slice(0, 14);
   return <section className="customer-detail__section"><h3>{heading}</h3>{entries.length ? <dl>{entries.map(([key, value]) => <div key={key}><dt>{title(key)}</dt><dd><DetailValue value={value} /></dd></div>)}</dl> : <p>No information recorded.</p>}</section>;
+}
+
+function IntelligenceEvidence({ profile }: { profile: Record<string, unknown> | undefined }) {
+  if (!profile) return <DetailSection heading="Customer Intelligence Profile" data={profile} />;
+  const groups: [string, unknown][] = [
+    ["Authoritative facts", profile.facts],
+    ["Derived metrics", { spending: profile.spending_profile, sessions: profile.session_profile, media: profile.video_conversion, bundles: profile.bundle_behavior, engagement: profile.engagement_profile }],
+    ["Inferred preferences", { purchase: profile.purchase_preferences, media: profile.media_preferences }],
+    ["Classifications", profile.classifications],
+    ["Interpreted opportunities and risks", { opportunities: profile.opportunities, risks: profile.risks }],
+    ["Historical decisions", profile.recommendation_history],
+  ];
+  const count = (value: unknown) => Array.isArray(value) ? value.length : value && typeof value === "object" ? Object.keys(value as Record<string, unknown>).length : value == null ? 0 : 1;
+  return <section className="customer-detail__section customer-intelligence-evidence"><h3>Customer Intelligence Profile</h3><dl><div><dt>Profile state</dt><dd><DetailValue value={profile.profile_state} /></dd></div><div><dt>Identity confidence</dt><dd>{Math.round(Number(profile.identity_confidence || 0) * 100)}%</dd></div><div><dt>Section states</dt><dd><DetailValue value={profile.section_states} /></dd></div></dl>{groups.map(([heading, value]) => <article key={heading}><h4>{heading}</h4><p>{count(value)} canonical record{count(value) === 1 ? "" : "s"}</p><details><summary>Technical evidence details</summary><pre>{JSON.stringify(value ?? null, null, 2)}</pre></details></article>)}<article><h4>Provenance, conflicts, and insufficiencies</h4><dl><div><dt>Conflicts</dt><dd><DetailValue value={profile.conflicts} /></dd></div><div><dt>Insufficiencies</dt><dd><DetailValue value={profile.insufficiencies} /></dd></div><div><dt>Calculation metadata</dt><dd><DetailValue value={profile.calculation_metadata} /></dd></div></dl><details><summary>Technical provenance details</summary><pre>{JSON.stringify(profile.provenance ?? null, null, 2)}</pre></details></article></section>;
 }
 
 export function BusinessCustomersPage() {
@@ -106,8 +120,10 @@ export function BusinessCustomersPage() {
       <DetailSection heading="Recommendation History" data={selected.recommendationHistory} />
       <DetailSection heading="Conversation Summary" data={selected.conversationSummary} />
       <DetailSection heading="Buyer Session" data={selected.buyerSession} />
+      <DetailSection heading="Sales Session History" data={selected.salesSessions} />
       <DetailSection heading="Retention and Growth" data={selected.retentionAndGrowth} />
       <DetailSection heading="Business Guidance" data={selected.businessGuidance} />
+      <IntelligenceEvidence profile={selected.customerIntelligenceProfile} />
     </div></aside>}
   </section>;
 }

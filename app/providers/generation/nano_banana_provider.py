@@ -7,6 +7,7 @@ from app.providers.generation.base import ProviderCapabilities, WaveSpeedProvide
 
 
 class NanoBananaProvider(WaveSpeedProviderBase):
+    lifecycle = "COMPATIBILITY"
     provider_id = "nano_banana"
     display_name = "Google Nano Banana 2 Edit"
     endpoint = "https://api.wavespeed.ai/api/v3/google/nano-banana-2/edit"

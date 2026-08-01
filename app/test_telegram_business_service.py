@@ -315,7 +315,7 @@ class TelegramBusinessServiceTests(unittest.TestCase):
             snapshot.customer_identity["telegram_identifier"],
             "123456789",
         )
-        self.assertEqual(snapshot.relationship["source"], "CustomerIntelligenceService")
+        self.assertEqual(snapshot.relationship["source"], "CustomerIntelligenceCompatibilityAdapter")
         self.assertEqual(snapshot.products[0]["source"], "ProductBusinessService")
         self.assertEqual(
             snapshot.commerce_strategy["recommended_objectives"],
@@ -367,7 +367,7 @@ class TelegramBusinessServiceTests(unittest.TestCase):
         self.assertFalse(compatibility["modifies_products"])
         self.assertEqual(
             compatibility["customer_intelligence_owner"],
-            "CustomerIntelligenceService",
+            "CustomerIntelligenceCompatibilityAdapter",
         )
         self.assertEqual(
             compatibility["commerce_strategy_owner"],

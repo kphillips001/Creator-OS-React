@@ -18,12 +18,40 @@ from app.models.commercial_offering_selection import (
     SelectedOfferingResult,
     immutable_selector_metadata,
 )
+from app.models.commercial_intelligence import (
+    CommercialIntelligenceContext,
+    OwnershipCoverage,
+)
 from app.models.purchase_intent import (
     AttributionResult,
     PurchaseIntentStatus,
 )
 from app.services.customer_sales_brain_config import CustomerSalesBrainConfig
 from app.services.customer_sales_brain_service import CustomerSalesBrainService
+
+
+def test_historical_session_resolution_matches_customer_and_photoshoot():
+    unrelated_latest = SimpleNamespace(
+        fanvue_account_id=2, fanvue_user_id="buyer-1",
+        commercial_foundation_reference="photoshoot-new",
+    )
+    matching_older = SimpleNamespace(
+        fanvue_account_id=2, fanvue_user_id="buyer-1",
+        commercial_foundation_reference="photoshoot-requested",
+    )
+    other_customer = SimpleNamespace(
+        fanvue_account_id=2, fanvue_user_id="buyer-2",
+        commercial_foundation_reference="photoshoot-requested",
+    )
+
+    result = CustomerSalesBrainService._resolve_historical_session(
+        (unrelated_latest, other_customer, matching_older),
+        fanvue_account_id=2,
+        fanvue_user_id="buyer-1",
+        intended_photoshoot_reference="photoshoot-requested",
+    )
+
+    assert result is matching_older
 
 
 NOW = datetime(2026, 7, 26, tzinfo=timezone.utc)
@@ -170,6 +198,48 @@ def test_identity_unresolved_has_first_priority():
     result = evaluate(brain(identity=False))
     assert result.decision is CustomerSalesDecisionType.MANUAL_REVIEW
     assert result.reason_code is CustomerSalesReasonCode.IDENTITY_UNRESOLVED
+
+
+def test_commercial_intelligence_diagnostics_preserve_boundary_contexts():
+    result = evaluate(
+        brain(customer=profile(), eligible=offering()),
+        {
+            "latest_message": "show me a beach photo",
+            "requested_themes": ("beach",),
+        },
+    )
+    diagnostics = result.decision_metadata["commercialIntelligence"]
+
+    assert diagnostics["strategy"] == "LIBRARY_SELLING"
+    assert "ownershipConsiderations" in diagnostics
+    assert "salesSessionContext" in diagnostics
+    assert diagnostics["customerRequestContext"]["requestedThemes"] == (
+        "beach",
+    )
+    assert "diagnosticContext" in diagnostics
+    assert result.decision_metadata["offeringSelector"] is not None
+    assert result.decision.value == "PRESENT_OFFER"
+
+
+def test_customer_sales_brain_returns_no_sale_for_ownership_insufficiency():
+    service = brain(customer=profile(), eligible=offering())
+    service.commercial_context = SimpleNamespace(assemble=lambda **_values:
+        CommercialIntelligenceContext(
+            creator_profile_id=2, fanvue_account_id=7,
+            telegram_user_id=22,
+            latest_message="show me a beach photo",
+            ownership=OwnershipCoverage(incomplete=True),
+        )
+    )
+
+    result = evaluate(service, {"latest_message": "show me a beach photo"})
+
+    assert result.decision is CustomerSalesDecisionType.NO_SALE
+    assert result.reason_code is CustomerSalesReasonCode.NO_SELLING_STRATEGY
+    assert (
+        result.decision_metadata["commercialIntelligence"]["reason"]
+        == "INSUFFICIENT_OWNERSHIP_EVIDENCE"
+    )
 
 
 @pytest.mark.parametrize(

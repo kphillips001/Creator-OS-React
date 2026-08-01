@@ -133,6 +133,39 @@ class CommercialFulfillmentRepository:
                 ORDER BY membership.updated_at DESC
                 LIMIT 1
             ) AS photoshoot_intelligence,
+            (
+                SELECT COALESCE(array_agg(DISTINCT role.role),ARRAY[]::text[])
+                FROM public.commercial_offering_assets role_member
+                JOIN public.commercial_role_assignments role
+                  ON role.asset_id=role_member.asset_id
+                 AND role.creator_profile_id=offering.creator_profile_id
+                 AND role.state='APPROVED'
+                WHERE role_member.offering_id=offering.offering_id
+            ) AS commercial_roles,
+            (
+                SELECT COALESCE(
+                    array_agg(DISTINCT membership.photoshoot_session_id),
+                    ARRAY[]::text[]
+                )
+                FROM public.commercial_offering_assets lineage_member
+                JOIN public.photoshoot_asset_memberships membership
+                  ON membership.asset_id=lineage_member.asset_id
+                 AND membership.approved=TRUE
+                WHERE lineage_member.offering_id=offering.offering_id
+            ) AS photoshoot_identifiers,
+            (
+                SELECT COUNT(*)
+                FROM public.photoshoot_asset_memberships complete_member
+                WHERE complete_member.photoshoot_session_id=(
+                    SELECT membership.photoshoot_session_id
+                    FROM public.photoshoot_asset_memberships membership
+                    WHERE membership.asset_id=offering.hero_asset_id
+                      AND membership.approved=TRUE
+                    ORDER BY membership.updated_at DESC
+                    LIMIT 1
+                )
+                  AND complete_member.approved=TRUE
+            ) AS photoshoot_asset_count,
             publication.publication_id,publication.provider,
             publication.external_product_id,
             publication.publication_metadata#>>'{{media_link,url}}' AS delivery_url,
@@ -169,5 +202,10 @@ class CommercialFulfillmentRepository:
                  AND bool_and(destination.destination='SINGLE_PPV'))
                 OR
                 (offering.offering_type='PHOTOSET'
-                 AND bool_and(destination.destination='PHOTOSET'))
+                  AND bool_and(destination.destination='PHOTOSET'))
+                OR
+                (offering.offering_type='BUNDLE'
+                 AND COUNT(*)>=2
+                 AND bool_and(destination.destination IN
+                     ('BUNDLE','PHOTOSET','SINGLE_PPV','VIDEOSET')))
             )"""

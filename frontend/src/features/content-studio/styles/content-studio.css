@@ -800,13 +800,9 @@
 .generation-live__status--partial { color: var(--color-warning-text); }
 .generation-live__status--failed,
 .generation-live__error { color: #e49a9f; }
-.generation-next-step { margin-top: var(--space-5); padding-top: var(--space-5); border-top: 1px solid var(--color-border-subtle); }
-.generation-next-step h2 { margin: 0; }
-.generation-next-step > p { margin: var(--space-2) 0 0; color: var(--color-text-secondary); }
-.generation-next-step__actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); margin-top: var(--space-4); }
-.generation-next-step__actions button { display: grid; gap: var(--space-2); align-content: start; min-height: 110px; padding: var(--space-4); text-align: left; }
-.generation-next-step__actions button strong { color: var(--color-text-primary); }
-.generation-next-step__actions button span { color: var(--color-text-secondary); font-size: .72rem; font-weight: 450; line-height: 1.5; }
+.generation-complete { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); margin-top: var(--space-5); padding-top: var(--space-5); border-top: 1px solid var(--color-border-subtle); }
+.generation-complete h2 { margin: 0; }
+.generation-complete__button { min-height: 40px; padding: 0 var(--space-4); border: 1px solid var(--color-accent-border); border-radius: var(--radius-sm); background: var(--color-accent); color: #111; font: inherit; font-weight: 700; cursor: pointer; }
 
 /* Shared Content Studio actions: secondary by default, gold only for primary workflows. */
 .content-studio button,
@@ -945,9 +941,8 @@
     grid-template-columns: repeat(auto-fit, minmax(min(140px, 100%), 1fr));
   }
 
-  .generation-next-step__actions {
-    grid-template-columns: 1fr;
-  }
+  .generation-complete { align-items: stretch; flex-direction: column; }
+  .generation-complete__button { width: 100%; }
 
 }
 

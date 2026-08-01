@@ -150,6 +150,7 @@ class ConversationGateway:
         global_automation_safety_service: Any | None = None,
         commerce_mode_service: Any | None = None,
         relationship_mode_service: Any | None = None,
+        sales_session_service: Any | None = None,
     ) -> None:
         if decision_engine is None:
             raise ValueError("decision_engine is required")
@@ -177,6 +178,7 @@ class ConversationGateway:
         self._relationship_mode_service = (
             relationship_mode_service or RelationshipModeService()
         )
+        self._sales_session_service = sales_session_service
 
     def execute(
         self,
@@ -214,8 +216,23 @@ class ConversationGateway:
                 )
 
         content_opportunity_ingestion = self._ingest_content_opportunity(gateway_input)
+        try:
+            sales_session = self._resolve_conversation_sales_session(
+                gateway_input
+            )
+        except Exception as error:
+            logger.warning(
+                "event=conversation_sales_session_unavailable error_type=%s "
+                "correlation_id=%s",
+                type(error).__name__, gateway_input.correlation_id,
+            )
+            return self._error_output(
+                correlation_id=gateway_input.correlation_id,
+                error_code="canonical_sales_session_unavailable",
+                status="commerce_context_unavailable",
+            )
         customer_sales_decision = self._evaluate_customer_sales_brain(
-            gateway_input
+            gateway_input, sales_session=sales_session,
         )
         commerce_mode = self._commerce_mode_service.get_mode()
         commerce_runtime_injection = self._commerce_runtime_injection(
@@ -797,6 +814,8 @@ class ConversationGateway:
                 external_fanvue_buyer_uuid=(
                     supplied.external_fanvue_buyer_uuid
                 ),
+                fanvue_user_id=supplied.fanvue_user_id,
+                conversation_thread_id=supplied.conversation_thread_id,
                 purchase_acknowledgement_pending=(
                     supplied.purchase_acknowledgement_pending
                 ),
@@ -815,7 +834,7 @@ class ConversationGateway:
         )
 
     def _evaluate_customer_sales_brain(
-        self, gateway_input: ConversationGatewayInput,
+        self, gateway_input: ConversationGatewayInput, *, sales_session=None,
     ) -> CustomerSalesDecision | None:
         service = self._customer_sales_brain_service
         if service is None:
@@ -849,6 +868,10 @@ class ConversationGateway:
                 and str(item.get("content") or "").strip()
             )[-3:],
         }
+        if sales_session is not None:
+            decision_context["sales_session_id"] = str(
+                sales_session.sales_session_id
+            )
         if context.telegram_user_id is not None:
             decision = service.evaluate_for_telegram_user(
                 creator_profile_id=int(context.creator_profile_id),
@@ -881,6 +904,35 @@ class ConversationGateway:
             gateway_input.correlation_id,
         )
         return decision
+
+    def _resolve_conversation_sales_session(self, gateway_input):
+        context = self._brain_context(gateway_input)
+        if (
+            context.creator_profile_id is None
+            or context.fanvue_account_id is None
+            or context.fanvue_user_id is None
+            or context.conversation_thread_id is None
+        ):
+            return None
+        service = self._sales_session_service
+        if service is None:
+            from app.services.sales_session_service import SalesSessionService
+            service = SalesSessionService()
+            self._sales_session_service = service
+        return service.resolve_or_start_conversation(
+            creator_profile_id=int(context.creator_profile_id),
+            fanvue_account_id=int(context.fanvue_account_id),
+            fanvue_user_id=int(context.fanvue_user_id),
+            telegram_user_id=context.telegram_user_id,
+            conversation_thread_id=int(context.conversation_thread_id),
+            objective="Authorized conversational commerce",
+            commercial_context={
+                "conversationIdentifier": context.conversation_identifier,
+                "primarySalesChannel": context.primary_sales_channel,
+            },
+            actor_type="AI",
+            actor_identifier="ConversationGateway",
+        )
 
     @staticmethod
     def _commerce_runtime_injection(
@@ -992,6 +1044,9 @@ class ConversationGateway:
         selector_diagnostics = (
             dict(selector) if isinstance(selector, Mapping) else {}
         )
+        intelligence = dict(decision.decision_metadata or {}).get(
+            "commercialIntelligence"
+        )
         return {
             "customer_sales_decision": decision.decision.value,
             "customer_sales_reason_code": decision.reason_code.value,
@@ -1005,6 +1060,10 @@ class ConversationGateway:
                 selector_diagnostics.get("recommendationTrace") or []
             ),
             "recommendation_diagnostics": selector_diagnostics or None,
+            "commercial_intelligence": (
+                dict(intelligence)
+                if isinstance(intelligence, Mapping) else None
+            ),
         }
 
     def _invoke_decision_engine(

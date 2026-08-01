@@ -13,7 +13,7 @@ from app.models.telegram_business import (
 if TYPE_CHECKING:
     from app.services.business_learning_service import BusinessLearningService
     from app.services.commerce_strategy_service import CommerceStrategyService
-    from app.services.customer_intelligence_service import CustomerIntelligenceService
+    from app.services.customer_intelligence_service import CustomerIntelligenceCompatibilityAdapter as CustomerIntelligenceService
     from app.services.product_business_service import ProductBusinessService
     from app.services.publishing_service import PublishingService
     from app.services.telegram_commerce_service import TelegramCommerceService
@@ -50,7 +50,7 @@ class TelegramBusinessService:
     def customer_intelligence(self) -> "CustomerIntelligenceService":
         if self._customer_intelligence is None:
             from app.services.customer_intelligence_service import (
-                CustomerIntelligenceService,
+                CustomerIntelligenceCompatibilityAdapter as CustomerIntelligenceService,
             )
 
             self._customer_intelligence = CustomerIntelligenceService()
@@ -395,7 +395,7 @@ class TelegramBusinessService:
     def _identity_summary(self, customer_snapshot: Any) -> dict[str, Any]:
         identity = self._read(customer_snapshot, "identity")
         return {
-            "source": "CustomerIntelligenceService",
+            "source": "CustomerIntelligenceCompatibilityAdapter",
             "canonical_customer_id": self._safe_text(
                 self._read(identity, "canonical_customer_id")
             ),
@@ -419,7 +419,7 @@ class TelegramBusinessService:
         relationship = self._read(customer_snapshot, "relationship_intelligence")
         stage = self._read(customer_snapshot, "relationship_stage")
         return {
-            "source": "CustomerIntelligenceService",
+            "source": "CustomerIntelligenceCompatibilityAdapter",
             "stage": self._enum_value(stage),
             "engagement_level": self._safe_text(
                 self._read(relationship, "engagement_level")
@@ -577,7 +577,7 @@ class TelegramBusinessService:
                 offers.append(
                     {
                         "offer_id": offer,
-                        "source": "CustomerIntelligenceService",
+                        "source": "CustomerIntelligenceCompatibilityAdapter",
                         "active": False,
                     }
                 )
@@ -609,7 +609,7 @@ class TelegramBusinessService:
             or {}
         )
         return {
-            "source": "CustomerIntelligenceService/TelegramCommerceService",
+            "source": "CustomerIntelligenceCompatibilityAdapter/TelegramCommerceService",
             "free_assets_delivered": free,
             "paid_deliveries": paid,
             "delivery_count": len(free) + len(paid),
@@ -829,7 +829,7 @@ class TelegramBusinessService:
             "modifies_products": False,
             "telegram_runtime_owner": "Telegram runtime",
             "decision_owner": "DecisionEngine",
-            "customer_intelligence_owner": "CustomerIntelligenceService",
+            "customer_intelligence_owner": "CustomerIntelligenceCompatibilityAdapter",
             "commerce_strategy_owner": "CommerceStrategyService",
             "product_business_owner": "ProductBusinessService",
             "publishing_owner": "PublishingService",

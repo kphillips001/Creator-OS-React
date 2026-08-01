@@ -31,10 +31,6 @@ from app.services.runtime_offer_escalation_coupling_service import (
     RuntimeOfferEscalationCouplingService,
 )
 
-from app.services.content_ownership_service import (
-    ContentOwnershipService,
-)
-
 class GPTService:
     def __init__(self, api_key: str):
         self.logger = logging.getLogger(__name__)
@@ -73,10 +69,6 @@ class GPTService:
 
         self.runtime_offer_escalation_service = (
             RuntimeOfferEscalationCouplingService()
-        )
-
-        self.content_ownership_service = (
-            ContentOwnershipService()
         )
 
     def load_persona_prompt(self, persona_name: str) -> str:

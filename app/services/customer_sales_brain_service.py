@@ -22,6 +22,12 @@ from app.services.commerce_signal_service import CommerceSignalService
 from app.services.commercial_offering_selector_service import (
     CommercialOfferingSelectorService,
 )
+from app.services.commercial_intelligence_context_service import (
+    CommercialIntelligenceContextService,
+)
+from app.services.commercial_intelligence_service import (
+    CommercialIntelligenceService,
+)
 from app.services.customer_sales_brain_config import CustomerSalesBrainConfig
 
 
@@ -34,6 +40,8 @@ class CustomerSalesBrainService:
         intent_repository=None, commerce_signal_service=None,
         offering_selector_service=None, config=None,
         sales_session_repository=None,
+        commercial_intelligence_service=None,
+        commercial_intelligence_context_service=None,
         clock=lambda: datetime.now(timezone.utc),
     ):
         self.customers = customer_repository or CustomerCommerceRepository()
@@ -45,6 +53,13 @@ class CustomerSalesBrainService:
         )
         self.sales_sessions = (
             sales_session_repository or SalesSessionRepository()
+        )
+        self.commercial_intelligence = (
+            commercial_intelligence_service or CommercialIntelligenceService()
+        )
+        self.commercial_context = (
+            commercial_intelligence_context_service
+            or CommercialIntelligenceContextService()
         )
         self.config = config or CustomerSalesBrainConfig.from_environment()
         self.clock = clock
@@ -251,6 +266,25 @@ class CustomerSalesBrainService:
                 summary="The latest offer expired without a verified purchase.",
             )
         # Priority 9/10: deterministic selector chooses one offering or none.
+        intelligence = self._commercial_intelligence_decision(
+            creator_profile_id=creator_profile_id,
+            fanvue_account_id=fanvue_account_id,
+            external_fanvue_buyer_uuid=external_fanvue_buyer_uuid,
+            telegram_user_id=telegram_user_id,
+            conversation_context=context,
+            core_user_id=(
+                getattr(profile, "core_user_id", None)
+                or context.get("core_user_id")
+            ),
+        )
+        if intelligence.strategy is None:
+            return self._finish(
+                started, now, **common,
+                decision=CustomerSalesDecisionType.NO_SALE,
+                reason=CustomerSalesReasonCode.NO_SELLING_STRATEGY,
+                summary=intelligence.reason_summary,
+                commercial_intelligence=intelligence,
+            )
         selection = self.offering_selector.select(
             creator_profile_id=creator_profile_id,
             telegram_user_id=telegram_user_id,
@@ -260,6 +294,8 @@ class CustomerSalesBrainService:
             conversation_context={
                 **context, "primary_sales_channel": "AI_CHAT",
             },
+            strategy_constraints=intelligence.constraints,
+            strategy=intelligence.strategy.value,
         )
         if selection.offering_id:
             return self._finish(
@@ -272,6 +308,7 @@ class CustomerSalesBrainService:
                 ),
                 recommendation=selection, selector_result=selection,
                 sell_allowed=True,
+                commercial_intelligence=intelligence,
             )
         return self._finish(
             started, now, **common,
@@ -279,6 +316,158 @@ class CustomerSalesBrainService:
             reason=CustomerSalesReasonCode.NO_ELIGIBLE_OFFERING,
             summary="No active, live, deliverable offering is available.",
             selector_result=selection,
+            commercial_intelligence=intelligence,
+        )
+
+    def _commercial_intelligence_decision(
+        self, *, creator_profile_id, fanvue_account_id,
+        external_fanvue_buyer_uuid, telegram_user_id, conversation_context,
+        core_user_id=None,
+    ):
+        identity = self.identities.get_by_telegram_user_id(telegram_user_id)
+        local_fanvue_user_id = getattr(
+            identity, "local_fanvue_user_id", None
+        )
+        session = self.sales_sessions.get_active_for_customer(
+            creator_profile_id=creator_profile_id,
+            fanvue_account_id=fanvue_account_id,
+            fanvue_user_id=local_fanvue_user_id,
+        ) if local_fanvue_user_id is not None else None
+        session_intents = ()
+        roles = ()
+        historical_session = None
+        selector_repository = getattr(self.offering_selector, "repository", None)
+        candidates = (
+            selector_repository.list_candidates(
+                creator_profile_id=creator_profile_id,
+                primary_sales_channel="AI_CHAT",
+            )
+            if selector_repository is not None else ()
+        )
+        bundle_compositions = tuple(
+            {
+                "photoshoot_reference": str(
+                    candidate["photoshoot_identifiers"][0]
+                ),
+                "asset_ids": tuple(
+                    int(value) for value in candidate.get("asset_ids") or ()
+                ),
+                "complete_set": (
+                    len(candidate.get("asset_ids") or ())
+                    == int(candidate.get("photoshoot_asset_count") or 0)
+                    and int(candidate.get("photoshoot_asset_count") or 0) > 0
+                ),
+                "provenance": (
+                    "CommercialOfferingAssetMembership",
+                    "PhotoshootAssetMembership",
+                ),
+            }
+            for candidate in candidates
+            if str(candidate.get("offering_type") or "") == "BUNDLE"
+            and len(candidate.get("photoshoot_identifiers") or ()) == 1
+        )
+        normalized_conversation = dict(conversation_context or {})
+        intended_photoshoot = normalized_conversation.get(
+            "requested_photoshoot_reference"
+        )
+        if intended_photoshoot is None:
+            references = tuple(dict.fromkeys(
+                value["photoshoot_reference"] for value in bundle_compositions
+            ))
+            intended_photoshoot = references[0] if len(references) == 1 else None
+        if (
+            session is None
+            and intended_photoshoot is not None
+            and local_fanvue_user_id is not None
+            and hasattr(self.sales_sessions, "list_for_creator")
+        ):
+            historical_session = self._resolve_historical_session(
+                self.sales_sessions.list_for_creator(
+                    creator_profile_id=creator_profile_id, limit=100
+                ),
+                fanvue_account_id=fanvue_account_id,
+                fanvue_user_id=local_fanvue_user_id,
+                intended_photoshoot_reference=intended_photoshoot,
+            )
+        evidence_session = session or historical_session
+        if session is not None and hasattr(
+            self.sales_sessions, "list_purchase_intents"
+        ):
+            session_intents = self.sales_sessions.list_purchase_intents(
+                session_id=session.sales_session_id,
+                creator_profile_id=creator_profile_id,
+            )
+        elif historical_session is not None and hasattr(
+            self.sales_sessions, "list_purchase_intents"
+        ):
+            session_intents = self.sales_sessions.list_purchase_intents(
+                session_id=historical_session.sales_session_id,
+                creator_profile_id=creator_profile_id,
+            )
+        if evidence_session is not None and hasattr(
+            self.sales_sessions, "commercial_guidance"
+        ):
+            guidance = self.sales_sessions.commercial_guidance(
+                session=evidence_session
+            )
+            roles = tuple(
+                role
+                for asset in guidance.get("assets") or ()
+                for role in asset.get("effective_commercial_roles") or ()
+            )
+        available_types = tuple(
+            str(candidate.get("offering_type") or "")
+            for candidate in candidates
+        )
+        lineage_asset_ids = tuple(dict.fromkeys(
+            int(asset_id)
+            for candidate in candidates
+            for asset_id in candidate.get("asset_ids") or ()
+        ))
+        if (
+            not available_types
+            and getattr(self.offering_selector, "offering", None) is not None
+        ):
+            available_types = ("SINGLE_IMAGE",)
+        if "latest_message" not in normalized_conversation:
+            normalized_conversation["latest_message"] = (
+                "general request for existing content"
+            )
+        assembled = self.commercial_context.assemble(
+            creator_profile_id=creator_profile_id,
+            fanvue_account_id=fanvue_account_id,
+            external_fanvue_user_uuid=external_fanvue_buyer_uuid,
+            telegram_user_id=telegram_user_id,
+            core_user_id=core_user_id,
+            legacy_fanvue_user_id=local_fanvue_user_id,
+            active_sales_session=session,
+            relevant_historical_session=historical_session,
+            session_purchase_intents=session_intents,
+            available_offering_types=available_types,
+            intended_photoshoot_reference=intended_photoshoot,
+            bundle_compositions=bundle_compositions,
+            approved_commercial_roles=roles,
+            conversation_context=normalized_conversation,
+            lineage_asset_ids=lineage_asset_ids,
+        )
+        return self.commercial_intelligence.recommend(assembled)
+
+    @staticmethod
+    def _resolve_historical_session(
+        sessions, *, fanvue_account_id, fanvue_user_id,
+        intended_photoshoot_reference,
+    ):
+        if intended_photoshoot_reference is None:
+            return None
+        return next(
+            (
+                item for item in sessions
+                if item.fanvue_account_id == fanvue_account_id
+                and item.fanvue_user_id == fanvue_user_id
+                and item.commercial_foundation_reference
+                == str(intended_photoshoot_reference)
+            ),
+            None,
         )
 
     def _active_sales_session_context(
@@ -310,6 +499,10 @@ class CustomerSalesBrainService:
             "sales_session_id": str(session.sales_session_id),
             "sales_session_state": session.state.value,
             "sales_session_progression": session.progression_stage.value,
+            "sales_session_foundation_type": getattr(
+                session.commercial_foundation_type,
+                "value", session.commercial_foundation_type,
+            ),
             "sales_session_foundation": (
                 session.commercial_foundation_reference
             ),
@@ -409,6 +602,7 @@ class CustomerSalesBrainService:
         recommendation=None, sell_allowed=False, nudge_allowed=False,
         congratulate_allowed=False, cooldown_until=None,
         selector_result=None,
+        commercial_intelligence=None,
     ):
         lifecycle = active
         conversion = (
@@ -477,6 +671,68 @@ class CustomerSalesBrainService:
                     }
                     if selector_result else None
                 ),
+                "commercialIntelligence": (
+                    {
+                        "strategy": (
+                            commercial_intelligence.strategy.value
+                            if commercial_intelligence.strategy else None
+                        ),
+                        "reason": commercial_intelligence.reason.value,
+                        "reasonSummary": commercial_intelligence.reason_summary,
+                        "evidence": list(commercial_intelligence.evidence),
+                        "evidenceProvenance": dict(
+                            commercial_intelligence.evidence_provenance
+                        ),
+                        "constraints": {
+                            "requiredOfferingTypes": list(
+                                commercial_intelligence.constraints
+                                .required_offering_types
+                            ),
+                            "excludedOfferingTypes": list(
+                                commercial_intelligence.constraints
+                                .excluded_offering_types
+                            ),
+                            "requiredPhotoshootReference": (
+                                commercial_intelligence.constraints
+                                .required_photoshoot_reference
+                            ),
+                            "progression": (
+                                commercial_intelligence.constraints.progression
+                            ),
+                            "completeSetRequired": (
+                                commercial_intelligence.constraints
+                                .complete_set_required
+                            ),
+                            "continuationRequired": (
+                                commercial_intelligence.constraints
+                                .continuation_required
+                            ),
+                        },
+                        "bundleEligibility": (
+                            commercial_intelligence.bundle_eligibility.value
+                        ),
+                        "continuationGuidance": (
+                            commercial_intelligence.continuation_guidance
+                        ),
+                        "evidenceSufficient": (
+                            commercial_intelligence.evidence_sufficient
+                        ),
+                        "conflicts": list(commercial_intelligence.conflicts),
+                        "ownershipConsiderations": dict(
+                            commercial_intelligence.ownership_considerations
+                        ),
+                        "salesSessionContext": dict(
+                            commercial_intelligence.sales_session_context
+                        ),
+                        "customerRequestContext": dict(
+                            commercial_intelligence.customer_request_context
+                        ),
+                        "diagnosticContext": dict(
+                            commercial_intelligence.diagnostic_context
+                        ),
+                    }
+                    if commercial_intelligence else None
+                ),
             }),
             recommended_offering_title=(
                 recommendation.title if recommendation else None
@@ -535,5 +791,6 @@ class CustomerSalesBrainService:
             CustomerSalesReasonCode.ACTIVE_OFFER_EXPIRED: 8,
             CustomerSalesReasonCode.NO_ACTIVE_OFFER: 9,
             CustomerSalesReasonCode.NO_ELIGIBLE_OFFERING: 10,
+            CustomerSalesReasonCode.NO_SELLING_STRATEGY: 9,
         }
         return priorities.get(reason, 0)

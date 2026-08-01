@@ -50,6 +50,8 @@ class Repository:
         self.candidate_calls = 0
         self.history_calls = 0
         self.purchase_calls = 0
+        self.ownership_conflicts = ()
+        self.ownership_insufficiencies = ()
 
     def list_candidates(self, **kwargs):
         self.candidate_calls += 1
@@ -75,6 +77,19 @@ class Repository:
         return self.learning
 
 
+class Ownership:
+    def __init__(self, repository):
+        self.repository = repository
+
+    def answer(self, _identity):
+        return SimpleNamespace(
+            owned_offering_ids=tuple(self.repository.purchased),
+            owned_asset_ids=(),
+            conflicts=self.repository.ownership_conflicts,
+            insufficiencies=self.repository.ownership_insufficiencies,
+        )
+
+
 def profile(telegram_user_id=22):
     return SimpleNamespace(
         creator_profile_id=2, fanvue_account_id=7,
@@ -87,6 +102,7 @@ def profile(telegram_user_id=22):
 def select(repository, *, active=None):
     return CommercialOfferingSelectorService(
         repository=repository, clock=lambda: NOW,
+        ownership_intelligence=Ownership(repository),
     ).select(
         creator_profile_id=2, telegram_user_id=22,
         customer_profile=profile(), commerce_signal=None,
@@ -132,6 +148,25 @@ def test_attributed_purchase_excludes_owned_offering():
         if item.offering_id == owned["offering_id"]
     )
     assert "OFFERING_ALREADY_PURCHASED" in rejected.exclusion_reasons
+
+
+@pytest.mark.parametrize(
+    ("field", "reason"),
+    [
+        ("ownership_insufficiencies", "OWNERSHIP_EVIDENCE_INSUFFICIENT"),
+        ("ownership_conflicts", "OWNERSHIP_CONFLICT"),
+    ],
+)
+def test_selector_fails_closed_on_uncertain_ownership(field, reason):
+    repository = Repository((candidate(),))
+    setattr(repository, field, ("test-evidence",))
+
+    result = select(repository)
+
+    assert result.offering_id is None
+    assert result.selection_reason is OfferingSelectionReason.NO_ELIGIBLE_OFFERING
+    assert reason in result.exclusion_reasons
+    assert repository.candidate_calls == 0
 
 
 @pytest.mark.parametrize(
@@ -243,6 +278,7 @@ def test_selector_enriches_candidates_and_uses_only_attributed_purchase_affinity
     repository = Repository((studio, coastal), history=history)
     result = CommercialOfferingSelectorService(
         repository=repository, clock=lambda: NOW,
+        ownership_intelligence=Ownership(repository),
     ).select(
         creator_profile_id=2, telegram_user_id=22,
         customer_profile=profile(), commerce_signal=None,
@@ -260,7 +296,7 @@ def test_selector_enriches_candidates_and_uses_only_attributed_purchase_affinity
     )
     assert set(affinity.evidence["matchedTags"]) == {"beach", "sunset"}
     assert "studio" not in affinity.evidence["matchedTags"]
-    assert repository.purchase_calls == 1
+    assert repository.purchase_calls == 0
     assert repository.history_calls == 1
     assert repository.candidate_calls == 1
 

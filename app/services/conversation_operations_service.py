@@ -13,7 +13,7 @@ from app.models.conversation_operations import (
 from app.models.telegram_business import TelegramBusinessSnapshot
 
 if TYPE_CHECKING:
-    from app.services.customer_intelligence_service import CustomerIntelligenceService
+    from app.services.customer_intelligence_service import CustomerIntelligenceCompatibilityAdapter as CustomerIntelligenceService
     from app.services.telegram_business_service import TelegramBusinessService
     from app.services.telegram_commerce_service import TelegramCommerceService
 
@@ -427,7 +427,7 @@ class ConversationOperationsService:
             "telegram_business_consumed": snapshot is not None,
             "telegram_runtime_owner": "Telegram runtime",
             "telegram_commerce_owner": "TelegramCommerceService",
-            "customer_intelligence_owner": "CustomerIntelligenceService",
+            "customer_intelligence_owner": "CustomerIntelligenceCompatibilityAdapter",
         }
 
     @staticmethod

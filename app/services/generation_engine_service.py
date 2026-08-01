@@ -7,6 +7,7 @@ Provider adapters remain swappable and are not called by Content Studio.
 from __future__ import annotations
 
 import json
+import threading
 from dataclasses import asdict, replace
 from pathlib import Path
 from time import perf_counter
@@ -28,12 +29,19 @@ from app.models.generation_engine import (
 from app.providers.generation.provider_registry import ProviderRegistry, create_default_registry
 from app.services.reference_library_service import ReferenceLibraryService
 from app.services.hosted_asset_reference_service import HostedAssetReferenceService
+from app.models.render_policy import (
+    RenderPolicy,
+    content_render_policy,
+    photoshoot_render_policy,
+)
 
 
 class GenerationEngineService:
     """Owns provider-neutral generation execution state and queue behavior."""
 
     DEFAULT_STORAGE_DIR = Path("data") / "generation_engine"
+    _dispatch_locks_guard = threading.Lock()
+    _dispatch_locks: dict[str, threading.Lock] = {}
 
     def __init__(
         self,
@@ -63,7 +71,7 @@ class GenerationEngineService:
         *,
         creator_profile: Mapping[str, Any],
         prompt_plan: PromptPlan,
-        provider_id: str = "future_provider",
+        provider_id: str = "seedream_5_0_pro",
         generation_type: str = GenerationType.IMAGE_TO_IMAGE.value,
         media_type: str = GenerationMediaType.IMAGE.value,
         image_count: int = 1,
@@ -93,6 +101,26 @@ class GenerationEngineService:
             provider_reference_url = resolver.cached_url(
                 asset_id=int(reference_asset_id), source_path=str(reference_asset_path), host_name="imgbb",
             )
+        request_metadata = dict(metadata or {})
+        if not request_metadata.get("render_policy"):
+            workflow = str(
+                request_metadata.get("workflow_type") or "content_studio"
+            ).strip().lower()
+            creative_mode = str(
+                request_metadata.get("creative_mode")
+                or prompt_plan.creative_mode
+                or "standard"
+            )
+            if workflow in {"edit", "edit_studio"}:
+                request_metadata["render_policy"] = RenderPolicy.EDIT.value
+            elif workflow == "photoshoot":
+                request_metadata["render_policy"] = (
+                    photoshoot_render_policy(creative_mode).value
+                )
+            else:
+                request_metadata["render_policy"] = (
+                    content_render_policy(creative_mode).value
+                )
         return GenerationRequest(
             request_id=new_generation_id("generation_request"),
             creator_profile_id=creator_profile_id,
@@ -100,7 +128,7 @@ class GenerationEngineService:
             prompt_text=prompt_plan.prompt_text,
             reference_asset_id=reference_asset_id,
             reference_asset_path=reference_asset_path,
-            provider_id=str(provider_id or "future_provider"),
+            provider_id=str(provider_id or "seedream_5_0_pro"),
             generation_type=self._normalize_generation_type(generation_type),
             media_type=self._normalize_media_type(media_type),
             image_count=max(1, int(image_count or 1)),
@@ -120,7 +148,7 @@ class GenerationEngineService:
                     else {}
                 ),
                 **({"reference_image_url": provider_reference_url} if provider_reference_url else {}),
-                **dict(metadata or {}),
+                **request_metadata,
             },
         )
 
@@ -145,7 +173,7 @@ class GenerationEngineService:
         *,
         creator_profile: Mapping[str, Any],
         prompt_plan: PromptPlan,
-        provider_id: str = "future_provider",
+        provider_id: str = "seedream_5_0_pro",
         generation_type: str = GenerationType.IMAGE_TO_IMAGE.value,
         media_type: str = GenerationMediaType.IMAGE.value,
         image_count: int = 1,
@@ -165,6 +193,11 @@ class GenerationEngineService:
 
     def start_job(self, job_id: str) -> GenerationJob:
         job = self.get_job(job_id)
+        if job.status in {
+            GenerationStatus.SUCCEEDED.value,
+            GenerationStatus.CANCELLED.value,
+        }:
+            return job
         updated = replace(
             job,
             status=GenerationStatus.RUNNING.value,
@@ -224,38 +257,63 @@ class GenerationEngineService:
         return updated
 
     def cancel_job(self, job_id: str) -> GenerationJob:
-        job = self.get_job(job_id)
-        updated = replace(
-            job,
-            status=GenerationStatus.CANCELLED.value,
-            completed_at=utc_now(),
-            updated_at=utc_now(),
-            progress=replace(job.progress, message="Cancelled"),
-        )
-        self._replace_job(updated)
-        return updated
+        with self._dispatch_lock(job_id):
+            job = self.get_job(job_id)
+            if job.status == GenerationStatus.SUCCEEDED.value:
+                return job
+            updated = replace(
+                job,
+                status=GenerationStatus.CANCELLED.value,
+                completed_at=utc_now(),
+                updated_at=utc_now(),
+                progress=replace(job.progress, message="Cancelled"),
+            )
+            self._replace_job(updated)
+            return updated
 
     def retry_job(self, job_id: str) -> GenerationJob:
-        job = self.get_job(job_id)
-        updated = replace(
-            job,
-            status=GenerationStatus.RETRY.value,
-            completed_at=None,
-            updated_at=utc_now(),
-            failure=None,
-            progress=GenerationProgress(
-                current=0,
-                total=job.request.image_count,
-                percent=0,
-                message="Retry queued",
-            ),
-        )
-        self._replace_job(updated)
-        return updated
+        with self._dispatch_lock(job_id):
+            job = self.get_job(job_id)
+            if job.status in {
+                GenerationStatus.SUCCEEDED.value,
+                GenerationStatus.CANCELLED.value,
+            }:
+                return job
+            updated = replace(
+                job,
+                status=GenerationStatus.RETRY.value,
+                completed_at=None,
+                updated_at=utc_now(),
+                failure=None,
+                progress=GenerationProgress(
+                    current=0,
+                    total=job.request.image_count,
+                    percent=0,
+                    message="Retry queued",
+                ),
+            )
+            self._replace_job(updated)
+            return updated
 
     def dispatch_job(
         self,
         job_id: str,
+        progress_callback: Callable[..., None] | None = None,
+    ) -> GenerationJob:
+        lock = self._dispatch_lock(job_id)
+        with lock:
+            current = self.get_job(job_id)
+            if current.status in {
+                GenerationStatus.SUCCEEDED.value,
+                GenerationStatus.CANCELLED.value,
+            }:
+                return current
+            return self._dispatch_locked(
+                job_id, progress_callback=progress_callback
+            )
+
+    def _dispatch_locked(
+        self, job_id: str,
         progress_callback: Callable[..., None] | None = None,
     ) -> GenerationJob:
         job = self.start_job(job_id)
@@ -325,6 +383,11 @@ class GenerationEngineService:
                 may_have_been_accepted=bool(primary_failure.get("may_have_been_accepted", False)),
             ),
         )
+
+    @classmethod
+    def _dispatch_lock(cls, job_id: str) -> threading.Lock:
+        with cls._dispatch_locks_guard:
+            return cls._dispatch_locks.setdefault(str(job_id), threading.Lock())
 
     def next_queued_job(self) -> GenerationJob | None:
         queued_statuses = {GenerationStatus.QUEUED.value, GenerationStatus.RETRY.value}

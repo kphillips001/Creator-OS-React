@@ -12,6 +12,7 @@ from app.models.purchase_intent import AttributionResult, PurchaseIntentStatus
 from app.models.sales_session import (
     SalesSession,
     SalesSessionActorType,
+    SalesSessionFoundationType,
     SalesSessionHistoryEntry,
     SalesSessionOutcome,
     SalesSessionProgression,
@@ -36,6 +37,9 @@ class FakeRepository:
     def create(self, **values):
         values["started_by_type"] = values.pop("actor_type")
         values["started_by_identifier"] = values.pop("actor_identifier")
+        values["commercial_foundation_type"] = SalesSessionFoundationType(
+            values["commercial_foundation_type"]
+        )
         self.item = SalesSession(
             sales_session_id=uuid4(), state=SalesSessionState.ACTIVE,
             progression_stage=SalesSessionProgression.DISCOVERY,
@@ -233,6 +237,9 @@ def setup():
             "id": user, "fanvue_account_id": account,
             "fanvue_user_uuid": CUSTOMER_UUID,
         } if (account, user) == (2, 3) else None,
+        creator_profile_resolver=lambda account: (
+            {"id": 7} if str(account) == "2" else None
+        ),
         compatibility=compatibility,
     )
     return service, repository, intents, compatibility
@@ -243,6 +250,7 @@ def start(service, **changes):
         "creator_profile_id": 7, "fanvue_account_id": 2,
         "fanvue_user_id": 3, "telegram_user_id": 99,
         "conversation_thread_id": 11,
+        "commercial_foundation_type": "PHOTOSHOOT",
         "commercial_foundation_reference": "photoshoot-1",
         "objective": "Bedroom commercial arc",
         "commercial_context": {"current_posture": "ready"},
@@ -264,6 +272,41 @@ def test_ai_can_start_one_canonical_session_and_legacy_projection_runs(setup):
     assert compatibility.started_items == [session]
 
 
+def test_conversation_orchestration_reuses_active_session(setup):
+    service, _, _, compatibility = setup
+    first = service.resolve_or_start_conversation(
+        creator_profile_id=7, fanvue_account_id=2, fanvue_user_id=3,
+        telegram_user_id=99, conversation_thread_id=11,
+        actor_identifier="conversation-gateway",
+    )
+    second = service.resolve_or_start_conversation(
+        creator_profile_id=7, fanvue_account_id=2, fanvue_user_id=3,
+        telegram_user_id=99, conversation_thread_id=11,
+        actor_identifier="conversation-gateway",
+    )
+    assert second.sales_session_id == first.sales_session_id
+    assert len(compatibility.started_items) == 1
+
+
+def test_terminal_session_stays_closed_and_later_conversation_can_start(setup):
+    service, _, _, _ = setup
+    first = service.resolve_or_start_conversation(
+        creator_profile_id=7, fanvue_account_id=2, fanvue_user_id=3,
+        telegram_user_id=99, conversation_thread_id=11,
+    )
+    closed = service.complete(
+        session_id=first.sales_session_id, creator_profile_id=7,
+        with_purchase=False,
+    )
+    later = service.resolve_or_start_conversation(
+        creator_profile_id=7, fanvue_account_id=2, fanvue_user_id=3,
+        telegram_user_id=99, conversation_thread_id=11,
+    )
+    assert closed.state is SalesSessionState.COMPLETED
+    assert later.sales_session_id != first.sales_session_id
+    assert later.state is SalesSessionState.ACTIVE
+
+
 def test_identity_and_foundation_are_authoritative(setup):
     service, _, _, _ = setup
     with pytest.raises(SalesSessionError, match="Telegram identity"):
@@ -274,6 +317,55 @@ def test_identity_and_foundation_are_authoritative(setup):
         start(service, fanvue_user_id=4)
     with pytest.raises(SalesSessionError, match="Conversation"):
         start(service, conversation_thread_id=12)
+
+
+def test_conversation_foundation_uses_thread_identity_without_reference(setup):
+    service, _, _, _ = setup
+    session = start(
+        service,
+        commercial_foundation_type="CONVERSATION",
+        commercial_foundation_reference=None,
+    )
+
+    assert (
+        session.commercial_foundation_type
+        is SalesSessionFoundationType.CONVERSATION
+    )
+    assert session.commercial_foundation_reference is None
+    assert session.conversation_thread_id == 11
+    guidance = service.commercial_guidance(session=session)
+    assert guidance["foundation_type"] == "CONVERSATION"
+    assert guidance["conversation"]["conversation_thread_id"] == 11
+    assert guidance["assets"] == ()
+
+
+@pytest.mark.parametrize("changes, message", [
+    ({
+        "commercial_foundation_type": "CONVERSATION",
+        "commercial_foundation_reference": "not-allowed",
+    }, "cannot store"),
+    ({
+        "commercial_foundation_type": "CONVERSATION",
+        "commercial_foundation_reference": None,
+        "conversation_thread_id": None,
+    }, "conversation thread"),
+    ({"commercial_foundation_type": "BUNDLE"}, "Unsupported"),
+])
+def test_foundation_shape_fails_explicitly(setup, changes, message):
+    service, _, _, _ = setup
+    with pytest.raises(SalesSessionError, match=message):
+        start(service, **changes)
+
+
+def test_conversation_foundation_validates_creator_scope(setup):
+    service, _, _, _ = setup
+    service.creator_profile_resolver = lambda _account: {"id": 8}
+    with pytest.raises(SalesSessionError, match="creator scope"):
+        start(
+            service,
+            commercial_foundation_type="CONVERSATION",
+            commercial_foundation_reference=None,
+        )
 
 
 def test_context_rejects_copies_of_authoritative_domains(setup):
@@ -384,6 +476,7 @@ def test_creator_scoped_api_exposes_operational_lifecycle(setup, monkeypatch):
         "fanvueUserId": 3,
         "telegramUserId": 99,
         "conversationThreadId": 11,
+        "commercialFoundationType": "PHOTOSHOOT",
         "commercialFoundationReference": "photoshoot-1",
         "objective": "Bedroom commercial arc",
         "commercialContext": {"current_posture": "ready"},

@@ -1,5 +1,7 @@
 from types import SimpleNamespace
 from uuid import uuid4
+from dataclasses import replace
+from datetime import datetime, timezone
 
 import pytest
 
@@ -7,6 +9,20 @@ from app.services.fanvue_official_client import FanvueAPIError, FanvueOfficialCl
 from app.services.fanvue_oauth_service import FanvueReauthorizationRequired
 from app.services.fanvue_media_link_publication_executor import (
     FanvueMediaLinkPublicationExecutor, PublicationPending,
+)
+from app.services.commercial_fulfillment_service import CommercialFulfillmentService
+from app.services.conversation_gateway import ConversationGateway
+from app.models.commercial_offering import (
+    CommercialOffering,
+    CommercialOfferingAsset,
+    CommercialOfferingStatus,
+    CommercialOfferingType,
+    PrimarySalesChannel,
+)
+from app.models.commercial_publication import (
+    CommercialPublication,
+    CommercialPublicationProvider,
+    CommercialPublicationStatus,
 )
 
 
@@ -180,3 +196,167 @@ def test_processing_timeout_resumes_existing_media_without_new_upload(tmp_path):
     assert executor._upload_asset(second, publication_id, 10, 7, 3) == "media-1"
     assert second.sessions == 0
     assert second.puts == []
+
+
+def test_bundle_is_supported_by_existing_multi_media_link_executor():
+    publication = SimpleNamespace(
+        provider=CommercialPublicationProvider.FANVUE,
+        status=CommercialPublicationStatus.READY_TO_PUBLISH,
+    )
+    offering = SimpleNamespace(
+        status=CommercialOfferingStatus.READY,
+        primary_sales_channel=PrimarySalesChannel.AI_CHAT,
+        offering_type=CommercialOfferingType.BUNDLE,
+        price_minor=1200,
+        assets=(SimpleNamespace(asset_id=1), SimpleNamespace(asset_id=2)),
+    )
+    FanvueMediaLinkPublicationExecutor._validate(publication, offering)
+
+
+def test_full_bundle_publication_preserves_order_and_reuses_provider_link():
+    now = datetime.now(timezone.utc)
+    offering = CommercialOffering(
+        offering_id=uuid4(), creator_profile_id=7,
+        offering_type=CommercialOfferingType.BUNDLE,
+        title="Complete Photoshoot", description=None, hero_asset_id=10,
+        primary_sales_channel=PrimarySalesChannel.AI_CHAT,
+        status=CommercialOfferingStatus.READY,
+        assets=(
+            CommercialOfferingAsset(asset_id=10, position=0, is_hero=True),
+            CommercialOfferingAsset(asset_id=11, position=1, is_hero=False),
+        ),
+        created_at=now, updated_at=now, price_minor=1200,
+    )
+    publications = [
+        CommercialPublication(
+            publication_id=uuid4(), commercial_offering_id=offering.offering_id,
+            provider=CommercialPublicationProvider.FANVUE,
+            status=CommercialPublicationStatus.READY_TO_PUBLISH,
+            external_product_id=None, published_at=None, created_at=now,
+            updated_at=now, last_error=None, retry_count=0,
+        )
+        for _ in range(2)
+    ]
+    memberships = ((10, "photoshoot-1"), (11, "photoshoot-1"))
+
+    class PublicationRepository:
+        def __init__(self):
+            self.metadata = []
+
+        def claim_execution(self, *_args, **_kwargs):
+            return "claim"
+
+        def release_execution(self, *_args):
+            pass
+
+        def update_metadata(self, _id, *, metadata, **_kwargs):
+            self.metadata.append(metadata)
+
+    class PublicationService:
+        def __init__(self):
+            self.by_id = {value.publication_id: value for value in publications}
+            self.live = []
+
+        def get_publication(self, publication_id, **_kwargs):
+            return self.by_id[publication_id]
+
+        def update_status(self, publication_id, *, status, **_kwargs):
+            return replace(self.by_id[publication_id], status=status)
+
+        def finalize_provider_live(self, publication_id, **values):
+            self.live.append((publication_id, values))
+            return SimpleNamespace(
+                publication_id=publication_id,
+                status=CommercialPublicationStatus.LIVE,
+                delivery_url=values["delivery_url"],
+            )
+
+        def mark_failed(self, *_args, **_kwargs):
+            raise AssertionError("publication should not fail")
+
+    class Client:
+        API_VERSION = "test"
+
+        def __init__(self):
+            self.link = None
+            self.creations = 0
+            self.reconciliations = []
+
+        def require_media_link_scopes(self):
+            pass
+
+        def get_current_user(self):
+            return {"uuid": "creator-uuid"}
+
+        def find_equivalent_media_link(self, media_uuids, price):
+            self.reconciliations.append((tuple(media_uuids), price))
+            return [self.link] if self.link else []
+
+        def create_media_link(self, media_uuids, price):
+            self.creations += 1
+            self.link = {
+                "uuid": "link-1", "url": "https://fanvue.test/link-1",
+                "price": price, "mediaUuids": list(media_uuids),
+            }
+            return self.link
+
+    repository = PublicationRepository()
+    publication_service = PublicationService()
+    client = Client()
+    executor = FanvueMediaLinkPublicationExecutor(
+        publications=repository,
+        offerings=SimpleNamespace(get=lambda *_args, **_kwargs: offering),
+        publication_service=publication_service,
+        client_factory=lambda _account: client,
+    )
+    executor.commercial_eligibility = SimpleNamespace(
+        require_offering=lambda *_args, **_kwargs: None
+    )
+    executor._upload_asset = (
+        lambda _client, _publication, asset_id, *_args:
+        f"media-{asset_id}"
+    )
+
+    results = [
+        executor.execute(
+            publication.publication_id,
+            creator_profile_id=7,
+            fanvue_account_id=3,
+        )
+        for publication in publications
+    ]
+
+    assert all(result.status is CommercialPublicationStatus.LIVE for result in results)
+    assert client.creations == 1
+    assert client.reconciliations == [
+        (("media-10", "media-11"), 1200),
+        (("media-10", "media-11"), 1200),
+    ]
+    assert repository.metadata[-1]["ordered_asset_ids"] == [10, 11]
+    assert memberships == ((10, "photoshoot-1"), (11, "photoshoot-1"))
+    assert [member.asset_id for member in offering.assets] == [10, 11]
+
+    fulfillment_row = {
+        "offering_id": offering.offering_id, "title": offering.title,
+        "description": None, "offering_type": "BUNDLE",
+        "primary_sales_channel": "AI_CHAT", "price_minor": 1200,
+        "currency": "USD", "hero_asset_id": 10, "asset_ids": [10, 11],
+        "destinations": ["BUNDLE", "BUNDLE"], "offering_status": "READY",
+        "publication_id": publications[0].publication_id, "provider": "FANVUE",
+        "external_product_id": "link-1",
+        "delivery_url": "https://fanvue.test/link-1",
+        "publication_status": "LIVE", "provider_resource_status": "PRESENT",
+        "last_reconciled_at": now, "published_at": now,
+    }
+    fulfillment = CommercialFulfillmentService(
+        repository=SimpleNamespace(get=lambda *_args, **_kwargs: fulfillment_row)
+    ).get_fulfillment(offering.offering_id, creator_profile_id=7)
+    delivery = ConversationGateway._authoritative_delivery(
+        response_text="Here is the approved bundle.",
+        offering=fulfillment,
+    )
+
+    assert fulfillment.fulfillable is True
+    assert fulfillment.ordered_asset_ids == (10, 11)
+    assert delivery[0] == "https://fanvue.test/link-1"
+    assert delivery[3] is True

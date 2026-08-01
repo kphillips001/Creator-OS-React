@@ -2,15 +2,24 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, is_dataclass
+from dataclasses import fields, is_dataclass
 from enum import Enum
 from typing import Any
+from uuid import UUID
 
 from app.repositories.chat_message_repository import get_thread_messages_for_user
 from app.repositories.customer_entitlement_repository import CustomerEntitlementRepository
 from app.repositories.customer_repository import CustomerRepository
+from app.repositories.purchase_intent_repository import PurchaseIntentRepository
+from app.repositories.sales_session_repository import SalesSessionRepository
+from app.repositories.creator_profile_repository import get_active_creator_profile
+from app.models.ownership_intelligence import OwnershipIdentity
+from app.services.ownership_intelligence_service import OwnershipIntelligenceService
 from app.services.customer_business_service import CustomerBusinessService
-from app.services.customer_intelligence_service import CustomerIntelligenceService
+from app.services.customer_intelligence_service import (
+    CustomerIntelligenceCompatibilityAdapter,
+    CustomerIntelligenceService,
+)
 from app.services.customer_service import CustomerService
 
 
@@ -25,7 +34,11 @@ class CustomerWorkspaceService:
         customer_intelligence_service: CustomerIntelligenceService | None = None,
         customer_business_service: CustomerBusinessService | None = None,
         entitlement_repository: CustomerEntitlementRepository | None = None,
+        ownership_intelligence: OwnershipIntelligenceService | None = None,
+        creator_profile_resolver: Any = get_active_creator_profile,
         conversation_fetcher: Any = get_thread_messages_for_user,
+        purchase_intent_repository: Any | None = None,
+        sales_session_repository: Any | None = None,
     ) -> None:
         self.customers = customer_repository or CustomerRepository()
         self.customer_service = customer_service or CustomerService(self.customers)
@@ -33,11 +46,19 @@ class CustomerWorkspaceService:
             customer_service=self.customer_service,
         )
         self.business = customer_business_service or CustomerBusinessService(
-            customer_intelligence_service=self.intelligence,
+            customer_intelligence_service=CustomerIntelligenceCompatibilityAdapter(
+                customer_service=self.customer_service,
+            ),
             customer_service=self.customer_service,
         )
         self.entitlements = entitlement_repository or CustomerEntitlementRepository()
+        self.ownership_intelligence = (
+            ownership_intelligence or OwnershipIntelligenceService()
+        )
+        self.creator_profile_resolver = creator_profile_resolver
         self.conversation_fetcher = conversation_fetcher
+        self.purchase_intents = purchase_intent_repository or PurchaseIntentRepository()
+        self.sales_sessions = sales_session_repository or SalesSessionRepository()
 
     def list_customers(self, *, fanvue_account_id: int, limit: int = 1000) -> tuple[dict[str, Any], ...]:
         return tuple(
@@ -113,7 +134,46 @@ class CustomerWorkspaceService:
             legacy_fanvue_account_id=account_id,
             legacy_fanvue_user_id=user_id,
         )
+        canonical_ownership = self._ownership_projection(account_id, user_id)
         messages = tuple(self.conversation_fetcher(account_id, user_id) or ())
+        fanvue_identity = customer.identity_for("fanvue")
+        telegram_identity = customer.identity_for("telegram")
+        source_facts, source_failures = self._canonical_customer_sources(
+            creator_profile_id=self._creator_profile_id(account_id),
+            account_id=account_id, user_id=user_id,
+            external_uuid=(
+                fanvue_identity.provider_customer_id if fanvue_identity else None
+            ),
+        )
+        canonical_profile = self.intelligence.build_canonical_profile(
+            customer_context={
+                "creator_profile_id": self._creator_profile_id(account_id),
+                "fanvue_account_id": account_id,
+                "canonical_customer_id": customer_id,
+                "external_fanvue_user_uuid": (
+                    fanvue_identity.provider_customer_id
+                    if fanvue_identity else None
+                ),
+                "telegram_user_id": (
+                    telegram_identity.provider_customer_id
+                    if telegram_identity else None
+                ),
+                "identity_path": "fanvue_account:legacy_user",
+            },
+            entitlements=entitlements,
+            ownership=canonical_ownership,
+            purchase_intents=source_facts["purchase_intents"],
+            sessions=source_facts["sessions"],
+            messages=messages,
+            recommendations=(self._plain(customer.recommendation),),
+            classifications=({
+                "label": review.relationship_stage,
+                "source": "CustomerIntelligenceReview",
+                "confidence": 0.6,
+                "evidence": ("relationship_intelligence",),
+            },),
+            source_failures=source_failures,
+        )
         item.update({
             "identity": self._plain(business_snapshot.customer_identity),
             "relationship": self._plain(review.relationship),
@@ -122,6 +182,9 @@ class CustomerWorkspaceService:
             "commerceAndOwnership": {
                 "summary": self._plain(commerce),
                 "entitlements": self._plain(entitlements),
+                "ownershipIntelligence": (
+                    self._plain(canonical_ownership)
+                ),
             },
             "recommendationHistory": self._plain(customer.recommendation),
             "conversationSummary": {
@@ -129,6 +192,7 @@ class CustomerWorkspaceService:
                 "recent_messages": self._plain(messages[-10:]),
             },
             "buyerSession": self._plain(customer.progression),
+            "salesSessions": self._plain(source_facts["sessions"]),
             "retentionAndGrowth": {
                 "retention": self._plain(business_snapshot.retention_summary),
                 "growth": self._plain(business_snapshot.growth_summary),
@@ -141,8 +205,68 @@ class CustomerWorkspaceService:
             "businessSummary": self._plain(business_summary),
             "businessSnapshot": self._plain(business_snapshot),
             "intelligenceReview": self._plain(review),
+            "customerIntelligenceProfile": self._plain(canonical_profile),
         })
         return item
+
+    def _ownership_projection(self, account_id: int, user_id):
+        creator_profile = self.creator_profile_resolver(str(account_id)) or {}
+        if creator_profile.get("id") is None:
+            return {
+                "insufficiencies": ("CREATOR_SCOPE_UNRESOLVED",),
+            }
+        answer = self.ownership_intelligence.answer(OwnershipIdentity(
+            creator_profile_id=int(creator_profile["id"]),
+            fanvue_account_id=int(account_id),
+            legacy_fanvue_user_id=str(user_id),
+        ))
+        return self.ownership_intelligence.workspace_view(answer)
+
+    def _creator_profile_id(self, account_id: int) -> int | None:
+        creator_profile = self.creator_profile_resolver(str(account_id)) or {}
+        return (
+            int(creator_profile["id"])
+            if creator_profile.get("id") is not None else None
+        )
+
+    def _canonical_customer_sources(
+        self, *, creator_profile_id: int | None, account_id: int,
+        user_id: int, external_uuid: str | None,
+    ) -> tuple[dict[str, tuple[Any, ...]], dict[str, str]]:
+        values: dict[str, tuple[Any, ...]] = {
+            "purchase_intents": (), "sessions": (),
+        }
+        failures: dict[str, str] = {}
+        if creator_profile_id is None:
+            return values, {
+                "purchase_intents": "CreatorScopeUnavailable",
+                "sessions": "CreatorScopeUnavailable",
+            }
+        try:
+            intents, _total, _page = self.purchase_intents.list_page(
+                creator_profile_id=creator_profile_id, search=None,
+                status=None, page=1, page_size=100,
+            )
+            values["purchase_intents"] = tuple(
+                item for item in intents
+                if int(item.fanvue_account_id) == int(account_id)
+                and (
+                    external_uuid is None
+                    or str(item.external_fanvue_user_uuid) == external_uuid
+                )
+            )
+        except Exception as error:
+            failures["purchase_intents"] = type(error).__name__
+        try:
+            values["sessions"] = tuple(
+                item for item in self.sales_sessions.list_for_creator(
+                    creator_profile_id=creator_profile_id, limit=500,
+                ) if int(item.fanvue_account_id) == int(account_id)
+                and int(item.fanvue_user_id) == int(user_id)
+            )
+        except Exception as error:
+            failures["sessions"] = type(error).__name__
+        return values, failures
 
     @staticmethod
     def _parse_customer_id(customer_id: str) -> tuple[int, int]:
@@ -157,9 +281,14 @@ class CustomerWorkspaceService:
             return None
         if isinstance(value, Enum):
             return value.value
+        if isinstance(value, UUID):
+            return str(value)
         if is_dataclass(value):
-            return cls._plain(asdict(value))
-        if isinstance(value, dict):
+            return {
+                field.name: cls._plain(getattr(value, field.name))
+                for field in fields(value)
+            }
+        if isinstance(value, dict) or hasattr(value, "items"):
             return {str(key): cls._plain(item) for key, item in value.items()}
         if isinstance(value, (tuple, list, set)):
             return [cls._plain(item) for item in value]

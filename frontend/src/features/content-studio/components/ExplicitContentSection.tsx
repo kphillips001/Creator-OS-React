@@ -32,7 +32,13 @@ function conceptId(tier: ExplicitTier, index: number): string {
   return `${tier}-${index}`;
 }
 
-export function ExplicitContentSection({ context }: { context: ContentStudioContext }) {
+export function ExplicitContentSection({
+  context,
+  onStartNewGeneration,
+}: {
+  context: ContentStudioContext;
+  onStartNewGeneration?: () => void;
+}) {
   const generationRef = useRef<GenerationWorkflowHandle>(null);
   const { configuration, error: configurationError } = useContentStudioConfiguration();
   const [lane, setLane] = useState<ExplicitLane>("tags");
@@ -457,11 +463,16 @@ export function ExplicitContentSection({ context }: { context: ContentStudioCont
         <GenerationWorkflowSections
           context={context}
           disabled={blocked}
-          onAskAnotherQuestion={() => undefined}
-          onContinueExploring={() => undefined}
           onPlannerBatchItemChange={(id, changes) => setItems((current) => updatePlannerBatchItems(current, id, changes))}
           onRunStart={() => setActivated(true)}
-          onStartNewSession={() => undefined}
+          onStartNewGeneration={() => {
+            setItems([]);
+            setProgress(null);
+            setPending(false);
+            setError("");
+            setActivated(false);
+            onStartNewGeneration?.();
+          }}
           plannerBatchItems={items}
           plannerBatchProgress={progress}
           plannerBatchRunning={pending}

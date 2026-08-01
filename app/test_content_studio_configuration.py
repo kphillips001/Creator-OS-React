@@ -147,14 +147,11 @@ class ContentStudioConfigurationServiceTests(unittest.TestCase):
             configuration.modes,
         )
 
-    def test_load_uses_content_studio_fallback_when_registry_has_no_supported_provider(self):
-        configuration = self._load(provider_ids=("not_available_to_content_studio",))
-
-        self.assertEqual(
-            configuration.providers,
-            (("future_provider", "Future Provider"),),
-        )
-        self.assertEqual(configuration.default_provider, "future_provider")
+    def test_load_fails_closed_when_registry_has_no_supported_provider(self):
+        with self.assertRaisesRegex(
+            RuntimeError, "No active Content Studio generation provider is registered"
+        ):
+            self._load(provider_ids=("not_available_to_content_studio",))
 
 
 class ContentStudioConfigurationApiTests(unittest.TestCase):

@@ -105,7 +105,7 @@ class EditStudioService:
             source_image_ids=source_ids,
             edit_mode=mode,
             edit_prompt=prompt,
-            provider_id=str(provider_id or "future_provider"),
+            provider_id=str(provider_id or "seedream_5_0_pro"),
             reference_image_id=reference_image_id,
             reference_asset_id=reference_asset_id,
             batch_size=max(1, int(batch_size or 1)),

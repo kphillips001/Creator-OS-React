@@ -48,6 +48,7 @@ function mockContext(
   configurationValue: object = configuration,
   archiveValue: object[] = [],
   plannerAnswer = "",
+  liveGenerationValue?: object,
 ) {
   vi.stubGlobal("fetch", vi.fn().mockImplementation((url: string, options?: RequestInit) => {
     let responseValue = url.endsWith("/configuration")
@@ -68,7 +69,7 @@ function mockContext(
             },
           }
       : url.endsWith("/generations/run-live")
-        ? {
+        ? liveGenerationValue ?? {
             success: true,
             error: null,
             generation: {
@@ -1276,24 +1277,42 @@ describe("ContentStudioPage", () => {
     completedSlots.forEach((slot, index) => expect(slot).toBe(reservedSlots[index]));
     expect(screen.getByText("Generation completed with partial success.")).toBeInTheDocument();
 
-    const nextStep = screen.getByRole("region", { name: "Next Step" });
-    expect(within(nextStep).getByText("Continue building on this creative direction or begin a new one.")).toBeInTheDocument();
-    fireEvent.click(within(nextStep).getByRole("button", { name: /Continue Exploring/ }));
-    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: "smooth", block: "start" });
-    expect(screen.getAllByText("Continue this direction")).toHaveLength(2);
-    expect(screen.getAllByRole("checkbox")).toHaveLength(3);
+    expect(screen.queryByRole("region", { name: "Next Step" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Generation Complete" })).not.toBeInTheDocument();
+    expect(scrollIntoView).not.toHaveBeenCalled();
+  });
 
-    fireEvent.click(within(nextStep).getByRole("button", { name: /Ask Another Question/ }));
-    await waitFor(() => expect(plannerInput).toHaveFocus());
-    expect(plannerInput).toHaveValue("Continue this direction");
-    expect(screen.getByText("Continue with a closer window portrait.")).toBeInTheDocument();
+  it("resets a dynamically completed batch and returns to the open Creative Studio", async () => {
+    mockContext(readyContext, configuration, [], "", {
+      success: true,
+      error: null,
+      generation: {
+        runId: "run-live", jobId: "job-live", promptPlanId: "plan-live",
+        status: "succeeded", message: "Generation completed successfully.",
+        provider: "seedream_5_0_pro", completedCount: 1, failedCount: 0,
+        processedCount: 1, totalCount: 1, progress: 100,
+        images: [{ index: 0, url: "/api/v1/content-studio/generations/run-live/images/0" }],
+      },
+    });
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(Element.prototype, "scrollIntoView", { configurable: true, value: scrollIntoView });
+    render(<ContentStudioPage />);
+    const initialPath = window.location.pathname;
 
-    fireEvent.click(within(nextStep).getByRole("button", { name: /Start New Session/ }));
-    await waitFor(() => expect(plannerInput).toHaveFocus());
-    expect(plannerInput).toHaveValue("");
-    expect(screen.queryByText("Canonical Prompt Planner Responses")).not.toBeInTheDocument();
-    expect(screen.queryByRole("checkbox", { name: "Select All" })).not.toBeInTheDocument();
-    expect(screen.getByRole("img", { name: "Generated image 1 of 10" })).toBeInTheDocument();
-    expect(screen.getByText("Generation completed with partial success.")).toBeInTheDocument();
+    const count = await screen.findByLabelText("Prompt Count");
+    fireEvent.change(count, { target: { value: "1" } });
+    fireEvent.change(screen.getByLabelText("Creative Concept"), { target: { value: "hotel mirror scene" } });
+    fireEvent.click(screen.getByRole("button", { name: "🚀 Create Images" }));
+
+    const completion = await screen.findByRole("region", { name: "Generation Complete" });
+    expect(within(completion).getByRole("heading", { name: "✓ Generation Complete" })).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Next Step" })).not.toBeInTheDocument();
+    fireEvent.click(within(completion).getByRole("button", { name: "Start New Generation" }));
+
+    await waitFor(() => expect(screen.queryByRole("region", { name: "Live Generation" })).not.toBeInTheDocument());
+    const creativeStudio = screen.getByText("🎨 Creative Studio").closest("details");
+    expect(creativeStudio).toHaveAttribute("open");
+    await waitFor(() => expect(scrollIntoView).toHaveBeenCalledWith({ behavior: "smooth", block: "start" }));
+    expect(window.location.pathname).toBe(initialPath);
   });
 });

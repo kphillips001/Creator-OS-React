@@ -11,6 +11,7 @@ from psycopg.errors import UniqueViolation
 from app.models.sales_session import (
     ACTIVE_SALES_SESSION_STATES,
     SalesSessionActorType,
+    SalesSessionFoundationType,
     SalesSessionOutcome,
     SalesSessionProgression,
     SalesSessionState,
@@ -26,6 +27,7 @@ from app.repositories.telegram_identity_repository import (
     TelegramIdentityRepository,
 )
 from app.repositories.user_repository import get_user_by_account_and_id
+from app.repositories.creator_profile_repository import get_active_creator_profile
 from app.services.buyer_session_service import BuyerSessionService
 
 
@@ -106,7 +108,8 @@ class SalesSessionService:
     def __init__(
         self, *, repository=None, identity_repository=None,
         purchase_intent_repository=None, photoshoot_repository=None,
-        customer_fetcher=None, compatibility=None,
+        customer_fetcher=None, creator_profile_resolver=None,
+        compatibility=None,
     ) -> None:
         self.repository = repository or SalesSessionRepository()
         self.identities = identity_repository or TelegramIdentityRepository()
@@ -117,6 +120,9 @@ class SalesSessionService:
             photoshoot_repository or PhotoshootCommerceRepository()
         )
         self.customer_fetcher = customer_fetcher or get_user_by_account_and_id
+        self.creator_profile_resolver = (
+            creator_profile_resolver or get_active_creator_profile
+        )
         self.compatibility = (
             compatibility or SalesSessionCompatibilityAdapter()
         )
@@ -125,9 +131,10 @@ class SalesSessionService:
         self, *, creator_profile_id: int, fanvue_account_id: int,
         fanvue_user_id: int, telegram_user_id: int | None,
         conversation_thread_id: int | None,
-        commercial_foundation_reference: str,
+        commercial_foundation_reference: str | None,
         objective: str | None, commercial_context: Mapping | None,
         actor_type, actor_identifier: str | None,
+        commercial_foundation_type=SalesSessionFoundationType.PHOTOSHOOT,
     ):
         actor = self._actor(actor_type, allow_system=False)
         customer = self.customer_fetcher(
@@ -158,27 +165,15 @@ class SalesSessionService:
                 raise SalesSessionError(
                     "Telegram identity does not match the canonical Customer."
                 )
-        foundation = str(commercial_foundation_reference or "").strip()
-        if not foundation:
-            raise SalesSessionError("A Photoshoot foundation is required.")
-        photoshoot = self.photoshoots.get_by_session(foundation)
-        if (
-            photoshoot is None
-            or int(photoshoot.get("creator_profile_id") or 0)
-            != int(creator_profile_id)
-        ):
-            raise KeyError("Commercial Photoshoot foundation was not found.")
-        if (
-            conversation_thread_id is not None
-            and not self.repository.conversation_belongs_to_customer(
-                conversation_thread_id=int(conversation_thread_id),
-                fanvue_account_id=int(fanvue_account_id),
-                fanvue_user_id=int(fanvue_user_id),
-            )
-        ):
-            raise SalesSessionError(
-                "Conversation does not belong to the canonical Customer."
-            )
+        foundation_type = self._foundation_type(commercial_foundation_type)
+        foundation, conversation_thread_id = self._validate_foundation(
+            foundation_type=foundation_type,
+            foundation_reference=commercial_foundation_reference,
+            conversation_thread_id=conversation_thread_id,
+            creator_profile_id=int(creator_profile_id),
+            fanvue_account_id=int(fanvue_account_id),
+            fanvue_user_id=int(fanvue_user_id),
+        )
         context = self._context(commercial_context)
         try:
             session = self.repository.create(
@@ -195,7 +190,7 @@ class SalesSessionService:
                     int(conversation_thread_id)
                     if conversation_thread_id is not None else None
                 ),
-                commercial_foundation_type="PHOTOSHOOT",
+                commercial_foundation_type=foundation_type.value,
                 commercial_foundation_reference=foundation,
                 objective=self._text(objective), commercial_context=context,
                 actor_type=actor,
@@ -211,6 +206,32 @@ class SalesSessionService:
                 raise
         self.compatibility.started(session)
         return session
+
+    def resolve_or_start_conversation(
+        self, *, creator_profile_id: int, fanvue_account_id: int,
+        fanvue_user_id: int, conversation_thread_id: int,
+        telegram_user_id: int | None = None,
+        objective: str | None = None,
+        commercial_context: Mapping | None = None,
+        actor_type=SalesSessionActorType.AI,
+        actor_identifier: str | None = None,
+    ):
+        """Resolve the active experience or start its canonical Conversation origin."""
+        return self.start(
+            creator_profile_id=creator_profile_id,
+            fanvue_account_id=fanvue_account_id,
+            fanvue_user_id=fanvue_user_id,
+            telegram_user_id=telegram_user_id,
+            conversation_thread_id=conversation_thread_id,
+            commercial_foundation_type=(
+                SalesSessionFoundationType.CONVERSATION
+            ),
+            commercial_foundation_reference=None,
+            objective=objective,
+            commercial_context=commercial_context,
+            actor_type=actor_type,
+            actor_identifier=actor_identifier,
+        )
 
     def get(self, *, session_id, creator_profile_id: int):
         session = self.repository.get(
@@ -399,13 +420,33 @@ class SalesSessionService:
         return {
             "sales_session": session,
             "customer": customer,
-            "commercial_guidance": self.repository.commercial_guidance(
-                session=session
-            ),
+            "commercial_guidance": self.commercial_guidance(session=session),
             "purchase_intents": self.repository.list_purchase_intents(
                 session_id=session.sales_session_id,
                 creator_profile_id=session.creator_profile_id,
             ),
+        }
+
+    def commercial_guidance(self, *, session) -> dict:
+        if (
+            session.commercial_foundation_type
+            is SalesSessionFoundationType.PHOTOSHOOT
+        ):
+            return {
+                "foundation_type": SalesSessionFoundationType.PHOTOSHOOT.value,
+                "foundation_reference": session.commercial_foundation_reference,
+                **self.repository.commercial_guidance(session=session),
+            }
+        return {
+            "foundation_type": SalesSessionFoundationType.CONVERSATION.value,
+            "conversation": {
+                "conversation_thread_id": session.conversation_thread_id,
+                "fanvue_account_id": session.fanvue_account_id,
+                "fanvue_user_id": session.fanvue_user_id,
+            },
+            "customer_intelligence_source": "CustomerIntelligenceService",
+            "ownership_intelligence_source": "OwnershipIntelligenceService",
+            "assets": (),
         }
 
     def _terminal_action(
@@ -472,6 +513,72 @@ class SalesSessionService:
         if actor is SalesSessionActorType.SYSTEM and not allow_system:
             raise SalesSessionError("SYSTEM cannot initiate a Sales Session.")
         return actor
+
+    @staticmethod
+    def _foundation_type(value):
+        try:
+            return (
+                value if isinstance(value, SalesSessionFoundationType)
+                else SalesSessionFoundationType(str(value).strip().upper())
+            )
+        except ValueError as error:
+            raise SalesSessionError(
+                "Unsupported Sales Session foundation type."
+            ) from error
+
+    def _validate_foundation(
+        self, *, foundation_type, foundation_reference,
+        conversation_thread_id, creator_profile_id,
+        fanvue_account_id, fanvue_user_id,
+    ):
+        reference = str(foundation_reference or "").strip() or None
+        if foundation_type is SalesSessionFoundationType.PHOTOSHOOT:
+            if reference is None:
+                raise SalesSessionError("A Photoshoot foundation is required.")
+            photoshoot = self.photoshoots.get_by_session(reference)
+            if (
+                photoshoot is None
+                or int(photoshoot.get("creator_profile_id") or 0)
+                != creator_profile_id
+            ):
+                raise KeyError("Commercial Photoshoot foundation was not found.")
+            if conversation_thread_id is not None:
+                self._validate_conversation(
+                    conversation_thread_id, creator_profile_id,
+                    fanvue_account_id, fanvue_user_id,
+                )
+            return reference, conversation_thread_id
+        if reference is not None:
+            raise SalesSessionError(
+                "A Conversation Session cannot store a foundation reference."
+            )
+        if conversation_thread_id is None:
+            raise SalesSessionError(
+                "A canonical conversation thread is required."
+            )
+        self._validate_conversation(
+            conversation_thread_id, creator_profile_id,
+            fanvue_account_id, fanvue_user_id,
+        )
+        return None, int(conversation_thread_id)
+
+    def _validate_conversation(
+        self, conversation_thread_id, creator_profile_id,
+        fanvue_account_id, fanvue_user_id,
+    ) -> None:
+        creator = self.creator_profile_resolver(str(fanvue_account_id)) or {}
+        if int(creator.get("id") or 0) != int(creator_profile_id):
+            raise SalesSessionError(
+                "Conversation does not belong to the creator scope."
+            )
+        if not self.repository.conversation_belongs_to_customer(
+            conversation_thread_id=int(conversation_thread_id),
+            fanvue_account_id=int(fanvue_account_id),
+            fanvue_user_id=int(fanvue_user_id),
+        ):
+            raise SalesSessionError(
+                "Conversation does not belong to the canonical Customer."
+            )
 
     @staticmethod
     def _state(value):

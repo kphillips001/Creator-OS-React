@@ -16,6 +16,7 @@ from app.services.telegram_identity_adapter import TelegramIdentityAdapter
 from app.services.telegram_inbound_adapter import TelegramInboundAdapter
 from app.services.worker_heartbeat_instrumentation import record_heartbeat_safely
 from app.services.worker_heartbeat_service import WorkerHeartbeatService
+from app.repositories.chat_message_repository import get_or_create_chat_thread
 
 if TYPE_CHECKING:
     from app.integrations.telegram.telethon_transport import TelethonUserTransport
@@ -333,6 +334,7 @@ def build_default_runtime_from_environment() -> TelethonRuntime:
         ),
         global_safety_service=global_safety,
         purchase_intent_service=purchase_intents,
+        conversation_thread_resolver=get_or_create_chat_thread,
     )
 
 

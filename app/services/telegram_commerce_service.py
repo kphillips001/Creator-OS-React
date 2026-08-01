@@ -24,7 +24,7 @@ from app.models.telegram_commerce import (
     TelegramDeliveryPayload,
     TelegramExperienceProgression,
 )
-from app.services.customer_intelligence_service import CustomerIntelligenceService
+from app.services.customer_intelligence_service import CustomerIntelligenceCompatibilityAdapter as CustomerIntelligenceService
 
 if TYPE_CHECKING:
     from app.services.cms_contract_service import CMSContractService
@@ -226,7 +226,7 @@ class TelegramCommerceService:
                     "customer_intelligence_boundary": type(
                         self.customer_intelligence_service
                     ).__name__,
-                    "customer_knowledge_owner": "CustomerIntelligenceService",
+                    "customer_knowledge_owner": "CustomerIntelligenceCompatibilityAdapter",
                 },
             ),
             runtime_executor=self.delivery_executor,

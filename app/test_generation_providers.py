@@ -116,6 +116,10 @@ class GenerationProviderTests(unittest.TestCase):
         self.assertIn("flux", provider_ids)
         self.assertFalse(registry.require("flux").metadata().enabled)
         self.assertEqual(registry.require("seedream_5_0_pro").capabilities.max_reference_images, 10)
+        self.assertEqual(registry.require("seedream_5_0_pro").metadata().metadata["lifecycle"], "ACTIVE")
+        self.assertEqual(registry.require("nano_banana").metadata().metadata["lifecycle"], "COMPATIBILITY")
+        self.assertEqual(registry.require("flux").metadata().metadata["lifecycle"], "FUTURE")
+        self.assertNotIn("future_provider", provider_ids)
 
     def test_seedream_5_photoshoot_payload_orders_identity_then_continuity_reference(self):
         provider = Seedream50ProProvider(api_key="test-key", http_client=FakeHttpClient())
@@ -434,6 +438,26 @@ class GenerationProviderTests(unittest.TestCase):
         self.assertEqual(len(http.gets), 2)
         self.assertEqual(completed.status, GenerationStatus.SUCCEEDED.value)
         self.assertEqual(completed.result.output_references, ("https://cdn.test/final.png",))
+
+    def test_polling_exhaustion_becomes_explicit_failure(self):
+        http = FakeHttpClient(get_payloads=[{"data": {"status": "processing"}}] * 2)
+        provider = Seedream45Provider(
+            api_key="test-key",
+            http_client=http,
+            poll_interval_seconds=0,
+            max_poll_attempts=2,
+        )
+        engine = self.make_engine(ProviderRegistry({provider.provider_id: provider}))
+        job = engine.queue_prompt_plan(
+            creator_profile={"id": 7}, prompt_plan=prompt_plan(),
+            provider_id=provider.provider_id, max_retries=0,
+        )
+
+        failed = engine.dispatch_job(job.job_id)
+
+        self.assertEqual(len(http.gets), 2)
+        self.assertEqual(failed.status, GenerationStatus.FAILED.value)
+        self.assertIn("polling exhausted", failed.failure.reason.lower())
 
     def test_retry_behavior_when_provider_api_fails(self):
         http = FakeHttpClient(post_status=500)

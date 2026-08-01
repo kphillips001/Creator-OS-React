@@ -23,7 +23,8 @@ class StartSalesSessionRequest(BaseModel):
     fanvueUserId: int = Field(gt=0)
     telegramUserId: int | None = Field(default=None, gt=0)
     conversationThreadId: int | None = Field(default=None, gt=0)
-    commercialFoundationReference: str
+    commercialFoundationType: str = "PHOTOSHOOT"
+    commercialFoundationReference: str | None = None
     objective: str | None = None
     commercialContext: dict[str, Any] = Field(default_factory=dict)
     actorType: str = "OPERATOR"
@@ -69,10 +70,16 @@ def _session_payload(item) -> dict:
         "fanvueUserId": item.fanvue_user_id,
         "externalFanvueUserUuid": str(item.external_fanvue_user_uuid),
         "telegramIdentityMappingId": item.telegram_identity_mapping_id,
-        "conversationThreadId": item.conversation_thread_id,
+        **(
+            {"conversationThreadId": item.conversation_thread_id}
+            if item.commercial_foundation_type.value == "CONVERSATION"
+            else {}
+        ),
         "commercialFoundationType": item.commercial_foundation_type,
-        "commercialFoundationReference": (
-            item.commercial_foundation_reference
+        **(
+            {"commercialFoundationReference": item.commercial_foundation_reference}
+            if item.commercial_foundation_type.value == "PHOTOSHOOT"
+            else {}
         ),
         "state": item.state.value,
         "progressionStage": item.progression_stage.value,
@@ -101,9 +108,8 @@ def start_sales_session(request: StartSalesSessionRequest):
         fanvue_user_id=request.fanvueUserId,
         telegram_user_id=request.telegramUserId,
         conversation_thread_id=request.conversationThreadId,
-        commercial_foundation_reference=(
-            request.commercialFoundationReference
-        ),
+        commercial_foundation_type=request.commercialFoundationType,
+        commercial_foundation_reference=request.commercialFoundationReference,
         objective=request.objective,
         commercial_context=request.commercialContext,
         actor_type=request.actorType,

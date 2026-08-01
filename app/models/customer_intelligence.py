@@ -9,7 +9,47 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
+from collections.abc import Iterator
+from types import MappingProxyType
 from typing import Any, Mapping
+
+
+class FrozenMapping(Mapping[str, Any]):
+    """Small recursively immutable mapping used by canonical read models."""
+
+    __slots__ = ("__values",)
+
+    def __init__(self, values: Mapping[str, Any] | None = None) -> None:
+        object.__setattr__(self, "_FrozenMapping__values", MappingProxyType({
+            str(key): deep_freeze(value) for key, value in (values or {}).items()
+        }))
+
+    def __getitem__(self, key: str) -> Any:
+        return self.__values[key]
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self.__values)
+
+    def __len__(self) -> int:
+        return len(self.__values)
+
+    def __copy__(self) -> "FrozenMapping":
+        return self
+
+    def __deepcopy__(self, memo: dict[int, Any]) -> "FrozenMapping":
+        return self
+
+
+def deep_freeze(value: Any) -> Any:
+    """Recursively detach and freeze canonical evidence values."""
+
+    if isinstance(value, FrozenMapping):
+        return value
+    if isinstance(value, Mapping):
+        return FrozenMapping(value)
+    if isinstance(value, (tuple, list, set, frozenset)):
+        return tuple(deep_freeze(item) for item in value)
+    return value
 
 
 class CustomerRelationshipStage(str, Enum):
@@ -21,6 +61,120 @@ class CustomerRelationshipStage(str, Enum):
     REPEAT_PURCHASER = "repeat_purchaser"
     VIP = "vip"
     DORMANT = "dormant"
+
+
+class CustomerIntelligenceState(str, Enum):
+    SUFFICIENT = "SUFFICIENT"
+    PARTIAL = "PARTIAL"
+    INSUFFICIENT = "INSUFFICIENT"
+    CONFLICTING = "CONFLICTING"
+    UNAVAILABLE = "UNAVAILABLE"
+
+
+class CustomerSignalQuality(str, Enum):
+    STRONG_COMMERCIAL = "STRONG_COMMERCIAL"
+    STRONG_BEHAVIORAL = "STRONG_BEHAVIORAL"
+    SUPPORTING = "SUPPORTING"
+    WEAK = "WEAK"
+    AMBIGUOUS = "AMBIGUOUS"
+    UNAVAILABLE = "UNAVAILABLE"
+
+
+@dataclass(frozen=True)
+class CustomerEvidenceReference:
+    authority: str
+    record_id: str | None
+    creator_profile_id: int
+    customer_identity_path: str
+    lifecycle: str | None = None
+    timestamp: str | None = None
+    currency: str | None = None
+    quality: CustomerSignalQuality = CustomerSignalQuality.SUPPORTING
+    metadata: Mapping[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "metadata", deep_freeze(self.metadata))
+
+
+@dataclass(frozen=True)
+class CustomerIntelligenceMetric:
+    name: str
+    value: Any
+    unit: str
+    state: CustomerIntelligenceState
+    calculation_method: str
+    calculated_at: str
+    currency: str | None = None
+    numerator: float | int | None = None
+    denominator: float | int | None = None
+    included_records: tuple[str, ...] = ()
+    excluded_records: tuple[str, ...] = ()
+    lifecycle_filters: tuple[str, ...] = ()
+    confidence: float = 0.0
+    conflicts: tuple[str, ...] = ()
+    insufficiencies: tuple[str, ...] = ()
+    provenance: Mapping[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "value", deep_freeze(self.value))
+        object.__setattr__(self, "provenance", deep_freeze(self.provenance))
+
+
+@dataclass(frozen=True)
+class CustomerIntelligencePreference:
+    dimension: str
+    subject: str
+    direction: str
+    state: CustomerIntelligenceState
+    quality: CustomerSignalQuality
+    confidence: float
+    positive_evidence: tuple[str, ...] = ()
+    contradictory_evidence: tuple[str, ...] = ()
+    observation_count: int = 0
+    exposure_count: int = 0
+    latest_evidence_at: str | None = None
+    derivation_method: str = "evidence_count"
+    conflicts: tuple[str, ...] = ()
+    insufficiencies: tuple[str, ...] = ()
+    supporting_evidence: tuple[str, ...] = ()
+    provenance: Mapping[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "provenance", deep_freeze(self.provenance))
+
+
+@dataclass(frozen=True)
+class CanonicalCustomerIntelligenceProfile:
+    profile_state: CustomerIntelligenceState
+    customer_context: Mapping[str, Any]
+    identity_confidence: float
+    facts: tuple[CustomerEvidenceReference, ...]
+    commercial_summary: Mapping[str, Any]
+    unified_purchase_history: tuple[Mapping[str, Any], ...]
+    spending_profile: Mapping[str, CustomerIntelligenceMetric]
+    ownership_summary: Mapping[str, Any]
+    session_profile: Mapping[str, Any]
+    purchase_preferences: tuple[CustomerIntelligencePreference, ...]
+    media_preferences: tuple[CustomerIntelligencePreference, ...]
+    bundle_behavior: Mapping[str, Any]
+    video_conversion: Mapping[str, Any]
+    engagement_profile: Mapping[str, Any]
+    recommendation_history: Mapping[str, Any]
+    interests: tuple[Mapping[str, Any], ...]
+    aversions: tuple[Mapping[str, Any], ...]
+    opportunities: tuple[Mapping[str, Any], ...]
+    risks: tuple[Mapping[str, Any], ...]
+    classifications: tuple[Mapping[str, Any], ...]
+    section_states: Mapping[str, CustomerIntelligenceState]
+    section_state_reasons: Mapping[str, tuple[str, ...]]
+    conflicts: tuple[str, ...]
+    insufficiencies: tuple[str, ...]
+    provenance: Mapping[str, Any]
+    calculation_metadata: Mapping[str, Any]
+
+    def __post_init__(self) -> None:
+        for name in self.__dataclass_fields__:
+            object.__setattr__(self, name, deep_freeze(getattr(self, name)))
 
 
 @dataclass(frozen=True)

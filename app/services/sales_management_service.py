@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from app.services.business_learning_service import BusinessLearningService
     from app.services.commerce_strategy_service import CommerceStrategyService
     from app.services.conversation_operations_service import ConversationOperationsService
-    from app.services.customer_intelligence_service import CustomerIntelligenceService
+    from app.services.customer_intelligence_service import CustomerIntelligenceCompatibilityAdapter as CustomerIntelligenceService
     from app.services.product_business_service import ProductBusinessService
     from app.services.telegram_business_service import TelegramBusinessService
 
@@ -521,7 +521,7 @@ class SalesManagementService:
             "telegram_business_owner": "TelegramBusinessService",
             "conversation_operations_owner": "ConversationOperationsService",
             "commerce_strategy_owner": "CommerceStrategyService",
-            "customer_intelligence_owner": "CustomerIntelligenceService",
+            "customer_intelligence_owner": "CustomerIntelligenceCompatibilityAdapter",
             "product_business_owner": "ProductBusinessService",
             "business_learning_owner": "BusinessLearningService",
             "sources_consumed": {key: value is not None for key, value in sources.items()},

@@ -14,6 +14,7 @@ from app.repositories.asset_intelligence_repository import AssetIntelligenceRepo
 from app.repositories.asset_repository import AssetRepository
 from app.repositories.commercial_role_repository import CommercialRoleRepository
 from app.repositories.photoshoot_commerce_repository import PhotoshootCommerceRepository
+from app.services.asset_lineage_service import AssetLineageService
 
 
 class CommercialRoleError(ValueError):
@@ -242,7 +243,7 @@ class CommercialRoleService:
 class CommercialRoleSuggestionService:
     def __init__(
         self, *, role_service=None, intelligence_repository=None,
-        photoshoot_repository=None,
+        photoshoot_repository=None, lineage_service=None,
     ) -> None:
         self.roles = role_service or CommercialRoleService()
         self.intelligence = (
@@ -251,6 +252,7 @@ class CommercialRoleSuggestionService:
         self.photoshoots = (
             photoshoot_repository or PhotoshootCommerceRepository()
         )
+        self.lineage = lineage_service or AssetLineageService()
 
     def suggest(self, *, asset_id: int, creator_profile_id: int):
         self.roles._asset(asset_id, creator_profile_id)
@@ -263,7 +265,20 @@ class CommercialRoleSuggestionService:
         context = self.photoshoots.commercial_role_context_for_asset(
             int(asset_id), int(creator_profile_id)
         )
+        if not context and self.lineage is not None:
+            inherited = self.lineage.photoshoot_context(int(asset_id))
+            if inherited:
+                context = {
+                    "inherited_photoshoot_context": True,
+                    "photoshoot_session_ids": tuple(
+                        item.photoshoot_session_id for item in inherited
+                    ),
+                }
         suggestions = self._suggestions(profile, context or {})
+        if self.lineage is not None:
+            suggestions = (*suggestions, *self._lineage_role_suggestions(
+                asset_id=int(asset_id), creator_profile_id=int(creator_profile_id),
+            ))
         created = []
         for role, confidence, rationale, evidence in suggestions:
             existing = self.roles.repository.get(
@@ -282,6 +297,28 @@ class CommercialRoleSuggestionService:
                 event_type="SUGGESTED",
             ))
         return tuple(created)
+
+    def _lineage_role_suggestions(self, *, asset_id: int, creator_profile_id: int):
+        values = []
+        for parent in self.lineage.parents(asset_id):
+            assignments = self.roles.repository.list_for_asset(
+                asset_id=parent.asset_id, creator_profile_id=creator_profile_id,
+                states=(CommercialRoleState.APPROVED,),
+            )
+            for assignment in assignments:
+                if assignment.role not in {item[0] for item in values}:
+                    values.append((
+                        assignment.role, 0.55,
+                        "A direct source Asset has this approved Commercial Role; "
+                        "creator review is required for the Derived Asset.",
+                        {
+                            "signals": ("asset_lineage", "parent_approved_role"),
+                            "source": "asset_lineage",
+                            "source_asset_id": parent.asset_id,
+                            "inherited": False,
+                        },
+                    ))
+        return tuple(values)
 
     @classmethod
     def _suggestions(cls, profile, context: Mapping):

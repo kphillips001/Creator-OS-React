@@ -38,7 +38,7 @@ from app.services.generation_engine_service import GenerationEngineService
 
 
 class NoReferenceLibraryService:
-    def get_active_reference(self, *, creator_profile_id):
+    def get_active_canonical_reference(self, *, creator_profile_id):
         return None
 
 

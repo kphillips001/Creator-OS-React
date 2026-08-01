@@ -17,18 +17,25 @@ class TelegramPurchaseIntentService:
     def __init__(
         self, *, creator_profile_id: int, fanvue_account_id: int,
         identity_repository=None, purchase_intent_service=None,
+        sales_session_service=None,
         clock=lambda: datetime.now(timezone.utc),
     ):
         self.creator_profile_id = creator_profile_id
         self.fanvue_account_id = fanvue_account_id
         self.identities = identity_repository or TelegramIdentityRepository()
         self.intents = purchase_intent_service or PurchaseIntentService()
+        if sales_session_service is None:
+            from app.services.sales_session_service import SalesSessionService
+            sales_session_service = SalesSessionService()
+        self.sales_sessions = sales_session_service
         self.clock = clock
 
     def create_before_delivery(self, result, payload):
         diagnostics = result.diagnostic_metadata or {}
         if not (
-            diagnostics.get("offering_selected")
+            diagnostics.get("final_offer_authorized") is True
+            and diagnostics.get("customer_sales_brain_evaluated") is True
+            and diagnostics.get("offering_selected")
             and diagnostics.get("delivery_url")
             and diagnostics.get("provider_resource_id")
             and diagnostics.get("publication_id")
@@ -53,7 +60,7 @@ class TelegramPurchaseIntentService:
         ))
         now = self.clock()
         correlation = str(result.correlation_id)
-        return self.intents.replace_active_intent(
+        intent = self.intents.replace_active_intent(
             creator_profile_id=self.creator_profile_id,
             fanvue_account_id=self.fanvue_account_id,
             telegram_identity_mapping_id=identity.id,
@@ -81,8 +88,35 @@ class TelegramPurchaseIntentService:
                         "recommendation_trace", []
                     ),
                 },
+                "commercial_intelligence": dict(
+                    diagnostics.get("commercial_intelligence") or {}
+                ),
             },
         )
+        intelligence = dict(
+            diagnostics.get("commercial_intelligence") or {}
+        )
+        session_context = dict(
+            intelligence.get("salesSessionContext") or {}
+        )
+        session_id = session_context.get("salesSessionId")
+        if intelligence.get("strategy") == "SESSION_SELLING" and session_id:
+            try:
+                self.sales_sessions.associate_purchase_intent(
+                    session_id=session_id,
+                    creator_profile_id=self.creator_profile_id,
+                    purchase_intent_id=intent.purchase_intent_id,
+                    actor_type="SYSTEM",
+                    actor_identifier="TelegramPurchaseIntentService",
+                    reason="Authorized Session Selling presentation.",
+                )
+            except Exception as error:
+                logger.warning(
+                    "event=sales_session_purchase_intent_association_failed "
+                    "purchase_intent_id=%s error_type=%s",
+                    intent.purchase_intent_id, type(error).__name__,
+                )
+        return intent
 
     def confirm_delivery(self, intent, *, telegram_message_id=None):
         if intent is None:

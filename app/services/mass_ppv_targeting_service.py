@@ -1,8 +1,8 @@
 from app.dashboard.config import load_dashboard_config
 from app.services.monetization_priority_service import MonetizationPriorityService
 from app.services.realtime_buyer_state_service import RealtimeBuyerStateService
-from app.services.content_ownership_service import (
-    ContentOwnershipService,
+from app.services.ownership_decision_projection import (
+    OwnershipDecisionProjection,
 )
 from app.services.outreach_mass_ppv_coordination_service import (
     OutreachMassPPVCoordinationService,
@@ -31,8 +31,8 @@ class MassPPVTargetingService:
     def __init__(self):
         self.priority_service = MonetizationPriorityService()
         self.realtime_buyer_state_service = RealtimeBuyerStateService()
-        self.content_ownership_service = (
-            ContentOwnershipService()
+        self.ownership_decisions = (
+            OwnershipDecisionProjection()
         )
         self.outreach_mass_ppv_coordination_service = (
             OutreachMassPPVCoordinationService()
@@ -137,16 +137,12 @@ class MassPPVTargetingService:
         # 1.5 OWNERSHIP FILTER
         # --------------------------------------------------
         if content_tag:
-            already_owned = (
-                self.content_ownership_service
-                .user_already_owns_content(
+            ownership = self.ownership_decisions.content_tag(
                     fanvue_account_id=fanvue_account_id,
                     fanvue_user_id=user_id,
                     content_tag=content_tag,
-                )
             )
-
-            if already_owned:
+            if ownership.blocks_offer:
                 print(
                     "[MASS PPV BLOCK] already owns content: "
                     f"account_id={fanvue_account_id} "
@@ -154,7 +150,10 @@ class MassPPVTargetingService:
                     f"content_tag={content_tag}"
                 )
 
-                return False, "already_owns_content"
+                return False, (
+                    "already_owns_content"
+                    if ownership.owned else "ownership_evidence_unavailable"
+                )
 
         # --------------------------------------------------
         # 2. BLOCK WHALES / HIGH VALUE USERS

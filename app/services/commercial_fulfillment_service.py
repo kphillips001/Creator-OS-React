@@ -79,7 +79,8 @@ class CommercialFulfillmentService:
             return "DELIVERY_ARTIFACT_MISSING"
         expected = (
             "SINGLE_PPV" if row["offering_type"] in {"SINGLE_IMAGE", "VIDEO"}
-            else "PHOTOSET" if row["offering_type"] == "PHOTOSET" else None
+            else "PHOTOSET" if row["offering_type"] == "PHOTOSET"
+            else "BUNDLE" if row["offering_type"] == "BUNDLE" else None
         )
         if expected is None or any(value != expected for value in row["destinations"]):
             return "ASSET_COMMITMENT_INCONSISTENT"

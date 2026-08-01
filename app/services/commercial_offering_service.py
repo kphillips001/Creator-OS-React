@@ -12,6 +12,7 @@ from app.models.commercial_offering import (
 from app.repositories.asset_repository import AssetRepository
 from app.repositories.commercial_offering_repository import CommercialOfferingRepository
 from app.repositories.commercial_publication_repository import CommercialPublicationRepository
+from app.repositories.photoshoot_commerce_repository import PhotoshootCommerceRepository
 from app.models.commercial_publication import CommercialPublicationStatus
 from app.services.content_destination_service import ContentDestinationService
 from app.services.reference_asset_protection import require_commercially_eligible_asset
@@ -30,6 +31,7 @@ class CommercialOfferingService:
     def __init__(
         self, *, repository=None, asset_repository=None, content_destinations=None,
         publication_repository=None,
+        photoshoot_repository=None,
     ) -> None:
         self.repository = repository or CommercialOfferingRepository()
         self.assets = asset_repository or AssetRepository()
@@ -37,6 +39,9 @@ class CommercialOfferingService:
             asset_repository=self.assets
         )
         self.publications = publication_repository or CommercialPublicationRepository()
+        self.photoshoots = (
+            photoshoot_repository or PhotoshootCommerceRepository()
+        )
 
     def create(
         self, *, creator_profile_id: int, offering_type, title: str,
@@ -66,12 +71,22 @@ class CommercialOfferingService:
                 if asset is None or int(asset.creator_profile_id or 0) != int(creator_profile_id):
                     raise ValueError(f"Canonical Asset is unavailable: {asset_id}.")
                 require_commercially_eligible_asset(asset, asset_id=asset_id)
-                if not self._is_available(asset_id, connection):
+                if (
+                    normalized_type != CommercialOfferingType.BUNDLE
+                    and not self._is_available(asset_id, connection)
+                ):
                     raise ValueError(f"Asset {asset_id} is already commercially committed.")
                 assets.append(asset)
             self._validate_shape(
                 normalized_type, tuple(asset.media_type for asset in assets)
             )
+            if (
+                normalized_type == CommercialOfferingType.BUNDLE
+                and self.photoshoots.common_approved_photoshoot(ordered) is None
+            ):
+                raise ValueError(
+                    "BUNDLE Assets must share one approved Photoshoot lineage."
+                )
             values = dict(
                 creator_profile_id=creator_profile_id, offering_type=normalized_type,
                 title=clean_title, description=str(description or "").strip() or None,
@@ -81,19 +96,35 @@ class CommercialOfferingService:
             if connection is not None:
                 values["connection"] = connection
             offering = self.repository.create(**values)
-            if normalized_type == CommercialOfferingType.PHOTOSET:
+            if normalized_type in {
+                CommercialOfferingType.PHOTOSET,
+                CommercialOfferingType.BUNDLE,
+            }:
                 for asset_id in ordered:
+                    if (
+                        normalized_type == CommercialOfferingType.BUNDLE
+                        and not self._is_available(asset_id, connection)
+                    ):
+                        continue
                     context = dict(
                         assigned_by_profile_id=creator_profile_id,
                         source_workflow="commercial_offering_creation",
                         source_reference=f"commercial_offering:{offering.offering_id}",
-                        reason="Asset became an immutable Photoset offering member.",
+                        reason=(
+                            "Asset became an immutable grouped offering member."
+                        ),
                         metadata={"offering_id": str(offering.offering_id)},
                     )
                     if connection is not None:
                         context["connection"] = connection
                     self.content_destinations.commit_to_destination(
-                        asset_id, ContentDestination.PHOTOSET, **context
+                        asset_id,
+                        (
+                            ContentDestination.PHOTOSET
+                            if normalized_type == CommercialOfferingType.PHOTOSET
+                            else ContentDestination.BUNDLE
+                        ),
+                        **context,
                     )
             return offering
 
@@ -207,8 +238,6 @@ class CommercialOfferingService:
 
     @staticmethod
     def _validate_shape(offering_type: CommercialOfferingType, media_types: tuple[str, ...]) -> None:
-        if offering_type == CommercialOfferingType.BUNDLE:
-            raise ValueError("BUNDLE is reserved for a future Commercial Offering workflow.")
         count = len(media_types)
         rules = {
             CommercialOfferingType.SINGLE_IMAGE: (count == 1 and media_types == ("image",), "exactly one image Asset"),
@@ -216,6 +245,10 @@ class CommercialOfferingService:
             CommercialOfferingType.VIDEO: (count == 1 and media_types == ("video",), "exactly one video Asset"),
             CommercialOfferingType.STORY: (count == 1 and media_types == ("story",), "exactly one story Asset"),
             CommercialOfferingType.STORY_SET: (count >= 2 and set(media_types) == {"story"}, "two or more story Assets"),
+            CommercialOfferingType.BUNDLE: (
+                count >= 2 and set(media_types).issubset({"image", "video"}),
+                "two or more image or video Assets",
+            ),
         }
         valid, requirement = rules[offering_type]
         if not valid:

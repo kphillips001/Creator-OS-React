@@ -73,6 +73,19 @@ class SchemaManagerService:
             "legacy": "provider-compatibility",
             "compatibility": "COMPATIBILITY",
         },
+        "asset_lineage_relationships": {
+            "owner": "Asset Lineage",
+            "migration": "20260731_028_asset_lineage.sql",
+            "repository": "AssetLineageRepository",
+            "service": "AssetLineageService",
+            "dashboard": (),
+            "columns": (
+                "relationship_id", "source_asset_id", "derived_asset_id",
+                "source_position", "derivation_kind", "provenance",
+            ),
+            "legacy": "current",
+            "compatibility": "CANONICAL",
+        },
         "asset_intelligence_profiles": {
             "owner": "Asset Intelligence",
             "migration": "20260715_001_asset_intelligence_foundation.sql",
@@ -1295,6 +1308,9 @@ class SchemaManagerService:
             "hosted_asset_reference_current_idx", "hosted_asset_reference_lookup_idx",
         ),
         "content_items": ("idx_content_items_creator_profile_status", "idx_content_items_local_vault_path"),
+        "asset_lineage_relationships": (
+            "idx_asset_lineage_source", "idx_asset_lineage_derived",
+        ),
         "content_opportunity_records": ("idx_content_opportunity_records_type", "idx_content_opportunity_records_payload"),
         "customer_entitlements": ("idx_customer_entitlements_product", "idx_customer_entitlements_legacy_user"),
         "product_assets": ("idx_product_assets_asset_id",),
@@ -1334,6 +1350,10 @@ class SchemaManagerService:
 
     CRITICAL_FOREIGN_KEYS: Mapping[str, tuple[str, ...]] = {
         "hosted_asset_references": ("hosted_asset_references_asset_id_fkey",),
+        "asset_lineage_relationships": (
+            "asset_lineage_relationships_source_asset_id_fkey",
+            "asset_lineage_relationships_derived_asset_id_fkey",
+        ),
         "products": ("products_creator_profile_id_fkey",),
         "product_assets": ("product_assets_product_id_fkey", "product_assets_asset_id_fkey"),
         "customer_entitlements": ("customer_entitlements_product_id_fkey",),

@@ -33,8 +33,10 @@ export type CustomerWorkspaceItem = {
   recommendationHistory?: Record<string, unknown>;
   conversationSummary?: Record<string, unknown>;
   buyerSession?: Record<string, unknown>;
+  salesSessions?: Record<string, unknown>[];
   retentionAndGrowth?: Record<string, unknown>;
   businessGuidance?: Record<string, unknown>;
+  customerIntelligenceProfile?: Record<string, unknown>;
 };
 
 export type CustomerListResponse = {

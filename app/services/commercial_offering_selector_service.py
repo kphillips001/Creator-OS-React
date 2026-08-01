@@ -20,11 +20,16 @@ from app.models.commerce_recommendation import (
     RecommendationContext,
     RecommendationHistoryEntry,
 )
+from app.models.commercial_intelligence import StrategyConstraints
+from app.models.ownership_intelligence import OwnershipIdentity
 from app.repositories.commercial_offering_selector_repository import (
     CommercialOfferingSelectorRepository,
 )
 from app.services.commerce_recommendation_engine import (
     CommerceRecommendationEngine,
+)
+from app.services.ownership_intelligence_service import (
+    OwnershipIntelligenceService,
 )
 
 
@@ -36,7 +41,7 @@ class CommercialOfferingSelectorService:
 
     def __init__(
         self, repository=None, clock=lambda: datetime.now(timezone.utc),
-        recommendation_engine=None,
+        recommendation_engine=None, ownership_intelligence=None,
     ):
         self.repository = (
             repository or CommercialOfferingSelectorRepository()
@@ -45,14 +50,20 @@ class CommercialOfferingSelectorService:
         self.recommendation_engine = (
             recommendation_engine or CommerceRecommendationEngine()
         )
+        self.ownership_intelligence = (
+            ownership_intelligence or OwnershipIntelligenceService()
+        )
 
     def select(
         self, *, creator_profile_id: int, telegram_user_id: int | None,
         customer_profile, commerce_signal, active_purchase_intent,
         conversation_context: dict | None = None,
+        strategy_constraints: StrategyConstraints | None = None,
+        strategy: str | None = None,
     ) -> SelectedOfferingResult:
         started = time.perf_counter()
         context = dict(conversation_context or {})
+        constraints = strategy_constraints or StrategyConstraints()
         channel = str(
             context.get("primary_sales_channel") or "AI_CHAT"
         ).strip().upper()
@@ -78,12 +89,49 @@ class CommercialOfferingSelectorService:
         buyer_uuid = getattr(
             customer_profile, "external_fanvue_user_uuid", None
         )
-        purchased = self.repository.list_purchased_offering_ids(
-            creator_profile_id=int(creator_profile_id),
-            fanvue_account_id=account_id,
-            external_fanvue_user_uuid=buyer_uuid,
-            telegram_user_id=telegram_user_id,
+        ownership = self.ownership_intelligence.answer(
+            OwnershipIdentity(
+                creator_profile_id=int(creator_profile_id),
+                fanvue_account_id=account_id,
+                external_fanvue_user_uuid=buyer_uuid,
+                telegram_user_id=telegram_user_id,
+                legacy_fanvue_user_id=(
+                    str(context["legacy_fanvue_user_id"])
+                    if context.get("legacy_fanvue_user_id") is not None
+                    else None
+                ),
+                core_user_id=context.get("core_user_id"),
+            )
         )
+        purchased = frozenset(ownership.owned_offering_ids)
+        ownership_conflicts = tuple(getattr(ownership, "conflicts", ()) or ())
+        ownership_insufficiencies = tuple(
+            getattr(ownership, "insufficiencies", ()) or ()
+        )
+        if ownership_conflicts or ownership_insufficiencies:
+            recommendation = self.recommendation_engine.rank(
+                (), recommendation_context, rejection_count=0
+            )
+            return self._result(
+                started=started, channel=channel, selected=None,
+                reason=OfferingSelectionReason.NO_ELIGIBLE_OFFERING,
+                evaluations=(), candidate_count=0, purchased=purchased,
+                active_intent=active_purchase_intent is not None,
+                extra_exclusions=(
+                    "OWNERSHIP_CONFLICT"
+                    if ownership_conflicts
+                    else "OWNERSHIP_EVIDENCE_INSUFFICIENT",
+                ),
+                recommendation=recommendation, strategy=strategy,
+            )
+        if ownership.owned_asset_ids:
+            constraints = replace(
+                constraints,
+                excluded_asset_ids=tuple(sorted(set((
+                    *constraints.excluded_asset_ids,
+                    *ownership.owned_asset_ids,
+                )))),
+            )
 
         if active_purchase_intent is not None:
             candidate = self.repository.get_candidate(
@@ -105,6 +153,7 @@ class CommercialOfferingSelectorService:
             evaluation = self._evaluate(
                 candidate, creator_profile_id=int(creator_profile_id),
                 channel=channel, purchased=frozenset(),
+                constraints=constraints,
             )
             if evaluation.eligible:
                 recommendation = self._rank(
@@ -176,6 +225,7 @@ class CommercialOfferingSelectorService:
             self._evaluate(
                 candidate, creator_profile_id=int(creator_profile_id),
                 channel=channel, purchased=purchased,
+                constraints=constraints,
             )
             for candidate in candidates
         )
@@ -195,6 +245,7 @@ class CommercialOfferingSelectorService:
                 evaluations=evaluations, candidate_count=len(candidates),
                 purchased=purchased, active_intent=False,
                 recommendation=recommendation,
+                strategy=strategy,
             )
 
         recommendation = self._rank(
@@ -209,12 +260,15 @@ class CommercialOfferingSelectorService:
             candidate_count=len(candidates), purchased=purchased,
             active_intent=False,
             recommendation=recommendation,
+            strategy=strategy,
         )
 
     def _evaluate(
         self, candidate, *, creator_profile_id: int, channel: str,
         purchased: frozenset[UUID],
+        constraints: StrategyConstraints | None = None,
     ) -> OfferingEligibilityEvaluation:
+        constraints = constraints or StrategyConstraints()
         reasons: list[str] = []
         if candidate.get("commercially_eligible") is False:
             reasons.append(
@@ -256,6 +310,59 @@ class CommercialOfferingSelectorService:
         if destination_reason:
             reasons.append(destination_reason)
         offering_id = UUID(str(candidate["offering_id"]))
+        offering_type = str(candidate.get("offering_type") or "")
+        if (
+            constraints.required_offering_types
+            and offering_type not in constraints.required_offering_types
+        ):
+            reasons.append("STRATEGY_OFFERING_TYPE_MISMATCH")
+        if offering_type in constraints.excluded_offering_types:
+            reasons.append("STRATEGY_OFFERING_TYPE_EXCLUDED")
+        photoshoot = (
+            str(candidate["photoshoot_identifier"])
+            if candidate.get("photoshoot_identifier") is not None else None
+        )
+        if (
+            constraints.required_photoshoot_reference
+            and photoshoot != constraints.required_photoshoot_reference
+        ):
+            reasons.append("STRATEGY_PHOTOSHOOT_MISMATCH")
+        roles = frozenset(
+            str(value) for value in candidate.get("commercial_roles") or ()
+        )
+        if constraints.progression:
+            if not roles:
+                reasons.append("STRATEGY_ROLE_EVIDENCE_MISSING")
+            elif constraints.progression not in roles:
+                reasons.append("STRATEGY_PROGRESSION_MISMATCH")
+        approved_roles = frozenset(constraints.approved_commercial_roles)
+        if approved_roles and roles and not roles.intersection(approved_roles):
+            reasons.append("STRATEGY_COMMERCIAL_ROLE_MISMATCH")
+        asset_ids = frozenset(
+            int(value) for value in candidate.get("asset_ids") or ()
+        )
+        owned_overlap = asset_ids.intersection(constraints.excluded_asset_ids)
+        if owned_overlap:
+            reasons.append(
+                (
+                    "BUNDLE_FULLY_OWNED"
+                    if offering_type == "BUNDLE"
+                    and asset_ids
+                    and owned_overlap == asset_ids
+                    else "BUNDLE_PARTIALLY_OWNED"
+                )
+                if offering_type == "BUNDLE"
+                else "OFFERING_CONTAINS_OWNED_VALUE"
+            )
+        if constraints.complete_set_required and offering_type != "BUNDLE":
+            reasons.append("COMPLETE_SET_REQUIRES_BUNDLE")
+        if offering_type == "BUNDLE":
+            lineages = tuple(
+                str(value)
+                for value in candidate.get("photoshoot_identifiers") or ()
+            )
+            if len(lineages) != 1:
+                reasons.append("BUNDLE_PHOTOSHOOT_LINEAGE_INVALID")
         if offering_id in purchased:
             reasons.append(
                 OfferingExclusionReason.OFFERING_ALREADY_PURCHASED.value
@@ -297,8 +404,13 @@ class CommercialOfferingSelectorService:
         destinations = tuple(candidate.get("destinations") or ())
         expected = (
             "SINGLE_PPV" if offering_type in {"SINGLE_IMAGE", "VIDEO"}
-            else "PHOTOSET" if offering_type == "PHOTOSET" else None
+            else "PHOTOSET" if offering_type == "PHOTOSET"
+            else "BUNDLE" if offering_type == "BUNDLE" else None
         )
+        if offering_type == "BUNDLE":
+            allowed = {"BUNDLE", "PHOTOSET", "SINGLE_PPV", "VIDEOSET"}
+            if destinations and all(value in allowed for value in destinations):
+                return None
         if (
             expected is None
             or not destinations
@@ -450,7 +562,7 @@ class CommercialOfferingSelectorService:
     def _result(
         self, *, started, channel, selected, reason, evaluations,
         candidate_count, purchased, active_intent,
-        extra_exclusions=(), recommendation=None,
+        extra_exclusions=(), recommendation=None, strategy=None,
     ):
         exclusions = tuple(dict.fromkeys((
             *extra_exclusions,
@@ -494,6 +606,7 @@ class CommercialOfferingSelectorService:
                 ),
                 "purchasedOfferingCount": len(purchased),
                 "activeIntentApplied": active_intent,
+                "strategy": strategy,
                 "primarySalesChannel": channel,
                 "featuredSupported": False,
                 "ordering": (

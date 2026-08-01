@@ -23,7 +23,7 @@ from app.models.telegram_business import TelegramBusinessSnapshot
 if TYPE_CHECKING:
     from app.services.business_learning_service import BusinessLearningService
     from app.services.conversation_operations_service import ConversationOperationsService
-    from app.services.customer_intelligence_service import CustomerIntelligenceService
+    from app.services.customer_intelligence_service import CustomerIntelligenceCompatibilityAdapter as CustomerIntelligenceService
     from app.services.delivery_management_service import DeliveryManagementService
     from app.services.sales_management_service import SalesManagementService
     from app.services.telegram_business_service import TelegramBusinessService
@@ -517,7 +517,7 @@ class RelationshipManagementService:
             "conversation_operations_owner": "ConversationOperationsService",
             "sales_management_owner": "SalesManagementService",
             "delivery_management_owner": "DeliveryManagementService",
-            "customer_intelligence_owner": "CustomerIntelligenceService",
+            "customer_intelligence_owner": "CustomerIntelligenceCompatibilityAdapter",
             "business_learning_owner": "BusinessLearningService",
             "sources_consumed": {key: value is not None for key, value in sources.items()},
         }

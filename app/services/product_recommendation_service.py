@@ -13,12 +13,11 @@ from app.models.product import (
     provider_neutral_fulfillment_label,
 )
 from app.models.product_offer import ProductOffer
-from app.repositories.customer_entitlement_repository import (
-    CustomerEntitlementRepository,
-)
+from app.models.ownership_intelligence import OwnershipIdentity
 from app.repositories.product_repository import ProductRepository
 from app.services.cms_contract_service import CMSContractService
 from app.services.product_offer_service import ProductOfferService
+from app.services.ownership_intelligence_service import OwnershipIntelligenceService
 
 
 class ProductRecommendationService:
@@ -26,15 +25,19 @@ class ProductRecommendationService:
         self,
         *,
         product_repository: ProductRepository | None = None,
-        entitlement_repository: CustomerEntitlementRepository | None = None,
+        entitlement_repository=None,
+        ownership_intelligence: OwnershipIntelligenceService | None = None,
         product_offer_service: ProductOfferService | None = None,
         cms_contract_service: CMSContractService | None = None,
         content_service=None,
         logger=None,
     ):
         self.products = product_repository or ProductRepository()
-        self.entitlements = (
-            entitlement_repository or CustomerEntitlementRepository()
+        # Kept as a constructor compatibility argument; ownership reads are
+        # canonicalized through Ownership Intelligence.
+        del entitlement_repository
+        self.ownership_intelligence = (
+            ownership_intelligence or OwnershipIntelligenceService()
         )
         self.product_offers = product_offer_service or ProductOfferService()
         self.cms_contracts = cms_contract_service or CMSContractService()
@@ -269,10 +272,15 @@ class ProductRecommendationService:
             status=ProductStatus.ACTIVE,
             include_archived=False,
         )
+        ownership = self._ownership_answer(
+            user_memory, creator_profile_id=creator_profile_id
+        )
 
         candidates: list[ProductOffer] = []
         for product in products:
-            reason = self._rejection_reason(product, user_memory)
+            reason = self._rejection_reason(
+                product, user_memory, ownership_answer=ownership
+            )
             if reason:
                 self._log_rejected(product, reason)
                 continue
@@ -311,7 +319,13 @@ class ProductRecommendationService:
         user_memory: dict | None = None,
     ) -> dict[str, str | bool | None]:
         """Expose the existing recommendation gate as a read-only projection."""
-        reason = self._rejection_reason(product, user_memory or {})
+        memory = user_memory or {}
+        ownership = self._ownership_answer(
+            memory, creator_profile_id=product.creator_profile_id or 0
+        )
+        reason = self._rejection_reason(
+            product, memory, ownership_answer=ownership
+        )
         return {
             "eligible": reason is None,
             "reason": reason,
@@ -321,6 +335,7 @@ class ProductRecommendationService:
         self,
         product: Product,
         user_memory: dict,
+        ownership_answer=None,
     ) -> str | None:
         if product.status == ProductStatus.DISABLED:
             return "disabled"
@@ -331,7 +346,11 @@ class ProductRecommendationService:
         if product.fulfillment_status != ProductFulfillmentStatus.READY:
             return f"fulfillment_not_ready:{product.fulfillment_status.value}"
 
-        if self._already_entitled(product, user_memory):
+        if ownership_answer is None or not ownership_answer.evidence_sufficient:
+            return "ownership_evidence_insufficient"
+        if self.ownership_intelligence.owns_product(
+            ownership_answer, product.id
+        ):
             return "already_entitled"
 
         if self._recently_offered(product, user_memory):
@@ -339,21 +358,20 @@ class ProductRecommendationService:
 
         return None
 
-    def _already_entitled(
-        self,
-        product: Product,
-        user_memory: dict,
-    ) -> bool:
-        fanvue_account_id = user_memory.get("fanvue_account_id")
-        fanvue_user_id = user_memory.get("fanvue_user_id")
-        if not fanvue_account_id or not fanvue_user_id:
-            return False
-
-        return self.entitlements.has_active_entitlement_for_legacy_user(
-            product_id=product.id,
-            legacy_fanvue_account_id=fanvue_account_id,
-            legacy_fanvue_user_id=fanvue_user_id,
-        )
+    def _ownership_answer(self, user_memory, *, creator_profile_id):
+        return self.ownership_intelligence.answer(OwnershipIdentity(
+            creator_profile_id=int(creator_profile_id or 0),
+            fanvue_account_id=int(user_memory.get("fanvue_account_id") or 0),
+            external_fanvue_user_uuid=user_memory.get(
+                "external_fanvue_user_uuid"
+            ),
+            telegram_user_id=user_memory.get("telegram_user_id"),
+            legacy_fanvue_user_id=(
+                str(user_memory["fanvue_user_id"])
+                if user_memory.get("fanvue_user_id") is not None else None
+            ),
+            core_user_id=user_memory.get("core_user_id"),
+        ))
 
     def _recently_offered(
         self,

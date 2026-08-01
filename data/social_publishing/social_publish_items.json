@@ -1,5 +1,57 @@
 [
   {
+    "publish_request_id": "social_publish_item_1c78f5c1921f44708de27abb36781ee3",
+    "queue_item_id": "social_queue_item_224b1a42949a4457b2c9323b90d0fd2d",
+    "platform": "x",
+    "caption_id": null,
+    "scheduled_for": null,
+    "status": "posted",
+    "created_at": "2026-08-01T16:27:36.414983",
+    "metadata": {
+      "posting_implemented": true,
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "provider_post_id": "2083590484941836676",
+      "provider_media_id": "2083590482366545921",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2083590484941836676",
+      "provider_metadata": {
+        "tweet_data": {
+          "edit_history_tweet_ids": [
+            ""
+          ],
+          "id": "2083590484941836676",
+          "text": "Current vibe: sunshine and zero stress \u2600\ufe0f\ud83d\udc47 What's yours? https://t.co/BL74n6PXob"
+        }
+      }
+    }
+  },
+  {
+    "publish_request_id": "social_publish_item_896e47a6097c47d28833c967388bea50",
+    "queue_item_id": "social_queue_item_dd86ebc683dd47e3b8d04869e79b7d45",
+    "platform": "x",
+    "caption_id": null,
+    "scheduled_for": null,
+    "status": "posted",
+    "created_at": "2026-07-31T15:28:43.585288",
+    "metadata": {
+      "posting_implemented": true,
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "provider_post_id": "2083213279300583681",
+      "provider_media_id": "2083213276788224002",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2083213279300583681",
+      "provider_metadata": {
+        "tweet_data": {
+          "edit_history_tweet_ids": [
+            ""
+          ],
+          "id": "2083213279300583681",
+          "text": "I said 'let's go for a quick walk'... somehow it's been two hours \ud83d\ude02\ud83d\udc47 https://t.co/TKcDuiLF8e"
+        }
+      }
+    }
+  },
+  {
     "publish_request_id": "social_publish_item_2d2332d565f94a0ca8ffd12d23cf46fe",
     "queue_item_id": "social_queue_item_c1edcfeab88c4c59b1a9c7bd75ba9573",
     "platform": "x",

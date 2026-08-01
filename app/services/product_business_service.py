@@ -30,7 +30,7 @@ from app.models.publishing_automation import (
 
 if TYPE_CHECKING:
     from app.services.business_learning_service import BusinessLearningService
-    from app.services.customer_intelligence_service import CustomerIntelligenceService
+    from app.services.customer_intelligence_service import CustomerIntelligenceCompatibilityAdapter as CustomerIntelligenceService
     from app.services.product_catalog_service import ProductCatalogService
     from app.services.product_lifecycle_service import ProductLifecycleService
     from app.services.publishing_automation_service import PublishingAutomationService
@@ -86,7 +86,7 @@ class ProductBusinessService:
     def customer_intelligence(self) -> "CustomerIntelligenceService":
         if self._customer_intelligence is None:
             from app.services.customer_intelligence_service import (
-                CustomerIntelligenceService,
+                CustomerIntelligenceCompatibilityAdapter as CustomerIntelligenceService,
             )
 
             self._customer_intelligence = CustomerIntelligenceService()

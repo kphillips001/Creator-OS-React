@@ -1,0 +1,13 @@
+.commercial-admin__state{display:flex;align-items:flex-start;gap:.55rem}
+.commercial-admin__state>strong{min-width:90px;color:var(--color-text-primary)}
+.commercial-admin__state--unauthorized,.commercial-admin__state--failed{border-color:rgba(239,68,68,.4);color:#fca5a5}
+.commercial-admin__state--stale,.commercial-admin__state--unsupported,.commercial-admin__state--dependency,.commercial-admin__state--insufficient,.commercial-admin__state--conflicting{border-color:rgba(245,158,11,.4);color:#fcd34d}
+.commercial-admin__breadcrumb{display:flex;flex-wrap:wrap;gap:.35rem;color:var(--color-text-tertiary);font-size:.65rem}
+.commercial-admin__breadcrumb span{display:flex;gap:.35rem}
+.commercial-admin__search{display:grid;gap:.3rem;max-width:520px;color:var(--color-text-secondary);font-size:.68rem}
+.commercial-admin__select-card{text-align:left}
+.commercial-admin__back{width:max-content}
+.commercial-admin__relations{display:grid;gap:.35rem;padding:.55rem;border:1px solid var(--color-border);border-radius:9px}
+.commercial-admin__relations>strong{font-size:.68rem}
+.commercial-admin__relations>span{color:var(--color-text-tertiary);font-size:.65rem}
+.commercial-admin__relations button{text-align:left;overflow-wrap:anywhere}

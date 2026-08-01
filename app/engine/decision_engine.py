@@ -9,7 +9,7 @@ from app.config import settings
 from app.services.content_gating_service import ContentGatingService
 from app.services.objection_classifier_service import ObjectionClassifierService
 from app.services.response_behavior_service import ResponseBehaviorService
-from app.services.content_ownership_service import ContentOwnershipService
+from app.services.ownership_decision_projection import OwnershipDecisionProjection
 from app.services.content_usage_service import ContentUsageService
 from app.services.decision_engine_runtime_boundary import (
     DecisionEngineRuntimeBoundary,
@@ -123,7 +123,7 @@ class DecisionEngine:
         self.content_gating_service = ContentGatingService()
         self.objection_classifier = ObjectionClassifierService()
         self.response_behavior_service = ResponseBehaviorService()
-        self.content_ownership_service = ContentOwnershipService()
+        self.ownership_decisions = OwnershipDecisionProjection()
         self.decision_runtime_boundary = (
             decision_runtime_boundary or DecisionEngineRuntimeBoundary()
         )
@@ -1093,10 +1093,11 @@ class DecisionEngine:
             commerce_execution_policy
             == CommerceExecutionPolicy.ACKNOWLEDGEMENT_ALLOWED.value
         )
-        legacy_commerce_enabled = not authoritative_commerce
-        legacy_commerce_evaluation_allowed = (
-            legacy_commerce_enabled or presentation_allowed
-        )
+        # Commercial action is fail-closed unless the canonical caller has
+        # already evaluated Customer Sales Brain. DecisionEngine never runs
+        # its historical commercial authority path.
+        legacy_commerce_enabled = False
+        legacy_commerce_evaluation_allowed = False
 
         if runtime_injection:
             self.logger.info(
@@ -2911,26 +2912,10 @@ class DecisionEngine:
         session_cooldown = user_memory.get("buyer_session_cooldown_until")
 
         if should_start_buyer_session and not session_active and not session_cooldown:
-            self.logger.info("[15H-X] Buyer session trigger detected")
-
-            from app.services.buyer_session_service import BuyerSessionService
-
-            buyer_session_service = BuyerSessionService()
-
-            buyer_session_service.start_or_refresh_session(
-                fanvue_account_id=fanvue_account_id,
-                fanvue_user_id=fanvue_user_id,
-                memory=working_memory,
+            self.logger.warning(
+                "event=legacy_buyer_session_start_blocked "
+                "authority=SalesSessionService"
             )
-
-            session_started_this_turn = True
-
-            # Refresh memory after session start
-            user_memory = self.memory.get_user_memory(user_id)
-            working_memory = {
-                **working_memory,
-                **user_memory,
-            }
 
         # --------------------------------------------------
         # 🔥 15H-X STEP 4 — BUYER SESSION STEP ADVANCEMENT
@@ -3002,92 +2987,20 @@ class DecisionEngine:
         # --------------------------------------------------
 
         if buyer_session_active:
-            from app.services.buyer_session_service import BuyerSessionService
-
-            buyer_session_service = BuyerSessionService()
-
-            exit_result = buyer_session_service.detect_exit_intent(
-                message=message,
-                memory=working_memory,
-                classifier_result=gpt_classifier_result,
+            self.logger.warning(
+                "event=legacy_buyer_session_exit_blocked "
+                "authority=SalesSessionService"
             )
-            self.logger.info(f"[15H-X STEP 7 EXIT CHECK] {exit_result}")
-
-            if exit_result.get("should_exit"):
-                self.logger.info("[15H-X STEP 7] EXIT MODE ACTIVATED")
-
-                buyer_session_service.exit_session(
-                    fanvue_account_id=fanvue_account_id,
-                    fanvue_user_id=fanvue_user_id,
-                    exit_type=exit_result.get("exit_type"),
-                    reason=exit_result.get("reason"),
-                )
-
-                buyer_session_action = "exit_session"
-                buyer_session_active = False
-                send_offer = False
-                soft_transition = False
-                conversation_mode = "casual"
-                route = "chat"
-                effective_route = "chat"
-
-                working_memory["buyer_session_active"] = False
-                working_memory["buyer_session_step"] = 0
-                working_memory["buyer_session_last_action"] = (
-                    f"session_exit_{exit_result.get('exit_type')}"
-                )
-                working_memory["buyer_session_action"] = "exit_session"
-                working_memory["conversation_mode"] = "casual"
-                working_memory["current_route"] = "chat"
-                working_memory["last_route"] = "chat"
-                working_memory["last_route_reason"] = exit_result.get("reason")
 
         # --------------------------------------------------
         # 15H-X STEP 6 — CLOSE / CONVERSION LOGIC
         # --------------------------------------------------
 
         if buyer_session_active:
-            from app.services.buyer_session_service import BuyerSessionService
-
-            buyer_session_service = BuyerSessionService()
-
-            close_result = buyer_session_service.detect_close_intent(
-                message=message,
-                memory=working_memory,
-                classifier_result=gpt_classifier_result,
+            self.logger.warning(
+                "event=legacy_buyer_session_close_blocked "
+                "authority=CustomerSalesBrainService"
             )
-            self.logger.info(f"[15H-X STEP 6 CLOSE CHECK] {close_result}")
-
-            gpt_result = working_memory.get("gpt_classifier_result", {}) or {}
-
-            if close_result.get("should_close") and self._is_gpt_confident(gpt_result):
-                self.logger.info("[15H-X STEP 6] CLOSE MODE ACTIVATED")
-
-                buyer_session_action = "close_mode"
-                send_offer = False
-                soft_transition = False
-                conversation_mode = "conversion"
-                route = "sales"
-                effective_route = "sales"
-
-                self.decision_runtime_boundary.update_memory_fields(
-                    fanvue_account_id,
-                    fanvue_user_id,
-                    {
-                        "buyer_session_last_action": "close_mode",
-                        "conversation_mode": "conversion",
-                        "current_route": "sales",
-                        "last_route": "sales",
-                        "last_route_reason": "Buyer session close mode activated after PPV intent.",
-                    },
-                )
-
-                working_memory["buyer_session_last_action"] = "close_mode"
-                working_memory["buyer_session_action"] = "close_mode"
-                working_memory["conversation_mode"] = "conversion"
-                working_memory["current_route"] = "sales"
-                working_memory["last_route"] = "sales"
-                working_memory["last_route_reason"] = "Buyer session close mode activated after PPV intent."
 
         # 🔥 7F — Soft Transition Detection
         soft_transition = (
@@ -3195,11 +3108,11 @@ class DecisionEngine:
 
                 if (
                     content_tag
-                    and self.content_ownership_service.user_already_owns_content(
+                    and self.ownership_decisions.content_tag(
                         fanvue_account_id=fanvue_account_id,
                         fanvue_user_id=fanvue_user_id,
                         content_tag=content_tag,
-                    )
+                    ).blocks_offer
                 ):
                     self.logger.info(
                         f"[3D.16 OWNERSHIP BLOCK] buyer-session owned content blocked | "
@@ -3353,11 +3266,11 @@ class DecisionEngine:
 
                 if content_tag:
                     already_owned = (
-                        self.content_ownership_service.user_already_owns_content(
+                        self.ownership_decisions.content_tag(
                             fanvue_account_id=fanvue_account_id,
                             fanvue_user_id=fanvue_user_id,
                             content_tag=content_tag,
-                        )
+                        ).blocks_offer
                     )
 
                 if already_owned:
@@ -3369,7 +3282,7 @@ class DecisionEngine:
                     final_offer = {
                         "offer_type": "none",
                         "price": 0,
-                        "description": "Owned content blocked by ContentOwnershipService",
+                        "description": "Content blocked by Ownership Intelligence",
                         "content": None,
                     }
 

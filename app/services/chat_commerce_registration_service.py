@@ -38,7 +38,7 @@ if TYPE_CHECKING:
     from app.repositories.fulfillment_registration_repository import (
         FulfillmentRegistrationRepository,
     )
-    from app.services.content_ownership_service import ContentOwnershipService
+    from app.services.ownership_decision_projection import OwnershipDecisionProjection
     from app.services.content_usage_service import ContentUsageService
 
 
@@ -59,7 +59,8 @@ class ChatCommerceRegistrationService:
         fulfillment_repository: "FulfillmentRegistrationRepository | None" = None,
         asset_repository: "AssetRepository | None" = None,
         content_usage_service: "ContentUsageService | None" = None,
-        content_ownership_service: "ContentOwnershipService | None" = None,
+        ownership_decisions: "OwnershipDecisionProjection | None" = None,
+        content_ownership_service: Any | None = None,
         entry_policy: Any | None = None,
     ) -> None:
         if chat_repository is None:
@@ -88,16 +89,17 @@ class ChatCommerceRegistrationService:
             from app.services.content_usage_service import ContentUsageService
 
             content_usage_service = ContentUsageService()
-        if content_ownership_service is None:
-            from app.services.content_ownership_service import ContentOwnershipService
-
-            content_ownership_service = ContentOwnershipService()
+        if ownership_decisions is None:
+            from app.services.ownership_decision_projection import (
+                OwnershipDecisionProjection,
+            )
+            ownership_decisions = OwnershipDecisionProjection()
         self.chat_repository = chat_repository
         self.registration_repository = registration_repository
         self.fulfillment_repository = fulfillment_repository
         self.asset_repository = asset_repository
         self.content_usage_service = content_usage_service
-        self.content_ownership_service = content_ownership_service
+        self.ownership_decisions = ownership_decisions
         if entry_policy is None:
             from app.services.autonomous_commerce_entry_policy import (
                 AutonomousCommerceEntryPolicy,
@@ -616,13 +618,12 @@ class ChatCommerceRegistrationService:
         fanvue_user_id = customer_context.get("fanvue_user_id")
         if not fanvue_account_id or not fanvue_user_id:
             return False
-        return bool(
-            self.content_ownership_service.user_already_owns_content(
-                int(fanvue_account_id),
-                fanvue_user_id,
-                f"chat_asset_{int(asset_id)}",
-            )
-        )
+        return self.ownership_decisions.asset(
+            fanvue_account_id=int(fanvue_account_id),
+            fanvue_user_id=fanvue_user_id,
+            asset_id=int(asset_id),
+            creator_profile_id=customer_context.get("creator_profile_id"),
+        ).blocks_offer
 
     def backfill_from_fulfillment_ready(
         self,

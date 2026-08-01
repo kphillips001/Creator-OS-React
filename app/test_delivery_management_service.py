@@ -323,7 +323,7 @@ class DeliveryManagementServiceTests(unittest.TestCase):
         self.assertEqual(compatibility["publishing_owner"], "PublishingService")
         self.assertEqual(
             compatibility["customer_intelligence_owner"],
-            "CustomerIntelligenceService",
+            "CustomerIntelligenceCompatibilityAdapter",
         )
 
 

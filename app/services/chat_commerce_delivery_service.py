@@ -35,6 +35,9 @@ class ChatCommerceDeliveryService:
         repository: Any | None = None,
         content_commerce_learning_service: Any | None = None,
     ) -> None:
+        # Retained as a no-op constructor argument for older composition roots.
+        # Delivery does not interpret ownership.
+        del content_ownership_service
         if chat_commerce_registration_service is None:
             from app.services.chat_commerce_registration_service import (
                 ChatCommerceRegistrationService,
@@ -51,10 +54,6 @@ class ChatCommerceDeliveryService:
             from app.services.content_usage_service import ContentUsageService
 
             content_usage_service = ContentUsageService()
-        if content_ownership_service is None:
-            from app.services.content_ownership_service import ContentOwnershipService
-
-            content_ownership_service = ContentOwnershipService()
         if repository is None:
             from app.repositories.chat_commerce_delivery_repository import (
                 ChatCommerceDeliveryRepository,
@@ -71,7 +70,6 @@ class ChatCommerceDeliveryService:
         self.chat_commerce_registration_service = chat_commerce_registration_service
         self.fulfillment_repository = fulfillment_repository
         self.content_usage_service = content_usage_service
-        self.content_ownership_service = content_ownership_service
         self.repository = repository
         self.content_commerce_learning_service = content_commerce_learning_service
 

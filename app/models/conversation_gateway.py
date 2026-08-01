@@ -16,6 +16,8 @@ class ConversationBrainContext:
     telegram_user_id: int | None = None
     fanvue_account_id: int | None = None
     external_fanvue_buyer_uuid: str | None = None
+    fanvue_user_id: int | None = None
+    conversation_thread_id: int | None = None
     purchase_acknowledgement_pending: bool = False
     purchase_acknowledgement_intent_id: str | None = None
 

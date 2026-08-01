@@ -303,7 +303,7 @@ class RelationshipManagementServiceTests(unittest.TestCase):
         self.assertFalse(compatibility["records_business_learning"])
         self.assertEqual(
             compatibility["customer_intelligence_owner"],
-            "CustomerIntelligenceService",
+            "CustomerIntelligenceCompatibilityAdapter",
         )
         self.assertEqual(
             compatibility["business_learning_owner"],

@@ -167,6 +167,23 @@ class PhotoshootCommerceRepository:
     def members(self, session_id: str):
         return self._all("SELECT * FROM public.photoshoot_asset_memberships WHERE photoshoot_session_id=%s AND approved=TRUE ORDER BY shot_order", (session_id,))
 
+    def common_approved_photoshoot(
+        self, asset_ids: tuple[int, ...],
+    ) -> str | None:
+        if not asset_ids:
+            return None
+        row = self._one(
+            """SELECT photoshoot_session_id
+               FROM public.photoshoot_asset_memberships
+               WHERE approved=TRUE AND asset_id=ANY(%s)
+               GROUP BY photoshoot_session_id
+               HAVING COUNT(DISTINCT asset_id)=%s
+               ORDER BY photoshoot_session_id
+               LIMIT 1""",
+            (list(asset_ids), len(set(asset_ids))),
+        )
+        return str(row["photoshoot_session_id"]) if row else None
+
     def commercial_role_context_for_asset(self, asset_id: int, creator_profile_id: int):
         return self._one(
             """SELECT membership.photoshoot_session_id,membership.shot_order,

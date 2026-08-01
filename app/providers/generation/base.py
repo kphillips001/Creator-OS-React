@@ -138,6 +138,7 @@ class WaveSpeedProviderBase(GenerationProvider):
     result_url_template = "https://api.wavespeed.ai/api/v3/predictions/{request_id}/result"
     api_key_env = "WAVESPEED_API_KEY"
     image_host_api_key_env = "IMGBB_API_KEY"
+    lifecycle = "ACTIVE"
     PREMIUM_RENDER_BODY_LOCK = """
 FINAL REFERENCE BODY LOCK - NON-NEGOTIABLE:
 Use the reference image as the identity, face, hair, skin-tone, body-size, body-shape, and bust-size source of truth only.
@@ -234,6 +235,7 @@ Do not render a landing strip, stubble, trimmed pubic hair, shadow hair, peach f
             metadata={
                 "api_key_env": self.api_key_env,
                 "reference_image_host_api_key_env": self.image_host_api_key_env,
+                "lifecycle": self.lifecycle,
             },
         )
 
@@ -461,7 +463,9 @@ Do not render a landing strip, stubble, trimmed pubic hair, shadow hair, peach f
             or data.get("data", {}).get("id")
         )
         if not provider_request_id:
-            raise GenerationProviderError(f"No provider request ID returned from WaveSpeed. Response: {data}")
+            raise GenerationProviderError(
+                "WaveSpeed accepted no canonical provider request ID."
+            )
         return ProviderSubmission(provider_request_id=str(provider_request_id), raw_response=data)
 
     def poll_status(self, submission: ProviderSubmission) -> ProviderPollResult:
@@ -477,10 +481,10 @@ Do not render a landing strip, stubble, trimmed pubic hair, shadow hair, peach f
             last_result = result
             if attempt < self.max_poll_attempts - 1:
                 self.sleep(self.poll_interval_seconds)
-        return last_result or ProviderPollResult(
+        return ProviderPollResult(
             provider_request_id=submission.provider_request_id,
             status=GenerationStatus.FAILED.value,
-            raw_response=submission.raw_response,
+            raw_response=(last_result.raw_response if last_result else submission.raw_response),
             failure_reason="Provider polling exhausted without a terminal status.",
         )
 
@@ -556,12 +560,14 @@ Do not render a landing strip, stubble, trimmed pubic hair, shadow hair, peach f
             RenderPolicy.CONTENT_SPICY,
             RenderPolicy.PHOTOSHOOT_PREMIUM,
         }:
-            return enforce_premium_render_body_lock(prompt)
+            rendered = enforce_premium_render_body_lock(prompt)
+            return self._with_expression_directive(rendered, prompt)
         if policy in {
             RenderPolicy.CONTENT_EXPLICIT,
             RenderPolicy.PHOTOSHOOT_EXPLICIT,
         }:
-            return enforce_explicit_render_lock(prompt)
+            rendered = enforce_explicit_render_lock(prompt)
+            return self._with_expression_directive(rendered, prompt)
         if policy == RenderPolicy.PHOTOSHOOT_SAFE:
             return enforce_photoshoot_safe_render_lock(prompt)
         if policy == RenderPolicy.EDIT:
@@ -571,12 +577,23 @@ Do not render a landing strip, stubble, trimmed pubic hair, shadow hair, peach f
     @staticmethod
     def _render_policy(request: GenerationRequest) -> RenderPolicy:
         raw_policy = (request.metadata or {}).get("render_policy")
+        if raw_policy is None:
+            # Compatibility requests created before render-policy routing are
+            # treated as standard content. Canonical engine requests always
+            # persist an explicit policy.
+            return RenderPolicy.CONTENT_STANDARD
         try:
             return RenderPolicy(str(raw_policy))
         except ValueError as error:
             raise GenerationProviderError(
                 f"Unknown or missing render policy: {raw_policy!r}"
             ) from error
+
+    @classmethod
+    def _with_expression_directive(cls, rendered: str, identity: str) -> str:
+        if "EXPLICIT EXPRESSION VARIATION:" in rendered:
+            return rendered
+        return f"{rendered}\n\n{cls._explicit_expression_directive(identity)}"
 
     @staticmethod
     def _prompt_variations(request: GenerationRequest) -> tuple[str, ...]:
@@ -986,10 +1003,6 @@ Do not render a landing strip, stubble, trimmed pubic hair, shadow hair, peach f
         try:
             response.raise_for_status()
         except Exception as exc:
-            try:
-                body = response.json()
-            except Exception:
-                body = getattr(response, "text", "")
             raise GenerationProviderError(
-                f"{context}. HTTP {getattr(response, 'status_code', '?')}: {body}"
+                f"{context}. HTTP {getattr(response, 'status_code', '?')}."
             ) from exc

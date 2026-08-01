@@ -59,7 +59,7 @@ class PhotoshootQueueService:
         creator_profile_id: int,
         prompt_plans: Iterable[PromptPlan],
         title: str = "Photoshoot Session",
-        provider_id: str = "future_provider",
+        provider_id: str = "seedream_5_0_pro",
         reference_asset_id: int | None = None,
         creator_notes: str | None = None,
         creative_continuity: Mapping[str, Any] | None = None,

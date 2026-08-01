@@ -38,7 +38,7 @@ from app.models.customer_business import (
 if TYPE_CHECKING:
     from app.services.business_learning_service import BusinessLearningService
     from app.services.commerce_strategy_service import CommerceStrategyService
-    from app.services.customer_intelligence_service import CustomerIntelligenceService
+    from app.services.customer_intelligence_service import CustomerIntelligenceCompatibilityAdapter as CustomerIntelligenceService
     from app.services.customer_service import CustomerService
     from app.services.delivery_management_service import DeliveryManagementService
     from app.services.product_business_service import ProductBusinessService
@@ -83,7 +83,7 @@ class CustomerBusinessService:
     def customer_intelligence(self) -> "CustomerIntelligenceService":
         if self._customer_intelligence is None:
             from app.services.customer_intelligence_service import (
-                CustomerIntelligenceService,
+                CustomerIntelligenceCompatibilityAdapter as CustomerIntelligenceService,
             )
 
             self._customer_intelligence = CustomerIntelligenceService()
@@ -1001,7 +1001,7 @@ class CustomerBusinessService:
                 "read_only": True,
                 "provider_neutral": True,
                 "aggregation_only": True,
-                "customer_intelligence_owner": "CustomerIntelligenceService",
+                "customer_intelligence_owner": "CustomerIntelligenceCompatibilityAdapter",
                 "commerce_strategy_owner": "CommerceStrategyService",
                 "telegram_business_owner": "TelegramBusinessService",
                 "product_business_owner": "ProductBusinessService",
@@ -1468,7 +1468,7 @@ class CustomerBusinessService:
                 "provider_neutral": True,
                 "aggregation_only": True,
                 "advisory_only": True,
-                "customer_intelligence_owner": "CustomerIntelligenceService",
+                "customer_intelligence_owner": "CustomerIntelligenceCompatibilityAdapter",
                 "business_learning_owner": "BusinessLearningService",
                 "product_business_owner": "ProductBusinessService",
                 "telegram_business_owner": "TelegramBusinessService",
@@ -2062,7 +2062,7 @@ class CustomerBusinessService:
                 "provider_neutral": True,
                 "aggregation_only": True,
                 "advisory_only": True,
-                "customer_intelligence_owner": "CustomerIntelligenceService",
+                "customer_intelligence_owner": "CustomerIntelligenceCompatibilityAdapter",
                 "relationship_management_owner": "RelationshipManagementService",
                 "business_learning_owner": "BusinessLearningService",
                 "commerce_strategy_owner": "CommerceStrategyService",
@@ -2644,7 +2644,7 @@ class CustomerBusinessService:
                 "provider_neutral": True,
                 "aggregation_only": True,
                 "advisory_only": True,
-                "customer_intelligence_owner": "CustomerIntelligenceService",
+                "customer_intelligence_owner": "CustomerIntelligenceCompatibilityAdapter",
                 "commerce_strategy_owner": "CommerceStrategyService",
                 "product_business_owner": "ProductBusinessService",
                 "telegram_business_owner": "TelegramBusinessService",
@@ -3218,7 +3218,7 @@ class CustomerBusinessService:
             "records_business_learning": False,
             "changes_decision_engine_behavior": False,
             "generates_commerce_strategy": False,
-            "customer_intelligence_owner": "CustomerIntelligenceService",
+            "customer_intelligence_owner": "CustomerIntelligenceCompatibilityAdapter",
             "telegram_business_owner": "TelegramBusinessService",
             "product_business_owner": "ProductBusinessService",
             "business_learning_owner": "BusinessLearningService",

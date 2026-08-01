@@ -233,12 +233,17 @@ class FakeUsageService:
         return (int(fanvue_account_id), fanvue_user_id, int(content_item_id)) in self.seen
 
 
-class FakeOwnershipService:
+class FakeOwnershipDecisionProjection:
     def __init__(self, owned=()):
         self.owned = set(owned)
 
-    def user_already_owns_content(self, fanvue_account_id, fanvue_user_id, content_tag):
-        return (int(fanvue_account_id), fanvue_user_id, str(content_tag)) in self.owned
+    def asset(self, *, fanvue_account_id, fanvue_user_id, asset_id, creator_profile_id=None):
+        del creator_profile_id
+        owned = (
+            int(fanvue_account_id), fanvue_user_id,
+            f"chat_asset_{int(asset_id)}",
+        ) in self.owned
+        return SimpleNamespace(blocks_offer=owned)
 
 
 class ChatCommerceRegistrationServiceTests(unittest.TestCase):
@@ -285,7 +290,7 @@ class ChatCommerceRegistrationServiceTests(unittest.TestCase):
             fulfillment_repository=self.fulfillment_repo,
             asset_repository=self.asset_repo,
             content_usage_service=FakeUsageService(seen),
-            content_ownership_service=FakeOwnershipService(owned),
+            ownership_decisions=FakeOwnershipDecisionProjection(owned),
         )
 
     def test_customer_conversations_fulfillment_ready_registers_chat_ready(self):

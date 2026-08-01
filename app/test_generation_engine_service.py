@@ -1,7 +1,9 @@
 import sys
 import tempfile
+import threading
 import types
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import Mock
 from pathlib import Path
 
@@ -126,6 +128,18 @@ class FakeGenerationProvider:
             image_metadata={"count": request.image_count},
             output_references=("future_asset_reference",),
         )
+
+
+class BlockingGenerationProvider(FakeGenerationProvider):
+    def __init__(self):
+        super().__init__()
+        self.entered = threading.Event()
+        self.release = threading.Event()
+
+    def dispatch(self, request):
+        self.entered.set()
+        self.release.wait(timeout=2)
+        return super().dispatch(request)
 
 
 class FakeResilientWaveProvider(WaveSpeedProviderBase):
@@ -288,6 +302,53 @@ class GenerationEngineServiceTests(unittest.TestCase):
         self.assertEqual(dispatched.result.image_metadata["count"], 2)
         self.assertEqual(provider.requests[0].prompt_plan_id, "plan_7")
 
+    def test_completed_job_dispatch_and_retry_are_idempotent(self):
+        provider = FakeGenerationProvider()
+        service = self.make_service(providers={provider.provider_id: provider})
+        job = service.queue_prompt_plan(
+            creator_profile={"id": 7}, prompt_plan=prompt_plan(),
+            provider_id=provider.provider_id,
+        )
+        completed = service.dispatch_job(job.job_id)
+        repeated = service.dispatch_job(job.job_id)
+        retry = service.retry_job(job.job_id)
+
+        self.assertEqual(len(provider.requests), 1)
+        self.assertEqual(repeated.result.result_id, completed.result.result_id)
+        self.assertEqual(retry.status, GenerationStatus.SUCCEEDED.value)
+
+    def test_concurrent_dispatch_submits_only_once(self):
+        provider = BlockingGenerationProvider()
+        service = self.make_service(providers={provider.provider_id: provider})
+        job = service.queue_prompt_plan(
+            creator_profile={"id": 7}, prompt_plan=prompt_plan(),
+            provider_id=provider.provider_id,
+        )
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            first = pool.submit(service.dispatch_job, job.job_id)
+            self.assertTrue(provider.entered.wait(timeout=2))
+            second = pool.submit(service.dispatch_job, job.job_id)
+            provider.release.set()
+            results = (first.result(timeout=2), second.result(timeout=2))
+
+        self.assertEqual(len(provider.requests), 1)
+        self.assertTrue(all(item.status == GenerationStatus.SUCCEEDED.value for item in results))
+        self.assertEqual(results[0].result.result_id, results[1].result.result_id)
+
+    def test_cancelled_job_never_dispatches_or_retries(self):
+        provider = FakeGenerationProvider()
+        service = self.make_service(providers={provider.provider_id: provider})
+        job = service.queue_prompt_plan(
+            creator_profile={"id": 7}, prompt_plan=prompt_plan(),
+            provider_id=provider.provider_id,
+        )
+        cancelled = service.cancel_job(job.job_id)
+
+        self.assertEqual(service.dispatch_job(job.job_id), cancelled)
+        self.assertEqual(service.retry_job(job.job_id), cancelled)
+        self.assertEqual(provider.requests, [])
+
     def test_generation_provider_continues_after_per_image_failures(self):
         provider = FakeResilientWaveProvider(fail_submissions=(2,), fail_polls=(3,))
         service = self.make_service(providers={provider.provider_id: provider})
@@ -341,6 +402,19 @@ class GenerationEngineServiceTests(unittest.TestCase):
         self.assertEqual(retry.retry_count, 1)
         self.assertEqual(failed.status, GenerationStatus.FAILED.value)
         self.assertEqual(failed.failure.reason, "permanent")
+
+    def test_retry_preserves_prompt_identity(self):
+        service = self.make_service()
+        job = service.queue_prompt_plan(
+            creator_profile={"id": 7}, prompt_plan=prompt_plan(), max_retries=1,
+        )
+        failed = service.fail_job(job.job_id, GenerationFailure(reason="temporary"))
+        retried = service.retry_job(job.job_id)
+
+        self.assertEqual(retried.request.request_id, job.request.request_id)
+        self.assertEqual(retried.request.prompt_plan_id, job.request.prompt_plan_id)
+        self.assertEqual(retried.request.prompt_text, job.request.prompt_text)
+        self.assertEqual(retried.retry_count, failed.retry_count)
 
     def test_content_studio_creates_generation_requests_without_provider_calls(self):
         source = Path("app/dashboard/pages/content_studio.py").read_text(

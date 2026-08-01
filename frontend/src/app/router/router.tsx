@@ -21,6 +21,7 @@ import { BusinessSalesPage } from "../../features/business-sales/BusinessSalesPa
 import { BusinessOperationsPage } from "../../features/business-operations/BusinessOperationsPage";
 import { AvailableInventoryPage } from "../../features/available-inventory/AvailableInventoryPage";
 import { CommercialOfferingsPage } from "../../features/commercial-offerings/CommercialOfferingsPage";
+import { CommercialAdministrationPage } from "../../features/commercial-administration/CommercialAdministrationPage";
 import { TestChatPage } from "../../features/test-chat/TestChatPage";
 import { CommerceSalesExplorerPage } from "../../features/commerce-sales-explorer/CommerceSalesExplorerPage";
 import { FanvueApiExplorerPage } from "../../features/fanvue-api-explorer/FanvueApiExplorerPage";
@@ -84,6 +85,7 @@ export const router = createBrowserRouter([
             item.path !== "/business/assets" &&
             item.path !== "/business/commerce-library" &&
             item.path !== "/commerce/offerings" &&
+            item.path !== "/commercial-administration" &&
             item.path !== "/commerce" &&
             item.path !== "/business/products" &&
             item.path !== "/business/customers" &&
@@ -164,6 +166,10 @@ export const router = createBrowserRouter([
       {
         path: "/business/commerce-library",
         element: <BusinessAssetsPage />,
+      },
+      {
+        path: "/commercial-administration",
+        element: <CommercialAdministrationPage />,
       },
       {
         path: "/commerce",

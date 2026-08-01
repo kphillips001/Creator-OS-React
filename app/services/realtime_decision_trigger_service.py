@@ -16,6 +16,15 @@ from app.services.decisionengine_refresh_hook_service import (
 from app.services.global_send_execution_guard_service import (
     GlobalSendExecutionGuardService,
 )
+from app.repositories.creator_profile_repository import get_active_creator_profile
+from app.repositories.telegram_identity_repository import TelegramIdentityRepository
+from app.services.commerce_execution_policy import (
+    CommerceExecutionPolicy,
+    derive_commerce_execution_policy,
+)
+from app.services.customer_sales_brain_service import CustomerSalesBrainService
+from app.services.sales_session_service import SalesSessionService
+from uuid import UUID
 
 
 class RealtimeDecisionTriggerService:
@@ -34,7 +43,11 @@ class RealtimeDecisionTriggerService:
     and GlobalSendExecutionGuardService.
     """
 
-    def __init__(self):
+    def __init__(
+        self, *, sales_session_service=None, customer_sales_brain_service=None,
+        telegram_identity_repository=None,
+        creator_profile_resolver=get_active_creator_profile,
+    ):
         self.fanvue_api = None
 
         self.refresh_hook_service = (
@@ -44,6 +57,14 @@ class RealtimeDecisionTriggerService:
         self.global_execution_guard = (
             GlobalSendExecutionGuardService()
         )
+        self.sales_sessions = sales_session_service or SalesSessionService()
+        self.customer_sales_brain = (
+            customer_sales_brain_service or CustomerSalesBrainService()
+        )
+        self.telegram_identities = (
+            telegram_identity_repository or TelegramIdentityRepository()
+        )
+        self.creator_profile_resolver = creator_profile_resolver
 
     def trigger_for_inbound_message(
         self,
@@ -122,6 +143,63 @@ class RealtimeDecisionTriggerService:
         chat_history = []
         decisionengine_injection = None
 
+        local_thread_id = None
+        if thread_id:
+            local_thread = get_or_create_chat_thread(
+                fanvue_account_id=local_fanvue_account_id,
+                fanvue_user_id=local_fanvue_user_id,
+                fanvue_chat_uuid=str(thread_id),
+            )
+            local_thread_id = int(local_thread["id"])
+
+        canonical_decision = None
+        if local_thread_id is not None:
+            creator = self.creator_profile_resolver(
+                str(local_fanvue_account_id)
+            ) or {}
+            creator_profile_id = int(creator.get("id") or 0)
+            if creator_profile_id:
+                session = self.sales_sessions.resolve_or_start_conversation(
+                    creator_profile_id=creator_profile_id,
+                    fanvue_account_id=local_fanvue_account_id,
+                    fanvue_user_id=local_fanvue_user_id,
+                    conversation_thread_id=local_thread_id,
+                    actor_type="AI",
+                    actor_identifier="RealtimeDecisionTriggerService",
+                    objective="Authorized conversational commerce",
+                    commercial_context={"providerThreadId": str(thread_id)},
+                )
+                identity = self.telegram_identities.get_by_external_fanvue_user_uuid(
+                    local_fanvue_account_id, UUID(str(fanvue_user_id))
+                )
+                canonical_decision = self.customer_sales_brain.evaluate_for_buyer(
+                    creator_profile_id=creator_profile_id,
+                    fanvue_account_id=local_fanvue_account_id,
+                    external_fanvue_buyer_uuid=UUID(str(fanvue_user_id)),
+                    telegram_user_id=(
+                        identity.telegram_user_id if identity else None
+                    ),
+                    identity_resolved=identity is not None,
+                    conversation_context={
+                        "latest_message": message_text,
+                        "conversation_thread_id": local_thread_id,
+                        "sales_session_id": str(session.sales_session_id),
+                    },
+                )
+                decisionengine_injection = {
+                    "commerce_execution_policy": (
+                        CommerceExecutionPolicy.DISABLED_FOR_TURN.value
+                    ),
+                    "commerce_decision": {
+                        "decision": canonical_decision.decision.value,
+                        "reason_code": canonical_decision.reason_code.value,
+                        "sales_session_id": str(session.sales_session_id),
+                        "authorized_policy": derive_commerce_execution_policy(
+                            canonical_decision
+                        ).value,
+                    },
+                }
+
         if monetization_event:
             refresh_payload = (
                 self.refresh_hook_service
@@ -132,11 +210,10 @@ class RealtimeDecisionTriggerService:
                 )
             )
 
-            decisionengine_injection = (
-                refresh_payload.get(
-                    "decisionengine_injection"
-                )
-            )
+            decisionengine_injection = {
+                **dict(refresh_payload.get("decisionengine_injection") or {}),
+                **dict(decisionengine_injection or {}),
+            }
 
             print("\n[DECISIONENGINE INJECTION]")
             print(decisionengine_injection)
@@ -158,17 +235,7 @@ class RealtimeDecisionTriggerService:
 
         response_text = decision_result.get("response")
 
-        local_thread_id = None
         outbound_message = None
-
-        if thread_id:
-            local_thread = get_or_create_chat_thread(
-                fanvue_account_id=local_fanvue_account_id,
-                fanvue_user_id=local_fanvue_user_id,
-                fanvue_chat_uuid=str(thread_id),
-            )
-
-            local_thread_id = local_thread["id"]
 
         if response_text and local_thread_id:
             outbound_message = save_chat_message(

@@ -1,6 +1,7 @@
 import unittest
 import sys
 import types
+from pathlib import Path
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from uuid import uuid4
@@ -90,6 +91,24 @@ class FakeEntitlementRepository:
         return str(kwargs["product_id"]) in self.entitled_product_ids
 
 
+class FakeOwnershipIntelligence:
+    def __init__(self, entitled_product_ids=()):
+        self.entitled_product_ids = {
+            str(value) for value in entitled_product_ids
+        }
+
+    def answer(self, identity):
+        return types.SimpleNamespace(
+            identity=identity, evidence_sufficient=True,
+            owned_product_ids=tuple(self.entitled_product_ids),
+        )
+
+    def owns_product(self, answer, product_id):
+        return str(product_id) in {
+            str(value) for value in answer.owned_product_ids
+        }
+
+
 class FakeContentService:
     def __init__(self):
         self.called = False
@@ -105,12 +124,20 @@ class FakeContentService:
 
 
 class ProductRecommendationServiceTests(unittest.TestCase):
+    def test_product_ownership_uses_canonical_intelligence_only(self):
+        source = Path(
+            "app/services/product_recommendation_service.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn("OwnershipIntelligenceService", source)
+        self.assertNotIn("has_active_entitlement_for_legacy_user", source)
+        self.assertNotIn("CustomerEntitlementRepository", source)
+
     def test_active_product_returns_legacy_compatible_payload(self):
         selected = product(themes=("GFE",))
         fallback = FakeContentService()
         service = ProductRecommendationService(
             product_repository=FakeProductRepository([selected]),
-            entitlement_repository=FakeEntitlementRepository(),
+            ownership_intelligence=FakeOwnershipIntelligence(),
             content_service=fallback,
         )
 
@@ -173,7 +200,7 @@ class ProductRecommendationServiceTests(unittest.TestCase):
         )
         service = ProductRecommendationService(
             product_repository=FakeProductRepository([selected]),
-            entitlement_repository=FakeEntitlementRepository(),
+            ownership_intelligence=FakeOwnershipIntelligence(),
             content_service=FakeContentService(),
         )
 
@@ -202,7 +229,7 @@ class ProductRecommendationServiceTests(unittest.TestCase):
         selected = product(themes=("GFE",))
         service = ProductRecommendationService(
             product_repository=FakeProductRepository([selected]),
-            entitlement_repository=FakeEntitlementRepository(),
+            ownership_intelligence=FakeOwnershipIntelligence(),
             content_service=FakeContentService(),
         )
 
@@ -226,7 +253,7 @@ class ProductRecommendationServiceTests(unittest.TestCase):
         selected = product(themes=("GFE",))
         service = ProductRecommendationService(
             product_repository=FakeProductRepository([selected]),
-            entitlement_repository=FakeEntitlementRepository(),
+            ownership_intelligence=FakeOwnershipIntelligence(),
             content_service=FakeContentService(),
         )
         offer, contract = service.recommend_contract(
@@ -267,7 +294,7 @@ class ProductRecommendationServiceTests(unittest.TestCase):
                 selected = product(product_type=product_type)
                 service = ProductRecommendationService(
                     product_repository=FakeProductRepository([selected]),
-                    entitlement_repository=FakeEntitlementRepository(),
+                    ownership_intelligence=FakeOwnershipIntelligence(),
                     content_service=FakeContentService(),
                 )
 
@@ -297,7 +324,7 @@ class ProductRecommendationServiceTests(unittest.TestCase):
         fallback = FakeContentService()
         service = ProductRecommendationService(
             product_repository=FakeProductRepository([entitled, recent]),
-            entitlement_repository=FakeEntitlementRepository([entitled.id]),
+            ownership_intelligence=FakeOwnershipIntelligence([entitled.id]),
             content_service=fallback,
         )
 
@@ -321,7 +348,7 @@ class ProductRecommendationServiceTests(unittest.TestCase):
         fallback = FakeContentService()
         service = ProductRecommendationService(
             product_repository=FakeProductRepository([not_ready]),
-            entitlement_repository=FakeEntitlementRepository(),
+            ownership_intelligence=FakeOwnershipIntelligence(),
             content_service=fallback,
         )
 
@@ -339,7 +366,7 @@ class ProductRecommendationServiceTests(unittest.TestCase):
         fallback = FakeContentService()
         service = ProductRecommendationService(
             product_repository=FakeProductRepository([product()]),
-            entitlement_repository=FakeEntitlementRepository(),
+            ownership_intelligence=FakeOwnershipIntelligence(),
             content_service=fallback,
         )
 

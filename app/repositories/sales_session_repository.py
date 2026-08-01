@@ -11,6 +11,7 @@ from app.models.sales_session import (
     ACTIVE_SALES_SESSION_STATES,
     SalesSession,
     SalesSessionActorType,
+    SalesSessionFoundationType,
     SalesSessionHistoryEntry,
     SalesSessionOutcome,
     SalesSessionProgression,
@@ -28,7 +29,7 @@ class SalesSessionRepository:
         telegram_identity_mapping_id: int | None,
         conversation_thread_id: int | None,
         commercial_foundation_type: str,
-        commercial_foundation_reference: str,
+        commercial_foundation_reference: str | None,
         objective: str | None, commercial_context: Mapping,
         actor_type: SalesSessionActorType, actor_identifier: str | None,
     ) -> SalesSession:
@@ -257,7 +258,16 @@ class SalesSessionRepository:
             with connection.cursor() as cursor:
                 cursor.execute(
                     """SELECT link.sequence_index,link.associated_at,
-                              intent.*
+                              intent.*,
+                              (
+                                  SELECT COALESCE(
+                                      array_agg(member.asset_id ORDER BY member.position),
+                                      ARRAY[]::bigint[]
+                                  )
+                                  FROM public.commercial_offering_assets member
+                                  WHERE member.offering_id=
+                                        intent.commercial_offering_id
+                              ) AS asset_ids
                        FROM public.sales_session_purchase_intents link
                        JOIN public.sales_sessions session
                          ON session.sales_session_id=link.sales_session_id
@@ -409,7 +419,9 @@ class SalesSessionRepository:
                 int(row["conversation_thread_id"])
                 if row.get("conversation_thread_id") is not None else None
             ),
-            commercial_foundation_type=row["commercial_foundation_type"],
+            commercial_foundation_type=SalesSessionFoundationType(
+                row["commercial_foundation_type"]
+            ),
             commercial_foundation_reference=row[
                 "commercial_foundation_reference"
             ],
