@@ -7,6 +7,9 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from app.database import get_db_connection
+from app.services.developer_agent_persistence_sanitizer import (
+    sanitize_developer_agent_value,
+)
 
 
 class DeveloperAgentExecutionRepository:
@@ -37,8 +40,10 @@ class DeveloperAgentExecutionRepository:
                     implementation_task,repository_path,expected_branch,status
                 ) VALUES(%s,%s,%s,%s,%s,%s,'AWAITING_APPROVAL')
                 RETURNING *""",
-                (task_id, issue_identifier, investigation_package,
-                 implementation_task, repository_path, expected_branch),
+                sanitize_developer_agent_value((
+                    task_id, issue_identifier, investigation_package,
+                    implementation_task, repository_path, expected_branch,
+                )),
             )
             row = cursor.fetchone()
         self.create_notification(
@@ -82,8 +87,10 @@ class DeveloperAgentExecutionRepository:
                     execution_id,task_id,status,initial_git_status,
                     initial_branch,initial_head
                 ) VALUES(%s,%s,'QUEUED',%s,%s,%s) RETURNING *""",
-                (execution_id, task_id, initial_git_status,
-                 initial_branch, initial_head),
+                sanitize_developer_agent_value((
+                    execution_id, task_id, initial_git_status,
+                    initial_branch, initial_head,
+                )),
             )
             row = cursor.fetchone()
             cursor.execute(
@@ -136,7 +143,12 @@ class DeveloperAgentExecutionRepository:
             """INSERT INTO public.developer_agent_events(
                    execution_id,event_type,message,event_data
                ) VALUES(%s,%s,%s,%s::JSONB) RETURNING *""",
-            (execution_id, event_type, message, json.dumps(event_data or {})),
+            (
+                execution_id,
+                sanitize_developer_agent_value(event_type),
+                sanitize_developer_agent_value(message),
+                json.dumps(sanitize_developer_agent_value(event_data or {})),
+            ),
         )
 
     def update_execution(
@@ -159,8 +171,11 @@ class DeveloperAgentExecutionRepository:
                    completed_at=CASE WHEN %s THEN NOW() ELSE completed_at END,
                    updated_at=NOW()
                WHERE execution_id=%s RETURNING *""",
-            (status, codex_session_id, failure_reason, cancellation_reason,
-             json.dumps(final_report) if final_report is not None else None,
+            (sanitize_developer_agent_value(status),
+             sanitize_developer_agent_value(codex_session_id),
+             sanitize_developer_agent_value(failure_reason),
+             sanitize_developer_agent_value(cancellation_reason),
+             json.dumps(sanitize_developer_agent_value(final_report)) if final_report is not None else None,
              status, terminal, execution_id),
         )
 
@@ -173,7 +188,10 @@ class DeveloperAgentExecutionRepository:
                    notification_id,task_id,execution_id,notification_type,
                    title,detail
                ) VALUES(%s,%s,%s,%s,%s,%s) RETURNING *""",
-            (uuid4(), task_id, execution_id, notification_type, title, detail),
+            (uuid4(), task_id, execution_id,
+             sanitize_developer_agent_value(notification_type),
+             sanitize_developer_agent_value(title),
+             sanitize_developer_agent_value(detail)),
         )
 
     def list_notifications(self) -> list[dict[str, Any]]:

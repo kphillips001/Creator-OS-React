@@ -152,6 +152,10 @@ export const router = createBrowserRouter([
         element: <AssetLibraryPage />,
       },
       {
+        path: "/library/bundles",
+        element: <PlaceholderPage title="Bundle Library" description="Create and manage reusable content Bundles." />,
+      },
+      {
         path: "/library/generations",
         element: <GenerationLibraryPage />,
       },

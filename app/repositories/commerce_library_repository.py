@@ -142,8 +142,8 @@ class CommerceLibraryRepository:
             term = f"%{needle}%"
             asset_search = "AND (COALESCE(content.file_name, '') ILIKE %s OR b.asset_id::text ILIKE %s)"
             photoshoot_search = """AND (
-                COALESCE(NULLIF(BTRIM(d.user_title), ''), d.ai_title, d.display_name) ILIKE %s
-                OR COALESCE(NULLIF(BTRIM(d.user_description), ''), d.ai_description, '') ILIKE %s
+                COALESCE(NULLIF(BTRIM(photoshoot_intelligence.commercial_title), ''), d.display_name) ILIKE %s
+                OR COALESCE(NULLIF(BTRIM(photoshoot_intelligence.commercial_summary), ''), '') ILIKE %s
                 OR d.deliverable_id::text ILIKE %s
             )"""
             asset_params.extend((term, term))
@@ -216,7 +216,7 @@ class CommerceLibraryRepository:
                 'photoshoot'::text AS item_kind,
                 COALESCE(d.hero_asset_id, 0) AS asset_id,
                 d.creator_profile_id::integer,
-                COALESCE(NULLIF(BTRIM(d.user_title), ''), d.ai_title, d.display_name) AS asset_name,
+                COALESCE(NULLIF(BTRIM(photoshoot_intelligence.commercial_title), ''), d.display_name) AS asset_name,
                 CASE WHEN workflow.current_stage = 'READY' THEN 'COMPLETE'
                      WHEN workflow.current_stage LIKE '%%\\_FAILED' ESCAPE '\\' THEN 'FAILED'
                      ELSE 'ANALYZING' END AS analysis_status,
@@ -230,6 +230,7 @@ class CommerceLibraryRepository:
                 d.shot_count,
                 COALESCE(d.updated_at, d.completed_at, d.created_at) AS sort_at
             FROM public.photoshoot_commerce_deliverables d
+            LEFT JOIN public.photoshoot_intelligence_profiles photoshoot_intelligence USING (photoshoot_session_id)
             LEFT JOIN public.photoshoot_analysis_workflows workflow USING (deliverable_id)
             WHERE d.creator_profile_id = %s
               AND d.registration_state = 'REGISTERED'

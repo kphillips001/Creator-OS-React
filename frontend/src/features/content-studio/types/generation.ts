@@ -35,7 +35,7 @@ export type GenerationSubmission = {
   creativeMode: string;
   promptCount: number;
   creatorContext: { status: string; activeReferenceAssetId: number | null };
-  origin?: "canonical_planner" | "explicit_tags" | "explicit_inspiration";
+  origin?: "canonical_planner" | "explicit_tags" | "explicit_inspiration" | "recreate_with_ava";
   plannerLineage?: {
     plannerQuestion: string;
     plannerItemId: string;

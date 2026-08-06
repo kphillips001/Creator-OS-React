@@ -6,6 +6,9 @@ from typing import Any, Mapping
 from uuid import UUID
 
 from app.models.commerce_recommendation import RecommendationResult
+from app.models.photoshoot_experience_recommendation import (
+    PhotoshootExperienceRecommendation,
+)
 
 
 class OfferingSelectionReason(str, Enum):
@@ -72,6 +75,7 @@ class SelectedOfferingResult:
     price_minor: int | None = None
     currency: str | None = None
     recommendation_result: RecommendationResult | None = None
+    photoshoot_experience: PhotoshootExperienceRecommendation | None = None
 
 
 def immutable_selector_metadata(

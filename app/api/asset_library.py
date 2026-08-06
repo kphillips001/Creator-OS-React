@@ -7,7 +7,8 @@ import logging
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
+from pydantic import BaseModel
 from fastapi.responses import FileResponse, JSONResponse
 
 from app.api.content_studio import _current_account_id
@@ -24,6 +25,7 @@ from app.services.staged_asset_registration_service import (
 )
 from app.repositories.photoshoot_commerce_repository import PhotoshootCommerceRepository
 from app.services.photoshoot_commerce_deliverable_service import PhotoshootCommerceDeliverableService
+from app.services.photoshoot_sale_preparation_service import PhotoshootSalePreparationService
 from app.services.creative_intelligence_learning_service import CreativeIntelligenceLearningService
 
 
@@ -155,6 +157,13 @@ def _staged_payload(record) -> dict:
 
 
 def _photoshoot_payload(row: dict) -> dict:
+    session_selling = None
+    try:
+        session_selling = PhotoshootSalePreparationService().inspect(
+            row["deliverable_id"], creator_profile_id=int(row["creator_profile_id"]),
+        )
+    except Exception as error:
+        logger.warning("Session Selling readiness unavailable for %s: %s", row.get("deliverable_id"), error)
     return {
         "libraryItemId": f"photoshoot:{row['deliverable_id']}",
         "itemKind": "photoshoot",
@@ -172,7 +181,78 @@ def _photoshoot_payload(row: dict) -> dict:
         "imageUrl": f"/api/v1/assets/{row['hero_asset_id']}/thumbnail" if row.get("hero_asset_id") else None,
         "shotCount": int(row["shot_count"]),
         "registrationSource": "Photoshoot Gallery",
+        "sessionSelling": session_selling,
     }
+
+
+class SalePreparationStep(BaseModel):
+    model_config = {"extra": "forbid"}
+
+    assetId: int
+    shotOrder: int
+    salesPosition: int
+    role: str
+    access: str
+    priceMinor: int | None = None
+    currency: str = "USD"
+
+
+class SalePreparationRequest(BaseModel):
+    model_config = {"extra": "forbid"}
+
+    strategyVersion: str
+    steps: list[SalePreparationStep]
+    fanvueAccountId: int | None = None
+
+
+def _execute_sale_preparation(publication_ids, creator_profile_id, account_id):
+    PhotoshootSalePreparationService().execute_staged(
+        publication_ids, creator_profile_id=creator_profile_id,
+        fanvue_account_id=account_id,
+    )
+
+
+@router.get("/photoshoots/{deliverable_id}/sale-preparation")
+def inspect_photoshoot_sale_preparation(deliverable_id: str):
+    try:
+        return PhotoshootSalePreparationService().inspect(
+            deliverable_id, creator_profile_id=int(_creator_profile()["id"]),
+        )
+    except KeyError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+
+
+@router.post("/photoshoots/{deliverable_id}/sale-preparation", status_code=202)
+def prepare_photoshoot_for_sale(deliverable_id: str, request: SalePreparationRequest,
+                               background_tasks: BackgroundTasks):
+    profile = _creator_profile()
+    account_id = request.fanvueAccountId or profile.get("fanvue_account_id")
+    if not account_id:
+        raise HTTPException(status_code=409, detail="A connected Fanvue account is required.")
+    try:
+        service = PhotoshootSalePreparationService()
+        publication_ids = service.stage(
+            deliverable_id, creator_profile_id=int(profile["id"]),
+            fanvue_account_id=int(account_id),
+            strategy_version=request.strategyVersion,
+            reviewed_steps=[item.model_dump() for item in request.steps],
+        )
+        background_tasks.add_task(
+            _execute_sale_preparation, publication_ids, int(profile["id"]), int(account_id),
+        )
+        return service.inspect(deliverable_id, creator_profile_id=int(profile["id"]))
+    except KeyError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+
+
+@router.post("/photoshoots/{deliverable_id}/sale-preparation/retry", status_code=202)
+def retry_photoshoot_sale_preparation(deliverable_id: str, request: SalePreparationRequest,
+                                     background_tasks: BackgroundTasks):
+    return prepare_photoshoot_for_sale(deliverable_id, request, background_tasks)
 
 
 def _asset_sort_timestamp(item: dict) -> float:

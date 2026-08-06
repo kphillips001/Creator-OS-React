@@ -1,5 +1,122 @@
 [
   {
+    "history_id": "caption_history_fd9e3bfe79f74222a5940418dd5d7179",
+    "session_id": "caption_session_dc742f4b55ff45dc9d09cda85d157ffe",
+    "caption_request_id": "caption_request_f12f41f92cc64350842cbb1fce9193ea",
+    "caption_result_id": "caption_result_9a1b4f23300245d9964816d02b5500bb",
+    "platform": "x",
+    "selected_text": "I'm in a teasing mood... tell me your move if you found me perched here waiting. No wrong answers \ud83d\ude0c\ud83d\udd25",
+    "created_at": "2026-08-05T14:39:22.136995",
+    "metadata": {
+      "source_generated_image_id": "generated_image_72af77f223b9b5f82f4bfd4c",
+      "social_queue_item_id": null
+    }
+  },
+  {
+    "history_id": "caption_history_e8785d24ec29465fbbb8d122939fba93",
+    "session_id": "caption_session_dc742f4b55ff45dc9d09cda85d157ffe",
+    "caption_request_id": "caption_request_f12f41f92cc64350842cbb1fce9193ea",
+    "caption_result_id": "caption_result_9a1b4f23300245d9964816d02b5500bb",
+    "platform": "x",
+    "selected_text": null,
+    "created_at": "2026-08-05T14:38:42.879005",
+    "metadata": {
+      "source_generated_image_id": "generated_image_72af77f223b9b5f82f4bfd4c",
+      "social_queue_item_id": null
+    }
+  },
+  {
+    "history_id": "caption_history_3ff1bce128ee46979f42ede84c968d09",
+    "session_id": "caption_session_61c5a9ebb5144d25bea4cd4ba6da2b3b",
+    "caption_request_id": "caption_request_6466740792104ddd858c2ce19384c312",
+    "caption_result_id": "caption_result_be45a06e86594f86a0256a5d2e9ef0e3",
+    "platform": "x",
+    "selected_text": "I swear the water gets warmer every time I glance back \ud83d\udc40 You coming in or what?",
+    "created_at": "2026-08-04T15:06:35.027323",
+    "metadata": {
+      "source_generated_image_id": "generated_image_1009171acbfd5b78bfd224df",
+      "social_queue_item_id": null
+    }
+  },
+  {
+    "history_id": "caption_history_664fd1e14d17453fbbfe3542c470b0b6",
+    "session_id": "caption_session_61c5a9ebb5144d25bea4cd4ba6da2b3b",
+    "caption_request_id": "caption_request_6466740792104ddd858c2ce19384c312",
+    "caption_result_id": "caption_result_be45a06e86594f86a0256a5d2e9ef0e3",
+    "platform": "x",
+    "selected_text": null,
+    "created_at": "2026-08-04T15:05:42.501694",
+    "metadata": {
+      "source_generated_image_id": "generated_image_1009171acbfd5b78bfd224df",
+      "social_queue_item_id": null
+    }
+  },
+  {
+    "history_id": "caption_history_09aff590ac184e7c9a2322645be1a177",
+    "session_id": "caption_session_d8b852ccd44d4ba180dc190fbd7c9e9f",
+    "caption_request_id": "caption_request_c94bb8f65cff4e37a62301e1a1d9f2b4",
+    "caption_result_id": "caption_result_4399ffb33e6946ffafbfb6088c8e4978",
+    "platform": "x",
+    "selected_text": "Quiet little moment just for us... tell me one thing that would make your whole day better right now \ud83d\udcad",
+    "created_at": "2026-08-03T16:15:11.834019",
+    "metadata": {
+      "source_generated_image_id": "generated_image_b8a5923eb96c0b50a895c506",
+      "social_queue_item_id": null
+    }
+  },
+  {
+    "history_id": "caption_history_0baeba99d6d14a7a9721facd6525e4d2",
+    "session_id": "caption_session_d8b852ccd44d4ba180dc190fbd7c9e9f",
+    "caption_request_id": "caption_request_c94bb8f65cff4e37a62301e1a1d9f2b4",
+    "caption_result_id": "caption_result_4399ffb33e6946ffafbfb6088c8e4978",
+    "platform": "x",
+    "selected_text": "Quiet little moment just for us... tell me one thing that would make your whole day better right now \ud83d\udcad",
+    "created_at": "2026-08-03T16:15:05.156085",
+    "metadata": {
+      "source_generated_image_id": "generated_image_b8a5923eb96c0b50a895c506",
+      "social_queue_item_id": null
+    }
+  },
+  {
+    "history_id": "caption_history_1b6c7ef17a7a4461b12328635db9a124",
+    "session_id": "caption_session_d8b852ccd44d4ba180dc190fbd7c9e9f",
+    "caption_request_id": "caption_request_c94bb8f65cff4e37a62301e1a1d9f2b4",
+    "caption_result_id": "caption_result_4399ffb33e6946ffafbfb6088c8e4978",
+    "platform": "x",
+    "selected_text": null,
+    "created_at": "2026-08-03T16:14:20.506561",
+    "metadata": {
+      "source_generated_image_id": "generated_image_b8a5923eb96c0b50a895c506",
+      "social_queue_item_id": null
+    }
+  },
+  {
+    "history_id": "caption_history_e70f8d1d32ac4d5d91970add86863aa6",
+    "session_id": "caption_session_86e3f7f1254f44a08e683f26ee1848cd",
+    "caption_request_id": "caption_request_bea91b27752f4eeb9766d26c9cdee9fe",
+    "caption_result_id": "caption_result_42424a994ffb41d0832384f1587ad700",
+    "platform": "x",
+    "selected_text": "If you walked up right now, what\u2019s the first thing you\u2019d say? \ud83d\udc40 no boring answers allowed",
+    "created_at": "2026-08-02T17:10:58.322197",
+    "metadata": {
+      "source_generated_image_id": "generated_image_44e564e268a1f109a6143896",
+      "social_queue_item_id": null
+    }
+  },
+  {
+    "history_id": "caption_history_d93a5b4e3ad84d60aa3c9ab0bb66d777",
+    "session_id": "caption_session_86e3f7f1254f44a08e683f26ee1848cd",
+    "caption_request_id": "caption_request_bea91b27752f4eeb9766d26c9cdee9fe",
+    "caption_result_id": "caption_result_42424a994ffb41d0832384f1587ad700",
+    "platform": "x",
+    "selected_text": null,
+    "created_at": "2026-08-02T17:10:06.860164",
+    "metadata": {
+      "source_generated_image_id": "generated_image_44e564e268a1f109a6143896",
+      "social_queue_item_id": null
+    }
+  },
+  {
     "history_id": "caption_history_710bc86faf924c7b9e1933f86aadefa3",
     "session_id": "caption_session_a4ca6797dd044f47948c8968d1e22434",
     "caption_request_id": "caption_request_b915e09bc74e4701aae25dba1aff1349",

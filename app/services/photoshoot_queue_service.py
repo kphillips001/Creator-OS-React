@@ -17,6 +17,7 @@ from app.models.photoshoot_queue import (
     PhotoshootRequest,
     PhotoshootResult,
     PhotoshootSession,
+    normalize_target_shot_count,
 )
 from app.models.generation_library import GeneratedImageRecord
 from app.services.generation_engine_service import GenerationEngineService
@@ -63,6 +64,7 @@ class PhotoshootQueueService:
         reference_asset_id: int | None = None,
         creator_notes: str | None = None,
         creative_continuity: Mapping[str, Any] | None = None,
+        target_shot_count: int = 10,
     ) -> PhotoshootSession:
         plans = tuple(prompt_plans)
         if not plans:
@@ -90,10 +92,12 @@ class PhotoshootQueueService:
             title=title,
             reference_asset_id=reference_asset_id if reference_asset_id is not None else plans[0].reference_asset_id,
             creative_mode=plans[0].creative_mode,
+            target_shot_count=normalize_target_shot_count(target_shot_count),
             provider_id=provider_id,
             creator_notes=creator_notes,
             creative_continuity={
                 "prompt_count": len(plans),
+                "target_shot_count": normalize_target_shot_count(target_shot_count),
                 "generation_mode_behavior": "photoshoot_queue",
                 "wavespeed_generation_mode_key": "photoshoot_set",
                 "continuity": (
@@ -137,6 +141,10 @@ class PhotoshootQueueService:
             self._replace_session(completed)
             return None
         plan = self._prompt_plan_from_request(next_request, session.creator_profile_id)
+        frozen_identity = dict((session.creative_continuity or {}).get("canonical_identity_reference") or {})
+        frozen_identity_path = str(frozen_identity.get("path") or "").strip()
+        if (session.creative_continuity or {}).get("canonical_identity_reference_frozen") and not frozen_identity_path:
+            raise ValueError("The frozen canonical identity reference is unavailable for this Photoshoot.")
         job = generation_engine.queue_prompt_plan(
             creator_profile={"id": session.creator_profile_id},
             prompt_plan=plan,
@@ -159,6 +167,12 @@ class PhotoshootQueueService:
                 "photoshoot_request_id": next_request.request_id,
                 "photoshoot_sequence_index": next_request.sequence_index,
                 "creative_continuity": dict(session.creative_continuity or {}),
+                **({
+                    "canonical_identity_reference_asset_id": int(frozen_identity.get("asset_id") or 0),
+                    "canonical_identity_reference_path": frozen_identity_path,
+                    "canonical_reference_image_url": frozen_identity_path,
+                    "require_frozen_photoshoot_identity": True,
+                } if frozen_identity_path else {}),
                 **(
                     {
                         "reference_image_url": dict(next_request.metadata or {}).get("active_reference_output_reference")
@@ -339,13 +353,35 @@ class PhotoshootQueueService:
         record: GeneratedImageRecord,
         *,
         title: str = "Photoshoot Studio",
+        canonical_identity_reference: Mapping[str, Any] | None = None,
     ) -> tuple[PhotoshootSession, bool]:
         """Open a persisted Photoshoot Studio session with a generated image as seed."""
+        identity_reference = dict(canonical_identity_reference or {})
+        identity_path = str(identity_reference.get("path") or identity_reference.get("url") or "").strip()
+        identity_asset_id = int(identity_reference.get("asset_id") or 0)
+        if identity_reference and (not identity_asset_id or not identity_path):
+            raise ValueError("Canonical Photoshoot identity reference is incomplete.")
         for session in self.list_sessions(creator_profile_id=record.creator_profile_id):
             if session.status in {"completed", "cancelled", "junked"}:
                 continue
             continuity = dict(session.creative_continuity or {})
             if continuity.get("seed_image_id") == record.image_id:
+                if not continuity.get("canonical_identity_reference_frozen") and identity_reference:
+                    updated = replace(
+                        session,
+                        creative_continuity={
+                            **continuity,
+                            "canonical_identity_reference": {
+                                "asset_id": identity_asset_id,
+                                "path": identity_path,
+                                "frozen_at": str(identity_reference.get("frozen_at") or utc_now()),
+                            },
+                            "canonical_identity_reference_frozen": True,
+                        },
+                        updated_at=utc_now(),
+                    )
+                    self._replace_session(updated)
+                    return updated, False
                 return session, False
 
         plan = PromptPlan(
@@ -386,6 +422,14 @@ class PhotoshootQueueService:
                 "seed_generation_job_id": record.generation_job_id,
                 "seed_generation_request_id": record.generation_request_id,
                 "seed_generation_result_id": record.generation_result_id,
+                **({
+                    "canonical_identity_reference": {
+                        "asset_id": identity_asset_id,
+                        "path": identity_path,
+                        "frozen_at": str(identity_reference.get("frozen_at") or utc_now()),
+                    },
+                    "canonical_identity_reference_frozen": True,
+                } if identity_reference else {}),
                 "continuity_rule": (
                     "Use the seed image as the canonical continuity reference. Preserve outfit, hair, makeup, "
                     "accessories, location, lighting, time of day, mood, and photography style. Vary only pose, "
@@ -562,7 +606,9 @@ class PhotoshootQueueService:
         for existing in reversed(requests):
             if existing.status in {"queued", "generating", "awaiting_review"}:
                 return existing
-        next_index = max((request.sequence_index for request in requests), default=0) + 1
+        continuity = dict(session.creative_continuity or {})
+        replacement_index = int(continuity.get("replacement_sequence_index") or 0)
+        next_index = replacement_index or max((request.sequence_index for request in requests), default=0) + 1
         request = PhotoshootRequest(
             request_id=new_id("photoshoot_request"),
             session_id=session_id,
@@ -587,6 +633,10 @@ class PhotoshootQueueService:
                 "active_reference_image_id": str(active_reference_image_id or "").strip(),
                 "active_reference_output_reference": str(active_reference_output_reference or "").strip(),
                 "creative_direction": dict(creative_direction or {}),
+                "replaces_request_id": str(continuity.get("replacement_request_id") or ""),
+                "inspiration_ideas": tuple(continuity.get("inspiration_ideas") or ()),
+                "selected_inspiration": str(continuity.get("selected_inspiration") or ""),
+                "inspiration_planning_shot": int(continuity.get("inspiration_planning_shot") or 0),
             },
         )
         all_requests = list(self.list_requests())
@@ -607,6 +657,75 @@ class PhotoshootQueueService:
             )
         )
         return request
+
+    def replace_approved_shot(self, request_id: str) -> tuple[PhotoshootRequest, tuple[PhotoshootRequest, ...], PhotoshootSession]:
+        """Return an approved timeline position to planning and invalidate dependent shots."""
+        target = self.get_request(request_id)
+        if target.status not in {"approved", "continuity_invalidated", "replacement_pending"}:
+            raise ValueError("Only an approved or invalidated Photoshoot shot can be replaced.")
+        if bool(dict(target.metadata or {}).get("is_seed_image")):
+            raise ValueError("The Photoshoot seed cannot be replaced.")
+        session = self.get_session(target.session_id)
+        if session.status in {"completed", "cancelled", "archived"}:
+            raise ValueError(f"Photoshoot Session is {session.status}.")
+        requests = list(self.requests_for_session(target.session_id))
+        active = next((item for item in requests if item.status in {"queued", "generating", "awaiting_review"}), None)
+        if active is not None:
+            raise ValueError("Finish the active Photoshoot shot before replacing an approved shot.")
+
+        invalidated = []
+        for item in requests:
+            if item.sequence_index < target.sequence_index or item.request_id == target.request_id:
+                continue
+            if item.status in {"approved", "continuity_invalidated", "replacement_pending"}:
+                updated = replace(item, status="continuity_invalidated", review_status="continuity_invalidated",
+                                  review_notes=f"Continuity changed before Shot {item.sequence_index}; regeneration required.", updated_at=utc_now())
+                self._replace_request(updated)
+                invalidated.append(updated)
+        replacement = replace(target, status="replacement_pending", review_status="replacement_pending",
+                              review_notes="Selected by operator for replacement.", updated_at=utc_now())
+        self._replace_request(replacement)
+
+        previous = max(
+            (item for item in requests if item.sequence_index < target.sequence_index and item.status == "approved"),
+            key=lambda item: item.sequence_index,
+            default=None,
+        )
+        continuity = dict(session.creative_continuity or {})
+        previous_ids = tuple(dict(previous.metadata or {}).get("generated_image_ids") or ()) if previous else ()
+        approved_before = tuple(
+            item for item in requests if item.sequence_index < target.sequence_index and item.status == "approved"
+        )
+        updated_session = replace(
+            session,
+            current_request_id=None,
+            creative_continuity={
+                **continuity,
+                "current_shot_image_id": previous_ids[-1] if previous_ids else continuity.get("seed_image_id"),
+                "replacement_request_id": target.request_id,
+                "replacement_sequence_index": target.sequence_index,
+                "inspiration_ideas": (),
+                "selected_inspiration": "",
+                "inspiration_planning_shot": 0,
+                "current_direction": {},
+                "current_prompt": "",
+                "creator_guidance": "",
+                "grok_guidance": "",
+                "session_direction": "",
+                "creative_hint": "",
+                "direction_approved": False,
+                "workflow_stage": "ready_for_next_shot",
+                "progression_stage": max(0, len(approved_before) - 1),
+                "approved_directions": tuple(
+                    dict((item.metadata or {}).get("creative_direction") or {})
+                    for item in approved_before if dict((item.metadata or {}).get("creative_direction") or {})
+                ),
+                "approved_prompts": tuple(item.prompt_text for item in approved_before if item.prompt_text),
+            },
+            updated_at=utc_now(),
+        )
+        self._replace_session(updated_session)
+        return replacement, tuple(invalidated), updated_session
 
     def update_request_continuity_reference(
         self,
@@ -632,6 +751,16 @@ class PhotoshootQueueService:
                     "active_reference_output_reference": reference_value,
                 },
             },
+            updated_at=utc_now(),
+        )
+        self._replace_request(updated)
+        return updated
+
+    def record_continuity_assessment(self, request_id: str, assessment: Mapping[str, Any]) -> PhotoshootRequest:
+        request = self.get_request(request_id)
+        updated = replace(
+            request,
+            metadata={**dict(request.metadata or {}), "continuity_assessment": dict(assessment or {})},
             updated_at=utc_now(),
         )
         self._replace_request(updated)
@@ -778,7 +907,11 @@ class PhotoshootQueueService:
                     "current_direction": {},
                     "current_prompt": "",
                     "creative_hint": "",
+                    "creator_guidance": "",
+                    "grok_guidance": "",
+                    "session_direction": "",
                     "inspiration_ideas": (),
+                    "inspiration_planning_shot": 0,
                     "selected_inspiration": "",
                     "direction_approved": False,
                     "workflow_stage": "ready_for_next_shot",
@@ -788,6 +921,8 @@ class PhotoshootQueueService:
                         int(continuity.get("progression_stage") or 0),
                         len(tuple(request for request in self.requests_for_session(updated.session_id) if request.status == "approved")),
                     ),
+                    "replacement_request_id": "",
+                    "replacement_sequence_index": 0,
                 },
                 updated_at=utc_now(),
             )
@@ -805,7 +940,16 @@ class PhotoshootQueueService:
         )
         self._replace_request(updated)
         session = self.get_session(updated.session_id)
-        self._replace_session(replace(session, current_request_id=None, updated_at=utc_now()))
+        self._replace_session(replace(
+            session,
+            current_request_id=None,
+            creative_continuity={
+                **dict(session.creative_continuity or {}),
+                "direction_approved": False,
+                "workflow_stage": "ready_for_next_shot",
+            },
+            updated_at=utc_now(),
+        ))
         return updated
 
     def return_seed_request_to_library(self, request_id: str, *, notes: str | None = None) -> PhotoshootRequest:
@@ -1086,9 +1230,11 @@ class PhotoshootQueueService:
         creator_guidance: str | None = None,
         grok_guidance: str | None = None,
         inspiration_ideas: tuple[str, ...] | list[str] | None = None,
+        inspiration_planning_shot: int | None = None,
         selected_inspiration: str | None = None,
         planning_mode: str | None = None,
         plan_frame_count: int | None = None,
+        target_shot_count: int | None = None,
         session_plan: tuple[Mapping[str, Any], ...] | list[Mapping[str, Any]] | None = None,
         session_plan_index: int | None = None,
         session_plan_approved: bool | None = None,
@@ -1114,6 +1260,8 @@ class PhotoshootQueueService:
             continuity["grok_guidance"] = str(grok_guidance)
         if inspiration_ideas is not None:
             continuity["inspiration_ideas"] = tuple(str(item) for item in inspiration_ideas)
+        if inspiration_planning_shot is not None:
+            continuity["inspiration_planning_shot"] = max(0, int(inspiration_planning_shot))
         if selected_inspiration is not None:
             continuity["selected_inspiration"] = str(selected_inspiration)
         if planning_mode is not None:
@@ -1121,6 +1269,10 @@ class PhotoshootQueueService:
             continuity["planning_mode"] = mode if mode in {"frame_by_frame", "full_plan"} else "frame_by_frame"
         if plan_frame_count is not None:
             continuity["plan_frame_count"] = max(4, min(12, int(plan_frame_count)))
+        normalized_target = session.target_shot_count
+        if target_shot_count is not None:
+            normalized_target = normalize_target_shot_count(target_shot_count)
+            continuity["target_shot_count"] = normalized_target
         if session_plan is not None:
             continuity["session_plan"] = tuple(dict(item or {}) for item in session_plan)
         if session_plan_index is not None:
@@ -1131,6 +1283,7 @@ class PhotoshootQueueService:
             session,
             provider_id=str(provider_id or session.provider_id),
             creative_mode=str(creative_mode or session.creative_mode),
+            target_shot_count=normalized_target,
             creative_continuity=continuity,
             updated_at=utc_now(),
         )
@@ -1267,6 +1420,7 @@ class PhotoshootQueueService:
             title=str(data.get("title") or "Photoshoot Session"),
             reference_asset_id=data.get("reference_asset_id"),
             creative_mode=str(data.get("creative_mode") or "social_safe"),
+            target_shot_count=normalize_target_shot_count(data.get("target_shot_count")),
             status=str(data.get("status") or "queued"),
             provider_id=str(data.get("provider_id") or "future_provider"),
             creator_notes=data.get("creator_notes"),

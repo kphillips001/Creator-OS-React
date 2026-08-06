@@ -3,22 +3,24 @@ import { describe, expect, it } from "vitest";
 import { navigationGroups } from "./navigation";
 
 describe("Business navigation", () => {
-  it("places commercial inventory and intelligence in the Business workflow", () => {
+  it("presents only primary operator workflows and moves administration to Advanced", () => {
     const content = navigationGroups.find((group) => group.label === "Content Creation");
     const business = navigationGroups.find((group) => group.label === "Business");
+    const advanced = navigationGroups.find((group) => group.label === "Advanced");
     expect(content?.label).toBe("Content Creation");
     expect(business?.label).toBe("Business");
     expect(business?.items.map((item) => [item.label, item.path])).toEqual([
-      ["Commercial Administration", "/commercial-administration"],
+      ["Overview", "/home"],
       ["Commerce", "/commerce"],
-      ["Commerce Library", "/business/commerce-library"],
-      ["Available Inventory", "/inventory/available"],
       ["Customers", "/business/customers"],
       ["Sales", "/business/sales"],
-      ["Operations", "/business/operations"],
-      ["Intelligence Center", "/home"],
     ]);
-    expect(content?.items.some((item) => item.label === "Available Inventory")).toBe(false);
+    expect(advanced?.items.map((item) => [item.label, item.path])).toEqual([
+      ["Operations", "/business/operations"],
+      ["Commercial Administration", "/commercial-administration"],
+    ]);
+    expect(navigationGroups.flatMap((group) => group.items).some((item) =>
+      ["Commerce Library", "Available Inventory", "Intelligence Center"].includes(item.label))).toBe(false);
     expect(navigationGroups.some((group) => group.label === "Intelligence")).toBe(false);
   });
 });

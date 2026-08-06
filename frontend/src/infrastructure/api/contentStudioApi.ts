@@ -121,7 +121,7 @@ export function enhanceCreativeTags(
   explicit: boolean,
   signal?: AbortSignal,
   context?: {
-    origin: "canonical_planner" | "manual_creative_concept";
+    origin: "canonical_planner" | "manual_creative_concept" | "recreate_with_ava";
     plannerQuestion?: string;
     plannerItemId?: string;
     plannerItemTitle?: string;
@@ -132,6 +132,24 @@ export function enhanceCreativeTags(
     { explicit, tags, ...context },
     signal,
   );
+}
+
+export type InspirationSceneAnalysis = {
+  scene: string; pose: string; camera_angle: string; camera_framing: string;
+  lighting: string; composition: string; wardrobe_concept: string; expression: string;
+  mood: string; environment: string; color_palette: string; styling: string;
+  elements_to_preserve: string[]; elements_to_ignore: string[];
+  identity_transfer_prohibited: true; confidence: number;
+};
+
+export async function analyzeInspirationScene(file: File): Promise<InspirationSceneAnalysis> {
+  const body = new FormData();
+  body.append("image", file);
+  const result = await readJsonResponse<{ success: boolean; error: string | null; analysis: InspirationSceneAnalysis }>(
+    await fetch(`${environment.apiBaseUrl}/content-studio/recreate/analyze`, { method: "POST", body }),
+  );
+  if (!result.success || result.error) throw new Error(result.error || "Inspiration analysis failed");
+  return result.analysis;
 }
 
 export async function generatePromptWorkshopBatch(

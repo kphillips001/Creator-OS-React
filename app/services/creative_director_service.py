@@ -23,6 +23,9 @@ from app.models.creative_director import (
     new_id,
 )
 from app.models.reference_library import ReferenceAsset
+from app.models.inspiration_scene import InspirationSceneAnalysis
+from app.models.photoshoot_queue import normalize_target_shot_count
+from app.services.llm_json_parser import parse_llm_json
 from app.prompts.generation_modes import GENERATION_MODES
 from app.prompts.prompt_builder import build_chatgpt_prompt, normalize_social_prompt_continuity
 from app.services.canonical_prompt_planner import (
@@ -364,6 +367,33 @@ class CreativeDirectorService:
             temperature=0.8,
         )
         return str(response.choices[0].message.content or "").strip()
+
+    def analyze_inspiration_scene(
+        self, *, image_bytes: bytes, image_mime_type: str | None = None,
+        image_name: str | None = None,
+    ) -> InspirationSceneAnalysis:
+        """Extract transferable creative direction without subject identity."""
+        if not image_bytes:
+            raise ValueError("An inspiration image is required.")
+        prompt = """Analyze this image as creative inspiration for a new image whose subject will be Ava.
+The uploaded person is never the identity source. Do not preserve or describe their face, hair, skin tone,
+body, age, ethnicity, or recognizable identity. Return ONLY one JSON object with exactly these keys:
+scene, pose, camera_angle, camera_framing, lighting, composition, wardrobe_concept, expression,
+mood, environment, color_palette, styling, elements_to_preserve, elements_to_ignore,
+identity_transfer_prohibited, confidence. All descriptive fields are strings; preserve/ignore are string
+arrays; identity_transfer_prohibited must be true; confidence is 0..1. Describe transferable creative
+attributes precisely and put all uploaded-subject identity attributes in elements_to_ignore."""
+        response = self.ask_anything(
+            question=prompt, image_bytes=image_bytes,
+            image_mime_type=image_mime_type or "image/png", image_name=image_name,
+        )
+        parsed = parse_llm_json(
+            response, model_name="creative-director-vision",
+            caller="CreativeDirectorService.analyze_inspiration_scene",
+        )
+        if not isinstance(parsed, Mapping):
+            raise ValueError("Creative Director returned malformed inspiration analysis.")
+        return InspirationSceneAnalysis.from_mapping(parsed)
 
     @staticmethod
     def _normalize_vision_images(
@@ -1026,6 +1056,158 @@ class CreativeDirectorService:
         return api_key
 
     @staticmethod
+    def _shoot_length_context(session_context: Mapping[str, Any] | None) -> dict[str, int | str]:
+        """Resolve target shoot length and derived escalation pacing for Photoshoot Studio."""
+        context = dict(session_context or {})
+        try:
+            target_shot_count = normalize_target_shot_count(context.get("target_shot_count"))
+        except (TypeError, ValueError):
+            target_shot_count = 10
+        try:
+            current_shot = max(1, int(context.get("current_shot") or 1))
+        except (TypeError, ValueError):
+            current_shot = 1
+        try:
+            planning_shot = max(current_shot + 1, int(context.get("planning_shot") or current_shot + 1))
+        except (TypeError, ValueError):
+            planning_shot = current_shot + 1
+        try:
+            remaining_raw = context.get("remaining_shots")
+            remaining_shots = (
+                max(0, int(remaining_raw))
+                if remaining_raw is not None
+                else max(0, target_shot_count - current_shot)
+            )
+        except (TypeError, ValueError):
+            remaining_shots = max(0, target_shot_count - current_shot)
+
+        if target_shot_count == 0:
+            return {
+                "target_shot_count": 0, "current_shot": current_shot,
+                "planning_shot": planning_shot, "remaining_shots": 0,
+                "editorial_stage": "Open-ended", "length_band": "open_ended",
+                "default_stage_advance": 1, "max_stage_advance": 2,
+                "face_only_forbidden": False, "endgame": False,
+                "ladder_stages": 8, "open_ended": True,
+            }
+
+        # 8-stage explicit ladder. Pace how many stages the next shot should advance
+        # so short shoots still reach strong NSFW by the finale.
+        ladder_stages = 8
+        future_frames = max(1, remaining_shots)
+        # Rough stages still needed if starting mild: leave room for a finale beat.
+        stages_left_budget = max(1, ladder_stages - 1)
+        computed_advance = max(1, min(3, (stages_left_budget + future_frames - 1) // future_frames))
+
+        if target_shot_count <= 6:
+            length_band = "short"
+            # Short shoots must move wardrobe/exposure, not linger on face-only micro-beats.
+            default_stage_advance = max(2, computed_advance)
+            max_stage_advance = max(3, default_stage_advance)
+            face_only_forbidden = True
+        elif target_shot_count <= 12:
+            length_band = "standard"
+            default_stage_advance = max(1, min(2, computed_advance))
+            max_stage_advance = 2
+            face_only_forbidden = False
+        else:
+            length_band = "long"
+            default_stage_advance = 1
+            max_stage_advance = 1 if remaining_shots > 4 else 2
+            face_only_forbidden = False
+
+        # Endgame: few remaining frames → force stronger escalation regardless of band.
+        if remaining_shots <= 1:
+            default_stage_advance = max(default_stage_advance, 3)
+            max_stage_advance = max(max_stage_advance, 4)
+            endgame = True
+        elif remaining_shots <= 2:
+            default_stage_advance = max(default_stage_advance, 2)
+            max_stage_advance = max(max_stage_advance, 3)
+            endgame = True
+        else:
+            endgame = False
+
+        return {
+            "target_shot_count": target_shot_count,
+            "current_shot": current_shot,
+            "planning_shot": planning_shot,
+            "remaining_shots": remaining_shots,
+            "editorial_stage": str(context.get("editorial_stage") or "Beginning"),
+            "length_band": length_band,
+            "default_stage_advance": int(default_stage_advance),
+            "max_stage_advance": int(max_stage_advance),
+            "face_only_forbidden": face_only_forbidden,
+            "endgame": endgame,
+            "ladder_stages": ladder_stages,
+            "open_ended": False,
+        }
+
+    @classmethod
+    def _explicit_length_pacing_block(cls, session_context: Mapping[str, Any] | None) -> str:
+        pace = cls._shoot_length_context(session_context)
+        target = pace["target_shot_count"]
+        current = pace["current_shot"]
+        remaining = pace["remaining_shots"]
+        band = pace["length_band"]
+        default_advance = pace["default_stage_advance"]
+        max_advance = pace["max_stage_advance"]
+        face_only = bool(pace["face_only_forbidden"])
+        endgame = bool(pace["endgame"])
+
+        if bool(pace.get("open_ended")):
+            return """
+Open-ended progression (REQUIRED):
+- There is no predefined total shot count and no remaining-shot budget.
+- Continue naturally from the latest approved image, approved history, continuity, and operator guidance.
+- Do not accelerate wardrobe removal, explicitness, or narrative closure because of the shot number.
+- Recommend the strongest immediate next beat without assuming a finale; the operator decides when the Photoshoot ends.
+""".strip()
+
+        if band == "short":
+            band_guidance = (
+                f"SHORT shoot ({target} total shots). Escalate aggressively so the set still reaches "
+                "strong explicit territory before the finale. Do not spend a full shot on face-only or "
+                "pose-only micro-tease when wardrobe is still fully on."
+            )
+        elif band == "standard":
+            band_guidance = (
+                f"STANDARD shoot ({target} total shots). Escalate at a steady editorial pace — "
+                "one clear beat per shot, with occasional two-stage advances when the current frame is still mild."
+            )
+        else:
+            band_guidance = (
+                f"LONG shoot ({target} total shots). Escalate gradually and linger within a stage band "
+                "when needed, but still reach nude/sexual stages well before the final frames."
+            )
+
+        endgame_line = ""
+        if endgame:
+            endgame_line = (
+                f"- ENDGAME: only {remaining} shot(s) remaining after the current frame. "
+                "Idea/direction must jump to a much hotter wardrobe/exposure/act stage so the shoot "
+                "does not finish still clothed or only lightly teasing.\n"
+            )
+
+        face_rule = (
+            "- Face/expression-only upgrades are NOT enough for the recommended next step while she is still fully dressed. "
+            "Idea 1 / the recommended direction MUST change wardrobe exposure or sexual action (lift/remove clothing, "
+            "reveal breasts/pussy, or begin explicit touch).\n"
+            if face_only
+            else "- Face must still escalate with the body, but wardrobe/act can advance more slowly on long shoots.\n"
+        )
+
+        return f"""
+Length-aware escalation budget (REQUIRED — overrides slower default instincts):
+- Target photoshoot length: {target} shots. Current approved shot: {current}. Planning shot: {pace["planning_shot"]}. Remaining shots after current: {remaining}. Editorial stage: {pace["editorial_stage"]}.
+- Length band: {band}.
+- {band_guidance}
+- Recommended next step should advance about {default_advance} ladder stage(s) from the latest frame (maximum {max_advance}).
+- Map the latest image onto the ladder below, then jump forward by that stage budget — do not crawl one micro-pose at a time when the budget says {default_advance}+.
+{endgame_line}{face_rule}- Shorter target lengths require faster NSFW ramp. Longer targets allow slower tease. Always finish the intended length near the hot end of the ladder, not still stuck in early clothed beats.
+""".strip()
+
+    @staticmethod
     def _build_photoshoot_creative_director_prompt(
         *,
         session_context: Mapping[str, Any],
@@ -1057,6 +1239,20 @@ class CreativeDirectorService:
             if hint_text
             else ""
         )
+        mode = str(creative_mode or "premium").strip().lower()
+        length_pacing = ""
+        if mode == "explicit":
+            length_pacing = (
+                "\n"
+                + CreativeDirectorService._explicit_length_pacing_block(session_context)
+                + "\n"
+            )
+        open_ended = CreativeDirectorService._shoot_length_context(session_context).get("open_ended") is True
+        session_pacing_rule = (
+            "- This session is open-ended. Use approved history, the latest shot, continuity, and operator guidance to plan the strongest natural next frame; do not assume an ending from shot number."
+            if open_ended
+            else "- Use current_shot, planning_shot, target_shot_count, remaining_shots, and editorial_stage from session memory to pace the intended fixed-length session."
+        )
         return f"""
 You are the Shot Director for a continuity-locked Creator OS Photoshoot Studio session.
 
@@ -1081,8 +1277,11 @@ Session defaults and memory:
 
 Approved direction history:
 {history_lines}
-
+{length_pacing}
 Rules:
+{session_pacing_rule}
+- Plan exactly planning_shot as the immediate next frame; never infer or renumber the shot.
+- In explicit mode, a fixed-length escalation budget is mandatory only when target_shot_count is greater than zero.
 - Preserve identity, face continuity, body continuity, hairstyle, makeup, wardrobe, lighting, camera style, and location by default.
 - When a Creative Hint is provided, it has higher priority than continuity locks for the hinted element only.
 - Never reject the Creative Hint because of continuity; evolve the hinted element naturally and preserve every remaining locked attribute.
@@ -1091,11 +1290,11 @@ Rules:
 - Safe mode must remain platform-safe. Premium mode can be sensual and subscription-content coded. Explicit mode may include explicit adult direction only when consistent with the session.
 - Recommend a natural progression from the current selected image and approved session history.
 - Every approved image should feel like the next frame of a professionally directed photoshoot.
-- Progression must be based on the latest approved shot, session history, creative mode, Creative Hint if provided, and continuity locks.
+- Progression must be based on the latest approved shot, session history, creative mode, Creative Hint if provided, continuity locks, and any applicable fixed target.
 - Avoid repetitive poses, repetitive framing, repetitive facial expressions, repeated hand placement, and repeated camera distance.
 - In safe mode, progress through expression, eye contact, confidence, pose variety, body language, framing, camera angles, composition, and storytelling while remaining SFW.
 - In premium mode, progress through tasteful intimacy, confidence, body language, wardrobe styling, pose sophistication, emotional connection, framing, and atmosphere.
-- In explicit mode, recommend the next logical stage of the established session instead of arbitrary jumps.
+- In explicit mode, recommend the next logical stage; apply length-budgeted escalation only to fixed-length sessions.
 
         Return only valid JSON with these string keys:
 title
@@ -1172,36 +1371,56 @@ User guidance for these suggestions: None.
 Continue the natural next beat from the summarized approved arc and creative mode.
 """.strip()
         if mode == "explicit":
+            length_pacing = CreativeDirectorService._explicit_length_pacing_block(session_context)
+            pace = CreativeDirectorService._shoot_length_context(session_context)
+            default_advance = pace["default_stage_advance"]
+            max_advance = pace["max_stage_advance"]
+            if pace.get("open_ended"):
+                pacing_hard_rules = """
+- This Photoshoot is open-ended: there is no total, remaining-shot budget, or assumed finale.
+- Base every idea on the latest image, approved arc, continuity, and operator guidance.
+- Idea 1 must be the strongest natural immediate next beat. Ideas 2–N are nearby alternatives.
+- Do not accelerate wardrobe removal or explicitness merely because the shot number is increasing.
+- Do not force climax, afterglow, or narrative closure; the operator decides when the session ends.
+""".strip()
+            else:
+                pacing_hard_rules = f"""
+- The length-aware escalation budget is the primary pace controller. Target length {pace["target_shot_count"]} with {pace["remaining_shots"]} remaining shot(s) after the current frame means Idea 1 should advance about {default_advance} ladder stage(s) (max {max_advance}).
+- Do NOT default to a slower historical crawl when the target length requires a faster ramp. Prior approved pace is secondary to the remaining-shot budget.
+- Base every idea on the latest image and Photoshoot Summary, but choose the next stage using the budget above.
+- Idea ranking (required for explicit mode): Idea 1 must be your single best length-budgeted next-step from the full visual timeline. Ideas 2–N are nearby alternatives in that same hotter stage band.
+- Most ideas should advance about {default_advance} stage(s) from the latest shot. A minority may use up to {max_advance} stages when the latest frame is still mild and remaining shots are few.
+- Never skip from early clothed/topless to hard masturbation/climax unless remaining shots are 1–2 or the length budget explicitly requires it.
+- On short shoots (target <= 6), if she is still fully dressed, Idea 1 must be a real wardrobe/exposure advance rather than another fully dressed close-up.
+- Only use direct masturbation/climax language when the latest shot plus the length-budgeted advance lands there, or endgame remaining shots force the arc hot.
+""".strip()
             intensity_rules = f"""
 Explicit mode — progressive photoshoot ladder:
-This is a multi-shot photoshoot that escalates naturally shot-by-shot. Use the compact Photoshoot Summary to place the latest shot on this ladder and suggest only the next natural beat(s):
+This is a multi-shot photoshoot that escalates shot-by-shot toward strong NSFW. Place the latest shot on this ladder, then advance by the length-aware stage budget (not by a fixed crawl of one micro-pose):
 
-1. Clothed / dressed tease (outfit still on; pose, flirty eye contact, soft smile or coy look)
-2. Partial undress (unbutton, pull straps, lift top, lower bottoms slightly; smirk, bitten lip)
-3. Topless / breasts exposed (bottoms may still be on; hungrier eyes, parted lips)
-4. Bottoms off / nude reveal (full or nearly full nudity, still more pose than sex act; open-mouth tease, bedroom eyes)
-5. Sexual teasing (hands near breasts/pussy, spreading, showing, light touch; naughty/horny expression)
-6. Active masturbation (rubbing, fingering, grinding; pleasure face, heavy lids, moan-ready mouth)
-7. Intensified play (deeper fingering, toys, more frantic motion; lost-in-it / desperate lust face)
+1. Clothed / dressed tease (outfit still on; pose, locked teasing/naughty eye contact, soft coy appeal)
+2. Partial undress (unbutton, pull straps, lift top, lower bottoms slightly; seductive smirk, bitten lip, fully open appealing eyes)
+3. Topless / breasts exposed (bottoms may still be on; sexually enticing open-eyed stare, parted lips)
+4. Bottoms off / nude reveal (full or nearly full nudity, still more pose than sex act; open-mouth tease, locked seductive salacious eyes fully open)
+5. Sexual teasing (hands near breasts/pussy, spreading, showing, light touch; naughty/horny expression with sharp teasing eye contact)
+6. Active masturbation (rubbing, fingering, grinding; pleasure face with awake lustful eyes, moan-ready mouth)
+7. Intensified play (deeper fingering, toys, more frantic motion; lost-in-it / desperate lust face still locking eyes)
 8. Climax / afterglow (orgasm build, shaking, spent pose; orgasmic or wrecked afterglow expression)
+
+{length_pacing}
 
 Facial expression progression (required):
 - Face must evolve every shot. Do NOT keep the same neutral model face, same soft smile, or same calm eye contact.
-- Each idea must name a specific facial change that is one step hornier / naughtier than the latest shot.
-- Progress expressions along a path like: polite/soft → flirty smirk → bitten lip → heavy-lidded lust → parted lips → open-mouth moan → orgasmic / afterglow wrecked.
-- Vary eyes, mouth, brow, and jaw: e.g. half-lidded stare, looking up through lashes, tongue tip, o-face building, brow furrow of pleasure.
+- Each idea must name a specific facial change that matches the body/wardrobe stage after the length-budgeted advance.
+- PPV face mood stack (combine, do not pick only one): teasing + naughty + seductive + sexually enticing + appealing + salacious.
+- Progress expressions along a path like: polite/soft → teasing smirk → bitten lip → locked seductive stare → parted lips → open-mouth moan → orgasmic / afterglow wrecked.
+- Eyes are critical: fully open, alert, locked camera eye contact with that combined PPV mood. Never droopy, sleepy, heavy-lidded, half-lidded, half-closed, or vacant — even during heat; only true afterglow/orgasm collapse may soften lids.
+- Vary eyes, mouth, brow, and jaw: e.g. locked teasing stare, looking up through lashes with eyes still fully open, tongue tip, o-face building, brow furrow of pleasure.
 - Same face reused across the timeline is a failure. Match expression intensity to the body/wardrobe stage.
 
 Hard rules for the next shot:
-- Use the summarized approved progression as evidence of pace. If shots 1→N only moved from clothed to topless, do NOT leap to hardcore masturbation.
-- Measure the actual rate of escalation across approved shots. Match that pace for the next frame.
-- Base every idea on the latest image, constrained by the approved arc captured in the Photoshoot Summary.
-- Idea ranking (required for explicit mode): Idea 1 must be your single best natural next-step progression from the full visual timeline — the default the creator should take. Ideas 2–N are nearby alternatives (same stage band, different pose/hands/face/framing), not random jumps.
-- Most ideas should advance only ONE stage from the latest shot. A minority may advance about TWO stages max.
-- Never jump from early stages (clothed/topless) straight to hard masturbation or climax.
-- If the sequence is still mild/clothed, next ideas stay in tease / partial undress / topless territory with matching mild-to-flirty face upgrades.
-- Only use direct masturbation/climax language when the latest shot and prior arc already support that stage.
-- Progressive wardrobe removal is a normal part of this photoshoot. Even if "Keep wardrobe" is yes, you may still suggest the next intentional undress stage when that is the natural next beat; otherwise keep the current dress state and escalate pose/touch/face.
+{pacing_hard_rules}
+- Progressive wardrobe removal is a normal part of this photoshoot. Even if "Keep wardrobe" is yes, you may still suggest the next intentional undress stage when that is the length-budgeted next beat.
 - Preserve location, lighting, hairstyle, makeup, and camera style unless Session Direction or Creative Hint changes them.
 - Avoid repeating poses, actions, OR facial expressions recorded in the Photoshoot Summary.
 - Current approved frame attached: {image_count}. Progression stage: {progression_stage}.
@@ -1212,7 +1431,7 @@ Premium mode intensity rules:
 - Keep suggestions sensual, subscription-content coded, teasing, and intimate.
 - Read the Photoshoot Summary and continue that sensual arc one step at a time.
 - Progress shot-by-shot through confidence, body language, wardrobe tension, erotic atmosphere, and facial expression without full explicit sex acts.
-- Face must change each shot: soft → flirty → bitten lip → heavier bedroom eyes — never the same neutral look twice.
+- Face must change each shot: soft → teasing → bitten lip → seductive locked eye contact (teasing/naughty/sexually enticing/appealing) — never the same neutral look twice, and never droopy, sleepy, or half-lidded eyes.
 - Prefer one-step escalation from the latest image, not sudden jumps or end-of-shoot climax ideas.
 """.strip()
         else:
@@ -1243,18 +1462,20 @@ Propose exactly {count} distinct next-scene ideas for the following shot.
 {intensity_rules}
 
 Output rules:
+- Use Session memory to continue the immediate next frame. Treat target and remaining shots as a pacing budget only when target_shot_count is greater than zero.
+- Every idea must describe planning_shot as the immediate next frame; never restart or renumber the Photoshoot.
 - Return exactly {count} ideas as a plain numbered list: 1. ... through {count}. ...
 - Each idea is one or two short conversational sentences describing the next evolving scene.
 - Every idea MUST include a concrete facial expression or eye/mouth change (not just "looks at the camera").
 - If user guidance is provided, every idea must honor that guidance.
-- In explicit mode, put the recommended natural progression first as idea 1; the UI pre-selects it for the creator.
+- In explicit mode, put the recommended length-budgeted progression first as idea 1; the UI pre-selects it for the creator.
 - Creative inspiration only.
 - Do not write a renderer prompt.
 - Do not include camera settings.
 - Do not include prompt engineering.
 - Do not explain the workflow or name the ladder stage.
 - Do not wrap the list in markdown code fences or JSON.
-- Make every idea meaningfully different (pose, wardrobe stage, hand placement, genital focus, facial expression, eye contact, or intensity), but keep all of them near the same next-stage band defined by the summarized approved arc and any user guidance.
+- Make every idea meaningfully different while keeping it consistent with the approved arc, continuity, user guidance, and any applicable fixed-length pacing budget.
 
 Creative mode: {mode}
 Provider context: {provider_text}
@@ -1294,11 +1515,26 @@ Approved direction history:
         guidance = str(creator_guidance or "").strip() or "None."
         direction = str(session_direction or "").strip() or "None."
         if mode == "explicit":
-            progression = """
+            length_pacing = CreativeDirectorService._explicit_length_pacing_block(session_context)
+            pace = CreativeDirectorService._shoot_length_context(session_context)
+            if pace.get("open_ended"):
+                progression = f"""
 Explicit progression (required):
-Plan a natural NSFW ladder across the full set. Start from the seed image's actual wardrobe/pose state.
-Escalate gradually shot-by-shot — one logical stage at a time — through tease → partial undress → topless → nude reveal → sexual teasing → masturbation → intensified play → climax/afterglow as frame count allows.
-Do not jump from clothed to hardcore in one step. Match facial expression intensity to body/wardrobe stage each shot.
+Plan {frame_count} natural next frames as a continuation batch, not as the complete Photoshoot or a forced finale.
+Use the seed/current image, approved continuity, and operator guidance to choose the strongest coherent progression.
+Do not accelerate explicitness because of shot numbers and do not force a climax or ending in the final frame of this batch.
+
+{length_pacing}
+""".strip()
+            else:
+                progression = f"""
+Explicit progression (required):
+Plan a length-budgeted NSFW ladder across the full set. Start from the seed image's actual wardrobe/pose state.
+Distribute tease → partial undress → topless → nude reveal → sexual teasing → masturbation → intensified play → climax/afterglow across the intended shoot length so the finale is hot, not still clothed.
+Target length {pace["target_shot_count"]} means each planned frame should advance about {pace["default_stage_advance"]} ladder stage(s) on average (max {pace["max_stage_advance"]} between consecutive frames when the arc is still mild).
+Do not crawl with face-only micro-beats on short shoots. Match facial expression intensity to body/wardrobe stage each shot.
+
+{length_pacing}
 """.strip()
         elif mode == "premium":
             progression = """
@@ -1310,6 +1546,16 @@ Plan a sensual subscription-content arc. Escalate through confidence, wardrobe t
 Safe progression (required):
 Stay platform-safe. Progress through expression, pose variety, framing, confidence, and storytelling only.
 """.strip()
+        fixed_length_rules = (
+            "- This Photoshoot is open-ended. The requested frame count is only the current planning batch; do not treat it as the session ending or derive escalation from shot number."
+            if CreativeDirectorService._shoot_length_context(session_context).get("open_ended")
+            else "- Treat target_shot_count in session memory as the intended total shoot length and the primary escalation budget for this arc.\n- Shorter target lengths (e.g. 5) must escalate faster per shot; longer targets (e.g. 10, 15, custom) may spend more frames teasing."
+        )
+        wardrobe_rule = (
+            "- In explicit open-ended sessions, let wardrobe progression follow the approved arc and guidance rather than a remaining-shot schedule."
+            if CreativeDirectorService._shoot_length_context(session_context).get("open_ended")
+            else "- Progressive wardrobe removal is required in explicit mode on the schedule implied by target_shot_count / remaining_shots."
+        )
         return f"""
 You are the Shot Director planning an entire Creator OS Photoshoot Studio session from one seed image.
 
@@ -1328,11 +1574,12 @@ Session memory:
 {progression}
 
 Rules:
+{fixed_length_rules}
 - Shot 1 must begin from the seed's real visual state (same wardrobe level, location, lighting, identity).
-- Each later shot is the next natural frame of the same session — not a new concept.
+- Each later shot is the next length-budgeted frame of the same session — not a new concept and not a slower crawl than the target length allows.
 - Preserve identity, face, body, hairstyle, makeup, location, lighting, and camera style unless guidance changes them.
 - Vary pose, hands, framing, and especially facial expression every shot.
-- Progressive wardrobe removal is allowed in explicit mode when that is the natural next beat.
+{wardrobe_rule}
 - If creator guidance is provided, the arc should clearly move toward it without ignoring continuity.
 - Do not write renderer prompts. Do not include camera settings or prompt engineering.
 

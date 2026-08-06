@@ -1,6 +1,7 @@
 """Telethon user-account transport for private plain-text messages."""
 
 import logging
+from pathlib import Path
 from collections.abc import Awaitable, Callable
 from typing import Any
 
@@ -94,6 +95,24 @@ class TelethonUserTransport:
         except Exception as error:
             self._log_error("send", error, chat_id=chat_id)
             raise TelethonTransportError("Telethon send failed.") from None
+
+    async def send_asset(
+        self, *, chat_id: int, asset_path: str, message_text: str = "",
+    ) -> int | None:
+        if isinstance(chat_id, bool) or not isinstance(chat_id, int) or chat_id <= 0:
+            raise ValueError("chat_id must be a positive private-chat identifier")
+        path = Path(str(asset_path or ""))
+        if not path.is_file():
+            raise ValueError("asset_path must reference an existing file")
+        try:
+            message = await self._client.send_file(
+                chat_id, str(path), caption=message_text.strip() or None,
+            )
+            message_id = getattr(message, "id", None)
+            return message_id if isinstance(message_id, int) else None
+        except Exception as error:
+            self._log_error("send_asset", error, chat_id=chat_id)
+            raise TelethonTransportError("Telethon Asset send failed.") from None
 
     async def _receive_event(self, event: Any) -> None:
         try:

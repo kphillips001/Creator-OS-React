@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import json
 import logging
 import mimetypes
 import time
@@ -12,7 +13,9 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from app.models.render_policy import photoshoot_planning_mode
-from app.models.photoshoot_queue import CanonicalPhotoshootSeedSummary, PhotoshootPlanningContext
+from app.models.photoshoot_queue import (
+    CanonicalPhotoshootSeedSummary, PhotoshootPlanningContext, normalize_target_shot_count,
+)
 from app.services.creative_director_service import CreativeDirectorService
 from app.services.generation_library_service import GenerationLibraryService
 from app.services.photoshoot_queue_service import PhotoshootQueueService
@@ -38,6 +41,8 @@ class PhotoshootCreativeDirectorWorkflowService:
         if planning_mode not in {"frame_by_frame", "full_plan"}:
             planning_mode = "frame_by_frame"
         session_plan = [dict(item) for item in tuple(continuity.get("session_plan") or ()) if isinstance(item, Mapping)]
+        planning = self._planning_progress(session)
+        ideas_are_current = int(continuity.get("inspiration_planning_shot") or 0) == planning["planning_shot"]
         return {
             "current_session": asdict(session),
             "session_id": session.session_id,
@@ -52,14 +57,20 @@ class PhotoshootCreativeDirectorWorkflowService:
             "photoshoot_summary": photoshoot_summary,
             "planning_mode": planning_mode,
             "plan_frame_count": max(4, min(12, int(continuity.get("plan_frame_count") or 8))),
+            "target_shot_count": normalize_target_shot_count(session.target_shot_count),
+            "current_shot": planning["current_shot"],
+            "planning_shot": planning["planning_shot"],
+            "remaining_shots": planning["remaining_shots"],
+            "editorial_stage": planning["editorial_stage"],
+            "planner_explanation": self._planner_explanation(planning),
             "session_plan": session_plan,
             "session_plan_index": max(0, int(continuity.get("session_plan_index") or 0)),
             "session_plan_approved": bool(continuity.get("session_plan_approved")),
             "recommendation_state": {
-                "inspiration_ideas": list(continuity.get("inspiration_ideas") or ()),
-                "selected_inspiration": str(continuity.get("selected_inspiration") or ""),
-                "recommendation": dict(continuity.get("current_direction") or {}),
-                "direction_approved": bool(continuity.get("direction_approved")),
+                "inspiration_ideas": list(continuity.get("inspiration_ideas") or ()) if ideas_are_current else [],
+                "selected_inspiration": str(continuity.get("selected_inspiration") or "") if ideas_are_current else "",
+                "recommendation": dict(continuity.get("current_direction") or {}) if ideas_are_current else {},
+                "direction_approved": bool(continuity.get("direction_approved")) if ideas_are_current else False,
             },
         }
 
@@ -70,6 +81,7 @@ class PhotoshootCreativeDirectorWorkflowService:
         session_id: str,
         planning_mode: str,
         plan_frame_count: int = 8,
+        target_shot_count: int = 10,
     ) -> dict[str, Any]:
         self._session(creator_profile_id, session_id)
         mode = str(planning_mode or "frame_by_frame").strip().lower()
@@ -81,6 +93,7 @@ class PhotoshootCreativeDirectorWorkflowService:
                 session_id,
                 planning_mode=mode,
                 plan_frame_count=count,
+                target_shot_count=target_shot_count,
                 session_plan=(),
                 session_plan_index=0,
                 session_plan_approved=False,
@@ -91,6 +104,7 @@ class PhotoshootCreativeDirectorWorkflowService:
                 session_id,
                 planning_mode=mode,
                 plan_frame_count=count,
+                target_shot_count=target_shot_count,
                 session_plan_approved=False,
             )
         continuity = dict((self.queue.get_session(session_id).creative_continuity or {}))
@@ -98,9 +112,24 @@ class PhotoshootCreativeDirectorWorkflowService:
         return {
             "planning_mode": mode,
             "plan_frame_count": count,
+            "target_shot_count": normalize_target_shot_count(target_shot_count),
             "session_plan": [] if mode == "frame_by_frame" else plan,
             "session_plan_approved": False if mode == "frame_by_frame" else bool(continuity.get("session_plan_approved")),
         }
+
+    def set_target_shot_count(
+        self,
+        *,
+        creator_profile_id: int,
+        session_id: str,
+        target_shot_count: int,
+    ) -> dict[str, int]:
+        self._session(creator_profile_id, session_id)
+        session = self.queue.update_session_settings(
+            session_id,
+            target_shot_count=target_shot_count,
+        )
+        return {"target_shot_count": session.target_shot_count}
 
     def generate_session_plan(
         self,
@@ -111,6 +140,7 @@ class PhotoshootCreativeDirectorWorkflowService:
         creator_guidance: str,
         continuity_locks: Mapping[str, bool],
         plan_frame_count: int = 8,
+        target_shot_count: int = 10,
     ) -> dict[str, Any]:
         session = self._session(creator_profile_id, session_id)
         session = self.queue.update_session_settings(
@@ -121,6 +151,7 @@ class PhotoshootCreativeDirectorWorkflowService:
             creator_guidance=creator_guidance,
             grok_guidance=creator_guidance,
             continuity_locks=continuity_locks,
+            target_shot_count=target_shot_count,
         )
         continuity = dict(session.creative_continuity or {})
         summary = self.summary.refresh(session.session_id)
@@ -132,7 +163,11 @@ class PhotoshootCreativeDirectorWorkflowService:
             summary,
             creator_guidance,
             progression_stage=int(continuity.get("progression_stage") or 0),
+            current_shot=1,
+            planning_shot=2,
+            editorial_stage="Beginning",
             timeline_image_count=1,
+            target_shot_count=session.target_shot_count,
         )
         plan = self.creative_director.plan_full_photoshoot_session(
             image_bytes=image_bytes,
@@ -276,9 +311,11 @@ class PhotoshootCreativeDirectorWorkflowService:
 
     def inspiration(self, *, creator_profile_id: int, session_id: str, creative_mode: str,
                     creator_guidance: str, provider_context: str,
-                    continuity_locks: Mapping[str, bool]) -> dict[str, Any]:
+                    continuity_locks: Mapping[str, bool], target_shot_count: int = 10) -> dict[str, Any]:
         session = self._session(creator_profile_id, session_id)
-        session = self.queue.update_session_settings(session_id, creative_mode=creative_mode)
+        session = self.queue.update_session_settings(
+            session_id, creative_mode=creative_mode, target_shot_count=target_shot_count,
+        )
         continuity = dict(session.creative_continuity or {})
         summary = self.summary.refresh(session.session_id)
         current, timeline = self._vision_context(session)
@@ -287,12 +324,19 @@ class PhotoshootCreativeDirectorWorkflowService:
             timeline = [{"bytes": image_bytes, "mime_type": mime_type, "label": "Current shot"}]
         original_direction = self._original_direction(session)
         approved_history = self._approved_history(continuity)
+        planning = self._planning_progress(session)
+        if planning["target_shot_count"] > 0 and planning["current_shot"] >= planning["target_shot_count"]:
+            raise ValueError("The target Photoshoot length has been reached.")
         ai_context = self._ai_context(
             original_direction,
             summary,
             creator_guidance,
             progression_stage=int(continuity.get("progression_stage") or 0),
+            current_shot=planning["current_shot"],
+            planning_shot=planning["planning_shot"],
+            editorial_stage=planning["editorial_stage"],
             timeline_image_count=len(timeline),
+            target_shot_count=session.target_shot_count,
         )
         ideas = self.creative_director.suggest_photoshoot_inspiration(
             image_bytes=image_bytes, image_mime_type=mime_type,
@@ -312,6 +356,7 @@ class PhotoshootCreativeDirectorWorkflowService:
         self.queue.update_session_settings(
             session_id, creator_guidance=creator_guidance,
             creative_hint=selected, grok_guidance=creator_guidance, inspiration_ideas=idea_list,
+            inspiration_planning_shot=planning["planning_shot"],
             selected_inspiration=selected, continuity_locks=continuity_locks,
             workflow_stage=stage,
         )
@@ -320,6 +365,9 @@ class PhotoshootCreativeDirectorWorkflowService:
     def select_inspiration(self, *, creator_profile_id: int, session_id: str, idea: str) -> dict[str, str]:
         session = self._session(creator_profile_id, session_id)
         continuity = dict(session.creative_continuity or {})
+        planning = self._planning_progress(session)
+        if int(continuity.get("inspiration_planning_shot") or 0) != planning["planning_shot"]:
+            raise ValueError("These AI ideas belong to a different Photoshoot position. Ask AI again.")
         selected = str(idea or "").strip()
         if selected not in tuple(continuity.get("inspiration_ideas") or ()):
             raise ValueError("Select an inspiration idea returned for this Photoshoot session.")
@@ -338,10 +386,16 @@ class PhotoshootCreativeDirectorWorkflowService:
         return {"creator_guidance": guidance}
 
     def recommendation(self, *, creator_profile_id: int, session_id: str, creative_mode: str,
-                       creator_guidance: str, continuity_locks: Mapping[str, bool]):
+                       creator_guidance: str, continuity_locks: Mapping[str, bool],
+                       target_shot_count: int = 10):
         session = self._session(creator_profile_id, session_id)
-        session = self.queue.update_session_settings(session_id, creative_mode=creative_mode)
+        session = self.queue.update_session_settings(
+            session_id, creative_mode=creative_mode, target_shot_count=target_shot_count,
+        )
         continuity = dict(session.creative_continuity or {})
+        planning = self._planning_progress(session)
+        if int(continuity.get("inspiration_planning_shot") or 0) != planning["planning_shot"]:
+            raise ValueError("These AI ideas belong to a different Photoshoot position. Ask AI again.")
         selected = str(continuity.get("selected_inspiration") or "").strip()
         if not selected or selected not in tuple(continuity.get("inspiration_ideas") or ()):
             raise ValueError("Select an AI idea before developing the next shot.")
@@ -355,7 +409,11 @@ class PhotoshootCreativeDirectorWorkflowService:
             summary,
             creator_guidance,
             progression_stage=int(continuity.get("progression_stage") or 0),
-            timeline_image_count=len(timeline) or 1,
+            current_shot=planning["current_shot"],
+            planning_shot=planning["planning_shot"],
+            editorial_stage=planning["editorial_stage"],
+            timeline_image_count=len(timeline),
+            target_shot_count=session.target_shot_count,
         )
         recommendation = self.creative_director.recommend_photoshoot_direction(
             image_bytes=image_bytes, image_mime_type=mime_type,
@@ -380,25 +438,33 @@ class PhotoshootCreativeDirectorWorkflowService:
         creative_mode: str,
         operator_direction: str,
         continuity_locks: Mapping[str, bool],
+        target_shot_count: int = 10,
     ) -> dict[str, Any]:
         direction = str(operator_direction or "").strip()
         if not direction:
             raise ValueError("Describe what should happen in the next shot.")
         session = self._session(creator_profile_id, session_id)
-        session = self.queue.update_session_settings(session_id, creative_mode=creative_mode)
+        session = self.queue.update_session_settings(
+            session_id, creative_mode=creative_mode, target_shot_count=target_shot_count,
+        )
         continuity = dict(session.creative_continuity or {})
         current, timeline = self._vision_context(session)
         image_bytes, mime_type = self._image_bytes(current.output_reference)
         summary = self.summary.refresh(session.session_id)
         original_direction = self._original_direction(session)
         approved_history = self._approved_history(continuity)
+        planning = self._planning_progress(session)
         ai_context = {
             **self._ai_context(
                 original_direction,
                 summary,
                 direction,
                 progression_stage=int(continuity.get("progression_stage") or 0),
-                timeline_image_count=len(timeline) or 1,
+                current_shot=planning["current_shot"],
+                planning_shot=planning["planning_shot"],
+                editorial_stage=planning["editorial_stage"],
+                timeline_image_count=len(timeline),
+                target_shot_count=session.target_shot_count,
             ),
             "canonical_seed_summary": self._seed_context(
                 continuity,
@@ -435,6 +501,68 @@ class PhotoshootCreativeDirectorWorkflowService:
         self.queue.update_session_settings(session_id, creative_hint="", selected_inspiration="")
         return {"workflow_stage": "inspiration_ready", "selected_inspiration": ""}
 
+    def assess_continuity(self, *, session_id: str, request_id: str, candidate_image_id: str) -> dict[str, Any]:
+        request = self.queue.get_request(request_id)
+        if request.session_id != session_id:
+            raise ValueError("Photoshoot request does not belong to this session.")
+        session = self.queue.get_session(session_id)
+        continuity = dict(session.creative_continuity or {})
+        reference_id = str(dict(request.metadata or {}).get("active_reference_image_id") or "").strip()
+        if not reference_id:
+            return {}
+        reference = self.library.get(reference_id)
+        candidate = self.library.get(candidate_image_id)
+        reference_bytes, reference_mime = self._image_bytes(reference.output_reference)
+        candidate_bytes, candidate_mime = self._image_bytes(candidate.output_reference)
+        frozen_identity = dict(continuity.get("canonical_identity_reference") or {})
+        frozen_identity_path = str(frozen_identity.get("path") or "").strip()
+        identity_frozen = bool(continuity.get("canonical_identity_reference_frozen"))
+        if identity_frozen and not frozen_identity_path:
+            raise ValueError("The frozen canonical identity reference is unavailable for this Photoshoot.")
+        if frozen_identity_path:
+            identity_bytes, identity_mime = self._image_bytes(frozen_identity_path)
+            question = (
+                "Compare Image 3 (new candidate) against two authorities. Assess identity only against "
+                "Image 1 (the frozen canonical identity reference). Assess wardrobe, location, lighting, "
+                "composition, and overall_continuity against Image 2 (the latest approved Photoshoot shot). "
+                "Expression may intentionally change and must not count as identity drift. Return only JSON "
+                "with identity, wardrobe, location, lighting, composition, overall_continuity, and a short reason."
+            )
+            images = (
+                {"bytes": identity_bytes, "mime_type": identity_mime, "label": "Frozen canonical identity"},
+                {"bytes": reference_bytes, "mime_type": reference_mime, "label": "Approved continuity reference"},
+                {"bytes": candidate_bytes, "mime_type": candidate_mime, "label": "Candidate"},
+            )
+        else:
+            question = (
+                "Compare Image 1 (approved Photoshoot continuity reference) with Image 2 (new candidate). "
+                "Assess identity, wardrobe, location, lighting, composition, and overall_continuity as "
+                "strong, acceptable, or weak. Composition may intentionally evolve and should be weak only "
+                "when it breaks the established shoot. Return only JSON with those six keys and a short reason."
+            )
+            images = (
+                {"bytes": reference_bytes, "mime_type": reference_mime, "label": "Approved reference"},
+                {"bytes": candidate_bytes, "mime_type": candidate_mime, "label": "Candidate"},
+            )
+        response = self.creative_director.ask_anything(
+            question=question,
+            image_bytes=candidate_bytes,
+            image_mime_type=candidate_mime,
+            images=images,
+        )
+        cleaned = str(response or "").strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+        parsed = json.loads(cleaned)
+        categories = ("identity", "wardrobe", "location", "lighting", "composition", "overall_continuity")
+        normalized = {key: str(parsed.get(key) or "unknown").strip().lower() for key in categories}
+        weak = tuple(key for key, value in normalized.items() if value == "weak")
+        warning = normalized["overall_continuity"] == "weak" or normalized["identity"] == "weak" or len(weak) >= 2
+        return {
+            **normalized,
+            "reason": str(parsed.get("reason") or "").strip(),
+            "warning": warning,
+            "warning_message": "This generation may have drifted from the current photoshoot." if warning else "",
+        }
+
     def approve(self, *, creator_profile_id: int, session_id: str) -> dict[str, Any]:
         started = time.perf_counter()
         LOGGER.info("[Approve] START approve() session_id=%s timestamp=%.6f", session_id, time.time())
@@ -450,7 +578,7 @@ class PhotoshootCreativeDirectorWorkflowService:
         current, _ = self._vision_context(session)
         direction = self._direction_text(recommendation)
         seed_context = self._seed_context(continuity, fallback=current.prompt_text)
-        planning_context = self._planning_context(continuity)
+        planning_context = self._planning_context(session)
         # A Photoshoot approval is one selected shot concept. The explicit planner
         # treats newline-delimited input as multiple independent concepts and
         # derives editorial guidance for every line, so preserve the full content
@@ -464,10 +592,21 @@ class PhotoshootCreativeDirectorWorkflowService:
         planning_mode = photoshoot_planning_mode(session.creative_mode)
         LOGGER.info("[Approve] Canonical planning request built mode=%s elapsed_ms=%.2f", planning_mode, (time.perf_counter() - started) * 1000)
         LOGGER.info("[Approve] Entering Canonical Prompt Planner elapsed_ms=%.2f", (time.perf_counter() - started) * 1000)
+        operator_expression = str(recommendation.get("emotion") or "").strip()
         result = self.creative_director.plan_prompts(
             mode=planning_mode,
             creative_tags=creative_tags, prompt_count=1, optional_direction=direction,
-            metadata={"source": "photoshoot_studio"},
+            metadata={
+                "source": "photoshoot_studio",
+                # Shot-level face direction from Creative Director becomes the
+                # explicit expression override; keeps eyes/face salacious and intentional.
+                "operator_expression": operator_expression or None,
+                "concept_tier": (
+                    "hardcore"
+                    if str(session.creative_mode or "").strip().lower() == "explicit"
+                    else "softcore"
+                ),
+            },
         )
         LOGGER.info("[Approve] Prompt planner complete prompt_count=%s elapsed_ms=%.2f", len(result.prompts), (time.perf_counter() - started) * 1000)
         if not result.prompts:
@@ -550,12 +689,15 @@ class PhotoshootCreativeDirectorWorkflowService:
             return summary.strip()
         return cls._seed_prompt(continuity, fallback=fallback)
 
-    @classmethod
-    def _planning_context(cls, continuity: Mapping[str, Any]) -> PhotoshootPlanningContext:
+    def _planning_context(self, session) -> PhotoshootPlanningContext:
+        continuity = dict(session.creative_continuity or {})
         summary = dict(continuity.get("photoshoot_summary") or {})
         defaults = dict(continuity.get("session_defaults") or {})
-        approved = cls._approved_history(continuity)
-        latest_direction = cls._direction_text(approved[-1]) if approved else ""
+        approved = self._approved_history(continuity)
+        latest_direction = self._direction_text(approved[-1]) if approved else ""
+        progress = self._planning_progress(session)
+        current_shot = progress["current_shot"]
+        target_shot_count = normalize_target_shot_count(continuity.get("target_shot_count"))
         return PhotoshootPlanningContext(
             photoshoot_summary=str(summary.get("summary_text") or summary.get("overall_theme") or "").strip(),
             latest_approved_direction=latest_direction,
@@ -592,6 +734,11 @@ class PhotoshootCreativeDirectorWorkflowService:
                 for key, value in dict(continuity.get("continuity_locks") or {}).items()
             },
             progression_stage=max(0, int(continuity.get("progression_stage") or 0)),
+            current_shot=current_shot,
+            planning_shot=progress["planning_shot"],
+            target_shot_count=target_shot_count,
+            remaining_shots=max(0, target_shot_count - current_shot) if target_shot_count > 0 else 0,
+            editorial_stage=progress["editorial_stage"],
             operator_guidance=str(
                 continuity.get("creator_guidance")
                 or continuity.get("grok_guidance")
@@ -610,6 +757,51 @@ class PhotoshootCreativeDirectorWorkflowService:
             ).strip(),
         )
 
+    def _planning_progress(self, session) -> dict[str, Any]:
+        try:
+            requests = tuple(self.queue.requests_for_session(session.session_id))
+        except TypeError:
+            requests = ()
+        approved_positions = {
+            int(getattr(request, "sequence_index", index))
+            for index, request in enumerate(requests, start=1)
+            if request.status == "approved"
+        }
+        current_shot = max(approved_positions, default=1)
+        target = normalize_target_shot_count(session.target_shot_count)
+        planning_shot = current_shot + 1
+        ratio = planning_shot / target if target > 0 else 0
+        if target == 0:
+            stage = "Open-ended"
+        elif planning_shot >= target:
+            stage = "Finale"
+        elif ratio >= 0.75:
+            stage = "Late"
+        elif ratio >= 0.5:
+            stage = "Middle"
+        else:
+            stage = "Beginning"
+        return {
+            "current_shot": current_shot,
+            "planning_shot": planning_shot,
+            "target_shot_count": target,
+            "remaining_shots": max(0, target - current_shot) if target > 0 else 0,
+            "editorial_stage": stage,
+        }
+
+    @staticmethod
+    def _planner_explanation(progress: Mapping[str, Any]) -> str:
+        if int(progress["target_shot_count"]) == 0:
+            return (
+                f"Planning the natural next shot after Shot {progress['current_shot']}. "
+                "The session is open-ended, so continuity, approved history, and operator guidance determine pacing."
+            )
+        return (
+            f"Planning Shot {progress['planning_shot']} of {progress['target_shot_count']} in the "
+            f"{str(progress['editorial_stage']).lower()} stage. Continuing naturally from the latest "
+            f"approved shot while preserving continuity and pacing {progress['remaining_shots']} remaining shot(s)."
+        )
+
     @staticmethod
     def _approved_history(continuity: Mapping[str, Any]) -> tuple[dict[str, Any], ...]:
         history = []
@@ -625,14 +817,27 @@ class PhotoshootCreativeDirectorWorkflowService:
         creator_guidance: str,
         *,
         progression_stage: int = 0,
+        current_shot: int = 1,
+        planning_shot: int | None = None,
+        editorial_stage: str = "Beginning",
         timeline_image_count: int = 0,
+        target_shot_count: int = 10,
     ) -> dict[str, Any]:
+        current_shot = max(1, int(current_shot or 1))
+        planning_shot = max(current_shot + 1, int(planning_shot or current_shot + 1))
+        normalized_target = normalize_target_shot_count(target_shot_count)
         return {
             "original_photoshoot_direction": str(original_direction or "").strip(),
             "current_photoshoot_summary": dict(summary or {}),
             "optional_user_guidance": str(creator_guidance or "").strip(),
             "progression_stage": max(0, int(progression_stage or 0)),
             "timeline_image_count": max(0, int(timeline_image_count or 0)),
+            "current_shot": current_shot,
+            "planning_shot": planning_shot,
+            "target_shot_count": normalized_target,
+            "remaining_shots": max(0, normalized_target - current_shot) if normalized_target > 0 else 0,
+            "editorial_stage": "Open-ended" if normalized_target == 0 else str(editorial_stage or "Beginning"),
+            "open_ended": normalized_target == 0,
         }
 
     @staticmethod

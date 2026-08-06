@@ -46,13 +46,11 @@ class PhotoshootAnalysisOrchestratorService:
         try:
             if job.current_stage == "MEMBER_ANALYSIS_RUNNING":
                 return self._members(job, row)
-            if job.current_stage == "PHOTOSHOOT_INTELLIGENCE_RUNNING":
-                return self._aggregate(job, row)
-            return self._name(job, row)
+            return self._aggregate(job, row)
         except Exception as error:
             failed = ("MEMBER_ANALYSIS_FAILED" if job.current_stage == "MEMBER_ANALYSIS_RUNNING"
                       else "PHOTOSHOOT_INTELLIGENCE_FAILED" if job.current_stage == "PHOTOSHOOT_INTELLIGENCE_RUNNING"
-                      else "NAMING_FAILED")
+                      else "PHOTOSHOOT_INTELLIGENCE_FAILED")
             self.photoshoots.set_analysis_failure(job.deliverable_id, str(error))
             self.workflows.transition(job.deliverable_id, self.worker_id, failed, error=error)
             return self._result(job, failed, error)
@@ -87,29 +85,15 @@ class PhotoshootAnalysisOrchestratorService:
 
     def _aggregate(self, job, row):
         try:
-            status, profile, error = self.deliverables.aggregate_members(
-                tuple(int(member["asset_id"]) for member in self.photoshoots.members(row["photoshoot_session_id"])))
-            if status != "READY":
-                raise error or RuntimeError("Photoshoot Intelligence aggregation failed.")
-            self.photoshoots.upsert_intelligence(row["photoshoot_session_id"], "READY", profile)
-            self.workflows.transition(job.deliverable_id, self.worker_id, "NAMING_PENDING")
-            return self._result(job, "NAMING_PENDING")
-        except Exception as error:
-            self.photoshoots.set_analysis_failure(job.deliverable_id, str(error))
-            self.workflows.transition(job.deliverable_id, self.worker_id, "PHOTOSHOOT_INTELLIGENCE_FAILED", error=error)
-            return self._result(job, "PHOTOSHOOT_INTELLIGENCE_FAILED", error)
-
-    def _name(self, job, row):
-        try:
-            intelligence = self.photoshoots.get(job.deliverable_id).get("intelligence_profile") or {}
-            self.deliverables.ensure_naming_or_raise(row, intelligence)
+            session = self.deliverables.queue.get_session(row["photoshoot_session_id"])
+            self.deliverables.run_canonical_intelligence(session)
             self.photoshoots.set_ready(job.deliverable_id)
             self.workflows.transition(job.deliverable_id, self.worker_id, "READY")
             return self._result(job, "READY")
         except Exception as error:
-            self.photoshoots.set_naming_failure(job.deliverable_id, str(error))
-            self.workflows.transition(job.deliverable_id, self.worker_id, "NAMING_FAILED", error=error)
-            return self._result(job, "NAMING_FAILED", error)
+            self.photoshoots.set_analysis_failure(job.deliverable_id, str(error))
+            self.workflows.transition(job.deliverable_id, self.worker_id, "PHOTOSHOOT_INTELLIGENCE_FAILED", error=error)
+            return self._result(job, "PHOTOSHOOT_INTELLIGENCE_FAILED", error)
 
     def retry(self, deliverable_id: str):
         workflow = self.workflows.get(deliverable_id)

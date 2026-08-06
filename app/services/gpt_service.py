@@ -364,7 +364,13 @@ OWNERSHIP RULES:
         )
         authoritative_commerce = bool(commerce_execution_policy)
         commerce_decision_instruction = ""
+        session_conversation_instruction = ""
         if commerce_decision:
+            session_conversation = commerce_decision.get("session_conversation") or {}
+            if isinstance(session_conversation, dict):
+                session_conversation_instruction = str(
+                    session_conversation.get("promptBlock") or ""
+                ).strip()
             selected_offering = commerce_decision.get("selected_offering") or {}
             selected_offering_lines = ""
             if selected_offering:
@@ -1116,6 +1122,8 @@ Rebuild comfort and engagement before any monetization resumes.
 {behavior_instruction}
 
 {commerce_decision_instruction}
+
+{session_conversation_instruction}
 
 {intimacy_strategy_instruction}
 

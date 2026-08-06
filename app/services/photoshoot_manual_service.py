@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 from app.models.generation_engine import GenerationStatus
 from app.services.content_studio_generation_service import ContentStudioGenerationService
 from app.services.generation_engine_service import GenerationEngineService
@@ -13,13 +15,14 @@ from app.services.photoshoot_summary_service import PhotoshootSummaryService
 
 class PhotoshootManualService:
     def __init__(self, *, queue=None, engine=None, library=None, ingestion=None, summary_service=None,
-                 commerce_deliverables=None):
+                 commerce_deliverables=None, continuity_assessor=None):
         self.queue = queue or PhotoshootQueueService()
         self.engine = engine or GenerationEngineService()
         self.library = library or GenerationLibraryService()
         self.ingestion = ingestion or GenerationResultIngestionService()
         self.summary = summary_service or PhotoshootSummaryService(queue=self.queue)
         self._commerce_deliverables = commerce_deliverables
+        self._continuity_assessor = continuity_assessor
 
     def session_for_creator(self, session_id: str, creator_profile_id: int):
         session = self.queue.get_session(session_id)
@@ -81,10 +84,29 @@ class PhotoshootManualService:
                 )
                 if not marked.success:
                     raise RuntimeError("; ".join(marked.errors) or marked.message)
-                self.queue.mark_generation_complete(
+                completed = self.queue.mark_generation_complete(
                     generation_job_id=executed.job_id,
                     generated_image_ids=tuple(record.image_id for record in records),
                 )
+                if completed is not None:
+                    self.queue.record_continuity_assessment(completed.request_id, {"status": "pending", "warning": False})
+                    try:
+                        from app.services.photoshoot_creative_director_service import PhotoshootCreativeDirectorWorkflowService
+                        assessor = self._continuity_assessor or PhotoshootCreativeDirectorWorkflowService(
+                            queue=self.queue, library=self.library,
+                        )
+                        assessment = assessor.assess_continuity(
+                            session_id=session_id, request_id=completed.request_id,
+                            candidate_image_id=records[-1].image_id,
+                        )
+                        if assessment:
+                            self.queue.record_continuity_assessment(completed.request_id, {**assessment, "status": "completed"})
+                    except Exception:
+                        logging.getLogger("creator_os.photoshoot.continuity").exception(
+                            "Continuity assessment unavailable session_id=%s request_id=%s",
+                            session_id, completed.request_id,
+                        )
+                        self.queue.record_continuity_assessment(completed.request_id, {"status": "unavailable", "warning": False})
                 return
             reason = executed.failure.reason if executed.failure else "Generation failed. Please try again."
             self.queue.mark_generation_failed(executed.job_id, reason=reason)
@@ -177,7 +199,12 @@ class PhotoshootManualService:
         request = self._review_request(session_id, request_id)
         self._junk_candidate(session, request, "photoshoot_rejected")
         self.queue.reject_request(request_id)
-        self.queue.update_session_settings(session_id, workflow_stage="ready_for_next_shot")
+
+    def replace_shot(self, *, creator_profile_id: int, session_id: str, request_id: str):
+        self.session_for_creator(session_id, creator_profile_id)
+        replaced, invalidated, _session = self.queue.replace_approved_shot(request_id)
+        self.summary.refresh(session_id)
+        return replaced, invalidated, self.queue.get_session(session_id)
 
     def _active_request(self, session_id: str):
         return next((item for item in reversed(self.queue.requests_for_session(session_id))

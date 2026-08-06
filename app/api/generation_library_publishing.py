@@ -21,6 +21,13 @@ class CaptionGenerationRequest(BaseModel):
     ideaSeed: int = Field(default=0, ge=0)
 
 
+class XPublishTarget(BaseModel):
+    accountName: str
+    caption: str
+    captionResultId: str | None = None
+    selectedGeneratedCaption: str = ""
+
+
 class PublishRequest(BaseModel):
     destination: str
     caption: str
@@ -29,6 +36,7 @@ class PublishRequest(BaseModel):
     ctaEnabled: bool = False
     ctaLabel: str = ""
     ctaUrl: str = ""
+    xTargets: list[XPublishTarget] | None = None
 
 
 def _creator_profile() -> dict:
@@ -94,6 +102,11 @@ def publish(generated_image_id: str, request: PublishRequest):
             cta_enabled=request.ctaEnabled,
             cta_label=request.ctaLabel,
             cta_url=request.ctaUrl,
+            x_targets=(
+                tuple(target.model_dump() for target in request.xTargets)
+                if request.xTargets is not None
+                else None
+            ),
         )
         return {"success": True, **result}
     except (KeyError, ValueError, RuntimeError) as error:

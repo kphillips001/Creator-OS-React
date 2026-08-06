@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
 from typing import Any
+from uuid import UUID
 
 from app.models.commerce_outcome import (
     CommerceOutcome,
@@ -32,6 +33,7 @@ class CommerceOutcomeSynchronizationService:
         customer_history_repository: Any | None = None,
         content_commerce_learning_service: Any | None = None,
         fanvue_api_factory: Any | None = None,
+        photoshoot_lifecycle_service: Any | None = None,
     ) -> None:
         if repository is None:
             from app.repositories.commerce_outcome_repository import (
@@ -78,6 +80,7 @@ class CommerceOutcomeSynchronizationService:
         self.customer_history_repository = customer_history_repository
         self.content_commerce_learning = content_commerce_learning_service
         self.fanvue_api_factory = fanvue_api_factory
+        self.photoshoot_lifecycles = photoshoot_lifecycle_service
 
     def synchronize_provider_outcome(
         self,
@@ -178,6 +181,7 @@ class CommerceOutcomeSynchronizationService:
                 reason="unmatched_transaction",
                 payload=outcome.to_context(),
             )
+        lifecycle_result = self._synchronize_photoshoot_lifecycle(outcome)
 
         return CommerceOutcomeResult(
             success=status
@@ -196,8 +200,41 @@ class CommerceOutcomeSynchronizationService:
                 "recommendation_learning_recorded": recommendation_learning_result
                 is not None,
                 "customer_history_updated": customer_result is not None,
+                "photoshoot_lifecycle_updated": lifecycle_result is not None,
             },
         )
+
+    def _synchronize_photoshoot_lifecycle(self, outcome: CommerceOutcome):
+        if (
+            outcome.status is not CommerceOutcomeStatus.SYNCHRONIZED
+            or outcome.purchase.purchase_status not in {PurchaseStatus.PAID, PurchaseStatus.PURCHASED}
+            or not outcome.attribution.matched
+            or not outcome.attribution.experience_id
+            or not outcome.attribution.customer_id
+            or not outcome.attribution.asset_id
+        ):
+            return None
+        try:
+            service = self.photoshoot_lifecycles
+            if service is None:
+                from app.services.customer_photoshoot_lifecycle_service import CustomerPhotoshootLifecycleService
+                service = CustomerPhotoshootLifecycleService()
+            raw = dict(outcome.raw_payload or {})
+            metadata = raw.get("metadata", {}) if isinstance(raw.get("metadata"), Mapping) else {}
+            creator_profile_id = raw.get("creator_profile_id") or metadata.get("creator_profile_id")
+            offering_id = raw.get("commercial_offering_id") or raw.get("offering_id") or metadata.get("commercial_offering_id") or metadata.get("offering_id")
+            if creator_profile_id is None:
+                return None
+            return service.synchronize_purchase(
+                creator_profile_id=int(creator_profile_id),
+                customer_commerce_profile_id=UUID(str(outcome.attribution.customer_id)),
+                photoshoot_id=outcome.attribution.experience_id,
+                asset_ids=(outcome.attribution.asset_id,),
+                purchase_outcome_id=outcome.outcome_id,
+                offering_id=UUID(str(offering_id)) if offering_id else None,
+            )
+        except (TypeError, ValueError):
+            return None
 
     def sync_fanvue_outcomes(
         self,

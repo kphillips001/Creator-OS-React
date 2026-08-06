@@ -48,3 +48,4 @@ class CommercialOffering:
     updated_at: datetime
     price_minor: int | None = None
     currency: str = "USD"
+    source_photoshoot_deliverable_id: UUID | None = None

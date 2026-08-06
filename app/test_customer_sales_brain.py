@@ -26,6 +26,9 @@ from app.models.purchase_intent import (
     AttributionResult,
     PurchaseIntentStatus,
 )
+from app.models.photoshoot_experience_recommendation import (
+    PhotoshootExperienceRecommendation,
+)
 from app.services.customer_sales_brain_config import CustomerSalesBrainConfig
 from app.services.customer_sales_brain_service import CustomerSalesBrainService
 
@@ -126,6 +129,9 @@ class Selector:
             ),
             price_minor=getattr(item, "price_minor", None) if item else None,
             currency=getattr(item, "currency", None) if item else None,
+            photoshoot_experience=(
+                getattr(item, "photoshoot_experience", None) if item else None
+            ),
         )
 
 
@@ -167,6 +173,46 @@ def offering():
         delivery_url="https://fanvue.com/media-link",
         title="Private Release", description="A private image.",
         price_minor=999, currency="USD",
+    )
+
+
+def test_sales_brain_returns_photoshoot_experience_with_offering_fulfillment():
+    selected = offering()
+    selected.photoshoot_experience = PhotoshootExperienceRecommendation(
+        photoshoot_id="photoshoot-sunday-porch",
+        title="Sunday Porch",
+        theme="warm porch",
+        description="A slow Sunday morning with Ava.",
+        hero_asset_id=42,
+        supporting_asset_ids=(43, 44),
+        photoshoot_intelligence={"themes": ("warm porch",)},
+        commercial_offering_id=selected.offering_id,
+        commercial_publication_id=selected.publication_id,
+        delivery_url=selected.delivery_url,
+        recommendation_score=0.91,
+        recommendation_explanation="Selected using semantic match and affinity.",
+        fulfillment_offering_type="PHOTOSET",
+        fulfillment_price_minor=selected.price_minor,
+        fulfillment_currency=selected.currency,
+    )
+    service = brain(
+        customer=profile(),
+        commerce_signal=signal(),
+        eligible=selected,
+    )
+
+    result = service.evaluate_for_telegram_user(
+        creator_profile_id=2, telegram_user_id=22
+    )
+    payload = api._payload(result)
+
+    assert result.recommended_offering_id == selected.offering_id
+    assert result.recommended_photoshoot_experience.photoshoot_id == (
+        "photoshoot-sunday-porch"
+    )
+    assert payload["recommendedPhotoshootExperience"]["title"] == "Sunday Porch"
+    assert payload["recommendedPhotoshootExperience"]["commercialOfferingId"] == str(
+        selected.offering_id
     )
 
 

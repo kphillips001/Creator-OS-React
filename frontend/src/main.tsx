@@ -4,7 +4,10 @@ import { RouterProvider } from "react-router-dom";
 
 import { ErrorBoundary } from "./app/boundaries/ErrorBoundary";
 import { router } from "./app/router/router";
+import { installButtonPressFeedback } from "./shared/ui/installButtonPressFeedback";
 import "./styles/global.css";
+
+installButtonPressFeedback();
 
 const root = document.getElementById("root");
 

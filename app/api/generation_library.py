@@ -16,6 +16,7 @@ from app.repositories.creator_profile_repository import get_active_creator_profi
 from app.services.generation_library_service import GenerationLibraryService
 from app.services.grid_thumbnail_service import GridThumbnailService
 from app.services.photoshoot_queue_service import PhotoshootQueueService
+from app.services.reference_library_service import ReferenceLibraryService
 from app.models.generation_library import GenerationLibraryFilter
 
 
@@ -419,7 +420,23 @@ def send_generation_to_photoshoot(generated_image_id: str):
 
     try:
         pending = library.send_to_pending_photoshoot(selected.image_id)
-        session, _created = queue.start_studio_session_from_generated_image(pending)
+        frozen = dict((matching_session.creative_continuity or {}).get("canonical_identity_reference") or {}) if matching_session else {}
+        if frozen:
+            identity_reference = frozen
+        else:
+            canonical = ReferenceLibraryService().get_active_canonical_reference(
+                creator_profile_id=creator_profile_id,
+            )
+            if canonical is None or not str(canonical.asset.original_path or "").strip():
+                raise ValueError("An active canonical identity reference is required to start a Photoshoot.")
+            identity_reference = {
+                "asset_id": canonical.asset_id,
+                "path": canonical.asset.original_path,
+            }
+        session, _created = queue.start_studio_session_from_generated_image(
+            pending,
+            canonical_identity_reference=identity_reference,
+        )
     except (KeyError, ValueError, RuntimeError) as error:
         logger.exception("Photoshoot handoff failed for %s", generated_image_id)
         raise HTTPException(status_code=409, detail="Generation Library handoff failed.") from error

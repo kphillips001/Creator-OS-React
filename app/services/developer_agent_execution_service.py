@@ -33,6 +33,7 @@ class DeveloperAgentExecutionService:
         self.repository = repository or DeveloperAgentExecutionRepository()
         self.adapter = adapter or CodexDeveloperAgentAdapter()
         self.repository_path = repository_path
+        self._telemetry_degraded: set[UUID] = set()
 
     def readiness(self) -> dict[str, Any]:
         repository_ok = (
@@ -127,11 +128,11 @@ class DeveloperAgentExecutionService:
             initial_head=self._git("rev-parse", "HEAD"),
         )
         execution_id = UUID(str(execution["execution_id"]))
-        self.repository.add_event(
+        self._record_event(
             execution_id, "EXECUTION_ACCEPTED",
             "Queued: approved task accepted by the Developer Agent worker.",
         )
-        self.repository.create_notification(
+        self._record_notification(
             task_id=task_id, execution_id=execution_id,
             notification_type="EXECUTION_STARTED",
             title="Developer Agent execution started.",
@@ -151,8 +152,8 @@ class DeveloperAgentExecutionService:
             execution_id, status="CANCELLED",
             cancellation_reason="Cancelled by operator before execution started.",
         )
-        self.repository.add_event(execution_id, "EXECUTION_CANCELLED", result["cancellation_reason"])
-        self.repository.create_notification(
+        self._record_event(execution_id, "EXECUTION_CANCELLED", result["cancellation_reason"])
+        self._record_notification(
             task_id=UUID(str(result["task_id"])), execution_id=execution_id,
             notification_type="EXECUTION_CANCELLED",
             title="Developer Agent execution cancelled.",
@@ -167,7 +168,7 @@ class DeveloperAgentExecutionService:
         started = time.monotonic()
         try:
             self.repository.update_execution(execution_id, status="STARTING")
-            self.repository.add_event(
+            self._record_event(
                 execution_id, "CODEX_SESSION_STARTING",
                 "Starting: execution worker is connecting to Codex.",
             )
@@ -188,7 +189,7 @@ class DeveloperAgentExecutionService:
             )
             if result.error or "completed" not in result.status.lower():
                 raise RuntimeError(result.error or f"Codex terminal status: {result.status}")
-            self.repository.add_event(
+            self._record_event(
                 execution_id, "PREPARING_REPORT",
                 "Preparing report from Codex output and repository evidence.",
             )
@@ -201,11 +202,11 @@ class DeveloperAgentExecutionService:
                 execution_id, status="COMPLETED",
                 codex_session_id=result.session_id, final_report=report,
             )
-            self.repository.add_event(
+            self._record_event(
                 execution_id, "EXECUTION_COMPLETED",
                 "Codex reported terminal completion and repository evidence was collected.",
             )
-            self.repository.create_notification(
+            self._record_notification(
                 task_id=UUID(str(task["task_id"])), execution_id=execution_id,
                 notification_type="EXECUTION_COMPLETED",
                 title="Implementation completed.",
@@ -216,8 +217,8 @@ class DeveloperAgentExecutionService:
             self.repository.update_execution(
                 execution_id, status="FAILED", failure_reason=reason,
             )
-            self.repository.add_event(execution_id, "EXECUTION_FAILED", reason)
-            self.repository.create_notification(
+            self._record_event(execution_id, "EXECUTION_FAILED", reason)
+            self._record_notification(
                 task_id=UUID(str(task["task_id"])), execution_id=execution_id,
                 notification_type="EXECUTION_FAILED",
                 title="Implementation failed.", detail=reason,
@@ -230,7 +231,7 @@ class DeveloperAgentExecutionService:
         self.repository.update_execution(
             execution_id, status="RUNNING", codex_session_id=session_id,
         )
-        self.repository.add_event(
+        self._record_event(
             execution_id, "CODEX_SESSION_STARTED",
             "Connected to Codex; session identifier captured.",
             {"sessionId": session_id},
@@ -256,7 +257,40 @@ class DeveloperAgentExecutionService:
             semantic, message = "CODEX_EVENT", str(event.get("text") or "Codex reported an agent message.")
         else:
             semantic, message = "CODEX_EVENT", event_type
-        self.repository.add_event(execution_id, semantic, message, event)
+        self._record_event(execution_id, semantic, message, event)
+
+    def _record_event(
+        self, execution_id: UUID, event_type: str, message: str,
+        event_data: dict[str, Any] | None = None,
+    ) -> dict[str, Any] | None:
+        """Persist observability without allowing it to fail the operation."""
+        try:
+            return self.repository.add_event(
+                execution_id, event_type, message, event_data,
+            )
+        except Exception as error:
+            self._telemetry_degraded.add(execution_id)
+            try:
+                return self.repository.add_event(
+                    execution_id,
+                    "TELEMETRY_DEGRADED",
+                    "A non-critical execution event could not be persisted; execution continued.",
+                    {
+                        "failedEventType": str(event_type),
+                        "persistenceErrorType": type(error).__name__,
+                    },
+                )
+            except Exception:
+                return None
+
+    def _record_notification(self, **values: Any) -> dict[str, Any] | None:
+        execution_id = values.get("execution_id")
+        try:
+            return self.repository.create_notification(**values)
+        except Exception:
+            if execution_id is not None:
+                self._telemetry_degraded.add(UUID(str(execution_id)))
+            return None
 
     def _collect_report(self, *, execution_id: UUID, result, duration_ms: int) -> dict[str, Any]:
         events = self.repository.list_events(execution_id)
@@ -295,7 +329,12 @@ class DeveloperAgentExecutionService:
                 "currentBranch": self._git("branch", "--show-current"),
                 "currentHead": head,
             },
-            "remainingWarnings": [] if diff_check[0] == 0 else [diff_check[1]],
+            "remainingWarnings": (
+                (["Execution telemetry was degraded; the repository operation completed."]
+                 if execution_id in self._telemetry_degraded else [])
+                + ([] if diff_check[0] == 0 else [diff_check[1]])
+            ),
+            "telemetryDegraded": execution_id in self._telemetry_degraded,
             "commitCreated": commit_created,
             "commitHash": head if commit_created else None,
             "executionDurationMs": result.duration_ms or duration_ms,

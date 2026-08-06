@@ -19,6 +19,7 @@ class PurchaseIntentService:
     def __init__(
         self, repository: PurchaseIntentRepository | None = None,
         learning_service=None, commercial_eligibility=None,
+        photoshoot_lifecycle_service=None,
         clock=lambda: datetime.now(timezone.utc),
     ) -> None:
         self.repository = repository or PurchaseIntentRepository()
@@ -26,6 +27,7 @@ class PurchaseIntentService:
             commercial_eligibility or CommercialAssetEligibilityService()
         )
         self.clock = clock
+        self.photoshoot_lifecycles = photoshoot_lifecycle_service
         if learning_service is None:
             from app.services.commerce_learning_service import CommerceLearningService
             learning_service = CommerceLearningService()
@@ -70,6 +72,14 @@ class PurchaseIntentService:
             telegram_message_id=telegram_message_id,
         )
         self.observe(result, "PRESENTED")
+        try:
+            service = self.photoshoot_lifecycles
+            if service is None:
+                from app.services.customer_photoshoot_lifecycle_service import CustomerPhotoshootLifecycleService
+                service = CustomerPhotoshootLifecycleService()
+            service.record_presentation(result)
+        except Exception as error:
+            logger.warning("event=photoshoot_presentation_memory_unavailable error_type=%s", type(error).__name__)
         return result
 
     def mark_abandoned(
@@ -81,6 +91,7 @@ class PurchaseIntentService:
             intent_id, at=abandoned_at or self.clock(),
         )
         self.observe(result, "ABANDONED")
+        self._record_photoshoot_outcome(result,"DECLINED")
         return result
 
     def record_click(
@@ -98,7 +109,18 @@ class PurchaseIntentService:
         results = self.repository.expire_due(now=self.clock())
         for result in results:
             self.observe(result, "EXPIRED")
+            self._record_photoshoot_outcome(result,"EXPIRED")
         return results
+
+    def _record_photoshoot_outcome(self,intent,event_type):
+        try:
+            service=self.photoshoot_lifecycles
+            if service is None:
+                from app.services.customer_photoshoot_lifecycle_service import CustomerPhotoshootLifecycleService
+                service=CustomerPhotoshootLifecycleService()
+            service.record_intent_outcome(intent,event_type)
+        except Exception as error:
+            logger.warning("event=photoshoot_intent_outcome_unavailable outcome_type=%s error_type=%s",event_type,type(error).__name__)
 
     def observe(self, intent, outcome_type, *, source_event_key=None):
         try:

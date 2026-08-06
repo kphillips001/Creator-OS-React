@@ -30,6 +30,8 @@ class CommercialOfferingRepository:
         primary_sales_channel: PrimarySalesChannel, asset_ids: tuple[int, ...],
         price_minor: int | None = None, currency: str = "USD",
         status: CommercialOfferingStatus = CommercialOfferingStatus.DRAFT,
+        source_photoshoot_deliverable_id: UUID | None = None,
+        idempotency_key: str | None = None,
         connection=None,
     ) -> CommercialOffering:
         offering_id = uuid4()
@@ -42,11 +44,13 @@ class CommercialOfferingRepository:
                 cursor.execute(
                     """INSERT INTO public.commercial_offerings
                        (offering_id,creator_profile_id,offering_type,title,description,
-                        hero_asset_id,primary_sales_channel,status,price_minor,currency)
-                       VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING *""",
+                        hero_asset_id,primary_sales_channel,status,price_minor,currency,
+                        source_photoshoot_deliverable_id,idempotency_key)
+                       VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING *""",
                     (offering_id, creator_profile_id, offering_type.value, title,
                      description, hero_asset_id, primary_sales_channel.value,
-                     status.value, price_minor, currency),
+                     status.value, price_minor, currency,
+                     source_photoshoot_deliverable_id, idempotency_key),
                 )
                 row = cursor.fetchone()
                 for position, asset_id in enumerate(asset_ids, 1):
@@ -65,6 +69,19 @@ class CommercialOfferingRepository:
             for position, asset_id in enumerate(asset_ids, 1)
         )
         return self._from_row(row, members)
+
+    def get_by_idempotency_key(
+        self, *, creator_profile_id: int, idempotency_key: str, connection=None,
+    ) -> CommercialOffering | None:
+        with (nullcontext(connection) if connection is not None else self._connection_factory()) as active_connection:
+            with active_connection.cursor() as cursor:
+                cursor.execute(
+                    """SELECT * FROM public.commercial_offerings
+                       WHERE creator_profile_id=%s AND idempotency_key=%s""",
+                    (creator_profile_id, idempotency_key),
+                )
+                row = cursor.fetchone()
+        return self._from_row(row, self._members(UUID(str(row["offering_id"])))) if row else None
 
     def get(
         self, offering_id: UUID, *, creator_profile_id: int,
@@ -155,6 +172,18 @@ class CommercialOfferingRepository:
                 row = cursor.fetchone()
         return self._from_row(row, self._members(offering_id)) if row else None
 
+    def update_status(self, offering_id: UUID, *, creator_profile_id: int,
+                      status: CommercialOfferingStatus, connection=None):
+        with (nullcontext(connection) if connection is not None else self._connection_factory()) as active_connection:
+            with active_connection.cursor() as cursor:
+                cursor.execute(
+                    """UPDATE public.commercial_offerings SET status=%s,updated_at=now()
+                       WHERE offering_id=%s AND creator_profile_id=%s RETURNING *""",
+                    (status.value, offering_id, creator_profile_id),
+                )
+                row = cursor.fetchone()
+        return self._from_row(row, self._members(offering_id)) if row else None
+
     def archive(
         self, offering_id: UUID, *, creator_profile_id: int,
     ) -> CommercialOffering | None:
@@ -198,4 +227,8 @@ class CommercialOfferingRepository:
             currency=str(row.get("currency") or "USD"),
             status=CommercialOfferingStatus(row["status"]), assets=tuple(assets),
             created_at=row["created_at"], updated_at=row["updated_at"],
+            source_photoshoot_deliverable_id=(
+                UUID(str(row["source_photoshoot_deliverable_id"]))
+                if row.get("source_photoshoot_deliverable_id") else None
+            ),
         )

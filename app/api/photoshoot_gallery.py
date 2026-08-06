@@ -48,17 +48,37 @@ def photoshoot_details(deliverable_id: str):
     if row is None or int(row["creator_profile_id"]) != creator_id or not row["is_active"]:
         raise HTTPException(status_code=404, detail="Photoshoot not found.")
     item = _payload(row)
-    item["intelligence"] = row.get("intelligence_profile") or {}
+    canonical = repo.get_intelligence(row["photoshoot_session_id"]) or {}
+    profile = canonical.get("profile_data") or row.get("intelligence_profile") or {}
+    production = canonical.get("production_analysis") or profile.get("production_analysis") or profile
+    cross_validation = canonical.get("cross_validation") or profile.get("cross_validation") or {}
+    item["intelligence"] = profile
+    item["productionIntelligence"] = {
+        **production,
+        "hero_shot": cross_validation.get("hero_asset_id"),
+        "cover_shot": cross_validation.get("cover_asset_id"),
+        "thumbnail_shot": cross_validation.get("thumbnail_asset_id"),
+        "teaser_shot": cross_validation.get("teaser_asset_id"),
+    }
     item["technical"] = {
         "deliverableId": str(row["deliverable_id"]),
         "sessionId": row["photoshoot_session_id"],
         "heroAssetId": row["hero_asset_id"],
         "galleryPath": row["gallery_path"],
     }
+    shot_rows = repo.shot_intelligence(
+        row["photoshoot_session_id"], canonical.get("intelligence_version") or "completed_photoshoot_v2"
+    ) if canonical else ()
+    if not shot_rows:
+        shot_rows = repo.latest_shot_intelligence(row["photoshoot_session_id"])
+    shots_by_asset = {int(shot["asset_id"]): shot for shot in shot_rows}
+    members = repo.intelligence_members(row["photoshoot_session_id"])
     item["members"] = [
         {"assetId": member["asset_id"], "shotOrder": member["shot_order"],
-         "isHero": member["is_hero"], "imageUrl": f'/api/v1/assets/{member["asset_id"]}/media'}
-        for member in repo.members(row["photoshoot_session_id"])
+         "isHero": member["is_hero"], "imageUrl": f'/api/v1/assets/{member["asset_id"]}/media',
+         "intelligence": (shots_by_asset.get(int(member["asset_id"]), {}).get("profile_data")
+                          or member.get("content_profile") or member.get("normalized_context") or {})}
+        for member in members
     ]
     return jsonable_encoder(item)
 

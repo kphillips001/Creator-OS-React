@@ -514,6 +514,7 @@ describe("Creator Intelligence operational homepage", () => {
           status: "COMPLETED", summary: "Done", rootCause: "Verified",
           actionsPerformed: [], filesModified: [], databaseMigrationsApplied: "None",
           commandsExecuted: [], tests: [], validation: {}, remainingWarnings: [],
+          telemetryDegraded: true,
           commitCreated: false, commitHash: null, executionDurationMs: 102000,
           codexSessionId: "session-1", gitStatusShort: "", gitDiffStat: "", gitDiff: "",
         },
@@ -528,5 +529,6 @@ describe("Creator Intelligence operational homepage", () => {
     expect(screen.getByText("Completed in")).toBeInTheDocument();
     expect(screen.getByText("01:42")).toBeInTheDocument();
     expect(screen.queryByLabelText("Developer Agent running")).not.toBeInTheDocument();
+    expect(screen.getByText("Telemetry degraded; the repository operation still completed.")).toBeInTheDocument();
   });
 });

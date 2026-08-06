@@ -130,10 +130,11 @@ def role_setup():
 
 def test_v1_vocabulary_is_frozen():
     assert [role.value for role in CommercialRoleService.vocabulary()] == [
-        "DISCOVERY", "HERO", "CORE", "PROGRESSION",
-        "PREMIUM", "FINALE", "BONUS",
+        "DISCOVERY", "TEASER", "HERO", "CORE", "CORE_SESSION",
+        "PROGRESSION", "PREMIUM", "FINALE", "FINALE_IMAGE",
+        "FINALE_VIDEO", "BONUS",
     ]
-    assert COMMERCIAL_ROLE_VOCABULARY_VERSION == "1.0"
+    assert COMMERCIAL_ROLE_VOCABULARY_VERSION == "2.0"
 
 
 def test_multiple_creator_owned_roles_can_be_assigned(role_setup):
@@ -302,7 +303,7 @@ def test_commercial_roles_api_exposes_vocabulary_and_lifecycle(monkeypatch, role
 
     vocabulary = client.get("/api/v1/commercial-roles/vocabulary")
     assert vocabulary.status_code == 200
-    assert vocabulary.json()["version"] == "1.0"
+    assert vocabulary.json()["version"] == "2.0"
 
     assigned = client.post(
         "/api/v1/commercial-roles/assets/12/assignments",

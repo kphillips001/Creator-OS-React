@@ -151,6 +151,9 @@ class ConversationGateway:
         commerce_mode_service: Any | None = None,
         relationship_mode_service: Any | None = None,
         sales_session_service: Any | None = None,
+        photoshoot_conversation_context_builder: Any | None = None,
+        asset_repository: Any | None = None,
+        runtime_media_resolver: Any | None = None,
     ) -> None:
         if decision_engine is None:
             raise ValueError("decision_engine is required")
@@ -179,6 +182,20 @@ class ConversationGateway:
             relationship_mode_service or RelationshipModeService()
         )
         self._sales_session_service = sales_session_service
+        if photoshoot_conversation_context_builder is None:
+            from app.services.photoshoot_session_conversation_context_builder import (
+                PhotoshootSessionConversationContextBuilder,
+            )
+            photoshoot_conversation_context_builder = PhotoshootSessionConversationContextBuilder()
+        self._photoshoot_conversation_context_builder = photoshoot_conversation_context_builder
+        if asset_repository is None:
+            from app.repositories.asset_repository import AssetRepository
+            asset_repository = AssetRepository()
+        if runtime_media_resolver is None:
+            from app.services.runtime_media_resolver import RuntimeMediaResolver
+            runtime_media_resolver = RuntimeMediaResolver()
+        self._asset_repository = asset_repository
+        self._runtime_media_resolver = runtime_media_resolver
 
     def execute(
         self,
@@ -550,6 +567,7 @@ class ConversationGateway:
             ) = self._authoritative_delivery(
                 response_text=response_text,
                 offering=offering if offer_authorized else None,
+                customer_sales_decision=customer_sales_decision,
             )
             diagnostics.update({
                 "commerce_mode": "AUTHORITATIVE",
@@ -752,8 +770,28 @@ class ConversationGateway:
             "offering": decision.offering,
         }
 
-    @staticmethod
-    def _authoritative_delivery(*, response_text: str, offering):
+    def _authoritative_delivery(
+        self, *, response_text: str, offering,
+        customer_sales_decision: CustomerSalesDecision | None = None,
+    ):
+        teaser = self._free_teaser_delivery(customer_sales_decision)
+        if teaser is not None:
+            return (
+                None, "FREE", "asset", False,
+                {
+                    "delivery_type": "FREE",
+                    "message_text": response_text,
+                    "asset_path": teaser["asset_path"],
+                    "experience_reference": teaser["photoshoot_session_id"],
+                    "delivery_method": "free_asset",
+                    "delivery_reason": "canonical_photoshoot_free_teaser",
+                    "next_suggested_action": "deliver_free_asset",
+                    "metadata": {
+                        "commerce_mode": "AUTHORITATIVE",
+                        "free_teaser_delivery": teaser,
+                    },
+                },
+            )
         if offering is None:
             return (
                 None,
@@ -790,6 +828,46 @@ class ConversationGateway:
                 },
             },
         )
+
+    def _free_teaser_delivery(
+        self, decision: CustomerSalesDecision | None,
+    ) -> dict[str, Any] | None:
+        action = getattr(decision, "next_sales_action", None)
+        runtime = dict((getattr(action, "metadata", {}) or {}).get("sessionRuntime") or {})
+        asset_id = runtime.get("currentAssetId")
+        if (
+            action is None
+            or str(runtime.get("currentSalesRole") or "") != "FREE_TEASER"
+            or action.action.value != "CONTINUE_PHOTOSHOOT"
+            or asset_id is None
+            or int(action.selected_asset_id or 0) != int(asset_id)
+            or not runtime.get("lifecycleId")
+        ):
+            return None
+        try:
+            asset = self._asset_repository.get_by_id(int(asset_id))
+            resolved = self._runtime_media_resolver.resolve_original(
+                asset, require_exists=True,
+            )
+        except Exception as error:
+            logger.warning(
+                "event=free_teaser_asset_resolution_failed asset_id=%s error_type=%s",
+                asset_id, type(error).__name__,
+            )
+            return None
+        if asset is None or resolved.path is None:
+            logger.warning(
+                "event=free_teaser_asset_unavailable asset_id=%s", asset_id,
+            )
+            return None
+        return {
+            "lifecycle_id": str(runtime["lifecycleId"]),
+            "photoshoot_session_id": str(runtime.get("photoshootSessionId") or action.current_photoshoot_id),
+            "asset_id": int(asset_id),
+            "sales_role": "FREE_TEASER",
+            "asset_path": str(resolved.path),
+            "asset_path_source": resolved.source,
+        }
 
     def _brain_context(
         self, gateway_input: ConversationGatewayInput,
@@ -934,9 +1012,8 @@ class ConversationGateway:
             actor_identifier="ConversationGateway",
         )
 
-    @staticmethod
     def _commerce_runtime_injection(
-        decision: CustomerSalesDecision | None,
+        self, decision: CustomerSalesDecision | None,
     ) -> dict[str, Any]:
         if decision is None:
             return {}
@@ -962,6 +1039,20 @@ class ConversationGateway:
             "conversion_state": decision.active_offer_conversion_state,
             "commerce_execution_policy": effective_policy.value,
         }
+        if decision.next_sales_action is not None:
+            context["next_sales_action"] = decision.next_sales_action.to_context()
+            try:
+                session_conversation = (
+                    self._photoshoot_conversation_context_builder.build(decision)
+                )
+            except Exception as error:
+                session_conversation = None
+                logger.warning(
+                    "event=photoshoot_session_conversation_context_unavailable "
+                    "error_type=%s", type(error).__name__,
+                )
+            if session_conversation:
+                context["session_conversation"] = session_conversation
         if (
             effective_policy.value in {
                 "COMMERCE_PRESENTATION_ALLOWED",
@@ -969,6 +1060,17 @@ class ConversationGateway:
             }
             and decision.recommended_offering_title
         ):
+            experience = decision.recommended_photoshoot_experience
+            if experience is not None:
+                context["selected_photoshoot_experience"] = {
+                    "photoshoot_id": experience.photoshoot_id,
+                    "title": experience.title,
+                    "theme": experience.theme,
+                    "description": experience.description,
+                    "recommendation_explanation": (
+                        experience.recommendation_explanation
+                    ),
+                }
             context["selected_offering"] = {
                 "title": decision.recommended_offering_title,
                 "short_description": (

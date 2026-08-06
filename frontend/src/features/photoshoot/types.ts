@@ -31,7 +31,8 @@ export type PhotoshootTimelineItem = {
   shotNumber: number;
   label: string;
   isSeed: boolean;
-  image: GenerationRecord;
+  status: "approved" | "replacement_pending" | "continuity_invalidated" | "queued" | "generating" | string;
+  image: GenerationRecord | null;
 };
 
 export type CreativeDirectorRecommendation = {
@@ -75,17 +76,6 @@ export type PhotoshootAutoRunRuntime = {
   available_actions: string[];
 };
 
-export type PhotoshootReviewShot = {
-  image_id: string; asset_id: number | null; shot_number: number; title: string;
-  description: string; image_url: string; keep: boolean; is_seed: boolean;
-};
-
-export type PhotoshootCurationReview = {
-  session_id: string; session_title: string; seed_image: PhotoshootReviewShot | null;
-  shots: PhotoshootReviewShot[]; photoshoot_decision: PhotoshootDecision;
-  confirmed: boolean; curation: Record<string, unknown>;
-};
-
 export type PhotoshootDecision = "PENDING" | "APPROVED" | "DECLINED";
 
 export type PhotoshootCurationResult = {
@@ -107,6 +97,12 @@ export type CreativeDirectorContext = {
   directionApproved: boolean;
   planningMode: PlanningMode;
   planFrameCount: number;
+  targetShotCount: number;
+  currentShot: number;
+  planningShot: number;
+  remainingShots: number;
+  editorialStage: "Beginning" | "Middle" | "Late" | "Finale" | string;
+  plannerExplanation: string;
   sessionPlan: PlannedShot[];
   sessionPlanIndex: number;
   sessionPlanApproved: boolean;

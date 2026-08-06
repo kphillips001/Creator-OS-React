@@ -566,6 +566,7 @@ class SocialPublishingTests(unittest.TestCase):
             payload,
             {
                 "platform": "x",
+                "account_name": "AvaBlackthorne",
                 "tweet_id": "tweet_123",
                 "published_at": payload["published_at"],
             },

@@ -20,6 +20,7 @@ class Photoshoots:
     def set_naming_failure(self, _id, _error): self.failed = True
     def set_ready(self, _id): self.ready = True
     def upsert_intelligence(self, *_args, **_kwargs): return {}
+    def upsert_commercial_intelligence(self, *_args, **_kwargs): return {}
 
 
 def service(stage, profile_state, results=()):
@@ -30,8 +31,8 @@ def service(stage, profile_state, results=()):
     content = SimpleNamespace(get_by_asset_id=lambda _id: SimpleNamespace(ready=True))
     business = SimpleNamespace(get_by_asset_id=lambda _id: SimpleNamespace(content_intelligence_ready=True))
     deliverables = SimpleNamespace(
-        aggregate_members=lambda _ids: ("READY", {"mood": ["calm"]}, None),
-        ensure_naming_or_raise=lambda row, data: row,
+        queue=SimpleNamespace(get_session=lambda _id: SimpleNamespace(session_id="session-1")),
+        run_canonical_intelligence=lambda _session: {"status": "READY"},
     )
     value = PhotoshootAnalysisOrchestratorService(
         worker_instance_id="worker-1", workflows=workflows, photoshoots=photoshoots,
@@ -56,19 +57,16 @@ def test_member_failure_is_terminal_and_identifies_member():
     assert photoshoots.failed
 
 
-def test_canonical_evidence_advances_then_aggregation_and_naming_reach_ready():
+def test_canonical_evidence_advances_then_single_commercial_intelligence_reaches_ready():
     results = tuple(SimpleNamespace(status=State.READY, metadata={"stage": stage}) for stage in ("NUDENET", "VISION", "GROK"))
     member, member_workflows, _ = service("MEMBER_ANALYSIS_RUNNING", State.READY, results)
     assert member.process_one()["status"] == "PHOTOSHOOT_INTELLIGENCE_PENDING"
     assert member_workflows.transitions[-1][2] == "PHOTOSHOOT_INTELLIGENCE_PENDING"
 
     aggregate, aggregate_workflows, _ = service("PHOTOSHOOT_INTELLIGENCE_RUNNING", State.READY, results)
-    assert aggregate.process_one()["status"] == "NAMING_PENDING"
-    assert aggregate_workflows.transitions[-1][2] == "NAMING_PENDING"
-
-    naming, naming_workflows, photoshoots = service("NAMING_RUNNING", State.READY, results)
-    assert naming.process_one()["status"] == "READY"
-    assert naming_workflows.transitions[-1][2] == "READY"
+    assert aggregate.process_one()["status"] == "READY"
+    assert aggregate_workflows.transitions[-1][2] == "READY"
+    photoshoots = aggregate.photoshoots
     assert photoshoots.ready
 
 

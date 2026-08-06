@@ -444,6 +444,7 @@ class SocialPublishingService:
                 self._schedule_x_auto_callback(
                     {
                         "platform": "x",
+                        "account_name": getattr(result, "account_name", None),
                         "tweet_id": result.provider_post_id,
                         "published_at": published_at,
                     }
@@ -475,6 +476,8 @@ class SocialPublishingService:
             "tweet_id": str(payload["tweet_id"]),
             "published_at": str(payload["published_at"]),
         }
+        if payload.get("account_name"):
+            callback_payload["account_name"] = str(payload["account_name"])
         for attempt in (1, 2):
             logger.info(
                 "X_AUTO callback started | callback_started=true attempt=%d tweet_id=%s",

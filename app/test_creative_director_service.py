@@ -353,6 +353,12 @@ class CreativeDirectorServiceTests(unittest.TestCase):
         ideas = service.suggest_photoshoot_inspiration(
             image_bytes=b"fake-image",
             creative_mode="explicit",
+            session_context={
+                "current_shot": 4,
+                "target_shot_count": 10,
+                "remaining_shots": 6,
+                "progression_stage": 3,
+            },
             approved_history=({"title": "Shot 5"}, {"title": "Shot 6"}),
             idea_count=8,
             timeline_images=(
@@ -365,16 +371,123 @@ class CreativeDirectorServiceTests(unittest.TestCase):
 
         self.assertEqual(len(ideas), 8)
         self.assertIn("progressive photoshoot ladder", captured["question"].lower())
-        self.assertIn("ONE stage", captured["question"])
-        self.assertIn("Never jump from early stages", captured["question"])
+        self.assertIn("Length-aware escalation budget", captured["question"])
+        self.assertIn("length-aware escalation budget is the primary pace controller", captured["question"])
         self.assertIn("Active masturbation", captured["question"])
         self.assertIn("exactly 8 distinct next-scene ideas", captured["question"])
-        self.assertIn("Measure the actual rate of escalation", captured["question"])
         self.assertIn("Facial expression progression", captured["question"])
         self.assertIn("MUST include a concrete facial expression", captured["question"])
         self.assertIn("Shot 1 (Seed)", captured["question"])
+        self.assertIn("target_shot_count", captured["question"])
         self.assertEqual(len(captured["images"]), 4)
         self.assertIn("fingers inside", ideas[2].lower())
+
+    def test_shoot_length_context_escalates_faster_for_short_targets(self):
+        short = CreativeDirectorService._shoot_length_context(
+            {"current_shot": 1, "target_shot_count": 5, "remaining_shots": 4}
+        )
+        standard = CreativeDirectorService._shoot_length_context(
+            {"current_shot": 1, "target_shot_count": 10, "remaining_shots": 9}
+        )
+        long = CreativeDirectorService._shoot_length_context(
+            {"current_shot": 1, "target_shot_count": 15, "remaining_shots": 14}
+        )
+        custom = CreativeDirectorService._shoot_length_context(
+            {"current_shot": 1, "target_shot_count": 27, "remaining_shots": 26}
+        )
+
+        self.assertEqual(short["length_band"], "short")
+        self.assertGreaterEqual(short["default_stage_advance"], 2)
+        self.assertTrue(short["face_only_forbidden"])
+
+        self.assertEqual(standard["length_band"], "standard")
+        self.assertLessEqual(standard["default_stage_advance"], short["default_stage_advance"])
+
+        self.assertEqual(long["length_band"], "long")
+        self.assertEqual(long["default_stage_advance"], 1)
+        self.assertFalse(long["face_only_forbidden"])
+
+        self.assertEqual(custom["length_band"], "long")
+        self.assertEqual(custom["default_stage_advance"], 1)
+
+        endgame = CreativeDirectorService._shoot_length_context(
+            {"current_shot": 9, "target_shot_count": 10, "remaining_shots": 1}
+        )
+        self.assertTrue(endgame["endgame"])
+        self.assertGreaterEqual(endgame["default_stage_advance"], 3)
+
+    def test_photoshoot_ask_grok_explicit_short_target_requires_faster_escalation(self):
+        captured = {}
+
+        def fake_provider(**_kwargs):
+            captured.update(_kwargs)
+            return (
+                "1. She peels the crop top up and free her breasts while biting her lip hungrily.\n"
+                "2. She tugs the top over her chest and cups both breasts with a heavier open-mouth stare.\n"
+                "3. She lifts the shirt fully off and arches toward the camera with parted lips.\n"
+                "4. She slides a strap down and pinches a nipple with a locked salacious stare.\n"
+                "5. She yanks the top up and leans in with a bitten-lip dare.\n"
+                "6. She strips the crop top and keeps only panties with a moan-ready mouth.\n"
+                "7. She pulls the top high and squeezes her breasts while looking up through lashes.\n"
+                "8. She discards the top and presents her chest with a desperate needy gaze."
+            )
+
+        service = CreativeDirectorService(
+            storage_dir=tempfile.mkdtemp(),
+            ask_anything_provider=fake_provider,
+        )
+        ideas = service.suggest_photoshoot_inspiration(
+            image_bytes=b"fake-image",
+            creative_mode="explicit",
+            session_context={
+                "current_shot": 1,
+                "target_shot_count": 5,
+                "remaining_shots": 4,
+                "progression_stage": 0,
+            },
+            approved_history=(),
+            idea_count=8,
+            timeline_images=({"bytes": b"seed", "label": "Shot 1 (Seed)"},),
+        )
+
+        question = captured["question"]
+        self.assertEqual(len(ideas), 8)
+        self.assertIn("SHORT shoot (5 total shots)", question)
+        self.assertIn("Escalate aggressively", question)
+        self.assertIn("Face/expression-only upgrades are NOT enough", question)
+        self.assertIn("MUST be a real wardrobe/exposure advance", question)
+        self.assertIn("about 2 ladder stage", question.lower())
+        self.assertNotIn("Measure the actual rate of escalation", question)
+
+    def test_photoshoot_ask_grok_explicit_long_target_allows_gradual_escalation(self):
+        captured = {}
+
+        def fake_provider(**_kwargs):
+            captured.update(_kwargs)
+            return "\n".join(f"{index}. Gradual idea {index} with a flirty smirk." for index in range(1, 9))
+
+        service = CreativeDirectorService(
+            storage_dir=tempfile.mkdtemp(),
+            ask_anything_provider=fake_provider,
+        )
+        service.suggest_photoshoot_inspiration(
+            image_bytes=b"fake-image",
+            creative_mode="explicit",
+            session_context={
+                "current_shot": 1,
+                "target_shot_count": 15,
+                "remaining_shots": 14,
+                "progression_stage": 0,
+            },
+            idea_count=8,
+            timeline_images=({"bytes": b"seed", "label": "Shot 1 (Seed)"},),
+        )
+
+        question = captured["question"]
+        self.assertIn("LONG shoot (15 total shots)", question)
+        self.assertIn("Escalate gradually", question)
+        self.assertIn("Face must still escalate with the body, but wardrobe/act can advance more slowly", question)
+        self.assertNotIn("Face/expression-only upgrades are NOT enough", question)
 
     def test_photoshoot_ask_grok_caps_very_long_timelines_but_keeps_arc(self):
         service = CreativeDirectorService(storage_dir=tempfile.mkdtemp())

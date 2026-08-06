@@ -67,8 +67,20 @@ class PhotoshootContextService:
         if session is None:
             return []
         items = []
-        shot_number = 1
+        requests_by_position = {}
         for request in self.photoshoot_queue.requests_for_session(session.session_id):
+            is_replacement_work = bool(dict(request.metadata or {}).get("replaces_request_id"))
+            if request.status in {"approved", "replacement_pending", "continuity_invalidated"} or (is_replacement_work and request.status in {"queued", "generating"}):
+                requests_by_position[request.sequence_index] = request
+        for request in (requests_by_position[index] for index in sorted(requests_by_position)):
+            shot_number = request.sequence_index
+            if request.status in {"replacement_pending", "continuity_invalidated", "queued", "generating"}:
+                items.append({
+                    "request_id": request.request_id, "sequence_index": request.sequence_index,
+                    "shot_number": shot_number, "label": f"Shot {shot_number}", "is_seed": False,
+                    "status": request.status, "image": None,
+                })
+                continue
             if request.status != "approved":
                 continue
             for image_id in tuple((request.metadata or {}).get("generated_image_ids") or ()):
@@ -83,9 +95,9 @@ class PhotoshootContextService:
                     "shot_number": shot_number,
                     "label": f"Shot {shot_number}" + (" (Seed)" if is_seed else ""),
                     "is_seed": is_seed,
+                    "status": "approved",
                     "image": self._generation_payload(record),
                 })
-                shot_number += 1
         return items
 
     def _provider_list(self) -> list[dict[str, str]]:

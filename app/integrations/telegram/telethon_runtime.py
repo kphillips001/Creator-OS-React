@@ -61,6 +61,7 @@ class TelethonRuntime:
         heartbeat_service: WorkerHeartbeatService | None = None,
         global_safety_service: Any | None = None,
         purchase_intent_service: Any | None = None,
+        photoshoot_lifecycle_service: Any | None = None,
     ) -> None:
         if transport is None:
             raise ValueError("transport is required")
@@ -74,6 +75,12 @@ class TelethonRuntime:
             global_safety_service = GlobalAutomationSafetyService()
         self._global_safety_service = global_safety_service
         self._purchase_intents = purchase_intent_service
+        if photoshoot_lifecycle_service is None:
+            from app.services.customer_photoshoot_lifecycle_service import (
+                CustomerPhotoshootLifecycleService,
+            )
+            photoshoot_lifecycle_service = CustomerPhotoshootLifecycleService()
+        self._photoshoot_lifecycles = photoshoot_lifecycle_service
         self._logger = logger or logging.getLogger("telethon-runtime")
         self._heartbeat = heartbeat_service or WorkerHeartbeatService(
             worker_name="Telegram", worker_type="transport_runtime", poll_interval_seconds=30,
@@ -202,6 +209,17 @@ class TelethonRuntime:
                             "delivery execution status=%s.",
                             execution.status,
                         )
+                    teaser_metadata = dict(
+                        (result.delivery_payload.get("metadata") or {}).get(
+                            "free_teaser_delivery"
+                        ) or {}
+                    )
+                    if execution.executed and teaser_metadata:
+                        await asyncio.to_thread(
+                            self._record_free_teaser_delivery,
+                            result.delivery_payload,
+                            execution,
+                        )
                 return result
             except Exception as error:
                 self._logger.error(
@@ -212,6 +230,30 @@ class TelethonRuntime:
                     type(error).__name__,
                 )
                 return None
+
+    def _record_free_teaser_delivery(self, delivery_payload, execution) -> None:
+        metadata = dict((delivery_payload or {}).get("metadata") or {})
+        teaser = dict(metadata.get("free_teaser_delivery") or {})
+        if not teaser or execution.metadata.get("execution_state") != "asset_sent":
+            return
+        provider_delivery_id = execution.metadata.get("telegram_message_id")
+        if provider_delivery_id is None:
+            self._logger.warning(
+                "event=free_teaser_delivery_unrecorded reason=provider_identifier_missing "
+                "asset_id=%s", teaser.get("asset_id"),
+            )
+            return
+        self._photoshoot_lifecycles.record_free_teaser_delivery(
+            lifecycle_id=teaser["lifecycle_id"],
+            asset_id=int(teaser["asset_id"]),
+            provider="TELEGRAM",
+            provider_delivery_id=str(provider_delivery_id),
+            metadata={
+                "photoshoot_session_id": teaser.get("photoshoot_session_id"),
+                "sales_role": teaser.get("sales_role"),
+                "delivery_method": execution.delivery_method,
+            },
+        )
 
 
 def _required_positive_int(name: str) -> int:

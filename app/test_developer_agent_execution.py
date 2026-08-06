@@ -47,6 +47,19 @@ class FakeAdapter:
         )
 
 
+class NulEventAdapter(FakeAdapter):
+    async def execute(self, *, prompt, repository, on_session=None, on_event=None):
+        if on_session:
+            on_session("session-nul")
+        if on_event:
+            on_event({
+                "type": "commandExecution", "command": "inspect backup",
+                "stdout": "fanvue_backup.dump\x00PGDMP", "stderr": "warn\x00",
+                "nested": ["safe\x00text"],
+            })
+        return CodexExecutionResult("session-nul", "completed", "Repair completed.", (), 5, None)
+
+
 class FakeRepository:
     def __init__(self, approved=False):
         self.task_id = uuid4()
@@ -108,6 +121,18 @@ class FakeRepository:
             "notification_type": "TASK_AWAITING_APPROVAL",
         })
         return dict(self.task)
+
+
+class TelemetryFailureRepository(FakeRepository):
+    def __init__(self, approved=True):
+        super().__init__(approved=approved)
+        self.fail_next_event = True
+
+    def add_event(self, execution_id, event_type, message, event_data=None):
+        if self.fail_next_event:
+            self.fail_next_event = False
+            raise RuntimeError("telemetry database unavailable")
+        return super().add_event(execution_id, event_type, message, event_data)
 
 
 @pytest.fixture
@@ -236,3 +261,31 @@ def test_adapter_failure_is_persisted_and_not_reported_complete(safe_repository,
     assert repository.execution["failure_reason"] == "real adapter failure"
     assert repository.execution.get("final_report") is None
     assert repository.notifications[-1]["notification_type"] == "EXECUTION_FAILED"
+
+
+def test_telemetry_failure_does_not_fail_successful_codex_operation(
+    safe_repository, monkeypatch,
+):
+    repository = TelemetryFailureRepository()
+    repository.task["repository_path"] = str(safe_repository)
+    instance = service(repository, NulEventAdapter(), safe_repository, monkeypatch)
+    instance.submit(repository.task_id)
+    deadline = time.time() + 3
+    while repository.execution["status"] not in {"COMPLETED", "FAILED"} and time.time() < deadline:
+        time.sleep(0.02)
+    assert repository.execution["status"] == "COMPLETED"
+    assert repository.execution["final_report"]["telemetryDegraded"] is True
+    assert any(event["event_type"] == "TELEMETRY_DEGRADED" for event in repository.events)
+
+
+def test_nul_codex_event_reaches_repository_without_failing_operation(
+    safe_repository, monkeypatch,
+):
+    repository = FakeRepository(approved=True)
+    repository.task["repository_path"] = str(safe_repository)
+    instance = service(repository, NulEventAdapter(), safe_repository, monkeypatch)
+    instance.submit(repository.task_id)
+    deadline = time.time() + 3
+    while repository.execution["status"] not in {"COMPLETED", "FAILED"} and time.time() < deadline:
+        time.sleep(0.02)
+    assert repository.execution["status"] == "COMPLETED"

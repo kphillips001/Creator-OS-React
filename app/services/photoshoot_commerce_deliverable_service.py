@@ -10,18 +10,25 @@ from app.repositories.content_intelligence_repository import ContentIntelligence
 from app.repositories.photoshoot_commerce_repository import PhotoshootCommerceRepository
 from app.services.generation_library_service import GenerationLibraryService
 from app.services.photoshoot_queue_service import PhotoshootQueueService
-from app.services.photoshoot_naming_service import PhotoshootNamingService
+from app.services.photoshoot_commercial_intelligence_service import (
+    PHOTOSHOOT_INTELLIGENCE_VERSION, PhotoshootCommercialIntelligenceService,
+)
 
 
 class PhotoshootCommerceDeliverableService:
     RISK = {"SAFE": 0, "TEASE": 1, "NUDITY": 2, "EXPLICIT": 3}
 
-    def __init__(self, *, queue=None, library=None, repository=None, intelligence=None, naming=None, workflows=None):
+    def __init__(self, *, queue=None, library=None, repository=None, intelligence=None,
+                 commercial_intelligence=None, session_sales_strategy=None, workflows=None):
         self.queue = queue or PhotoshootQueueService()
         self.library = library or GenerationLibraryService()
         self.repository = repository or PhotoshootCommerceRepository()
         self.intelligence = intelligence or ContentIntelligenceProfileRepository()
-        self.naming = naming or PhotoshootNamingService()
+        self.commercial_intelligence = commercial_intelligence or PhotoshootCommercialIntelligenceService()
+        if session_sales_strategy is None:
+            from app.services.photoshoot_session_sales_strategy_service import PhotoshootSessionSalesStrategyService
+            session_sales_strategy = PhotoshootSessionSalesStrategyService(photoshoots=self.repository)
+        self.session_sales_strategy = session_sales_strategy
         if workflows is None:
             from app.repositories.photoshoot_analysis_workflow_repository import PhotoshootAnalysisWorkflowRepository
             workflows = PhotoshootAnalysisWorkflowRepository()
@@ -51,34 +58,22 @@ class PhotoshootCommerceDeliverableService:
         hero = members[0][0]
         self.repository.replace_members(session_id, members, hero)
 
-        existing = self.repository.get_by_session(session_id)
-        registered = bool(existing and existing.get("registration_state") == "REGISTERED")
-        status = str(existing.get("intelligence_status")) if registered else "PENDING"
-        profile = dict(existing.get("intelligence_profile") or {}) if registered else {}
-        if not registered:
-            self.repository.upsert_intelligence(session_id, status, profile)
         completed_at = self._completed_at(session)
         deliverable = self.repository.upsert_deliverable(
             deliverable_id=str(uuid5(NAMESPACE_URL, f"creator-os:photoshoot-deliverable:{session_id}")),
             session_id=session_id, creator_profile_id=creator_profile_id,
             display_name=session.title, member_ids=tuple(a for a, _ in members), hero_asset_id=hero,
             gallery_path=gallery_path, completed_at=completed_at,
-            intelligence_status=status, commerce_status="ANALYZING")
+            intelligence_status="PENDING", commerce_status="ANALYZING")
+        self.run_canonical_intelligence(session)
+        self.session_sales_strategy.generate(
+            str(deliverable["deliverable_id"]), creator_profile_id=creator_profile_id
+        )
+        self.repository.set_completion_intelligence_status(str(deliverable["deliverable_id"]), "READY")
+        deliverable = self.repository.get(str(deliverable["deliverable_id"]))
         if session.status != "completed" or not dict(session.creative_continuity or {}).get("gallery_ready"):
             session = self.queue.finish_session(session_id)
         return session, deliverable
-
-    def _ensure_naming(self, deliverable, profile, intelligence_status):
-        if intelligence_status != "READY":
-            return deliverable
-        if not self.naming.needs_refinement(deliverable.get("ai_title"), deliverable.get("ai_description")):
-            return deliverable
-        try:
-            title, description = self.naming.generate(profile, int(deliverable["shot_count"]))
-            self.repository.set_ai_naming(str(deliverable["deliverable_id"]), title, description)
-        except Exception as error:
-            self.repository.record_naming_failure(str(deliverable["deliverable_id"]), str(error))
-        return self.repository.get_by_session(str(deliverable["photoshoot_session_id"]))
 
     def reconcile_completed(self, *, creator_profile_id: int | None = None):
         output = []
@@ -86,6 +81,71 @@ class PhotoshootCommerceDeliverableService:
             if session.status == "completed":
                 output.append(self.complete(session.session_id, session.creator_profile_id)[1])
         return tuple(output)
+
+    def regenerate_commercial_intelligence(self, deliverable_id: str, creator_profile_id: int):
+        """Safely replace only the canonical intelligence row from preserved approved evidence."""
+        deliverable = self.repository.get(deliverable_id)
+        if deliverable is None or int(deliverable["creator_profile_id"]) != int(creator_profile_id):
+            raise KeyError("Completed Photoshoot not found.")
+        session_id = str(deliverable["photoshoot_session_id"])
+        session = self.queue.get_session(session_id)
+        profile = self.run_canonical_intelligence(session, force=True)
+        self.repository.set_completion_intelligence_status(deliverable_id, "READY")
+        return self.repository.get(deliverable_id)
+
+    def generate_session_sales_strategy(
+        self, deliverable_id: str, creator_profile_id: int, *, strategy_version: str,
+    ):
+        """Generate an intentional new version, or return the existing same version."""
+        return self.session_sales_strategy.generate(
+            deliverable_id,
+            creator_profile_id=creator_profile_id,
+            strategy_version=strategy_version,
+        )
+
+    def run_canonical_intelligence(self, session, *, intelligence_version: str = PHOTOSHOOT_INTELLIGENCE_VERSION,
+                                   force: bool = False, preserve_commercial_intelligence: bool = False):
+        session_id = str(session.session_id)
+        chapters = self._approved_chapters(session_id)
+        if not chapters:
+            raise ValueError("Canonical Photoshoot Intelligence requires approved persisted members.")
+        existing = self.repository.get_intelligence(session_id)
+        if (not force and existing and existing.get("status") == "READY"
+                and existing.get("pipeline_stage") == "COMPLETE"
+                and existing.get("intelligence_version") == intelligence_version
+                and len(self.repository.shot_intelligence(session_id, intelligence_version)) == len(chapters)):
+            return dict(existing.get("profile_data") or {})
+        self.repository.mark_intelligence_running(session_id, intelligence_version)
+        try:
+            profile = self.commercial_intelligence.generate(
+                chapters=chapters, approved_metadata=self._production_context(session),
+                intelligence_version=intelligence_version,
+                progress=lambda stage, state: self.repository.update_intelligence_stage(session_id, stage, dict(state)))
+            if preserve_commercial_intelligence and existing:
+                profile = self._preserve_legacy_commercial_intelligence(profile, existing)
+            self.repository.persist_canonical_intelligence(session_id, intelligence_version, profile)
+            return profile
+        except Exception as error:
+            stage = str(getattr(error, "stage", "PERSISTENCE_FAILED"))
+            self.repository.mark_intelligence_failure(session_id, intelligence_version, stage, error)
+            raise
+
+    @staticmethod
+    def _preserve_legacy_commercial_intelligence(profile: dict, existing: dict) -> dict:
+        """Add canonical analysis while retaining the legacy commercial aggregate verbatim."""
+        merged = dict(profile)
+        legacy_profile = dict(existing.get("profile_data") or {})
+        commercial_fields = (
+            "commercial_title", "subtitle", "commercial_summary", "story", "theme",
+            "experience", "emotional_journey", "buyer_profile", "sales_strategy",
+            "sales_brain_brief", "input_snapshot", "model", "generated_at",
+        )
+        for field in commercial_fields:
+            if field in legacy_profile:
+                merged[field] = legacy_profile[field]
+            elif existing.get(field) is not None:
+                merged[field] = existing[field]
+        return merged
 
     def register(self, deliverable_id: str, creator_profile_id: int):
         """Promote one completed Gallery record into commerce; safe to repeat."""
@@ -160,11 +220,48 @@ class PhotoshootCommerceDeliverableService:
     def aggregate_members(self, asset_ids: tuple[int, ...]):
         return self._aggregate(asset_ids)
 
-    def ensure_naming_or_raise(self, deliverable, profile):
-        if not self.naming.needs_refinement(deliverable.get("ai_title"), deliverable.get("ai_description")):
-            return deliverable
-        title, description = self.naming.generate(profile, int(deliverable["shot_count"]))
-        return self.repository.set_ai_naming(str(deliverable["deliverable_id"]), title, description)
+    def generate_commercial_intelligence(self, session_id: str, approved_metadata: dict):
+        return self.commercial_intelligence.generate(
+            chapters=self._approved_chapters(session_id), approved_metadata=approved_metadata)
+
+    def _approved_chapters(self, session_id: str):
+        by_asset = {}
+        for request in sorted((r for r in self.queue.requests_for_session(session_id) if r.status == "approved"),
+                              key=lambda r: r.sequence_index):
+            for asset_id in request.imported_asset_ids:
+                by_asset[int(asset_id)] = {
+                    "asset_id": int(asset_id),
+                    "approved_prompt": request.prompt_text,
+                    "review_notes": request.review_notes,
+                    "approved_metadata": dict(request.metadata or {}),
+                }
+        members = self.repository.intelligence_members(session_id)
+        if members:
+            return tuple({
+                "shot_order": int(member["shot_order"]),
+                **by_asset.get(int(member["asset_id"]), {
+                    "asset_id": int(member["asset_id"]),
+                    "approved_metadata": {"sequence_role": "reference_seed" if member.get("is_hero") else "approved_member"},
+                }),
+                "is_seed": bool(member.get("is_hero")),
+                "image_reference": str(member.get("file_path") or ""),
+                "canonical_content_intelligence": dict(member.get("content_profile") or {}),
+                "canonical_normalized_context": dict(member.get("normalized_context") or {}),
+            } for member in members)
+        return tuple({"shot_order": index + 1, **chapter}
+                     for index, chapter in enumerate(by_asset.values()))
+
+    @staticmethod
+    def _production_context(session):
+        continuity = dict(session.creative_continuity or {})
+        return {
+            "photoshoot_summary": dict(continuity.get("photoshoot_summary") or {}),
+            "session_plan": tuple(continuity.get("session_plan") or ()),
+            "approved_directions": tuple(continuity.get("approved_directions") or ()),
+            "canonical_seed_summary": continuity.get("canonical_seed_summary") or continuity.get("seed_summary"),
+            "creator_notes": session.creator_notes,
+            "creative_mode": session.creative_mode,
+        }
 
     @staticmethod
     def _dedupe(values):

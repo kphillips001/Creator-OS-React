@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import logging
+from typing import Literal
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, conint
 
 from app.api.content_studio import _current_account_id
 from app.repositories.creator_profile_repository import get_active_creator_profile
@@ -19,6 +20,8 @@ from app.services.photoshoot_curation_service import PhotoshootCurationService
 
 
 router = APIRouter(prefix="/api/v1/photoshoot", tags=["photoshoot"])
+
+TargetShotCount = Literal[0] | conint(ge=2, le=100)
 
 
 class PhotoshootProviderResponse(BaseModel):
@@ -78,7 +81,8 @@ class TimelineSummaryItemResponse(BaseModel):
     shot_number: int
     label: str
     is_seed: bool
-    image: PhotoshootGenerationResponse
+    status: str = "approved"
+    image: PhotoshootGenerationResponse | None
 
 
 class PhotoshootContextResponse(BaseModel):
@@ -138,6 +142,7 @@ class CreativeDirectorInputRequest(CreativeDirectorSessionRequest):
     creative_mode: str
     creator_guidance: str = ""
     continuity_locks: ContinuitySettingsResponse
+    target_shot_count: TargetShotCount = 10
 
 
 class InspirationRequest(CreativeDirectorInputRequest):
@@ -152,6 +157,7 @@ class DirectShotRequest(CreativeDirectorSessionRequest):
     creative_mode: str
     operator_direction: str
     continuity_locks: ContinuitySettingsResponse
+    target_shot_count: TargetShotCount = 10
 
 
 class CreatorGuidanceRequest(CreativeDirectorSessionRequest):
@@ -161,6 +167,11 @@ class CreatorGuidanceRequest(CreativeDirectorSessionRequest):
 class PlanningModeRequest(CreativeDirectorSessionRequest):
     planning_mode: str = "frame_by_frame"
     plan_frame_count: int = 8
+    target_shot_count: TargetShotCount = 10
+
+
+class TargetShotCountRequest(CreativeDirectorSessionRequest):
+    target_shot_count: TargetShotCount = 10
 
 
 class SessionPlanRequest(CreativeDirectorInputRequest):
@@ -226,6 +237,7 @@ def creative_director_inspiration(request: InspirationRequest):
             creative_mode=request.creative_mode,
             creator_guidance=request.creator_guidance, provider_context=request.provider_context,
             continuity_locks=request.continuity_locks.model_dump(),
+            target_shot_count=request.target_shot_count,
         )
     except Exception as error:
         _creative_director_error(error)
@@ -260,6 +272,7 @@ def creative_director_recommendation(request: CreativeDirectorInputRequest):
             creative_mode=request.creative_mode,
             creator_guidance=request.creator_guidance,
             continuity_locks=request.continuity_locks.model_dump(),
+            target_shot_count=request.target_shot_count,
         )
     except Exception as error:
         _creative_director_error(error)
@@ -274,6 +287,7 @@ def creative_director_direct_recommendation(request: DirectShotRequest):
             creative_mode=request.creative_mode,
             operator_direction=request.operator_direction,
             continuity_locks=request.continuity_locks.model_dump(),
+            target_shot_count=request.target_shot_count,
         )
     except Exception as error:
         _creative_director_error(error)
@@ -312,6 +326,19 @@ def creative_director_planning_mode(request: PlanningModeRequest):
             session_id=request.session_id,
             planning_mode=request.planning_mode,
             plan_frame_count=request.plan_frame_count,
+            target_shot_count=request.target_shot_count,
+        )
+    except Exception as error:
+        _creative_director_error(error)
+
+
+@router.post("/creative-director/target-shot-count")
+def creative_director_target_shot_count(request: TargetShotCountRequest):
+    try:
+        return PhotoshootCreativeDirectorWorkflowService().set_target_shot_count(
+            creator_profile_id=_creator_profile_id_required(),
+            session_id=request.session_id,
+            target_shot_count=request.target_shot_count,
         )
     except Exception as error:
         _creative_director_error(error)
@@ -327,6 +354,7 @@ def creative_director_session_plan(request: SessionPlanRequest):
             creator_guidance=request.creator_guidance,
             continuity_locks=request.continuity_locks.model_dump(),
             plan_frame_count=request.plan_frame_count,
+            target_shot_count=request.target_shot_count,
         )
     except Exception as error:
         _creative_director_error(error)
@@ -453,6 +481,7 @@ def manual_photoshoot_status(session_id: str):
             "failure": state["failure"] or None,
         },
         "candidate": None if candidate is None else PhotoshootContextService._generation_payload(candidate),
+        "continuity_assessment": dict((request.metadata or {}).get("continuity_assessment") or {}) if request else {},
     }
 
 
@@ -510,10 +539,28 @@ def reject_manual_candidate(request: CandidateActionRequest):
     return {"success": True, "message": "Candidate rejected."}
 
 
+@router.post("/shot/replace")
+def replace_approved_shot(request: CandidateActionRequest):
+    try:
+        replaced, invalidated, session = PhotoshootManualService().replace_shot(
+            creator_profile_id=_creator_profile_id_required(), session_id=request.session_id,
+            request_id=request.request_id,
+        )
+    except Exception as error:
+        _manual_error(error)
+    return {
+        "success": True,
+        "message": f"Shot {replaced.sequence_index} is ready to replace.",
+        "request_id": replaced.request_id,
+        "invalidated_request_ids": [item.request_id for item in invalidated],
+        "session": PhotoshootContextService._session_payload(session),
+    }
+
+
 @router.post("/finish")
 def finish_photoshoot(request: CreativeDirectorSessionRequest):
     try:
-        return PhotoshootCurationService().review(
+        return PhotoshootCurationService().complete(
             creator_profile_id=_creator_profile_id_required(), session_id=request.session_id)
     except Exception as error:
         _manual_error(error)

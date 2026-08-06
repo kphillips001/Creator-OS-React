@@ -35,28 +35,63 @@ const response = (body: unknown, ok = true) => Promise.resolve(new Response(
 beforeEach(() => window.history.replaceState({}, "", "/library/assets"));
 afterEach(() => vi.restoreAllMocks());
 
-async function openAssetType(name: "Images" | "Photoshoots" | "Stories" | "Videos") {
+async function openAssetType(name: "Images" | "Photoshoots" | "Videos") {
   fireEvent.click(await screen.findByRole("button", { name: new RegExp(`^${name}`) }));
 }
 
 describe("AssetLibraryPage", () => {
-  it("renders and registers a Photoshoot as one curated Asset", async () => {
+  it("renders a Photoshoot and exposes Prepare for Sale in the card and viewer", async () => {
     const photoshoot = { ...asset, libraryItemId: "photoshoot:set-1", itemKind: "photoshoot" as const, assetId: null, deliverableId: "set-1", generationId: null, fileName: "Sunlit Serenity", mediaType: "photoshoot", classification: null, status: "IN_ASSET_LIBRARY", shotCount: 6 };
-    let registered = false;
-    const fetch = vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
-      if (String(input).endsWith("/photoshoots/set-1/register")) {
-        registered = true;
-        return response({ success: true, message: "Photoshoot registered for Commerce." });
-      }
-      return response({ assets: registered ? [] : [photoshoot], total: registered ? 0 : 1, page: 1, pageSize: 18, totalPages: 1, classifications: [] });
+    const fetch = vi.spyOn(globalThis, "fetch").mockImplementation((input, options) => {
+      if (String(input) === "/api/v1/photoshoot-gallery/set-1") return response({
+        deliverableId: "set-1", name: "Sunlit Serenity", description: null,
+        completedAt: "2026-01-02T00:00:00Z", shotCount: 6, imageUrl: "/cover",
+        registrationState: "IN_ASSET_LIBRARY", intelligence: {}, technical: {},
+        members: Array.from({ length: 6 }, (_, index) => ({ assetId: index + 1, shotOrder: index + 1, imageUrl: `/shot-${index + 1}` })),
+      });
+      if (String(input).endsWith("/assets/photoshoots/set-1/sale-preparation")) return response({
+        deliverableId: "set-1", photoshootSessionId: "session-1", strategyVersion: "v1",
+        status: options?.method === "POST" ? "READY" : "NOT_PREPARED",
+        statusLabel: options?.method === "POST" ? "Ready for Session Selling" : "Not Prepared", paidStepCount: 1,
+        readyPaidStepCount: options?.method === "POST" ? 1 : 0, teaserReady: true, steps: [
+          { assetId: 1, shotOrder: 1, position: 1, role: "FREE_TEASER", access: "FREE", ready: true },
+          { assetId: 2, shotOrder: 2, position: 2, role: "FIRST_UNLOCK", access: "PAID",
+            ready: options?.method === "POST", priceMinor: options?.method === "POST" ? 500 : null },
+        ],
+      });
+      if (String(input).endsWith("/commercial-offerings/photoshoots/set-1/prepare")) return response({
+        deliverableId: "set-1", title: "Sunlit Serenity", description: "A complete set.",
+        heroAssetId: 2, coverAssetId: 3, supportedChannels: ["AI_CHAT", "TELEGRAM_WALL"],
+        members: Array.from({ length: 6 }, (_, index) => ({ assetId: index + 1, shotOrder: index + 1, imageUrl: `/shot-${index + 1}` })),
+      });
+      return response({ assets: [photoshoot], total: 1, page: 1, pageSize: 18, totalPages: 1, classifications: [] });
     });
     render(<AssetLibraryPage />);
     await openAssetType("Photoshoots");
     expect(await screen.findByText("Sunlit Serenity")).toBeInTheDocument();
     expect(screen.getByText(/Photoshoot.*6 Images/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Register Asset" }));
-    expect(await screen.findByText("Photoshoot registered for Commerce.")).toBeInTheDocument();
-    expect(fetch).toHaveBeenCalledWith("/api/v1/assets/photoshoots/set-1/register", { method: "POST" });
+    fireEvent.click(screen.getByRole("button", { name: "Open Photoshoot" }));
+    expect(await screen.findByText("Shot 6")).toBeInTheDocument();
+    expect(screen.getByLabelText("Photoshoot filmstrip")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /Select shot/ }).map((button) => button.getAttribute("aria-label"))).toEqual([
+      "Select shot 1", "Select shot 2", "Select shot 3", "Select shot 4", "Select shot 5", "Select shot 6",
+    ]);
+    expect(screen.queryByRole("dialog", { name: /Asset .* preview/ })).not.toBeInTheDocument();
+    expect(fetch).toHaveBeenCalledWith("/api/v1/photoshoot-gallery/set-1", expect.objectContaining({ cache: "no-store" }));
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    expect(screen.queryByRole("button", { name: "Register Asset" })).not.toBeInTheDocument();
+    const libraryRequestsBeforePreparation = fetch.mock.calls.filter(([input]) => String(input).startsWith("/api/v1/assets?")).length;
+    fireEvent.click(screen.getByRole("button", { name: "Prepare for Sale" }));
+    expect(await screen.findByRole("dialog", { name: "Prepare for Sale" })).toBeInTheDocument();
+    expect(await screen.findByLabelText("Shot 2 price")).toBeInTheDocument();
+    expect(screen.getByLabelText("Photoshoot filmstrip")).toBeInTheDocument();
+    expect(screen.queryByText("Loading assets...")).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Shot 2 price"), { target: { value: "5.00" } });
+    fireEvent.click(screen.getByRole("button", { name: "Prepare Photoshoot" }));
+    expect(await screen.findByRole("heading", { name: "Ready for Session Selling" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    expect(await screen.findByText("Ready")).toBeInTheDocument();
+    expect(fetch.mock.calls.filter(([input]) => String(input).startsWith("/api/v1/assets?")).length).toBe(libraryRequestsBeforePreparation);
   });
 
   it("opens Image details from both the image and Open action", async () => {
@@ -113,7 +148,9 @@ describe("AssetLibraryPage", () => {
     expect(stylesheetText).toMatch(/\.asset-library-grid\s*\{[^}]*grid-template-columns:\s*repeat\(auto-fill, 235px\)/);
     expect(stylesheetText).toMatch(/\.asset-card\s*\{[^}]*width:\s*235px/);
     expect(stylesheetText).toMatch(/\.asset-card__image\s*\{[^}]*height:\s*294px[^}]*aspect-ratio:\s*4\/5/);
-    expect(stylesheetText).toMatch(/\.asset-card__image img\s*\{[^}]*object-fit:\s*cover/);
+    expect(stylesheetText).toMatch(/\.asset-card__photoshoot \.session-selling-badge\s*\{[^}]*justify-self:\s*center/);
+    expect(within(card).getByRole("img")).toHaveClass("contained-media-image");
+    expect(sharedStylesheetText).toMatch(/\.contained-media-image\s*\{[^}]*object-fit:\s*contain/);
     expect(within(card).queryByText("portrait.png")).not.toBeInTheDocument();
     expect(within(card).queryByText("Staged Image")).not.toBeInTheDocument();
     expect(stylesheetText).not.toMatch(/\.asset-card__actions(?:--icons)?\s*\{/);
@@ -194,8 +231,9 @@ describe("AssetLibraryPage", () => {
     expect(screen.getByRole("heading", { name: "Choose Asset Type" })).toBeInTheDocument();
     expect(await screen.findByRole("button", { name: /Images 8 Assets/ })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Photoshoots 3 Photoshoots/ })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Stories 0 Stories/ })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Videos 0 Videos/ })).toBeInTheDocument();
+    expect(screen.queryByText("Stories")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Bundles 0 Bundles/ })).toHaveAttribute("href", "/library/bundles");
     expect(screen.queryByLabelText("Media type")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Classification")).not.toBeInTheDocument();
 

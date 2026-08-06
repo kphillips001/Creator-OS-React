@@ -17,8 +17,10 @@ if "psycopg" not in sys.modules:
     json_types = types.ModuleType("psycopg.types.json")
     errors = types.ModuleType("psycopg.errors")
     psycopg.connect = lambda *args, **kwargs: None
+    psycopg.IntegrityError = type("IntegrityError", (Exception,), {})
     rows.dict_row = object()
     json_types.Json = lambda value: value
+    json_types.Jsonb = lambda value: value
     errors.UniqueViolation = type("UniqueViolation", (Exception,), {})
     sys.modules["psycopg"] = psycopg
     sys.modules["psycopg.rows"] = rows
@@ -34,6 +36,9 @@ from app.services.content_archive_service import ContentArchiveService
 from app.services.generation_library_service import GenerationLibraryService
 from app.services.generation_engine_service import GenerationEngineService
 from app.services.photoshoot_queue_service import PhotoshootQueueService
+from app.services.photoshoot_creative_director_service import PhotoshootCreativeDirectorWorkflowService
+from app.services.photoshoot_manual_service import PhotoshootManualService
+from app.services.photoshoot_summary_service import PhotoshootSummaryService
 
 
 class NoReferenceLibraryService:
@@ -153,6 +158,8 @@ class PhotoshootQueueServiceTests(unittest.TestCase):
 
         self.assertEqual(session.creator_profile_id, 7)
         self.assertEqual(session.provider_id, "seedream_4_5")
+        self.assertEqual(session.target_shot_count, 10)
+        self.assertEqual(session.creative_continuity["target_shot_count"], 10)
         self.assertEqual(session.creative_continuity["generation_mode_behavior"], "photoshoot_queue")
         self.assertEqual(session.creative_continuity["wavespeed_generation_mode_key"], "photoshoot_set")
         self.assertIn("preserve the same selected-shot", session.creative_continuity["continuity"])
@@ -160,6 +167,62 @@ class PhotoshootQueueServiceTests(unittest.TestCase):
         self.assertEqual(tuple(request.sequence_index for request in requests), (1, 2, 3))
         self.assertEqual(tuple(request.prompt_plan_id for request in requests), ("prompt_plan_1", "prompt_plan_2", "prompt_plan_3"))
         self.assertEqual(service.next_queued_request(session.session_id).prompt_plan_id, "prompt_plan_1")
+
+    def test_custom_target_shot_count_persists_when_session_is_reloaded(self):
+        temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(temp_dir.cleanup)
+        service = PhotoshootQueueService(
+            storage_dir=temp_dir.name,
+            generation_ingestion_service=FakeIngestion(),
+            asset_repository=FakeAssetRepository(),
+        )
+        session = service.create_session(
+            creator_profile_id=7,
+            prompt_plans=[prompt_plan(1)],
+            provider_id="seedream_4_5",
+        )
+
+        service.update_session_settings(session.session_id, target_shot_count=27)
+        reloaded = PhotoshootQueueService(
+            storage_dir=temp_dir.name,
+            generation_ingestion_service=FakeIngestion(),
+            asset_repository=FakeAssetRepository(),
+        ).get_session(session.session_id)
+
+        self.assertIsNotNone(reloaded)
+        self.assertEqual(reloaded.target_shot_count, 27)
+        self.assertEqual(reloaded.creative_continuity["target_shot_count"], 27)
+
+    def test_open_ended_target_persists_when_session_is_reloaded(self):
+        temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(temp_dir.cleanup)
+        service = PhotoshootQueueService(
+            storage_dir=temp_dir.name,
+            generation_ingestion_service=FakeIngestion(),
+            asset_repository=FakeAssetRepository(),
+        )
+        session = service.create_session(
+            creator_profile_id=7, prompt_plans=[prompt_plan(1)], provider_id="seedream_4_5",
+            target_shot_count=0,
+        )
+
+        reloaded = PhotoshootQueueService(
+            storage_dir=temp_dir.name,
+            generation_ingestion_service=FakeIngestion(),
+            asset_repository=FakeAssetRepository(),
+        ).get_session(session.session_id)
+
+        self.assertIsNotNone(reloaded)
+        self.assertEqual(reloaded.target_shot_count, 0)
+        self.assertEqual(reloaded.creative_continuity["target_shot_count"], 0)
+
+        progress = PhotoshootCreativeDirectorWorkflowService(
+            queue=service, library=SimpleNamespace(), creative_director=SimpleNamespace(), summary_service=SimpleNamespace(),
+        )._planning_progress(reloaded)
+        self.assertEqual(progress["target_shot_count"], 0)
+        self.assertEqual(progress["remaining_shots"], 0)
+        self.assertEqual(progress["editorial_stage"], "Open-ended")
+        self.assertNotIn("of 0", PhotoshootCreativeDirectorWorkflowService._planner_explanation(progress))
 
     def test_generation_engine_integration_consumes_one_prompt_at_a_time(self):
         service = self.make_service()
@@ -243,12 +306,25 @@ class PhotoshootQueueServiceTests(unittest.TestCase):
             generation_job_id=next_job.job_id,
             imported_asset_ids=(102,),
         )
+        service.update_session_settings(
+            session.session_id,
+            inspiration_ideas=("Closer portrait", "Window profile"),
+            inspiration_planning_shot=2,
+            selected_inspiration="Closer portrait",
+            workflow_stage="direction_approved",
+        )
         rejected = service.reject_request(second.request_id)
+        after_rejection = service.get_session(session.session_id)
         regenerated = service.regenerate_request(second.request_id)
 
         self.assertEqual(approved.status, "approved")
         self.assertEqual(next_job.request.metadata["photoshoot_sequence_index"], 2)
         self.assertEqual(rejected.status, "rejected")
+        self.assertIsNone(after_rejection.current_request_id)
+        self.assertEqual(after_rejection.creative_continuity["workflow_stage"], "ready_for_next_shot")
+        self.assertFalse(after_rejection.creative_continuity["direction_approved"])
+        self.assertEqual(tuple(after_rejection.creative_continuity["inspiration_ideas"]), ("Closer portrait", "Window profile"))
+        self.assertEqual(after_rejection.creative_continuity["selected_inspiration"], "Closer portrait")
         self.assertEqual(regenerated.status, "queued")
         self.assertEqual(regenerated.review_status, "regenerate")
 
@@ -362,8 +438,14 @@ class PhotoshootQueueServiceTests(unittest.TestCase):
         service = self.make_service()
         seed = generated_record()
 
-        session, created = service.start_studio_session_from_generated_image(seed)
-        reopened, duplicate_created = service.start_studio_session_from_generated_image(seed)
+        session, created = service.start_studio_session_from_generated_image(
+            seed,
+            canonical_identity_reference={"asset_id": 55, "path": "https://cdn.test/frozen-identity.png"},
+        )
+        reopened, duplicate_created = service.start_studio_session_from_generated_image(
+            seed,
+            canonical_identity_reference={"asset_id": 99, "path": "https://cdn.test/new-active-identity.png"},
+        )
         seed_request = service.requests_for_session(session.session_id)[0]
         shot_request = service.add_studio_shot_request(
             session_id=session.session_id,
@@ -388,6 +470,10 @@ class PhotoshootQueueServiceTests(unittest.TestCase):
         self.assertFalse(duplicate_created)
         self.assertEqual(reopened.session_id, session.session_id)
         self.assertEqual(session.creative_continuity["seed_image_id"], seed.image_id)
+        self.assertEqual(session.creative_continuity["canonical_identity_reference"]["asset_id"], 55)
+        self.assertEqual(session.creative_continuity["canonical_identity_reference"]["path"], "https://cdn.test/frozen-identity.png")
+        self.assertTrue(session.creative_continuity["canonical_identity_reference_frozen"])
+        self.assertEqual(reopened.creative_continuity["canonical_identity_reference"]["asset_id"], 55)
         self.assertIn("session_defaults", session.creative_continuity)
         self.assertEqual(session.creative_continuity["progression_stage"], 0)
         self.assertEqual(seed_request.status, "approved")
@@ -398,6 +484,8 @@ class PhotoshootQueueServiceTests(unittest.TestCase):
         self.assertEqual(shot_request.metadata["active_reference_image_id"], "generated_image_shot_reference")
         self.assertEqual(job.request.metadata["reference_image_url"], "https://cdn.test/selected-reference.png")
         self.assertEqual(job.request.metadata["photoshoot_continuity_reference_image_url"], "https://cdn.test/selected-reference.png")
+        self.assertEqual(job.request.metadata["canonical_reference_image_url"], "https://cdn.test/frozen-identity.png")
+        self.assertEqual(job.request.reference_asset_id, 55)
         self.assertEqual(completed_request.status, "awaiting_review")
         self.assertEqual(completed_request.metadata["generated_image_ids"], ("generated_image_shot_1",))
         self.assertEqual(approved_request.status, "approved")
@@ -552,6 +640,80 @@ class PhotoshootQueueServiceTests(unittest.TestCase):
         )
         self.assertIn(seed.image_id, approved_image_ids)
         self.assertIn("generated_image_window_turn", approved_image_ids)
+
+    def test_replace_approved_shot_restores_previous_continuity_and_invalidates_downstream(self):
+        service = self.make_service()
+        seed = generated_record()
+        session, _created = service.start_studio_session_from_generated_image(seed)
+        created = []
+        reference_id = seed.image_id
+        for index in (2, 3, 4):
+            request = service.add_studio_shot_request(
+                session_id=session.session_id, prompt_text=f"Shot {index} prompt",
+                shot_direction=f"Direction {index}", active_reference_image_id=reference_id,
+                active_reference_output_reference=f"/shot-{index - 1}.png",
+                creative_direction={"title": f"Shot {index}", "creative_direction": f"Direction {index}"},
+            )
+            service._replace_request(replace(request, status="awaiting_review", metadata={
+                **dict(request.metadata or {}), "generated_image_ids": (f"shot-{index}",),
+            }))
+            service.approve_request(request.request_id)
+            created.append(request)
+            reference_id = f"shot-{index}"
+
+        service.update_session_settings(session.session_id, target_shot_count=5)
+        replaced, invalidated, restored = PhotoshootManualService(
+            queue=service,
+            engine=SimpleNamespace(),
+            library=SimpleNamespace(),
+            summary_service=PhotoshootSummaryService(queue=service),
+        ).replace_shot(
+            creator_profile_id=session.creator_profile_id,
+            session_id=session.session_id,
+            request_id=created[1].request_id,
+        )
+        planning = PhotoshootCreativeDirectorWorkflowService(
+            queue=service, library=SimpleNamespace(), creative_director=SimpleNamespace(), summary_service=SimpleNamespace(),
+        )._planning_progress(restored)
+
+        self.assertEqual(replaced.status, "replacement_pending")
+        self.assertEqual(tuple(item.request_id for item in invalidated), (created[2].request_id,))
+        self.assertEqual(service.get_request(created[2].request_id).status, "continuity_invalidated")
+        self.assertEqual(restored.creative_continuity["current_shot_image_id"], "shot-2")
+        self.assertEqual(restored.creative_continuity["replacement_sequence_index"], 3)
+        self.assertEqual(restored.target_shot_count, 5)
+        self.assertEqual(restored.creative_continuity["current_prompt"], "")
+        self.assertEqual(restored.creative_continuity["current_direction"], {})
+        self.assertEqual(restored.creative_continuity["inspiration_ideas"], [])
+        self.assertEqual(restored.creative_continuity["selected_inspiration"], "")
+        self.assertEqual(restored.creative_continuity["inspiration_planning_shot"], 0)
+        self.assertEqual(restored.creative_continuity["workflow_stage"], "ready_for_next_shot")
+        self.assertFalse(restored.creative_continuity["direction_approved"])
+        self.assertEqual(restored.creative_continuity["approved_prompts"], ["Seed image prompt", "Shot 2 prompt"])
+        self.assertEqual(len(restored.creative_continuity["approved_directions"]), 1)
+        self.assertEqual(restored.creative_continuity["photoshoot_summary"]["approved_shot_count"], 2)
+        self.assertNotIn("Shot 3", restored.creative_continuity["photoshoot_summary"]["summary_text"])
+        self.assertEqual(planning, {"current_shot": 2, "planning_shot": 3, "target_shot_count": 5, "remaining_shots": 3, "editorial_stage": "Middle"})
+
+    def test_frame_by_frame_editorial_stage_uses_approved_request_positions(self):
+        service = self.make_service()
+        session, _created = service.start_studio_session_from_generated_image(generated_record())
+        session = service.update_session_settings(session.session_id, target_shot_count=5)
+        workflow = PhotoshootCreativeDirectorWorkflowService(
+            queue=service, library=SimpleNamespace(), creative_director=SimpleNamespace(), summary_service=SimpleNamespace(),
+        )
+        self.assertEqual(workflow._planning_progress(session)["editorial_stage"], "Beginning")
+        for index, expected in ((2, "Middle"), (3, "Late"), (4, "Finale")):
+            request = service.add_studio_shot_request(
+                session_id=session.session_id, prompt_text=f"Shot {index}", shot_direction=f"Direction {index}",
+            )
+            service._replace_request(replace(request, status="awaiting_review", metadata={
+                **dict(request.metadata or {}), "generated_image_ids": (f"missing-media-{index}",),
+            }))
+            service.approve_request(request.request_id)
+            progress = workflow._planning_progress(service.get_session(session.session_id))
+            self.assertEqual(progress["planning_shot"], index + 1)
+            self.assertEqual(progress["editorial_stage"], expected)
 
     def test_pending_recommendation_persists_without_approved_history(self):
         service = self.make_service()

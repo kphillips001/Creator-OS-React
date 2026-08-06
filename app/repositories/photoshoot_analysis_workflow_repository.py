@@ -14,7 +14,7 @@ class PhotoshootAnalysisJob:
 
 
 class PhotoshootAnalysisWorkflowRepository:
-    FAILURES = {"MEMBER_ANALYSIS_FAILED", "PHOTOSHOOT_INTELLIGENCE_FAILED", "NAMING_FAILED"}
+    FAILURES = {"MEMBER_ANALYSIS_FAILED", "PHOTOSHOOT_INTELLIGENCE_FAILED"}
 
     def __init__(self, connection_factory=get_db_connection):
         self.connection_factory = connection_factory
@@ -42,15 +42,15 @@ class PhotoshootAnalysisWorkflowRepository:
             with conn.cursor() as cur:
                 cur.execute("""WITH candidate AS (
                     SELECT deliverable_id,current_stage FROM public.photoshoot_analysis_workflows
-                    WHERE current_stage IN ('PENDING','MEMBER_ANALYSIS_PENDING','PHOTOSHOOT_INTELLIGENCE_PENDING','NAMING_PENDING')
-                       OR (current_stage IN ('MEMBER_ANALYSIS_RUNNING','PHOTOSHOOT_INTELLIGENCE_RUNNING','NAMING_RUNNING')
+                    WHERE current_stage IN ('PENDING','MEMBER_ANALYSIS_PENDING','PHOTOSHOOT_INTELLIGENCE_PENDING')
+                       OR (current_stage IN ('MEMBER_ANALYSIS_RUNNING','PHOTOSHOOT_INTELLIGENCE_RUNNING')
                            AND lease_expires_at<=now())
                     ORDER BY updated_at,deliverable_id FOR UPDATE SKIP LOCKED LIMIT 1
                 ) UPDATE public.photoshoot_analysis_workflows w SET
                     current_stage=CASE
                       WHEN candidate.current_stage IN ('PENDING','MEMBER_ANALYSIS_PENDING','MEMBER_ANALYSIS_RUNNING') THEN 'MEMBER_ANALYSIS_RUNNING'
                       WHEN candidate.current_stage IN ('PHOTOSHOOT_INTELLIGENCE_PENDING','PHOTOSHOOT_INTELLIGENCE_RUNNING') THEN 'PHOTOSHOOT_INTELLIGENCE_RUNNING'
-                      ELSE 'NAMING_RUNNING' END,
+                      ELSE 'PHOTOSHOOT_INTELLIGENCE_RUNNING' END,
                     worker_id=%s,claimed_at=now(),lease_expires_at=now()+(%s*interval '1 minute'),
                     attempt_count=w.attempt_count+1,started_at=COALESCE(w.started_at,now()),updated_at=now()
                     FROM candidate WHERE w.deliverable_id=candidate.deliverable_id
@@ -79,7 +79,7 @@ class PhotoshootAnalysisWorkflowRepository:
                     current_stage=CASE
                       WHEN current_stage='MEMBER_ANALYSIS_FAILED' THEN 'MEMBER_ANALYSIS_PENDING'
                       WHEN current_stage='PHOTOSHOOT_INTELLIGENCE_FAILED' THEN 'PHOTOSHOOT_INTELLIGENCE_PENDING'
-                      WHEN current_stage='NAMING_FAILED' THEN 'NAMING_PENDING' ELSE current_stage END,
+                      WHEN current_stage='NAMING_FAILED' THEN 'PHOTOSHOOT_INTELLIGENCE_PENDING' ELSE current_stage END,
                     last_error_code=NULL,last_error_message=NULL,failed_member_asset_id=NULL,updated_at=now()
                     WHERE deliverable_id=%s RETURNING *""", (deliverable_id,))
                 row = cur.fetchone(); return dict(row) if row else None

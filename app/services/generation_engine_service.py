@@ -78,16 +78,22 @@ class GenerationEngineService:
         metadata: Mapping[str, Any] | None = None,
     ) -> GenerationRequest:
         creator_profile_id = int((creator_profile or {}).get("id") or prompt_plan.creator_profile_id)
-        active_reference = self.reference_library.get_active_canonical_reference(
+        request_metadata = dict(metadata or {})
+        frozen_identity_path = str(request_metadata.get("canonical_identity_reference_path") or "").strip()
+        frozen_identity_asset_id = int(request_metadata.get("canonical_identity_reference_asset_id") or 0)
+        frozen_identity_required = bool(request_metadata.get("require_frozen_photoshoot_identity"))
+        if frozen_identity_required and (not frozen_identity_path or not frozen_identity_asset_id):
+            raise ValueError("The frozen canonical identity reference is unavailable for this Photoshoot.")
+        active_reference = None if frozen_identity_required else self.reference_library.get_active_canonical_reference(
             creator_profile_id=creator_profile_id,
         )
         reference_asset_id = (
-            active_reference.asset_id
+            frozen_identity_asset_id if frozen_identity_required else active_reference.asset_id
             if active_reference
             else prompt_plan.reference_asset_id
         )
         reference_asset_path = (
-            active_reference.asset.original_path
+            frozen_identity_path if frozen_identity_required else active_reference.asset.original_path
             if active_reference
             else prompt_plan.reference_asset_path
         )
@@ -101,7 +107,6 @@ class GenerationEngineService:
             provider_reference_url = resolver.cached_url(
                 asset_id=int(reference_asset_id), source_path=str(reference_asset_path), host_name="imgbb",
             )
-        request_metadata = dict(metadata or {})
         if not request_metadata.get("render_policy"):
             workflow = str(
                 request_metadata.get("workflow_type") or "content_studio"

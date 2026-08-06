@@ -15,7 +15,7 @@ export function PhotoshootSettings({ session, providers, disabled, creativeMode,
         </div>
         <fieldset disabled={disabled}>
           <legend>Creative Mode</legend>
-          <div className="photoshoot-segmented">
+          <div className="photoshoot-segmented segmented-control">
             {(["safe", "premium", "explicit"] as const).map((mode) => (
               <label key={mode}>
                 <input checked={creativeMode === mode} name="photoshoot-mode" onChange={() => onMode(mode)} type="radio" />

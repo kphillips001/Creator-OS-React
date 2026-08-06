@@ -21,6 +21,9 @@ from app.models.commerce_recommendation import (
     RecommendationHistoryEntry,
 )
 from app.models.commercial_intelligence import StrategyConstraints
+from app.models.photoshoot_experience_recommendation import (
+    PhotoshootExperienceRecommendation,
+)
 from app.models.ownership_intelligence import OwnershipIdentity
 from app.repositories.commercial_offering_selector_repository import (
     CommercialOfferingSelectorRepository,
@@ -31,6 +34,7 @@ from app.services.commerce_recommendation_engine import (
 from app.services.ownership_intelligence_service import (
     OwnershipIntelligenceService,
 )
+from app.models.customer_photoshoot_lifecycle import CustomerPhotoshootStatus
 
 
 logger = logging.getLogger("commercial-offering-selector")
@@ -42,6 +46,7 @@ class CommercialOfferingSelectorService:
     def __init__(
         self, repository=None, clock=lambda: datetime.now(timezone.utc),
         recommendation_engine=None, ownership_intelligence=None,
+        photoshoot_lifecycle_service=None, progression_repository=None,
     ):
         self.repository = (
             repository or CommercialOfferingSelectorRepository()
@@ -53,6 +58,8 @@ class CommercialOfferingSelectorService:
         self.ownership_intelligence = (
             ownership_intelligence or OwnershipIntelligenceService()
         )
+        self.photoshoot_lifecycles = photoshoot_lifecycle_service
+        self.progression_repository = progression_repository
 
     def select(
         self, *, creator_profile_id: int, telegram_user_id: int | None,
@@ -234,6 +241,28 @@ class CommercialOfferingSelectorService:
                 candidates, evaluations, strict=True
             ) if evaluation.eligible
         )
+        lifecycle_context = self._lifecycle_context(
+            creator_profile_id, customer_profile
+        )
+        terminal = {
+            CustomerPhotoshootStatus.COMPLETED,
+            CustomerPhotoshootStatus.CLOSED,
+            CustomerPhotoshootStatus.DECLINED,
+        }
+        eligible = tuple(candidate for candidate in eligible if not (
+            candidate.get("photoshoot_identifier")
+            and lifecycle_context.get(str(candidate["photoshoot_identifier"]))
+            and lifecycle_context[str(candidate["photoshoot_identifier"])].status in terminal
+        ))
+        active = next((item for item in lifecycle_context.values()
+                       if item.status in {CustomerPhotoshootStatus.ACTIVE, CustomerPhotoshootStatus.OBJECTION}), None)
+        if active is not None:
+            # An ACTIVE opportunity is exclusive.  The deterministic first
+            # unpaid chapter is the only Offering allowed to reach ranking.
+            eligible = (() if active.status is CustomerPhotoshootStatus.OBJECTION else
+                        self._active_opportunity_candidates(
+                            eligible, active, creator_profile_id, customer_profile,
+                        ))
         if not eligible:
             recommendation = self.recommendation_engine.rank(
                 (), recommendation_context,
@@ -262,6 +291,49 @@ class CommercialOfferingSelectorService:
             recommendation=recommendation,
             strategy=strategy,
         )
+
+    def _lifecycle_context(self, creator_profile_id, customer_profile):
+        profile_id = getattr(customer_profile, "customer_commerce_profile_id", None)
+        if profile_id is None:
+            return {}
+        try:
+            service = self.photoshoot_lifecycles
+            if service is None:
+                from app.services.customer_photoshoot_lifecycle_service import CustomerPhotoshootLifecycleService
+                service = CustomerPhotoshootLifecycleService()
+            return service.context_for_customer(
+                creator_profile_id=int(creator_profile_id),
+                customer_commerce_profile_id=profile_id,
+            )
+        except Exception as error:
+            logger.warning("event=photoshoot_lifecycle_context_unavailable error_type=%s", type(error).__name__)
+            return {}
+
+    def _active_opportunity_candidates(self, candidates, opportunity,
+                                       creator_profile_id, customer_profile):
+        profile_id = getattr(customer_profile, "customer_commerce_profile_id", None)
+        if profile_id is None:
+            return ()
+        repository = self.progression_repository
+        if repository is None:
+            from app.repositories.autonomous_sales_progression_repository import AutonomousSalesProgressionRepository
+            repository = AutonomousSalesProgressionRepository()
+        assets = repository.ordered_assets(
+            creator_profile_id=int(creator_profile_id),
+            customer_commerce_profile_id=profile_id,
+            photoshoot_id=opportunity.photoshoot_id,
+        )
+        ordered = tuple(sorted(assets, key=lambda item: (item.position, item.asset_id)))
+        paid = tuple(item for item in ordered if item.role.value in {"CORE_SESSION", "FINALE_IMAGE"})
+        selected = next((item for item in paid if not item.owned and not item.rejected), None)
+        if selected is None:
+            videos = tuple(item for item in ordered if item.role.value == "FINALE_VIDEO")
+            selected = next((item for item in videos if not item.owned and not item.rejected), None)
+        if selected is None or selected.offering_id is None:
+            return ()
+        return tuple(candidate for candidate in candidates
+                     if UUID(str(candidate["offering_id"])) == selected.offering_id
+                     and str(candidate.get("photoshoot_identifier") or "") == opportunity.photoshoot_id)
 
     def _evaluate(
         self, candidate, *, creator_profile_id: int, channel: str,
@@ -330,6 +402,14 @@ class CommercialOfferingSelectorService:
         roles = frozenset(
             str(value) for value in candidate.get("commercial_roles") or ()
         )
+        content_types = frozenset(
+            str(value).lower() for value in candidate.get("asset_content_types") or ()
+        )
+        if photoshoot and (
+            roles.intersection({"TEASER", "DISCOVERY"})
+            or any(value.startswith("teaser") for value in content_types)
+        ):
+            reasons.append("PROTECTED_PHOTOSHOOT_TEASER_NOT_SELLABLE")
         if constraints.progression:
             if not roles:
                 reasons.append("STRATEGY_ROLE_EVIDENCE_MISSING")
@@ -423,15 +503,64 @@ class CommercialOfferingSelectorService:
         return None
 
     def _rank(self, eligible, context, *, rejection_count):
+        candidates = tuple(
+            RecommendationCandidate.from_eligible_projection(
+                self._enriched_projection(candidate)
+            )
+            for candidate in eligible
+        )
+        photoshoot_groups: dict[str, list[RecommendationCandidate]] = {}
+        for candidate in candidates:
+            if candidate.photoshoot_identifier:
+                photoshoot_groups.setdefault(
+                    candidate.photoshoot_identifier, []
+                ).append(candidate)
+        if not photoshoot_groups:
+            return self.recommendation_engine.rank(
+                candidates, context, rejection_count=rejection_count
+            )
+        experiences = tuple(
+            self._aggregate_photoshoot_candidate(group, context)
+            for _, group in sorted(photoshoot_groups.items())
+        )
         return self.recommendation_engine.rank(
-            tuple(
-                RecommendationCandidate.from_eligible_projection(
-                    self._enriched_projection(candidate)
-                )
-                for candidate in eligible
+            experiences, context, rejection_count=rejection_count
+        )
+
+    def _aggregate_photoshoot_candidate(self, group, context):
+        """Aggregate one Photoshoot while retaining one Offering for fulfillment."""
+        fulfillment = self.recommendation_engine.rank(tuple(group), context)
+        selected = fulfillment.selected_candidate
+        if selected is None:
+            raise ValueError("Photoshoot has no eligible fulfillment Offering.")
+        intelligence: dict[str, list[str]] = {}
+        member_ids: list[int] = []
+        for candidate in group:
+            member_ids.extend(candidate.member_asset_ids)
+            for key, values in candidate.intelligence.items():
+                intelligence.setdefault(key, []).extend(values)
+        return RecommendationCandidate(
+            offering_id=selected.offering_id,
+            creator_profile_id=selected.creator_profile_id,
+            title=selected.title,
+            description=selected.description,
+            offering_type=selected.offering_type,
+            price_minor=selected.price_minor,
+            currency=selected.currency,
+            published_at=max(
+                (item.published_at for item in group if item.published_at),
+                default=None,
             ),
-            context,
-            rejection_count=rejection_count,
+            publication_id=selected.publication_id,
+            delivery_url=selected.delivery_url,
+            hero_asset_id=selected.hero_asset_id,
+            member_asset_ids=tuple(dict.fromkeys(member_ids)),
+            commercially_eligible=True,
+            photoshoot_identifier=selected.photoshoot_identifier,
+            intelligence={
+                key: tuple(dict.fromkeys(values))
+                for key, values in intelligence.items()
+            },
         )
 
     @classmethod
@@ -573,6 +702,7 @@ class CommercialOfferingSelectorService:
             ),
         )))
         elapsed = round((time.perf_counter() - started) * 1000, 3)
+        experience = self._photoshoot_experience(recommendation)
         result = SelectedOfferingResult(
             offering_id=(
                 UUID(str(selected["offering_id"])) if selected else None
@@ -681,6 +811,17 @@ class CommercialOfferingSelectorService:
                     recommendation.recommendation_summary
                     if recommendation else None
                 ),
+                "recommendationLayer": (
+                    "PHOTOSHOOT_EXPERIENCE"
+                    if experience else "COMMERCIAL_OFFERING_FALLBACK"
+                ),
+                "selectedPhotoshootId": (
+                    experience.photoshoot_id if experience else None
+                ),
+                "fulfillmentOfferingId": (
+                    str(experience.commercial_offering_id)
+                    if experience else None
+                ),
                 "unsupportedSchemaRules": [
                     "offering_expiration",
                     "offering_withdrawn",
@@ -701,6 +842,7 @@ class CommercialOfferingSelectorService:
                 str(selected.get("currency") or "") if selected else None
             ),
             recommendation_result=recommendation,
+            photoshoot_experience=experience,
         )
         logger.info(
             "event=offer_selected offering_id=%s selection_reason=%s "
@@ -708,3 +850,45 @@ class CommercialOfferingSelectorService:
             result.offering_id, reason.value, elapsed,
         )
         return result
+
+    @staticmethod
+    def _photoshoot_experience(recommendation):
+        if recommendation is None or recommendation.selected_candidate is None:
+            return None
+        selected = recommendation.selected_candidate
+        if not selected.photoshoot_identifier:
+            return None
+        ranked = next(
+            item for item in recommendation.ranked_candidates if item.selected
+        )
+        themes = (
+            selected.intelligence.get("photoshoot_themes")
+            or selected.intelligence.get("themes")
+            or ()
+        )
+        return PhotoshootExperienceRecommendation(
+            photoshoot_id=selected.photoshoot_identifier,
+            title=selected.title,
+            theme=themes[0] if themes else None,
+            description=selected.description,
+            hero_asset_id=selected.hero_asset_id,
+            supporting_asset_ids=tuple(
+                asset_id
+                for asset_id in selected.member_asset_ids
+                if asset_id != selected.hero_asset_id
+            ),
+            photoshoot_intelligence=selected.intelligence,
+            commercial_offering_id=selected.offering_id,
+            commercial_publication_id=selected.publication_id,
+            delivery_url=selected.delivery_url,
+            recommendation_score=ranked.final_score,
+            recommendation_explanation=ranked.deterministic_reason,
+            fulfillment_offering_type=selected.offering_type,
+            fulfillment_price_minor=selected.price_minor,
+            fulfillment_currency=selected.currency,
+            metadata={
+                "recommendationLayer": "PHOTOSHOOT_EXPERIENCE",
+                "fulfillmentLayer": "COMMERCIAL_OFFERING",
+                "engineVersion": recommendation.engine_version,
+            },
+        )

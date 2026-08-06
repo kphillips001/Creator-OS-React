@@ -85,6 +85,16 @@ class PhotoshootCurationService:
                                         selected_image_ids=selected_image_ids,
                                         photoshoot_decision=photoshoot_decision)
 
+    def complete(self, *, creator_profile_id: int, session_id: str):
+        """Complete a Photoshoot with every approved shot in timeline order."""
+        review = self.review(creator_profile_id=creator_profile_id, session_id=session_id)
+        return self.confirm(
+            creator_profile_id=creator_profile_id,
+            session_id=session_id,
+            selected_image_ids=[shot["image_id"] for shot in review["shots"]],
+            photoshoot_decision="APPROVED",
+        )
+
     def _confirm_locked(self, *, creator_profile_id: int, session_id: str, selected_image_ids, photoshoot_decision: str):
         decision = str(photoshoot_decision or "").upper()
         if decision not in self.DECISIONS: raise ValueError("Approve or decline this Photoshoot.")
@@ -165,8 +175,6 @@ class PhotoshootCurationService:
         if len(members) != len(selected): raise RuntimeError("A selected shot is missing its canonical Asset.")
         hero = members[0][0]
         self.deliverables.repository.replace_members(session.session_id, members, hero)
-        profile = dict(dict(session.creative_continuity or {}).get("photoshoot_summary") or {})
-        self.deliverables.repository.upsert_intelligence(session.session_id, "READY", profile)
         first = records[selected[0]]
         gallery_path = str(Path(first.output_reference).parent)
         row = self.deliverables.repository.upsert_deliverable(
@@ -174,13 +182,15 @@ class PhotoshootCurationService:
             session_id=session.session_id, creator_profile_id=session.creator_profile_id,
             display_name=session.title, member_ids=tuple(asset_id for asset_id, _ in members),
             hero_asset_id=hero, gallery_path=gallery_path,
-            completed_at=self.deliverables._completed_at(session), intelligence_status="READY", commerce_status="CURATED")
-        row = self.deliverables.repository.add_to_asset_library(str(row["deliverable_id"]), session.creator_profile_id) or row
+            completed_at=self.deliverables._completed_at(session), intelligence_status="PENDING", commerce_status="CURATED")
         try:
-            title, description = self.deliverables.naming.generate(profile, len(members))
-            self.deliverables.repository.set_ai_naming(str(row["deliverable_id"]), title, description)
-        except Exception as error:
-            self.deliverables.repository.record_naming_failure(str(row["deliverable_id"]), str(error))
+            self.deliverables.run_canonical_intelligence(session)
+        except Exception:
+            self.deliverables.repository.set_completion_intelligence_status(
+                str(row["deliverable_id"]), "FAILED")
+            raise
+        self.deliverables.repository.set_completion_intelligence_status(
+            str(row["deliverable_id"]), "READY")
         return self.deliverables.repository.get(str(row["deliverable_id"]))
 
     @classmethod

@@ -24,6 +24,9 @@ class GenerationLibraryPublishingServiceTests(unittest.TestCase):
         self.library.resolve_publishable_image_reference.return_value = "C:/images/generated-1.png"
         self.captions = Mock()
         self.social = Mock()
+        self.social.x_account_options.return_value = (
+            "AvaBlackthorne", "AvaBlackthorneX",
+        )
         self.service = GenerationLibraryPublishingService(
             generation_library=self.library,
             caption_studio=self.captions,
@@ -36,6 +39,21 @@ class GenerationLibraryPublishingServiceTests(unittest.TestCase):
         self.assertEqual(self.service.validate_destination("telegram_chat"), ("telegram", "vault"))
         with self.assertRaises(ValueError):
             self.service.validate_destination("fanvue")
+
+    def test_context_exposes_only_marketing_destinations(self):
+        context = self.service.context("generated-1")
+
+        self.assertEqual(
+            context["destinations"],
+            (
+                {"value": "x", "label": "X", "available": True},
+                {
+                    "value": "telegram_wall",
+                    "label": "Telegram Broadcast",
+                    "available": True,
+                },
+            ),
+        )
 
     def test_x_and_telegram_use_their_existing_caption_generators(self):
         result = SimpleNamespace(
@@ -117,6 +135,68 @@ class GenerationLibraryPublishingServiceTests(unittest.TestCase):
         metadata = self.library.mark_published.call_args.kwargs["metadata"]
         self.assertEqual(metadata["post_to"], "vault")
         self.assertEqual(metadata["caption_source"], "custom")
+
+    def test_publish_x_targets_succeeds_independently_and_archives_successes(self):
+        self.social.create_queue_item.return_value = SimpleNamespace(queue_item_id="queue-x")
+        self.social.publish_now.side_effect = (
+            SimpleNamespace(status="failed"),
+            SimpleNamespace(status="posted"),
+        )
+        self.social.list_history.return_value = (
+            SimpleNamespace(
+                queue_item_id="queue-x", status="failed",
+                message="First account failed.",
+                metadata={"account_name": "AvaBlackthorne"},
+            ),
+        )
+
+        result = self.service.publish(
+            generated_image_id="generated-1",
+            destination="x",
+            caption="",
+            x_targets=(
+                {"accountName": "AvaBlackthorne", "caption": "Main"},
+                {"accountName": "AvaBlackthorneX", "caption": "Second"},
+            ),
+        )
+
+        self.assertEqual([item["status"] for item in result["results"]], ["failed", "posted"])
+        self.assertEqual(self.social.publish_now.call_count, 2)
+        self.assertEqual(
+            self.social.publish_now.call_args_list[1].kwargs["account_name"],
+            "AvaBlackthorneX",
+        )
+        self.library.mark_published.assert_called_once()
+        metadata = self.library.mark_published.call_args.kwargs["metadata"]
+        self.assertEqual(metadata["account_names"], ("AvaBlackthorneX",))
+
+    def test_publish_x_targets_supports_second_account_only(self):
+        self.social.create_queue_item.return_value = SimpleNamespace(queue_item_id="queue-second")
+        self.social.publish_now.return_value = SimpleNamespace(status="posted")
+
+        result = self.service.publish(
+            generated_image_id="generated-1", destination="x", caption="",
+            x_targets=({
+                "accountName": "AvaBlackthorneX",
+                "caption": "Second account caption",
+            },),
+        )
+
+        self.assertEqual(result["results"], (
+            {"accountName": "AvaBlackthorneX", "status": "posted"},
+        ))
+        self.assertEqual(
+            self.social.publish_now.call_args.kwargs["account_name"],
+            "AvaBlackthorneX",
+        )
+
+    def test_publish_x_targets_rejects_unknown_accounts(self):
+        with self.assertRaisesRegex(ValueError, "Unknown X account"):
+            self.service.publish(
+                generated_image_id="generated-1", destination="x", caption="",
+                x_targets=({"accountName": "Unknown", "caption": "Caption"},),
+            )
+        self.social.publish_now.assert_not_called()
 
     def test_publish_failure_preserves_library_record(self):
         self.social.create_queue_item.return_value = SimpleNamespace(queue_item_id="queue-3")

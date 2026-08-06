@@ -6,6 +6,11 @@ from types import MappingProxyType
 from typing import Any, Mapping
 from uuid import UUID
 
+from app.models.photoshoot_experience_recommendation import (
+    PhotoshootExperienceRecommendation,
+)
+from app.models.autonomous_sales_progression import NextSalesAction
+
 
 class CustomerSalesDecisionType(str, Enum):
     CONTINUE_CONVERSATION = "CONTINUE_CONVERSATION"
@@ -87,6 +92,8 @@ class CustomerSalesDecision:
     recommended_offering_short_description: str | None = None
     recommended_offering_price_minor: int | None = None
     recommended_offering_currency: str | None = None
+    recommended_photoshoot_experience: PhotoshootExperienceRecommendation | None = None
+    next_sales_action: NextSalesAction | None = None
 
 
 def immutable_mapping(value: Mapping[str, Any] | None) -> Mapping[str, Any]:

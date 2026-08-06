@@ -791,7 +791,10 @@ function DiagnosticDrawer({
           {workflowError && <p className="workflow-error" role="alert">{workflowError}</p>}
         </section>}
         {launchStartedAt !== null && <LaunchingExecution startedAt={launchStartedAt} />}
-        {execution && <ExecutionStatus execution={execution} launchedAt={executionStartedLocally} cancel={() => void cancel(execution.execution_id)} review={(state) => {
+        {execution && <ExecutionStatus execution={execution} launchedAt={executionStartedLocally} cancel={() => void cancel(execution.execution_id)} retry={() => {
+          setBusy(true);
+          void submitTask(execution.task_id).then(setExecution).catch((reason: unknown) => setWorkflowError(reason instanceof Error ? reason.message : "Retry failed.")).finally(() => setBusy(false));
+        }} review={(state) => {
           void review(execution.execution_id, state)
             .then(() => getExecution(execution.execution_id))
             .then(setExecution);
@@ -852,7 +855,7 @@ function LaunchingExecution({ startedAt }: { startedAt: number }) {
   </section>;
 }
 
-function ExecutionStatus({ execution, launchedAt, cancel, review }: { execution: DeveloperExecution; launchedAt?: number | null; cancel: () => void; review: (state: "ACKNOWLEDGED" | "REJECTED" | "ARCHIVED") => void }) {
+function ExecutionStatus({ execution, launchedAt, cancel, retry, review }: { execution: DeveloperExecution; launchedAt?: number | null; cancel: () => void; retry: () => void; review: (state: "ACKNOWLEDGED" | "REJECTED" | "ARCHIVED") => void }) {
   const terminal = ["COMPLETED", "FAILED", "CANCELLED", "INTERRUPTED"].includes(execution.status);
   const latestEvent = execution.events?.at(-1);
   const startedAt = execution.started_at
@@ -885,7 +888,9 @@ function ExecutionStatus({ execution, launchedAt, cancel, review }: { execution:
     <details><summary>View execution log</summary><ol>{execution.events?.map((event) => <li key={event.event_id}><strong>{title(event.event_type.toLowerCase())}</strong> — {event.message}</li>)}</ol></details>
     {!terminal && <button disabled type="button">⏳ Developer Agent Running...</button>}
     {!terminal && <button onClick={cancel} type="button">Cancel</button>}
+    {execution.status === "FAILED" && <button onClick={retry} type="button">Retry Execution</button>}
     {execution.failure_reason && <p role="alert">{execution.failure_reason}</p>}
+    {execution.final_report?.telemetryDegraded && <p role="status">Telemetry degraded; the repository operation still completed.</p>}
     {execution.final_report && <section ref={reportRef}><ExecutionReport execution={execution} review={review} /></section>}
   </section>;
 }
@@ -913,9 +918,9 @@ function ExecutionReport({ execution, review }: { execution: DeveloperExecution;
 }
 
 function ExecutionReviewDrawer({ execution, close }: { execution: DeveloperExecution; close: () => void }) {
-  const { review, getExecution } = useDeveloperAgentExecutions();
+  const { review, getExecution, submitTask } = useDeveloperAgentExecutions();
   const [current, setCurrent] = useState(execution);
-  return <div className="diagnostic-drawer-backdrop" role="presentation"><aside className="diagnostic-drawer" role="dialog" aria-modal="true" aria-labelledby="execution-review-title"><header><div><span>Developer Agent</span><h2 id="execution-review-title">{current.issue_identifier}</h2></div><button aria-label="Close execution report" onClick={close} type="button"><X /></button></header><ExecutionStatus execution={current} cancel={() => undefined} review={(state) => {
+  return <div className="diagnostic-drawer-backdrop" role="presentation"><aside className="diagnostic-drawer" role="dialog" aria-modal="true" aria-labelledby="execution-review-title"><header><div><span>Developer Agent</span><h2 id="execution-review-title">{current.issue_identifier}</h2></div><button aria-label="Close execution report" onClick={close} type="button"><X /></button></header><ExecutionStatus execution={current} cancel={() => undefined} retry={() => { void submitTask(current.task_id).then(setCurrent); }} review={(state) => {
     void review(current.execution_id, state)
       .then(() => getExecution(current.execution_id))
       .then(setCurrent);

@@ -38,6 +38,16 @@ _generation_runs: dict[str, dict] = {}
 _generation_runs_lock = threading.Lock()
 
 
+def _has_supported_image_signature(data: bytes, mime_type: str) -> bool:
+    if mime_type == "image/png":
+        return data.startswith(b"\x89PNG\r\n\x1a\n")
+    if mime_type == "image/jpeg":
+        return data.startswith(b"\xff\xd8\xff")
+    if mime_type == "image/webp":
+        return len(data) >= 12 and data[:4] == b"RIFF" and data[8:12] == b"WEBP"
+    return False
+
+
 class TransformTagsRequest(BaseModel):
     tags: str
     explicit: bool = False
@@ -106,6 +116,23 @@ class GenerationSubmissionRequest(BaseModel):
 
 class AutonomousInspirationRequest(BaseModel):
     provider: str
+
+
+def _analyze_recreate_image(
+    *, image_bytes: bytes, image_mime_type: str, image_name: str,
+) -> dict:
+    creator_profile, creative_director = _creative_director_context(
+        require_reference=True
+    )
+    analysis = creative_director.analyze_inspiration_scene(
+        image_bytes=image_bytes, image_mime_type=image_mime_type,
+        image_name=image_name,
+    )
+    return {
+        "success": True, "error": None,
+        "creatorProfileId": int(creator_profile["id"]),
+        "analysis": analysis.as_dict(),
+    }
 
 
 class ExplicitInspirationRequest(BaseModel):
@@ -266,7 +293,7 @@ def _enhance_tags(request: TransformTagsRequest) -> dict:
             fanvue_account_id=account_id,
             selected_item=tags,
         )
-    elif request.origin == "manual_creative_concept":
+    elif request.origin in {"manual_creative_concept", "recreate_with_ava"}:
         if request.explicit:
             raise ValueError("Manual Creative Concept enhancement must use the premium lane.")
         from app.services.manual_creative_concept_enhancement_service import (
@@ -891,6 +918,35 @@ async def ask_content_studio_prompt_planner(
             status_code=503,
             content={"success": False, "error": "Canonical Prompt Planner request failed. Please try again.", "answer": ""},
         )
+
+
+@router.post("/recreate/analyze")
+async def analyze_recreate_inspiration(image: UploadFile = File(...)) -> JSONResponse:
+    suffix = Path(image.filename or "").suffix.lower()
+    if image.content_type not in PLANNER_IMAGE_TYPES or suffix not in PLANNER_IMAGE_SUFFIXES:
+        return JSONResponse(status_code=400, content={"success": False, "error": "Use one PNG, JPG, JPEG, or WEBP image."})
+    image_bytes = await image.read(PLANNER_IMAGE_MAX_BYTES + 1)
+    if not image_bytes:
+        return JSONResponse(status_code=400, content={"success": False, "error": "An inspiration image is required."})
+    if len(image_bytes) > PLANNER_IMAGE_MAX_BYTES:
+        return JSONResponse(status_code=400, content={"success": False, "error": "The inspiration image is too large."})
+    if not _has_supported_image_signature(image_bytes, image.content_type or ""):
+        return JSONResponse(status_code=400, content={"success": False, "error": "The uploaded file is not a valid supported image."})
+    try:
+        content = await asyncio.wait_for(asyncio.to_thread(
+            _analyze_recreate_image,
+            image_bytes=image_bytes,
+            image_mime_type=image.content_type,
+            image_name=image.filename or "inspiration",
+        ), timeout=60)
+        return JSONResponse(status_code=200, content=content)
+    except ValueError as error:
+        return JSONResponse(status_code=400, content={"success": False, "error": str(error)})
+    except asyncio.TimeoutError:
+        return JSONResponse(status_code=503, content={"success": False, "error": "Inspiration analysis timed out. Please retry."})
+    except Exception:
+        logger.exception("Recreate With Ava analysis failed")
+        return JSONResponse(status_code=503, content={"success": False, "error": "Inspiration analysis failed. Please retry."})
 
 
 @router.post("/generations")

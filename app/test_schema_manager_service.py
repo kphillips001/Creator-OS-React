@@ -96,6 +96,16 @@ class SchemaManagerServiceTests(unittest.TestCase):
                     "PROVIDER_SPECIFIC",
                 )
 
+    def test_fanvue_provider_primary_keys_are_canonical(self):
+        matrix = {item.table_name: item for item in self.service.audit_tables()}
+
+        self.assertNotIn("id", self.service.TABLE_OWNERSHIP["fanvue_messages"]["columns"])
+        self.assertNotIn("id", self.service.TABLE_OWNERSHIP["fanvue_threads"]["columns"])
+        self.assertIn("fanvue_message_id", self.service.TABLE_OWNERSHIP["fanvue_messages"]["columns"])
+        self.assertIn("thread_id", self.service.TABLE_OWNERSHIP["fanvue_threads"]["columns"])
+        self.assertEqual(matrix["fanvue_messages"].missing_columns, ())
+        self.assertEqual(matrix["fanvue_threads"].missing_columns, ())
+
 
 if __name__ == "__main__":
     unittest.main()

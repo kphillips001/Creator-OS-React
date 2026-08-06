@@ -42,9 +42,8 @@ class TelegramDeliveryExecutionResult:
 class TelegramDeliveryExecutor:
     """Execute normalized Telegram Delivery Payloads.
 
-    This foundation preserves current runtime behavior. Text is the only
-    executable capability currently supported by the Telegram runtimes;
-    media/link/button delivery remains deferred to later phases.
+    Text and canonical local-Asset delivery are executable capabilities.
+    Paid link/button behavior remains governed by the existing Commerce path.
     """
 
     def __init__(self, *, global_safety_service: Any | None = None) -> None:
@@ -65,6 +64,15 @@ class TelegramDeliveryExecutor:
         sender = self._sender(context)
         chat_id = self._chat_id(context)
 
+        if normalized.asset_path and sender is not None and chat_id is not None:
+            safety = self._global_safety_service.check_global_safety()
+            if not safety.get("allowed", False):
+                return self._safety_blocked_result(normalized, metadata, safety)
+            return self._execute_asset(
+                sender, chat_id=chat_id, asset_path=normalized.asset_path,
+                message_text=message_text, payload=normalized, metadata=metadata,
+                raise_on_failure=self._raise_on_failure(context),
+            )
         if message_text and sender is not None and chat_id is not None:
             safety = self._global_safety_service.check_global_safety()
             if not safety.get("allowed", False):
@@ -92,6 +100,15 @@ class TelegramDeliveryExecutor:
         sender = self._sender(context)
         chat_id = self._chat_id(context)
 
+        if normalized.asset_path and sender is not None and chat_id is not None:
+            safety = self._global_safety_service.check_global_safety()
+            if not safety.get("allowed", False):
+                return self._safety_blocked_result(normalized, metadata, safety)
+            return await self._execute_asset_async(
+                sender, chat_id=chat_id, asset_path=normalized.asset_path,
+                message_text=message_text, payload=normalized, metadata=metadata,
+                raise_on_failure=self._raise_on_failure(context),
+            )
         if message_text and sender is not None and chat_id is not None:
             safety = self._global_safety_service.check_global_safety()
             if not safety.get("allowed", False):
@@ -209,6 +226,51 @@ class TelegramDeliveryExecutor:
             metadata=metadata,
         )
 
+    def _execute_asset(
+        self, sender: Any, *, chat_id: int, asset_path: str,
+        message_text: str, payload: TelegramDeliveryPayload,
+        metadata: dict[str, Any], raise_on_failure: bool,
+    ) -> TelegramDeliveryExecutionResult:
+        method = getattr(sender, "send_asset", None)
+        if not callable(method):
+            return self._deferred_result(payload, metadata)
+        try:
+            sent = method(chat_id=chat_id, asset_path=asset_path, message_text=message_text)
+        except Exception as error:
+            if raise_on_failure:
+                raise
+            return self._failure_result(payload, metadata, error)
+        return self._asset_success(payload, metadata, sent)
+
+    async def _execute_asset_async(
+        self, sender: Any, *, chat_id: int, asset_path: str,
+        message_text: str, payload: TelegramDeliveryPayload,
+        metadata: dict[str, Any], raise_on_failure: bool,
+    ) -> TelegramDeliveryExecutionResult:
+        method = getattr(sender, "send_asset", None)
+        if not callable(method):
+            return self._deferred_result(payload, metadata)
+        try:
+            sent = method(chat_id=chat_id, asset_path=asset_path, message_text=message_text)
+            if inspect.isawaitable(sent):
+                sent = await sent
+        except Exception as error:
+            if raise_on_failure:
+                raise
+            return self._failure_result(payload, metadata, error)
+        return self._asset_success(payload, metadata, sent)
+
+    @staticmethod
+    def _asset_success(payload, metadata, sent):
+        metadata.update({"execution_state": "asset_sent", "asset_path": payload.asset_path})
+        message_id = getattr(sent, "id", sent)
+        if isinstance(message_id, int) and not isinstance(message_id, bool):
+            metadata["telegram_message_id"] = message_id
+        return TelegramDeliveryExecutionResult(
+            status="success", executed=True, delivery_method=payload.delivery_method,
+            blocking_reason=payload.blocking_reason, metadata=metadata,
+        )
+
     @staticmethod
     def _safety_blocked_result(
         payload: TelegramDeliveryPayload,
@@ -320,8 +382,6 @@ class TelegramDeliveryExecutor:
         if context:
             metadata["context"] = cls._safe_context(context)
         unsupported = []
-        if payload.asset_path:
-            unsupported.append("free_asset_media_send")
         if payload.media_link:
             unsupported.append("paid_media_link_send")
         if unsupported:

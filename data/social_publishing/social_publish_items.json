@@ -1,5 +1,161 @@
 [
   {
+    "publish_request_id": "social_publish_item_6760c6e615d340d9974e22e0e65313d0",
+    "queue_item_id": "social_queue_item_c541feac2cf34cc0b51f5a37d5fadb47",
+    "platform": "x",
+    "caption_id": "caption_result_9a1b4f23300245d9964816d02b5500bb",
+    "scheduled_for": null,
+    "status": "posted",
+    "created_at": "2026-08-05T14:39:22.179992",
+    "metadata": {
+      "posting_implemented": true,
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "provider_post_id": "2085012797407007131",
+      "provider_media_id": "2085012794852638720",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2085012797407007131",
+      "provider_metadata": {
+        "tweet_data": {
+          "edit_history_tweet_ids": [
+            ""
+          ],
+          "id": "2085012797407007131",
+          "text": "I'm in a teasing mood... tell me your move if you found me perched here waiting. No wrong answers \ud83d\ude0c\ud83d\udd25 https://t.co/26wy7BgERi"
+        }
+      }
+    }
+  },
+  {
+    "publish_request_id": "social_publish_item_22eb415014c8428597c9a75dd33369d2",
+    "queue_item_id": "social_queue_item_96b1dc56c6b3409bb75beaa25a0adee7",
+    "platform": "x",
+    "caption_id": "caption_result_be45a06e86594f86a0256a5d2e9ef0e3",
+    "scheduled_for": null,
+    "status": "posted",
+    "created_at": "2026-08-04T15:06:35.072179",
+    "metadata": {
+      "posting_implemented": true,
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "provider_post_id": "2084657258655314256",
+      "provider_media_id": "2084657255878742016",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2084657258655314256",
+      "provider_metadata": {
+        "tweet_data": {
+          "edit_history_tweet_ids": [
+            ""
+          ],
+          "id": "2084657258655314256",
+          "text": "I swear the water gets warmer every time I glance back \ud83d\udc40 You coming in or what? https://t.co/tI3bUul0C5"
+        }
+      }
+    }
+  },
+  {
+    "publish_request_id": "social_publish_item_67fe4a9bd3174e98b94f51d689e94da5",
+    "queue_item_id": "social_queue_item_a1b0d76192a94b13b02324d97edc896d",
+    "platform": "x",
+    "caption_id": "caption_result_4399ffb33e6946ffafbfb6088c8e4978",
+    "scheduled_for": null,
+    "status": "posted",
+    "created_at": "2026-08-03T16:15:11.874607",
+    "metadata": {
+      "posting_implemented": true,
+      "account_name": "AvaBlackthorneX",
+      "telegram_post_to": null,
+      "provider_post_id": "2084312137900433559",
+      "provider_media_id": "2084312135169900544",
+      "provider_output_url": "https://x.com/AvaBlackthorneX/status/2084312137900433559",
+      "provider_metadata": {
+        "tweet_data": {
+          "edit_history_tweet_ids": [
+            ""
+          ],
+          "id": "2084312137900433559",
+          "text": "Quiet little moment just for us... tell me one thing that would make your whole day better right now \ud83d\udcad https://t.co/ulASCvU40E"
+        }
+      }
+    }
+  },
+  {
+    "publish_request_id": "social_publish_item_c10e22b00a35467c9738e75297df565e",
+    "queue_item_id": "social_queue_item_a1b0d76192a94b13b02324d97edc896d",
+    "platform": "x",
+    "caption_id": "caption_result_4399ffb33e6946ffafbfb6088c8e4978",
+    "scheduled_for": null,
+    "status": "posted",
+    "created_at": "2026-08-03T16:15:05.198549",
+    "metadata": {
+      "posting_implemented": true,
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "provider_post_id": "2084312109769167272",
+      "provider_media_id": "2084312107101618176",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2084312109769167272",
+      "provider_metadata": {
+        "tweet_data": {
+          "edit_history_tweet_ids": [
+            ""
+          ],
+          "id": "2084312109769167272",
+          "text": "Quiet little moment just for us... tell me one thing that would make your whole day better right now \ud83d\udcad https://t.co/tGJP4Zvtcy"
+        }
+      }
+    }
+  },
+  {
+    "publish_request_id": "social_publish_item_ebea2fd4bba846dba7468b197d618d38",
+    "queue_item_id": "social_queue_item_19f5709c6ae94b878f362e233fbd7386",
+    "platform": "x",
+    "caption_id": "caption_result_42424a994ffb41d0832384f1587ad700",
+    "scheduled_for": null,
+    "status": "posted",
+    "created_at": "2026-08-02T17:10:58.363177",
+    "metadata": {
+      "posting_implemented": true,
+      "account_name": "AvaBlackthorneX",
+      "telegram_post_to": null,
+      "provider_post_id": "2083963787355291656",
+      "provider_media_id": "2083963784662564865",
+      "provider_output_url": "https://x.com/AvaBlackthorneX/status/2083963787355291656",
+      "provider_metadata": {
+        "tweet_data": {
+          "edit_history_tweet_ids": [
+            ""
+          ],
+          "id": "2083963787355291656",
+          "text": "If you walked up right now, what\u2019s the first thing you\u2019d say? \ud83d\udc40 no boring answers allowed https://t.co/3NDGbnkjlP"
+        }
+      }
+    }
+  },
+  {
+    "publish_request_id": "social_publish_item_80727e0dcfe449f2a8d29f5569f98949",
+    "queue_item_id": "social_queue_item_f55f964b53b8489b82ae13eed00e0ba4",
+    "platform": "x",
+    "caption_id": null,
+    "scheduled_for": null,
+    "status": "posted",
+    "created_at": "2026-08-02T16:35:00.943535",
+    "metadata": {
+      "posting_implemented": true,
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "provider_post_id": "2083954737674690872",
+      "provider_media_id": "2083954734990344192",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2083954737674690872",
+      "provider_metadata": {
+        "tweet_data": {
+          "edit_history_tweet_ids": [
+            ""
+          ],
+          "id": "2083954737674690872",
+          "text": "Warning: I get a little too competitive when water's involved \ud83d\udca6\ud83d\ude02\ud83d\udc47 https://t.co/bczAAzTW7M"
+        }
+      }
+    }
+  },
+  {
     "publish_request_id": "social_publish_item_1c78f5c1921f44708de27abb36781ee3",
     "queue_item_id": "social_queue_item_224b1a42949a4457b2c9323b90d0fd2d",
     "platform": "x",

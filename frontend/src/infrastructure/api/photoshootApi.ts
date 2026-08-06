@@ -1,6 +1,6 @@
 import { environment } from "../config/environment";
 import type { GenerationRecord } from "../../features/generation-library/types";
-import type { CreativeDirectorContext, CreativeDirectorRecommendation, PhotoshootAutoRunRuntime, PhotoshootContext, PhotoshootCurationResult, PhotoshootCurationReview, PhotoshootProvider, PlannedShot, PlanningMode } from "../../features/photoshoot/types";
+import type { CreativeDirectorContext, CreativeDirectorRecommendation, PhotoshootAutoRunRuntime, PhotoshootContext, PhotoshootCurationResult, PhotoshootProvider, PlannedShot, PlanningMode } from "../../features/photoshoot/types";
 
 type PhotoshootContextResponse = {
   creator_profile_exists: boolean;
@@ -36,7 +36,8 @@ type PhotoshootContextResponse = {
     shot_number: number;
     label: string;
     is_seed: boolean;
-    image: GenerationRecord;
+    status?: string;
+    image: GenerationRecord | null;
   }>;
 };
 
@@ -102,6 +103,7 @@ export async function getPhotoshootContext(signal?: AbortSignal): Promise<Photos
       shotNumber: item.shot_number,
       label: item.label,
       isSeed: item.is_seed,
+      status: item.status || "approved",
       image: item.image,
     })),
   };
@@ -130,6 +132,7 @@ export async function stopPhotoshootAndReturnSeed(): Promise<{ redirect: string;
 export type PhotoshootStatus = {
   request: null | { request_id: string; status: "queued" | "generating" | "awaiting_review"; prompt: string; provider_id: string; generation_job_id: string | null; failure: string | null };
   candidate: GenerationRecord | null;
+  continuity_assessment?: { status?: "pending" | "completed" | "unavailable"; identity?: string; wardrobe?: string; location?: string; lighting?: string; composition?: string; overall_continuity?: string; reason?: string; warning?: boolean; warning_message?: string };
 };
 
 async function photoshootMutation<T>(path: string, body: unknown): Promise<T> {
@@ -146,6 +149,9 @@ type CreativeDirectorContextResponse = {
   session_id: string; creative_mode: "safe" | "premium" | "explicit"; session_direction: string;
   creator_guidance: string; workflow_stage: string; current_prompt: string;
   planning_mode?: PlanningMode; plan_frame_count?: number; session_plan?: PlannedShot[];
+  target_shot_count?: number;
+  current_shot?: number; planning_shot?: number; remaining_shots?: number; editorial_stage?: string;
+  planner_explanation?: string;
   session_plan_index?: number; session_plan_approved?: boolean;
   recommendation_state: { inspiration_ideas: string[]; selected_inspiration: string; recommendation: CreativeDirectorRecommendation; direction_approved: boolean };
 };
@@ -167,6 +173,12 @@ export async function getCreativeDirectorContext(sessionId: string, signal?: Abo
     directionApproved: Boolean(result.recommendation_state?.direction_approved),
     planningMode: result.planning_mode === "full_plan" ? "full_plan" : "frame_by_frame",
     planFrameCount: Math.max(4, Math.min(12, Number(result.plan_frame_count || 8))),
+    targetShotCount: Number(result.target_shot_count) === 0 ? 0 : Math.max(2, Math.min(100, Number(result.target_shot_count || 10))),
+    currentShot: Math.max(1, Number(result.current_shot || 1)),
+    planningShot: Math.max(2, Number(result.planning_shot || 2)),
+    remainingShots: Math.max(0, Number(result.remaining_shots ?? 9)),
+    editorialStage: result.editorial_stage || "Beginning",
+    plannerExplanation: result.planner_explanation || "Continuing from the latest approved shot.",
     sessionPlan: Array.isArray(result.session_plan) ? result.session_plan : [],
     sessionPlanIndex: Math.max(0, Number(result.session_plan_index || 0)),
     sessionPlanApproved: Boolean(result.session_plan_approved),
@@ -181,6 +193,7 @@ export const requestDirectPhotoshootRecommendation = (body: unknown) => photosho
 export const approvePhotoshootRecommendation = (body: unknown) => photoshootMutation<{ prompt: string; workflow_stage: string }>("/creative-director/approve", body);
 export const chooseAnotherPhotoshootIdea = (body: unknown) => photoshootMutation<{ workflow_stage: string; selected_inspiration: string }>("/creative-director/choose-another", body);
 export const setPhotoshootPlanningMode = (body: unknown) => photoshootMutation<{ planning_mode: PlanningMode; plan_frame_count: number; session_plan: PlannedShot[]; session_plan_approved: boolean }>("/creative-director/planning-mode", body);
+export const setPhotoshootTargetShotCount = (body: unknown) => photoshootMutation<{ target_shot_count: number }>("/creative-director/target-shot-count", body);
 export const generatePhotoshootSessionPlan = (body: unknown) => photoshootMutation<{ planning_mode: PlanningMode; plan_frame_count: number; session_plan: PlannedShot[]; session_plan_index: number; session_plan_approved: boolean }>("/creative-director/session-plan", body);
 export const approvePhotoshootSessionPlan = (body: unknown) => photoshootMutation<{ session_plan: PlannedShot[]; session_plan_index: number; session_plan_approved: boolean; workflow_stage: string }>("/creative-director/session-plan/approve", body);
 export const developPhotoshootPlannedShot = (body: unknown) => photoshootMutation<CreativeDirectorRecommendation>("/creative-director/session-plan/develop", body);
@@ -195,8 +208,8 @@ export const approvePhotoshootCandidate = (body: unknown) => photoshootMutation<
 export const regeneratePhotoshootCandidate = (body: unknown) => photoshootMutation("/candidate/regenerate", body);
 export const editPhotoshootCandidatePrompt = (body: unknown) => photoshootMutation<{ prompt: string }>("/candidate/edit-prompt", body);
 export const rejectPhotoshootCandidate = (body: unknown) => photoshootMutation("/candidate/reject", body);
-export const finishPhotoshoot = (body: unknown) => photoshootMutation<PhotoshootCurationReview>("/finish", body);
-export const confirmPhotoshootCuration = (body: unknown) => photoshootMutation<PhotoshootCurationResult>("/curation/confirm", body);
+export const replacePhotoshootShot = (body: unknown) => photoshootMutation<{ success: true; request_id: string; invalidated_request_ids: string[] }>("/shot/replace", body);
+export const finishPhotoshoot = (body: unknown) => photoshootMutation<PhotoshootCurationResult>("/finish", body);
 export const startPhotoshootAutoRun = (body: unknown) => photoshootMutation<PhotoshootAutoRunRuntime>("/auto-run/start", body);
 export const pausePhotoshootAutoRun = (body: unknown) => photoshootMutation<PhotoshootAutoRunRuntime>("/auto-run/pause", body);
 export const resumePhotoshootAutoRun = (body: unknown) => photoshootMutation<PhotoshootAutoRunRuntime>("/auto-run/resume", body);

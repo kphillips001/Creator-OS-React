@@ -265,17 +265,28 @@ def test_explicit_expression_profiles_share_premium_identity_and_are_tier_aware(
     hardcore = ExplicitExpressionProfileService.build("hardcore").render()
 
     for profile in (softcore, hardcore):
-        assert "sensual" in profile
         assert "intimate" in profile
         assert "emotionally engaged" in profile
-        assert "no default smiling" in profile
-        assert "tongue-out teasing" in profile
-        assert "playful performer expression" in profile
+        assert "private PPV" in profile
+        assert "half-lidded" in profile  # banned in limits/eye rules
+        assert "no default grinning" in profile
+        assert "tongue-out goofy mugging" in profile
+        for mood in (
+            "teasing",
+            "naughty",
+            "seductive",
+            "sexually enticing",
+            "appealing",
+            "salacious",
+        ):
+            assert mood in profile
+        assert "fully open" in profile
+        assert "never droopy" in profile
+        assert "bedroom eyes" not in profile
 
-    assert "restrained" in softcore
-    assert "bedroom eyes" in softcore
-    assert "heightened intensity" in hardcore
-    assert "stronger emotional tension" in hardcore
+    assert "quietly confident" in softcore
+    assert "intensely aroused" in hardcore
+    assert "stronger wanting" in hardcore
 
 
 def test_canonical_explicit_expression_profile_follows_editorial_and_preserves_scene(
@@ -323,9 +334,10 @@ def test_canonical_explicit_expression_profile_follows_editorial_and_preserves_s
     assert prompt.index("EDITORIAL DIRECTION") < prompt.index(EXPLICIT_EXPRESSION_SECTION)
     assert prompt.index(EXPLICIT_EXPRESSION_SECTION) < prompt.index("WARDROBE")
     assert "heightened intensity" in prompt
-    assert "stronger emotional tension" in prompt
-    assert "no default smiling" in prompt
-    assert "tongue-out teasing" in prompt
+    assert "stronger wanting" in prompt
+    assert "teasing, naughty, seductive, sexually enticing, appealing, and salacious" in prompt
+    assert "half-lidded" in prompt
+    assert "no default grinning" in prompt
     assert "rear three-quarter camera angle" in prompt
     assert "low blue evening light" in prompt
 

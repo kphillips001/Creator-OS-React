@@ -64,6 +64,10 @@ export type PublishContext = {
     label: string;
     available: boolean;
   }>;
+  xAccounts?: Array<{
+    accountName: string;
+    label: string;
+  }>;
   error?: string;
 };
 

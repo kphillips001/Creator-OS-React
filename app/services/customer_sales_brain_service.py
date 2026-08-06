@@ -42,6 +42,9 @@ class CustomerSalesBrainService:
         sales_session_repository=None,
         commercial_intelligence_service=None,
         commercial_intelligence_context_service=None,
+        photoshoot_lifecycle_service=None,
+        autonomous_progression_service=None, progression_repository=None,
+        session_runtime_service=None,
         clock=lambda: datetime.now(timezone.utc),
     ):
         self.customers = customer_repository or CustomerCommerceRepository()
@@ -62,6 +65,10 @@ class CustomerSalesBrainService:
             or CommercialIntelligenceContextService()
         )
         self.config = config or CustomerSalesBrainConfig.from_environment()
+        self.photoshoot_lifecycles = photoshoot_lifecycle_service
+        self.autonomous_progression = autonomous_progression_service
+        self.progression_repository = progression_repository
+        self.session_runtime = session_runtime_service
         self.clock = clock
 
     def evaluate_for_telegram_user(
@@ -181,7 +188,22 @@ class CustomerSalesBrainService:
             telegram_user_id=telegram_user_id,
             identity_resolved=True, stage=stage,
             signal=signal_data, active=active, latest=latest,
+            progression_context=context,
         )
+        opportunity = self._apply_photoshoot_opportunity_policy(
+            creator_profile_id=creator_profile_id,
+            customer_profile=profile,
+            context=context,
+        )
+        if opportunity is not None and opportunity.status.value in {"OBJECTION", "CLOSED", "DECLINED"} and active is not None:
+            abandon = getattr(self.intents, "mark_abandoned", None)
+            if callable(abandon):
+                try:
+                    abandon(active.purchase_intent_id, at=now)
+                    active = None
+                    common["active"] = None
+                except Exception as error:
+                    logger.warning("event=photoshoot_opportunity_intent_close_failed error_type=%s", type(error).__name__)
 
         # Priority 2: verified provider payment is still reconciling.
         if signal and signal.reconciliation_state == "PENDING":
@@ -603,6 +625,7 @@ class CustomerSalesBrainService:
         congratulate_allowed=False, cooldown_until=None,
         selector_result=None,
         commercial_intelligence=None,
+        progression_context=None,
     ):
         lifecycle = active
         conversion = (
@@ -746,7 +769,109 @@ class CustomerSalesBrainService:
             recommended_offering_currency=(
                 recommendation.currency if recommendation else None
             ),
+            recommended_photoshoot_experience=(
+                getattr(recommendation, "photoshoot_experience", None)
+                if recommendation else None
+            ),
         )
+        progression_context=dict(progression_context or {})
+        experience = getattr(recommendation, "photoshoot_experience", None) if recommendation else None
+        resolved_photoshoot_lifecycle = None
+        existing_active_lifecycle = None
+        profile = None
+        if experience is not None and buyer_uuid is not None:
+            try:
+                profile = self.customers.get_by_buyer_uuid(
+                    creator_profile_id=creator_profile_id,
+                    external_fanvue_user_uuid=buyer_uuid,
+                )
+                if profile is not None:
+                    service = self.photoshoot_lifecycles
+                    if service is None:
+                        from app.services.customer_photoshoot_lifecycle_service import CustomerPhotoshootLifecycleService
+                        service = CustomerPhotoshootLifecycleService()
+                    states=service.context_for_customer(creator_profile_id=creator_profile_id,customer_commerce_profile_id=profile.customer_commerce_profile_id)
+                    existing_active_lifecycle=next((v for v in states.values() if v.status.value in {'ACTIVE','OBJECTION'}),None)
+                    resolved_photoshoot_lifecycle = service.resolve_recommendation(
+                        creator_profile_id=creator_profile_id,
+                        customer_commerce_profile_id=profile.customer_commerce_profile_id,
+                        recommendation=experience,
+                        reason=experience.recommendation_explanation,
+                    )
+            except Exception as error:
+                logger.warning("event=photoshoot_lifecycle_resolution_unavailable error_type=%s", type(error).__name__)
+        if buyer_uuid is not None:
+            try:
+                profile = profile or self.customers.get_by_buyer_uuid(creator_profile_id=creator_profile_id,external_fanvue_user_uuid=buyer_uuid)
+                lifecycle_service = self.photoshoot_lifecycles
+                if lifecycle_service is None:
+                    from app.services.customer_photoshoot_lifecycle_service import CustomerPhotoshootLifecycleService
+                    lifecycle_service = CustomerPhotoshootLifecycleService()
+                if profile and resolved_photoshoot_lifecycle is None:
+                    states=lifecycle_service.context_for_customer(creator_profile_id=creator_profile_id,customer_commerce_profile_id=profile.customer_commerce_profile_id)
+                    existing_active_lifecycle=next((v for v in states.values() if v.status.value in {'ACTIVE','OBJECTION'}),None)
+                    resolved_photoshoot_lifecycle=existing_active_lifecycle
+                current_lifecycle=existing_active_lifecycle or resolved_photoshoot_lifecycle
+                target_lifecycle=(resolved_photoshoot_lifecycle if current_lifecycle and resolved_photoshoot_lifecycle and current_lifecycle.photoshoot_id!=resolved_photoshoot_lifecycle.photoshoot_id else None)
+                if profile and current_lifecycle:
+                    repository=self.progression_repository
+                    if repository is None:
+                        from app.repositories.autonomous_sales_progression_repository import AutonomousSalesProgressionRepository
+                        repository=AutonomousSalesProgressionRepository()
+                    engine=self.autonomous_progression
+                    if engine is None:
+                        from app.services.autonomous_sales_progression_service import AutonomousSalesProgressionService
+                        engine=AutonomousSalesProgressionService()
+                    from app.models.autonomous_sales_progression import BuyingMomentumEvidence
+                    assets=repository.ordered_assets(creator_profile_id=creator_profile_id,customer_commerce_profile_id=profile.customer_commerce_profile_id,photoshoot_id=current_lifecycle.photoshoot_id)
+                    session_runtime_state=None
+                    try:
+                        runtime_service=self.session_runtime
+                        if runtime_service is None:
+                            from app.services.photoshoot_session_runtime_service import PhotoshootSessionRuntimeService
+                            runtime_service=PhotoshootSessionRuntimeService()
+                        session_runtime_state=runtime_service.evaluate(creator_profile_id=creator_profile_id,customer_commerce_profile_id=profile.customer_commerce_profile_id,photoshoot_session_id=current_lifecycle.photoshoot_id)
+                        owned=set(session_runtime_state.owned_asset_ids)
+                        assets=tuple(replace(asset,owned=asset.asset_id in owned) for asset in assets)
+                    except Exception as error:
+                        logger.warning("event=photoshoot_session_runtime_unavailable error_type=%s",type(error).__name__)
+                    target_assets=(repository.ordered_assets(creator_profile_id=creator_profile_id,customer_commerce_profile_id=profile.customer_commerce_profile_id,photoshoot_id=target_lifecycle.photoshoot_id) if target_lifecycle else ())
+                    action=engine.decide(customer_profile_id=profile.customer_commerce_profile_id,lifecycle=current_lifecycle,assets=assets,target_lifecycle=target_lifecycle,target_assets=target_assets,momentum_evidence=BuyingMomentumEvidence(purchases=int(progression_context.get('current_conversation_purchase_count') or (1 if congratulate_allowed else 0)),rapid_purchases=int(progression_context.get('rapid_purchase_count') or 0),explicit_more=bool(progression_context.get('explicit_request_for_more')),declined=bool(progression_context.get('offer_declined')),expired_intents=int(progression_context.get('expired_intent_count') or (1 if reason is CustomerSalesReasonCode.ACTIVE_OFFER_EXPIRED else 0)),consecutive_no_response=int(progression_context.get('consecutive_offer_no_response') or 0),active_intent=active is not None,cooldown=reason is CustomerSalesReasonCode.RECENT_PURCHASE_COOLDOWN,runtime_suppressed=decision in {CustomerSalesDecisionType.MANUAL_REVIEW}),active_purchase_intent_id=(active.purchase_intent_id if active else None),sales_session_id=progression_context.get('sales_session_id'),bridge_recent=bool(progression_context.get('recent_bridge_to_target')),selling_authorized=(sell_allowed or nudge_allowed or decision in {CustomerSalesDecisionType.CONTINUE_CONVERSATION,CustomerSalesDecisionType.NO_SALE}))
+                    if session_runtime_state is not None:
+                        if (
+                            session_runtime_state.status.value == "ACTIVE"
+                            and session_runtime_state.current_sales_role == "FREE_TEASER"
+                            and session_runtime_state.current_asset_id not in set(session_runtime_state.owned_asset_ids)
+                            and active is None
+                        ):
+                            from app.models.autonomous_sales_progression import NextSalesActionType
+                            action=replace(
+                                action,action=NextSalesActionType.CONTINUE_PHOTOSHOOT,
+                                selected_asset_id=session_runtime_state.current_asset_id,
+                                selected_offering_id=None,publication_id=None,delivery_url=None,
+                                reason="Execute the persisted Session Sales Strategy free teaser.",
+                                decision_trace=("active_lifecycle","session_runtime","free_teaser"),
+                            )
+                        action=replace(action,metadata={**dict(action.metadata),"sessionRuntime":session_runtime_state.to_context()})
+                    result=replace(result,next_sales_action=action)
+                    # The opportunity engine is authoritative for fulfillment.
+                    # Never leave the generic ranked Offering attached when it
+                    # differs from the deterministic current chapter.
+                    if action.selected_offering_id is not None and action.selected_offering_id != result.recommended_offering_id:
+                        selector_repository=getattr(self.offering_selector,'repository',None)
+                        getter=getattr(selector_repository,'get_candidate',None)
+                        selected=getter(action.selected_offering_id,creator_profile_id=creator_profile_id) if callable(getter) else None
+                        if selected:
+                            result=replace(result,recommended_offering_id=action.selected_offering_id,recommended_publication_id=action.publication_id,recommended_delivery_url=action.delivery_url,recommended_offering_title=str(selected.get('title') or ''),recommended_offering_short_description=selected.get('description'),recommended_offering_price_minor=selected.get('price_minor'),recommended_offering_currency=selected.get('currency'))
+                    claim=getattr(repository,'claim_action',None)
+                    if callable(claim):
+                        claimed=claim(action)
+                        if claimed and claimed.get('decision'):
+                            from app.models.autonomous_sales_progression import NextSalesAction
+                            action=NextSalesAction.from_context(claimed['decision'])
+                            result=replace(result,next_sales_action=action)
+            except Exception as error:
+                logger.warning("event=autonomous_sales_progression_unavailable error_type=%s",type(error).__name__)
         logger.info(
             "event=decision_generated decision=%s reason_code=%s buyer_stage=%s "
             "buyer_uuid=%s current_offer=%s purchase_state=%s timing_ms=%s",
@@ -755,6 +880,54 @@ class CustomerSalesBrainService:
             result.decision_metadata["evaluationMs"],
         )
         return result
+
+    def _apply_photoshoot_opportunity_policy(self, *, creator_profile_id,
+                                             customer_profile, context):
+        """Apply explicit bounded-opportunity decisions before Offering selection."""
+        profile_id = getattr(customer_profile, "customer_commerce_profile_id", None)
+        if profile_id is None:
+            return None
+        try:
+            service = self.photoshoot_lifecycles
+            if service is None:
+                from app.services.customer_photoshoot_lifecycle_service import CustomerPhotoshootLifecycleService
+                service = CustomerPhotoshootLifecycleService()
+            opportunity = service.active_for_customer(
+                creator_profile_id=creator_profile_id,
+                customer_commerce_profile_id=profile_id,
+            )
+            if opportunity is None:
+                return None
+            requested = context.get("requested_photoshoot_reference")
+            close_reason = next((reason for enabled, reason in (
+                (context.get("close_photoshoot_opportunity"), "SALES_BRAIN_CLOSE"),
+                (context.get("operator_close_photoshoot"), "OPERATOR_CLOSE"),
+                (context.get("customer_requests_different_content"), "CUSTOMER_REQUESTED_DIFFERENT_CONTENT"),
+                (context.get("stronger_opportunity_available"), "STRONGER_OPPORTUNITY"),
+                (requested and str(requested) != opportunity.photoshoot_id, "DIFFERENT_PHOTOSHOOT_REQUESTED"),
+                (int(context.get("consecutive_offer_no_response") or 0) >= self.config.photoshoot_objection_recovery_limit, "REPEATED_NON_RESPONSE"),
+            ) if enabled), None)
+            if close_reason:
+                return service.close_opportunity(opportunity, reason=close_reason)
+            if context.get("offer_declined") or context.get("photoshoot_objection"):
+                opportunity = service.enter_objection(opportunity, reason=str(context.get("objection_type") or "CUSTOMER_OBJECTION"))
+            if opportunity.status.value == "OBJECTION":
+                if context.get("objection_recovered") or context.get("explicit_request_for_more"):
+                    opportunity = service.attempt_recovery(
+                        opportunity, recovered=True,
+                        recovery_limit=self.config.photoshoot_objection_recovery_limit,
+                        reason="CUSTOMER_REENGAGED",
+                    )
+                elif context.get("objection_recovery_attempted") or context.get("objection_recovery_failed"):
+                    opportunity = service.attempt_recovery(
+                        opportunity, recovered=False,
+                        recovery_limit=self.config.photoshoot_objection_recovery_limit,
+                        reason="RECOVERY_DID_NOT_CONVERT",
+                    )
+            return opportunity
+        except Exception as error:
+            logger.warning("event=photoshoot_opportunity_policy_unavailable error_type=%s", type(error).__name__)
+            return None
 
     @staticmethod
     def _signal(signal):

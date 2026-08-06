@@ -71,6 +71,8 @@
 .publish-dialog__radios,.publish-dialog__actions { display:flex; flex-wrap:wrap; gap:.55rem; }
 .publish-dialog__radios label { display:flex; align-items:center; gap:.45rem; min-height:38px; padding:0 .75rem; border:1px solid var(--color-border); border-radius:8px; color:var(--color-text-secondary); font-size:.75rem; cursor:pointer; }
 .publish-dialog__radios label:has(input:checked) { border-color:var(--color-accent-border); background:var(--color-accent-surface); color:var(--color-text-primary); }
+.publish-dialog__x-accounts { display:flex; flex-wrap:wrap; gap:.55rem; margin-top:.7rem; padding-left:.2rem; }
+.publish-dialog__x-accounts label { display:flex; align-items:center; gap:.45rem; color:var(--color-text-secondary); font-size:.74rem; cursor:pointer; }
 .publish-dialog__captions { display:grid; gap:.8rem; margin-top:1rem; }
 .publish-dialog__captions>div { display:grid; gap:.4rem; }
 .publish-dialog__captions button { height:auto; min-height:38px; text-align:left; line-height:1.45; }

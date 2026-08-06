@@ -46,7 +46,8 @@ class CommerceSignalService:
     def __init__(
         self, *, repository=None, identity_repository=None,
         customer_service=None, purchase_intent_service=None,
-        purchase_intent_repository=None, client_factory=FanvueOfficialClient,
+        purchase_intent_repository=None, photoshoot_lifecycle_service=None,
+        client_factory=FanvueOfficialClient,
     ):
         self.repository = repository or CommerceSignalRepository()
         self.identities = identity_repository or TelegramIdentityRepository()
@@ -55,6 +56,10 @@ class CommerceSignalService:
         self.intent_repository = (
             purchase_intent_repository or PurchaseIntentRepository()
         )
+        if photoshoot_lifecycle_service is None:
+            from app.services.customer_photoshoot_lifecycle_service import CustomerPhotoshootLifecycleService
+            photoshoot_lifecycle_service = CustomerPhotoshootLifecycleService()
+        self.photoshoot_lifecycles = photoshoot_lifecycle_service
         self.client_factory = client_factory
 
     def process_webhook(self, event: dict) -> dict:
@@ -171,6 +176,7 @@ class CommerceSignalService:
                     or reconciliation["observed_transaction_id"]
                 ),
                 event_id=reconciliation["provider_event_id"],
+                customer_commerce_profile_id=customer.profile.customer_commerce_profile_id,
                 media_link_purchase=(
                     source.lower() in {"medialink", "media_link"}
                     or purchase_type.lower() in {"media", "medialink", "media_link"}
@@ -217,6 +223,7 @@ class CommerceSignalService:
         self, *, creator_profile_id: int, fanvue_account_id: int,
         buyer_uuid: UUID, amount_minor: int, payment_timestamp: datetime,
         transaction_id: str, payment_id: str, event_id: str,
+        customer_commerce_profile_id: UUID,
         media_link_purchase: bool,
     ) -> dict:
         if not media_link_purchase:
@@ -226,6 +233,21 @@ class CommerceSignalService:
             fanvue_account_id=fanvue_account_id,
             external_fanvue_user_uuid=buyer_uuid,
         )
+        previously_attributed = [
+            item for item in candidates
+            if item.provider_transaction_order_id == transaction_id
+            and item.status.value == "PURCHASED"
+            and item.attribution_result.value == "ATTRIBUTED"
+        ]
+        if len(previously_attributed) == 1:
+            lifecycle_result = self.photoshoot_lifecycles.synchronize_attributed_purchase(
+                intent=previously_attributed[0],
+                customer_commerce_profile_id=customer_commerce_profile_id,
+            )
+            return {
+                "state": "ATTRIBUTED", "candidateCount": 1,
+                "lifecycleSynchronized": lifecycle_result is not None,
+            }
         survivors = [
             item for item in candidates
             if item.expected_price_minor == amount_minor
@@ -251,6 +273,10 @@ class CommerceSignalService:
                     "and single-candidate match."
                 ),
             )
+            lifecycle_result = self.photoshoot_lifecycles.synchronize_attributed_purchase(
+                intent=purchased_intent,
+                customer_commerce_profile_id=customer_commerce_profile_id,
+            )
             observer = getattr(self.intents, "observe", None)
             if callable(observer):
                 observer(
@@ -262,7 +288,10 @@ class CommerceSignalService:
             logger.info(
                 "event=attributed purchase_intent_id=%s", item.purchase_intent_id
             )
-            return {"state": "ATTRIBUTED", "candidateCount": 1}
+            return {
+                "state": "ATTRIBUTED", "candidateCount": 1,
+                "lifecycleSynchronized": lifecycle_result is not None,
+            }
         reason = (
             "NO_HARD_MATCHING_CANDIDATE"
             if not survivors else "MULTIPLE_HARD_MATCHING_CANDIDATES"

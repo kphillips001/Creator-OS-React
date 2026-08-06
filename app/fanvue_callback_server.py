@@ -58,6 +58,7 @@ from app.api.commerce_learning import router as commerce_learning_router
 from app.api.recommendation_diagnostics import (
     router as recommendation_diagnostics_router,
 )
+from app.api.customer_photoshoot_lifecycles import router as customer_photoshoot_lifecycles_router
 from app.api.commerce_signals import router as commerce_signals_router
 from app.api.customer_sales_brain import router as customer_sales_brain_router
 from app.api.commercial_offering_selector import (
@@ -171,6 +172,7 @@ app.include_router(customer_commerce_router)
 app.include_router(purchase_intents_router)
 app.include_router(commerce_learning_router)
 app.include_router(recommendation_diagnostics_router)
+app.include_router(customer_photoshoot_lifecycles_router)
 app.include_router(commerce_signals_router)
 app.include_router(customer_sales_brain_router)
 app.include_router(commercial_offering_selector_router)

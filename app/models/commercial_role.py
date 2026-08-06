@@ -9,16 +9,20 @@ from typing import Any, Mapping
 from uuid import UUID
 
 
-COMMERCIAL_ROLE_VOCABULARY_VERSION = "1.0"
+COMMERCIAL_ROLE_VOCABULARY_VERSION = "2.0"
 
 
 class CommercialRole(str, Enum):
     DISCOVERY = "DISCOVERY"
+    TEASER = "TEASER"
     HERO = "HERO"
     CORE = "CORE"
+    CORE_SESSION = "CORE_SESSION"
     PROGRESSION = "PROGRESSION"
     PREMIUM = "PREMIUM"
     FINALE = "FINALE"
+    FINALE_IMAGE = "FINALE_IMAGE"
+    FINALE_VIDEO = "FINALE_VIDEO"
     BONUS = "BONUS"
 
 
@@ -74,4 +78,3 @@ class CommercialRoleHistoryEntry:
     actor_identifier: str | None
     reason: str | None
     created_at: datetime
-

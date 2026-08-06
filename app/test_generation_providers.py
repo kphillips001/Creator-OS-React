@@ -94,6 +94,15 @@ class NoReferenceLibraryService:
         return None
 
 
+class ChangingReferenceLibraryService:
+    def __init__(self):
+        self.calls = 0
+
+    def get_active_canonical_reference(self, *, creator_profile_id):
+        self.calls += 1
+        raise AssertionError("A frozen Photoshoot must not resolve the live active reference.")
+
+
 class GenerationProviderTests(unittest.TestCase):
     def make_engine(self, registry):
         temp_dir = tempfile.TemporaryDirectory()
@@ -158,6 +167,51 @@ class GenerationProviderTests(unittest.TestCase):
         payload = provider.build_payload(request)
         self.assertEqual(payload["images"], ["https://cdn.test/latest-shot.png"])
         self.assertNotIn("Image 1 is the canonical creator identity reference", payload["prompt"])
+
+    def test_frozen_photoshoot_identity_fails_closed_on_single_reference_provider(self):
+        provider = Seedream45Provider(api_key="test-key", http_client=FakeHttpClient())
+        request = self.make_engine(ProviderRegistry({provider.provider_id: provider})).create_request(
+            creator_profile={"id": 7}, prompt_plan=prompt_plan(), provider_id=provider.provider_id,
+            metadata={
+                "workflow_type": "photoshoot",
+                "canonical_identity_reference_asset_id": 55,
+                "canonical_identity_reference_path": "https://cdn.test/frozen.png",
+                "canonical_reference_image_url": "https://cdn.test/frozen.png",
+                "reference_image_url": "https://cdn.test/latest.png",
+                "photoshoot_continuity_reference_image_url": "https://cdn.test/latest.png",
+                "require_frozen_photoshoot_identity": True,
+            },
+        )
+        with self.assertRaisesRegex(GenerationProviderError, "fewer than two reference images"):
+            provider.build_payload(request)
+
+    def test_frozen_photoshoot_request_never_resolves_live_active_reference(self):
+        provider = Seedream50ProProvider(api_key="test-key", http_client=FakeHttpClient())
+        references = ChangingReferenceLibraryService()
+        temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(temp_dir.cleanup)
+        engine = GenerationEngineService(
+            storage_dir=temp_dir.name,
+            reference_library_service=references,
+            provider_registry=ProviderRegistry({provider.provider_id: provider}),
+        )
+        request = engine.create_request(
+            creator_profile={"id": 7}, prompt_plan=prompt_plan(), provider_id=provider.provider_id,
+            metadata={
+                "workflow_type": "photoshoot",
+                "canonical_identity_reference_asset_id": 55,
+                "canonical_identity_reference_path": "https://cdn.test/session-frozen.png",
+                "canonical_reference_image_url": "https://cdn.test/session-frozen.png",
+                "reference_image_url": "https://cdn.test/latest-approved.png",
+                "photoshoot_continuity_reference_image_url": "https://cdn.test/latest-approved.png",
+                "require_frozen_photoshoot_identity": True,
+            },
+        )
+        self.assertEqual(references.calls, 0)
+        self.assertEqual(request.reference_asset_id, 55)
+        self.assertEqual(provider.build_payload(request)["images"], [
+            "https://cdn.test/session-frozen.png", "https://cdn.test/latest-approved.png",
+        ])
 
     def test_seedream_5_non_photoshoot_prompt_has_no_photoshoot_reference_roles(self):
         provider = Seedream50ProProvider(api_key="test-key", http_client=FakeHttpClient())

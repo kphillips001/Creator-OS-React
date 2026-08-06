@@ -14,6 +14,8 @@ from app.services.commercial_offering_selector_service import (
 from app.services.commerce_recommendation_engine import (
     CommerceRecommendationEngine,
 )
+from app.models.autonomous_sales_progression import ProgressionAssetRole, SellableProgressionAsset
+from app.models.customer_photoshoot_lifecycle import CustomerPhotoshootLifecycle, CustomerPhotoshootStatus
 
 
 NOW = datetime(2026, 7, 26, tzinfo=timezone.utc)
@@ -343,6 +345,161 @@ def test_selector_consumes_persisted_learning_profile():
     assert affinity.evidence["sourceTypes"] == (
         "COMMERCE_LEARNING_PROFILE",
     )
+
+
+def test_selector_recommends_aggregated_photoshoot_experience():
+    single = candidate(
+        title="Sunday Porch",
+        photoshoot_identifier="photoshoot-sunday-porch",
+        photoshoot_intelligence={"themes": ["warm porch", "slow morning"]},
+        asset_ids=[42, 43],
+        published_at=NOW - timedelta(days=2),
+    )
+    alternate_fulfillment = candidate(
+        title="Sunday Porch Complete Set",
+        offering_type="PHOTOSET",
+        destinations=["PHOTOSET"],
+        photoshoot_identifier="photoshoot-sunday-porch",
+        photoshoot_identifiers=["photoshoot-sunday-porch"],
+        photoshoot_intelligence={"mood": ["intimate"]},
+        asset_ids=[42, 43, 44],
+        published_at=NOW,
+    )
+
+    result = select(Repository((single, alternate_fulfillment)))
+
+    experience = result.photoshoot_experience
+    assert experience is not None
+    assert experience.photoshoot_id == "photoshoot-sunday-porch"
+    assert experience.commercial_offering_id == result.offering_id
+    assert experience.commercial_offering_id == alternate_fulfillment["offering_id"]
+    assert experience.theme == "warm porch"
+    assert experience.supporting_asset_ids == (43, 44)
+    assert experience.photoshoot_intelligence["photoshoot_mood"] == ("intimate",)
+    assert experience.recommendation_score >= 0
+    assert "Selected" in experience.recommendation_explanation
+    assert result.recommendation_result.candidate_count == 1
+    assert result.selector_metadata["recommendationLayer"] == "PHOTOSHOOT_EXPERIENCE"
+    assert result.selector_metadata["fulfillmentOfferingId"] == str(result.offering_id)
+
+
+def test_selector_falls_back_to_offering_when_photoshoot_is_unresolved():
+    offering = candidate(title="Legacy Offering", photoshoot_identifier=None)
+
+    result = select(Repository((offering,)))
+
+    assert result.offering_id == offering["offering_id"]
+    assert result.photoshoot_experience is None
+    assert result.recommendation_result.candidate_count == 1
+    assert result.selector_metadata["recommendationLayer"] == (
+        "COMMERCIAL_OFFERING_FALLBACK"
+    )
+
+
+def test_active_photoshoot_blocks_every_other_commercial_recommendation():
+    customer_id = uuid4(); current = candidate(
+        photoshoot_identifier="active-shoot", asset_ids=[42],
+    ); other_photo = candidate(
+        photoshoot_identifier="other-shoot", asset_ids=[43],
+    ); standalone = candidate(asset_ids=[44], photoshoot_identifier=None)
+    active = CustomerPhotoshootLifecycle(
+        uuid4(), 2, customer_id, "active-shoot", CustomerPhotoshootStatus.ACTIVE,
+    )
+
+    class Opportunities:
+        def context_for_customer(self, **kwargs): return {"active-shoot": active}
+
+    class Progression:
+        def ordered_assets(self, **kwargs):
+            return (SellableProgressionAsset(
+                42, 1, ProgressionAssetRole.CORE_SESSION,
+                offering_id=current["offering_id"], publication_id=current["publication_id"],
+                delivery_url=current["delivery_url"],
+            ),)
+
+    customer = profile(); customer.customer_commerce_profile_id = customer_id
+    result = CommercialOfferingSelectorService(
+        repository=Repository((standalone, other_photo, current)),
+        clock=lambda: NOW, ownership_intelligence=Ownership(Repository()),
+        photoshoot_lifecycle_service=Opportunities(), progression_repository=Progression(),
+    ).select(
+        creator_profile_id=2, telegram_user_id=22, customer_profile=customer,
+        commerce_signal=None, active_purchase_intent=None,
+        conversation_context={"primary_sales_channel": "AI_CHAT"},
+    )
+    assert result.offering_id == current["offering_id"]
+
+
+def test_photoshoot_teaser_can_never_be_selected_as_a_paid_offering():
+    teaser = candidate(
+        photoshoot_identifier="protected-shoot",
+        asset_content_types=["teaser"],
+    )
+    result = select(Repository((teaser,)))
+    assert result.offering_id is None
+    assert "PROTECTED_PHOTOSHOOT_TEASER_NOT_SELLABLE" in result.evaluations[0].exclusion_reasons
+
+
+def test_objection_stage_blocks_all_commercial_recommendations_during_recovery():
+    customer_id = uuid4(); protected = candidate(photoshoot_identifier="active-shoot")
+    standalone = candidate(asset_ids=[44], photoshoot_identifier=None)
+    objection = CustomerPhotoshootLifecycle(uuid4(), 2, customer_id, "active-shoot", CustomerPhotoshootStatus.OBJECTION)
+    class Opportunities:
+        def context_for_customer(self, **kwargs): return {"active-shoot": objection}
+    customer = profile(); customer.customer_commerce_profile_id = customer_id
+    result = CommercialOfferingSelectorService(
+        repository=Repository((protected, standalone)), clock=lambda: NOW,
+        ownership_intelligence=Ownership(Repository()), photoshoot_lifecycle_service=Opportunities(),
+    ).select(creator_profile_id=2, telegram_user_id=22, customer_profile=customer,
+             commerce_signal=None, active_purchase_intent=None,
+             conversation_context={"primary_sales_channel": "AI_CHAT"})
+    assert result.offering_id is None
+
+
+@pytest.mark.parametrize("status", [
+    CustomerPhotoshootStatus.CLOSED,
+    CustomerPhotoshootStatus.COMPLETED,
+    CustomerPhotoshootStatus.DECLINED,
+])
+def test_terminal_photoshoot_is_not_automatically_resumed(status):
+    customer_id = uuid4(); historical = candidate(photoshoot_identifier="old-shoot")
+    available = candidate(asset_ids=[77], photoshoot_identifier=None)
+    terminal = CustomerPhotoshootLifecycle(uuid4(), 2, customer_id, "old-shoot", status)
+    class Opportunities:
+        def context_for_customer(self, **kwargs): return {"old-shoot": terminal}
+    customer = profile(); customer.customer_commerce_profile_id = customer_id
+    result = CommercialOfferingSelectorService(
+        repository=Repository((historical, available)), clock=lambda: NOW,
+        ownership_intelligence=Ownership(Repository()),
+        photoshoot_lifecycle_service=Opportunities(),
+    ).select(
+        creator_profile_id=2, telegram_user_id=22, customer_profile=customer,
+        commerce_signal=None, active_purchase_intent=None,
+        conversation_context={"primary_sales_channel": "AI_CHAT"},
+    )
+    assert result.offering_id == available["offering_id"]
+
+
+@pytest.mark.parametrize("available", [
+    candidate(asset_ids=[81], photoshoot_identifier="new-shoot"),
+    candidate(asset_ids=[82], photoshoot_identifier=None),
+    candidate(offering_type="VIDEO", asset_ids=[83], photoshoot_identifier=None),
+    candidate(offering_type="BUNDLE", asset_ids=[84, 85], destinations=["BUNDLE", "BUNDLE"],
+              photoshoot_identifier="bundle-shoot", photoshoot_identifiers=["bundle-shoot"]),
+])
+def test_closed_opportunity_releases_sales_brain_to_every_commercial_type(available):
+    customer_id = uuid4(); old = candidate(photoshoot_identifier="old-shoot")
+    closed = CustomerPhotoshootLifecycle(uuid4(), 2, customer_id, "old-shoot", CustomerPhotoshootStatus.CLOSED)
+    class Opportunities:
+        def context_for_customer(self, **kwargs): return {"old-shoot": closed}
+    customer = profile(); customer.customer_commerce_profile_id = customer_id
+    result = CommercialOfferingSelectorService(
+        repository=Repository((old, available)), clock=lambda: NOW,
+        ownership_intelligence=Ownership(Repository()), photoshoot_lifecycle_service=Opportunities(),
+    ).select(creator_profile_id=2, telegram_user_id=22, customer_profile=customer,
+             commerce_signal=None, active_purchase_intent=None,
+             conversation_context={"primary_sales_channel": "AI_CHAT"})
+    assert result.offering_id == available["offering_id"]
 
 
 def test_no_eligible_offering_exposes_filtering_summary():

@@ -31,6 +31,17 @@ class AsyncRecordingTextSender:
         self.calls.append({"chat_id": chat_id, "message_text": message_text})
 
 
+class AsyncRecordingAssetSender:
+    def __init__(self):
+        self.calls = []
+
+    async def send_asset(self, *, chat_id, asset_path, message_text):
+        self.calls.append({
+            "chat_id": chat_id, "asset_path": asset_path, "message_text": message_text,
+        })
+        return 778
+
+
 class TelegramDeliveryExecutorTests(unittest.TestCase):
     def test_execute_defers_runtime_transport_for_normalized_payload(self):
         executor = TelegramDeliveryExecutor(global_safety_service=AllowingSafetyService())
@@ -139,6 +150,26 @@ class TelegramDeliveryExecutorTests(unittest.TestCase):
             sender.calls,
             [{"chat_id": 123456789, "message_text": "Async brain result"}],
         )
+
+    def test_execute_async_sends_asset_with_conversation_as_caption(self):
+        async def run():
+            sender = AsyncRecordingAssetSender()
+            executor = TelegramDeliveryExecutor(global_safety_service=AllowingSafetyService())
+            result = await executor.execute_async(
+                TelegramDeliveryPayload(
+                    delivery_type="FREE", message_text="A little preview for you",
+                    asset_path="C:/vault/teaser.jpg", delivery_method="free_asset",
+                ),
+                context={"chat_id": 123456789, "transport": sender},
+            )
+            return result, sender
+
+        result, sender = asyncio.run(run())
+        self.assertTrue(result.executed)
+        self.assertEqual(result.metadata["execution_state"], "asset_sent")
+        self.assertEqual(result.metadata["telegram_message_id"], 778)
+        self.assertEqual(sender.calls[0]["asset_path"], "C:/vault/teaser.jpg")
+        self.assertEqual(sender.calls[0]["message_text"], "A little preview for you")
 
     def test_execute_preserves_blocked_and_no_delivery_states(self):
         executor = TelegramDeliveryExecutor()

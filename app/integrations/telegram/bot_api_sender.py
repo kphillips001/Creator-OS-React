@@ -1,6 +1,7 @@
 """Minimal private-chat, plain-text Telegram Bot API sender."""
 
 import logging
+from pathlib import Path
 from collections.abc import Mapping
 from typing import Any
 
@@ -88,6 +89,31 @@ class TelegramBotApiSender:
             raise TelegramOutboundSendError(
                 "Telegram rejected the sendMessage request."
             )
+
+    def send_asset(
+        self, *, chat_id: int, asset_path: str, message_text: str = "",
+    ) -> int | None:
+        self._validate_private_chat_id(chat_id)
+        path = Path(str(asset_path or ""))
+        if not path.is_file():
+            raise ValueError("asset_path must reference an existing file")
+        endpoint = self._endpoint.replace("/sendMessage", "/sendPhoto")
+        try:
+            with path.open("rb") as media:
+                response = self._session.post(
+                    endpoint,
+                    data={"chat_id": chat_id, "caption": message_text.strip()},
+                    files={"photo": (path.name, media)},
+                    timeout=self._timeout_seconds,
+                )
+            payload = response.json()
+            response.raise_for_status()
+        except Exception:
+            raise TelegramOutboundSendError("Telegram sendPhoto request failed.") from None
+        if not isinstance(payload, Mapping) or payload.get("ok") is not True:
+            raise TelegramOutboundSendError("Telegram rejected the Asset send request.")
+        message_id = (payload.get("result") or {}).get("message_id")
+        return message_id if isinstance(message_id, int) else None
 
     @staticmethod
     def _validate_private_chat_id(chat_id: int) -> None:

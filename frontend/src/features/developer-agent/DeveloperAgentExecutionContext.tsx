@@ -35,6 +35,7 @@ export type DeveloperExecutionReport = {
   tests: unknown[] | string;
   validation: Record<string, unknown>;
   remainingWarnings: string[];
+  telemetryDegraded?: boolean;
   commitCreated: boolean;
   commitHash: string | null;
   executionDurationMs: number;

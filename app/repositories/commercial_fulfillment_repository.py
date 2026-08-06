@@ -99,6 +99,7 @@ class CommercialFulfillmentRepository:
             offering.price_minor,offering.currency,offering.hero_asset_id,
             offering.status AS offering_status,offering.created_at,
             array_agg(member.asset_id ORDER BY member.position) AS asset_ids,
+            array_agg(member_asset.content_type ORDER BY member.position) AS asset_content_types,
             array_agg(destination.destination ORDER BY member.position) AS destinations,
             (
                 SELECT COALESCE(jsonb_agg(

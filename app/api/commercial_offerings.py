@@ -34,6 +34,16 @@ class UpdateOfferingPricingRequest(BaseModel):
     currency: str = "USD"
 
 
+class CreatePhotoshootOfferRequest(BaseModel):
+    offeringType: str
+    title: str
+    description: str | None = None
+    assetIds: list[int] = Field(min_length=1)
+    coverAssetId: int | None = None
+    priceMinor: int
+    primarySalesChannel: str
+
+
 def _service() -> CommercialOfferingService:
     return CommercialOfferingService()
 
@@ -57,7 +67,58 @@ def _payload(offering, *, include_assets=True):
         ] if include_assets else [],
         "createdAt": offering.created_at.isoformat(),
         "updatedAt": offering.updated_at.isoformat(),
+        "sourcePhotoshootDeliverableId": (
+            str(offering.source_photoshoot_deliverable_id)
+            if offering.source_photoshoot_deliverable_id else None
+        ),
     }
+
+
+@router.get("/photoshoots/{deliverable_id}/prepare")
+def prepare_photoshoot_offer(deliverable_id: UUID):
+    try:
+        prepared = _service().prepare_photoshoot(
+            deliverable_id, creator_profile_id=int(_creator_profile()["id"])
+        )
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Photoshoot not found.")
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    return {
+        "deliverableId": prepared["deliverable_id"],
+        "title": prepared["title"],
+        "description": prepared["description"],
+        "heroAssetId": prepared["hero_asset_id"],
+        "coverAssetId": prepared["cover_asset_id"],
+        "supportedChannels": ["AI_CHAT", "TELEGRAM_WALL"],
+        "members": [
+            {"assetId": item["asset_id"], "shotOrder": item["shot_order"], "imageUrl": item["image_url"]}
+            for item in prepared["members"]
+        ],
+    }
+
+
+@router.post("/photoshoots/{deliverable_id}", status_code=201)
+def create_photoshoot_offer(deliverable_id: UUID, request: CreatePhotoshootOfferRequest):
+    try:
+        offering = _service().create_from_photoshoot(
+            deliverable_id=deliverable_id,
+            creator_profile_id=int(_creator_profile()["id"]),
+            offering_type=request.offeringType,
+            title=request.title,
+            description=request.description,
+            asset_ids=request.assetIds,
+            cover_asset_id=request.coverAssetId,
+            price_minor=request.priceMinor,
+            primary_sales_channel=request.primarySalesChannel,
+        )
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Photoshoot not found.")
+    except CommercialOfferingBusinessError as error:
+        raise HTTPException(status_code=409, detail={"code": error.code, "message": str(error)}) from error
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    return _payload(offering)
 
 
 @router.get("")

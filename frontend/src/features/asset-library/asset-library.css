@@ -43,6 +43,7 @@
   color: var(--color-text-primary);
   box-shadow: 0 12px 34px #0002;
   transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+  text-decoration: none;
 }
 .asset-type-card:hover {
   transform: translateY(-3px);
@@ -62,6 +63,9 @@
   border-radius: 16px;
   background: #26202f;
   color: #d6b7ff;
+}
+.asset-type-card__icon--emoji {
+  font-size: 2rem;
 }
 .asset-type-card > span:last-child {
   display: grid;
@@ -201,7 +205,6 @@
 .asset-card__image img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
   background: #090a0d;
 }
 
@@ -236,6 +239,9 @@
 .asset-card__photoshoot span {
   color: var(--color-text-secondary);
   font-size: 0.75rem;
+}
+.asset-card__photoshoot .session-selling-badge {
+  justify-self: center;
 }
 .asset-card__summary > span {
   display: grid;
@@ -341,7 +347,6 @@
 .asset-preview img {
   max-width: 100%;
   max-height: 82vh;
-  object-fit: contain;
 }
 .asset-preview p {
   margin: 0.5rem;
@@ -378,3 +383,34 @@
     height: auto;
   }
 }
+
+.session-selling-badge { width:max-content; padding:4px 8px; border:1px solid var(--color-border-subtle); border-radius:999px; color:var(--color-text-secondary); font-size:.68rem; font-style:normal; font-weight:700; letter-spacing:.03em; text-transform:uppercase; }
+.session-selling-badge--ready { border-color:var(--color-success); color:var(--color-success); }
+.session-selling-badge--preparing { border-color:var(--color-accent); color:var(--color-accent); }
+.session-selling-badge--needs_attention { border-color:var(--color-danger); color:var(--color-danger); }
+.session-selling-progress { display:grid; gap:10px; padding:14px; border:1px solid var(--color-border-subtle); border-radius:var(--radius-md); background:var(--color-surface-sunken); }
+.session-selling-progress>div { display:flex; justify-content:space-between; gap:12px; color:var(--color-text-secondary); }
+.session-selling-progress progress { width:100%; height:8px; accent-color:var(--color-accent); }
+.session-selling-progress ul { display:grid; gap:6px; margin:0; padding:0; list-style:none; }
+.session-selling-progress li { display:flex; align-items:center; gap:8px; color:var(--color-text-muted); font-size:.78rem; }
+.session-selling-progress li.is-complete { color:var(--color-success); }
+.session-selling-progress li.is-failed { color:var(--color-danger); }
+.session-selling-failures { display:grid; gap:6px; }
+.session-selling-failures p { display:grid; gap:2px; margin:0; padding:10px 12px; border:1px solid var(--color-danger); border-radius:var(--radius-md); color:var(--color-danger); }
+.session-selling-failures span { color:var(--color-text-secondary); font-size:.78rem; }
+.sale-preparation-dialog { position:fixed; inset:0; z-index:90; display:grid; place-items:center; padding:24px; background:rgb(3 7 18 / 78%); backdrop-filter:blur(8px); }
+.sale-preparation-dialog>div { width:min(620px,100%); max-height:90vh; overflow:auto; display:grid; gap:16px; padding:24px; border:1px solid var(--color-border-subtle); border-radius:var(--radius-lg); background:var(--color-surface-raised); }
+.sale-preparation-dialog header,.sale-preparation-dialog footer { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.sale-preparation-dialog h2 { margin:2px 0 0; }
+.sale-preparation-prices { display:grid; gap:8px; }
+.sale-preparation-step { display:grid; grid-template-columns:64px minmax(120px,1fr) auto; align-items:center; gap:12px; padding:10px 12px; border:1px solid var(--color-border-subtle); border-radius:var(--radius-md); }
+.sale-preparation-step>img { width:64px; height:76px; border-radius:var(--radius-sm); background:var(--color-surface-sunken); object-fit:contain; }
+.sale-preparation-step>p { grid-column:2/-1; margin:0; color:var(--color-text-muted); font-size:.76rem; }
+.sale-preparation-step__price { align-items:end; }
+.sale-preparation-step__price label { color:var(--color-text-muted); font-size:.72rem; }
+.sale-preparation-prices span { display:grid; gap:2px; }
+.sale-preparation-prices small { color:var(--color-text-muted); }
+.sale-preparation-prices input { width:110px; }
+.sale-preparation-prices em { display:flex; align-items:center; gap:5px; color:var(--color-success); font-style:normal; }
+.sale-preparation-error { color:var(--color-danger); }
+@media (max-width:600px) { .sale-preparation-step { grid-template-columns:54px 1fr; } .sale-preparation-step>img { width:54px; height:64px; } .sale-preparation-step>em,.sale-preparation-step__price { grid-column:2; justify-self:start; } }

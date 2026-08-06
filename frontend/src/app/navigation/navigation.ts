@@ -14,11 +14,9 @@ import {
   Send,
   Settings,
   Sparkles,
-  BriefcaseBusiness,
   Users,
   BadgeDollarSign,
   Activity,
-  Warehouse,
   ShoppingBasket,
   ShieldCheck,
   ScanSearch,
@@ -144,28 +142,16 @@ export const navigationGroups: NavigationGroup[] = [
     label: "Business",
     items: [
       {
-        label: "Commercial Administration",
-        path: "/commercial-administration",
-        icon: ShieldCheck,
-        description: "Operate the creator-scoped commercial platform from one supported workspace.",
+        label: "Overview",
+        path: "/home",
+        icon: CircleGauge,
+        description: "Operational priorities, opportunities, and evidence in one executive console.",
       },
       {
         label: "Commerce",
         path: "/commerce",
         icon: BadgeDollarSign,
         description: "Author, manage, and publish AI Chat commercial offerings.",
-      },
-      {
-        label: "Commerce Library",
-        path: "/business/commerce-library",
-        icon: BriefcaseBusiness,
-        description: "Review registered Business Assets and their commerce readiness.",
-      },
-      {
-        label: "Available Inventory",
-        path: "/inventory/available",
-        icon: Warehouse,
-        description: "Browse canonical, analyzed content that has not been commercially committed.",
       },
       {
         label: "Customers",
@@ -179,6 +165,11 @@ export const navigationGroups: NavigationGroup[] = [
         icon: BadgeDollarSign,
         description: "Review sales activity, recommendations, and commercial outcomes.",
       },
+    ],
+  },
+  {
+    label: "Advanced",
+    items: [
       {
         label: "Operations",
         path: "/business/operations",
@@ -186,10 +177,10 @@ export const navigationGroups: NavigationGroup[] = [
         description: "Monitor business workflows, fulfillment, and items needing attention.",
       },
       {
-        label: "Intelligence Center",
-        path: "/home",
-        icon: CircleGauge,
-        description: "Operational priorities, opportunities, and evidence in one executive console.",
+        label: "Commercial Administration",
+        path: "/commercial-administration",
+        icon: ShieldCheck,
+        description: "Operate the creator-scoped commercial platform from one supported workspace.",
       },
     ],
   },

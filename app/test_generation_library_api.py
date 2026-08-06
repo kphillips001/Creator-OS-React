@@ -148,13 +148,21 @@ def test_photoshoot_handoff_replaces_previous_seed_and_starts_selected(monkeypat
     queue.list_sessions.return_value = (previous_session,)
     queue.requests_for_session.return_value = (previous_request,)
     queue.start_studio_session_from_generated_image.return_value = (new_session, True)
+    canonical = SimpleNamespace(asset_id=55, asset=SimpleNamespace(original_path="C:/identity.png"))
     monkeypatch.setattr(api, "_creator_profile_id", lambda: 7)
     monkeypatch.setattr(api, "GenerationLibraryService", lambda: library)
     monkeypatch.setattr(api, "PhotoshootQueueService", lambda: queue)
+    monkeypatch.setattr(api, "ReferenceLibraryService", lambda: SimpleNamespace(
+        get_active_canonical_reference=lambda **_: canonical,
+    ))
     result = api.send_generation_to_photoshoot("image-2")
     queue.return_seed_request_to_library.assert_called_once()
     queue.cancel_session.assert_called_once_with("session-1")
     library.send_to_pending_photoshoot.assert_called_once_with("image-2")
+    queue.start_studio_session_from_generated_image.assert_called_once_with(
+        library.send_to_pending_photoshoot.return_value,
+        canonical_identity_reference={"asset_id": 55, "path": "C:/identity.png"},
+    )
     assert result["image_id"] == "image-2"
     assert result["redirect"] == "/content/photoshoot"
 

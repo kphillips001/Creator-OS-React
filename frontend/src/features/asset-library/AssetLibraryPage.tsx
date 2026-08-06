@@ -1,8 +1,11 @@
-import { ArrowLeft, BookOpen, Camera, ChevronLeft, ChevronRight, Image as ImageIcon, ImageOff, MoveRight, PackagePlus, Search, Trash2, Video, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { ArrowLeft, Camera, ChevronLeft, ChevronRight, Image as ImageIcon, ImageOff, MoveRight, PackagePlus, Search, ShoppingBag, Trash2, Video, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { PageHeader } from "../../shared/ui/PageHeader";
 import { LibraryActionButton, LibraryActionGroup } from "../../shared/ui/LibraryActionButton";
+import { ContainedMediaImage } from "../../shared/ui/ContainedMediaImage";
+import { PhotoshootViewer } from "../photoshoot-gallery/PhotoshootViewer";
+import { readinessBadge } from "./photoshootSalePreparationStatus";
 import type { AssetLibraryItem, AssetLibraryResponse } from "./types";
 import "./asset-library.css";
 
@@ -18,12 +21,11 @@ const originalImageUrl = (imageUrl: string | null) => imageUrl
   ?.replace(/\/thumbnail(?:\?.*)?$/, "/media") || null;
 
 type RegistrationResponse = { message?: string; detail?: string; error?: string };
-type AssetType = "images" | "photoshoots" | "stories" | "videos";
+type AssetType = "images" | "photoshoots" | "videos";
 
 const assetTypes = [
   { id: "images" as const, label: "Images", countLabel: "Assets", mediaType: "image", icon: ImageIcon },
   { id: "photoshoots" as const, label: "Photoshoots", countLabel: "Photoshoots", mediaType: "photoshoot", icon: Camera },
-  { id: "stories" as const, label: "Stories", countLabel: "Stories", mediaType: "story", icon: BookOpen },
   { id: "videos" as const, label: "Videos", countLabel: "Videos", mediaType: "video", icon: Video },
 ];
 
@@ -69,6 +71,8 @@ export function AssetLibraryPage() {
   const [error, setError] = useState("");
   const [selected, setSelected] = useState<AssetLibraryItem | null>(null);
   const [preview, setPreview] = useState<AssetLibraryItem | null>(null);
+  const [openPhotoshootId, setOpenPhotoshootId] = useState<string | null>(null);
+  const [initialPreparationDialog, setInitialPreparationDialog] = useState<"prepare" | "retry" | null>(null);
   const [version, setVersion] = useState(0);
   const [actionMessage, setActionMessage] = useState("");
   const [registeringId, setRegisteringId] = useState<string | null>(null);
@@ -180,7 +184,8 @@ export function AssetLibraryPage() {
   };
 
   const openAsset = (asset: AssetLibraryItem) => {
-    if (asset.itemKind === "registered_asset") void openDetails(asset);
+    if (asset.itemKind === "photoshoot" && asset.deliverableId) setOpenPhotoshootId(asset.deliverableId);
+    else if (asset.itemKind === "registered_asset") void openDetails(asset);
     else setPreview(asset);
   };
 
@@ -223,6 +228,20 @@ export function AssetLibraryPage() {
     return `${first}-${Math.min(first + data.assets.length - 1, data.total)} of ${data.total}`;
   }, [data]);
 
+  const synchronizeSessionSelling = useCallback((readiness: NonNullable<AssetLibraryItem["sessionSelling"]>) => {
+    setData((current) => ({
+      ...current,
+      assets: current.assets.map((asset) => asset.deliverableId === readiness.deliverableId
+        ? { ...asset, sessionSelling: readiness }
+        : asset),
+    }));
+  }, []);
+
+  if (openPhotoshootId) return <PhotoshootViewer deliverableId={openPhotoshootId} enableSessionSelling
+    initialSessionSellingDialog={initialPreparationDialog}
+    onSessionSellingChange={synchronizeSessionSelling}
+    onClose={() => { setOpenPhotoshootId(null); setInitialPreparationDialog(null); }} />;
+
   return <section className="asset-library-page">
     <PageHeader title="Asset Library" description="Curated generations and registered Creator Assets." />
 
@@ -233,6 +252,10 @@ export function AssetLibraryPage() {
           <span className="asset-type-card__icon"><item.icon size={34} /></span>
           <span><strong>{item.label}</strong><small>{countsLoading ? "Loading…" : countsError ? "Count unavailable" : `${counts[item.id]} ${item.countLabel}`}</small></span>
         </button>)}
+        <a className="asset-type-card" href="/library/bundles">
+          <span className="asset-type-card__icon asset-type-card__icon--emoji" aria-hidden="true">📦</span>
+          <span><strong>Bundles</strong><small>0 Bundles</small></span>
+        </a>
       </div>
     </section>}
 
@@ -255,10 +278,10 @@ export function AssetLibraryPage() {
       <div className="asset-library-grid">
         {data.assets.map((asset) => <article className={selected?.libraryItemId === asset.libraryItemId ? "asset-card asset-card--selected" : "asset-card"} key={asset.libraryItemId}>
           <button className="asset-card__image" disabled={!asset.mediaAvailable} onClick={() => openAsset(asset)} type="button" aria-label={`Open ${asset.itemKind === "photoshoot" ? "Photoshoot" : selectedAssetType?.label.slice(0, -1) || "Asset"}`}>
-            {asset.imageUrl ? <img alt={asset.itemKind === "photoshoot" ? asset.fileName || "Photoshoot" : `${selectedAssetType?.label.slice(0, -1) || "Asset"} preview`} loading="lazy" src={asset.imageUrl} /> : <span><ImageOff /><small>Media unavailable</small></span>}
+            {asset.imageUrl ? <ContainedMediaImage alt={asset.itemKind === "photoshoot" ? asset.fileName || "Photoshoot" : `${selectedAssetType?.label.slice(0, -1) || "Asset"} preview`} loading="lazy" src={asset.imageUrl} /> : <span><ImageOff /><small>Media unavailable</small></span>}
           </button>
           {asset.itemKind === "photoshoot" ? (
-            <div className="asset-card__photoshoot"><strong>{asset.fileName}</strong><span>Photoshoot • {asset.shotCount} Images</span></div>
+            <div className="asset-card__photoshoot"><strong>{asset.fileName}</strong><span>Photoshoot • {asset.shotCount} Images</span><em className={`session-selling-badge session-selling-badge--${(asset.sessionSelling?.status || "NOT_PREPARED").toLowerCase()}`}>{readinessBadge(asset.sessionSelling)}</em></div>
           ) : asset.itemKind === "registered_asset" ? (
             <div className="asset-card__summary">
               <span><strong>Asset #{asset.assetId}</strong>{asset.isCanonicalReference && <em>Canonical reference - Protected</em>}</span>
@@ -267,7 +290,16 @@ export function AssetLibraryPage() {
           ) : null}
           <LibraryActionGroup label="Asset actions">
             <LibraryActionButton icon={MoveRight} onClick={() => openAsset(asset)} tooltip="Move to Generation Library" />
-            <LibraryActionButton disabled={asset.itemKind === "registered_asset" || Boolean(registeringId)} icon={PackagePlus} onClick={() => void registerAsset(asset)} tooltip="Register Asset" />
+            {asset.itemKind === "photoshoot" && asset.deliverableId
+              ? asset.sessionSelling?.status === "READY"
+                ? <LibraryActionButton icon={ShoppingBag} onClick={() => setOpenPhotoshootId(asset.deliverableId!)} tooltip="View Published Assets" />
+                : asset.sessionSelling?.status === "PREPARING"
+                  ? <LibraryActionButton icon={ShoppingBag} onClick={() => setOpenPhotoshootId(asset.deliverableId!)} tooltip="View Preparation Progress" />
+                  : <LibraryActionButton icon={ShoppingBag} onClick={() => {
+                    setInitialPreparationDialog(asset.sessionSelling?.status === "NEEDS_ATTENTION" ? "retry" : "prepare");
+                    setOpenPhotoshootId(asset.deliverableId!);
+                  }} tooltip={asset.sessionSelling?.status === "NEEDS_ATTENTION" ? "Retry Failed Preparation" : "Prepare for Sale"} />
+              : <LibraryActionButton disabled={asset.itemKind === "registered_asset" || Boolean(registeringId)} icon={PackagePlus} onClick={() => void registerAsset(asset)} tooltip="Register Asset" />}
             <LibraryActionButton disabled={Boolean(archivingId)} icon={Trash2} onClick={() => void archiveAsset(asset)} tooltip="Delete" />
           </LibraryActionGroup>
         </article>)}
@@ -276,7 +308,7 @@ export function AssetLibraryPage() {
     </div>}
 
     {!loading && data.totalPages > 1 && <nav className="asset-pagination" aria-label="Asset Library pagination"><button disabled={data.page <= 1} onClick={() => setPage((current) => current - 1)} type="button"><ChevronLeft size={16} />Previous</button><span>Page {data.page} of {data.totalPages}</span><button disabled={data.page >= data.totalPages} onClick={() => setPage((current) => current + 1)} type="button">Next<ChevronRight size={16} /></button></nav>}
-    {preview && <div className="asset-preview" role="dialog" aria-modal="true" aria-label={`Asset ${preview.assetId} preview`} onMouseDown={(event) => { if (event.target === event.currentTarget) setPreview(null); }}><button aria-label="Close preview" onClick={() => setPreview(null)} type="button"><X /></button><div>{preview.imageUrl ? <img alt={`${preview.fileName || `Asset ${preview.assetId}`} preview`} src={originalImageUrl(preview.imageUrl) || preview.imageUrl} /> : <span>Media unavailable</span>}<p>Asset #{preview.assetId}</p></div></div>}
+    {preview && <div className="asset-preview" role="dialog" aria-modal="true" aria-label={`Asset ${preview.assetId} preview`} onMouseDown={(event) => { if (event.target === event.currentTarget) setPreview(null); }}><button aria-label="Close preview" onClick={() => setPreview(null)} type="button"><X /></button><div>{preview.imageUrl ? <ContainedMediaImage alt={`${preview.fileName || `Asset ${preview.assetId}`} preview`} src={originalImageUrl(preview.imageUrl) || preview.imageUrl} /> : <span>Media unavailable</span>}<p>Asset #{preview.assetId}</p></div></div>}
     </>}
   </section>;
 }

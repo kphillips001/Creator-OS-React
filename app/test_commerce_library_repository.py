@@ -70,7 +70,8 @@ def test_list_projection_is_creator_scoped_paginated_and_bounded():
     assert page_params[-2:] == (24, 24)
     assert "chat_commerce_registrations" in page_sql
     assert "business_asset_fulfillment_registrations" in page_sql
-    assert "intelligence_profile" not in page_sql
+    assert "photoshoot_intelligence_profiles" in page_sql
+    assert "commercial_title" in page_sql
     assert "profile_data" not in page_sql
     assert "SELECT d.*" not in page_sql
     assert "to_regclass" not in count_sql + page_sql

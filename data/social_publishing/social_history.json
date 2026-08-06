@@ -1,5 +1,156 @@
 [
   {
+    "history_id": "social_publish_history_d120f0b3b1834d18aa89fc28019e7632",
+    "queue_item_id": "social_queue_item_c541feac2cf34cc0b51f5a37d5fadb47",
+    "platform": "x",
+    "status": "posted",
+    "message": "Posted to X.",
+    "created_at": "2026-08-05T14:39:23.532793",
+    "metadata": {
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "caption_id": "caption_result_9a1b4f23300245d9964816d02b5500bb",
+      "provider_post_id": "2085012797407007131",
+      "provider_media_id": "2085012794852638720",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2085012797407007131"
+    }
+  },
+  {
+    "history_id": "social_publish_history_84c78f176fdf4c7cb26003267d4b05e7",
+    "queue_item_id": "social_queue_item_c541feac2cf34cc0b51f5a37d5fadb47",
+    "platform": "x",
+    "status": "caption_attached",
+    "message": "Caption Studio result attached to Social Queue item.",
+    "created_at": "2026-08-05T14:39:22.168089",
+    "metadata": {
+      "caption_id": "caption_result_9a1b4f23300245d9964816d02b5500bb"
+    }
+  },
+  {
+    "history_id": "social_publish_history_b567ad6bff0a45f4b6b68ffef04fff4c",
+    "queue_item_id": "social_queue_item_96b1dc56c6b3409bb75beaa25a0adee7",
+    "platform": "x",
+    "status": "posted",
+    "message": "Posted to X.",
+    "created_at": "2026-08-04T15:06:36.466332",
+    "metadata": {
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "caption_id": "caption_result_be45a06e86594f86a0256a5d2e9ef0e3",
+      "provider_post_id": "2084657258655314256",
+      "provider_media_id": "2084657255878742016",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2084657258655314256"
+    }
+  },
+  {
+    "history_id": "social_publish_history_349e31ebd53446fcb4fd9a4aa8220036",
+    "queue_item_id": "social_queue_item_96b1dc56c6b3409bb75beaa25a0adee7",
+    "platform": "x",
+    "status": "caption_attached",
+    "message": "Caption Studio result attached to Social Queue item.",
+    "created_at": "2026-08-04T15:06:35.059616",
+    "metadata": {
+      "caption_id": "caption_result_be45a06e86594f86a0256a5d2e9ef0e3"
+    }
+  },
+  {
+    "history_id": "social_publish_history_3f873d515f0f44189591ca769edb3741",
+    "queue_item_id": "social_queue_item_a1b0d76192a94b13b02324d97edc896d",
+    "platform": "x",
+    "status": "posted",
+    "message": "Posted to X.",
+    "created_at": "2026-08-03T16:15:13.287097",
+    "metadata": {
+      "account_name": "AvaBlackthorneX",
+      "telegram_post_to": null,
+      "caption_id": "caption_result_4399ffb33e6946ffafbfb6088c8e4978",
+      "provider_post_id": "2084312137900433559",
+      "provider_media_id": "2084312135169900544",
+      "provider_output_url": "https://x.com/AvaBlackthorneX/status/2084312137900433559"
+    }
+  },
+  {
+    "history_id": "social_publish_history_6ec19a0f298e4f7db0285637f251af1f",
+    "queue_item_id": "social_queue_item_a1b0d76192a94b13b02324d97edc896d",
+    "platform": "x",
+    "status": "caption_attached",
+    "message": "Caption Studio result attached to Social Queue item.",
+    "created_at": "2026-08-03T16:15:11.863866",
+    "metadata": {
+      "caption_id": "caption_result_4399ffb33e6946ffafbfb6088c8e4978"
+    }
+  },
+  {
+    "history_id": "social_publish_history_8607b921e8744ba79d5ca9e03d89c15d",
+    "queue_item_id": "social_queue_item_a1b0d76192a94b13b02324d97edc896d",
+    "platform": "x",
+    "status": "posted",
+    "message": "Posted to X.",
+    "created_at": "2026-08-03T16:15:06.540979",
+    "metadata": {
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "caption_id": "caption_result_4399ffb33e6946ffafbfb6088c8e4978",
+      "provider_post_id": "2084312109769167272",
+      "provider_media_id": "2084312107101618176",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2084312109769167272"
+    }
+  },
+  {
+    "history_id": "social_publish_history_0ece15079f4d4022bf038d909aff3284",
+    "queue_item_id": "social_queue_item_a1b0d76192a94b13b02324d97edc896d",
+    "platform": "x",
+    "status": "caption_attached",
+    "message": "Caption Studio result attached to Social Queue item.",
+    "created_at": "2026-08-03T16:15:05.188525",
+    "metadata": {
+      "caption_id": "caption_result_4399ffb33e6946ffafbfb6088c8e4978"
+    }
+  },
+  {
+    "history_id": "social_publish_history_89ce7681585b473fab61dfdf736d552a",
+    "queue_item_id": "social_queue_item_19f5709c6ae94b878f362e233fbd7386",
+    "platform": "x",
+    "status": "posted",
+    "message": "Posted to X.",
+    "created_at": "2026-08-02T17:11:00.020147",
+    "metadata": {
+      "account_name": "AvaBlackthorneX",
+      "telegram_post_to": null,
+      "caption_id": "caption_result_42424a994ffb41d0832384f1587ad700",
+      "provider_post_id": "2083963787355291656",
+      "provider_media_id": "2083963784662564865",
+      "provider_output_url": "https://x.com/AvaBlackthorneX/status/2083963787355291656"
+    }
+  },
+  {
+    "history_id": "social_publish_history_086a7908e3754a9bb6be6b0ecbf352b1",
+    "queue_item_id": "social_queue_item_19f5709c6ae94b878f362e233fbd7386",
+    "platform": "x",
+    "status": "caption_attached",
+    "message": "Caption Studio result attached to Social Queue item.",
+    "created_at": "2026-08-02T17:10:58.352177",
+    "metadata": {
+      "caption_id": "caption_result_42424a994ffb41d0832384f1587ad700"
+    }
+  },
+  {
+    "history_id": "social_publish_history_b3449e879bcb407fa313a9990ce382a6",
+    "queue_item_id": "social_queue_item_f55f964b53b8489b82ae13eed00e0ba4",
+    "platform": "x",
+    "status": "posted",
+    "message": "Posted to X.",
+    "created_at": "2026-08-02T16:35:02.458639",
+    "metadata": {
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "caption_id": null,
+      "provider_post_id": "2083954737674690872",
+      "provider_media_id": "2083954734990344192",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2083954737674690872"
+    }
+  },
+  {
     "history_id": "social_publish_history_6fa10b9a90cc4ef7b87859745f6b81f8",
     "queue_item_id": "social_queue_item_224b1a42949a4457b2c9323b90d0fd2d",
     "platform": "x",

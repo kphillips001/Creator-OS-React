@@ -94,6 +94,8 @@ class AvailableInventoryRepository:
             LEFT JOIN public.asset_intelligence_profiles intelligence ON intelligence.asset_id=asset.id
             LEFT JOIN public.photoshoot_commerce_deliverables photoshoot
               ON photoshoot.photoshoot_session_id={self._SESSION_SQL}
+            LEFT JOIN public.photoshoot_intelligence_profiles photoshoot_intelligence
+              ON photoshoot_intelligence.photoshoot_session_id=photoshoot.photoshoot_session_id
         """
         with self._connection_factory() as connection:
             with connection.cursor() as cursor:
@@ -117,8 +119,7 @@ class AvailableInventoryRepository:
                         destination.destination,
                         {self._SOURCE_WORKFLOW_SQL} AS source_workflow,
                         COALESCE(
-                            NULLIF(photoshoot.user_title, ''),
-                            photoshoot.ai_title,
+                            NULLIF(photoshoot_intelligence.commercial_title, ''),
                             photoshoot.display_name,
                             CASE WHEN {self._SESSION_SQL} IS NOT NULL THEN 'Photoshoot Studio' END,
                             'Canonical Asset'
@@ -168,7 +169,7 @@ class AvailableInventoryRepository:
                 COALESCE(asset.file_name, '') ILIKE %s
                 OR COALESCE(asset.short_safe_summary, '') ILIKE %s
                 OR COALESCE(intelligence.profile_data->>'short_description', '') ILIKE %s
-                OR COALESCE(photoshoot.user_title, photoshoot.ai_title, photoshoot.display_name, '') ILIKE %s
+                OR COALESCE(photoshoot_intelligence.commercial_title, photoshoot.display_name, '') ILIKE %s
             )""")
             params.extend([f"%{search.strip()}%"] * 4)
         if readiness:

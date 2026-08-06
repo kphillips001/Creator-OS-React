@@ -36,6 +36,7 @@ export function CommercialOfferingsPage() {
   const [executingId, setExecutingId] = useState("");
   const [reconcilingId, setReconcilingId] = useState("");
   const [fulfillment, setFulfillment] = useState<CommercialFulfillment | null>(null);
+  const createdOfferingId = params.get("offering_id");
 
   useEffect(() => {
     if (!detail || !publications.some((item) => item.status === "PUBLISHING")) return;
@@ -106,6 +107,12 @@ export function CommercialOfferingsPage() {
       setError(reason instanceof Error ? reason.message : "Unable to load Commercial Offering.");
     } finally { setDetailLoading(false); }
   };
+  useEffect(() => {
+    if (!createdOfferingId || detail?.offeringId === createdOfferingId) return;
+    const created = data.items.find((item) => item.offeringId === createdOfferingId);
+    if (created) void openDetail(created);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [createdOfferingId, data.items]);
   const createPublication = async () => {
     if (!detail || publications.some((item) => item.provider === "FANVUE")) return;
     setPublicationSaving(true); setError("");
@@ -167,11 +174,12 @@ export function CommercialOfferingsPage() {
   };
 
   return <section className="commercial-offerings-page">
-    <PageHeader title="Commercial Offerings" description="Define the content packages that may eventually be sold or distributed." />
+    <PageHeader title="Offers" description="Create and prepare content to publish or sell." />
+    {params.get("created") === "1" && <div className="commercial-offerings-state" role="status">Draft Offer created. It is ready for the existing publication flow.</div>}
     <div className="commercial-offerings-toolbar"><form onSubmit={(event) => { event.preventDefault(); setPage(1); setSearch(searchInput.trim()); }}><input aria-label="Search Commercial Offerings" onChange={(event) => setSearchInput(event.target.value)} placeholder="Search offerings" value={searchInput} /><button type="submit">Search</button></form><button onClick={openCreate} type="button"><Plus size={16} />Create Offering</button></div>
     {error && <div className="commercial-offerings-state commercial-offerings-state--error" role="alert"><AlertTriangle />{error}</div>}
     {loading && <div className="commercial-offerings-state">Loading Commercial Offerings…</div>}
-    {!loading && !error && data.items.length === 0 && <div className="commercial-offerings-state"><strong>No Commercial Offerings yet.</strong><span>Select Available Inventory assets to create the first offering.</span></div>}
+    {!loading && !error && data.items.length === 0 && <div className="commercial-offerings-state"><strong>No Offers yet.</strong><span>Create an Offer from a Photoshoot in the Asset Library.</span></div>}
     {!loading && data.items.length > 0 && <div className="commercial-offerings-grid" aria-label="Commercial Offerings">
       {data.items.map((item) => <article key={item.offeringId}><button aria-label={`View ${item.title}`} className="commercial-offering-card__hero" disabled={detailLoading} onClick={() => void openDetail(item)} type="button">{item.heroUrl ? <img alt="" loading="lazy" src={item.heroUrl} /> : <ImageOff />}</button><div><small>{label(item.offeringType)}</small><h2>{item.title}</h2>{item.description && <p>{item.description}</p>}<dl><div><dt>Primary channel</dt><dd>{label(item.primarySalesChannel)}</dd></div><div><dt>Assets</dt><dd>{item.assetCount}</dd></div><div><dt>Status</dt><dd>{label(item.status)}</dd></div><div><dt>Created</dt><dd>{new Date(item.createdAt).toLocaleDateString()}</dd></div></dl></div></article>)}
     </div>}

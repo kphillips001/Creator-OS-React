@@ -7,6 +7,7 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from app.database import get_db_connection
+from app.services.developer_agent_persistence_sanitizer import sanitize_developer_agent_value
 
 
 class AutonomousIssueResolutionRepository:
@@ -26,8 +27,11 @@ class AutonomousIssueResolutionRepository:
                ) VALUES(%s,%s,%s::JSONB,%s,%s,%s,%s,%s,%s,
                         CASE WHEN %s IN ('USER_ACTION_REQUIRED','ALREADY_RESOLVED')
                              THEN NOW() END) RETURNING *""",
-            (uuid4(), issue_identifier, json.dumps(issue_snapshot), decision,
-             decision_reason, required_action, destination_path,
+            (uuid4(), sanitize_developer_agent_value(issue_identifier),
+             json.dumps(sanitize_developer_agent_value(issue_snapshot)), decision,
+             sanitize_developer_agent_value(decision_reason),
+             sanitize_developer_agent_value(required_action),
+             sanitize_developer_agent_value(destination_path),
              validation_status, outcome, outcome),
         )
 
@@ -50,7 +54,8 @@ class AutonomousIssueResolutionRepository:
                    validation_status=%s,outcome=%s,
                    validation_evidence=%s::JSONB,resolved_at=NOW(),updated_at=NOW()
                WHERE resolution_id=%s RETURNING *""",
-            (validation_status, outcome, json.dumps(evidence), resolution_id),
+            (validation_status, outcome,
+             json.dumps(sanitize_developer_agent_value(evidence)), resolution_id),
         )
 
     def get(self, resolution_id: UUID) -> dict[str, Any] | None:

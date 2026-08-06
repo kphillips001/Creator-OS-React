@@ -15,6 +15,7 @@ router = APIRouter(
 
 
 def _payload(item: CustomerSalesDecision):
+    experience = item.recommended_photoshoot_experience
     return {
         "creatorProfileId": item.creator_profile_id,
         "fanvueAccountId": item.fanvue_account_id,
@@ -47,6 +48,36 @@ def _payload(item: CustomerSalesDecision):
             if item.recommended_publication_id else None
         ),
         "recommendedDeliveryUrl": item.recommended_delivery_url,
+        "recommendedPhotoshootExperience": (
+            {
+                "photoshootId": experience.photoshoot_id,
+                "title": experience.title,
+                "theme": experience.theme,
+                "description": experience.description,
+                "heroAssetId": experience.hero_asset_id,
+                "supportingAssetIds": list(experience.supporting_asset_ids),
+                "photoshootIntelligence": {
+                    key: list(values)
+                    for key, values in experience.photoshoot_intelligence.items()
+                },
+                "commercialOfferingId": str(experience.commercial_offering_id),
+                "commercialPublicationId": str(
+                    experience.commercial_publication_id
+                ),
+                "deliveryUrl": experience.delivery_url,
+                "recommendationScore": experience.recommendation_score,
+                "recommendationExplanation": (
+                    experience.recommendation_explanation
+                ),
+                "fulfillment": {
+                    "offeringType": experience.fulfillment_offering_type,
+                    "priceMinor": experience.fulfillment_price_minor,
+                    "currency": experience.fulfillment_currency,
+                },
+                "metadata": dict(experience.metadata),
+            }
+            if experience else None
+        ),
         "sellAllowed": item.sell_allowed,
         "nudgeAllowed": item.nudge_allowed,
         "upsellAllowed": item.upsell_allowed,
@@ -57,6 +88,10 @@ def _payload(item: CustomerSalesDecision):
         ),
         "evaluatedAt": item.evaluated_at.isoformat(),
         "decisionMetadata": dict(item.decision_metadata),
+        "nextSalesAction": (
+            item.next_sales_action.to_context()
+            if item.next_sales_action else None
+        ),
     }
 
 

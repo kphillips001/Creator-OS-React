@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { PhotoshootAutoRunRuntime, PlannedShot, PlanningMode } from "../types";
 
 const FRAME_COUNTS = [4, 6, 8, 10, 12] as const;
@@ -9,6 +10,7 @@ type Props = {
   runtime: PhotoshootAutoRunRuntime | null;
   planningMode: PlanningMode;
   planFrameCount: number;
+  targetShotCount: number;
   sessionPlan: PlannedShot[];
   sessionPlanIndex: number;
   sessionPlanApproved: boolean;
@@ -16,12 +18,14 @@ type Props = {
   directionApproved: boolean;
   onPlanningMode: (mode: PlanningMode) => void;
   onFrameCount: (count: number) => void;
+  onTargetShotCount: (count: number) => void;
   onGeneratePlan: () => void;
   onApprovePlan: () => void;
   onResumePlan: () => void;
 };
 
 export function SessionPlanPanel(props: Props) {
+  const [customTargetSelected, setCustomTargetSelected] = useState(![0, 5, 10, 15].includes(props.targetShotCount));
   const remaining = props.sessionPlan.length
     ? Math.max(0, props.sessionPlan.length - props.sessionPlanIndex)
     : 0;
@@ -39,7 +43,7 @@ export function SessionPlanPanel(props: Props) {
 
       <fieldset disabled={props.disabled || props.busy || props.autoRunning}>
         <legend>Planning style</legend>
-        <div className="photoshoot-segmented">
+        <div className="photoshoot-segmented segmented-control">
           <label>
             <input
               checked={props.planningMode === "frame_by_frame"}
@@ -60,6 +64,48 @@ export function SessionPlanPanel(props: Props) {
           </label>
         </div>
       </fieldset>
+
+      <div className="photoshoot-session-plan__controls photoshoot-session-plan__target">
+        <label>
+          <span>Target Photoshoot Length</span>
+          <select
+            aria-label="Target Photoshoot Length"
+            disabled={props.disabled || props.busy || props.autoRunning}
+            onChange={(event) => {
+              if (event.target.value === "custom") {
+                setCustomTargetSelected(true);
+                return;
+              }
+              setCustomTargetSelected(false);
+              props.onTargetShotCount(Number(event.target.value));
+            }}
+            value={customTargetSelected ? "custom" : String(props.targetShotCount)}
+          >
+            <option value="0">0 (No limit)</option>
+            <option value="5">Mini (5 shots)</option>
+            <option value="10">Standard (10 shots)</option>
+            <option value="15">Extended (15 shots)</option>
+            <option value="custom">Custom...</option>
+          </select>
+        </label>
+        {customTargetSelected && (
+          <label>
+            <span>Custom shot count</span>
+            <input
+              aria-label="Custom shot count"
+              disabled={props.disabled || props.busy || props.autoRunning}
+              max={100}
+              min={2}
+              onChange={(event) => {
+                const count = Number(event.target.value);
+                if (Number.isInteger(count) && count >= 2 && count <= 100) props.onTargetShotCount(count);
+              }}
+              type="number"
+              value={props.targetShotCount}
+            />
+          </label>
+        )}
+      </div>
 
       {props.planningMode === "frame_by_frame" ? (
         <p className="photoshoot-session-plan__hint">

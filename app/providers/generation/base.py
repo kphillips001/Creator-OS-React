@@ -195,7 +195,7 @@ Do not render a landing strip, stubble, trimmed pubic hair, shadow hair, peach f
         (10, "laughing naturally, caught mid-laugh, genuine happiness, spontaneous camera-roll moment"),
         (10, "looking away thoughtfully, soft smile while looking off-camera, candid private moment"),
         (10, "confident expression, confident eye contact, slight smile, relaxed self-assured presence"),
-        (10, "intimate bedroom eyes, soft seductive look, subtle intimacy, restrained private mood"),
+        (10, "teasing naughty seductive sexually enticing appealing salacious locked eye contact, fully open alert eyes, soft intimate private PPV mood"),
         (5, "parted lips, intimate expression, quiet close-camera connection"),
         (5, "playful lower-lip bite, amused eyes, casual teasing energy"),
     )
@@ -752,27 +752,39 @@ Do not render a landing strip, stubble, trimmed pubic hair, shadow hair, peach f
 
     def _provider_reference_images(self, request: GenerationRequest) -> list[str]:
         continuity = str(request.metadata.get("photoshoot_continuity_reference_image_url") or "").strip()
+        frozen_identity_required = bool(request.metadata.get("require_frozen_photoshoot_identity"))
         photoshoot_policies = {
             RenderPolicy.PHOTOSHOOT_SAFE,
             RenderPolicy.PHOTOSHOOT_PREMIUM,
             RenderPolicy.PHOTOSHOOT_EXPLICIT,
         }
+        canonical = str(
+            request.metadata.get("canonical_reference_image_url")
+            or request.reference_asset_path
+            or ""
+        ).strip()
+        if frozen_identity_required:
+            if self._render_policy(request) not in photoshoot_policies:
+                raise GenerationProviderError("Frozen Photoshoot identity references require a Photoshoot render policy.")
+            if self.capabilities.max_reference_images < 2:
+                raise GenerationProviderError(
+                    f"{self.provider_id} cannot enforce the Photoshoot identity lock because it supports fewer than two reference images."
+                )
+            if not canonical or not continuity:
+                raise GenerationProviderError("The frozen identity and evolving continuity references are both required.")
         if (
             self._render_policy(request) not in photoshoot_policies
             or self.capabilities.max_reference_images < 2
             or not continuity
         ):
             return [self._provider_reference_image(request)]
-        canonical = str(
-            request.metadata.get("canonical_reference_image_url")
-            or request.reference_asset_path
-            or ""
-        ).strip()
         ordered = []
         for reference in (canonical, continuity):
             if reference and reference not in ordered:
                 ordered.append(reference)
         if len(ordered) < 2:
+            if frozen_identity_required:
+                raise GenerationProviderError("The identity and continuity references must be distinct Photoshoot images.")
             return [self._provider_reference_image(request)]
         values = []
         for index, reference in enumerate(ordered[:self.capabilities.max_reference_images]):

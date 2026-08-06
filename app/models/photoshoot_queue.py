@@ -112,6 +112,15 @@ class CanonicalPhotoshootSeedSummary:
         return source[:match.start()].strip() if match else source.strip()
 
 
+def normalize_target_shot_count(value, *, default: int = 10) -> int:
+    """Return 0 for an open-ended Photoshoot, otherwise the supported fixed target."""
+    try:
+        count = int(default if value is None or value == "" else value)
+    except (TypeError, ValueError):
+        count = default
+    return 0 if count == 0 else max(2, min(100, count))
+
+
 @dataclass(frozen=True)
 class PhotoshootPlanningContext:
     """Creative-only continuity passed into canonical Photoshoot planning."""
@@ -126,6 +135,11 @@ class PhotoshootPlanningContext:
     makeup: str
     continuity_locks: Mapping[str, bool]
     progression_stage: int
+    current_shot: int
+    planning_shot: int
+    target_shot_count: int
+    remaining_shots: int
+    editorial_stage: str
     operator_guidance: str
     required_identity_instructions: str
     latest_approved_shot_reference: str
@@ -143,6 +157,12 @@ class PhotoshootPlanningContext:
             ("Makeup", self.makeup),
             ("Continuity locks", self._locks_text()),
             ("Progression stage", str(max(0, int(self.progression_stage)))),
+            ("Current shot", str(max(1, int(self.current_shot)))),
+            ("Planning shot", str(max(2, int(self.planning_shot)))),
+            ("Session length", "Open-ended; the operator decides when to finish" if self.target_shot_count == 0 else ""),
+            ("Target shots", str(max(2, int(self.target_shot_count))) if self.target_shot_count > 0 else ""),
+            ("Remaining shots", str(max(0, int(self.remaining_shots))) if self.target_shot_count > 0 else ""),
+            ("Editorial stage", self.editorial_stage),
             ("Operator guidance", self.operator_guidance),
             ("Required identity instructions", self.required_identity_instructions),
             ("Latest approved shot reference", self.latest_approved_shot_reference),
@@ -208,6 +228,7 @@ class PhotoshootSession:
     title: str
     reference_asset_id: int | None
     creative_mode: str
+    target_shot_count: int = 10
     status: str = "queued"
     provider_id: str = "future_provider"
     creator_notes: str | None = None

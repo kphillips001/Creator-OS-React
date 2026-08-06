@@ -63,6 +63,33 @@ def test_review_displays_seed_first_and_preserves_generated_order_and_descriptio
         ("image-1", 1, "One", "First"), ("image-2", 2, "Two", "Second")]
 
 
+def test_complete_implicitly_approves_every_shot_in_timeline_order():
+    service, queue, library, deliverables, _ = fixture()
+    row = {"deliverable_id": "set-1", "registration_state": "PHOTOSHOOT_COMPLETE"}
+    deliverables.repository.upsert_deliverable.return_value = row
+    deliverables.repository.get.return_value = row
+    deliverables.commercial_intelligence.generate.return_value = {
+        "commercial_title": "Shoot", "commercial_summary": "Description"
+    }
+    deliverables._completed_at.return_value = "now"
+
+    result = service.complete(creator_profile_id=2, session_id="session-1")
+
+    assert result["status"] == "archived"
+    assert result["selected_image_ids"] == ["image-1", "image-2"]
+    assert result["photoshoot_deliverable_id"] == "set-1"
+    library.finish_photoshoot_session.assert_called_once_with(
+        session_id="session-1",
+        approved_image_ids=("seed", "image-1", "image-2"),
+        session_title="Shoot",
+    )
+    deliverables.repository.replace_members.assert_called_once_with(
+        "session-1", ((90, 1), (91, 2), (92, 3)), 90
+    )
+    deliverables.repository.add_to_asset_library.assert_not_called()
+    queue.archive_curated_session.assert_called_once()
+
+
 @pytest.mark.parametrize("selected,staged", [(["image-2"], 1), ([], 0)])
 def test_declined_session_optionally_stages_images_and_creates_no_photoshoot(selected, staged):
     service, queue, library, deliverables, _ = fixture()
@@ -104,9 +131,10 @@ def test_approved_photoshoot_includes_seed_and_leaves_commitment_to_offering_cre
     service, queue, library, deliverables, destinations = fixture()
     row = {"deliverable_id": "set-1", "registration_state": "PHOTOSHOOT_COMPLETE"}
     deliverables.repository.upsert_deliverable.return_value = row
-    deliverables.repository.add_to_asset_library.return_value = {**row, "registration_state": "IN_ASSET_LIBRARY"}
-    deliverables.repository.get.return_value = {**row, "registration_state": "IN_ASSET_LIBRARY"}
-    deliverables.naming.generate.return_value = ("AI Shoot", "AI Description")
+    deliverables.repository.get.return_value = row
+    deliverables.commercial_intelligence.generate.return_value = {
+        "commercial_title": "AI Shoot", "commercial_summary": "AI Description"
+    }
     deliverables._completed_at.return_value = "now"
     result = service.confirm(creator_profile_id=2, session_id="session-1",
                              selected_image_ids=["image-2", "image-1"], photoshoot_decision="APPROVED")
@@ -121,7 +149,7 @@ def test_approved_photoshoot_includes_seed_and_leaves_commitment_to_offering_cre
         session_title="Shoot",
     )
     destinations.commit_to_destination.assert_not_called()
-    deliverables.repository.add_to_asset_library.assert_called_once_with("set-1", 2)
+    deliverables.repository.add_to_asset_library.assert_not_called()
     deliverables.workflows.enqueue.assert_not_called()
 
 
@@ -131,7 +159,9 @@ def test_approved_photoshoot_does_not_commercially_commit_selected_members():
     deliverables.repository.upsert_deliverable.return_value = row
     deliverables.repository.add_to_asset_library.return_value = row
     deliverables.repository.get.return_value = row
-    deliverables.naming.generate.return_value = ("Shoot", "Description")
+    deliverables.commercial_intelligence.generate.return_value = {
+        "commercial_title": "Shoot", "commercial_summary": "Description"
+    }
     deliverables._completed_at.return_value = "now"
 
     service.confirm(
@@ -158,7 +188,9 @@ def test_selected_photoshoot_images_feed_the_shared_learning_pipeline():
     deliverables.repository.upsert_deliverable.return_value = row
     deliverables.repository.add_to_asset_library.return_value = row
     deliverables.repository.get.return_value = row
-    deliverables.naming.generate.return_value = ("Shoot", "Description")
+    deliverables.commercial_intelligence.generate.return_value = {
+        "commercial_title": "Shoot", "commercial_summary": "Description"
+    }
     deliverables._completed_at.return_value = "now"
 
     service.confirm(
@@ -192,3 +224,17 @@ def test_invalid_candidate_is_rejected_before_finalization():
     deliverables.repository.replace_members.assert_not_called()
     destinations.commit_to_destination.assert_not_called()
     queue.archive_curated_session.assert_not_called()
+
+
+def test_finish_waits_for_successful_canonical_intelligence():
+    service, queue, _, deliverables, _ = fixture()
+    row = {"deliverable_id": "set-1", "registration_state": "PHOTOSHOOT_COMPLETE"}
+    deliverables.repository.upsert_deliverable.return_value = row
+    deliverables._completed_at.return_value = "now"
+    deliverables.run_canonical_intelligence.side_effect = RuntimeError("shot intelligence failed")
+
+    with pytest.raises(RuntimeError, match="shot intelligence failed"):
+        service.complete(creator_profile_id=2, session_id="session-1")
+
+    queue.archive_curated_session.assert_not_called()
+    deliverables.repository.set_completion_intelligence_status.assert_called_with("set-1", "FAILED")

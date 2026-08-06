@@ -1,5 +1,273 @@
 [
   {
+    "caption_result_id": "caption_result_9a1b4f23300245d9964816d02b5500bb",
+    "caption_request_id": "caption_request_f12f41f92cc64350842cbb1fce9193ea",
+    "session_id": "caption_session_dc742f4b55ff45dc9d09cda85d157ffe",
+    "platform": "x",
+    "variations": [
+      "Pool's empty and the water's calling... would you slide in next to me or just watch from the edge first? \ud83d\udc40\ud83d\udca6",
+      "Be honest... if you caught me like this by the water, what's the very first thing you'd say? \ud83e\udee3",
+      "Help me decide: stay right here soaking up the quiet or jump in and make some waves? \u2600\ufe0f\ud83c\udf0a",
+      "Late afternoon at the pool and I keep thinking about who I'd want sharing this spot with me... finish the sentence: you'd walk over and ___. \ud83d\udcad",
+      "Choose one: soft conversation by the edge or jumping straight into the deep end with me? \ud83d\ude0f\u2728",
+      "This kind of stillness feels dangerous in the best way. What would you do if you had the whole pool to ourselves right now? \ud83d\udca7",
+      "I'm in a teasing mood... tell me your move if you found me perched here waiting. No wrong answers \ud83d\ude0c\ud83d\udd25",
+      "Sun's still high but the vibe is pure night-out energy. Would you rather keep it quiet or turn this into something unforgettable? \ud83c\udf19",
+      "Quick poll for the group chat in my head: A) join me on the edge B) pull me into the water. Drop your letter \ud83d\udc47",
+      "Imagine the water's perfect and nobody else is around... what's the first thing you'd dare me to do? \ud83d\ude0f\ud83d\udca6"
+    ],
+    "selected_text": "I'm in a teasing mood... tell me your move if you found me perched here waiting. No wrong answers \ud83d\ude0c\ud83d\udd25",
+    "formatter_metadata": {
+      "provider_neutral": true,
+      "formatter": "CaptionStudioService",
+      "workflow": "x_engagement_publish",
+      "vision_primary": true,
+      "vision_provider": "grok",
+      "vision": {
+        "setting": "poolside edge with dark water behind",
+        "activity": "seated posing with hand near collarbone",
+        "time_of_day": "daytime with strong directional sunlight",
+        "location": "outdoor pool deck",
+        "wardrobe": "white plunging one-piece swimsuit",
+        "expression": "serious direct gaze, lips softly closed, seductive and calm",
+        "body_language": "torso twisted three-quarters toward camera, hand resting lightly at upper chest, confident posture",
+        "lighting": "bright natural sunlight creating highlights and soft shadows on skin",
+        "mood": "intimate, quietly confident, magnetic",
+        "environment": "dark still pool water, wooden deck edge, blurred greenery in background"
+      },
+      "themes": [
+        {
+          "theme": "Creator OS Engagement",
+          "persona": "creator_os_engagement",
+          "captions": [
+            "Pool's empty and the water's calling... would you slide in next to me or just watch from the edge first? \ud83d\udc40\ud83d\udca6",
+            "Be honest... if you caught me like this by the water, what's the very first thing you'd say? \ud83e\udee3",
+            "Help me decide: stay right here soaking up the quiet or jump in and make some waves? \u2600\ufe0f\ud83c\udf0a",
+            "Late afternoon at the pool and I keep thinking about who I'd want sharing this spot with me... finish the sentence: you'd walk over and ___. \ud83d\udcad",
+            "Choose one: soft conversation by the edge or jumping straight into the deep end with me? \ud83d\ude0f\u2728",
+            "This kind of stillness feels dangerous in the best way. What would you do if you had the whole pool to ourselves right now? \ud83d\udca7",
+            "I'm in a teasing mood... tell me your move if you found me perched here waiting. No wrong answers \ud83d\ude0c\ud83d\udd25",
+            "Sun's still high but the vibe is pure night-out energy. Would you rather keep it quiet or turn this into something unforgettable? \ud83c\udf19",
+            "Quick poll for the group chat in my head: A) join me on the edge B) pull me into the water. Drop your letter \ud83d\udc47",
+            "Imagine the water's perfect and nobody else is around... what's the first thing you'd dare me to do? \ud83d\ude0f\ud83d\udca6"
+          ]
+        }
+      ],
+      "personas": {
+        "creator_os_engagement": "Creator OS Engagement"
+      },
+      "engagement_goals": [
+        "replies",
+        "reposts",
+        "likes",
+        "profile visits",
+        "follows"
+      ]
+    },
+    "created_at": "2026-08-05T14:38:42.872265"
+  },
+  {
+    "caption_result_id": "caption_result_be45a06e86594f86a0256a5d2e9ef0e3",
+    "caption_request_id": "caption_request_6466740792104ddd858c2ce19384c312",
+    "session_id": "caption_session_61c5a9ebb5144d25bea4cd4ba6da2b3b",
+    "platform": "x",
+    "variations": [
+      "Caught me mid-splash \ud83d\udca6 Would you wade in with me or just watch from the shore?",
+      "This water feels perfect right now \u2600\ufe0f Be honest\u2026 are you more of a \u2018join me\u2019 or \u2018take the pic\u2019 person?",
+      "Golden hour + quiet lake = my favorite kind of trouble \ud83d\ude09 What\u2019s your move if you found me here?",
+      "Help me decide\u2026 stay right here in the shallows or swim out a little further? \ud83c\udfca",
+      "That look means I\u2019m about to splash you \ud83d\ude0f Finish the sentence: If I turned around like this you\u2019d\u2026",
+      "Quiet lake, warm water, zero plans \u2728 Would you rather float here all afternoon or explore the shore with me?",
+      "I swear the water gets warmer every time I glance back \ud83d\udc40 You coming in or what?",
+      "Choose one: A) lazy float next to me B) race me to that tree line C) just keep looking \ud83d\ude0c",
+      "Feeling a little too good in this moment \ud83d\udd25 Tell me you\u2019d actually jump in without hesitation\u2026",
+      "If this was our little secret spot \ud83c\udfde\ufe0f what would we be doing right now instead of just posing?"
+    ],
+    "selected_text": "I swear the water gets warmer every time I glance back \ud83d\udc40 You coming in or what?",
+    "formatter_metadata": {
+      "provider_neutral": true,
+      "formatter": "CaptionStudioService",
+      "workflow": "x_engagement_publish",
+      "vision_primary": true,
+      "vision_provider": "grok",
+      "vision": {
+        "setting": "shallow edge of a calm lake with forested shoreline in soft focus",
+        "activity": "standing in water, glancing back over her shoulder while lightly touching the surface",
+        "time_of_day": "late afternoon with warm golden sunlight",
+        "location": "quiet natural lake surrounded by trees",
+        "wardrobe": "olive-gray string bikini, top and bottoms with side ties",
+        "expression": "teasing closed-mouth smile, direct eye contact, playful mischief",
+        "body_language": "three-quarter turn toward camera, wet skin with droplets, relaxed hips, one hand skimming water",
+        "lighting": "warm natural sunlight creating highlights and soft shadows on wet skin",
+        "mood": "flirty, candid, sun-soaked, inviting",
+        "environment": "peaceful lake water with gentle ripples, distant green trees, serene outdoor setting"
+      },
+      "themes": [
+        {
+          "theme": "Creator OS Engagement",
+          "persona": "creator_os_engagement",
+          "captions": [
+            "Caught me mid-splash \ud83d\udca6 Would you wade in with me or just watch from the shore?",
+            "This water feels perfect right now \u2600\ufe0f Be honest\u2026 are you more of a \u2018join me\u2019 or \u2018take the pic\u2019 person?",
+            "Golden hour + quiet lake = my favorite kind of trouble \ud83d\ude09 What\u2019s your move if you found me here?",
+            "Help me decide\u2026 stay right here in the shallows or swim out a little further? \ud83c\udfca",
+            "That look means I\u2019m about to splash you \ud83d\ude0f Finish the sentence: If I turned around like this you\u2019d\u2026",
+            "Quiet lake, warm water, zero plans \u2728 Would you rather float here all afternoon or explore the shore with me?",
+            "I swear the water gets warmer every time I glance back \ud83d\udc40 You coming in or what?",
+            "Choose one: A) lazy float next to me B) race me to that tree line C) just keep looking \ud83d\ude0c",
+            "Feeling a little too good in this moment \ud83d\udd25 Tell me you\u2019d actually jump in without hesitation\u2026",
+            "If this was our little secret spot \ud83c\udfde\ufe0f what would we be doing right now instead of just posing?"
+          ]
+        }
+      ],
+      "personas": {
+        "creator_os_engagement": "Creator OS Engagement"
+      },
+      "engagement_goals": [
+        "replies",
+        "reposts",
+        "likes",
+        "profile visits",
+        "follows"
+      ]
+    },
+    "created_at": "2026-08-04T15:05:42.496694"
+  },
+  {
+    "caption_result_id": "caption_result_4399ffb33e6946ffafbfb6088c8e4978",
+    "caption_request_id": "caption_request_c94bb8f65cff4e37a62301e1a1d9f2b4",
+    "session_id": "caption_session_d8b852ccd44d4ba180dc190fbd7c9e9f",
+    "platform": "x",
+    "variations": [
+      "Caught me mid-lazy Sunday... would you stay in with me or drag me outside? \u2600\ufe0f",
+      "Be honest... does this little smile make you want to come closer or keep your distance? \ud83d\ude0c",
+      "I was just adjusting and then the light hit just right \u2728 Help me decide: cozy afternoon or spontaneous adventure?",
+      "If you walked in right now, what's the first thing you'd say to me?",
+      "Soft light, soft mood... finish this: 'I wouldn't leave the room until ___' \ud83d\ude09",
+      "Feeling playfully stuck between staying in bed all day or actually being productive. Vote: bed or world?",
+      "This is my 'I might cancel plans' face... would you let me get away with it? \ud83e\udd2d",
+      "Imagine you're here and I glance at you like this. What happens next?",
+      "Quiet little moment just for us... tell me one thing that would make your whole day better right now \ud83d\udcad",
+      "Okay real talk... am I giving cozy girlfriend energy or dangerous tease energy today? Choose carefully \ud83d\ude0c"
+    ],
+    "selected_text": "Quiet little moment just for us... tell me one thing that would make your whole day better right now \ud83d\udcad",
+    "formatter_metadata": {
+      "provider_neutral": true,
+      "formatter": "CaptionStudioService",
+      "workflow": "x_engagement_publish",
+      "vision_primary": true,
+      "vision_provider": "grok",
+      "vision": {
+        "setting": "bright indoor bedroom corner with plain light walls",
+        "activity": "standing and lightly holding the hem of her top while looking at the camera",
+        "time_of_day": "daytime with strong natural sunlight",
+        "location": "bedroom",
+        "wardrobe": "fitted white spaghetti-strap tank top and white high-waisted shorts",
+        "expression": "soft closed-mouth smile, direct and inviting gaze",
+        "body_language": "relaxed forward-facing stance, hands gently gripping the hem of her top, open and approachable posture",
+        "lighting": "strong natural window light creating highlights and soft shadows on skin",
+        "mood": "intimate, playful, candid, warm",
+        "environment": "simple bedroom with bed partially visible, window light, wooden side table, minimal clutter"
+      },
+      "themes": [
+        {
+          "theme": "Creator OS Engagement",
+          "persona": "creator_os_engagement",
+          "captions": [
+            "Caught me mid-lazy Sunday... would you stay in with me or drag me outside? \u2600\ufe0f",
+            "Be honest... does this little smile make you want to come closer or keep your distance? \ud83d\ude0c",
+            "I was just adjusting and then the light hit just right \u2728 Help me decide: cozy afternoon or spontaneous adventure?",
+            "If you walked in right now, what's the first thing you'd say to me?",
+            "Soft light, soft mood... finish this: 'I wouldn't leave the room until ___' \ud83d\ude09",
+            "Feeling playfully stuck between staying in bed all day or actually being productive. Vote: bed or world?",
+            "This is my 'I might cancel plans' face... would you let me get away with it? \ud83e\udd2d",
+            "Imagine you're here and I glance at you like this. What happens next?",
+            "Quiet little moment just for us... tell me one thing that would make your whole day better right now \ud83d\udcad",
+            "Okay real talk... am I giving cozy girlfriend energy or dangerous tease energy today? Choose carefully \ud83d\ude0c"
+          ]
+        }
+      ],
+      "personas": {
+        "creator_os_engagement": "Creator OS Engagement"
+      },
+      "engagement_goals": [
+        "replies",
+        "reposts",
+        "likes",
+        "profile visits",
+        "follows"
+      ]
+    },
+    "created_at": "2026-08-03T16:14:20.500562"
+  },
+  {
+    "caption_result_id": "caption_result_42424a994ffb41d0832384f1587ad700",
+    "caption_request_id": "caption_request_bea91b27752f4eeb9766d26c9cdee9fe",
+    "session_id": "caption_session_86e3f7f1254f44a08e683f26ee1848cd",
+    "platform": "x",
+    "variations": [
+      "Caught me mid-splash \ud83d\udca6 be honest\u2026 would you splash back or just sit there and watch?",
+      "Golden hour + cold water = my current mood \u2600\ufe0f would you join me or are you more of a lounge chair person?",
+      "I was trying to be cute and then this happened \ud83d\ude02 help me decide: keep the playful energy or go full chill?",
+      "If you walked up right now, what\u2019s the first thing you\u2019d say? \ud83d\udc40 no boring answers allowed",
+      "Finish the sentence: pool days are better when\u2026 \u2728",
+      "Would you rather: lazy float or full splash war with me? \ud83d\udca6 choose carefully",
+      "This laugh is 100% real and I dare you to make me laugh harder \ud83d\ude0f what\u2019s your best joke?",
+      "Be honest\u2026 does this look like the kind of evening you\u2019d cancel plans for? \ud83c\udf05",
+      "Someone tell me why pool water feels better at golden hour or is it just me? \u2600\ufe0f",
+      "If I handed you the next splash\u2026 would you take it or run? \ud83d\ude08"
+    ],
+    "selected_text": "If you walked up right now, what\u2019s the first thing you\u2019d say? \ud83d\udc40 no boring answers allowed",
+    "formatter_metadata": {
+      "provider_neutral": true,
+      "formatter": "CaptionStudioService",
+      "workflow": "x_engagement_publish",
+      "vision_primary": true,
+      "vision_provider": "grok",
+      "vision": {
+        "setting": "outdoor swimming pool with blue water and blurred greenery/background structures",
+        "activity": "laughing while mid-splash, hands pushing water forward",
+        "time_of_day": "golden hour / late afternoon with warm sunlight",
+        "location": "poolside outdoor area",
+        "wardrobe": "dark/olive slingshot-style bikini, wet fabric",
+        "expression": "wide open-mouthed joyful laugh, bright smile, playful eye contact toward camera",
+        "body_language": "leaning forward into the water, arms extended creating splash, wet skin and hair, energetic and candid posture",
+        "lighting": "warm golden sunlight highlighting wet skin, water droplets, and curves with soft natural shadows",
+        "mood": "playful, fun, candid, warm, energetic, intimate",
+        "environment": "sunny pool with rippling blue water, flying droplets, soft out-of-focus outdoor background"
+      },
+      "themes": [
+        {
+          "theme": "Creator OS Engagement",
+          "persona": "creator_os_engagement",
+          "captions": [
+            "Caught me mid-splash \ud83d\udca6 be honest\u2026 would you splash back or just sit there and watch?",
+            "Golden hour + cold water = my current mood \u2600\ufe0f would you join me or are you more of a lounge chair person?",
+            "I was trying to be cute and then this happened \ud83d\ude02 help me decide: keep the playful energy or go full chill?",
+            "If you walked up right now, what\u2019s the first thing you\u2019d say? \ud83d\udc40 no boring answers allowed",
+            "Finish the sentence: pool days are better when\u2026 \u2728",
+            "Would you rather: lazy float or full splash war with me? \ud83d\udca6 choose carefully",
+            "This laugh is 100% real and I dare you to make me laugh harder \ud83d\ude0f what\u2019s your best joke?",
+            "Be honest\u2026 does this look like the kind of evening you\u2019d cancel plans for? \ud83c\udf05",
+            "Someone tell me why pool water feels better at golden hour or is it just me? \u2600\ufe0f",
+            "If I handed you the next splash\u2026 would you take it or run? \ud83d\ude08"
+          ]
+        }
+      ],
+      "personas": {
+        "creator_os_engagement": "Creator OS Engagement"
+      },
+      "engagement_goals": [
+        "replies",
+        "reposts",
+        "likes",
+        "profile visits",
+        "follows"
+      ]
+    },
+    "created_at": "2026-08-02T17:10:06.855049"
+  },
+  {
     "caption_result_id": "caption_result_db577dde05314e3a92a60dcd5eac435a",
     "caption_request_id": "caption_request_b915e09bc74e4701aae25dba1aff1349",
     "session_id": "caption_session_a4ca6797dd044f47948c8968d1e22434",

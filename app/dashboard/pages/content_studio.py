@@ -4466,7 +4466,27 @@ def _render_generation_library(
                     st.rerun()
             if a3.button("📸", key=f"generation_library_photoshoot_{record.image_id}", help="Create Photoshoot", use_container_width=True):
                 photoshoot_record = generation_library.send_to_pending_photoshoot(record.image_id)
-                session, created = photoshoot_queue.start_studio_session_from_generated_image(photoshoot_record)
+                existing_session = next((
+                    item for item in photoshoot_queue.list_sessions(creator_profile_id=photoshoot_record.creator_profile_id)
+                    if item.status not in {"completed", "cancelled", "junked"}
+                    and str(dict(item.creative_continuity or {}).get("seed_image_id") or "") == photoshoot_record.image_id
+                ), None)
+                identity_reference = dict((existing_session.creative_continuity or {}).get("canonical_identity_reference") or {}) if existing_session else {}
+                if not identity_reference:
+                    canonical_identity = ReferenceLibraryService().get_active_canonical_reference(
+                        creator_profile_id=photoshoot_record.creator_profile_id,
+                    )
+                    if canonical_identity is None or not str(canonical_identity.asset.original_path or "").strip():
+                        st.error("An active canonical identity reference is required to start a Photoshoot.")
+                        st.stop()
+                    identity_reference = {
+                        "asset_id": canonical_identity.asset_id,
+                        "path": canonical_identity.asset.original_path,
+                    }
+                session, created = photoshoot_queue.start_studio_session_from_generated_image(
+                    photoshoot_record,
+                    canonical_identity_reference=identity_reference,
+                )
                 if created:
                     st.success("Added to Photoshoot Studio.")
                 else:

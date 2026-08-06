@@ -57,6 +57,103 @@ class Photoshoots:
         return "photoshoot-1" if len(asset_ids) >= 2 else None
 
 
+class PhotoshootOfferings(Offerings):
+    def __init__(self):
+        super().__init__(); self.by_key = {}
+    def get_by_idempotency_key(self, **values):
+        return self.by_key.get(values["idempotency_key"])
+    def create(self, **values):
+        result = super().create(**values)
+        object.__setattr__(result, "source_photoshoot_deliverable_id", values.get("source_photoshoot_deliverable_id"))
+        self.by_key[values["idempotency_key"]] = result
+        return result
+
+
+class CanonicalPhotoshoot:
+    def __init__(self, *, registration_state="IN_ASSET_LIBRARY", cross=None):
+        self.registration_state = registration_state
+        self.cross = cross or {}
+        self.members_list = (
+            {"asset_id": 3, "shot_order": 1},
+            {"asset_id": 7, "shot_order": 2},
+            {"asset_id": 9, "shot_order": 3},
+        )
+    def get(self, deliverable_id):
+        return {"deliverable_id": deliverable_id, "creator_profile_id": 7,
+                "photoshoot_session_id": "session-1", "display_name": "Fallback",
+                "display_title": None, "display_description": None,
+                "intelligence_profile": {}, "registration_state": self.registration_state,
+                "is_archived": False}
+    def members(self, _session_id): return self.members_list
+    def get_intelligence(self, _session_id):
+        return {"production_analysis": {"commercial_title": "Persisted title", "commercial_summary": "Persisted summary"},
+                "cross_validation": self.cross}
+
+
+def photoshoot_offer_service(*, cross=None, registration_state="IN_ASSET_LIBRARY"):
+    repository = PhotoshootOfferings(); photoshoots = CanonicalPhotoshoot(registration_state=registration_state, cross=cross)
+    service = CommercialOfferingService(
+        repository=repository, asset_repository=Assets({3: "image", 7: "image", 9: "image"}),
+        content_destinations=Destinations(), photoshoot_repository=photoshoots,
+    )
+    return service, repository
+
+
+def test_photoshoot_offer_preparation_uses_persisted_intelligence_order_and_recommendations():
+    service, _ = photoshoot_offer_service(cross={"hero_asset_id": 7, "cover_asset_id": 9})
+    prepared = service.prepare_photoshoot(uuid4(), creator_profile_id=7)
+    assert prepared["title"] == "Persisted title"
+    assert prepared["description"] == "Persisted summary"
+    assert prepared["asset_ids"] == (3, 7, 9)
+    assert prepared["hero_asset_id"] == 7
+    assert prepared["cover_asset_id"] == 9
+
+
+def test_photoshoot_offer_preparation_safely_falls_back_to_first_shot():
+    service, _ = photoshoot_offer_service(cross={"hero_asset_id": 999, "cover_asset_id": None})
+    prepared = service.prepare_photoshoot(uuid4(), creator_profile_id=7)
+    assert prepared["hero_asset_id"] == 3
+    assert prepared["cover_asset_id"] == 3
+
+
+def test_photoset_creation_preserves_subsequence_price_channel_without_manual_registration():
+    service, repository = photoshoot_offer_service()
+    deliverable_id = uuid4()
+    result = service.create_from_photoshoot(
+        deliverable_id=deliverable_id, creator_profile_id=7, offering_type="PHOTOSET",
+        title="Edited", description="Edited summary", asset_ids=[3, 9], cover_asset_id=9,
+        price_minor=1200, primary_sales_channel="TELEGRAM_WALL",
+    )
+    assert tuple(member.asset_id for member in result.assets) == (3, 9)
+    assert repository.created["price_minor"] == 1200
+    assert repository.created["primary_sales_channel"] is PrimarySalesChannel.TELEGRAM_WALL
+
+
+def test_single_image_and_repeated_submission_are_idempotent():
+    service, repository = photoshoot_offer_service()
+    deliverable_id = uuid4()
+    values = dict(
+        deliverable_id=deliverable_id, creator_profile_id=7, offering_type="SINGLE_IMAGE",
+        title="Selected shot", description=None, asset_ids=[7], cover_asset_id=None,
+        price_minor=500, primary_sales_channel="AI_CHAT",
+    )
+    first = service.create_from_photoshoot(**values)
+    second = service.create_from_photoshoot(**values)
+    assert second.offering_id == first.offering_id
+    assert len(repository.by_key) == 1
+
+
+def test_photoshoot_offer_rejects_reordering_and_noncanonical_assets():
+    service, _ = photoshoot_offer_service(registration_state="REGISTERED")
+    common = dict(deliverable_id=uuid4(), creator_profile_id=7, offering_type="PHOTOSET",
+                  title="Set", description=None, cover_asset_id=3, price_minor=500,
+                  primary_sales_channel="AI_CHAT")
+    with pytest.raises(ValueError, match="preserve canonical"):
+        service.create_from_photoshoot(**common, asset_ids=[7, 3])
+    with pytest.raises(ValueError, match="approved images"):
+        service.create_from_photoshoot(**common, asset_ids=[3, 99])
+
+
 @pytest.mark.parametrize("offering_type,media", [
     ("SINGLE_IMAGE", {1: "image"}),
     ("PHOTOSET", {1: "image", 2: "image"}),
@@ -228,6 +325,13 @@ def test_repository_persists_order_and_prevents_duplicate_members_structurally()
     migration = open("migrations/forward/20260723_002_commercial_offerings_foundation.sql", encoding="utf-8").read()
     assert "PRIMARY KEY (offering_id, asset_id)" in migration
     assert "UNIQUE (offering_id, position)" in migration
+
+
+def test_photoshoot_source_migration_adds_stable_link_and_idempotency_constraint():
+    migration = open("migrations/forward/20260804_036_photoshoot_offering_sources.sql", encoding="utf-8").read()
+    assert "source_photoshoot_deliverable_id UUID" in migration
+    assert "REFERENCES public.photoshoot_commerce_deliverables(deliverable_id)" in migration
+    assert "creator_profile_id, idempotency_key" in migration
 
 
 class ApiService:

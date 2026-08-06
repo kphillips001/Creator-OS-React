@@ -166,6 +166,13 @@ class CommercialPublicationService:
             )
             if finalized is None:
                 raise ValueError("Commercial Publication LIVE finalization failed.")
+            if metadata.get("source_workflow") == "photoshoot_session_sale_preparation":
+                self.offerings.update_status(
+                    offering.offering_id,
+                    creator_profile_id=creator_profile_id,
+                    status=CommercialOfferingStatus.READY,
+                    connection=connection,
+                )
             return finalized
 
     def _commit_offering_assets(

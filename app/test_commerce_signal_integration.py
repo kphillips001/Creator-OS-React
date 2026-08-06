@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 from uuid import UUID, uuid4
 
@@ -165,6 +165,12 @@ class IntentRepository:
 
     def mark_purchased(self, item_id, **values):
         self.purchased.append((item_id, values))
+        item = next(item for item in self.items if item.purchase_intent_id == item_id)
+        return replace(
+            item, status=PurchaseIntentStatus.PURCHASED,
+            attribution_result=AttributionResult.ATTRIBUTED,
+            purchased_at=values["at"],
+        )
 
 
 class Intents:
@@ -177,6 +183,15 @@ class Intents:
 
     def mark_unknown(self, item_id, **values):
         self.unknown.append((item_id, values))
+
+
+class PhotoshootLifecycles:
+    def __init__(self):
+        self.calls = []
+
+    def synchronize_attributed_purchase(self, **values):
+        self.calls.append(values)
+        return object()
 
 
 def service(monkeypatch, candidates):
@@ -192,10 +207,12 @@ def service(monkeypatch, candidates):
         "app.services.commerce_signal_service.get_active_creator_profile",
         lambda value: {"id": 2},
     )
+    lifecycles = PhotoshootLifecycles()
     return CommerceSignalService(
         repository=reconciliation, identity_repository=Identities(),
         customer_service=customers, purchase_intent_service=intent_service,
-        purchase_intent_repository=intent_repository, client_factory=Client,
+        purchase_intent_repository=intent_repository,
+        photoshoot_lifecycle_service=lifecycles, client_factory=Client,
     ), reconciliation, customers, intent_service, intent_repository
 
 
@@ -220,6 +237,7 @@ def test_verified_earnings_updates_customer_and_attributes_one_hard_match(monkey
     assert customers.calls[0]["transaction_order_id"] == "order-1"
     assert len(intents.references) == 1
     assert len(intent_repository.purchased) == 1
+    assert len(integration.photoshoot_lifecycles.calls) == 1
     assert ledger.verified
 
     duplicate = integration.process_webhook({
@@ -240,6 +258,7 @@ def test_multiple_hard_matches_are_unknown_without_guessing(monkeypatch):
         amount_minor=999, payment_timestamp=NOW,
         transaction_id="order-1", payment_id="payment-1",
         event_id="event-1", media_link_purchase=True,
+        customer_commerce_profile_id=uuid4(),
     )
     assert result == {
         "state": "UNKNOWN",
@@ -248,6 +267,29 @@ def test_multiple_hard_matches_are_unknown_without_guessing(monkeypatch):
     }
     assert len(intents.unknown) == 2
     assert repository.purchased == []
+    assert integration.photoshoot_lifecycles.calls == []
+
+
+def test_retry_resynchronizes_already_attributed_purchase(monkeypatch):
+    candidate = replace(
+        purchase_intent(), status=PurchaseIntentStatus.PURCHASED,
+        attribution_result=AttributionResult.ATTRIBUTED,
+        provider_transaction_order_id="order-1", purchased_at=NOW,
+    )
+    integration, _, _, _, repository = service(monkeypatch, [candidate])
+
+    result = integration._attribute(
+        creator_profile_id=2, fanvue_account_id=7, buyer_uuid=BUYER,
+        amount_minor=999, payment_timestamp=NOW,
+        transaction_id="order-1", payment_id="payment-1",
+        event_id="event-1", media_link_purchase=True,
+        customer_commerce_profile_id=uuid4(),
+    )
+
+    assert result["state"] == "ATTRIBUTED"
+    assert result["lifecycleSynchronized"] is True
+    assert repository.purchased == []
+    assert len(integration.photoshoot_lifecycles.calls) == 1
 
 
 def test_creator_payment_id_converges_through_canonical_earnings(monkeypatch):

@@ -258,3 +258,7 @@
 .library-action-button:hover:not(:disabled) { transform:translateY(-1px); border-color:var(--color-accent-border); background:var(--color-accent-surface); }
 .library-action-button:active:not(:disabled) { transform:translateY(0); border-color:var(--color-accent-border); background:var(--color-accent-surface); }
 .library-action-button:disabled { opacity:.42; cursor:not-allowed; }
+.library-action-button--labeled { width:auto; padding:0 var(--space-3); gap:var(--space-2); white-space:nowrap; }
+.library-action-button--accent { border-color:var(--color-accent-border); background:var(--color-accent-surface); color:var(--color-accent); }
+.library-action-button--accent:hover:not(:disabled) { border-color:var(--color-accent); color:var(--color-accent); }
+.contained-media-image { object-fit:contain; }
