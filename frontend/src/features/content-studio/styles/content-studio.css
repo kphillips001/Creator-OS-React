@@ -1033,7 +1033,7 @@
   align-items: end;
   gap: var(--space-3);
 }
-.explicit-content__tabs button[aria-selected="true"] {
+.explicit-content__tabs button {
   border-color: var(--color-accent);
   color: var(--color-accent);
 }

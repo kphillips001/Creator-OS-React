@@ -185,12 +185,12 @@ class PhotoshootCurationService:
             completed_at=self.deliverables._completed_at(session), intelligence_status="PENDING", commerce_status="CURATED")
         try:
             self.deliverables.run_canonical_intelligence(session)
-        except Exception:
+        except Exception as error:
+            self.deliverables.repository.set_analysis_failure(
+                str(row["deliverable_id"]), str(error))
+        else:
             self.deliverables.repository.set_completion_intelligence_status(
-                str(row["deliverable_id"]), "FAILED")
-            raise
-        self.deliverables.repository.set_completion_intelligence_status(
-            str(row["deliverable_id"]), "READY")
+                str(row["deliverable_id"]), "READY")
         return self.deliverables.repository.get(str(row["deliverable_id"]))
 
     @classmethod

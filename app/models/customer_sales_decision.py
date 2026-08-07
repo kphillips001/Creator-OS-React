@@ -94,6 +94,7 @@ class CustomerSalesDecision:
     recommended_offering_currency: str | None = None
     recommended_photoshoot_experience: PhotoshootExperienceRecommendation | None = None
     next_sales_action: NextSalesAction | None = None
+    bundle_sales_context: Mapping[str, Any] | None = None
 
 
 def immutable_mapping(value: Mapping[str, Any] | None) -> Mapping[str, Any]:

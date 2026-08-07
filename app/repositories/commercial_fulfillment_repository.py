@@ -98,6 +98,12 @@ class CommercialFulfillmentRepository:
             offering.offering_type,offering.primary_sales_channel,
             offering.price_minor,offering.currency,offering.hero_asset_id,
             offering.status AS offering_status,offering.created_at,
+            offering.source_photoshoot_deliverable_id,
+            source_deliverable.selling_mode AS photoshoot_selling_mode,
+            source_deliverable.bundle_sales_channel AS photoshoot_bundle_sales_channel,
+            bundle_teaser.source_asset_id AS bundle_teaser_source_asset_id,
+            bundle_teaser.teaser_asset_id AS bundle_teaser_asset_id,
+            (bundle_teaser_asset.id IS NOT NULL) AS bundle_teaser_registered,
             array_agg(member.asset_id ORDER BY member.position) AS asset_ids,
             array_agg(member_asset.content_type ORDER BY member.position) AS asset_content_types,
             array_agg(destination.destination ORDER BY member.position) AS destinations,
@@ -184,9 +190,19 @@ class CommercialFulfillmentRepository:
           ON destination.asset_id=member.asset_id
         LEFT JOIN public.commercial_publications publication
           ON publication.commercial_offering_id=offering.offering_id
+        LEFT JOIN public.photoshoot_commerce_deliverables source_deliverable
+          ON source_deliverable.deliverable_id=
+             offering.source_photoshoot_deliverable_id
+        LEFT JOIN public.photoshoot_bundle_teasers bundle_teaser
+          ON bundle_teaser.deliverable_id=source_deliverable.deliverable_id
+        LEFT JOIN public.content_items bundle_teaser_asset
+          ON bundle_teaser_asset.id=bundle_teaser.teaser_asset_id
         WHERE {where}
           AND {commercial_asset_eligibility_sql("member_asset")}
-        GROUP BY offering.offering_id,publication.publication_id
+        GROUP BY offering.offering_id,publication.publication_id,
+                 source_deliverable.selling_mode,source_deliverable.bundle_sales_channel,
+                 bundle_teaser.source_asset_id,
+                 bundle_teaser.teaser_asset_id,bundle_teaser_asset.id
         {having}"""
 
     @staticmethod

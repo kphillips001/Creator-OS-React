@@ -40,8 +40,8 @@ async function openAssetType(name: "Images" | "Photoshoots" | "Videos") {
 }
 
 describe("AssetLibraryPage", () => {
-  it("renders a Photoshoot and exposes Prepare for Sale in the card and viewer", async () => {
-    const photoshoot = { ...asset, libraryItemId: "photoshoot:set-1", itemKind: "photoshoot" as const, assetId: null, deliverableId: "set-1", generationId: null, fileName: "Sunlit Serenity", mediaType: "photoshoot", classification: null, status: "IN_ASSET_LIBRARY", shotCount: 6 };
+  it("keeps Photoshoot preparation in the viewer rather than the grid card", async () => {
+    const photoshoot = { ...asset, libraryItemId: "photoshoot:set-1", itemKind: "photoshoot" as const, assetId: null, deliverableId: "set-1", generationId: null, fileName: "Sunlit Serenity", mediaType: "photoshoot", classification: null, status: "IN_ASSET_LIBRARY", shotCount: 6, sellingMode: "SESSION", bundleSalesChannel: null };
     const fetch = vi.spyOn(globalThis, "fetch").mockImplementation((input, options) => {
       if (String(input) === "/api/v1/photoshoot-gallery/set-1") return response({
         deliverableId: "set-1", name: "Sunlit Serenity", description: null,
@@ -70,6 +70,12 @@ describe("AssetLibraryPage", () => {
     await openAssetType("Photoshoots");
     expect(await screen.findByText("Sunlit Serenity")).toBeInTheDocument();
     expect(screen.getByText(/Photoshoot.*6 Images/)).toBeInTheDocument();
+    expect(screen.getByText("Not Prepared")).toBeInTheDocument();
+    expect(screen.getByText("SESSION")).toBeInTheDocument();
+    const card = screen.getByRole("button", { name: "Open Photoshoot cover" }).closest("article")!;
+    expect(within(card).queryByRole("button", { name: "Prepare for Sale" })).not.toBeInTheDocument();
+    expect(within(card).getByRole("button", { name: "Delete" })).toBeInTheDocument();
+    expect(within(card).getAllByRole("button")).toHaveLength(3);
     fireEvent.click(screen.getByRole("button", { name: "Open Photoshoot" }));
     expect(await screen.findByText("Shot 6")).toBeInTheDocument();
     expect(screen.getByLabelText("Photoshoot filmstrip")).toBeInTheDocument();
@@ -78,20 +84,71 @@ describe("AssetLibraryPage", () => {
     ]);
     expect(screen.queryByRole("dialog", { name: /Asset .* preview/ })).not.toBeInTheDocument();
     expect(fetch).toHaveBeenCalledWith("/api/v1/photoshoot-gallery/set-1", expect.objectContaining({ cache: "no-store" }));
-    fireEvent.click(screen.getByRole("button", { name: "Close" }));
-    expect(screen.queryByRole("button", { name: "Register Asset" })).not.toBeInTheDocument();
+    expect(screen.getByText("Selling Mode")).toBeInTheDocument();
     const libraryRequestsBeforePreparation = fetch.mock.calls.filter(([input]) => String(input).startsWith("/api/v1/assets?")).length;
-    fireEvent.click(screen.getByRole("button", { name: "Prepare for Sale" }));
-    expect(await screen.findByRole("dialog", { name: "Prepare for Sale" })).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("button", { name: "Prepare Session" }));
+    const prepareDialog = await screen.findByRole("dialog", { name: "Prepare Session" });
     expect(await screen.findByLabelText("Shot 2 price")).toBeInTheDocument();
     expect(screen.getByLabelText("Photoshoot filmstrip")).toBeInTheDocument();
     expect(screen.queryByText("Loading assets...")).not.toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Shot 2 price"), { target: { value: "5.00" } });
-    fireEvent.click(screen.getByRole("button", { name: "Prepare Photoshoot" }));
+    fireEvent.click(within(prepareDialog).getByRole("button", { name: "Prepare Session" }));
     expect(await screen.findByRole("heading", { name: "Ready for Session Selling" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
     expect(await screen.findByText("Ready")).toBeInTheDocument();
     expect(fetch.mock.calls.filter(([input]) => String(input).startsWith("/api/v1/assets?")).length).toBe(libraryRequestsBeforePreparation);
+  });
+
+  it("renders separate readiness and commercial badges and filters Photoshoots with search", async () => {
+    const photoshoots = [
+      { ...asset, libraryItemId: "photoshoot:chat", itemKind: "photoshoot" as const, assetId: null, deliverableId: "chat", fileName: "Shower Bundle", mediaType: "photoshoot", classification: null, shotCount: 3, sellingMode: "BUNDLE", bundleSalesChannel: "CHAT", sessionSelling: { sellingMode: "BUNDLE", bundleSalesChannel: "CHAT", imageCount: 3, status: "READY", autonomousSales: { status: "READY" } } },
+      { ...asset, libraryItemId: "photoshoot:chat-setup", itemKind: "photoshoot" as const, assetId: null, deliverableId: "chat-setup", fileName: "Evening Bundle", mediaType: "photoshoot", classification: null, shotCount: 2, sellingMode: "BUNDLE", bundleSalesChannel: "CHAT", sessionSelling: { sellingMode: "BUNDLE", bundleSalesChannel: "CHAT", imageCount: 2, status: "READY", autonomousSales: { status: "NEEDS_SETUP" } } },
+      { ...asset, libraryItemId: "photoshoot:session", itemKind: "photoshoot" as const, assetId: null, deliverableId: "session", fileName: "Shower Session", mediaType: "photoshoot", classification: null, shotCount: 4, sellingMode: "SESSION", bundleSalesChannel: null, sessionSelling: { sellingMode: "SESSION", status: "NOT_PREPARED" } },
+      { ...asset, libraryItemId: "photoshoot:wall", itemKind: "photoshoot" as const, assetId: null, deliverableId: "wall", fileName: "Morning Wall", mediaType: "photoshoot", classification: null, shotCount: 5, sellingMode: "BUNDLE", bundleSalesChannel: "CONTENT_WALL", sessionSelling: { sellingMode: "BUNDLE", bundleSalesChannel: "CONTENT_WALL", imageCount: 5, status: "READY" } },
+    ];
+    vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
+      const url = new URL(String(input), "http://localhost");
+      if (url.searchParams.get("media_type") !== "photoshoot") return response({ assets: [], total: 0, page: 1, pageSize: 18, totalPages: 1, classifications: [] });
+      const classification = url.searchParams.get("classification");
+      const search = (url.searchParams.get("search") || "").toLowerCase();
+      const selected = photoshoots.filter((item) => (!classification || item.sellingMode === "SESSION" && classification === "SESSION" || item.sellingMode === "BUNDLE" && item.bundleSalesChannel === "CHAT" && classification === "CHAT" || item.sellingMode === "BUNDLE" && item.bundleSalesChannel === "CONTENT_WALL" && classification === "WALL") && (!search || item.fileName.toLowerCase().includes(search)));
+      return response({ assets: selected, total: selected.length, page: 1, pageSize: 18, totalPages: 1, classifications: [] });
+    });
+    window.history.replaceState({}, "", "/library/assets?assetType=photoshoots");
+    render(<AssetLibraryPage />);
+
+    expect(await screen.findByText("Shower Bundle")).toBeInTheDocument();
+    expect(screen.getByText("Shower Session")).toBeInTheDocument();
+    expect(screen.getByText("Morning Wall")).toBeInTheDocument();
+    expect(within(screen.getByText("Shower Bundle").closest("article")!).getByText("Ready")).toBeInTheDocument();
+    expect(within(screen.getByText("Evening Bundle").closest("article")!).getByText("Needs Setup")).toBeInTheDocument();
+    expect(within(screen.getByText("Morning Wall").closest("article")!).getByText("Ready")).toBeInTheDocument();
+    expect(screen.getAllByText("CHAT")).toHaveLength(2);
+    expect(screen.getByText("SESSION")).toBeInTheDocument();
+    expect(screen.getByText("WALL")).toBeInTheDocument();
+    expect(screen.getByLabelText("Classification")).toHaveTextContent("All classificationsChatSessionWall");
+
+    fireEvent.change(screen.getByLabelText("Classification"), { target: { value: "CHAT" } });
+    await waitFor(() => expect(screen.queryByText("Shower Session")).not.toBeInTheDocument());
+    expect(screen.getByText("Shower Bundle")).toBeInTheDocument();
+    expect(screen.queryByText("Morning Wall")).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Search assets"), { target: { value: "morning" } });
+    expect(await screen.findByText("No assets found.")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Classification"), { target: { value: "WALL" } });
+    expect(await screen.findByText("Morning Wall")).toBeInTheDocument();
+    expect(screen.queryByText("Shower Bundle")).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Classification"), { target: { value: "SESSION" } });
+    fireEvent.change(screen.getByLabelText("Search assets"), { target: { value: "shower" } });
+    expect(await screen.findByText("Shower Session")).toBeInTheDocument();
+    expect(screen.queryByText("Shower Bundle")).not.toBeInTheDocument();
+
+    const actionGroup = screen.getByLabelText("Asset actions");
+    expect(within(actionGroup).getByRole("button", { name: "Open Photoshoot" })).toBeInTheDocument();
+    expect(within(actionGroup).getByRole("button", { name: "Delete" })).toBeInTheDocument();
+    expect(within(actionGroup).queryByRole("button", { name: "Prepare for Sale" })).not.toBeInTheDocument();
+    expect(sharedStylesheetText).toMatch(/\.library-action-group\s*\{[^}]*grid-auto-columns:\s*minmax\(0,1fr\)/);
   });
 
   it("opens Image details from both the image and Open action", async () => {
@@ -148,7 +205,7 @@ describe("AssetLibraryPage", () => {
     expect(stylesheetText).toMatch(/\.asset-library-grid\s*\{[^}]*grid-template-columns:\s*repeat\(auto-fill, 235px\)/);
     expect(stylesheetText).toMatch(/\.asset-card\s*\{[^}]*width:\s*235px/);
     expect(stylesheetText).toMatch(/\.asset-card__image\s*\{[^}]*height:\s*294px[^}]*aspect-ratio:\s*4\/5/);
-    expect(stylesheetText).toMatch(/\.asset-card__photoshoot \.session-selling-badge\s*\{[^}]*justify-self:\s*center/);
+    expect(stylesheetText).toMatch(/\.asset-card__photoshoot-badges\s*\{[^}]*display:\s*flex[^}]*justify-content:\s*center/);
     expect(within(card).getByRole("img")).toHaveClass("contained-media-image");
     expect(sharedStylesheetText).toMatch(/\.contained-media-image\s*\{[^}]*object-fit:\s*contain/);
     expect(within(card).queryByText("portrait.png")).not.toBeInTheDocument();

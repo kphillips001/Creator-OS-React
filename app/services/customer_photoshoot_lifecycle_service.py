@@ -117,6 +117,41 @@ class CustomerPhotoshootLifecycleService:
         photoshoot_assets = set(self.repository.photoshoot_asset_ids(opportunity.lifecycle_id))
         if not offering_assets or not set(offering_assets).issubset(photoshoot_assets):
             return None
+        selling_mode_reader = getattr(
+            self.repository, "offering_selling_mode", None
+        )
+        selling_mode = (
+            selling_mode_reader(intent.commercial_offering_id)
+            if callable(selling_mode_reader) else "SESSION"
+        )
+        if selling_mode == "BUNDLE":
+            if opportunity.status is CustomerPhotoshootStatus.COMPLETED:
+                return opportunity, self.repository.coverage(
+                    opportunity.lifecycle_id
+                )
+            transition_values = {
+                "status": CustomerPhotoshootStatus.COMPLETED,
+                "event_type": "BUNDLE_PURCHASED",
+                "purchase_outcome_id": intent.purchase_intent_id,
+                "purchase_intent_id": intent.purchase_intent_id,
+                "metadata": {
+                    "commercial_offering_id": str(
+                        intent.commercial_offering_id
+                    ),
+                    "paid_asset_count": len(offering_assets),
+                    "commercial_completion": "BUNDLE_OFFERING_PURCHASED",
+                },
+            }
+            completed = (
+                self.repository.transition(
+                    opportunity.lifecycle_id, **transition_values
+                )
+                if opportunity.status in self.TERMINAL
+                else self.transition(opportunity, **transition_values)
+            )
+            return completed, self.repository.coverage(
+                opportunity.lifecycle_id
+            )
         return self.synchronize_purchase(
             creator_profile_id=intent.creator_profile_id,
             customer_commerce_profile_id=customer_commerce_profile_id,
@@ -209,6 +244,25 @@ class CustomerPhotoshootLifecycleService:
         opportunity = self.repository.get_for_purchase_intent(intent)
         if opportunity is None or opportunity.status is not CustomerPhotoshootStatus.ACTIVE:
             return opportunity
+        selling_mode_reader = getattr(
+            self.repository, "offering_selling_mode", None
+        )
+        if (
+            callable(selling_mode_reader)
+            and selling_mode_reader(intent.commercial_offering_id) == "BUNDLE"
+        ):
+            return self.repository.transition(
+                opportunity.lifecycle_id,
+                status=CustomerPhotoshootStatus.ACTIVE,
+                event_type="BUNDLE_OFFER_PRESENTED",
+                purchase_intent_id=intent.purchase_intent_id,
+                metadata={
+                    "commercial_offering_id": str(
+                        intent.commercial_offering_id
+                    ),
+                    "session_progression": False,
+                },
+            )
         teaser_ids = set(self.repository.teaser_asset_ids(opportunity.lifecycle_id))
         for asset_id in self.repository.offering_asset_ids(intent.commercial_offering_id):
             if asset_id in teaser_ids:
@@ -255,6 +309,46 @@ class CustomerPhotoshootLifecycleService:
             event_type="PRESENTED", asset_id=int(asset_id),
             provider=str(provider), provider_delivery_id=str(provider_delivery_id),
             metadata=detail,
+        )
+
+    def bundle_teaser_presented(self, lifecycle) -> bool:
+        return any(
+            row.get("event_type") == "BUNDLE_TEASER_PRESENTED"
+            for row in self.repository.history(lifecycle.lifecycle_id)
+        )
+
+    def bundle_offer_presented(self, lifecycle) -> bool:
+        return any(
+            row.get("event_type") == "BUNDLE_OFFER_PRESENTED"
+            for row in self.repository.history(lifecycle.lifecycle_id)
+        )
+
+    def record_bundle_teaser_delivery(
+        self, *, lifecycle_id, asset_id: int, provider: str,
+        provider_delivery_id: str, metadata=None,
+    ):
+        if not str(provider_delivery_id or "").strip():
+            raise ValueError(
+                "Confirmed Bundle teaser delivery requires a provider identifier."
+            )
+        opportunity = self.repository.get_by_id(lifecycle_id)
+        if opportunity is None or opportunity.status not in {
+            CustomerPhotoshootStatus.ACTIVE, CustomerPhotoshootStatus.OBJECTION,
+        }:
+            return opportunity
+        authoritative = self.repository.bundle_teaser_asset_id(lifecycle_id)
+        if authoritative is None or int(asset_id) != authoritative:
+            raise ValueError("Only the canonical Bundle teaser may be presented.")
+        return self.repository.transition(
+            opportunity.lifecycle_id, status=opportunity.status,
+            event_type="BUNDLE_TEASER_PRESENTED", asset_id=int(asset_id),
+            provider=str(provider), provider_delivery_id=str(provider_delivery_id),
+            metadata={
+                **dict(metadata or {}),
+                "commercial_role": "BUNDLE_PROMOTIONAL_TEASER",
+                "delivery_confirmation": "PROVIDER_CONFIRMED",
+                "session_progression": False,
+            },
         )
 
     def record_intent_outcome(self, intent, event_type):

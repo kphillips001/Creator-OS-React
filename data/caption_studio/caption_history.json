@@ -1,5 +1,57 @@
 [
   {
+    "history_id": "caption_history_63c4652a3265441f9bcbcaf800bd8778",
+    "session_id": "caption_session_3e10492dc2bd4ba28862942368ca281f",
+    "caption_request_id": "caption_request_d3659c18fea047b5acbb040a8e480063",
+    "caption_result_id": "caption_result_acd36ff6b0cd420dbdc32f15727bf379",
+    "platform": "x",
+    "selected_text": "Help me decide\u2026 stay out here until the stars come out, or head inside for movie night? \ud83c\udf19",
+    "created_at": "2026-08-07T14:35:43.251399",
+    "metadata": {
+      "source_generated_image_id": "generated_image_b0ab78bc4fbd745ffefeee61",
+      "social_queue_item_id": null
+    }
+  },
+  {
+    "history_id": "caption_history_8a9867c20beb47e088400b13746e220d",
+    "session_id": "caption_session_3e10492dc2bd4ba28862942368ca281f",
+    "caption_request_id": "caption_request_d3659c18fea047b5acbb040a8e480063",
+    "caption_result_id": "caption_result_acd36ff6b0cd420dbdc32f15727bf379",
+    "platform": "x",
+    "selected_text": null,
+    "created_at": "2026-08-07T14:34:30.309580",
+    "metadata": {
+      "source_generated_image_id": "generated_image_b0ab78bc4fbd745ffefeee61",
+      "social_queue_item_id": null
+    }
+  },
+  {
+    "history_id": "caption_history_ff4143a4be344623af16a52e89c1e917",
+    "session_id": "caption_session_105603ef27ca49a3b24c87578aee0c0a",
+    "caption_request_id": "caption_request_34c10e1f690641cc8d83503b041c6aae",
+    "caption_result_id": "caption_result_12fc5a6438d2411b9209f6e93cee454b",
+    "platform": "x",
+    "selected_text": "I was just enjoying the quiet until someone made me laugh this hard \ud83d\ude02 what did you just say to me?",
+    "created_at": "2026-08-06T15:03:53.419587",
+    "metadata": {
+      "source_generated_image_id": "generated_image_1ee5a34ff60cce048dc3c449",
+      "social_queue_item_id": null
+    }
+  },
+  {
+    "history_id": "caption_history_829ae6955baa45ff9c418284a7ffe6e9",
+    "session_id": "caption_session_105603ef27ca49a3b24c87578aee0c0a",
+    "caption_request_id": "caption_request_34c10e1f690641cc8d83503b041c6aae",
+    "caption_result_id": "caption_result_12fc5a6438d2411b9209f6e93cee454b",
+    "platform": "x",
+    "selected_text": null,
+    "created_at": "2026-08-06T15:03:15.197366",
+    "metadata": {
+      "source_generated_image_id": "generated_image_1ee5a34ff60cce048dc3c449",
+      "social_queue_item_id": null
+    }
+  },
+  {
     "history_id": "caption_history_fd9e3bfe79f74222a5940418dd5d7179",
     "session_id": "caption_session_dc742f4b55ff45dc9d09cda85d157ffe",
     "caption_request_id": "caption_request_f12f41f92cc64350842cbb1fce9193ea",

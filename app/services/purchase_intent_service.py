@@ -94,6 +94,18 @@ class PurchaseIntentService:
         self._record_photoshoot_outcome(result,"DECLINED")
         return result
 
+    def mark_delivery_failed(
+        self, intent_id: UUID, *, failed_at: datetime | None = None,
+    ) -> PurchaseIntent:
+        """Release a technically failed delivery without fabricating rejection."""
+        intent = self._require(intent_id)
+        self._require_transition(intent.status, PurchaseIntentStatus.ABANDONED)
+        result = self.repository.mark_abandoned(
+            intent_id, at=failed_at or self.clock(),
+        )
+        self.observe(result, "DELIVERY_FAILED")
+        return result
+
     def record_click(
         self, intent_id: UUID, *, clicked_at: datetime | None = None,
     ) -> PurchaseIntent:

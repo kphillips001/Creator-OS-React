@@ -42,6 +42,9 @@ import { AvaCoachPage } from "../../features/ava-coach/AvaCoachPage";
 import { NotFoundPage } from "../../features/not-found/NotFoundPage";
 import { AdministrationPage } from "../../features/administration/AdministrationPage";
 import { ProviderConnectionsPage } from "../../features/administration/ProviderConnectionsPage";
+import { DeveloperNotesPage } from "../../features/developer-notes/DeveloperNotesPage";
+import { VideoStudioPage } from "../../features/video-studio/VideoStudioPage";
+import { VideoGalleryPage } from "../../features/video-gallery/VideoGalleryPage";
 import { AppShell } from "../layout/AppShell";
 import { allNavigationItems } from "../navigation/navigation";
 
@@ -65,10 +68,12 @@ export const router = createBrowserRouter([
             item.path !== "/library/generations" &&
             item.path !== "/inventory/available" &&
             item.path !== "/library/photoshoots" &&
+            item.path !== "/gallery/videos" &&
             item.path !== "/studio/content" &&
             item.path !== "/content/edit" &&
             item.path !== "/content/photoshoot" &&
             item.path !== "/content/story" &&
+            item.path !== "/studio/video" &&
             item.path !== "/library/references" &&
             item.path !== "/library/assets" &&
             item.path !== "/system/archive" &&
@@ -92,6 +97,7 @@ export const router = createBrowserRouter([
             item.path !== "/business/sales" &&
             item.path !== "/business/operations" &&
             item.path !== "/administration" &&
+            item.path !== "/administration/developer-notes" &&
             item.path !== "/agents/ava-coach",
         )
         .map((item) => ({
@@ -136,6 +142,10 @@ export const router = createBrowserRouter([
         element: <EditStudioPage />,
       },
       {
+        path: "/studio/video",
+        element: <VideoStudioPage />,
+      },
+      {
         path: "/content/story",
         element: <StoryStudioPage />,
       },
@@ -166,6 +176,10 @@ export const router = createBrowserRouter([
       {
         path: "/library/photoshoots",
         element: <PhotoshootGalleryPage />,
+      },
+      {
+        path: "/gallery/videos",
+        element: <VideoGalleryPage />,
       },
       {
         path: "/business/commerce-library",
@@ -250,6 +264,10 @@ export const router = createBrowserRouter([
       {
         path: "/administration/providers",
         element: <ProviderConnectionsPage />,
+      },
+      {
+        path: "/administration/developer-notes",
+        element: <DeveloperNotesPage />,
       },
       {
         path: "/administration/:section",

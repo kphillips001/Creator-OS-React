@@ -3,7 +3,9 @@ import inspect
 import pytest
 
 from app.repositories.photoshoot_commerce_repository import PhotoshootCommerceRepository
-from app.services.photoshoot_commercial_intelligence_service import PhotoshootCommercialIntelligenceService
+from app.services.photoshoot_commercial_intelligence_service import (
+    PhotoshootCommercialIntelligenceIncompleteError, PhotoshootCommercialIntelligenceService,
+)
 from app.services.photoshoot_commerce_deliverable_service import PhotoshootCommerceDeliverableService
 
 
@@ -99,3 +101,40 @@ def test_large_photoshoot_is_sequential_and_bounded():
     service.generate(chapters=tuple({"asset_id": i, "shot_order": i, "prompt": str(i)} for i in range(1, 101)),
                      approved_metadata={"plan": "custom"})
     assert peak == 1
+
+
+@pytest.mark.parametrize("field,value", [
+    ("commercial_title", None), ("commercial_summary", None),
+    ("buyer_profile", None), ("sales_strategy", None),
+    ("sales_brain_brief", None), ("subtitle", "   "),
+])
+def test_incomplete_production_is_retried_and_reports_missing_field(field, value):
+    calls = []
+    incomplete = result() | {field: value}
+    service = PhotoshootCommercialIntelligenceService(
+        production_runner=lambda payload: calls.append(payload) or incomplete,
+        shot_runner=lambda *_: {"sequence_role": "opening"},
+        cross_runner=lambda *_: {"hero_asset_id": 1},
+    )
+    with pytest.raises(Exception) as raised:
+        service.generate(chapters=({"asset_id": 1, "shot_order": 1, "prompt": "one"},),
+                         approved_metadata={"plan": "test"})
+    assert len(calls) == 3
+    assert field in str(raised.value)
+    assert "previous response was incomplete" in calls[1]["corrective_instruction"]
+
+
+def test_retry_can_recover_to_ready_profile():
+    calls = []
+    service = PhotoshootCommercialIntelligenceService(
+        production_runner=lambda payload: calls.append(payload) or (
+            result() if len(calls) == 2 else result() | {"commercial_title": None}),
+        shot_runner=lambda *_: {"sequence_role": "opening"},
+        cross_runner=lambda *_: {"hero_asset_id": 1},
+    )
+    profile = service.generate(
+        chapters=({"asset_id": 1, "shot_order": 1, "prompt": "one"},),
+        approved_metadata={"plan": "test"},
+    )
+    assert len(calls) == 2
+    assert profile["commercial_title"] == "Quiet Unfolding"

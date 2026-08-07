@@ -1,5 +1,139 @@
 [
   {
+    "caption_result_id": "caption_result_acd36ff6b0cd420dbdc32f15727bf379",
+    "caption_request_id": "caption_request_d3659c18fea047b5acbb040a8e480063",
+    "session_id": "caption_session_3e10492dc2bd4ba28862942368ca281f",
+    "platform": "x",
+    "variations": [
+      "Be honest\u2026 would you join me in here or just sit on the edge and talk first? \ud83d\ude0f\ud83d\udca6",
+      "Hot tub rule: you have to tell me one secret before the bubbles start \ud83e\udee7 what\u2019s yours?",
+      "I\u2019m already in\u2026 are you the \u2018slide right in\u2019 type or the \u2018give me five more minutes\u2019 type? \ud83d\udd25",
+      "Finish this: the best thing about evening hot tubs is ______ \ud83d\udcad",
+      "Help me decide\u2026 stay out here until the stars come out, or head inside for movie night? \ud83c\udf19",
+      "If you walked out and caught me like this, what\u2019s the first thing you\u2019d say? \ud83d\udc40",
+      "Choose one: quiet conversation while the water steams \u2601\ufe0f or playful splashing and laughter?",
+      "This water feels perfect right now\u2026 would you rather sip something cold or just soak in silence with me? \ud83e\udd42",
+      "Plot twist: I saved you a spot. Are you coming in slow or diving right under? \ud83d\udca6\ud83d\ude09",
+      "Real talk\u2026 evening hot tub sessions hit different. Who else is team soak-until-dark? \u2728"
+    ],
+    "selected_text": "Help me decide\u2026 stay out here until the stars come out, or head inside for movie night? \ud83c\udf19",
+    "formatter_metadata": {
+      "provider_neutral": true,
+      "formatter": "CaptionStudioService",
+      "workflow": "x_engagement_publish",
+      "vision_primary": true,
+      "vision_provider": "grok",
+      "vision": {
+        "setting": "outdoor hot tub",
+        "activity": "standing partially immersed, resting hands on the edge, glancing back over shoulder",
+        "time_of_day": "evening",
+        "location": "backyard patio area with fence and greenery",
+        "wardrobe": "wet sage green string bikini",
+        "expression": "relaxed playful smile",
+        "body_language": "turned slightly away while looking back, natural weight shift, hands on tub edge",
+        "lighting": "warm soft evening light with golden highlights on wet skin",
+        "mood": "candid intimate and inviting",
+        "environment": "steaming water, outdoor residential setting, blurred fence and trees"
+      },
+      "themes": [
+        {
+          "theme": "Creator OS Engagement",
+          "persona": "creator_os_engagement",
+          "captions": [
+            "Be honest\u2026 would you join me in here or just sit on the edge and talk first? \ud83d\ude0f\ud83d\udca6",
+            "Hot tub rule: you have to tell me one secret before the bubbles start \ud83e\udee7 what\u2019s yours?",
+            "I\u2019m already in\u2026 are you the \u2018slide right in\u2019 type or the \u2018give me five more minutes\u2019 type? \ud83d\udd25",
+            "Finish this: the best thing about evening hot tubs is ______ \ud83d\udcad",
+            "Help me decide\u2026 stay out here until the stars come out, or head inside for movie night? \ud83c\udf19",
+            "If you walked out and caught me like this, what\u2019s the first thing you\u2019d say? \ud83d\udc40",
+            "Choose one: quiet conversation while the water steams \u2601\ufe0f or playful splashing and laughter?",
+            "This water feels perfect right now\u2026 would you rather sip something cold or just soak in silence with me? \ud83e\udd42",
+            "Plot twist: I saved you a spot. Are you coming in slow or diving right under? \ud83d\udca6\ud83d\ude09",
+            "Real talk\u2026 evening hot tub sessions hit different. Who else is team soak-until-dark? \u2728"
+          ]
+        }
+      ],
+      "personas": {
+        "creator_os_engagement": "Creator OS Engagement"
+      },
+      "engagement_goals": [
+        "replies",
+        "reposts",
+        "likes",
+        "profile visits",
+        "follows"
+      ]
+    },
+    "created_at": "2026-08-07T14:34:30.303577"
+  },
+  {
+    "caption_result_id": "caption_result_12fc5a6438d2411b9209f6e93cee454b",
+    "caption_request_id": "caption_request_34c10e1f690641cc8d83503b041c6aae",
+    "session_id": "caption_session_105603ef27ca49a3b24c87578aee0c0a",
+    "platform": "x",
+    "variations": [
+      "Caught me mid-laugh on the porch steps \u2600\ufe0f would you sit down and join or just keep walking by?",
+      "This heat has me melting out here \ud83d\ude05 be honest\u2026 would you bring me a cold drink or make me come inside for it?",
+      "Summer porches hit different when the sun\u2019s this golden \u2728 finish the sentence: if you found me like this you\u2019d\u2026",
+      "Help me decide real quick \u2014 stay out here until the sun drops or head in for AC? \ud83c\udfe0 what would you pick?",
+      "I was just enjoying the quiet until someone made me laugh this hard \ud83d\ude02 what did you just say to me?",
+      "Would you rather spend a lazy afternoon right here on these steps with me\u2026 or drag me somewhere cooler? \ud83d\ude0f",
+      "That first real smile of the day hits different in weather like this \ud83c\udf24\ufe0f tell me you\u2019re not smiling back rn",
+      "If I texted you \u2018come over, porch is free\u2019 during a day like this\u2026 how fast are you showing up?",
+      "Choose one: ice cream run with me right now \ud83c\udf66 or just sit here and talk until it gets dark?",
+      "Something about late afternoon light makes everything feel a little more fun \ud83d\ude09 what\u2019s your favorite summer porch activity?"
+    ],
+    "selected_text": "I was just enjoying the quiet until someone made me laugh this hard \ud83d\ude02 what did you just say to me?",
+    "formatter_metadata": {
+      "provider_neutral": true,
+      "formatter": "CaptionStudioService",
+      "workflow": "x_engagement_publish",
+      "vision_primary": true,
+      "vision_provider": "grok",
+      "vision": {
+        "setting": "wooden front porch steps of a summer home",
+        "activity": "sitting relaxed and laughing toward the camera",
+        "time_of_day": "late afternoon with warm sunlight",
+        "location": "outdoor residential porch with house entrance and railings visible",
+        "wardrobe": "tight pink short-sleeve crop top and light blue denim shorts",
+        "expression": "wide genuine laugh with open mouth and bright eyes",
+        "body_language": "seated angled on the step, torso twisted slightly forward, hands resting on the wood",
+        "lighting": "warm late-afternoon sunlight creating soft highlights and natural shadows on skin and fabric",
+        "mood": "joyful, candid, inviting, and carefree",
+        "environment": "weathered wooden porch, railings, house exterior, greenery, bright outdoor summer day"
+      },
+      "themes": [
+        {
+          "theme": "Creator OS Engagement",
+          "persona": "creator_os_engagement",
+          "captions": [
+            "Caught me mid-laugh on the porch steps \u2600\ufe0f would you sit down and join or just keep walking by?",
+            "This heat has me melting out here \ud83d\ude05 be honest\u2026 would you bring me a cold drink or make me come inside for it?",
+            "Summer porches hit different when the sun\u2019s this golden \u2728 finish the sentence: if you found me like this you\u2019d\u2026",
+            "Help me decide real quick \u2014 stay out here until the sun drops or head in for AC? \ud83c\udfe0 what would you pick?",
+            "I was just enjoying the quiet until someone made me laugh this hard \ud83d\ude02 what did you just say to me?",
+            "Would you rather spend a lazy afternoon right here on these steps with me\u2026 or drag me somewhere cooler? \ud83d\ude0f",
+            "That first real smile of the day hits different in weather like this \ud83c\udf24\ufe0f tell me you\u2019re not smiling back rn",
+            "If I texted you \u2018come over, porch is free\u2019 during a day like this\u2026 how fast are you showing up?",
+            "Choose one: ice cream run with me right now \ud83c\udf66 or just sit here and talk until it gets dark?",
+            "Something about late afternoon light makes everything feel a little more fun \ud83d\ude09 what\u2019s your favorite summer porch activity?"
+          ]
+        }
+      ],
+      "personas": {
+        "creator_os_engagement": "Creator OS Engagement"
+      },
+      "engagement_goals": [
+        "replies",
+        "reposts",
+        "likes",
+        "profile visits",
+        "follows"
+      ]
+    },
+    "created_at": "2026-08-06T15:03:15.191998"
+  },
+  {
     "caption_result_id": "caption_result_9a1b4f23300245d9964816d02b5500bb",
     "caption_request_id": "caption_request_f12f41f92cc64350842cbb1fce9193ea",
     "session_id": "caption_session_dc742f4b55ff45dc9d09cda85d157ffe",

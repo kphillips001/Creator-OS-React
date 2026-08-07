@@ -30,7 +30,13 @@ def request(status="approved"):
 
 
 def profile(version):
-    return {"intelligence_version": version, "shot_intelligence": (
+    return {"intelligence_version": version,
+        "commercial_title": "Complete set", "subtitle": "An ordered story",
+        "commercial_summary": "A complete commercial sequence.",
+        "buyer_profile": {"audience": "collector"},
+        "sales_strategy": {"positioning": "complete sequence"},
+        "sales_brain_brief": "Sell the complete sequence.",
+        "shot_intelligence": (
         {"asset_id": 10, "shot_order": 1, "sequence_role": "seed"},
         {"asset_id": 20, "shot_order": 2, "sequence_role": "closing"}),
         "production_analysis": {"story": "progression"}, "cross_validation": {"hero_asset_id": 20}}
@@ -80,8 +86,11 @@ def test_legacy_backfill_preserves_commercial_intelligence_fields():
     repo.production = {
         "status": "READY", "pipeline_stage": "PENDING", "intelligence_version": "completed_photoshoot_v1",
         "commercial_title": "Legacy title", "profile_data": {
-            "commercial_title": "Legacy title", "commercial_summary": "Legacy summary",
+            "commercial_title": "Legacy title", "subtitle": "Legacy subtitle",
+            "commercial_summary": "Legacy summary",
             "buyer_profile": {"audience": "legacy"}, "input_snapshot": {"legacy": True},
+            "sales_strategy": {"positioning": "legacy"},
+            "sales_brain_brief": "Legacy sales brief.",
             "model": "legacy-model", "generated_at": "2026-01-01T00:00:00+00:00",
         },
     }

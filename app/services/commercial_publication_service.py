@@ -166,7 +166,10 @@ class CommercialPublicationService:
             )
             if finalized is None:
                 raise ValueError("Commercial Publication LIVE finalization failed.")
-            if metadata.get("source_workflow") == "photoshoot_session_sale_preparation":
+            if metadata.get("source_workflow") in {
+                "photoshoot_session_sale_preparation",
+                "photoshoot_bundle_sale_preparation",
+            }:
                 self.offerings.update_status(
                     offering.offering_id,
                     creator_profile_id=creator_profile_id,

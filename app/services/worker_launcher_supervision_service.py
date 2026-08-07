@@ -87,6 +87,10 @@ WORKERS = (
         "app.workers.commerce_reconciliation", "Commerce Reconciliation",
         30, 30, "commerce_reconciliation.log",
     ),
+    WorkerLaunchDefinition("background_operations", "Background Operations",
+                           "CREATOR_OS_LAUNCH_BACKGROUND_OPERATIONS",
+                           "app.workers.background_operations", "Background Operations",
+                           30, 30, "background_operations.log"),
 )
 
 

@@ -70,48 +70,57 @@ class PhotoshootManualService:
             raise ValueError("A Photoshoot request is already active.")
         return request, job
 
-    def execute(self, *, session_id: str, job) -> None:
+    def execute(self, *, session_id: str, job, progress_callback=None) -> dict:
         generation = ContentStudioGenerationService(
             creative_director=None, generation_engine=self.engine,
             generation_library=self.library, reference_service=None,
         )
         try:
-            executed, records = generation.execute(job)
+            executed, records = generation.execute(job, progress_callback=progress_callback)
             if executed.status == GenerationStatus.SUCCEEDED.value and records:
-                session = self.queue.get_session(session_id)
-                marked = self.library.mark_photoshoot_session_records(
-                    (record.image_id for record in records), session_id=session_id, session_title=session.title,
-                )
-                if not marked.success:
-                    raise RuntimeError("; ".join(marked.errors) or marked.message)
-                completed = self.queue.mark_generation_complete(
-                    generation_job_id=executed.job_id,
-                    generated_image_ids=tuple(record.image_id for record in records),
-                )
-                if completed is not None:
-                    self.queue.record_continuity_assessment(completed.request_id, {"status": "pending", "warning": False})
-                    try:
-                        from app.services.photoshoot_creative_director_service import PhotoshootCreativeDirectorWorkflowService
-                        assessor = self._continuity_assessor or PhotoshootCreativeDirectorWorkflowService(
-                            queue=self.queue, library=self.library,
-                        )
-                        assessment = assessor.assess_continuity(
-                            session_id=session_id, request_id=completed.request_id,
-                            candidate_image_id=records[-1].image_id,
-                        )
-                        if assessment:
-                            self.queue.record_continuity_assessment(completed.request_id, {**assessment, "status": "completed"})
-                    except Exception:
-                        logging.getLogger("creator_os.photoshoot.continuity").exception(
-                            "Continuity assessment unavailable session_id=%s request_id=%s",
-                            session_id, completed.request_id,
-                        )
-                        self.queue.record_continuity_assessment(completed.request_id, {"status": "unavailable", "warning": False})
-                return
+                completed = self.synchronize_completed(session_id=session_id, job=executed, records=records)
+                return {
+                    "status": "succeeded", "job_id": executed.job_id,
+                    "request_id": completed.request_id if completed is not None else job.request.request_id,
+                    "image_ids": [record.image_id for record in records],
+                }
             reason = executed.failure.reason if executed.failure else "Generation failed. Please try again."
             self.queue.mark_generation_failed(executed.job_id, reason=reason)
+            return {"status": "failed", "job_id": executed.job_id, "message": reason}
         except Exception as error:
             self.queue.mark_generation_failed(job.job_id, reason=str(error))
+            return {"status": "failed", "job_id": job.job_id, "message": str(error)}
+
+    def synchronize_completed(self, *, session_id: str, job, records) -> object | None:
+        session = self.queue.get_session(session_id)
+        marked = self.library.mark_photoshoot_session_records(
+            (record.image_id for record in records), session_id=session_id, session_title=session.title,
+        )
+        if not marked.success:
+            raise RuntimeError("; ".join(marked.errors) or marked.message)
+        completed = self.queue.mark_generation_complete(
+            generation_job_id=job.job_id, generated_image_ids=tuple(record.image_id for record in records),
+        )
+        if completed is None:
+            return None
+        self.queue.record_continuity_assessment(completed.request_id, {"status": "pending", "warning": False})
+        try:
+            from app.services.photoshoot_creative_director_service import PhotoshootCreativeDirectorWorkflowService
+            assessor = self._continuity_assessor or PhotoshootCreativeDirectorWorkflowService(
+                queue=self.queue, library=self.library,
+            )
+            assessment = assessor.assess_continuity(
+                session_id=session_id, request_id=completed.request_id,
+                candidate_image_id=records[-1].image_id,
+            )
+            if assessment:
+                self.queue.record_continuity_assessment(completed.request_id, {**assessment, "status": "completed"})
+        except Exception:
+            logging.getLogger("creator_os.photoshoot.continuity").exception(
+                "Continuity assessment unavailable session_id=%s request_id=%s", session_id, completed.request_id,
+            )
+            self.queue.record_continuity_assessment(completed.request_id, {"status": "unavailable", "warning": False})
+        return completed
 
     def status(self, *, creator_profile_id: int, session_id: str) -> dict:
         session = self.session_for_creator(session_id, creator_profile_id)
@@ -194,10 +203,26 @@ class PhotoshootManualService:
         self.queue.update_session_settings(session_id, workflow_stage="ready_for_next_shot")
         return request.prompt_text
 
-    def reject(self, *, creator_profile_id: int, session_id: str, request_id: str) -> None:
+    def reject(self, *, creator_profile_id: int, session_id: str, request_id: str,
+               save_to_generation_library: bool = False) -> None:
         session = self.session_for_creator(session_id, creator_profile_id)
         request = self._review_request(session_id, request_id)
-        self._junk_candidate(session, request, "photoshoot_rejected")
+        image_ids = tuple(dict(request.metadata or {}).get("generated_image_ids") or ())
+        if save_to_generation_library:
+            candidate_id = str(image_ids[-1]) if image_ids else ""
+            if candidate_id:
+                result = self.library.save_rejected_photoshoot_candidate_to_library(candidate_id)
+                if not result.success:
+                    raise RuntimeError("; ".join(result.errors) or result.message)
+            if len(image_ids) > 1:
+                result = self.library.move_photoshoot_records_to_junk(
+                    image_ids[:-1], session_id=session.session_id, session_title=session.title,
+                    reason="photoshoot_rejected",
+                )
+                if not result.success:
+                    raise RuntimeError("; ".join(result.errors) or result.message)
+        else:
+            self._junk_candidate(session, request, "photoshoot_rejected")
         self.queue.reject_request(request_id)
 
     def replace_shot(self, *, creator_profile_id: int, session_id: str, request_id: str):

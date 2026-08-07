@@ -6,6 +6,7 @@ import {
   DeveloperAgentExecutionProvider,
 } from "../../features/developer-agent/DeveloperAgentExecutionContext";
 import { TopBar } from "./TopBar";
+import { BackgroundOperationsProvider } from "../../features/background-operations/BackgroundOperationsContext";
 
 function LocationProbe() {
   const location = useLocation();
@@ -46,5 +47,60 @@ describe("Developer Agent notifications", () => {
     fireEvent.click(screen.getByRole("button", { name: /Implementation completed/ }));
     expect(screen.getByTestId("location")).toHaveTextContent("/home:");
     expect(screen.getByTestId("location")).toHaveTextContent("developerExecutionId");
+  });
+});
+
+describe("Background Operations Jobs indicator", () => {
+  it("shows the active count and operation details", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
+      const url = String(input);
+      if (url.includes("/background-operations")) return Promise.resolve(new Response(JSON.stringify({
+        success: true,
+        operations: url.includes("status=active") ? [{
+          operationId: "operation-1", operationType: "content_studio_autonomous_inspiration",
+          originatingWorkspace: "content_studio", subjectType: "creator_profile", subjectId: "1",
+          status: "RUNNING", progressCurrent: 1, progressTotal: 3, progressPercent: 33,
+          currentStage: "GENERATING", stageMessage: "Generating image 2", createdAt: "2026-08-05T12:00:00Z",
+          startedAt: "2026-08-05T12:00:01Z", completedAt: null, resultLocation: "/studio/content",
+          resultReference: "job-1", errorCode: null, errorMessage: null,
+          cancellationSupported: false, metadata: {},
+        }] : [],
+      }), { status: 200 }));
+      return Promise.resolve(new Response(JSON.stringify({ items: [] }), { status: 200 }));
+    });
+    render(<MemoryRouter><DeveloperAgentExecutionProvider><BackgroundOperationsProvider pollMilliseconds={60_000}>
+      <TopBar onMenuToggle={() => undefined} />
+    </BackgroundOperationsProvider></DeveloperAgentExecutionProvider></MemoryRouter>);
+    fireEvent.click(await screen.findByText("1 Active"));
+    expect(screen.getByLabelText("Background Operations")).toHaveTextContent("Generating image 2");
+    expect(screen.getByLabelText("Background Operations")).toHaveTextContent("Content Studio — Inspire Me");
+  });
+
+  it("labels an open-ended Photoshoot operation and returns to Photoshoot Studio", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
+      const url = String(input);
+      if (url.includes("/background-operations")) return Promise.resolve(new Response(JSON.stringify({
+        success: true,
+        operations: url.includes("status=active") ? [{
+          operationId: "photoshoot-operation", operationType: "photoshoot_generation",
+          originatingWorkspace: "photoshoot_studio", subjectType: "photoshoot_session", subjectId: "session-1",
+          status: "RUNNING", progressCurrent: 0, progressTotal: 1, progressPercent: 42,
+          currentStage: "GENERATING", stageMessage: "Generating image", createdAt: "2026-08-05T12:00:00Z",
+          startedAt: "2026-08-05T12:00:01Z", completedAt: null, resultLocation: "/content/photoshoot",
+          resultReference: "job-1", errorCode: null, errorMessage: null,
+          cancellationSupported: false, metadata: { shotNumber: 4, targetShotCount: 0, openEnded: true },
+        }] : [],
+      }), { status: 200 }));
+      return Promise.resolve(new Response(JSON.stringify({ items: [] }), { status: 200 }));
+    });
+    render(<MemoryRouter initialEntries={["/home"]}><DeveloperAgentExecutionProvider><BackgroundOperationsProvider pollMilliseconds={60_000}>
+      <TopBar onMenuToggle={() => undefined} /><LocationProbe />
+    </BackgroundOperationsProvider></DeveloperAgentExecutionProvider></MemoryRouter>);
+    fireEvent.click(await screen.findByText("1 Active"));
+    expect(screen.getByLabelText("Background Operations")).toHaveTextContent(
+      "Photoshoot Studio — Generating Shot 4 · Open-ended",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Return to Workspace" }));
+    expect(screen.getByTestId("location")).toHaveTextContent("/content/photoshoot");
   });
 });

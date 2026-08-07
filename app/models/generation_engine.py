@@ -36,6 +36,7 @@ class GenerationType(str, Enum):
     IMAGE_TO_IMAGE = "image_to_image"
     TEXT_TO_VIDEO = "text_to_video"
     IMAGE_TO_VIDEO = "image_to_video"
+    VIDEO_EXTEND = "video_extend"
 
 
 @dataclass(frozen=True)

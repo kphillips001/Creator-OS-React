@@ -226,15 +226,17 @@ def test_invalid_candidate_is_rejected_before_finalization():
     queue.archive_curated_session.assert_not_called()
 
 
-def test_finish_waits_for_successful_canonical_intelligence():
+def test_finish_preserves_photoshoot_and_records_failed_canonical_intelligence():
     service, queue, _, deliverables, _ = fixture()
     row = {"deliverable_id": "set-1", "registration_state": "PHOTOSHOOT_COMPLETE"}
     deliverables.repository.upsert_deliverable.return_value = row
+    deliverables.repository.get.return_value = row
     deliverables._completed_at.return_value = "now"
     deliverables.run_canonical_intelligence.side_effect = RuntimeError("shot intelligence failed")
 
-    with pytest.raises(RuntimeError, match="shot intelligence failed"):
-        service.complete(creator_profile_id=2, session_id="session-1")
+    result = service.complete(creator_profile_id=2, session_id="session-1")
 
-    queue.archive_curated_session.assert_not_called()
-    deliverables.repository.set_completion_intelligence_status.assert_called_with("set-1", "FAILED")
+    queue.archive_curated_session.assert_called_once()
+    deliverables.repository.set_analysis_failure.assert_called_once_with(
+        "set-1", "shot intelligence failed")
+    assert result["photoshoot_deliverable_id"] == "set-1"

@@ -1,5 +1,59 @@
 [
   {
+    "history_id": "social_publish_history_2f55fb37dcba48d3b5450b764afe998c",
+    "queue_item_id": "social_queue_item_363e14cc3ba74ebeb523e82ade69b4ca",
+    "platform": "x",
+    "status": "posted",
+    "message": "Posted to X.",
+    "created_at": "2026-08-07T14:35:44.702028",
+    "metadata": {
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "caption_id": "caption_result_acd36ff6b0cd420dbdc32f15727bf379",
+      "provider_post_id": "2085736654497526223",
+      "provider_media_id": "2085736652014583808",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2085736654497526223"
+    }
+  },
+  {
+    "history_id": "social_publish_history_baa19c9150534a17903f35928e77e821",
+    "queue_item_id": "social_queue_item_363e14cc3ba74ebeb523e82ade69b4ca",
+    "platform": "x",
+    "status": "caption_attached",
+    "message": "Caption Studio result attached to Social Queue item.",
+    "created_at": "2026-08-07T14:35:43.287531",
+    "metadata": {
+      "caption_id": "caption_result_acd36ff6b0cd420dbdc32f15727bf379"
+    }
+  },
+  {
+    "history_id": "social_publish_history_93210c9dcec9468fa2836568cd55ba29",
+    "queue_item_id": "social_queue_item_fd569ecabf224cef984545099673d409",
+    "platform": "x",
+    "status": "posted",
+    "message": "Posted to X.",
+    "created_at": "2026-08-06T15:03:54.796594",
+    "metadata": {
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "caption_id": "caption_result_12fc5a6438d2411b9209f6e93cee454b",
+      "provider_post_id": "2085381367265738763",
+      "provider_media_id": "2085381364828762113",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2085381367265738763"
+    }
+  },
+  {
+    "history_id": "social_publish_history_4ac2028fc2eb466a88d6a84dee5bea19",
+    "queue_item_id": "social_queue_item_fd569ecabf224cef984545099673d409",
+    "platform": "x",
+    "status": "caption_attached",
+    "message": "Caption Studio result attached to Social Queue item.",
+    "created_at": "2026-08-06T15:03:53.454609",
+    "metadata": {
+      "caption_id": "caption_result_12fc5a6438d2411b9209f6e93cee454b"
+    }
+  },
+  {
     "history_id": "social_publish_history_d120f0b3b1834d18aa89fc28019e7632",
     "queue_item_id": "social_queue_item_c541feac2cf34cc0b51f5a37d5fadb47",
     "platform": "x",

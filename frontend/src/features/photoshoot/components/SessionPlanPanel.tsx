@@ -60,7 +60,7 @@ export function SessionPlanPanel(props: Props) {
               onChange={() => props.onPlanningMode("full_plan")}
               type="radio"
             />
-            <span>Plan entire session</span>
+            <span>{props.targetShotCount === 0 ? "Plan variety batch" : "Plan entire session"}</span>
           </label>
         </div>
       </fieldset>
@@ -81,7 +81,7 @@ export function SessionPlanPanel(props: Props) {
             }}
             value={customTargetSelected ? "custom" : String(props.targetShotCount)}
           >
-            <option value="0">0 (No limit)</option>
+            <option value="0">Creative Freeflow (No progression)</option>
             <option value="5">Mini (5 shots)</option>
             <option value="10">Standard (10 shots)</option>
             <option value="15">Extended (15 shots)</option>
@@ -107,14 +107,27 @@ export function SessionPlanPanel(props: Props) {
         )}
       </div>
 
+      <div className="photoshoot-creative-structure">
+        <strong>{props.targetShotCount === 0 ? "✨ Creative Freeflow" : "🎬 Story Progression Active"}</strong>
+        <span>
+          {props.targetShotCount === 0
+            ? "AI explores varied shots within the same scene without staged progression."
+            : "AI advances each approved shot through a planned Photoshoot arc."}
+        </span>
+      </div>
+
       {props.planningMode === "frame_by_frame" ? (
         <p className="photoshoot-session-plan__hint">
-          Default mode. After each approved shot, Ask AI for the next natural frame.
+          {props.targetShotCount === 0
+            ? "Default mode. After each approved shot, Ask AI for another distinct photograph in the same visual world."
+            : "Default mode. After each approved shot, Ask AI for the next natural frame."}
         </p>
       ) : (
         <>
           <p className="photoshoot-session-plan__hint">
-            Plan the full arc from the seed, approve once, then Photoshoot generates each frame automatically until the set is done.
+            {props.targetShotCount === 0
+              ? "Plan a finite batch of varied photographs, approve once, then Photoshoot generates each frame automatically until the batch is done."
+              : "Plan the full arc from the seed, approve once, then Photoshoot generates each frame automatically until the set is done."}
           </p>
           <div className="photoshoot-session-plan__controls">
             <label>
@@ -136,7 +149,9 @@ export function SessionPlanPanel(props: Props) {
                 onClick={props.onGeneratePlan}
                 type="button"
               >
-                {props.sessionPlan.length ? "Replan Session" : "Plan Entire Session"}
+                {props.targetShotCount === 0
+                  ? props.sessionPlan.length ? "Replan Variety Batch" : "Plan Variety Batch"
+                  : props.sessionPlan.length ? "Replan Session" : "Plan Entire Session"}
               </button>
               {props.sessionPlan.length > 0 && !props.sessionPlanApproved && (
                 <button

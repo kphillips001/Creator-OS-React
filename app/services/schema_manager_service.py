@@ -51,6 +51,58 @@ class SchemaManagerService:
     """Owns Creator OS schema discovery, migration history, and reconciliation."""
 
     REQUIRED_TABLES: Mapping[str, Mapping[str, Any]] = {
+        "developer_todos": {
+            "owner": "Developer Notes",
+            "migration": "20260807_041_developer_todos.sql",
+            "repository": "DeveloperTodoRepository",
+            "service": "Developer Notes API",
+            "dashboard": ("Developer Notes",),
+            "columns": ("todo_id", "creator_profile_id", "title", "created_at", "completed", "completed_at", "notes"),
+        },
+        "video_generation_sessions": {
+            "owner": "Video Studio", "migration": "20260806_040_video_studio_backend.sql",
+            "repository": "VideoStudioRepository", "service": "VideoStudioService", "dashboard": (),
+            "columns": ("session_id","creator_profile_id","status","source_type","source_id","settings","provider_id","provider_capability","visual_intelligence","concept_batches","selected_concept","execution_plan","current_generation_run","final_generated_media_id","final_asset_id"),
+        },
+        "video_generation_segments": {
+            "owner": "Video Studio Paid Segment Lifecycle", "migration": "20260806_040_video_studio_backend.sql",
+            "repository": "VideoStudioRepository", "service": "VideoStudioBackgroundExecutor", "dashboard": (),
+            "columns": ("segment_id","session_id","generation_run_id","ordinal","generation_type","planned_duration","status","provider_task_id","idempotency_key","prompt_snapshot","output_clip","failure_code","attempt_count"),
+        },
+        "generated_media": {
+            "owner": "Generated Media", "migration": "20260806_040_video_studio_backend.sql",
+            "repository": "GeneratedMediaService", "service": "GeneratedMediaService", "dashboard": (),
+            "columns": ("media_id","creator_profile_id","media_type","media_path","poster_path","duration_seconds","provider_id","source_lineage","generation_metadata"),
+        },
+        "background_operations": {
+            "owner": "Application Background Operations",
+            "migration": "20260805_039_background_operations.sql",
+            "repository": "BackgroundOperationRepository",
+            "service": "BackgroundOperationService",
+            "dashboard": ("Jobs", "Content Studio"),
+            "columns": (
+                "operation_id", "operation_type", "originating_workspace",
+                "creator_profile_id", "account_id", "subject_type", "subject_id",
+                "idempotency_key", "executor_key", "status", "progress_current",
+                "progress_total", "progress_percent", "current_stage", "stage_message",
+                "created_at", "started_at", "completed_at", "result_location",
+                "result_reference", "error_code", "error_message",
+                "cancellation_supported", "cancellation_requested_at", "worker_id",
+                "lease_expires_at", "attempt_count", "metadata", "operation_version",
+                "updated_at",
+            ),
+        },
+        "background_operation_events": {
+            "owner": "Application Background Operations Audit",
+            "migration": "20260805_039_background_operations.sql",
+            "repository": "BackgroundOperationRepository",
+            "service": "BackgroundOperationService",
+            "dashboard": ("Jobs",),
+            "columns": (
+                "event_id", "operation_id", "event_type", "previous_status",
+                "new_status", "stage", "message", "metadata", "created_at",
+            ),
+        },
         "photoshoot_session_sales_strategies": {
             "owner": "Photoshoot Session Sales Brain",
             "migration": "20260804_037_photoshoot_session_sales_strategies.sql",
@@ -537,6 +589,22 @@ class SchemaManagerService:
     }
 
     MIGRATION_SCHEMA_REQUIREMENTS: Mapping[str, Mapping[str, tuple[str, ...]]] = {
+        "20260807_045_photoshoot_bundle_sales_channel.sql": {
+            "photoshoot_commerce_deliverables": ("bundle_sales_channel",),
+        },
+        "20260807_044_photoshoot_bundle_teasers.sql": {
+            "photoshoot_bundle_teasers": ("deliverable_id", "source_asset_id", "teaser_asset_id", "mask_path", "blur_strength"),
+        },
+        "20260807_043_photoshoot_selling_mode.sql": {
+            "photoshoot_commerce_deliverables": ("selling_mode",),
+        },
+        "20260805_039_background_operations.sql": {
+            "background_operations": (
+                "operation_id", "operation_type", "creator_profile_id", "status",
+                "idempotency_key", "executor_key", "lease_expires_at", "metadata",
+            ),
+            "background_operation_events": ("event_id", "operation_id", "event_type"),
+        },
         "20260727_019_creative_intelligence_learning.sql": {
             "creative_intelligence_profiles": (
                 "id", "creator_profile_id", "fanvue_account_id",
@@ -1070,11 +1138,22 @@ class SchemaManagerService:
         },
         "photoshoot_commerce_deliverables": {
             "owner": "Photoshoot Commerce",
-            "migration": "20260721_001_photoshoot_commerce_deliverables.sql",
+            "migration": "20260807_045_photoshoot_bundle_sales_channel.sql",
             "repository": "PhotoshootCommerceRepository",
             "service": "PhotoshootCommerceDeliverableService",
             "dashboard": ("Photoshoot Gallery", "Commerce Library"),
-            "columns": ("deliverable_id", "photoshoot_session_id", "creator_profile_id", "shot_count", "is_active", "is_archived"),
+            "columns": ("deliverable_id", "photoshoot_session_id", "creator_profile_id", "shot_count", "selling_mode", "bundle_sales_channel", "is_active", "is_archived"),
+            "legacy": "current", "compatibility": "CANONICAL",
+        },
+        "photoshoot_bundle_teasers": {
+            "owner": "Photoshoot Bundle Commerce",
+            "migration": "20260807_044_photoshoot_bundle_teasers.sql",
+            "repository": "PhotoshootBundleTeaserRepository",
+            "service": "PhotoshootBundleTeaserService",
+            "dashboard": ("Asset Library",),
+            "columns": ("deliverable_id", "creator_profile_id", "source_asset_id",
+                        "teaser_asset_id", "mask_path", "mask_width", "mask_height",
+                        "blur_strength"),
             "legacy": "current", "compatibility": "CANONICAL",
         },
         "photoshoot_analysis_workflows": {
@@ -1378,6 +1457,14 @@ class SchemaManagerService:
     }
 
     REQUIRED_INDEXES: Mapping[str, tuple[str, ...]] = {
+        "background_operations": (
+            "uq_background_operations_active_idempotency",
+            "idx_background_operations_creator_account",
+            "idx_background_operations_active",
+            "idx_background_operations_workspace_subject",
+            "idx_background_operations_status_lease",
+        ),
+        "background_operation_events": ("idx_background_operation_events_operation",),
         "hosted_asset_references": (
             "hosted_asset_reference_current_idx", "hosted_asset_reference_lookup_idx",
         ),

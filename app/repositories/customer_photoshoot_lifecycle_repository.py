@@ -206,6 +206,39 @@ class CustomerPhotoshootLifecycleRepository:
                 cursor.execute("SELECT asset_id FROM public.commercial_offering_assets WHERE offering_id=%s ORDER BY position", (offering_id,))
                 return tuple(row["asset_id"] for row in cursor.fetchall())
 
+    def offering_selling_mode(self, offering_id):
+        with self.connection_factory() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """SELECT deliverable.selling_mode
+                       FROM public.commercial_offerings offering
+                       JOIN public.photoshoot_commerce_deliverables deliverable
+                         ON deliverable.deliverable_id=
+                            offering.source_photoshoot_deliverable_id
+                       WHERE offering.offering_id=%s""",
+                    (offering_id,),
+                )
+                row = cursor.fetchone()
+        return str(row["selling_mode"]) if row else None
+
+    def bundle_teaser_asset_id(self, lifecycle_id):
+        with self.connection_factory() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """SELECT teaser.teaser_asset_id
+                       FROM public.customer_photoshoot_lifecycles lifecycle
+                       JOIN public.photoshoot_commerce_deliverables deliverable
+                         ON deliverable.photoshoot_session_id::text=
+                            lifecycle.photoshoot_id
+                        AND deliverable.selling_mode='BUNDLE'
+                       JOIN public.photoshoot_bundle_teasers teaser
+                         ON teaser.deliverable_id=deliverable.deliverable_id
+                       WHERE lifecycle.lifecycle_id=%s""",
+                    (lifecycle_id,),
+                )
+                row = cursor.fetchone()
+        return int(row["teaser_asset_id"]) if row else None
+
     def photoshoot_asset_ids(self, lifecycle_id):
         with self.connection_factory() as connection:
             with connection.cursor() as cursor:

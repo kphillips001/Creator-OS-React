@@ -5,14 +5,8 @@ import { navigationGroups } from "../../app/navigation/navigation";
 import { StoryStudioPage } from "./StoryStudioPage";
 
 describe("StoryStudioPage", () => {
-  it("appears in the requested Content Creation order", () => {
-    const content = navigationGroups.find((group) => group.label === "Content Creation");
-    expect(content?.items.map((item) => item.label)).toEqual([
-      "Generation Library", "Available Inventory", "Photoshoot Gallery", "Content Studio",
-      "Edit Studio", "Photoshoot Studio", "Story Studio", "Video Studio",
-      "Reference Library", "Asset Library",
-    ]);
-    expect(content?.items.find((item) => item.label === "Story Studio")?.path).toBe("/content/story");
+  it("stays implemented while hidden from normal sidebar navigation", () => {
+    expect(navigationGroups.flatMap((group) => group.items).some((item) => item.label === "Story Studio")).toBe(false);
   });
 
   it("renders the Coming Soon placeholder copy", () => {

@@ -174,7 +174,8 @@ class TelethonRuntime:
                     except Exception:
                         if self._purchase_intents is not None:
                             await asyncio.to_thread(
-                                self._purchase_intents.abandon_delivery, intent,
+                                self._fail_or_abandon_delivery,
+                                intent, result.delivery_payload,
                             )
                         raise
                     if execution.executed and self._purchase_intents is not None:
@@ -201,7 +202,8 @@ class TelethonRuntime:
                             )
                     elif self._purchase_intents is not None:
                         await asyncio.to_thread(
-                            self._purchase_intents.abandon_delivery, intent,
+                            self._fail_or_abandon_delivery,
+                            intent, result.delivery_payload,
                         )
                     if not execution.executed:
                         self._logger.warning(
@@ -214,9 +216,20 @@ class TelethonRuntime:
                             "free_teaser_delivery"
                         ) or {}
                     )
+                    bundle_teaser_metadata = dict(
+                        (result.delivery_payload.get("metadata") or {}).get(
+                            "bundle_teaser_delivery"
+                        ) or {}
+                    )
                     if execution.executed and teaser_metadata:
                         await asyncio.to_thread(
                             self._record_free_teaser_delivery,
+                            result.delivery_payload,
+                            execution,
+                        )
+                    if execution.executed and bundle_teaser_metadata:
+                        await asyncio.to_thread(
+                            self._record_bundle_teaser_delivery,
                             result.delivery_payload,
                             execution,
                         )
@@ -230,6 +243,15 @@ class TelethonRuntime:
                     type(error).__name__,
                 )
                 return None
+
+    def _fail_or_abandon_delivery(self, intent, delivery_payload) -> None:
+        metadata = dict((delivery_payload or {}).get("metadata") or {})
+        if metadata.get("bundle_complete_presentation") is True:
+            handler = getattr(self._purchase_intents, "fail_delivery", None)
+            if callable(handler):
+                handler(intent)
+                return
+        self._purchase_intents.abandon_delivery(intent)
 
     def _record_free_teaser_delivery(self, delivery_payload, execution) -> None:
         metadata = dict((delivery_payload or {}).get("metadata") or {})
@@ -251,6 +273,28 @@ class TelethonRuntime:
             metadata={
                 "photoshoot_session_id": teaser.get("photoshoot_session_id"),
                 "sales_role": teaser.get("sales_role"),
+                "delivery_method": execution.delivery_method,
+            },
+        )
+
+    def _record_bundle_teaser_delivery(self, delivery_payload, execution) -> None:
+        metadata = dict((delivery_payload or {}).get("metadata") or {})
+        teaser = dict(metadata.get("bundle_teaser_delivery") or {})
+        provider_delivery_id = execution.metadata.get("telegram_message_id")
+        if (
+            not teaser
+            or execution.metadata.get("execution_state") != "asset_sent"
+            or provider_delivery_id is None
+        ):
+            return
+        self._photoshoot_lifecycles.record_bundle_teaser_delivery(
+            lifecycle_id=teaser["lifecycle_id"],
+            asset_id=int(teaser["asset_id"]), provider="TELEGRAM",
+            provider_delivery_id=str(provider_delivery_id),
+            metadata={
+                "photoshoot_session_id": teaser.get("photoshoot_session_id"),
+                "source_asset_id": teaser.get("source_asset_id"),
+                "sales_role": "BUNDLE_PROMOTIONAL_TEASER",
                 "delivery_method": execution.delivery_method,
             },
         )

@@ -18,6 +18,7 @@ from app.repositories.webhook_event_repository import (
     get_webhook_event_by_external_id,
 )
 from app.api.content_studio import router as content_studio_router
+from app.api.background_operations import router as background_operations_router
 from app.api.generation_library_publishing import router as generation_library_publishing_router
 from app.api.edit_studio import router as edit_studio_router
 from app.api.generation_library import router as generation_library_router
@@ -71,6 +72,9 @@ from app.api.provider_connections import (
 from app.api.developer_agent_execution import (
     router as developer_agent_execution_router,
 )
+from app.api.video_studio import router as video_studio_router
+from app.api.video_gallery import router as video_gallery_router
+from app.api.developer_notes import router as developer_notes_router
 from app.services.fanvue_oauth_service import FanvueOAuthService
 from app.services.fanvue_webhook_monitor_service import fanvue_webhook_monitor
 from app.services.worker_heartbeat_instrumentation import record_heartbeat_safely
@@ -136,6 +140,7 @@ async def _application_lifespan(application: FastAPI):
 
 app = FastAPI(lifespan=_application_lifespan)
 app.include_router(content_studio_router)
+app.include_router(background_operations_router)
 app.include_router(generation_library_publishing_router)
 app.include_router(edit_studio_router)
 app.include_router(generation_library_router)
@@ -178,6 +183,9 @@ app.include_router(customer_sales_brain_router)
 app.include_router(commercial_offering_selector_router)
 app.include_router(provider_connections_router)
 app.include_router(developer_agent_execution_router)
+app.include_router(video_studio_router)
+app.include_router(video_gallery_router)
+app.include_router(developer_notes_router)
 
 
 @app.get("/callback")

@@ -199,7 +199,7 @@ export const approvePhotoshootSessionPlan = (body: unknown) => photoshootMutatio
 export const developPhotoshootPlannedShot = (body: unknown) => photoshootMutation<CreativeDirectorRecommendation>("/creative-director/session-plan/develop", body);
 export const advancePhotoshootSessionPlan = (body: unknown) => photoshootMutation<{ session_plan: PlannedShot[]; session_plan_index: number; session_plan_complete: boolean; next_planned_shot: PlannedShot | null; workflow_stage: string }>("/creative-director/session-plan/advance", body);
 
-export const generatePhotoshootShot = (body: unknown) => photoshootMutation<{ request_id: string; status: string }>("/generate", body);
+export const generatePhotoshootShot = (body: unknown) => photoshootMutation<{ request_id: string; generation_job_id: string; operation_id: string; status: string }>("/generate", body);
 export const approvePhotoshootCandidate = (body: unknown) => photoshootMutation<{
   success: true;
   request: { request_id: string; status: "approved"; imported_asset_ids: number[] };

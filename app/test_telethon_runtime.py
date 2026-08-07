@@ -330,6 +330,123 @@ class TelethonRuntimeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(purchases.acknowledged, [])
         self.assertEqual(purchases.abandoned, [None])
 
+    async def test_bundle_complete_presentation_confirms_one_intent_and_both_events(self):
+        result = TelegramInboundResult(
+            correlation_id="bundle-correlation", telegram_chat_id=12,
+            telegram_user_id=34, message_id=56, engine_user_id="2:34",
+            response_text="Natural Bundle copy\n\nBundle — USD 25.00: https://fanvue.com/bundle",
+            offer_authorized=True, offer_link="https://fanvue.com/bundle",
+            blocked=False, error_code=None,
+            delivery_payload={
+                "delivery_type": "BUNDLE",
+                "message_text": "Natural Bundle copy\n\nBundle — USD 25.00: https://fanvue.com/bundle",
+                "asset_path": "C:/test/blurred.png",
+                "media_link": "https://fanvue.com/bundle",
+                "delivery_method": "free_asset",
+                "metadata": {
+                    "bundle_complete_presentation": True,
+                    "bundle_teaser_delivery": {
+                        "lifecycle_id": "lifecycle-1",
+                        "photoshoot_session_id": "shoot-1",
+                        "asset_id": 90, "source_asset_id": 11,
+                    },
+                },
+            },
+            diagnostic_metadata={"final_offer_authorized": True},
+        )
+        inbound = type("Inbound", (), {"execute": lambda self, _payload: result})()
+        successful_delivery = type(
+            "Delivery", (), {
+                "execute_async": lambda self, *_args, **_kwargs:
+                    _async_result(TelegramDeliveryExecutionResult(
+                        status="SENT", executed=True, delivery_method="free_asset",
+                        metadata={"execution_state": "asset_sent", "telegram_message_id": 91},
+                    ))
+            },
+        )()
+        events = []
+
+        class PurchaseIntents:
+            def __init__(self):
+                self.created = 0
+
+            def create_before_delivery(self, *_args):
+                self.created += 1
+                return "bundle-intent"
+
+            def confirm_delivery(self, intent, **kwargs):
+                events.append(("BUNDLE_OFFER_PRESENTED", intent, kwargs["telegram_message_id"]))
+
+            def abandon_delivery(self, intent):
+                events.append(("ABANDONED", intent))
+
+        class Lifecycles:
+            def record_bundle_teaser_delivery(self, **kwargs):
+                events.append(("BUNDLE_TEASER_PRESENTED", kwargs["asset_id"], kwargs["provider_delivery_id"]))
+
+        purchases = PurchaseIntents()
+        runtime = TelethonRuntime(
+            transport=FakeTransport(), inbound_adapter=inbound,
+            delivery_executor=successful_delivery,
+            global_safety_service=type("Safety", (), {
+                "check_global_safety": lambda self: {"allowed": True}
+            })(),
+            purchase_intent_service=purchases,
+            photoshoot_lifecycle_service=Lifecycles(),
+        )
+        await runtime.handle_payload(TelegramInboundPayload(
+            telegram_user_id=34, telegram_chat_id=12,
+            message_text="show me", message_id=56,
+        ))
+        self.assertEqual(purchases.created, 1)
+        self.assertEqual(events, [
+            ("BUNDLE_OFFER_PRESENTED", "bundle-intent", 91),
+            ("BUNDLE_TEASER_PRESENTED", 90, "91"),
+        ])
+
+    async def test_failed_bundle_presentation_is_retryable_not_customer_declined(self):
+        result = TelegramInboundResult(
+            correlation_id="bundle-failure", telegram_chat_id=12,
+            telegram_user_id=34, message_id=56, engine_user_id="2:34",
+            response_text="Bundle", offer_authorized=True,
+            offer_link="https://fanvue.com/bundle", blocked=False,
+            error_code=None,
+            delivery_payload={
+                "message_text": "Bundle", "asset_path": "C:/test/blurred.png",
+                "metadata": {"bundle_complete_presentation": True},
+            },
+            diagnostic_metadata={"final_offer_authorized": True},
+        )
+        inbound = type("Inbound", (), {"execute": lambda self, _payload: result})()
+        failed_delivery = type("Delivery", (), {
+            "execute_async": lambda self, *_args, **_kwargs:
+                _async_result(TelegramDeliveryExecutionResult(
+                    status="FAILED", executed=False,
+                ))
+        })()
+
+        class PurchaseIntents:
+            failed = []
+            abandoned = []
+            def create_before_delivery(self, *_args): return "bundle-intent"
+            def fail_delivery(self, intent): self.failed.append(intent)
+            def abandon_delivery(self, intent): self.abandoned.append(intent)
+
+        purchases = PurchaseIntents()
+        runtime = TelethonRuntime(
+            transport=FakeTransport(), inbound_adapter=inbound,
+            delivery_executor=failed_delivery,
+            global_safety_service=type("Safety", (), {
+                "check_global_safety": lambda self: {"allowed": True}
+            })(), purchase_intent_service=purchases,
+        )
+        await runtime.handle_payload(TelegramInboundPayload(
+            telegram_user_id=34, telegram_chat_id=12,
+            message_text="show me", message_id=56,
+        ))
+        self.assertEqual(purchases.failed, ["bundle-intent"])
+        self.assertEqual(purchases.abandoned, [])
+
 
 async def _async_result(value):
     return value

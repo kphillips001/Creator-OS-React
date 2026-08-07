@@ -12,6 +12,7 @@ from app.repositories.photoshoot_session_sales_strategy_repository import (
     PhotoshootSessionSalesStrategyRepository,
 )
 from app.services.llm_json_parser import parse_llm_json
+from app.services.photoshoot_commercial_intelligence_service import PhotoshootCommercialIntelligenceService
 
 
 SESSION_SALES_STRATEGY_VERSION = "photoshoot_session_sales_v1"
@@ -35,14 +36,29 @@ class PhotoshootSessionSalesStrategyService:
             raise KeyError("Completed Photoshoot not found.")
         if deliverable["is_archived"]:
             raise ValueError("Archived Photoshoots cannot generate a Session Sales Strategy.")
+        if str(deliverable.get("selling_mode") or "SESSION") != "SESSION":
+            raise ValueError("Session Sales Strategy requires SESSION selling mode.")
+        if deliverable.get("registration_state") not in {
+            "PHOTOSHOOT_COMPLETE", "IN_ASSET_LIBRARY", "REGISTERED",
+        }:
+            raise ValueError("Photoshoot must be completed before generating a Session Sales Strategy.")
         session_id = str(deliverable["photoshoot_session_id"])
         existing = self.repository.get(session_id, strategy_version)
         if existing is not None:
             return existing
 
         canonical = self.photoshoots.get_intelligence(session_id)
-        if not canonical or canonical.get("status") != "READY":
-            raise ValueError("Canonical Photoshoot Intelligence must be READY.")
+        if (not canonical or canonical.get("status") != "READY"
+                or canonical.get("pipeline_stage") != "COMPLETE"):
+            raise ValueError("Canonical Photoshoot Intelligence must be READY and COMPLETE.")
+        missing = PhotoshootCommercialIntelligenceService.missing_required_commercial_fields(
+            dict(canonical.get("profile_data") or {})
+        )
+        if missing:
+            raise ValueError(
+                "Canonical Photoshoot Commercial Intelligence is incomplete: "
+                + ", ".join(missing)
+            )
         intelligence_version = str(canonical.get("intelligence_version") or "")
         production = dict(canonical.get("production_analysis") or {})
         cross_validation = dict(canonical.get("cross_validation") or {})

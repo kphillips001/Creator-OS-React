@@ -34,10 +34,18 @@ class Photoshoots:
     def __init__(self): self.deliverable_id = uuid4()
     def get(self, _deliverable_id):
         return {"deliverable_id": self.deliverable_id, "creator_profile_id": 7,
-                "photoshoot_session_id": "session-1", "is_archived": False}
+                "photoshoot_session_id": "session-1", "is_archived": False,
+                "selling_mode": "SESSION", "registration_state": "IN_ASSET_LIBRARY"}
     def get_intelligence(self, _session_id):
-        return {"status": "READY", "intelligence_version": "intelligence-v2",
-                "production_analysis": {"theme": "intimate progression", "story": "gradual reveal"},
+        production = {"theme": "intimate progression", "story": "gradual reveal",
+            "commercial_title": "Complete Session", "subtitle": "A progression",
+            "commercial_summary": "A complete commercial sequence.",
+            "buyer_profile": {"audience": "collector"},
+            "sales_strategy": {"positioning": "guided session"},
+            "sales_brain_brief": "Sell the guided progression."}
+        return {"status": "READY", "pipeline_stage": "COMPLETE",
+                "intelligence_version": "intelligence-v2", "profile_data": production,
+                "production_analysis": production,
                 "cross_validation": {"teaser_asset_id": 20, "closing_asset_id": 30}}
     def members(self, _session_id):
         return ({"asset_id": 10, "shot_order": 1}, {"asset_id": 20, "shot_order": 2},
@@ -143,3 +151,30 @@ def test_strategy_migration_is_versioned_and_photoshoot_scoped():
     assert "PRIMARY KEY (photoshoot_session_id, strategy_version)" in migration
     assert "REFERENCES public.photoshoot_commerce_deliverables" in migration
     assert "strategy_data JSONB" in migration
+
+
+def test_strategy_generation_requires_session_mode_and_creator_scope():
+    photoshoots = Photoshoots()
+    original = photoshoots.get
+    photoshoots.get = lambda value: {**original(value), "selling_mode": "BUNDLE"}
+    service = PhotoshootSessionSalesStrategyService(
+        repository=Strategies(), photoshoots=photoshoots, strategy_runner=lambda _: strategy())
+    with pytest.raises(ValueError, match="SESSION selling mode"):
+        service.generate("deliverable-1", creator_profile_id=7)
+    photoshoots.get = original
+    with pytest.raises(KeyError, match="not found"):
+        service.generate("deliverable-1", creator_profile_id=99)
+
+
+def test_incomplete_commercial_contract_is_rejected_before_ai_generation():
+    photoshoots = Photoshoots()
+    canonical = photoshoots.get_intelligence("session-1")
+    canonical["profile_data"] = {**canonical["profile_data"], "commercial_summary": None}
+    photoshoots.get_intelligence = lambda _: canonical
+    calls = []
+    service = PhotoshootSessionSalesStrategyService(
+        repository=Strategies(), photoshoots=photoshoots,
+        strategy_runner=lambda value: calls.append(value) or strategy())
+    with pytest.raises(ValueError, match="commercial_summary"):
+        service.generate("deliverable-1", creator_profile_id=7)
+    assert calls == []

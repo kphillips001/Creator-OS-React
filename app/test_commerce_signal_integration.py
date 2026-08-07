@@ -156,12 +156,23 @@ def purchase_intent():
 
 
 class IntentRepository:
-    def __init__(self, items):
+    def __init__(self, items, contexts=None):
         self.items = items
+        self.contexts = contexts or {}
         self.purchased = []
 
     def list_candidates(self, **lookup):
-        return self.items
+        buyer = lookup.get("external_fanvue_user_uuid")
+        return [
+            item for item in self.items
+            if buyer is None or item.external_fanvue_user_uuid == buyer
+        ]
+
+    def get_attribution_contexts(self, intent_ids):
+        return {
+            item_id: self.contexts[item_id]
+            for item_id in intent_ids if item_id in self.contexts
+        }
 
     def mark_purchased(self, item_id, **values):
         self.purchased.append((item_id, values))
@@ -194,11 +205,11 @@ class PhotoshootLifecycles:
         return object()
 
 
-def service(monkeypatch, candidates):
+def service(monkeypatch, candidates, contexts=None):
     reconciliation = Reconciliations()
     customers = Customers()
     intent_service = Intents()
-    intent_repository = IntentRepository(candidates)
+    intent_repository = IntentRepository(candidates, contexts)
     monkeypatch.setattr(
         "app.services.commerce_signal_service.get_account_by_fanvue_user_uuid",
         lambda value: {"id": 7},
@@ -290,6 +301,170 @@ def test_retry_resynchronizes_already_attributed_purchase(monkeypatch):
     assert result["lifecycleSynchronized"] is True
     assert repository.purchased == []
     assert len(integration.photoshoot_lifecycles.calls) == 1
+
+
+def attribution_context(item, *, offering_type, selling_mode=None,
+                        bundle_sales_channel=None, source_deliverable_id=None):
+    return {item.purchase_intent_id: {
+        "offering_type": offering_type,
+        "source_photoshoot_deliverable_id": source_deliverable_id,
+        "selling_mode": selling_mode,
+        "bundle_sales_channel": bundle_sales_channel,
+        "external_product_id": item.provider_resource_id,
+    }}
+
+
+def attribute_at(integration, *, at, buyer=BUYER, resource="link-1",
+                 transaction="late-order"):
+    return integration._attribute(
+        creator_profile_id=2, fanvue_account_id=7, buyer_uuid=buyer,
+        amount_minor=999, payment_timestamp=at,
+        transaction_id=transaction, payment_id=f"payment-{transaction}",
+        event_id=f"event-{transaction}", media_link_purchase=True,
+        provider_resource_id=resource,
+        customer_commerce_profile_id=uuid4(),
+    )
+
+
+def test_bundle_chat_remains_attributable_at_1_30_and_180_days(monkeypatch):
+    for days in (1, 30, 180):
+        item = replace(
+            purchase_intent(),
+            presented_at=NOW,
+            expires_at=NOW + timedelta(hours=72),
+            status=(PurchaseIntentStatus.PRESENTED if days == 1
+                    else PurchaseIntentStatus.EXPIRED),
+        )
+        integration, _, _, _, repository = service(
+            monkeypatch, [item], attribution_context(
+                item, offering_type="BUNDLE", selling_mode="BUNDLE",
+                bundle_sales_channel="CHAT", source_deliverable_id=uuid4(),
+            ),
+        )
+        result = attribute_at(
+            integration, at=NOW + timedelta(days=days),
+            transaction=f"bundle-day-{days}",
+        )
+        assert result["state"] == "ATTRIBUTED"
+        assert len(repository.purchased) == 1
+        assert len(integration.photoshoot_lifecycles.calls) == 1
+
+
+def test_standalone_single_image_is_persistent_at_1_30_and_180_days(monkeypatch):
+    for days in (1, 30, 180):
+        item = replace(
+            purchase_intent(), presented_at=NOW,
+            expires_at=NOW + timedelta(hours=72),
+            status=(PurchaseIntentStatus.PRESENTED if days == 1
+                    else PurchaseIntentStatus.EXPIRED),
+        )
+        integration, _, _, _, repository = service(
+            monkeypatch, [item], attribution_context(
+                item, offering_type="SINGLE_IMAGE",
+            ),
+        )
+        result = attribute_at(
+            integration, at=NOW + timedelta(days=days),
+            transaction=f"single-day-{days}",
+        )
+        assert result["state"] == "ATTRIBUTED"
+        assert len(repository.purchased) == 1
+
+
+def test_session_single_image_keeps_72_hour_attribution_window(monkeypatch):
+    item = replace(
+        purchase_intent(), presented_at=NOW,
+        expires_at=NOW + timedelta(hours=72),
+        status=PurchaseIntentStatus.EXPIRED,
+    )
+    integration, _, _, _, repository = service(
+        monkeypatch, [item], attribution_context(
+            item, offering_type="SINGLE_IMAGE", selling_mode="SESSION",
+            source_deliverable_id=uuid4(),
+        ),
+    )
+    result = attribute_at(integration, at=NOW + timedelta(days=91))
+    assert result == {
+        "state": "UNKNOWN", "reason": "NO_HARD_MATCHING_CANDIDATE",
+        "candidateCount": 0,
+    }
+    assert repository.purchased == []
+
+
+def test_persistent_ppv_rejects_wrong_media_link_and_wrong_buyer(monkeypatch):
+    item = replace(
+        purchase_intent(), presented_at=NOW,
+        expires_at=NOW + timedelta(hours=72),
+        status=PurchaseIntentStatus.EXPIRED,
+    )
+    integration, _, _, _, repository = service(
+        monkeypatch, [item], attribution_context(
+            item, offering_type="BUNDLE", selling_mode="BUNDLE",
+            bundle_sales_channel="CHAT", source_deliverable_id=uuid4(),
+        ),
+    )
+    assert attribute_at(
+        integration, at=NOW + timedelta(days=180), resource="other-link",
+    )["reason"] == "NO_HARD_MATCHING_CANDIDATE"
+    assert attribute_at(
+        integration, at=NOW + timedelta(days=180), buyer=uuid4(),
+    )["reason"] == "NO_HARD_MATCHING_CANDIDATE"
+    assert repository.purchased == []
+
+
+def test_persistent_ppv_ambiguity_fails_closed(monkeypatch):
+    first = replace(
+        purchase_intent(), presented_at=NOW,
+        expires_at=NOW + timedelta(hours=72),
+        status=PurchaseIntentStatus.EXPIRED,
+    )
+    second = replace(
+        purchase_intent(), presented_at=NOW,
+        expires_at=NOW + timedelta(hours=72),
+        status=PurchaseIntentStatus.EXPIRED,
+        provider_resource_id="link-2",
+    )
+    contexts = {
+        **attribution_context(first, offering_type="SINGLE_IMAGE"),
+        **attribution_context(second, offering_type="SINGLE_IMAGE"),
+    }
+    integration, _, _, intents, repository = service(
+        monkeypatch, [first, second], contexts,
+    )
+    result = attribute_at(
+        integration, at=NOW + timedelta(days=180), resource=None,
+    )
+    assert result["reason"] == "MULTIPLE_HARD_MATCHING_CANDIDATES"
+    assert len(intents.unknown) == 2
+    assert repository.purchased == []
+
+
+def test_august_to_november_policy_simulation(monkeypatch):
+    presented = datetime(2026, 8, 7, tzinfo=timezone.utc)
+    purchased = datetime(2026, 11, 7, tzinfo=timezone.utc)
+    cases = (
+        ("BUNDLE", "BUNDLE", "CHAT", uuid4(), "ATTRIBUTED"),
+        ("SINGLE_IMAGE", None, None, None, "ATTRIBUTED"),
+        ("SINGLE_IMAGE", "SESSION", None, uuid4(), "UNKNOWN"),
+    )
+    for offering_type, selling_mode, channel, source_id, expected in cases:
+        item = replace(
+            purchase_intent(), presented_at=presented,
+            expires_at=presented + timedelta(hours=72),
+            status=PurchaseIntentStatus.EXPIRED,
+        )
+        integration, _, _, _, _ = service(
+            monkeypatch, [item], attribution_context(
+                item, offering_type=offering_type,
+                selling_mode=selling_mode, bundle_sales_channel=channel,
+                source_deliverable_id=source_id,
+            ),
+        )
+        result = attribute_at(
+            integration, at=purchased,
+            transaction=f"aug-nov-{offering_type}-{selling_mode}",
+        )
+        assert result["state"] == expected
 
 
 def test_creator_payment_id_converges_through_canonical_earnings(monkeypatch):

@@ -9,6 +9,8 @@ describe("AdministrationPage", () => {
     expect(screen.getByRole("heading", { name: "Administration" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Provider Connections/ })).toHaveAttribute(
       "href", "/administration/providers");
+    expect(screen.getByRole("link", { name: /Developer Notes/ })).toHaveAttribute(
+      "href", "/administration/developer-notes");
     for (const title of ["OAuth Accounts", "Webhooks", "API Credentials", "Publication Workers", "System Status"]) {
       expect(screen.getByText(title)).toBeInTheDocument();
     }

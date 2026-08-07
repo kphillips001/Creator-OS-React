@@ -161,7 +161,7 @@ class OwnershipIntelligenceRepository:
         if not clause:
             return ()
         cursor.execute(
-            f"""SELECT intent.purchase_intent_id,
+            f"""SELECT intent.purchase_intent_id,intent.purchased_at,
                        intent.commercial_offering_id,intent.status,
                        intent.attribution_result,
                        array_agg(member.asset_id ORDER BY member.position)
@@ -217,6 +217,10 @@ class OwnershipIntelligenceRepository:
                 details=immutable_details({
                     "status": row["status"],
                     "attributionResult": row["attribution_result"],
+                    "purchasedAt": (
+                        row["purchased_at"].isoformat()
+                        if row.get("purchased_at") else None
+                    ),
                 }),
             ))
         return tuple(values)

@@ -311,6 +311,17 @@ class CommercialOfferingSelectorService:
 
     def _active_opportunity_candidates(self, candidates, opportunity,
                                        creator_profile_id, customer_profile):
+        bundle_candidates = tuple(
+            candidate for candidate in candidates
+            if str(candidate.get("photoshoot_selling_mode") or "") == "BUNDLE"
+            and str(candidate.get("photoshoot_identifier") or "")
+                == opportunity.photoshoot_id
+            and str(candidate.get("offering_type") or "") == "BUNDLE"
+        )
+        if bundle_candidates:
+            # Bundle opportunities have one canonical prepared fulfillment.
+            # Never enter Session strategy/current-next Asset resolution.
+            return bundle_candidates if len(bundle_candidates) == 1 else ()
         profile_id = getattr(customer_profile, "customer_commerce_profile_id", None)
         if profile_id is None:
             return ()
@@ -383,6 +394,23 @@ class CommercialOfferingSelectorService:
             reasons.append(destination_reason)
         offering_id = UUID(str(candidate["offering_id"]))
         offering_type = str(candidate.get("offering_type") or "")
+        selling_mode = str(candidate.get("photoshoot_selling_mode") or "")
+        bundle_channel = str(
+            candidate.get("photoshoot_bundle_sales_channel") or "CHAT"
+        )
+        if selling_mode == "BUNDLE" and bundle_channel != "CHAT":
+            reasons.append("BUNDLE_CHANNEL_CONTENT_WALL")
+        if selling_mode == "BUNDLE" and offering_type != "BUNDLE":
+            reasons.append("BUNDLE_MEMBER_OFFERING_SUPPRESSED")
+        if offering_type == "BUNDLE":
+            if selling_mode != "BUNDLE":
+                reasons.append("BUNDLE_SELLING_MODE_MISMATCH")
+            if not (
+                candidate.get("bundle_teaser_asset_id")
+                and candidate.get("bundle_teaser_source_asset_id")
+                and candidate.get("bundle_teaser_registered") is True
+            ):
+                reasons.append("BUNDLE_TEASER_NOT_READY")
         if (
             constraints.required_offering_types
             and offering_type not in constraints.required_offering_types

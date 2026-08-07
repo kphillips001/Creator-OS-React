@@ -104,19 +104,19 @@ class PhotoshootSummaryService:
 
     @staticmethod
     def _opportunities(*, poses: tuple[str, ...], cameras: tuple[str, ...]) -> list[str]:
-        opportunities = []
-        if not any("profile" in value.lower() for value in cameras):
-            opportunities.append("Explore a profile or three-quarter composition.")
-        if not any("close-up" in value.lower() for value in cameras):
-            opportunities.append("Use a closer expression-led frame.")
-        if not any("reclining" in value.lower() or "lying" in value.lower() for value in poses):
-            opportunities.append("Introduce a grounded or reclining pose if it fits the direction.")
-        return opportunities[:3] or ["Advance expression, hand placement, and framing without repeating an approved composition."]
+        return [
+            "Continue from the latest approved frame with one subtle change in expression, pose, or hand placement; "
+            "preserve its scene and camera setup unless the operator directs otherwise."
+        ]
 
     @staticmethod
     def _avoid_repetition(*, poses: tuple[str, ...], cameras: tuple[str, ...]) -> str:
         explored = tuple((*poses[-3:], *cameras[-3:]))
-        return "Avoid repeating: " + "; ".join(explored) if explored else "Avoid repeating the seed composition; vary pose, framing, expression, and hand placement."
+        return (
+            "Avoid an exact duplicate while staying adjacent to the latest approved composition: " + "; ".join(explored)
+            if explored
+            else "Avoid an exact duplicate through one subtle natural change; preserve the latest scene and camera setup."
+        )
 
     @staticmethod
     def _summary_text(summary: Mapping[str, Any]) -> str:

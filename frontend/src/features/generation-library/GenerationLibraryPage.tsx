@@ -4,7 +4,6 @@ import {
   Camera,
   ChevronLeft,
   ChevronRight,
-  Clapperboard,
   MoveRight,
   Pencil,
   Rocket,
@@ -28,6 +27,7 @@ import type {
 } from "./types";
 import { LibraryImage } from "./LibraryImage";
 import { PublishDialog } from "./PublishDialog";
+import { videoStudioLink } from "../../infrastructure/api/videoStudioApi";
 import "./generation-library.css";
 
 const EMPTY_RESULT: GenerationLibraryResponse = {
@@ -208,12 +208,6 @@ export function GenerationLibraryPage() {
     }
   };
 
-  const showStoryNotice = () => {
-    setActionMessage(
-      "Story Studio is coming soon. Story Studio has not been implemented yet. Your image remains safely in the Generation Library.",
-    );
-  };
-
   const copyPrompt = async () => {
     if (!preview) return;
     await navigator.clipboard.writeText(preview.prompt_text);
@@ -304,8 +298,7 @@ export function GenerationLibraryPage() {
                 <LibraryActionButton icon={Rocket} onClick={() => setPublishRecord(record)} tooltip="Publish" />
                 <LibraryActionButton disabled={pendingAction.endsWith(":edit")} icon={Pencil} onClick={() => runCardAction(record, "edit")} tooltip="Edit Image" />
                 <LibraryActionButton disabled={pendingAction === `${record.image_id}:photoshoot`} icon={Camera} onClick={() => runCardAction(record, "photoshoot")} tooltip="Create Photoshoot" />
-                <LibraryActionButton icon={Clapperboard} onClick={showStoryNotice} tooltip="Create Story" />
-                <LibraryActionButton aria-label="Create Video · Coming Soon" disabled icon={Video} tooltip="Video Studio Coming Soon" />
+                <LibraryActionButton icon={Video} onClick={() => navigate(videoStudioLink({ type: "generation", id: record.image_id, previewUrl: record.image_url, label: "Generation Library image" }))} tooltip="Create Video" />
                 <LibraryActionButton disabled={pendingAction === `${record.image_id}:move-to-asset-library`} icon={MoveRight} onClick={() => runCardAction(record, "move-to-asset-library")} tooltip="Move to Asset Library" />
                 <LibraryActionButton disabled={pendingAction === `${record.image_id}:remove`} icon={Trash2} onClick={() => runCardAction(record, "remove")} tooltip="Remove Content" />
               </LibraryActionGroup>

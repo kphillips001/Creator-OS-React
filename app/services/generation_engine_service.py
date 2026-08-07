@@ -126,7 +126,7 @@ class GenerationEngineService:
                 request_metadata["render_policy"] = (
                     content_render_policy(creative_mode).value
                 )
-        return GenerationRequest(
+        generation_request = GenerationRequest(
             request_id=new_generation_id("generation_request"),
             creator_profile_id=creator_profile_id,
             prompt_plan_id=prompt_plan.plan_id,
@@ -156,6 +156,21 @@ class GenerationEngineService:
                 **request_metadata,
             },
         )
+        from app.services.generation_request_diagnostic_service import GenerationRequestDiagnosticService
+        diagnostic = GenerationRequestDiagnosticService()
+        diagnostic.record(
+            trace_id=request_metadata.get("diagnostic_trace_id"),
+            workflow_origin=request_metadata.get("workflow_origin"),
+            stage="9_generation_request_fields_and_metadata",
+            value=generation_request,
+        )
+        diagnostic.record(
+            trace_id=request_metadata.get("diagnostic_trace_id"),
+            workflow_origin=request_metadata.get("workflow_origin"),
+            stage="10_render_policy",
+            value=generation_request.metadata.get("render_policy"),
+        )
+        return generation_request
 
     def enqueue(
         self,

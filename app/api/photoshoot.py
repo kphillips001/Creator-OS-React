@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Literal
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field, conint
 
 from app.api.content_studio import _current_account_id
@@ -17,6 +17,8 @@ from app.services.photoshoot_manual_service import PhotoshootManualService
 from app.services.photoshoot_creative_director_service import PhotoshootCreativeDirectorWorkflowService
 from app.services.photoshoot_auto_run_service import PhotoshootAutoRunService
 from app.services.photoshoot_curation_service import PhotoshootCurationService
+from app.services.background_operation_service import BackgroundOperationService
+from app.repositories.photoshoot_auto_run_repository import PhotoshootAutoRunRepository
 
 
 router = APIRouter(prefix="/api/v1/photoshoot", tags=["photoshoot"])
@@ -117,11 +119,16 @@ class CandidateActionRequest(BaseModel):
     request_id: str
 
 
+class RejectCandidateRequest(CandidateActionRequest):
+    disposition: Literal["discard", "save_to_generation_library"] = "discard"
+
+
 class ManualGenerateResponse(BaseModel):
     success: bool
     session_id: str
     request_id: str
     generation_job_id: str
+    operation_id: str
     status: str
 
 
@@ -193,8 +200,59 @@ def _manual_error(error: Exception):
     raise HTTPException(status_code=409, detail="Photoshoot action failed. Please try again.") from error
 
 
-def _execute_manual_generation(session_id: str, job) -> None:
-    PhotoshootManualService().execute(session_id=session_id, job=job)
+def _active_manual_operation(creator_profile_id: int, session_id: str):
+    operations = BackgroundOperationService()
+    return next(iter(operations.list(
+        creator_profile_id=creator_profile_id, account_id=_current_account_id(), status="active",
+        workspace="photoshoot_studio", subject_type="photoshoot_session", subject_id=session_id,
+    )), None)
+
+
+def _ensure_manual_generation_available(creator_profile_id: int, session_id: str) -> None:
+    run = PhotoshootAutoRunRepository().get(session_id)
+    if run is not None and run.state not in {"PLAN_COMPLETE", "PHOTOSHOOT_COMPLETE"}:
+        raise ValueError("Photoshoot Auto Run currently owns this session.")
+
+
+def _create_photoshoot_operation(*, creator_profile_id: int, session, shot, job, request_payload: dict):
+    continuity = dict(session.creative_continuity or {})
+    requests = PhotoshootQueueService().requests_for_session(session.session_id)
+    approved_count = PhotoshootContextService.approved_display_count(requests)
+    target = int(session.target_shot_count)
+    shot_metadata = dict(shot.metadata or {})
+    metadata = {
+        "creatorProfileId": creator_profile_id,
+        "accountId": _current_account_id(),
+        "photoshootSessionId": session.session_id,
+        "requestId": shot.request_id,
+        "generationJobId": job.job_id,
+        "shotNumber": approved_count + 1,
+        "approvedCount": approved_count,
+        "targetShotCount": target,
+        "openEnded": target == 0,
+        "provider": session.provider_id,
+        "planningStyle": continuity.get("planning_mode"),
+        "operatorDirection": request_payload.get("session_direction", ""),
+        "activeReferenceImageId": shot_metadata.get("active_reference_image_id"),
+        "activeReferenceOutputReference": shot_metadata.get("active_reference_output_reference"),
+        "frozenIdentityReference": continuity.get("frozen_identity_reference") or continuity.get("seed_image_id"),
+        "continuity": continuity,
+        "request": request_payload,
+    }
+    operation, _created = BackgroundOperationService().create(
+        operation_type="photoshoot_generation", originating_workspace="photoshoot_studio",
+        creator_profile_id=creator_profile_id, account_id=_current_account_id(),
+        subject_type="photoshoot_session", subject_id=session.session_id,
+        idempotency_key=f"photoshoot-generation:{creator_profile_id}:{session.session_id}:{shot.request_id}",
+        executor_key="photoshoot_generation", progress_total=1,
+        current_stage="PREPARING_NEXT_SHOT", stage_message="Preparing next shot",
+        result_location="/content/photoshoot", cancellation_supported=False, metadata=metadata,
+    )
+    BackgroundOperationService().progress(
+        operation.operation_id, current=0, total=1, percent=0,
+        stage="QUEUED", message="Photoshoot generation queued", result_reference=job.job_id,
+    )
+    return operation
 
 
 def _creative_director_error(error: Exception):
@@ -446,20 +504,37 @@ def creative_director_advance_session_plan(request: CreativeDirectorSessionReque
 
 
 @router.post("/generate", response_model=ManualGenerateResponse, status_code=202)
-def generate_manual_photoshoot(request: ManualGenerateRequest, background_tasks: BackgroundTasks):
+def generate_manual_photoshoot(request: ManualGenerateRequest):
     service = PhotoshootManualService()
+    creator_profile_id = _creator_profile_id_required()
     try:
+        existing = _active_manual_operation(creator_profile_id, request.session_id)
+        if existing is not None:
+            metadata = dict(existing.metadata or {})
+            return {"success": True, "session_id": request.session_id,
+                    "request_id": metadata.get("requestId"),
+                    "generation_job_id": metadata.get("generationJobId") or existing.result_reference,
+                    "operation_id": str(existing.operation_id), "status": existing.status.lower()}
+        _ensure_manual_generation_available(creator_profile_id, request.session_id)
         shot, job = service.create_manual_request(
-            creator_profile_id=_creator_profile_id_required(), session_id=request.session_id,
+            creator_profile_id=creator_profile_id, session_id=request.session_id,
             provider_id=request.provider_id, creative_mode=request.creative_mode, prompt=request.prompt,
             continuity_locks=request.continuity_settings.model_dump(), session_direction=request.session_direction,
             creative_hint=request.creative_hint,
         )
     except Exception as error:
         _manual_error(error)
-    background_tasks.add_task(_execute_manual_generation, request.session_id, job)
+    session = service.queue.get_session(request.session_id)
+    try:
+        operation = _create_photoshoot_operation(
+            creator_profile_id=creator_profile_id, session=session, shot=shot, job=job,
+            request_payload=request.model_dump(),
+        )
+    except Exception as error:
+        service.queue.mark_generation_failed(job.job_id, reason="Background operation could not be persisted.")
+        _manual_error(error)
     return {"success": True, "session_id": request.session_id, "request_id": shot.request_id,
-            "generation_job_id": job.job_id, "status": "generating"}
+            "generation_job_id": job.job_id, "operation_id": str(operation.operation_id), "status": "queued"}
 
 
 @router.get("/status")
@@ -510,15 +585,31 @@ def approve_manual_candidate(request: CandidateActionRequest):
 
 
 @router.post("/candidate/regenerate", response_model=ManualGenerateResponse, status_code=202)
-def regenerate_manual_candidate(request: CandidateActionRequest, background_tasks: BackgroundTasks):
+def regenerate_manual_candidate(request: CandidateActionRequest):
     service = PhotoshootManualService()
+    creator_profile_id = _creator_profile_id_required()
     try:
-        shot, job = service.regenerate(creator_profile_id=_creator_profile_id_required(), session_id=request.session_id, request_id=request.request_id)
+        existing = _active_manual_operation(creator_profile_id, request.session_id)
+        if existing is not None:
+            metadata = dict(existing.metadata or {})
+            return {"success": True, "session_id": request.session_id,
+                    "request_id": metadata.get("requestId"), "generation_job_id": metadata.get("generationJobId"),
+                    "operation_id": str(existing.operation_id), "status": existing.status.lower()}
+        _ensure_manual_generation_available(creator_profile_id, request.session_id)
+        shot, job = service.regenerate(creator_profile_id=creator_profile_id, session_id=request.session_id, request_id=request.request_id)
     except Exception as error:
         _manual_error(error)
-    background_tasks.add_task(_execute_manual_generation, request.session_id, job)
+    session = service.queue.get_session(request.session_id)
+    try:
+        operation = _create_photoshoot_operation(
+            creator_profile_id=creator_profile_id, session=session, shot=shot, job=job,
+            request_payload={"session_id": request.session_id, "request_id": request.request_id, "action": "regenerate"},
+        )
+    except Exception as error:
+        service.queue.mark_generation_failed(job.job_id, reason="Background operation could not be persisted.")
+        _manual_error(error)
     return {"success": True, "session_id": request.session_id, "request_id": shot.request_id,
-            "generation_job_id": job.job_id, "status": "generating"}
+            "generation_job_id": job.job_id, "operation_id": str(operation.operation_id), "status": "queued"}
 
 
 @router.post("/candidate/edit-prompt")
@@ -531,12 +622,24 @@ def edit_manual_candidate_prompt(request: CandidateActionRequest):
 
 
 @router.post("/candidate/reject")
-def reject_manual_candidate(request: CandidateActionRequest):
+def reject_manual_candidate(request: RejectCandidateRequest):
     try:
-        PhotoshootManualService().reject(creator_profile_id=_creator_profile_id_required(), session_id=request.session_id, request_id=request.request_id)
+        PhotoshootManualService().reject(
+            creator_profile_id=_creator_profile_id_required(), session_id=request.session_id,
+            request_id=request.request_id,
+            save_to_generation_library=request.disposition == "save_to_generation_library",
+        )
     except Exception as error:
         _manual_error(error)
-    return {"success": True, "message": "Candidate rejected."}
+    return {
+        "success": True,
+        "message": (
+            "Candidate rejected and saved to Generation Library."
+            if request.disposition == "save_to_generation_library"
+            else "Candidate rejected and discarded."
+        ),
+        "disposition": request.disposition,
+    }
 
 
 @router.post("/shot/replace")

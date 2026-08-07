@@ -50,4 +50,23 @@ describe("CandidatePanel image preview", () => {
     fireEvent.mouseDown(screen.getByRole("dialog"));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
+
+  it("asks whether to discard or save a rejected candidate", () => {
+    const callbacks = renderPanel();
+
+    fireEvent.click(screen.getByRole("button", { name: "Reject Shot" }));
+    expect(screen.getByRole("dialog", { name: "Reject this candidate?" })).toBeInTheDocument();
+    expect(callbacks.onReject).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Reject but Save to Generation Library" }));
+    expect(callbacks.onReject).toHaveBeenCalledWith("save_to_generation_library");
+    expect(screen.queryByRole("dialog", { name: "Reject this candidate?" })).not.toBeInTheDocument();
+  });
+
+  it("keeps the existing discard rejection available", () => {
+    const callbacks = renderPanel();
+    fireEvent.click(screen.getByRole("button", { name: "Reject Shot" }));
+    fireEvent.click(screen.getByRole("button", { name: "Reject and Discard" }));
+    expect(callbacks.onReject).toHaveBeenCalledWith("discard");
+  });
 });

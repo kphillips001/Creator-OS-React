@@ -190,91 +190,65 @@ export function ExplicitContentSection({
     let failedIdeas = 0;
     setProgress({ completedIdeas, currentIdeaIndex: 0, failedIdeas, phase: "preparing", totalIdeas: batch.length });
     const collectionId = `explicit-collection-${selectedConcepts.map(({ id }) => id).join("-")}`;
-    const enhancedConcepts: string[] = [];
+    const finalPrompts: string[] = [];
     for (const [index, selection] of selectedConcepts.entries()) {
       const item = batch[index]!;
       setItems((current) => updatePlannerBatchItems(current, item.id, { status: "enhancing" }));
       setProgress({ completedIdeas, currentIdeaIndex: index + 1, failedIdeas, phase: "preparing", totalIdeas: batch.length });
+      let enhanced = "";
       try {
-        enhancedConcepts.push(
-          (await enhanceCreativeTags(selection.concept, true)).replace(/\s*\n+\s*/g, ", "),
-        );
+        enhanced = (await enhanceCreativeTags(selection.concept, true)).replace(/\s*\n+\s*/g, ", ");
       } catch (reason) {
         failedIdeas += 1;
-        enhancedConcepts.push("");
         setItems((current) => updatePlannerBatchItems(current, item.id, {
           error: reason instanceof Error ? reason.message : "Explicit concept failed",
           failureStage: "enhancement",
           status: "failed",
         }));
+        continue;
       }
-    }
-    const plannableSelections = selectedConcepts
-      .map((selection, index) => ({ selection, enhanced: enhancedConcepts[index] ?? "", index }))
-      .filter(({ enhanced }) => Boolean(enhanced));
-    const originalCollection = plannableSelections.map(({ selection }) => selection.concept).join("\n");
-    const enhancedCollection = plannableSelections.map(({ enhanced }) => enhanced).join("\n");
-    let finalPrompts: string[] = [];
-    if (plannableSelections.length) {
-      const collectionInput: ExplicitGenerationInput = {
-        sourceText: enhancedCollection,
-        originalSource: originalCollection,
+
+      const explicitInput: ExplicitGenerationInput = {
+        sourceText: enhanced,
+        originalSource: selection.concept,
         sourceType: "selected_inspiration_concept",
         origin: "explicit_inspiration",
+        conceptTier: selection.tier,
         requiredSemanticAttributes: {},
-        requestedImageCount: plannableSelections.length,
+        requestedImageCount: 1,
         collectionId,
         lineage: {
-          selectedConceptIds: plannableSelections.map(({ selection }) => selection.id),
-          selectedConcepts: plannableSelections.map(({ selection }) => selection.concept),
+          collectionPromptIndex: index,
+          plannerItemId: item.id,
+          selectedConcept: selection.concept,
         },
       };
+      let providerPrompt = "";
       try {
         const preview = await createPromptPreview(
           "explicit",
-          enhancedCollection,
-          plannableSelections.length,
+          enhanced,
+          1,
           undefined,
           "explicit",
-          collectionInput,
+          explicitInput,
         );
-        finalPrompts = preview.prompts.slice(0, plannableSelections.length);
+        providerPrompt = preview.prompts[0] ?? "";
+        if (!providerPrompt) throw new Error("Explicit prompt planning returned no prompt");
+        finalPrompts.push(providerPrompt);
       } catch (reason) {
-        setError(reason instanceof Error ? reason.message : "Explicit collection planning failed");
-        for (const { index } of plannableSelections) {
-          const item = batch[index]!;
-          setItems((current) => updatePlannerBatchItems(current, item.id, {
-            error: reason instanceof Error ? reason.message : "Explicit collection planning failed",
-            failureStage: "planning",
-            status: "failed",
-          }));
-        }
-        failedIdeas += plannableSelections.length;
+        failedIdeas += 1;
+        setItems((current) => updatePlannerBatchItems(current, item.id, {
+          error: reason instanceof Error ? reason.message : "Explicit prompt planning failed",
+          failureStage: "planning",
+          status: "failed",
+        }));
+        continue;
       }
-    }
-    for (const [plannedIndex, planned] of plannableSelections.entries()) {
-      const { selection, enhanced, index } = planned;
-      const item = batch[index]!;
-      const providerPrompt = finalPrompts[plannedIndex];
-      if (!providerPrompt) continue;
+
       try {
         setProgress({ completedIdeas, currentIdeaIndex: index + 1, failedIdeas, phase: "generating", totalIdeas: batch.length });
         const tierLabel = selection.tier === "hardcore" ? "Hardcore" : "Softcore";
-        const explicitInput: ExplicitGenerationInput = {
-          sourceText: enhanced,
-          originalSource: selection.concept,
-          sourceType: "selected_inspiration_concept",
-          origin: "explicit_inspiration",
-          conceptTier: selection.tier,
-          requiredSemanticAttributes: {},
-          requestedImageCount: 1,
-          collectionId,
-          lineage: {
-            collectionPromptIndex: plannedIndex,
-            plannerItemId: item.id,
-            selectedConcept: selection.concept,
-          },
-        };
         const succeeded = await generationRef.current?.generate({
           batchItemId: item.id,
           creativeMode: "explicit",
@@ -375,19 +349,14 @@ export function ExplicitContentSection({
         <h2>Explicit Content</h2>
         <p>Create with explicit tags or ask Grok for 5 hardcore and 5 softcore concepts you can mix.</p>
       </header>
-      <div className="explicit-content__tabs" role="tablist">
-        <button aria-selected={lane === "tags"} onClick={() => setLane("tags")} role="tab" type="button">Create From Tags</button>
-        <button
-          aria-selected={lane === "inspire"}
+      <div className="explicit-content__tabs">
+        {lane === "tags" ? <button
           onClick={() => {
             setLane("inspire");
             if (!hasConcepts && !pending) void inspire();
           }}
-          role="tab"
           type="button"
-        >
-          Inspire Me
-        </button>
+        >Inspire Me</button> : <button onClick={() => setLane("tags")} type="button">Back to Tags</button>}
       </div>
 
       {lane === "tags" ? (

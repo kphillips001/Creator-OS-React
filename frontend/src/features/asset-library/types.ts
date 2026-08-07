@@ -20,8 +20,13 @@ export type AssetLibraryItem = {
   deliverableId?: string | null;
   description?: string | null;
   shotCount?: number | null;
-  sessionSelling?: SessionSellingReadiness | null;
+  sessionSelling?: SalePreparationReadiness | null;
+  sellingMode?: PhotoshootSellingMode;
+  bundleSalesChannel?: BundleSalesChannel | null;
 };
+
+export type PhotoshootSellingMode = "SESSION" | "BUNDLE";
+export type BundleSalesChannel = "CHAT" | "CONTENT_WALL";
 
 export type SessionSellingStep = {
   assetId: number; shotOrder: number; position: number; role: string;
@@ -37,10 +42,39 @@ export type SessionSellingStep = {
 
 export type SessionSellingReadiness = {
   deliverableId: string; photoshootSessionId: string; strategyVersion: string;
-  status: "NOT_PREPARED" | "PREPARING" | "READY" | "NEEDS_ATTENTION";
+  sellingMode: PhotoshootSellingMode;
+  status: "STRATEGY_REQUIRED" | "NOT_PREPARED" | "PREPARING" | "READY" | "NEEDS_ATTENTION" | "NOT_CONFIGURED";
+  strategyExists?: boolean; strategyStatus?: "MISSING" | "READY";
   statusLabel: string; paidStepCount: number; readyPaidStepCount: number;
   teaserReady: boolean; steps: SessionSellingStep[];
 };
+
+export type BundleSellingReadiness = {
+  deliverableId: string; photoshootSessionId: string; sellingMode: "BUNDLE";
+  bundleSalesChannel?: BundleSalesChannel;
+  status: "NOT_CONFIGURED" | "PREPARING" | "READY" | "NEEDS_ATTENTION";
+  statusLabel: string; imageCount: number; priceMinor: number | null; currency: string;
+  offeringId?: string | null; publicationId?: string | null;
+  publicationStatus?: string | null; providerResourceStatus?: string | null;
+  mediaLinkUuid?: string | null; deliveryUrl?: string | null;
+  publishedAt?: string | null; updatedAt?: string | null; error?: string | null;
+  promotionalTeaser?: BundleTeaserReadiness;
+  autonomousSales?: {
+    status: "READY" | "NEEDS_SETUP" | "DISABLED";
+    statusLabel: string; reason: string | null;
+  };
+};
+
+export type BundleTeaserReadiness = {
+  status: "NOT_CONFIGURED" | "READY" | "NEEDS_ATTENTION"; statusLabel: string;
+  commercialRole: "BUNDLE_PROMOTIONAL_TEASER"; sourceAssetId: number | null;
+  teaserAssetId: number | null; blurStrength: number; maskWidth: number | null;
+  maskHeight: number | null; maskVersion: string; maskUrl: string | null;
+  previewUrl: string | null; error: string | null;
+  candidates: { assetId: number; shotOrder: number; imageUrl: string }[];
+};
+
+export type SalePreparationReadiness = SessionSellingReadiness | BundleSellingReadiness;
 
 export type AssetLibraryResponse = {
   assets: AssetLibraryItem[];

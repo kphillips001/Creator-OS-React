@@ -91,6 +91,9 @@ class TelegramPurchaseIntentService:
                 "commercial_intelligence": dict(
                     diagnostics.get("commercial_intelligence") or {}
                 ),
+                "photoshoot_bundle": dict(
+                    diagnostics.get("bundle_sales_context") or {}
+                ),
             },
         )
         intelligence = dict(
@@ -130,6 +133,11 @@ class TelegramPurchaseIntentService:
         if intent is None:
             return None
         return self.intents.mark_abandoned(intent.purchase_intent_id)
+
+    def fail_delivery(self, intent):
+        if intent is None:
+            return None
+        return self.intents.mark_delivery_failed(intent.purchase_intent_id)
 
     def get_unacknowledged_purchase(self, **lookup):
         return self.intents.get_unacknowledged_purchase(**lookup)

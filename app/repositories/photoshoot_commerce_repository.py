@@ -10,7 +10,10 @@ from app.database import get_db_connection
 class PhotoshootCommerceRepository:
     DISPLAY_COLUMNS = """
         COALESCE(NULLIF(BTRIM(i.commercial_title), ''), d.display_name) AS display_title,
-        NULLIF(BTRIM(i.commercial_summary), '') AS display_description
+        NULLIF(BTRIM(i.commercial_summary), '') AS display_description,
+        i.status AS commercial_intelligence_status,
+        i.pipeline_stage AS commercial_intelligence_stage,
+        i.error_code AS commercial_intelligence_error_code
     """
     def __init__(self, connection_factory=get_db_connection):
         self.connection_factory = connection_factory
@@ -64,7 +67,8 @@ class PhotoshootCommerceRepository:
                     stage_status=jsonb_set(COALESCE(stage_status,'{}'::jsonb),ARRAY[%s],to_jsonb('FAILED'::text),TRUE),
                     generation_status='FAILED',error_code=%s,error_message=%s,updated_at=now()
                     WHERE photoshoot_session_id=%s RETURNING *""",
-                    (version, stage, stage.lower(), type(error).__name__, str(error), session_id))
+                    (version, stage, stage.lower(),
+                     getattr(error, "error_code", type(error).__name__), str(error), session_id))
                 return dict(cur.fetchone())
 
     def update_intelligence_stage(self, session_id: str, stage: str, progress: dict):
@@ -203,13 +207,27 @@ class PhotoshootCommerceRepository:
             WHERE d.creator_profile_id=%s AND d.registration_state='PHOTOSHOOT_COMPLETE'
               AND d.is_archived=FALSE ORDER BY d.completed_at DESC""", (creator_profile_id,))
 
-    def list_asset_library(self, creator_profile_id: int, *, search: str | None = None, limit: int | None = None):
+    @staticmethod
+    def _asset_library_sales_classification_filter(classification: str | None):
+        value = str(classification or "").strip().upper()
+        if value == "SESSION":
+            return "COALESCE(d.selling_mode, 'SESSION')='SESSION'"
+        if value == "CHAT":
+            return "d.selling_mode='BUNDLE' AND COALESCE(d.bundle_sales_channel, 'CHAT')='CHAT'"
+        if value == "WALL":
+            return "d.selling_mode='BUNDLE' AND d.bundle_sales_channel='CONTENT_WALL'"
+        return None
+
+    def list_asset_library(self, creator_profile_id: int, *, search: str | None = None, classification: str | None = None, limit: int | None = None):
         filters = ["d.creator_profile_id=%s", "d.registration_state='IN_ASSET_LIBRARY'", "d.is_archived=FALSE"]
         params = [creator_profile_id]
         if search:
             filters.append("(COALESCE(NULLIF(BTRIM(i.commercial_title), ''), d.display_name) ILIKE %s OR COALESCE(NULLIF(BTRIM(i.commercial_summary), ''), '') ILIKE %s)")
             term = f"%{search.strip()}%"
             params.extend((term, term))
+        classification_filter = self._asset_library_sales_classification_filter(classification)
+        if classification_filter:
+            filters.append(f"({classification_filter})")
         suffix = " LIMIT %s OFFSET 0" if limit is not None else ""
         if limit is not None:
             params.append(max(0, int(limit)))
@@ -220,13 +238,16 @@ class PhotoshootCommerceRepository:
             WHERE {' AND '.join(filters)}
             ORDER BY COALESCE(d.updated_at, d.completed_at) DESC NULLS LAST, d.deliverable_id DESC{suffix}""", tuple(params))
 
-    def count_asset_library(self, creator_profile_id: int, *, search: str | None = None) -> int:
+    def count_asset_library(self, creator_profile_id: int, *, search: str | None = None, classification: str | None = None) -> int:
         filters = ["d.creator_profile_id=%s", "d.registration_state='IN_ASSET_LIBRARY'", "d.is_archived=FALSE"]
         params = [creator_profile_id]
         if search:
             filters.append("(COALESCE(NULLIF(BTRIM(i.commercial_title), ''), d.display_name) ILIKE %s OR COALESCE(NULLIF(BTRIM(i.commercial_summary), ''), '') ILIKE %s)")
             term = f"%{search.strip()}%"
             params.extend((term, term))
+        classification_filter = self._asset_library_sales_classification_filter(classification)
+        if classification_filter:
+            filters.append(f"({classification_filter})")
         row = self._one(f"""SELECT COUNT(*) AS total FROM public.photoshoot_commerce_deliverables d
             LEFT JOIN public.photoshoot_intelligence_profiles i USING (photoshoot_session_id)
             WHERE {' AND '.join(filters)}""", tuple(params))
@@ -246,6 +267,106 @@ class PhotoshootCommerceRepository:
             WHERE deliverable_id=%s AND creator_profile_id=%s
               AND registration_state='IN_ASSET_LIBRARY' AND is_archived=FALSE
             RETURNING *""", (deliverable_id, creator_profile_id))
+
+    def update_selling_mode(self, deliverable_id: str, creator_profile_id: int, selling_mode: str):
+        """Persist an operator-selected mode when no immutable commerce evidence exists."""
+        return self._one("""UPDATE public.photoshoot_commerce_deliverables deliverable
+            SET selling_mode=%s,
+                bundle_sales_channel=CASE WHEN %s='BUNDLE'
+                    THEN COALESCE(bundle_sales_channel,'CHAT')
+                    ELSE bundle_sales_channel END,
+                updated_at=now()
+            WHERE deliverable.deliverable_id=%s
+              AND deliverable.creator_profile_id=%s
+              AND deliverable.is_archived=FALSE
+              AND NOT EXISTS (
+                SELECT 1 FROM public.commercial_offerings offering
+                JOIN public.commercial_publications publication
+                  ON publication.commercial_offering_id=offering.offering_id
+                WHERE offering.source_photoshoot_deliverable_id=deliverable.deliverable_id
+                  AND publication.status='LIVE'
+                  AND publication.provider_resource_status='PRESENT'
+              )
+              AND NOT EXISTS (
+                SELECT 1 FROM public.commercial_offerings offering
+                JOIN public.purchase_intents intent
+                  ON intent.commercial_offering_id=offering.offering_id
+                WHERE offering.source_photoshoot_deliverable_id=deliverable.deliverable_id
+                  AND intent.status='PURCHASED'
+              )
+            RETURNING deliverable.*""",
+            (selling_mode, selling_mode, deliverable_id, creator_profile_id))
+
+    def update_bundle_sales_channel(self, deliverable_id: str,
+                                    creator_profile_id: int, channel: str):
+        """Persist the exclusive Bundle channel until the Bundle is used in chat."""
+        return self._one("""UPDATE public.photoshoot_commerce_deliverables deliverable
+            SET bundle_sales_channel=%s,updated_at=now()
+            WHERE deliverable.deliverable_id=%s
+              AND deliverable.creator_profile_id=%s
+              AND deliverable.selling_mode='BUNDLE'
+              AND deliverable.is_archived=FALSE
+              AND NOT EXISTS (
+                SELECT 1
+                FROM public.customer_photoshoot_lifecycles lifecycle
+                JOIN public.customer_photoshoot_lifecycle_events event
+                  ON event.lifecycle_id=lifecycle.lifecycle_id
+                WHERE lifecycle.photoshoot_id=deliverable.photoshoot_session_id
+                  AND lifecycle.creator_profile_id=deliverable.creator_profile_id
+                  AND event.event_type IN (
+                    'BUNDLE_TEASER_PRESENTED','BUNDLE_OFFER_PRESENTED'
+                  )
+              )
+              AND NOT EXISTS (
+                SELECT 1 FROM public.commercial_offerings offering
+                JOIN public.purchase_intents intent
+                  ON intent.commercial_offering_id=offering.offering_id
+                WHERE offering.source_photoshoot_deliverable_id=deliverable.deliverable_id
+                  AND offering.offering_type='BUNDLE'
+              )
+            RETURNING deliverable.*""",
+            (channel, deliverable_id, creator_profile_id))
+
+    def has_bundle_channel_use_evidence(self, deliverable_id: str,
+                                        creator_profile_id: int) -> bool:
+        row = self._one("""SELECT EXISTS (
+            SELECT 1 FROM public.photoshoot_commerce_deliverables deliverable
+            WHERE deliverable.deliverable_id=%s
+              AND deliverable.creator_profile_id=%s
+              AND (
+                EXISTS (
+                  SELECT 1 FROM public.customer_photoshoot_lifecycles lifecycle
+                  JOIN public.customer_photoshoot_lifecycle_events event
+                    ON event.lifecycle_id=lifecycle.lifecycle_id
+                  WHERE lifecycle.photoshoot_id=deliverable.photoshoot_session_id
+                    AND lifecycle.creator_profile_id=deliverable.creator_profile_id
+                    AND event.event_type IN (
+                      'BUNDLE_TEASER_PRESENTED','BUNDLE_OFFER_PRESENTED'
+                    )
+                ) OR EXISTS (
+                  SELECT 1 FROM public.commercial_offerings offering
+                  JOIN public.purchase_intents intent
+                    ON intent.commercial_offering_id=offering.offering_id
+                  WHERE offering.source_photoshoot_deliverable_id=deliverable.deliverable_id
+                    AND offering.offering_type='BUNDLE'
+                )
+              )
+        ) AS protected""", (deliverable_id, creator_profile_id))
+        return bool(row and row["protected"])
+
+    def has_protected_commercial_evidence(self, deliverable_id: str, creator_profile_id: int) -> bool:
+        row = self._one("""SELECT EXISTS (
+              SELECT 1 FROM public.commercial_offerings offering
+              LEFT JOIN public.commercial_publications publication
+                ON publication.commercial_offering_id=offering.offering_id
+              LEFT JOIN public.purchase_intents intent
+                ON intent.commercial_offering_id=offering.offering_id
+              WHERE offering.source_photoshoot_deliverable_id=%s
+                AND offering.creator_profile_id=%s
+                AND ((publication.status='LIVE' AND publication.provider_resource_status='PRESENT')
+                     OR intent.status='PURCHASED')
+            ) AS protected""", (deliverable_id, creator_profile_id))
+        return bool(row and row["protected"])
 
     def set_analysis_pending(self, deliverable_id: str):
         return self._one("""UPDATE public.photoshoot_commerce_deliverables SET

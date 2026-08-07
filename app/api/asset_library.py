@@ -6,9 +6,10 @@ import mimetypes
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
+from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from fastapi.responses import FileResponse, JSONResponse
 
 from app.api.content_studio import _current_account_id
@@ -26,7 +27,14 @@ from app.services.staged_asset_registration_service import (
 from app.repositories.photoshoot_commerce_repository import PhotoshootCommerceRepository
 from app.services.photoshoot_commerce_deliverable_service import PhotoshootCommerceDeliverableService
 from app.services.photoshoot_sale_preparation_service import PhotoshootSalePreparationService
+from app.services.photoshoot_bundle_sale_preparation_service import PhotoshootBundleSalePreparationService
+from app.services.photoshoot_bundle_teaser_service import PhotoshootBundleTeaserService
 from app.services.creative_intelligence_learning_service import CreativeIntelligenceLearningService
+from app.models.photoshoot_selling_mode import PhotoshootSellingMode
+from app.models.bundle_sales_channel import BundleSalesChannel
+from app.models.ownership_intelligence import OwnershipIdentity
+from app.services.photoshoot_bundle_ownership_service import PhotoshootBundleOwnershipService
+from app.services.photoshoot_session_sales_strategy_service import SESSION_SALES_STRATEGY_VERSION
 
 
 router = APIRouter(prefix="/api/v1/assets", tags=["asset-library"])
@@ -159,7 +167,12 @@ def _staged_payload(record) -> dict:
 def _photoshoot_payload(row: dict) -> dict:
     session_selling = None
     try:
-        session_selling = PhotoshootSalePreparationService().inspect(
+        service = (
+            PhotoshootBundleSalePreparationService()
+            if str(row.get("selling_mode") or "SESSION") == "BUNDLE"
+            else PhotoshootSalePreparationService()
+        )
+        session_selling = service.inspect(
             row["deliverable_id"], creator_profile_id=int(row["creator_profile_id"]),
         )
     except Exception as error:
@@ -182,6 +195,11 @@ def _photoshoot_payload(row: dict) -> dict:
         "shotCount": int(row["shot_count"]),
         "registrationSource": "Photoshoot Gallery",
         "sessionSelling": session_selling,
+        "sellingMode": row.get("selling_mode") or "SESSION",
+        "bundleSalesChannel": (
+            row.get("bundle_sales_channel") or "CHAT"
+            if str(row.get("selling_mode") or "SESSION") == "BUNDLE" else None
+        ),
     }
 
 
@@ -200,13 +218,155 @@ class SalePreparationStep(BaseModel):
 class SalePreparationRequest(BaseModel):
     model_config = {"extra": "forbid"}
 
-    strategyVersion: str
-    steps: list[SalePreparationStep]
+    strategyVersion: str | None = None
+    steps: list[SalePreparationStep] = Field(default_factory=list)
+    priceMinor: int | None = None
     fanvueAccountId: int | None = None
 
 
-def _execute_sale_preparation(publication_ids, creator_profile_id, account_id):
-    PhotoshootSalePreparationService().execute_staged(
+class PhotoshootSellingModeRequest(BaseModel):
+    model_config = {"extra": "forbid"}
+
+    sellingMode: PhotoshootSellingMode
+
+
+class BundleSalesChannelRequest(BaseModel):
+    model_config = {"extra": "forbid"}
+
+    bundleSalesChannel: BundleSalesChannel
+
+
+class BundleTeaserSaveRequest(BaseModel):
+    model_config = {"extra": "forbid"}
+    sourceAssetId: int
+    maskData: str
+    maskWidth: int
+    maskHeight: int
+    blurStrength: int
+
+
+@router.put("/photoshoots/{deliverable_id}/selling-mode")
+def update_photoshoot_selling_mode(deliverable_id: str, request: PhotoshootSellingModeRequest):
+    creator_profile_id = int(_creator_profile()["id"])
+    try:
+        row = PhotoshootCommerceDeliverableService().set_selling_mode(
+            deliverable_id, creator_profile_id, request.sellingMode,
+        )
+        return {
+            "deliverableId": str(row["deliverable_id"]),
+            "sellingMode": row.get("selling_mode") or "SESSION",
+        }
+    except KeyError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+
+
+@router.put("/photoshoots/{deliverable_id}/bundle-sales-channel")
+def update_photoshoot_bundle_sales_channel(
+    deliverable_id: str, request: BundleSalesChannelRequest,
+):
+    creator_profile_id = int(_creator_profile()["id"])
+    try:
+        row = PhotoshootCommerceDeliverableService().set_bundle_sales_channel(
+            deliverable_id, creator_profile_id, request.bundleSalesChannel,
+        )
+        return {
+            "deliverableId": str(row["deliverable_id"]),
+            "bundleSalesChannel": row.get("bundle_sales_channel") or "CHAT",
+        }
+    except KeyError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+
+
+@router.get("/photoshoots/{deliverable_id}/bundle-teaser")
+def inspect_photoshoot_bundle_teaser(deliverable_id: str):
+    try:
+        return PhotoshootBundleTeaserService().inspect(
+            deliverable_id, creator_profile_id=int(_creator_profile()["id"]),
+        )
+    except KeyError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+
+
+@router.get("/photoshoots/{deliverable_id}/bundle-ownership")
+def inspect_photoshoot_bundle_ownership(
+    deliverable_id: str,
+    fanvueAccountId: int = Query(..., gt=0),
+    externalFanvueUserUuid: UUID | None = Query(None),
+    telegramUserId: int | None = Query(None, gt=0),
+):
+    if externalFanvueUserUuid is None and telegramUserId is None:
+        raise HTTPException(
+            status_code=422,
+            detail="A Fanvue buyer UUID or Telegram user ID is required.",
+        )
+    try:
+        creator_profile_id = int(_creator_profile()["id"])
+        return PhotoshootBundleOwnershipService().inspect(
+            deliverable_id,
+            identity=OwnershipIdentity(
+                creator_profile_id=creator_profile_id,
+                fanvue_account_id=fanvueAccountId,
+                external_fanvue_user_uuid=externalFanvueUserUuid,
+                telegram_user_id=telegramUserId,
+            ),
+        )
+    except KeyError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+
+
+@router.put("/photoshoots/{deliverable_id}/bundle-teaser")
+def save_photoshoot_bundle_teaser(deliverable_id: str, request: BundleTeaserSaveRequest):
+    try:
+        return PhotoshootBundleTeaserService().save(
+            deliverable_id, creator_profile_id=int(_creator_profile()["id"]),
+            source_asset_id=request.sourceAssetId, mask_data=request.maskData,
+            mask_width=request.maskWidth, mask_height=request.maskHeight,
+            blur_strength=request.blurStrength,
+        )
+    except KeyError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+
+
+@router.get("/photoshoots/{deliverable_id}/bundle-teaser/mask", response_class=FileResponse)
+def photoshoot_bundle_teaser_mask(deliverable_id: str):
+    try:
+        path = PhotoshootBundleTeaserService().mask_path(
+            deliverable_id, creator_profile_id=int(_creator_profile()["id"]),
+        )
+        return FileResponse(path, media_type="image/png", headers={"Cache-Control": "no-store"})
+    except KeyError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+
+
+def _preparation_service(deliverable_id: str, creator_profile_id: int):
+    row = PhotoshootCommerceRepository().get(deliverable_id)
+    if row is None or int(row["creator_profile_id"]) != int(creator_profile_id):
+        raise KeyError("Photoshoot not found.")
+    return (
+        PhotoshootBundleSalePreparationService()
+        if str(row.get("selling_mode") or "SESSION") == "BUNDLE"
+        else PhotoshootSalePreparationService()
+    )
+
+
+def _execute_sale_preparation(publication_ids, creator_profile_id, account_id, selling_mode):
+    service = (
+        PhotoshootBundleSalePreparationService()
+        if selling_mode == "BUNDLE" else PhotoshootSalePreparationService()
+    )
+    service.execute_staged(
         publication_ids, creator_profile_id=creator_profile_id,
         fanvue_account_id=account_id,
     )
@@ -215,8 +375,33 @@ def _execute_sale_preparation(publication_ids, creator_profile_id, account_id):
 @router.get("/photoshoots/{deliverable_id}/sale-preparation")
 def inspect_photoshoot_sale_preparation(deliverable_id: str):
     try:
+        creator_profile_id = int(_creator_profile()["id"])
+        return _preparation_service(deliverable_id, creator_profile_id).inspect(
+            deliverable_id, creator_profile_id=creator_profile_id)
+    except KeyError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+
+
+@router.post("/photoshoots/{deliverable_id}/session-sales-strategy")
+def generate_photoshoot_session_sales_strategy(deliverable_id: str):
+    creator_profile_id = int(_creator_profile()["id"])
+    try:
+        deliverable = PhotoshootCommerceRepository().get(deliverable_id)
+        if (deliverable is None
+                or int(deliverable["creator_profile_id"]) != creator_profile_id):
+            raise KeyError("Completed Photoshoot not found.")
+        if deliverable.get("registration_state") not in {"IN_ASSET_LIBRARY", "REGISTERED"}:
+            raise ValueError(
+                "Photoshoot must be in the Asset Library before generating a Session Sales Strategy."
+            )
+        PhotoshootCommerceDeliverableService().generate_session_sales_strategy(
+            deliverable_id, creator_profile_id,
+            strategy_version=SESSION_SALES_STRATEGY_VERSION,
+        )
         return PhotoshootSalePreparationService().inspect(
-            deliverable_id, creator_profile_id=int(_creator_profile()["id"]),
+            deliverable_id, creator_profile_id=creator_profile_id,
         )
     except KeyError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
@@ -232,17 +417,30 @@ def prepare_photoshoot_for_sale(deliverable_id: str, request: SalePreparationReq
     if not account_id:
         raise HTTPException(status_code=409, detail="A connected Fanvue account is required.")
     try:
-        service = PhotoshootSalePreparationService()
-        publication_ids = service.stage(
-            deliverable_id, creator_profile_id=int(profile["id"]),
-            fanvue_account_id=int(account_id),
-            strategy_version=request.strategyVersion,
-            reviewed_steps=[item.model_dump() for item in request.steps],
-        )
+        creator_profile_id = int(profile["id"])
+        service = _preparation_service(deliverable_id, creator_profile_id)
+        selling_mode = "BUNDLE" if isinstance(service, PhotoshootBundleSalePreparationService) else "SESSION"
+        if selling_mode == "BUNDLE":
+            if request.strategyVersion is not None or request.steps:
+                raise ValueError("Bundle preparation does not accept Session strategy steps or asset membership.")
+            publication_ids = service.stage(
+                deliverable_id, creator_profile_id=creator_profile_id,
+                fanvue_account_id=int(account_id), price_minor=request.priceMinor,
+            )
+        else:
+            if request.priceMinor is not None:
+                raise ValueError("Session preparation does not accept a Bundle price.")
+            publication_ids = service.stage(
+                deliverable_id, creator_profile_id=creator_profile_id,
+                fanvue_account_id=int(account_id),
+                strategy_version=request.strategyVersion,
+                reviewed_steps=[item.model_dump() for item in request.steps],
+            )
         background_tasks.add_task(
-            _execute_sale_preparation, publication_ids, int(profile["id"]), int(account_id),
+            _execute_sale_preparation, publication_ids, creator_profile_id,
+            int(account_id), selling_mode,
         )
-        return service.inspect(deliverable_id, creator_profile_id=int(profile["id"]))
+        return service.inspect(deliverable_id, creator_profile_id=creator_profile_id)
     except KeyError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
     except ValueError as error:
@@ -315,9 +513,12 @@ def list_assets(
             continue
         staged_by_id[record.image_id] = _staged_payload(record)
     photoshoot_repository = PhotoshootCommerceRepository()
-    include_photoshoots = (not media_type or media_type == "photoshoot") and not classification
+    sales_classification = str(classification or "").strip().upper()
+    is_photoshoot_classification = sales_classification in {"CHAT", "SESSION", "WALL"}
+    include_photoshoots = (not media_type or media_type == "photoshoot") and (not classification or is_photoshoot_classification)
     photoshoot_total = photoshoot_repository.count_asset_library(
-        creator_profile_id, search=search_value or None
+        creator_profile_id, search=search_value or None,
+        classification=sales_classification if is_photoshoot_classification else None,
     ) if include_photoshoots else 0
     requested_candidate_limit = page * page_size
     registered_candidates, registered_total, classifications = (
@@ -337,6 +538,7 @@ def list_assets(
     photoshoots = photoshoot_repository.list_asset_library(
         creator_profile_id,
         search=search_value or None,
+        classification=sales_classification if is_photoshoot_classification else None,
         limit=candidate_limit,
     ) if include_photoshoots else ()
     staged_candidates = list(staged_by_id.values())

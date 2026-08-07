@@ -39,7 +39,13 @@ class PhotoshootSessionSalesStrategyRepository:
                        (photoshoot_session_id,deliverable_id,creator_profile_id,strategy_version,
                         intelligence_version,status,strategy_data,model,generated_at)
                        VALUES (%s,%s,%s,%s,%s,'READY',%s::jsonb,%s,%s)
-                       ON CONFLICT (photoshoot_session_id,strategy_version) DO NOTHING
+                       ON CONFLICT (photoshoot_session_id,strategy_version) DO UPDATE SET
+                        deliverable_id=EXCLUDED.deliverable_id,
+                        creator_profile_id=EXCLUDED.creator_profile_id,
+                        intelligence_version=EXCLUDED.intelligence_version,
+                        status='READY',strategy_data=EXCLUDED.strategy_data,
+                        model=EXCLUDED.model,generated_at=EXCLUDED.generated_at,updated_at=now()
+                       WHERE photoshoot_session_sales_strategies.status<>'READY'
                        RETURNING *""",
                     (photoshoot_session_id, deliverable_id, creator_profile_id,
                      strategy_version, intelligence_version,

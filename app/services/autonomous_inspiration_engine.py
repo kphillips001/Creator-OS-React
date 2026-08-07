@@ -55,6 +55,7 @@ class AutonomousInspirationEngine:
         self,
         *,
         fanvue_account_id: int | str,
+        diagnostic_trace_id: str | None = None,
     ) -> tuple[str, ...]:
         account_id = str(fanvue_account_id)
         intelligence = self.creator_intelligence.get_for_account(
@@ -90,13 +91,30 @@ class AutonomousInspirationEngine:
             month=calendar.month_name[current.month],
             season=self._season(current.month),
         )
+        from app.services.generation_request_diagnostic_service import GenerationRequestDiagnosticService
+        diagnostic = GenerationRequestDiagnosticService()
+        diagnostic.record(trace_id=diagnostic_trace_id,
+                          workflow_origin="autonomous_inspiration",
+                          stage="1_workflow_origin", value="autonomous_inspiration")
+        diagnostic.record(
+            trace_id=diagnostic_trace_id, workflow_origin="autonomous_inspiration",
+            stage="2_initial_creative_input",
+            value="Autonomous selection from Creator Intelligence and Creative Intelligence",
+        )
+        diagnostic.record(trace_id=diagnostic_trace_id,
+                          workflow_origin="autonomous_inspiration",
+                          stage="3_ava_creator_context_supplied", value=brief)
         directions = self._parse(self.text_generator(brief))
         if len(directions) < self.IMAGE_COUNT:
             raise ValueError(
                 "Autonomous Inspiration Engine returned fewer than six "
                 "usable image directions."
             )
-        return directions[:self.IMAGE_COUNT]
+        selected = directions[:self.IMAGE_COUNT]
+        diagnostic.record(trace_id=diagnostic_trace_id,
+                          workflow_origin="autonomous_inspiration",
+                          stage="4_enhanced_creative_intent", value=selected)
+        return selected
 
     @classmethod
     def _build_brief(

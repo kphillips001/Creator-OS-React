@@ -41,6 +41,7 @@
 .photoshoot-shot-approved { display: grid; grid-column: 1 / -1; grid-template-columns: auto 1fr auto; align-items: center; gap: var(--space-4); }.photoshoot-shot-approved__check { display: grid; width: 46px; height: 46px; place-items: center; border-radius: 50%; background: var(--color-accent-surface); color: var(--color-accent); font-size: 1.5rem; font-weight: 800; }.photoshoot-shot-approved h2 { margin-bottom: var(--space-2); }.photoshoot-shot-approved p { margin: var(--space-1) 0; color: var(--color-text-secondary); }.photoshoot-shot-approved strong { display: block; margin-top: var(--space-3); color: var(--color-text-primary); }.photoshoot-shot-approved__actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--space-2); }
 .photoshoot-session-actions { display: flex; grid-column: 1 / -1; align-items: center; justify-content: flex-end; gap: var(--space-3); }.photoshoot-session-actions span { color: var(--color-text-muted); font-size: .75rem; }.photoshoot-approval-notice { display: grid; grid-column: 1 / -1; gap: var(--space-1); padding: var(--space-3) var(--space-4); border: 1px solid var(--color-accent); border-radius: var(--radius-md); background: var(--color-accent-surface); color: var(--color-text-secondary); }.photoshoot-approval-notice strong { color: var(--color-accent); }.photoshoot-approval-notice span { font-size: .78rem; }
 .photoshoot-stop-dialog { position: fixed; inset: 0; z-index: 120; display: grid; place-items: center; padding: 1rem; background: rgb(4 5 7 / 84%); backdrop-filter: blur(12px); }.photoshoot-stop-dialog > div { width: min(540px,100%); padding: var(--space-4); border: 1px solid var(--color-border-strong); border-radius: var(--radius-lg); background: #0d1014; box-shadow: 0 28px 90px #000; }.photoshoot-stop-dialog h2 { margin: 0; }.photoshoot-stop-dialog p { color: var(--color-text-secondary); font-size: .8rem; line-height: 1.6; }.photoshoot-stop-dialog footer { display: flex; justify-content: flex-end; gap: var(--space-2); margin-top: var(--space-4); }.photoshoot-stop-dialog button { min-height: 40px; padding: 0 var(--space-4); border: 1px solid var(--color-border-strong); border-radius: var(--radius-sm); background: #090a0c; color: var(--color-text-primary); font: inherit; cursor: pointer; }
+.photoshoot-reject-dialog > div { width: min(680px,100%); }.photoshoot-reject-dialog footer { flex-wrap: wrap; }.photoshoot-reject-dialog footer button:last-child { border-color: var(--color-accent); background: var(--color-accent); color: #050607; }
 @media (max-width: 860px) { .photoshoot-workflow { grid-template-columns: 1fr; }.photoshoot-workflow > * { grid-column: 1 !important; }.photoshoot-form-grid,.photoshoot-candidate-compare { grid-template-columns: 1fr; }.photoshoot-shot-approved { grid-template-columns: auto 1fr; }.photoshoot-shot-approved__actions { grid-column: 1 / -1; justify-content: stretch; }.photoshoot-shot-approved__actions button { flex: 1; } }
 @media (max-width: 580px) { .photoshoot-card { padding: var(--space-3); }.photoshoot-card > header,.photoshoot-generation { align-items: flex-start; flex-direction: column; }.photoshoot-segmented { flex-direction: column; }.photoshoot-placeholder-actions { display: grid; }.photoshoot-placeholder-actions button { width: 100%; }.photoshoot-inspiration__grid,.photoshoot-recommendation dl { grid-template-columns: 1fr; } }
 .photoshoot-recommendation--collapsible {
@@ -60,9 +61,15 @@
 .photoshoot-planning-status em { color: var(--color-text-primary); font-size: .68rem; font-style: normal; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
 .photoshoot-planning-status span { color: var(--color-text-secondary); font-size: .72rem; }
 .photoshoot-planning-status p { margin: .2rem 0 0; color: var(--color-text-muted); font-size: .72rem; line-height: 1.45; }
+.photoshoot-creative-structure { display: grid; gap: .2rem; padding: .65rem .75rem; border: 1px solid color-mix(in srgb, var(--color-accent) 42%, var(--color-border-subtle)); border-radius: var(--radius-sm); background: color-mix(in srgb, var(--color-accent) 7%, var(--color-surface-inset)); }
+.photoshoot-creative-structure strong { color: var(--color-accent); font-size: .74rem; letter-spacing: .02em; }
+.photoshoot-creative-structure span { color: var(--color-text-muted); font-size: .7rem; line-height: 1.4; }
 .photoshoot-continuity-warning { margin-bottom: var(--space-3); padding: var(--space-3); border: 1px solid var(--color-warning-border); border-radius: var(--radius-sm); background: var(--color-warning-surface); color: var(--color-warning-text); font-size: .76rem; line-height: 1.45; }
 .photoshoot-target-complete { grid-column: 1 / -1; text-align: center; }
 .photoshoot-target-complete p { margin: var(--space-2) 0 0; color: var(--color-text-secondary); font-size: .78rem; }
+.photoshoot-completion { display: grid; justify-items: center; gap: var(--space-3); text-align: center; }
+.photoshoot-completion strong { color: var(--color-accent); }
+.photoshoot-completion p { margin: 0; color: var(--color-text-secondary); }
 
 .photoshoot-recommendation--collapsible > summary {
   cursor: pointer;
@@ -96,4 +103,29 @@
 
 .photoshoot-selected-progress__stages li.is-complete span {
   color: var(--success, #35c48d);
+}
+.photoshoot-operation progress {
+  width: 100%;
+}
+
+.photoshoot-operation small {
+  color: var(--color-text-secondary);
+}
+
+.photoshoot-direct-editor {
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-accent-border);
+  animation: photoshoot-direct-editor-open 180ms ease-out;
+  transform-origin: top;
+}
+.photoshoot-direct-editor h3 { margin: 0 0 var(--space-1); color: var(--color-text-primary); }
+.photoshoot-direct-editor > p { margin: 0 0 var(--space-3); color: var(--color-text-secondary); }
+.photoshoot-direct-editor label { display: grid; }
+.photoshoot-direct-editor textarea { min-height: 110px; resize: vertical; }
+.photoshoot-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+
+@keyframes photoshoot-direct-editor-open {
+  from { opacity: 0; transform: scaleY(.92) translateY(-.35rem); }
+  to { opacity: 1; transform: scaleY(1) translateY(0); }
 }

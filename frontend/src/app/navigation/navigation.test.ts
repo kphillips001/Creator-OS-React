@@ -4,10 +4,25 @@ import { navigationGroups } from "./navigation";
 
 describe("Business navigation", () => {
   it("presents only primary operator workflows and moves administration to Advanced", () => {
-    const content = navigationGroups.find((group) => group.label === "Content Creation");
+    const studios = navigationGroups.find((group) => group.label === "Studios");
+    const libraries = navigationGroups.find((group) => group.label === "Libraries");
     const business = navigationGroups.find((group) => group.label === "Business");
     const advanced = navigationGroups.find((group) => group.label === "Advanced");
-    expect(content?.label).toBe("Content Creation");
+    expect(studios?.items.map((item) => [item.label,item.path])).toEqual([
+      ["Content Studio","/studio/content"],
+      ["Photoshoot Studio","/content/photoshoot"],
+      ["Video Studio","/studio/video"],
+      ["Edit Studio","/content/edit"],
+    ]);
+    expect(libraries?.items.map((item) => [item.label,item.path])).toEqual([
+      ["Generation Library","/library/generations"],
+      ["Photoshoot Gallery","/library/photoshoots"],
+      ["Video Gallery","/gallery/videos"],
+      ["Reference Library","/library/references"],
+      ["Asset Library","/library/assets"],
+    ]);
+    expect(navigationGroups.some((group)=>group.label==="Content Creation")).toBe(false);
+    expect(navigationGroups.flatMap((group)=>group.items).some((item)=>item.label==="Story Studio")).toBe(false);
     expect(business?.label).toBe("Business");
     expect(business?.items.map((item) => [item.label, item.path])).toEqual([
       ["Overview", "/home"],
@@ -25,10 +40,20 @@ describe("Business navigation", () => {
   });
 });
 
+describe("Video Gallery navigation", () => {
+  it("pairs the completed-video gallery with Video Studio", () => {
+    const libraries=navigationGroups.find((group)=>group.label==="Libraries");
+    const studios=navigationGroups.find((group)=>group.label==="Studios");
+    expect(libraries?.items.map((item)=>[item.label,item.path])).toContainEqual(["Video Gallery","/gallery/videos"]);
+    expect(studios?.items.map((item)=>item.label)).toContain("Video Studio");
+  });
+});
+
 describe("Creator navigation", () => {
-  it("keeps personality and social creative direction separate", () => {
-    const creator = navigationGroups.find((group) => group.label === "Creator");
-    expect(creator?.items.map((item) => [item.label, item.path])).toEqual([
+  it("moves creator configuration into Administration without duplication", () => {
+    const administration = navigationGroups.find((group) => group.label === "Administration");
+    expect(navigationGroups.some((group) => group.label === "Creator")).toBe(false);
+    expect(administration?.items.slice(1,5).map((item) => [item.label, item.path])).toEqual([
       ["Personality", "/creator/personality"],
       ["Social Creative Direction", "/creator/social-creative-direction"],
       ["Lifestyle", "/creator/lifestyle"],
@@ -45,6 +70,11 @@ describe("Administration navigation", () => {
     expect(labels[index + 1]).toBe("System");
     expect(navigationGroups[index]?.items.map((item) => [item.label, item.path])).toEqual([
       ["Administration", "/administration"],
+      ["Personality", "/creator/personality"],
+      ["Social Creative Direction", "/creator/social-creative-direction"],
+      ["Lifestyle", "/creator/lifestyle"],
+      ["World Model", "/creator/world-model"],
+      ["Developer Notes", "/administration/developer-notes"],
     ]);
   });
 });

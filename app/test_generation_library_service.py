@@ -671,6 +671,31 @@ class GenerationLibraryServiceTests(unittest.TestCase):
         self.assertEqual({record.status for record in completed.values()}, {"photoshoot_completed"})
         self.assertTrue(all(record.photoshoot_session_id == "photoshoot_1" for record in completed.values()))
 
+    def test_rejected_photoshoot_candidate_can_be_saved_as_standalone_generation(self):
+        service = self.make_service()
+        candidate = service.sync_job(successful_job(
+            output_references=("https://cdn.test/save-rejected-candidate.png",)
+        ))[0]
+        isolated = service.mark_photoshoot_session_records(
+            (candidate.image_id,), session_id="photoshoot_1", session_title="Continuity Set",
+        )
+
+        saved = service.save_rejected_photoshoot_candidate_to_library(candidate.image_id)
+        record = service.get(candidate.image_id)
+        active = service.browse(GenerationLibraryFilter(status="active"))
+
+        self.assertTrue(isolated.success)
+        self.assertTrue(saved.success)
+        self.assertEqual(active.total, 1)
+        self.assertEqual(active.records[0].image_id, candidate.image_id)
+        self.assertEqual(record.status, "active")
+        self.assertEqual(record.review_state, "unreviewed")
+        self.assertIsNone(record.photoshoot_session_id)
+        self.assertIsNone(record.photoshoot_request_id)
+        self.assertFalse(any(str(key).startswith("photoshoot_") for key in record.generation_metadata))
+        self.assertIn("Generation", Path(record.output_reference).parts)
+        self.assertIn("Active", Path(record.output_reference).parts)
+
     def test_return_photoshoot_seed_keeps_active_image_once_and_discards_candidate(self):
         service = self.make_service()
         created = service.sync_job(

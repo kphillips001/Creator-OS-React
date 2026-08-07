@@ -484,8 +484,10 @@ def test_terminal_photoshoot_is_not_automatically_resumed(status):
     candidate(asset_ids=[81], photoshoot_identifier="new-shoot"),
     candidate(asset_ids=[82], photoshoot_identifier=None),
     candidate(offering_type="VIDEO", asset_ids=[83], photoshoot_identifier=None),
-    candidate(offering_type="BUNDLE", asset_ids=[84, 85], destinations=["BUNDLE", "BUNDLE"],
-              photoshoot_identifier="bundle-shoot", photoshoot_identifiers=["bundle-shoot"]),
+        candidate(offering_type="BUNDLE", asset_ids=[84, 85], destinations=["BUNDLE", "BUNDLE"],
+                  photoshoot_identifier="bundle-shoot", photoshoot_identifiers=["bundle-shoot"],
+                  photoshoot_selling_mode="BUNDLE", bundle_teaser_asset_id=184,
+                  bundle_teaser_source_asset_id=84, bundle_teaser_registered=True),
 ])
 def test_closed_opportunity_releases_sales_brain_to_every_commercial_type(available):
     customer_id = uuid4(); old = candidate(photoshoot_identifier="old-shoot")
@@ -511,6 +513,24 @@ def test_no_eligible_offering_exposes_filtering_summary():
     assert result.selector_metadata["eligibleCount"] == 0
     assert result.selector_metadata["rejectedCount"] == 2
     assert "PUBLICATION_NOT_LIVE" in result.exclusion_reasons
+
+
+def test_content_wall_bundle_and_member_offerings_are_suppressed_from_chat():
+    bundle = candidate(
+        offering_type="BUNDLE", asset_ids=[84, 85], destinations=["BUNDLE", "BUNDLE"],
+        photoshoot_identifier="bundle-shoot", photoshoot_identifiers=["bundle-shoot"],
+        photoshoot_selling_mode="BUNDLE", photoshoot_bundle_sales_channel="CONTENT_WALL",
+        bundle_teaser_asset_id=184, bundle_teaser_source_asset_id=84,
+        bundle_teaser_registered=True,
+    )
+    member = candidate(
+        photoshoot_identifier="bundle-shoot", photoshoot_selling_mode="BUNDLE",
+        photoshoot_bundle_sales_channel="CONTENT_WALL",
+    )
+    result = select(Repository((bundle, member)))
+    assert result.offering_id is None
+    assert "BUNDLE_CHANNEL_CONTENT_WALL" in result.exclusion_reasons
+    assert "BUNDLE_MEMBER_OFFERING_SUPPRESSED" in result.exclusion_reasons
 
 
 def test_read_only_developer_api(monkeypatch):

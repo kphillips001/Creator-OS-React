@@ -79,7 +79,8 @@ def test_authoritative_entry_points_and_defaults_are_safe(tmp_path):
                                "photoshoot_auto_run": "app.workers.photoshoot_auto_run",
                                "ready_asset_chat_registration": "app.workers.ready_asset_chat_registration",
                                    "fanvue_commercial_publications": "app.workers.fanvue_commercial_publications",
-                                   "commerce_reconciliation": "app.workers.commerce_reconciliation"}
+                                       "commerce_reconciliation": "app.workers.commerce_reconciliation",
+                                       "background_operations": "app.workers.background_operations"}
     assert "app.outreach_worker" not in modules.values()
     value.start_enabled()
     assert processes.started == []

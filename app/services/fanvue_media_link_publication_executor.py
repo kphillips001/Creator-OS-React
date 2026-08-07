@@ -6,6 +6,7 @@ import random
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from requests.exceptions import Timeout as RequestsTimeout
 
 from app.models.commercial_offering import CommercialOfferingStatus, PrimarySalesChannel
 from app.models.commercial_publication import CommercialPublicationProvider, CommercialPublicationStatus
@@ -126,6 +127,10 @@ class FanvueMediaLinkPublicationExecutor:
         checkpoint = checkpoint or self.uploads.initialize(
             publication_id=publication_id, asset_id=asset_id, fanvue_account_id=account_id,
             media_type=asset.media_type, content_hash=digest.hexdigest(), file_size_bytes=size)
+        resume_completed_parts = bool(
+            checkpoint.provider_media_uuid and checkpoint.total_parts
+            and len(checkpoint.uploaded_parts) == int(checkpoint.total_parts)
+        )
         if checkpoint.processing_status == "ready":
             return checkpoint.provider_media_uuid
         if not checkpoint.provider_media_uuid:
@@ -148,8 +153,25 @@ class FanvueMediaLinkPublicationExecutor:
                     parts[str(number)] = etag
             completion = [{"PartNumber": number, "ETag": parts[str(number)]}
                           for number in range(1, int(checkpoint.total_parts)+1)]
-            result = client.complete_upload(checkpoint.provider_upload_id, completion)
-            self.uploads.mark_uploaded(checkpoint.publication_upload_id, result.get("status", "processing"))
+            provider_status = ""
+            if resume_completed_parts:
+                media = client.get_media(checkpoint.provider_media_uuid)
+                provider_status = str(media.get("status") or "").lower()
+            if provider_status not in {"processing", "ready"}:
+                try:
+                    result = client.complete_upload(checkpoint.provider_upload_id, completion)
+                    provider_status = str(result.get("status") or "processing").lower()
+                except RequestsTimeout:
+                    # Completion is an ambiguous write: reconcile the persisted media UUID
+                    # before allowing a later operator retry to submit it again.
+                    media = client.get_media(checkpoint.provider_media_uuid)
+                    provider_status = str(media.get("status") or "").lower()
+                    if provider_status not in {"processing", "ready"}:
+                        raise
+            self.uploads.mark_uploaded(
+                checkpoint.publication_upload_id,
+                provider_status if provider_status in {"processing", "ready"} else "processing",
+            )
         delays = (1, 2, 4, 8)
         for delay in delays:
             media = client.get_media(checkpoint.provider_media_uuid)

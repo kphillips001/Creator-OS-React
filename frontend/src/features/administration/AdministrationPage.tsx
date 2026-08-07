@@ -1,9 +1,10 @@
-import { Activity, Bot, KeyRound, RadioTower, ShieldCheck, Webhook } from "lucide-react";
+import { Activity, BookOpen, Bot, KeyRound, RadioTower, ShieldCheck, Webhook } from "lucide-react";
 import { Link } from "react-router-dom";
 import { PageHeader } from "../../shared/ui/PageHeader";
 import "./administration.css";
 
 const cards = [
+  ["Developer Notes", "Review architectural decisions, migrations, and long-term initiatives.", "/administration/developer-notes", BookOpen],
   ["Provider Connections", "Connect and inspect external provider authentication.", "/administration/providers", RadioTower],
   ["OAuth Accounts", "Review account-scoped OAuth installations.", "/administration/oauth-accounts", ShieldCheck],
   ["Webhooks", "Configure provider event destinations.", "/administration/webhooks", Webhook],

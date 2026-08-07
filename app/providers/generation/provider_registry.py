@@ -10,6 +10,7 @@ from app.providers.generation.flux_provider import FluxProvider
 from app.providers.generation.nano_banana_provider import NanoBananaProProvider, NanoBananaProvider
 from app.providers.generation.seedream_provider import Seedream45Provider, Seedream50ProProvider
 from app.providers.generation.wan_provider import WanImageEditProvider
+from app.providers.generation.seedance_video_provider import Seedance20VideoProvider
 
 
 class ProviderRegistry:
@@ -53,5 +54,6 @@ def create_default_registry(**provider_kwargs) -> ProviderRegistry:
         Seedream45Provider(**provider_kwargs),
         Seedream50ProProvider(**provider_kwargs),
         FluxProvider(),
+        Seedance20VideoProvider(**provider_kwargs),
     )
     return ProviderRegistry({provider.provider_id: provider for provider in providers})

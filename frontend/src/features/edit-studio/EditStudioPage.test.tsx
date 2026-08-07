@@ -36,13 +36,12 @@ const renderPage = () => render(
 );
 
 describe("EditStudioPage", () => {
-  it("is registered in Content Creation at the required route", () => {
-    const content = navigationGroups.find((group) => group.label === "Content Creation");
-    expect(content?.items.slice(0, 8).map(({ label }) => label)).toEqual([
-      "Generation Library", "Available Inventory", "Photoshoot Gallery", "Content Studio",
-      "Edit Studio", "Photoshoot Studio", "Story Studio", "Video Studio",
+  it("is registered in Studios at the required route", () => {
+    const studios = navigationGroups.find((group) => group.label === "Studios");
+    expect(studios?.items.map(({ label }) => label)).toEqual([
+      "Content Studio", "Photoshoot Studio", "Video Studio", "Edit Studio",
     ]);
-    expect(content?.items.find(({ label }) => label === "Edit Studio")?.path).toBe("/content/edit");
+    expect(studios?.items.find(({ label }) => label === "Edit Studio")?.path).toBe("/content/edit");
   });
 
   it("renders the missing creator profile gate without requesting configuration", async () => {

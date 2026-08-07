@@ -104,6 +104,31 @@ def test_attributed_purchase_synchronizes_existing_lifecycle_once():
     assert repository.events.count(("PURCHASED", 2, intent_id)) == 1
 
 
+def test_late_attributed_bundle_purchase_completes_closed_opportunity():
+    repository = MemoryRepository(core=(2,), teaser=())
+    repository.offering_selling_mode = lambda offering_id: "BUNDLE"
+    service = CustomerPhotoshootLifecycleService(repository)
+    customer, offering, intent_id = uuid4(), uuid4(), uuid4()
+    opportunity = repository.resolve(
+        creator_profile_id=1, customer_commerce_profile_id=customer,
+        photoshoot_id="shoot-a", selected_offering_id=offering,
+    )
+    service.transition(opportunity, CustomerPhotoshootStatus.CLOSED)
+    intent = SimpleNamespace(
+        status=SimpleNamespace(value="PURCHASED"),
+        attribution_result=SimpleNamespace(value="ATTRIBUTED"),
+        creator_profile_id=1, commercial_offering_id=offering,
+        purchase_intent_id=intent_id,
+    )
+
+    completed, _ = service.synchronize_attributed_purchase(
+        intent=intent, customer_commerce_profile_id=customer,
+    )
+
+    assert completed.status is CustomerPhotoshootStatus.COMPLETED
+    assert ("BUNDLE_PURCHASED", None, intent_id) in repository.events
+
+
 def test_unattributed_or_unmapped_purchase_never_writes_lifecycle_event():
     repository = MemoryRepository(core=(2,), teaser=(), video=())
     service = CustomerPhotoshootLifecycleService(repository)

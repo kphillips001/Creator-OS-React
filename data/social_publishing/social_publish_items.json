@@ -1,5 +1,57 @@
 [
   {
+    "publish_request_id": "social_publish_item_ae0e75fd8a5e45c897964e3784b1408a",
+    "queue_item_id": "social_queue_item_363e14cc3ba74ebeb523e82ade69b4ca",
+    "platform": "x",
+    "caption_id": "caption_result_acd36ff6b0cd420dbdc32f15727bf379",
+    "scheduled_for": null,
+    "status": "posted",
+    "created_at": "2026-08-07T14:35:43.299503",
+    "metadata": {
+      "posting_implemented": true,
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "provider_post_id": "2085736654497526223",
+      "provider_media_id": "2085736652014583808",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2085736654497526223",
+      "provider_metadata": {
+        "tweet_data": {
+          "edit_history_tweet_ids": [
+            ""
+          ],
+          "id": "2085736654497526223",
+          "text": "Help me decide\u2026 stay out here until the stars come out, or head inside for movie night? \ud83c\udf19 https://t.co/9F1OLrHn6M"
+        }
+      }
+    }
+  },
+  {
+    "publish_request_id": "social_publish_item_ecb6b3a9ded24deba6e5c1e000c928a2",
+    "queue_item_id": "social_queue_item_fd569ecabf224cef984545099673d409",
+    "platform": "x",
+    "caption_id": "caption_result_12fc5a6438d2411b9209f6e93cee454b",
+    "scheduled_for": null,
+    "status": "posted",
+    "created_at": "2026-08-06T15:03:53.466098",
+    "metadata": {
+      "posting_implemented": true,
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "provider_post_id": "2085381367265738763",
+      "provider_media_id": "2085381364828762113",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2085381367265738763",
+      "provider_metadata": {
+        "tweet_data": {
+          "edit_history_tweet_ids": [
+            ""
+          ],
+          "id": "2085381367265738763",
+          "text": "I was just enjoying the quiet until someone made me laugh this hard \ud83d\ude02 what did you just say to me? https://t.co/a2dVUV7Kay"
+        }
+      }
+    }
+  },
+  {
     "publish_request_id": "social_publish_item_6760c6e615d340d9974e22e0e65313d0",
     "queue_item_id": "social_queue_item_c541feac2cf34cc0b51f5a37d5fadb47",
     "platform": "x",

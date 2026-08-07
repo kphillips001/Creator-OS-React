@@ -1,4 +1,4 @@
-import { ImagePlus, Pencil } from "lucide-react";
+import { ImagePlus, Pencil, Video } from "lucide-react";
 import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -23,6 +23,7 @@ import type {
 } from "./types";
 import { useEditStudio } from "./useEditStudio";
 import "./edit-studio.css";
+import { videoStudioLink } from "../../infrastructure/api/videoStudioApi";
 
 let nextReferenceId = 0;
 const StableSourceImage = memo(LibraryImage);
@@ -262,6 +263,7 @@ export function EditStudioPage() {
             <h2 id="edit-source-title">Selected Source Image</h2>
             <div className="edit-studio__source-image"><StableSourceImage priority record={workingSource || context.pendingImage} /></div>
             <button className="edit-studio__secondary" disabled={busy || generationRunning} onClick={handleReturnToLibrary} type="button">Return to Library</button>
+            {workingSource && workingSource.image_id !== context.pendingImage.image_id && <button className="edit-studio__secondary" disabled={busy || generationRunning} onClick={() => navigate(videoStudioLink({ type: "edit_result", id: workingSource.image_id, previewUrl: workingSource.image_url, label: "Approved edit" }))} type="button"><Video size={16} /> Create Video</button>}
           </section>
 
           {generationRunning && <section className="edit-studio__section edit-studio__generation" aria-live="polite"><span className="edit-studio__spinner" aria-hidden="true" /><div><h2>Generating Edit...</h2><p>{context.providers.find((item) => item.value === provider)?.label || provider}</p></div></section>}

@@ -298,7 +298,10 @@ class ContentStudioCreativeTagActionTests(unittest.TestCase):
             AutonomousInspirationRequest(provider="seedream_5_0_pro"),
         )
 
-        create_directions.assert_called_once_with(fanvue_account_id=2)
+        create_directions.assert_called_once_with(
+            fanvue_account_id=2,
+            diagnostic_trace_id="run-inspire",
+        )
         queued = execute_generation.call_args.args[1]
         self.assertEqual(queued.promptCount, 6)
         self.assertEqual(queued.provider, "seedream_5_0_pro")
@@ -514,7 +517,7 @@ class ContentStudioCreativeTagActionTests(unittest.TestCase):
         )
         self.assertFalse(any(call[0] == "enhance" for call in self.director.calls))
 
-    def test_manual_origin_uses_creator_aware_editorial_enhancement(self):
+    def test_manual_origin_reuses_canonical_planner_enhancement(self):
         request = TransformTagsRequest(
             tags="tight booty daisy duke shorts, crop top, hiking",
             origin="manual_creative_concept",
@@ -522,8 +525,8 @@ class ContentStudioCreativeTagActionTests(unittest.TestCase):
         with (
             patch("app.api.content_studio._current_account_id", return_value=2),
             patch(
-                "app.services.manual_creative_concept_enhancement_service."
-                "ManualCreativeConceptEnhancementService.enhance",
+                "app.services.canonical_planner_enhancement_service."
+                "CanonicalPlannerEnhancementService.enhance",
                 return_value="creator-aware candid hiking direction",
             ) as enhance,
         ):
@@ -532,7 +535,7 @@ class ContentStudioCreativeTagActionTests(unittest.TestCase):
         self.assertEqual(result["tags"], "creator-aware candid hiking direction")
         enhance.assert_called_once_with(
             fanvue_account_id=2,
-            creative_concept=request.tags,
+            selected_item=request.tags,
         )
         self.assertFalse(any(call[0] == "enhance" for call in self.director.calls))
 

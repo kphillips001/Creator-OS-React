@@ -545,11 +545,24 @@ Do not render a landing strip, stubble, trimmed pubic hair, shadow hair, peach f
         }
 
     def build_payload(self, request: GenerationRequest) -> Mapping[str, Any]:
-        return {
-            "prompt": self._render_prompt_text(request),
-            "images": self._provider_reference_images(request),
+        prompt = self._render_prompt_text(request)
+        images = self._provider_reference_images(request)
+        payload = {
+            "prompt": prompt,
+            "images": images,
             "output_format": str(request.metadata.get("output_format") or "png"),
         }
+        from app.services.generation_request_diagnostic_service import GenerationRequestDiagnosticService
+        diagnostic = GenerationRequestDiagnosticService()
+        trace_id = request.metadata.get("diagnostic_trace_id")
+        origin = request.metadata.get("workflow_origin")
+        diagnostic.record(trace_id=trace_id, workflow_origin=origin,
+                          stage="11_ordered_provider_reference_images", value=images)
+        diagnostic.record(trace_id=trace_id, workflow_origin=origin,
+                          stage="12_final_provider_prompt", value=prompt)
+        diagnostic.record(trace_id=trace_id, workflow_origin=origin,
+                          stage="13_final_seedream_payload", value=payload)
+        return payload
 
     def _render_prompt_text(self, request: GenerationRequest) -> str:
         prompt = str(request.prompt_text or "").strip()

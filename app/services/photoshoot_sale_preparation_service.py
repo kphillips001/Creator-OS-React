@@ -45,7 +45,31 @@ class PhotoshootSalePreparationService:
         )
 
     def inspect(self, deliverable_id, *, creator_profile_id: int):
-        row, strategy = self._context(deliverable_id, creator_profile_id)
+        row = self._deliverable(deliverable_id, creator_profile_id)
+        if str(row.get("selling_mode") or "SESSION") == "BUNDLE":
+            return {
+                "deliverableId": str(row["deliverable_id"]),
+                "photoshootSessionId": str(row["photoshoot_session_id"]),
+                "sellingMode": "BUNDLE",
+                "strategyVersion": "",
+                "status": "NOT_CONFIGURED",
+                "statusLabel": "Bundle preparation is not configured yet",
+                "paidStepCount": 0,
+                "readyPaidStepCount": 0,
+                "teaserReady": False,
+                "steps": [],
+            }
+        strategy = self._strategy(row)
+        if strategy is None:
+            return {
+                "deliverableId": str(row["deliverable_id"]),
+                "photoshootSessionId": str(row["photoshoot_session_id"]),
+                "sellingMode": "SESSION", "strategyVersion": "",
+                "strategyExists": False, "strategyStatus": "MISSING",
+                "status": "STRATEGY_REQUIRED", "statusLabel": "Not Prepared",
+                "paidStepCount": 0, "readyPaidStepCount": 0,
+                "teaserReady": False, "steps": [],
+            }
         steps = [self._step_projection(row, strategy, shot) for shot in self._ordered(strategy)]
         paid = [step for step in steps if step["access"] == "PAID"]
         ready_paid = sum(step["ready"] for step in paid)
@@ -59,6 +83,7 @@ class PhotoshootSalePreparationService:
         return {
             "deliverableId": str(row["deliverable_id"]),
             "photoshootSessionId": str(row["photoshoot_session_id"]),
+            "sellingMode": "SESSION",
             "strategyVersion": strategy.strategy_version,
             "status": status,
             "statusLabel": {
@@ -300,15 +325,26 @@ class PhotoshootSalePreparationService:
                 "error": publication.last_error if publication else None}
 
     def _context(self, deliverable_id, creator_profile_id):
+        row = self._deliverable(deliverable_id, creator_profile_id)
+        if str(row.get("selling_mode") or "SESSION") != "SESSION":
+            raise ValueError(
+                "Session sale preparation is unavailable while this Photoshoot uses BUNDLE selling mode."
+            )
+        strategy = self._strategy(row)
+        if strategy is None:
+            raise ValueError("Generate a Session Sales Strategy before preparing this Photoshoot.")
+        return row, strategy
+
+    def _deliverable(self, deliverable_id, creator_profile_id):
         row = self.photoshoots.get(str(deliverable_id))
         if row is None or int(row["creator_profile_id"]) != int(creator_profile_id):
             raise KeyError("Photoshoot not found.")
         if row["registration_state"] not in {"IN_ASSET_LIBRARY", "REGISTERED"}:
             raise ValueError("Photoshoot must be in the Asset Library.")
-        strategy = self.strategies.latest(str(row["photoshoot_session_id"]))
-        if strategy is None:
-            raise ValueError("Photoshoot has no READY Session Sales Strategy.")
-        return row, strategy
+        return row
+
+    def _strategy(self, row):
+        return self.strategies.latest(str(row["photoshoot_session_id"]))
 
     @staticmethod
     def _ordered(strategy):

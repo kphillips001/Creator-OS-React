@@ -88,6 +88,33 @@ def test_context_aggregates_pending_session_registry_continuity_and_approved_tim
     assert result["timeline_summary"][0]["is_seed"] is True
 
 
+def test_timeline_numbers_only_approved_positions_not_generation_attempts():
+    seed = _record("seed-1", status="photoshoot_session")
+    second = _record("approved-2", status="photoshoot_session")
+    requests = (
+        SimpleNamespace(request_id="seed-request", sequence_index=1, status="approved", metadata={"generated_image_ids": ("seed-1",), "is_seed_image": True}),
+        SimpleNamespace(request_id="rejected-attempt", sequence_index=2, status="rejected", metadata={"generated_image_ids": ("rejected",)}),
+        SimpleNamespace(request_id="regenerated-attempt", sequence_index=3, status="rejected", metadata={"generated_image_ids": ("regenerated",)}),
+        SimpleNamespace(request_id="approved-request", sequence_index=4, status="approved", metadata={"generated_image_ids": ("approved-2",)}),
+    )
+    library = Mock()
+    library.get.side_effect = lambda image_id: {"seed-1": seed, "approved-2": second}[image_id]
+    queue = Mock()
+    queue.requests_for_session.return_value = requests
+    service = PhotoshootContextService(
+        generation_library=library,
+        generation_engine=SimpleNamespace(provider_registry=SimpleNamespace(metadata=lambda: ())),
+        photoshoot_queue=queue,
+    )
+
+    timeline = service._timeline_summary(_session())
+
+    assert [(item["sequence_index"], item["shot_number"], item["label"]) for item in timeline] == [
+        (1, 1, "Shot 1 (Seed)"),
+        (4, 2, "Shot 2"),
+    ]
+
+
 def test_context_returns_empty_gates_without_creator_profile():
     service = PhotoshootContextService(
         generation_library=Mock(), generation_engine=SimpleNamespace(provider_registry=SimpleNamespace(metadata=lambda: ())), photoshoot_queue=Mock(),
@@ -310,6 +337,33 @@ def test_manual_candidate_actions_reuse_junk_and_queue_lifecycle():
         ("candidate-1",), session_id="session-1", session_title="Photoshoot Studio", reason="photoshoot_regenerate",
     )
     queue.regenerate_request.assert_called_once_with("request-2")
+
+
+def test_manual_reject_can_save_candidate_without_approving_or_advancing():
+    session = _session()
+    request = SimpleNamespace(
+        request_id="request-2", session_id="session-1", status="awaiting_review",
+        prompt_text="Try this", metadata={"generated_image_ids": ("candidate-1",)},
+    )
+    queue = Mock()
+    queue.get_session.return_value = session
+    queue.get_request.return_value = request
+    library = Mock()
+    library.save_rejected_photoshoot_candidate_to_library.return_value = SimpleNamespace(
+        success=True, errors=(), message="Saved",
+    )
+    service = PhotoshootManualService(queue=queue, engine=Mock(), library=library, ingestion=Mock())
+
+    service.reject(
+        creator_profile_id=7, session_id="session-1", request_id="request-2",
+        save_to_generation_library=True,
+    )
+
+    library.save_rejected_photoshoot_candidate_to_library.assert_called_once_with("candidate-1")
+    library.move_photoshoot_records_to_junk.assert_not_called()
+    queue.reject_request.assert_called_once_with("request-2")
+    queue.approve_request.assert_not_called()
+    queue.update_session_settings.assert_not_called()
 
 
 def test_manual_reference_uses_backend_current_shot_and_never_stale_seed():

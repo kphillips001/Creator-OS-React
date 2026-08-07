@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, useNavigate } from "react-router-dom";
 import { PhotoshootGalleryPage } from "./PhotoshootGalleryPage";
 
-const item = { deliverableId: "set-1", name: "Golden Hour Escape", description: "A two-image outdoor collection in warm natural light.", completedAt: "2026-07-21T00:00:00Z", shotCount: 2, imageUrl: "/cover", registrationState: "PHOTOSHOOT_COMPLETE" };
+const item = { deliverableId: "set-1", name: "Golden Hour Escape", description: "A two-image outdoor collection in warm natural light.", completedAt: "2026-07-21T00:00:00Z", shotCount: 2, imageUrl: "/cover", registrationState: "PHOTOSHOOT_COMPLETE", intelligenceStatus: "READY" };
 
 function GalleryHarness() {
   const navigate = useNavigate();
@@ -19,6 +19,15 @@ describe("PhotoshootGalleryPage", () => {
     render(<MemoryRouter><PhotoshootGalleryPage /></MemoryRouter>);
     await screen.findByText("2 Images", { exact: false });
     expect(fetchSpy.mock.calls.every(([input]) => !String(input).includes("intelligence"))).toBe(true);
+  });
+
+  it("surfaces failed commercial intelligence without exposing an error traceback", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(
+      JSON.stringify({ items: [{ ...item, intelligenceStatus: "FAILED" }] }),
+      { status: 200, headers: { "content-type": "application/json" } }));
+    render(<MemoryRouter><PhotoshootGalleryPage /></MemoryRouter>);
+    expect(await screen.findByText("Intelligence Needs Attention")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Add to Asset Library/ })).toBeInTheDocument();
   });
 
   it("opens a photo-first detail view without duplicating the Gallery card", async () => {

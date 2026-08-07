@@ -86,13 +86,15 @@ class GenerationResultIngestionService:
                     output_reference,
                     job=job,
                 )
+                is_video = Path(local_file).suffix.lower() in self.VIDEO_SUFFIXES
+                upload_intent = "teaser_video" if is_video else "teaser_image"
                 import_result = self.import_workflow.import_asset(
                     media_path=local_file,
-                    upload_intent="teaser_image",
+                    upload_intent=upload_intent,
                     creator_profile_id=job.request.creator_profile_id,
                     creator_intent=CreatorIntent.create(
                         "single_asset",
-                        legacy_upload_intent="teaser_image",
+                        legacy_upload_intent=upload_intent,
                         metadata={
                             "source": "content_studio",
                             "generation_job_id": job.job_id,

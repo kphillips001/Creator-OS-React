@@ -20,6 +20,7 @@ from app.services.creative_director_service import CreativeDirectorService
 from app.services.generation_library_service import GenerationLibraryService
 from app.services.photoshoot_queue_service import PhotoshootQueueService
 from app.services.photoshoot_summary_service import PhotoshootSummaryService
+from app.services.photoshoot_context_service import PhotoshootContextService
 
 LOGGER = logging.getLogger("creator_os.photoshoot.approve")
 
@@ -162,6 +163,7 @@ class PhotoshootCreativeDirectorWorkflowService:
             original_direction,
             summary,
             creator_guidance,
+            latest_approved_shot=self._latest_approved_shot_summary(session, summary),
             progression_stage=int(continuity.get("progression_stage") or 0),
             current_shot=1,
             planning_shot=2,
@@ -331,6 +333,7 @@ class PhotoshootCreativeDirectorWorkflowService:
             original_direction,
             summary,
             creator_guidance,
+            latest_approved_shot=self._latest_approved_shot_summary(session, summary),
             progression_stage=int(continuity.get("progression_stage") or 0),
             current_shot=planning["current_shot"],
             planning_shot=planning["planning_shot"],
@@ -408,6 +411,7 @@ class PhotoshootCreativeDirectorWorkflowService:
             original_direction,
             summary,
             creator_guidance,
+            latest_approved_shot=self._latest_approved_shot_summary(session, summary),
             progression_stage=int(continuity.get("progression_stage") or 0),
             current_shot=planning["current_shot"],
             planning_shot=planning["planning_shot"],
@@ -459,6 +463,7 @@ class PhotoshootCreativeDirectorWorkflowService:
                 original_direction,
                 summary,
                 direction,
+                latest_approved_shot=self._latest_approved_shot_summary(session, summary),
                 progression_stage=int(continuity.get("progression_stage") or 0),
                 current_shot=planning["current_shot"],
                 planning_shot=planning["planning_shot"],
@@ -733,12 +738,16 @@ class PhotoshootCreativeDirectorWorkflowService:
                 str(key): bool(value)
                 for key, value in dict(continuity.get("continuity_locks") or {}).items()
             },
-            progression_stage=max(0, int(continuity.get("progression_stage") or 0)),
+            progression_stage=(
+                max(0, int(continuity.get("progression_stage") or 0))
+                if target_shot_count > 0 else None
+            ),
             current_shot=current_shot,
             planning_shot=progress["planning_shot"],
             target_shot_count=target_shot_count,
-            remaining_shots=max(0, target_shot_count - current_shot) if target_shot_count > 0 else 0,
-            editorial_stage=progress["editorial_stage"],
+            remaining_shots=max(0, target_shot_count - current_shot) if target_shot_count > 0 else None,
+            editorial_stage=progress["editorial_stage"] if target_shot_count > 0 else None,
+            progression_enabled=target_shot_count > 0,
             operator_guidance=str(
                 continuity.get("creator_guidance")
                 or continuity.get("grok_guidance")
@@ -751,9 +760,10 @@ class PhotoshootCreativeDirectorWorkflowService:
             latest_approved_shot_reference=(
                 "Use the latest approved Photoshoot image supplied downstream as the visual continuity reference."
             ),
+            latest_approved_shot=self._latest_approved_shot_summary(session, summary),
             repetition_avoidance=str(
                 summary.get("avoid_repetition")
-                or "Avoid repeating the seed composition; vary pose, framing, expression, and hand placement."
+                or "Avoid an exact duplicate through one subtle change; preserve the latest composition and camera setup."
             ).strip(),
         )
 
@@ -762,13 +772,8 @@ class PhotoshootCreativeDirectorWorkflowService:
             requests = tuple(self.queue.requests_for_session(session.session_id))
         except TypeError:
             requests = ()
-        approved_positions = {
-            int(getattr(request, "sequence_index", index))
-            for index, request in enumerate(requests, start=1)
-            if request.status == "approved"
-        }
-        current_shot = max(approved_positions, default=1)
-        target = normalize_target_shot_count(session.target_shot_count)
+        current_shot = max(1, PhotoshootContextService.approved_display_count(requests))
+        target = normalize_target_shot_count(getattr(session, "target_shot_count", None))
         planning_shot = current_shot + 1
         ratio = planning_shot / target if target > 0 else 0
         if target == 0:
@@ -787,6 +792,55 @@ class PhotoshootCreativeDirectorWorkflowService:
             "target_shot_count": target,
             "remaining_shots": max(0, target - current_shot) if target > 0 else 0,
             "editorial_stage": stage,
+        }
+
+    def _latest_approved_shot_summary(self, session, summary: Mapping[str, Any]) -> dict[str, Any]:
+        """Return the latest approved frame as an explicit scene-continuity contract."""
+        continuity = dict(session.creative_continuity or {})
+        defaults = dict(continuity.get("session_defaults") or {})
+        approved = tuple(
+            request for request in self.queue.requests_for_session(session.session_id)
+            if request.status == "approved"
+        )
+        latest = max(
+            enumerate(approved, start=1),
+            key=lambda pair: int(getattr(pair[1], "sequence_index", pair[0])),
+            default=(0, None),
+        )[1]
+        direction = dict((latest.metadata or {}).get("creative_direction") or {}) if latest else {}
+        pose = str(direction.get("pose_composition") or "").strip()
+        framing = str(direction.get("camera_framing") or "").strip()
+        wardrobe = str(
+            summary.get("current_wardrobe") or defaults.get("wardrobe")
+            or "Preserve exactly as shown in the latest approved image."
+        ).strip()
+        return {
+            "environment": str(
+                summary.get("overall_theme") or defaults.get("environment")
+                or "Preserve exactly as shown in the latest approved image."
+            ).strip(),
+            "location": str(
+                summary.get("current_location") or defaults.get("location")
+                or "Preserve exactly as shown in the latest approved image."
+            ).strip(),
+            "wardrobe": wardrobe,
+            "clothing_state": wardrobe,
+            "pose": pose or "Preserve the latest approved pose with only one small natural evolution.",
+            "body_orientation": pose or "Preserve the latest approved body orientation.",
+            "hand_placement": pose or "Preserve the latest approved hand placement.",
+            "facial_expression": str(
+                direction.get("emotion") or "Preserve the latest approved expression with only a subtle evolution."
+            ).strip(),
+            "camera_angle": framing or "Preserve the latest approved camera angle.",
+            "framing": framing or str(
+                summary.get("visual_style") or defaults.get("camera_style")
+                or "Preserve the latest approved framing."
+            ).strip(),
+            "lighting": str(
+                direction.get("lighting") or summary.get("lighting") or defaults.get("lighting")
+                or "Preserve exactly as shown in the latest approved image."
+            ).strip(),
+            "progression_stage": max(0, int(continuity.get("progression_stage") or 0)),
         }
 
     @staticmethod
@@ -822,22 +876,31 @@ class PhotoshootCreativeDirectorWorkflowService:
         editorial_stage: str = "Beginning",
         timeline_image_count: int = 0,
         target_shot_count: int = 10,
+        latest_approved_shot: Mapping[str, Any] | None = None,
     ) -> dict[str, Any]:
         current_shot = max(1, int(current_shot or 1))
         planning_shot = max(current_shot + 1, int(planning_shot or current_shot + 1))
         normalized_target = normalize_target_shot_count(target_shot_count)
+        progression_enabled = normalized_target > 0
         return {
             "original_photoshoot_direction": str(original_direction or "").strip(),
             "current_photoshoot_summary": dict(summary or {}),
             "optional_user_guidance": str(creator_guidance or "").strip(),
-            "progression_stage": max(0, int(progression_stage or 0)),
+            "progression_stage": max(0, int(progression_stage or 0)) if progression_enabled else None,
             "timeline_image_count": max(0, int(timeline_image_count or 0)),
             "current_shot": current_shot,
             "planning_shot": planning_shot,
             "target_shot_count": normalized_target,
-            "remaining_shots": max(0, normalized_target - current_shot) if normalized_target > 0 else 0,
-            "editorial_stage": "Open-ended" if normalized_target == 0 else str(editorial_stage or "Beginning"),
+            "remaining_shots": max(0, normalized_target - current_shot) if progression_enabled else None,
+            "editorial_stage": str(editorial_stage or "Beginning") if progression_enabled else None,
+            "progress_percent": (
+                round((current_shot / normalized_target) * 100, 2)
+                if progression_enabled else None
+            ),
             "open_ended": normalized_target == 0,
+            "progression_enabled": progression_enabled,
+            "creative_structure": "PROGRESSION_AWARE" if progression_enabled else "OPEN_ENDED_NON_PROGRESSIVE",
+            "latest_approved_shot": dict(latest_approved_shot or {}),
         }
 
     @staticmethod

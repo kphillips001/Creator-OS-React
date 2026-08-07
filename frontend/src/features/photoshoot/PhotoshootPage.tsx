@@ -46,6 +46,7 @@ import { ActivePhotoshootActions, StopPhotoshootDialog } from "./components/Shot
 import { PhotoshootAutoGenerationProgress } from "./components/PhotoshootAutoGenerationProgress";
 import { SelectedShotProgress, type SelectedShotStage } from "./components/SelectedShotProgress";
 import { usePhotoshootContext } from "./usePhotoshootContext";
+import { useBackgroundOperations } from "../background-operations/BackgroundOperationsContext";
 import "./photoshoot.css";
 
 type Ready = Extract<PhotoshootContext, { status: "ready" }>;
@@ -55,14 +56,15 @@ function ManualWorkspace({
   refresh,
   onReturn,
   onOpenLibrary,
-  onOpenGallery,
+  onCompleted,
 }: {
   ready: Ready;
   refresh: () => Promise<unknown>;
   onReturn: () => void;
   onOpenLibrary: (message?: string) => void;
-  onOpenGallery: (deliverableId: string | null) => void;
+  onCompleted: (deliverableId: string | null) => void;
 }) {
+  const backgroundOperations = useBackgroundOperations();
   const provider = ready.session.providerId;
   const [mode, setMode] = useState(ready.session.creativeMode);
   const locks = ready.session.continuityLocks;
@@ -94,10 +96,18 @@ function ManualWorkspace({
   const [selectedShotError, setSelectedShotError] = useState("");
   const [selectedShotSource, setSelectedShotSource] = useState<"idea" | "direct">("idea");
   const selectionSaveRef = useRef<Promise<void>>(Promise.resolve());
-  const promptEditorRef = useRef<HTMLTextAreaElement>(null);
   const request = status.request;
+  const photoshootOperation = backgroundOperations.bySubject(
+    "photoshoot_session", ready.session.sessionId,
+  ).find((operation) => operation.operationType === "photoshoot_generation");
+  const operationActive = photoshootOperation != null && [
+    "QUEUED", "RUNNING", "WAITING_EXTERNAL", "CANCEL_REQUESTED",
+  ].includes(photoshootOperation.status);
+  const photoshootOperationId = photoshootOperation?.operationId;
+  const photoshootOperationStatus = photoshootOperation?.status;
   const working =
     busy ||
+    operationActive ||
     Boolean(autoRuntime?.spinner_active) ||
     (!request?.failure &&
       (request?.status === "queued" || request?.status === "generating"));
@@ -140,6 +150,13 @@ function ManualWorkspace({
       window.clearTimeout(timer);
     };
   }, [ready.session.sessionId, pollRevision]);
+
+  useEffect(() => {
+    if (!photoshootOperationId) return;
+    // The AppShell provider owns lifecycle polling. This targeted refresh only
+    // reconnects the durable operation to Photoshoot's canonical review state.
+    setPollRevision((current) => current + 1);
+  }, [photoshootOperationId, photoshootOperationStatus]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -394,6 +411,7 @@ function ManualWorkspace({
         candidate: null,
       });
       setPollRevision((current) => current + 1);
+      await backgroundOperations.refresh();
       return true;
     } catch (reason) {
       const message = reason instanceof Error ? reason.message : "Generation failed. Please try again.";
@@ -496,14 +514,10 @@ function ManualWorkspace({
     );
   };
 
-  const openPromptEditor = () => {
-    const editor = promptEditorRef.current;
-    if (!editor) return;
-    editor.scrollIntoView({ behavior: "smooth", block: "center" });
-    editor.focus({ preventScroll: true });
-  };
-
-  const action = async (kind: "approve" | "regenerate" | "edit" | "reject") => {
+  const action = async (
+    kind: "approve" | "regenerate" | "edit" | "reject",
+    rejectionDisposition: "discard" | "save_to_generation_library" = "discard",
+  ) => {
     if (!request) return;
     setBusy(true);
     setError("");
@@ -534,6 +548,7 @@ function ManualWorkspace({
           candidate: null,
         });
         setPollRevision((current) => current + 1);
+        await backgroundOperations.refresh();
       }
       if (kind === "edit") {
         const result = await editPhotoshootCandidatePrompt(body);
@@ -541,7 +556,7 @@ function ManualWorkspace({
         setStatus({ request: null, candidate: null });
       }
       if (kind === "reject") {
-        await rejectPhotoshootCandidate(body);
+        await rejectPhotoshootCandidate({ ...body, disposition: rejectionDisposition });
         setStatus({ request: null, candidate: null });
         setSelectedShotStage(null);
         setSelectedShotError("");
@@ -569,8 +584,8 @@ function ManualWorkspace({
     setBusy(true); setError("");
     try {
       const result = await finishPhotoshoot({ session_id: ready.session.sessionId });
-      await refresh();
-      onOpenGallery(result.photoshoot_deliverable_id);
+      onCompleted(result.photoshoot_deliverable_id);
+      void refresh().catch(() => undefined);
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to finish this Photoshoot."); }
     finally { setBusy(false); }
   };
@@ -668,7 +683,7 @@ function ManualWorkspace({
             onDifferentIdeas={() => { void askAi(); }}
             onGuidance={setGuidance}
             onGenerateSelected={() => { void generateSelectedShot(); }}
-            onDirectSelected={openPromptEditor}
+            onDirectSelected={() => undefined}
             onChooseAnother={() => { void chooseAnother(); }}
             onSelectIdea={(idea) => { void chooseIdea(idea); }}
           />
@@ -682,6 +697,18 @@ function ManualWorkspace({
             <div className="photoshoot-state photoshoot-state--error" role="alert">
               {error}
             </div>
+          )}
+          {photoshootOperation && (operationActive || photoshootOperation.status === "FAILED") && (
+            <section className="photoshoot-card photoshoot-operation" aria-label="Photoshoot Generation Progress">
+              <header><h2>Live Generation</h2><span>{photoshootOperation.status}</span></header>
+              <p>{photoshootOperation.stageMessage || "Preparing next shot"}</p>
+              <progress max={100} value={photoshootOperation.progressPercent} />
+              <small>
+                {photoshootOperation.metadata.openEnded
+                  ? `${Number(photoshootOperation.metadata.approvedCount || 0)} approved · Open-ended Photoshoot`
+                  : `Generating Shot ${Number(photoshootOperation.metadata.shotNumber || planningStatus.planningShot)} of ${Number(photoshootOperation.metadata.targetShotCount || targetShotCount)}`}
+              </small>
+            </section>
           )}
           <GenerationPanel
             disabled={working || Boolean(status.candidate) || !prompt.trim()}
@@ -705,8 +732,8 @@ function ManualWorkspace({
             onRegenerate={() => {
               void action("regenerate");
             }}
-            onReject={() => {
-              void action("reject");
+            onReject={(disposition) => {
+              void action("reject", disposition);
             }}
           />}
         </>
@@ -747,7 +774,9 @@ export function PhotoshootPage() {
   const navigate = useNavigate();
   const state = usePhotoshootContext();
   const [returnError, setReturnError] = useState("");
-  const ready = state.context?.status === "ready" ? state.context : null;
+  const [completedDeliverableId, setCompletedDeliverableId] = useState<string | null | undefined>(undefined);
+  const completed = completedDeliverableId !== undefined;
+  const ready = !completed && state.context?.status === "ready" ? state.context : null;
   const returnToLibrary = async () => {
     setReturnError("");
     try {
@@ -768,9 +797,17 @@ export function PhotoshootPage() {
           {returnError}
         </div>
       )}
-      <PhotoshootStateGate {...state}>
-        {ready && <ManualWorkspace key={`${ready.session.sessionId}:${ready.seedImage.image_id}`} onOpenGallery={(deliverableId) => navigate("/library/photoshoots", { state: { newlyCompletedDeliverableId: deliverableId } })} onOpenLibrary={(message) => navigate("/library/generations", { state: message ? { notification: message } : undefined })} onReturn={() => { void returnToLibrary(); }} ready={ready} refresh={state.refresh} />}
-      </PhotoshootStateGate>
+      {completed ? (
+        <div className="photoshoot-state photoshoot-completion" role="status">
+          <strong>✓ Photoshoot completed successfully.</strong>
+          <p>The Photoshoot has been added to the Gallery.</p>
+          <button className="photoshoot-button photoshoot-button--primary" onClick={() => navigate("/library/photoshoots", { state: { newlyCompletedDeliverableId: completedDeliverableId } })} type="button">Open Gallery</button>
+        </div>
+      ) : (
+        <PhotoshootStateGate {...state}>
+          {ready && <ManualWorkspace key={`${ready.session.sessionId}:${ready.seedImage.image_id}`} onCompleted={setCompletedDeliverableId} onOpenLibrary={(message) => navigate("/library/generations", { state: message ? { notification: message } : undefined })} onReturn={() => { void returnToLibrary(); }} ready={ready} refresh={state.refresh} />}
+        </PhotoshootStateGate>
+      )}
     </section>
   );
 }

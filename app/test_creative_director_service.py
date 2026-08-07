@@ -33,6 +33,7 @@ from app.models.asset_library import (
 from app.models.creative_director import CreativeDirectorSettings
 from app.models.reference_library import ReferenceAsset
 from app.services.creative_director_service import CreativeDirectorService
+from app.services.photoshoot_creative_director_service import PhotoshootCreativeDirectorWorkflowService
 
 
 def reference_asset(asset_id=55, creator_profile_id=7):
@@ -268,7 +269,7 @@ class CreativeDirectorServiceTests(unittest.TestCase):
         self.assertIn("The Shot Director still owns", captured["question"])
         self.assertIn("next frame of a professionally directed photoshoot", captured["question"])
         self.assertIn("latest approved shot, session history, creative mode, Creative Hint", captured["question"])
-        self.assertIn("Avoid repetitive poses", captured["question"])
+        self.assertIn("Avoid an exact duplicate through one subtle natural change", captured["question"])
         self.assertIn("In premium mode, progress through tasteful intimacy", captured["question"])
 
     def test_photoshoot_ask_grok_inspiration_uses_vision_context_without_prompt_planner(self):
@@ -371,8 +372,8 @@ class CreativeDirectorServiceTests(unittest.TestCase):
 
         self.assertEqual(len(ideas), 8)
         self.assertIn("progressive photoshoot ladder", captured["question"].lower())
-        self.assertIn("Length-aware escalation budget", captured["question"])
-        self.assertIn("length-aware escalation budget is the primary pace controller", captured["question"])
+        self.assertIn("Natural progression pacing", captured["question"])
+        self.assertIn("latest approved shot and approved history are the primary pace controller", captured["question"])
         self.assertIn("Active masturbation", captured["question"])
         self.assertIn("exactly 8 distinct next-scene ideas", captured["question"])
         self.assertIn("Facial expression progression", captured["question"])
@@ -382,7 +383,7 @@ class CreativeDirectorServiceTests(unittest.TestCase):
         self.assertEqual(len(captured["images"]), 4)
         self.assertIn("fingers inside", ideas[2].lower())
 
-    def test_shoot_length_context_escalates_faster_for_short_targets(self):
+    def test_shoot_length_context_keeps_natural_pacing_for_every_target(self):
         short = CreativeDirectorService._shoot_length_context(
             {"current_shot": 1, "target_shot_count": 5, "remaining_shots": 4}
         )
@@ -397,11 +398,12 @@ class CreativeDirectorServiceTests(unittest.TestCase):
         )
 
         self.assertEqual(short["length_band"], "short")
-        self.assertGreaterEqual(short["default_stage_advance"], 2)
-        self.assertTrue(short["face_only_forbidden"])
+        self.assertEqual(short["default_stage_advance"], 1)
+        self.assertEqual(short["max_stage_advance"], 2)
+        self.assertFalse(short["face_only_forbidden"])
 
         self.assertEqual(standard["length_band"], "standard")
-        self.assertLessEqual(standard["default_stage_advance"], short["default_stage_advance"])
+        self.assertEqual(standard["default_stage_advance"], 1)
 
         self.assertEqual(long["length_band"], "long")
         self.assertEqual(long["default_stage_advance"], 1)
@@ -413,10 +415,10 @@ class CreativeDirectorServiceTests(unittest.TestCase):
         endgame = CreativeDirectorService._shoot_length_context(
             {"current_shot": 9, "target_shot_count": 10, "remaining_shots": 1}
         )
-        self.assertTrue(endgame["endgame"])
-        self.assertGreaterEqual(endgame["default_stage_advance"], 3)
+        self.assertFalse(endgame["endgame"])
+        self.assertEqual(endgame["default_stage_advance"], 1)
 
-    def test_photoshoot_ask_grok_explicit_short_target_requires_faster_escalation(self):
+    def test_photoshoot_ask_grok_explicit_short_target_remains_advisory(self):
         captured = {}
 
         def fake_provider(**_kwargs):
@@ -452,12 +454,11 @@ class CreativeDirectorServiceTests(unittest.TestCase):
 
         question = captured["question"]
         self.assertEqual(len(ideas), 8)
-        self.assertIn("SHORT shoot (5 total shots)", question)
-        self.assertIn("Escalate aggressively", question)
-        self.assertIn("Face/expression-only upgrades are NOT enough", question)
-        self.assertIn("MUST be a real wardrobe/exposure advance", question)
-        self.assertIn("about 2 ladder stage", question.lower())
-        self.assertNotIn("Measure the actual rate of escalation", question)
+        self.assertIn("Target Photoshoot length is advisory context only", question)
+        self.assertIn("Measure the actual rate of progression", question)
+        self.assertIn("Normally advance only one small progression stage", question)
+        self.assertNotIn("Escalate aggressively", question)
+        self.assertNotIn("primary pace controller. Target length", question)
 
     def test_photoshoot_ask_grok_explicit_long_target_allows_gradual_escalation(self):
         captured = {}
@@ -484,10 +485,76 @@ class CreativeDirectorServiceTests(unittest.TestCase):
         )
 
         question = captured["question"]
-        self.assertIn("LONG shoot (15 total shots)", question)
-        self.assertIn("Escalate gradually", question)
-        self.assertIn("Face must still escalate with the body, but wardrobe/act can advance more slowly", question)
-        self.assertNotIn("Face/expression-only upgrades are NOT enough", question)
+        self.assertIn("Target Photoshoot length is advisory context only", question)
+        self.assertIn("Normally advance only one small progression stage", question)
+        self.assertNotIn("Escalate aggressively", question)
+
+    def test_photoshoot_freeflow_context_omits_progression_pacing(self):
+        context = PhotoshootCreativeDirectorWorkflowService._ai_context(
+            "shower scene", {"current_location": "shower"}, "",
+            progression_stage=7, current_shot=5, planning_shot=6,
+            editorial_stage="Late", target_shot_count=0,
+            latest_approved_shot={"location": "shower", "wardrobe": "established state"},
+        )
+        self.assertFalse(context["progression_enabled"])
+        self.assertTrue(context["open_ended"])
+        self.assertEqual(context["creative_structure"], "OPEN_ENDED_NON_PROGRESSIVE")
+        self.assertIsNone(context["progression_stage"])
+        self.assertIsNone(context["editorial_stage"])
+        self.assertIsNone(context["remaining_shots"])
+        self.assertIsNone(context["progress_percent"])
+        self.assertEqual(context["current_shot"], 5)
+        self.assertEqual(context["latest_approved_shot"]["location"], "shower")
+
+    def test_photoshoot_freeflow_shared_direction_prompt_preserves_variety_without_progression(self):
+        context = PhotoshootCreativeDirectorWorkflowService._ai_context(
+            "shower scene", {"avoid_repetition": "Avoid approved poses."}, "",
+            progression_stage=7, current_shot=5, target_shot_count=0,
+            latest_approved_shot={"location": "shower", "wardrobe": "established state"},
+        )
+        prompt = CreativeDirectorService._build_photoshoot_creative_director_prompt(
+            session_context=context, approved_history=({"title": "Washing hair"},),
+            creative_mode="explicit", session_direction="",
+            creative_hint="seated shower pose", continuity_locks={"location": True},
+        )
+        self.assertIn("CREATIVE FREEFLOW", prompt)
+        self.assertIn("visually distinct", prompt)
+        self.assertIn("Avoid an exact duplicate", prompt)
+        self.assertIn("operator explicitly requests a change", prompt)
+        self.assertIn('"latest_approved_shot"', prompt)
+        self.assertNotIn('"progression_stage"', prompt)
+        self.assertNotIn('"planning_shot"', prompt)
+        self.assertNotIn("next logical small stage", prompt)
+        self.assertNotIn("natural progression from", prompt)
+
+    def test_photoshoot_freeflow_explicit_inspiration_omits_ladder(self):
+        prompt = CreativeDirectorService._build_photoshoot_grok_inspiration_prompt(
+            session_context={"target_shot_count": 0, "progression_enabled": False,
+                             "latest_approved_shot": {"location": "shower", "progression_stage": 6}},
+            approved_history=({"title": "Standing under water"},),
+            creative_mode="explicit", session_direction="shower scene",
+            creative_hint="", continuity_locks={"location": True},
+            provider_context="Seedream", timeline_labels=("Shot 1",),
+        )
+        self.assertIn("Creative Freeflow", prompt)
+        self.assertIn("anti-repetition evidence", prompt)
+        self.assertIn("distinct compositions", prompt)
+        self.assertNotIn("progressive photoshoot ladder", prompt.lower())
+        self.assertNotIn("1. Clothed / dressed tease", prompt)
+        self.assertNotIn("Progression stage:", prompt)
+        self.assertNotIn('"progression_stage"', prompt)
+
+    def test_photoshoot_freeflow_full_plan_is_finite_variety_batch(self):
+        prompt = CreativeDirectorService._build_full_photoshoot_plan_prompt(
+            session_context={"target_shot_count": 0, "progression_enabled": False},
+            creative_mode="explicit", session_direction="shower scene",
+            creator_guidance="", continuity_locks={"location": True}, frame_count=6,
+        )
+        self.assertIn("Creative Freeflow variety batch", prompt)
+        self.assertIn("Plan 6 distinct photographs", prompt)
+        self.assertIn("Vary pose, hands, framing", prompt)
+        self.assertNotIn("Explicit progression (required)", prompt)
+        self.assertNotIn("one small natural progression", prompt)
 
     def test_photoshoot_ask_grok_caps_very_long_timelines_but_keeps_arc(self):
         service = CreativeDirectorService(storage_dir=tempfile.mkdtemp())

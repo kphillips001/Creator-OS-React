@@ -1,5 +1,5 @@
 import { act, createRef } from "react";
-import { render } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { GenerationWorkflowSections, type GenerationWorkflowHandle } from "./GenerationWorkflowSections";
 import { getContentStudioGeneration, submitContentStudioGeneration } from "../../../infrastructure/api/contentStudioApi";
@@ -50,5 +50,22 @@ describe("GenerationWorkflowSections request-aware gate", () => {
     await act(async () => { resultPromise = ref.current!.generateWithResult(override); await Promise.resolve(); });
     await act(async () => { await vi.advanceTimersByTimeAsync(400); });
     await expect(resultPromise).resolves.toMatchObject({ accepted: true, reason: "Provider generation failed.", stage: "provider", status: "failed" });
+  });
+
+  it("briefly shows a failed terminal state and then clears the Live Generation presentation", async () => {
+    vi.mocked(getContentStudioGeneration).mockResolvedValueOnce({ runId: "run-1", jobId: "job-1", promptPlanId: "plan-1", status: "failed", message: "Provider generation failed.", provider: "Seedream", completedCount: 0, failedCount: 1, processedCount: 1, totalCount: 1, progress: 100, images: [] });
+    const onStartNewGeneration = vi.fn();
+    const ref = createRef<GenerationWorkflowHandle>();
+    render(<GenerationWorkflowSections context={context} disabled request={request} ref={ref}
+      workflow="manual" onStartNewGeneration={onStartNewGeneration} />);
+    let resultPromise!: ReturnType<GenerationWorkflowHandle["generateWithResult"]>;
+    await act(async () => { resultPromise = ref.current!.generateWithResult(override); await Promise.resolve(); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(400); });
+    await expect(resultPromise).resolves.toMatchObject({ status: "failed" });
+    expect(screen.getByLabelText("Live Generation")).toHaveTextContent("Provider generation failed.");
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(4000); });
+    expect(screen.queryByLabelText("Live Generation")).not.toBeInTheDocument();
+    expect(onStartNewGeneration).toHaveBeenCalledTimes(1);
   });
 });

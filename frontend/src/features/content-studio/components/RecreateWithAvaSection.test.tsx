@@ -13,7 +13,7 @@ describe("RecreateWithAvaSection one-click workflow", () => {
   });
 
   it("shows one primary action, hides analysis, and automatically analyzes, enhances, and generates", async () => {
-    const generate = vi.fn(async () => {});
+    const generate = vi.fn<(source: string, enhanced: string) => Promise<void>>().mockResolvedValue(undefined);
     const callbacks = runtime(); render(<RecreateWithAvaSection disabled={false} onGenerate={generate} {...callbacks} />);
     const action = screen.getByRole("button", { name: "Recreate With Ava" });
     expect(action).toBeDisabled();

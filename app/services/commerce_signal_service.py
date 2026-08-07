@@ -181,6 +181,9 @@ class CommerceSignalService:
                     source.lower() in {"medialink", "media_link"}
                     or purchase_type.lower() in {"media", "medialink", "media_link"}
                 ),
+                provider_resource_id=self._provider_resource_id(
+                    earning, fields or {}
+                ),
             )
             self.repository.mark_verified(
                 reconciliation_id, transaction_order_id=transaction_id,
@@ -225,6 +228,7 @@ class CommerceSignalService:
         transaction_id: str, payment_id: str, event_id: str,
         customer_commerce_profile_id: UUID,
         media_link_purchase: bool,
+        provider_resource_id: str | None = None,
     ) -> dict:
         if not media_link_purchase:
             return {"state": "UNKNOWN", "reason": "NOT_MEDIA_LINK_PURCHASE"}
@@ -232,6 +236,13 @@ class CommerceSignalService:
             creator_profile_id=creator_profile_id,
             fanvue_account_id=fanvue_account_id,
             external_fanvue_user_uuid=buyer_uuid,
+        )
+        context_reader = getattr(
+            self.intent_repository, "get_attribution_contexts", None
+        )
+        contexts = (
+            context_reader([item.purchase_intent_id for item in candidates])
+            if callable(context_reader) else {}
         )
         previously_attributed = [
             item for item in candidates
@@ -248,13 +259,32 @@ class CommerceSignalService:
                 "state": "ATTRIBUTED", "candidateCount": 1,
                 "lifecycleSynchronized": lifecycle_result is not None,
             }
-        survivors = [
-            item for item in candidates
-            if item.expected_price_minor == amount_minor
-            and item.presented_at is not None
-            and item.presented_at <= payment_timestamp <= item.expires_at
-            and item.status.value in {"PRESENTED", "CLICKED"}
-        ]
+        survivors = []
+        for item in candidates:
+            context = contexts.get(item.purchase_intent_id, {})
+            persistent = self._persistent_ppv(context)
+            canonical_resource_id = str(
+                context.get("external_product_id")
+                or item.provider_resource_id or ""
+            ).strip()
+            resource_matches = (
+                provider_resource_id is None
+                or canonical_resource_id == provider_resource_id
+            )
+            status_allowed = item.status.value in (
+                {"PRESENTED", "CLICKED", "EXPIRED", "SUPERSEDED", "UNKNOWN"}
+                if persistent else {"PRESENTED", "CLICKED"}
+            )
+            window_matches = (
+                item.presented_at <= payment_timestamp
+                and (persistent or payment_timestamp <= item.expires_at)
+            ) if item.presented_at is not None else False
+            if (
+                item.expected_price_minor == amount_minor
+                and resource_matches and status_allowed and window_matches
+            ):
+                survivors.append(item)
+        survivors = self._prefer_latest_canonical_presentation(survivors)
         logger.info(
             "event=purchase_intent_candidates buyer_uuid=%s count=%s",
             buyer_uuid, len(survivors),
@@ -269,8 +299,8 @@ class CommerceSignalService:
             purchased_intent = self.intent_repository.mark_purchased(
                 item.purchase_intent_id, at=payment_timestamp,
                 attribution_reason=(
-                    "Exact buyer, account, creator, price, attribution window, "
-                    "and single-candidate match."
+                    "Exact buyer, account, creator, price, product policy, "
+                    "available Media Link evidence, and single-candidate match."
                 ),
             )
             lifecycle_result = self.photoshoot_lifecycles.synchronize_attributed_purchase(
@@ -347,6 +377,54 @@ class CommerceSignalService:
         return "NO_ACTIVE_OFFER"
 
     @staticmethod
+    def _persistent_ppv(context: dict) -> bool:
+        offering_type = str(context.get("offering_type") or "").upper()
+        source_id = context.get("source_photoshoot_deliverable_id")
+        selling_mode = str(context.get("selling_mode") or "").upper()
+        channel = str(context.get("bundle_sales_channel") or "").upper()
+        if offering_type == "BUNDLE":
+            return selling_mode == "BUNDLE" and channel == "CHAT"
+        return offering_type == "SINGLE_IMAGE" and source_id is None
+
+    @staticmethod
+    def _prefer_latest_canonical_presentation(candidates):
+        if len(candidates) <= 1:
+            return candidates
+        identities = {
+            (
+                item.commercial_offering_id,
+                item.commercial_publication_id,
+                item.provider_resource_id,
+            )
+            for item in candidates
+        }
+        if len(identities) != 1:
+            return candidates
+        return [max(
+            candidates,
+            key=lambda item: (
+                item.presented_at or item.created_at,
+                item.created_at,
+                str(item.purchase_intent_id),
+            ),
+        )]
+
+    @staticmethod
+    def _provider_resource_id(*sources: dict) -> str | None:
+        aliases = (
+            "provider_resource_id", "mediaLinkUuid", "mediaLinkId", "media_link_uuid",
+            "media_link_id", "externalProductId", "external_product_id",
+        )
+        for source in sources:
+            if not isinstance(source, dict):
+                continue
+            for key in aliases:
+                value = str(source.get(key) or "").strip()
+                if value:
+                    return value
+        return None
+
+    @staticmethod
     def _account(creator_uuid, normalized_account):
         if creator_uuid:
             account = get_account_by_creator_uuid(str(creator_uuid))
@@ -392,6 +470,7 @@ class CommerceSignalService:
                 payload.get("price") or data.get("gross") or data.get("amount")
             ),
             "purchase_type": payload.get("purchaseType") or data.get("type"),
+            "provider_resource_id": cls._provider_resource_id(payload, data),
             "payment_status": (
                 payload.get("transactionOrderStatus") or data.get("status")
             ),

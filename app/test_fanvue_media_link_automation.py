@@ -1,4 +1,5 @@
 from types import SimpleNamespace
+import hashlib
 from uuid import uuid4
 from dataclasses import replace
 from datetime import datetime, timezone
@@ -147,7 +148,7 @@ class Uploads:
 
 
 class UploadClient:
-    def __init__(self, statuses=("ready",)):
+    def __init__(self, statuses=("created", "ready")):
         self.statuses, self.puts, self.completed, self.sessions = list(statuses), [], None, 0
     def create_upload_session(self, **_):
         self.sessions += 1
@@ -196,6 +197,60 @@ def test_processing_timeout_resumes_existing_media_without_new_upload(tmp_path):
     assert executor._upload_asset(second, publication_id, 10, 7, 3) == "media-1"
     assert second.sessions == 0
     assert second.puts == []
+
+
+def test_ambiguous_completion_timeout_reconciles_persisted_media_before_resuming(tmp_path):
+    from requests.exceptions import ReadTimeout
+
+    path = tmp_path / "asset.jpg"
+    path.write_bytes(b"123")
+    uploads = Uploads()
+
+    class Client(UploadClient):
+        def __init__(self):
+            super().__init__(("processing", "ready"))
+
+        def complete_upload(self, _upload_id, _parts):
+            raise ReadTimeout("completion response timed out")
+
+    client = Client()
+    executor = FanvueMediaLinkPublicationExecutor(
+        assets=SimpleNamespace(get_by_id=lambda _: SimpleNamespace(
+            creator_profile_id=7, media_type="image", local_vault_path=None,
+            file_path=str(path))),
+        uploads=uploads, sleep=lambda _: None,
+    )
+
+    assert executor._upload_asset(client, uuid4(), 10, 7, 3) == "media-1"
+    assert uploads.checkpoint.upload_status == "uploaded"
+    assert uploads.checkpoint.processing_status == "ready"
+
+
+def test_retry_skips_upload_completion_when_media_uuid_is_already_processing(tmp_path):
+    path = tmp_path / "asset.jpg"
+    path.write_bytes(b"123")
+    uploads = Uploads()
+    publication_id = uuid4()
+    uploads.checkpoint = uploads.initialize(
+        publication_id=publication_id, asset_id=10, fanvue_account_id=3,
+        media_type="image", content_hash=hashlib.sha256(b"123").hexdigest(),
+        file_size_bytes=3,
+    )
+    uploads.save_session(
+        uploads.checkpoint.publication_upload_id, media_uuid="media-1",
+        upload_id="upload-1", part_size=3, total_parts=1,
+    )
+    uploads.save_part(uploads.checkpoint.publication_upload_id, part_number=1, etag="etag-1")
+    client = UploadClient(statuses=("processing", "ready"))
+    executor = FanvueMediaLinkPublicationExecutor(
+        assets=SimpleNamespace(get_by_id=lambda _: SimpleNamespace(
+            creator_profile_id=7, media_type="image", local_vault_path=None,
+            file_path=str(path))),
+        uploads=uploads, sleep=lambda _: None,
+    )
+
+    assert executor._upload_asset(client, publication_id, 10, 7, 3) == "media-1"
+    assert client.completed is None
 
 
 def test_bundle_is_supported_by_existing_multi_media_link_executor():
@@ -351,7 +406,7 @@ def test_full_bundle_publication_preserves_order_and_reuses_provider_link():
     fulfillment = CommercialFulfillmentService(
         repository=SimpleNamespace(get=lambda *_args, **_kwargs: fulfillment_row)
     ).get_fulfillment(offering.offering_id, creator_profile_id=7)
-    delivery = ConversationGateway._authoritative_delivery(
+    delivery = ConversationGateway.__new__(ConversationGateway)._authoritative_delivery(
         response_text="Here is the approved bundle.",
         offering=fulfillment,
     )

@@ -5,6 +5,7 @@ import {
   BookOpen,
   Camera,
   Clapperboard,
+  Film,
   CircleGauge,
   Code2,
   MessagesSquare,
@@ -43,40 +44,38 @@ export type NavigationGroup = {
 
 export const navigationGroups: NavigationGroup[] = [
   {
-    label: "Creator",
+    label: "Studios",
     items: [
       {
-        label: "Personality",
-        path: "/creator/personality",
-        icon: UserRound,
+        label: "Content Studio",
+        path: "/studio/content",
+        icon: Sparkles,
         description:
-          "Review and edit the canonical creator personality.",
+          "Create original content through a focused suite of creative tools.",
       },
       {
-        label: "Social Creative Direction",
-        path: "/creator/social-creative-direction",
+        label: "Photoshoot Studio",
+        path: "/content/photoshoot",
+        icon: Camera,
+        description:
+          "Direct persistent photoshoot sessions from seed image to final set.",
+      },
+      {
+        label: "Video Studio",
+        path: "/studio/video",
+        icon: Clapperboard,
+        description: "Create and refine video content.",
+      },
+      {
+        label: "Edit Studio",
+        path: "/content/edit",
         icon: Paintbrush,
-        description:
-          "Maintain the canonical creative vision for public social content.",
-      },
-      {
-        label: "Lifestyle",
-        path: "/creator/lifestyle",
-        icon: BookOpen,
-        description:
-          "Maintain the canonical description of the creator's everyday life.",
-      },
-      {
-        label: "World Model",
-        path: "/creator/world-model",
-        icon: CircleGauge,
-        description:
-          "Maintain canonical environments, location privacy, and seasonal context.",
+        description: "Refine and transform creative media.",
       },
     ],
   },
   {
-    label: "Content Creation",
+    label: "Libraries",
     items: [
       {
         label: "Generation Library",
@@ -92,36 +91,10 @@ export const navigationGroups: NavigationGroup[] = [
         description: "Browse completed multi-image Photoshoot sets.",
       },
       {
-        label: "Content Studio",
-        path: "/studio/content",
-        icon: Sparkles,
-        description:
-          "Create original content through a focused suite of creative tools.",
-      },
-      {
-        label: "Edit Studio",
-        path: "/content/edit",
-        icon: Paintbrush,
-        description: "Refine and transform creative media.",
-      },
-      {
-        label: "Photoshoot Studio",
-        path: "/content/photoshoot",
-        icon: Camera,
-        description:
-          "Direct persistent photoshoot sessions from seed image to final set.",
-      },
-      {
-        label: "Story Studio",
-        path: "/content/story",
-        icon: BookOpen,
-        description: "Coming Soon",
-      },
-      {
-        label: "Video Studio",
-        path: "/studio/video",
-        icon: Clapperboard,
-        description: "Create and refine video content.",
+        label: "Video Gallery",
+        path: "/gallery/videos",
+        icon: Film,
+        description: "Browse and continue completed generated videos.",
       },
       {
         label: "Reference Library",
@@ -294,6 +267,40 @@ export const navigationGroups: NavigationGroup[] = [
         path: "/administration",
         icon: ShieldCheck,
         description: "Manage provider connections and operational configuration.",
+      },
+      {
+        label: "Personality",
+        path: "/creator/personality",
+        icon: UserRound,
+        description:
+          "Review and edit the canonical creator personality.",
+      },
+      {
+        label: "Social Creative Direction",
+        path: "/creator/social-creative-direction",
+        icon: Paintbrush,
+        description:
+          "Maintain the canonical creative vision for public social content.",
+      },
+      {
+        label: "Lifestyle",
+        path: "/creator/lifestyle",
+        icon: BookOpen,
+        description:
+          "Maintain the canonical description of the creator's everyday life.",
+      },
+      {
+        label: "World Model",
+        path: "/creator/world-model",
+        icon: CircleGauge,
+        description:
+          "Maintain canonical environments, location privacy, and seasonal context.",
+      },
+      {
+        label: "Developer Notes",
+        path: "/administration/developer-notes",
+        icon: BookOpen,
+        description: "Review architecture decisions, migrations, and technical debt.",
       },
     ],
   },

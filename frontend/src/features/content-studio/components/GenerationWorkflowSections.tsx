@@ -11,11 +11,13 @@ import type { PlannerBatchItem } from "../types/plannerBatch";
 import { LiveProgressPanel } from "../../../shared/ui/LiveProgressPanel";
 import { InspirationProgressPanel } from "./InspirationProgressPanel";
 import { RECREATE_RUNTIME_STAGES, type RecreateRuntimeState } from "../types/recreateRuntime";
+import { useBackgroundOperations } from "../../background-operations/BackgroundOperationsContext";
 
 type GenerationWorkflowSectionsProps = {
   context: ContentStudioContext;
   disabled: boolean;
   onManualGenerationStart?: () => void;
+  onReconnect?: () => void;
   onRunStart?: () => void;
   onPlannerBatchItemChange?: (id: string, changes: Partial<PlannerBatchItem>) => void;
   onStartNewGeneration?: () => void;
@@ -52,6 +54,8 @@ export type GenerationAttemptResult = {
 
 const TERMINAL = new Set(["succeeded", "partial", "failed"]);
 const NEXT_STEP_STATUSES = new Set(["succeeded", "partial"]);
+const RECONNECTABLE_OPERATION_STATUSES = new Set(["QUEUED", "RUNNING", "WAITING_EXTERNAL"]);
+const TERMINAL_DISMISS_MILLISECONDS = 4000;
 
 export function inspirationProgressStage(
   generation: ContentStudioGeneration | null,
@@ -71,7 +75,7 @@ export function inspirationProgressStage(
 }
 
 export const GenerationWorkflowSections = forwardRef<GenerationWorkflowHandle, GenerationWorkflowSectionsProps>(function GenerationWorkflowSections({
-  context, disabled, onManualGenerationStart, onPlannerBatchItemChange, onRunStart,
+  context, disabled, onManualGenerationStart, onPlannerBatchItemChange, onReconnect, onRunStart,
   onStartNewGeneration, plannerBatchItems = [], plannerBatchProgress = null, plannerBatchRunning = false, request, workflow, recreateRuntime, onRecreateRuntimeChange,
 }, ref) {
   const [runId, setRunId] = useState("");
@@ -83,6 +87,28 @@ export const GenerationWorkflowSections = forwardRef<GenerationWorkflowHandle, G
   const [activeOrigin, setActiveOrigin] = useState<GenerationSubmission["origin"] | null>(null);
   const completionRef = useRef<((result: GenerationAttemptResult) => void) | null>(null);
   const activeBatchItemIdRef = useRef<string | null>(null);
+  const reconnectAttemptedRef = useRef(false);
+  const backgroundOperations = useBackgroundOperations();
+
+  useEffect(() => {
+    if (reconnectAttemptedRef.current || !backgroundOperations.initialized || runId || submitting) return;
+    const expectedType = workflow === "autonomous"
+      ? "content_studio_autonomous_inspiration"
+      : "content_studio_generation";
+    const candidates = backgroundOperations.active
+      .filter((operation) => operation.operationType === expectedType
+        && RECONNECTABLE_OPERATION_STATUSES.has(operation.status))
+      .sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt));
+    if (candidates[0]) {
+      reconnectAttemptedRef.current = true;
+      setRunId(candidates[0].operationId);
+      setReservedCount(candidates[0].progressTotal || request.promptCount);
+      setAutonomousRun(workflow === "autonomous");
+      setActiveOrigin(null);
+      onReconnect?.();
+    }
+  }, [backgroundOperations.active, backgroundOperations.initialized,
+      onReconnect, request.promptCount, runId, submitting, workflow]);
 
   function reset() {
     if (completionRef.current && recreateRuntime) onRecreateRuntimeChange?.({ activeStage: recreateRuntime.activeStage, failedStage: recreateRuntime.activeStage, message: "Generation cancelled.", state: "failed" });
@@ -167,6 +193,7 @@ export const GenerationWorkflowSections = forwardRef<GenerationWorkflowHandle, G
         },
       });
       setRunId(nextRunId);
+      void backgroundOperations.refresh();
       if (recreateRuntime) onRecreateRuntimeChange?.({ activeStage: 5, message: "Waiting for provider", state: "running" });
       if (batchItemId) onPlannerBatchItemChange?.(batchItemId, { status: "generating" });
     } catch (reason) {
@@ -209,6 +236,7 @@ export const GenerationWorkflowSections = forwardRef<GenerationWorkflowHandle, G
     try {
       const nextRunId = await submitAutonomousInspiration(request.provider);
       setRunId(nextRunId);
+      void backgroundOperations.refresh();
     } catch (reason) {
       setError(reason instanceof Error
         ? reason.message
@@ -270,6 +298,40 @@ export const GenerationWorkflowSections = forwardRef<GenerationWorkflowHandle, G
         && generation.completedCount === generation.totalCount,
       );
   const showCompletion = generationComplete && !autonomousRun;
+  useEffect(() => {
+    if (!generation || !TERMINAL.has(generation.status) || showCompletion) return;
+    const timer = window.setTimeout(() => {
+      completionRef.current = null;
+      activeBatchItemIdRef.current = null;
+      setRunId("");
+      setGeneration(null);
+      setSubmitting(false);
+      setError("");
+      setReservedCount(request.promptCount);
+      setAutonomousRun(false);
+      setActiveOrigin(null);
+      onStartNewGeneration?.();
+    }, TERMINAL_DISMISS_MILLISECONDS);
+    return () => window.clearTimeout(timer);
+  }, [generation, onStartNewGeneration, request.promptCount, showCompletion]);
+  useEffect(() => {
+    if (!runId || !backgroundOperations.recent.some(
+      (operation) => operation.operationId === runId && operation.status === "CANCELLED")) return;
+    setError("Generation cancelled.");
+    const timer = window.setTimeout(() => {
+      completionRef.current = null;
+      activeBatchItemIdRef.current = null;
+      setRunId("");
+      setGeneration(null);
+      setSubmitting(false);
+      setError("");
+      setReservedCount(request.promptCount);
+      setAutonomousRun(false);
+      setActiveOrigin(null);
+      onStartNewGeneration?.();
+    }, TERMINAL_DISMISS_MILLISECONDS);
+    return () => window.clearTimeout(timer);
+  }, [backgroundOperations.recent, onStartNewGeneration, request.promptCount, runId]);
   const aggregateProcessed = plannerBatchProgress
     ? plannerBatchProgress.completedIdeas + plannerBatchProgress.failedIdeas
     : 0;

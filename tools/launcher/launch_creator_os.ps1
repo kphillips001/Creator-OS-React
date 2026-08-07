@@ -37,6 +37,7 @@ $script:CurrentStep = "initialization"
 # Core Business Asset analysis is part of the Creator_OS application lifecycle,
 # not optional automation. Explicit user environment values still win.
 foreach ($workerSwitch in @(
+    "CREATOR_OS_LAUNCH_BACKGROUND_OPERATIONS",
     "CREATOR_OS_LAUNCH_ANALYSIS_ORCHESTRATOR",
     "CREATOR_OS_LAUNCH_NUDENET_ANALYSIS",
     "CREATOR_OS_LAUNCH_VISION_ANALYSIS",

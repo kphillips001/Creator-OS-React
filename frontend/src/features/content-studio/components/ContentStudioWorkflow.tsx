@@ -209,19 +209,26 @@ export function ContentStudioWorkflow({ context, error, loading }: ContentStudio
     setManualWorkflowError("");
     setRecreateRuntime(null);
     try {
+      const diagnosticTraceId = crypto.randomUUID();
       const enhancedTags = await enhanceCreativeTags(
         creativeConcept,
         false,
         undefined,
-        { origin: "manual_creative_concept" },
+        { origin: "manual_creative_concept", diagnosticTraceId },
       );
       const promptInput = enhancedPromptInput(creativeConcept, enhancedTags);
       const preview = await createPromptPreview(
         creativeMode ?? "",
         promptInput,
         promptCount ?? 1,
+        undefined,
+        "social",
+        undefined,
+        { origin: "manual_creative_concept", diagnosticTraceId },
       );
       const succeeded = await generationRef.current?.generate({
+        diagnosticTraceId,
+        origin: "manual_creative_concept",
         promptBatch: preview.prompts,
         promptCount: promptCount ?? 1,
         promptSource: promptInput,
@@ -314,6 +321,7 @@ export function ContentStudioWorkflow({ context, error, loading }: ContentStudio
                   context={context}
                   disabled={ideaGenerationDisabled}
                   onRunStart={() => setInspirationActivated(true)}
+                  onReconnect={() => setInspirationActivated(true)}
                   request={{
                     creativeMode: creativeMode ?? "",
                     promptBatch: [],
@@ -406,6 +414,10 @@ export function ContentStudioWorkflow({ context, error, loading }: ContentStudio
                     disabled={generationDisabled}
                     onManualGenerationStart={() => setPlannerBatchProgress(null)}
                     onRunStart={() => setManualGenerationActivated(true)}
+                    onReconnect={() => {
+                      setManualGenerationActivated(true);
+                      setCreativeStudioOpen(true);
+                    }}
                     onPlannerBatchItemChange={updatePlannerBatchItem}
                     onStartNewGeneration={startNewGeneration}
                     plannerBatchProgress={plannerBatchProgress}

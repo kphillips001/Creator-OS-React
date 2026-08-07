@@ -37,6 +37,7 @@ class ContentStudioGenerationService:
         prompt_batch: tuple[str, ...], origin: str | None = None,
         planner_lineage: dict | None = None,
         explicit_input: dict | None = None,
+        diagnostic_trace_id: str | None = None,
     ):
         lineage = dict(planner_lineage or {})
         input_contract = dict(explicit_input or {})
@@ -45,6 +46,16 @@ class ContentStudioGenerationService:
             **({"planner_lineage": lineage} if lineage else {}),
             **({"explicit_input": input_contract} if input_contract else {}),
         }
+        from app.services.generation_request_diagnostic_service import GenerationRequestDiagnosticService
+        diagnostic = GenerationRequestDiagnosticService()
+        if origin == "autonomous_inspiration":
+            diagnostic.record(
+                trace_id=diagnostic_trace_id, workflow_origin=origin,
+                stage="5_prompt_plan_input",
+                value={"creativeTags": creative_tags, "creativeMode": creative_mode,
+                       "promptCount": prompt_count, "providerId": provider_id,
+                       "promptBatch": prompt_batch},
+            )
         provider_ready_modes = {
             "explicit", "premium_teaser", "spicy", "story_sequence"
         }
@@ -65,6 +76,19 @@ class ContentStudioGenerationService:
                 metadata=metadata,
             )
             plan = plan_with_prompt_batch(plan, prompt_batch)
+            if origin == "autonomous_inspiration":
+                diagnostic.record(
+                    trace_id=diagnostic_trace_id, workflow_origin=origin,
+                    stage="6_prompt_plan_output_and_variations",
+                    value={"planId": plan.plan_id, "promptText": plan.prompt_text,
+                           "promptMetadata": dict(plan.prompt_metadata or {}),
+                           "variations": list(plan.prompt_metadata.get("prompt_variations") or ())},
+                )
+                diagnostic.record(
+                    trace_id=diagnostic_trace_id, workflow_origin=origin,
+                    stage="7_prompt_before_render_locks",
+                    value=list(plan.prompt_metadata.get("prompt_variations") or ()),
+                )
             if creative_mode in {"premium_teaser", "spicy", "story_sequence"}:
                 from app.services.seedream_premium_render_locks import (
                     enforce_premium_render_body_lock,
@@ -75,6 +99,12 @@ class ContentStudioGenerationService:
                     for prompt in plan.prompt_metadata.get("prompt_variations") or ()
                 )
                 plan = plan_with_prompt_batch(plan, locked)
+        if origin == "autonomous_inspiration":
+            diagnostic.record(
+                trace_id=diagnostic_trace_id, workflow_origin=origin,
+                stage="8_prompt_after_render_locks",
+                value=list(plan.prompt_metadata.get("prompt_variations") or ()),
+            )
         variations = tuple(plan.prompt_metadata.get("prompt_variations") or ())
         job = self.generation_engine.queue_prompt_plan(
             creator_profile=creator_profile,
@@ -94,6 +124,7 @@ class ContentStudioGenerationService:
                 **({"workflow_origin": origin} if origin else {}),
                 **({"planner_lineage": lineage} if lineage else {}),
                 **({"explicit_input": input_contract} if input_contract else {}),
+                **({"diagnostic_trace_id": diagnostic_trace_id} if diagnostic_trace_id else {}),
             },
         )
         return plan, job

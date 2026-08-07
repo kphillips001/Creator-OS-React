@@ -1100,6 +1100,45 @@ class GenerationLibraryService:
             image_ids=(str(image_id),),
         )
 
+    def save_rejected_photoshoot_candidate_to_library(self, image_id: str) -> GenerationLibraryActionResult:
+        """Detach a rejected candidate from Photoshoot and retain it as a standalone generation."""
+        try:
+            record = self.get(image_id)
+            active_path = self.archive_service.move_to_generation_active(record)
+            standalone_metadata = {
+                key: value
+                for key, value in dict(record.generation_metadata or {}).items()
+                if not str(key).startswith("photoshoot_")
+            }
+            updated = replace(
+                record,
+                output_reference=str(active_path),
+                status="active",
+                review_state="unreviewed",
+                selected=False,
+                photoshoot_session_id=None,
+                photoshoot_request_id=None,
+                generation_metadata={
+                    **standalone_metadata,
+                    "saved_to_generation_library_at": utc_now(),
+                    "output_reference": str(active_path),
+                },
+                updated_at=utc_now(),
+            )
+            self._replace_record(updated)
+        except Exception as exc:
+            return GenerationLibraryActionResult(
+                success=False,
+                message="Rejected candidate could not be saved to Generation Library.",
+                image_ids=(str(image_id),),
+                errors=(str(exc),),
+            )
+        return GenerationLibraryActionResult(
+            success=True,
+            message="Rejected candidate saved to Generation Library as a standalone generation.",
+            image_ids=(str(image_id),),
+        )
+
     def discard_temporary_records(self, image_ids: Iterable[str]) -> GenerationLibraryActionResult:
         ids = tuple(dict.fromkeys(str(image_id) for image_id in image_ids if str(image_id)))
         if not ids:

@@ -39,6 +39,7 @@ from app.services.photoshoot_queue_service import PhotoshootQueueService
 from app.services.photoshoot_creative_director_service import PhotoshootCreativeDirectorWorkflowService
 from app.services.photoshoot_manual_service import PhotoshootManualService
 from app.services.photoshoot_summary_service import PhotoshootSummaryService
+from app.services.creative_director_service import CreativeDirectorService
 
 
 class NoReferenceLibraryService:
@@ -223,6 +224,41 @@ class PhotoshootQueueServiceTests(unittest.TestCase):
         self.assertEqual(progress["remaining_shots"], 0)
         self.assertEqual(progress["editorial_stage"], "Open-ended")
         self.assertNotIn("of 0", PhotoshootCreativeDirectorWorkflowService._planner_explanation(progress))
+
+    def test_target_switching_changes_semantics_without_resetting_continuity(self):
+        service = self.make_service()
+        session = service.create_session(
+            creator_profile_id=7, prompt_plans=[prompt_plan(1)], provider_id="seedream_4_5",
+            target_shot_count=5,
+            creative_continuity={
+                "current_shot_image_id": "approved-image",
+                "approved_directions": ({"title": "Washing hair"},),
+                "progression_stage": 3,
+            },
+        )
+
+        freeflow = service.update_session_settings(session.session_id, target_shot_count=0)
+        self.assertEqual(freeflow.target_shot_count, 0)
+        self.assertEqual(freeflow.creative_continuity["current_shot_image_id"], "approved-image")
+        self.assertEqual(freeflow.creative_continuity["approved_directions"][0]["title"], "Washing hair")
+        self.assertEqual(freeflow.creative_continuity["progression_stage"], 3)
+        freeflow_context = PhotoshootCreativeDirectorWorkflowService._ai_context(
+            "shower", {}, "", progression_stage=3, current_shot=2, target_shot_count=0,
+        )
+        self.assertFalse(freeflow_context["progression_enabled"])
+        self.assertIsNone(freeflow_context["progression_stage"])
+
+        restored = service.update_session_settings(session.session_id, target_shot_count=10)
+        self.assertEqual(restored.target_shot_count, 10)
+        self.assertEqual(restored.creative_continuity["current_shot_image_id"], "approved-image")
+        self.assertEqual(restored.creative_continuity["approved_directions"][0]["title"], "Washing hair")
+        restored_context = PhotoshootCreativeDirectorWorkflowService._ai_context(
+            "shower", {}, "", progression_stage=3, current_shot=2,
+            editorial_stage="Beginning", target_shot_count=10,
+        )
+        self.assertTrue(restored_context["progression_enabled"])
+        self.assertEqual(restored_context["progression_stage"], 3)
+        self.assertEqual(restored_context["remaining_shots"], 8)
 
     def test_generation_engine_integration_consumes_one_prompt_at_a_time(self):
         service = self.make_service()
@@ -714,6 +750,85 @@ class PhotoshootQueueServiceTests(unittest.TestCase):
             progress = workflow._planning_progress(service.get_session(session.session_id))
             self.assertEqual(progress["planning_shot"], index + 1)
             self.assertEqual(progress["editorial_stage"], expected)
+
+    def test_creative_director_progress_uses_timeline_approved_ordinals(self):
+        service = self.make_service()
+        session, _created = service.start_studio_session_from_generated_image(generated_record())
+        rejected = service.add_studio_shot_request(
+            session_id=session.session_id, prompt_text="Rejected attempt", shot_direction="Attempt",
+        )
+        service._replace_request(replace(rejected, status="rejected", review_status="rejected"))
+        approved = service.add_studio_shot_request(
+            session_id=session.session_id, prompt_text="Approved next shot", shot_direction="Next shot",
+        )
+        service._replace_request(replace(approved, status="awaiting_review", metadata={
+            **dict(approved.metadata or {}), "generated_image_ids": ("approved-after-rejection",),
+        }))
+        service.approve_request(approved.request_id)
+        session = service.update_session_settings(session.session_id, target_shot_count=5)
+        workflow = PhotoshootCreativeDirectorWorkflowService(
+            queue=service, library=SimpleNamespace(), creative_director=SimpleNamespace(), summary_service=SimpleNamespace(),
+        )
+
+        progress = workflow._planning_progress(session)
+
+        self.assertEqual(approved.sequence_index, 3)
+        self.assertEqual(progress, {
+            "current_shot": 2,
+            "planning_shot": 3,
+            "target_shot_count": 5,
+            "remaining_shots": 3,
+            "editorial_stage": "Middle",
+        })
+
+    def test_latest_approved_shot_is_structured_continuity_contract(self):
+        service = self.make_service()
+        session, _created = service.start_studio_session_from_generated_image(generated_record())
+        request = service.add_studio_shot_request(
+            session_id=session.session_id,
+            prompt_text="Warm bedroom, black lingerie, seated three-quarter pose.",
+            shot_direction="Remain seated and turn slightly toward camera.",
+            creative_direction={
+                "title": "Seated turn",
+                "creative_direction": "Remain seated and turn slightly toward camera.",
+                "pose_composition": "Seated, torso three-quarter right, left hand on thigh.",
+                "emotion": "Soft confident smile.",
+                "camera_framing": "Eye-level medium shot.",
+                "lighting": "Warm window light.",
+            },
+        )
+        service._replace_request(replace(request, status="awaiting_review", metadata={
+            **dict(request.metadata or {}), "generated_image_ids": ("latest-shot",),
+        }))
+        service.approve_request(request.request_id)
+        session = service.get_session(session.session_id)
+        workflow = PhotoshootCreativeDirectorWorkflowService(
+            queue=service, library=SimpleNamespace(), creative_director=SimpleNamespace(), summary_service=SimpleNamespace(),
+        )
+        latest = workflow._latest_approved_shot_summary(session, {
+            "overall_theme": "Intimate bedroom editorial",
+            "current_location": "bedroom",
+            "current_wardrobe": "black lingerie",
+            "lighting": "warm window light",
+            "visual_style": "intimate medium portrait",
+        })
+
+        self.assertEqual(set(latest), {
+            "environment", "location", "wardrobe", "clothing_state", "pose", "body_orientation",
+            "hand_placement", "facial_expression", "camera_angle", "framing", "lighting", "progression_stage",
+        })
+        self.assertEqual(latest["location"], "bedroom")
+        self.assertEqual(latest["clothing_state"], "black lingerie")
+        self.assertIn("left hand on thigh", latest["hand_placement"].lower())
+        context = workflow._ai_context("original", {}, "", latest_approved_shot=latest)
+        prompt = CreativeDirectorService._build_photoshoot_creative_director_prompt(
+            session_context=context, approved_history=(), creative_mode="premium",
+            session_direction="", creative_hint="", continuity_locks={},
+        )
+        self.assertIn('"latest_approved_shot"', prompt)
+        self.assertIn('"body_orientation"', prompt)
+        self.assertIn("Never begin a new composition, wardrobe, location, or camera setup", prompt)
+        self.assertIn("Target shot count is advisory only", prompt)
 
     def test_pending_recommendation_persists_without_approved_history(self):
         service = self.make_service()

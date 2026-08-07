@@ -145,6 +145,34 @@ def test_one_request_materializes_each_paid_step_without_teaser(tmp_path):
     assert {item.publication_metadata["session_role"] for item in publications.by_id.values()} == {"FIRST_UNLOCK", "ESCALATION"}
 
 
+def test_bundle_mode_returns_placeholder_and_rejects_session_preparation(tmp_path):
+    preparation, _, _ = service(tmp_path)
+    preparation.photoshoots = SimpleNamespace(get=lambda _: {
+        "deliverable_id": uuid4(), "photoshoot_session_id": "session-1",
+        "creator_profile_id": 1, "registration_state": "IN_ASSET_LIBRARY",
+        "selling_mode": "BUNDLE",
+    })
+    readiness = preparation.inspect("deliverable", creator_profile_id=1)
+    assert readiness["sellingMode"] == "BUNDLE"
+    assert readiness["status"] == "NOT_CONFIGURED"
+    assert readiness["steps"] == []
+    with pytest.raises(ValueError, match="BUNDLE selling mode"):
+        stage(preparation)
+
+
+def test_missing_strategy_is_a_normal_structured_state_without_steps(tmp_path):
+    preparation, _, _ = service(tmp_path)
+    preparation.strategies = SimpleNamespace(latest=lambda _: None)
+    readiness = preparation.inspect("deliverable", creator_profile_id=1)
+    assert readiness["photoshootSessionId"] == "session-1"
+    assert readiness["sellingMode"] == "SESSION"
+    assert readiness["strategyExists"] is False and readiness["strategyStatus"] == "MISSING"
+    assert readiness["status"] == "STRATEGY_REQUIRED" and readiness["statusLabel"] == "Not Prepared"
+    assert readiness["steps"] == [] and readiness["paidStepCount"] == 0
+    with pytest.raises(ValueError, match="Generate a Session Sales Strategy"):
+        stage(preparation)
+
+
 def test_repeated_preparation_reuses_offerings_and_publications(tmp_path):
     preparation, offerings, publications = service(tmp_path)
     for _ in range(2):

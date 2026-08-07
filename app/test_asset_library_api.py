@@ -22,6 +22,29 @@ from app.services.generation_library_service import GenerationLibraryService
 from app.services.staged_asset_registration_service import (
     StagedAssetRegistrationResult,
 )
+from app.repositories.photoshoot_commerce_repository import PhotoshootCommerceRepository
+
+
+def test_session_strategy_endpoint_uses_canonical_generator_and_returns_readiness(monkeypatch):
+    calls = []
+    monkeypatch.setattr(asset_api, "_creator_profile", lambda: {"id": 7})
+    monkeypatch.setattr(asset_api, "PhotoshootCommerceRepository", lambda: SimpleNamespace(
+        get=lambda _deliverable_id: {
+            "creator_profile_id": 7,
+            "registration_state": "IN_ASSET_LIBRARY",
+        }
+    ))
+    monkeypatch.setattr(asset_api, "PhotoshootCommerceDeliverableService", lambda: SimpleNamespace(
+        generate_session_sales_strategy=lambda deliverable_id, creator_profile_id, strategy_version: calls.append(
+            (deliverable_id, creator_profile_id, strategy_version))))
+    monkeypatch.setattr(asset_api, "PhotoshootSalePreparationService", lambda: SimpleNamespace(
+        inspect=lambda deliverable_id, creator_profile_id: {
+            "deliverableId": deliverable_id, "sellingMode": "SESSION",
+            "status": "NOT_PREPARED", "steps": [],
+        }))
+    result = asset_api.generate_photoshoot_session_sales_strategy("set-1")
+    assert result["status"] == "NOT_PREPARED"
+    assert calls == [("set-1", 7, "photoshoot_session_sales_v1")]
 
 
 def test_canonical_asset_id_uses_direct_lookup_without_reference_enrichment(monkeypatch):
@@ -140,6 +163,14 @@ def _empty_photoshoots():
         count_asset_library=lambda *_args, **_kwargs: 0,
         list_asset_library=lambda *_args, **_kwargs: (),
     )
+
+
+def test_photoshoot_sales_classification_filters_use_persisted_configuration():
+    build = PhotoshootCommerceRepository._asset_library_sales_classification_filter
+    assert build("SESSION") == "COALESCE(d.selling_mode, 'SESSION')='SESSION'"
+    assert build("CHAT") == "d.selling_mode='BUNDLE' AND COALESCE(d.bundle_sales_channel, 'CHAT')='CHAT'"
+    assert build("WALL") == "d.selling_mode='BUNDLE' AND d.bundle_sales_channel='CONTENT_WALL'"
+    assert build(None) is None
 
 
 def test_all_media_merge_is_complete_union_across_sources():
@@ -439,6 +470,46 @@ def test_list_assets_applies_filters_and_pagination(monkeypatch):
     assert filters.is_reference_image is False
     assert captured["candidate_limit"] == 20
     assert captured["built_ids"] == tuple(range(11, 21))
+
+
+@pytest.mark.parametrize("classification", ("CHAT", "SESSION", "WALL"))
+def test_list_assets_filters_photoshoots_by_commercial_classification(monkeypatch, classification):
+    captured = {}
+    photoshoot = {
+        "deliverable_id": f"set-{classification.lower()}", "display_title": classification,
+        "display_name": "Photoshoot", "registration_state": "IN_ASSET_LIBRARY",
+        "completed_at": "2026-08-07T10:00:00Z", "updated_at": "2026-08-07T10:00:00Z",
+        "hero_asset_id": 42, "shot_count": 3,
+        "selling_mode": "SESSION" if classification == "SESSION" else "BUNDLE",
+        "bundle_sales_channel": "CONTENT_WALL" if classification == "WALL" else "CHAT",
+    }
+
+    class Repository:
+        def count_asset_library(self, _creator_profile_id, **kwargs):
+            captured["count"] = kwargs
+            return 1
+
+        def list_asset_library(self, _creator_profile_id, **kwargs):
+            captured["list"] = kwargs
+            return (photoshoot,)
+
+    monkeypatch.setattr(asset_api, "_creator_profile", lambda: {"id": 7})
+    monkeypatch.setattr(asset_api, "_canonical_asset_id", lambda _profile_id: None)
+    monkeypatch.setattr(asset_api, "AssetLibraryService", lambda: _paged_service(()))
+    monkeypatch.setattr(asset_api, "GenerationLibraryService", lambda: SimpleNamespace(list_records=lambda: ()))
+    monkeypatch.setattr(asset_api, "PhotoshootCommerceRepository", Repository)
+
+    result = asset_api.list_assets(
+        search="photo", media_type="photoshoot", classification=classification,
+        page=1, page_size=18,
+    )
+
+    assert result["total"] == 1
+    assert result["assets"][0]["sellingMode"] == photoshoot["selling_mode"]
+    assert result["assets"][0]["bundleSalesChannel"] == (None if classification == "SESSION" else photoshoot["bundle_sales_channel"])
+    assert captured["count"] == {"search": "photo", "classification": classification}
+    assert captured["list"]["search"] == "photo"
+    assert captured["list"]["classification"] == classification
 
 
 def test_asset_library_defensively_excludes_reference_items(monkeypatch):

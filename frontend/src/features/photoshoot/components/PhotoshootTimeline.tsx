@@ -1,5 +1,6 @@
-import { ImagePlus, RefreshCw } from "lucide-react";
+import { ImagePlus, RefreshCw, Video } from "lucide-react";
 import { useState } from "react";
+import { videoStudioLink } from "../../../infrastructure/api/videoStudioApi";
 import { LibraryImage } from "../../generation-library/LibraryImage";
 import type { PhotoshootTimelineItem } from "../types";
 import { PhotoshootImagePreview } from "./PhotoshootImagePreview";
@@ -15,6 +16,7 @@ export function PhotoshootTimeline({ items, busy, onReplace }: { items: Photosho
       {item.image ? <button aria-label={`Select ${item.label}`} className="photoshoot-timeline__select" onClick={() => { setSelected(isSelected ? "" : item.requestId); if (item.status === "approved") setPreview(item.image); }} type="button"><LibraryImage record={item.image} /></button> : <div className="photoshoot-timeline__replacement"><RefreshCw aria-hidden="true" size={22} /><span>{item.status === "continuity_invalidated" ? "Requires regeneration" : "Replacement in progress"}</span></div>}
       <strong>{item.label}</strong>
       {!item.isSeed && (isSelected || invalid) && <button className="photoshoot-timeline__replace" disabled={busy || item.status === "queued" || item.status === "generating"} onClick={() => onReplace(item.requestId)} type="button">Replace Shot</button>}
+      {isSelected && item.status === "approved" && item.image && <button className="photoshoot-timeline__replace" onClick={() => { window.location.href = videoStudioLink({ type: "photoshoot_shot", id: item.image!.image_id, previewUrl: item.image!.image_url, label: item.label, context: `Production Photoshoot · ${item.label}` }); }} type="button"><Video size={14} /> Create Video</button>}
     </article>;
   })}{Array.from({ length: reserved }, (_, index) => <div className="photoshoot-timeline__reserved" key={`future-${index}`}><ImagePlus aria-hidden="true" size={22} /><span>Future approved shot</span></div>)}</div>{preview && <PhotoshootImagePreview image={preview} label="Approved Photoshoot image" onClose={() => setPreview(null)} />}</section>;
 }

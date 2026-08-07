@@ -776,19 +776,53 @@ class ConversationGateway:
     ):
         teaser = self._free_teaser_delivery(customer_sales_decision)
         if teaser is not None:
+            metadata_key = (
+                "bundle_teaser_delivery"
+                if teaser.get("sales_role") == "BUNDLE_PROMOTIONAL_TEASER"
+                else "free_teaser_delivery"
+            )
+            bundle_presentation = (
+                teaser.get("sales_role") == "BUNDLE_PROMOTIONAL_TEASER"
+                and offering is not None
+            )
+            offering_metadata = ({
+                "publication_id": str(offering.publication_id),
+                "provider": offering.provider,
+                "provider_resource_id": offering.provider_resource_id,
+                "price_minor": offering.price_minor,
+                "currency": offering.currency,
+            } if bundle_presentation else {})
             return (
-                None, "FREE", "asset", False,
+                offering.delivery_url if bundle_presentation else None,
+                offering.offering_type if bundle_presentation else "FREE",
+                "provider_link" if bundle_presentation else "asset",
+                bundle_presentation,
                 {
-                    "delivery_type": "FREE",
+                    "delivery_type": (
+                        offering.offering_type if bundle_presentation else "FREE"
+                    ),
                     "message_text": response_text,
                     "asset_path": teaser["asset_path"],
+                    **({
+                        "media_link": offering.delivery_url,
+                        "product_reference": str(offering.offering_id),
+                    } if bundle_presentation else {}),
                     "experience_reference": teaser["photoshoot_session_id"],
                     "delivery_method": "free_asset",
-                    "delivery_reason": "canonical_photoshoot_free_teaser",
-                    "next_suggested_action": "deliver_free_asset",
+                    "delivery_reason": (
+                        "canonical_bundle_complete_presentation"
+                        if bundle_presentation
+                        else "canonical_photoshoot_free_teaser"
+                    ),
+                    "next_suggested_action": (
+                        "await_purchase_or_continue_conversation"
+                        if bundle_presentation else "deliver_free_asset"
+                    ),
                     "metadata": {
                         "commerce_mode": "AUTHORITATIVE",
-                        "free_teaser_delivery": teaser,
+                        metadata_key: teaser,
+                        "bundle_complete_presentation": bundle_presentation,
+                        **offering_metadata,
                     },
                 },
             )
@@ -832,6 +866,28 @@ class ConversationGateway:
     def _free_teaser_delivery(
         self, decision: CustomerSalesDecision | None,
     ) -> dict[str, Any] | None:
+        bundle = dict(getattr(decision, "bundle_sales_context", None) or {})
+        if (
+            bundle.get("eligible") is True
+            and bundle.get("presentationPhase") == "COMPLETE_PRESENTATION"
+        ):
+            teaser = dict(bundle.get("promotionalTeaser") or {})
+            delivery = dict(bundle.get("_delivery") or {})
+            if all((bundle.get("lifecycleId"), teaser.get("assetId"),
+                    delivery.get("teaserAssetPath"))):
+                return {
+                    "lifecycle_id": str(bundle["lifecycleId"]),
+                    "photoshoot_session_id": str(
+                        (bundle.get("photoshoot") or {}).get(
+                            "photoshootSessionId"
+                        )
+                    ),
+                    "asset_id": int(teaser["assetId"]),
+                    "source_asset_id": int(teaser["sourceAssetId"]),
+                    "sales_role": "BUNDLE_PROMOTIONAL_TEASER",
+                    "asset_path": str(delivery["teaserAssetPath"]),
+                    "asset_path_source": "canonical_bundle_teaser",
+                }
         action = getattr(decision, "next_sales_action", None)
         runtime = dict((getattr(action, "metadata", {}) or {}).get("sessionRuntime") or {})
         asset_id = runtime.get("currentAssetId")
@@ -1053,6 +1109,12 @@ class ConversationGateway:
                 )
             if session_conversation:
                 context["session_conversation"] = session_conversation
+        bundle_context = dict(decision.bundle_sales_context or {})
+        if bundle_context.get("eligible") is True:
+            context["bundle_conversation"] = {
+                key: value for key, value in bundle_context.items()
+                if key != "_delivery"
+            }
         if (
             effective_policy.value in {
                 "COMMERCE_PRESENTATION_ALLOWED",
@@ -1165,6 +1227,15 @@ class ConversationGateway:
             "commercial_intelligence": (
                 dict(intelligence)
                 if isinstance(intelligence, Mapping) else None
+            ),
+            "bundle_sales_context": (
+                {
+                    key: value
+                    for key, value in dict(
+                        decision.bundle_sales_context or {}
+                    ).items()
+                    if key != "_delivery"
+                } or None
             ),
         }
 

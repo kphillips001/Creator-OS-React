@@ -45,6 +45,7 @@ class CustomerSalesBrainService:
         photoshoot_lifecycle_service=None,
         autonomous_progression_service=None, progression_repository=None,
         session_runtime_service=None,
+        bundle_sales_context_service=None,
         clock=lambda: datetime.now(timezone.utc),
     ):
         self.customers = customer_repository or CustomerCommerceRepository()
@@ -69,6 +70,7 @@ class CustomerSalesBrainService:
         self.autonomous_progression = autonomous_progression_service
         self.progression_repository = progression_repository
         self.session_runtime = session_runtime_service
+        self.bundle_sales_context = bundle_sales_context_service
         self.clock = clock
 
     def evaluate_for_telegram_user(
@@ -800,6 +802,93 @@ class CustomerSalesBrainService:
                     )
             except Exception as error:
                 logger.warning("event=photoshoot_lifecycle_resolution_unavailable error_type=%s", type(error).__name__)
+        dispatch_mode = None
+        dispatch_session_id = (
+            resolved_photoshoot_lifecycle.photoshoot_id
+            if resolved_photoshoot_lifecycle is not None
+            else getattr(experience, "photoshoot_id", None)
+        )
+        if dispatch_session_id:
+            try:
+                bundle_service = self.bundle_sales_context
+                if bundle_service is None:
+                    from app.services.photoshoot_bundle_sales_context_service import PhotoshootBundleSalesContextService
+                    bundle_service = PhotoshootBundleSalesContextService()
+                dispatch_mode = bundle_service.resolve_mode(dispatch_session_id)
+                if dispatch_mode == "BUNDLE" and profile is not None:
+                    from app.models.ownership_intelligence import OwnershipIdentity
+                    lifecycle_service = self.photoshoot_lifecycles
+                    if lifecycle_service is None:
+                        from app.services.customer_photoshoot_lifecycle_service import CustomerPhotoshootLifecycleService
+                        lifecycle_service = CustomerPhotoshootLifecycleService()
+                    teaser_presented = bool(
+                        resolved_photoshoot_lifecycle
+                        and lifecycle_service.bundle_teaser_presented(
+                            resolved_photoshoot_lifecycle
+                        )
+                    )
+                    offer_presented_reader = getattr(
+                        lifecycle_service, "bundle_offer_presented", None
+                    )
+                    offer_presented = bool(
+                        resolved_photoshoot_lifecycle
+                        and callable(offer_presented_reader)
+                        and offer_presented_reader(resolved_photoshoot_lifecycle)
+                    )
+                    bundle_context = bundle_service.build(
+                        dispatch_session_id,
+                        identity=OwnershipIdentity(
+                            creator_profile_id=creator_profile_id,
+                            fanvue_account_id=fanvue_account_id,
+                            external_fanvue_user_uuid=buyer_uuid,
+                            telegram_user_id=telegram_user_id,
+                        ),
+                        lifecycle_id=(
+                            resolved_photoshoot_lifecycle.lifecycle_id
+                            if resolved_photoshoot_lifecycle else None
+                        ),
+                        teaser_presented=teaser_presented,
+                        offer_presented=offer_presented,
+                    )
+                    result = replace(result, bundle_sales_context=bundle_context)
+                    if not bundle_context["eligible"]:
+                        result = replace(
+                            result, decision=CustomerSalesDecisionType.NO_SALE,
+                            reason_code=CustomerSalesReasonCode.NO_ELIGIBLE_OFFERING,
+                            reason_summary=",".join(
+                                bundle_context["ineligibilityReasons"]
+                            ), sell_allowed=False, nudge_allowed=False,
+                            recommended_offering_id=None,
+                            recommended_publication_id=None,
+                            recommended_delivery_url=None,
+                        )
+            except Exception as error:
+                dispatch_mode = "BUNDLE" if dispatch_mode == "BUNDLE" else dispatch_mode
+                logger.warning(
+                    "event=bundle_sales_context_unavailable error_type=%s",
+                    type(error).__name__,
+                )
+                if dispatch_mode == "BUNDLE":
+                    result = replace(
+                        result, decision=CustomerSalesDecisionType.NO_SALE,
+                        reason_code=CustomerSalesReasonCode.NO_ELIGIBLE_OFFERING,
+                        reason_summary="BUNDLE_CONTEXT_NOT_READY",
+                        sell_allowed=False, nudge_allowed=False,
+                        recommended_offering_id=None,
+                        recommended_publication_id=None,
+                        recommended_delivery_url=None,
+                    )
+                elif dispatch_session_id:
+                    dispatch_mode = "UNRESOLVED"
+                    result = replace(
+                        result, decision=CustomerSalesDecisionType.NO_SALE,
+                        reason_code=CustomerSalesReasonCode.NO_ELIGIBLE_OFFERING,
+                        reason_summary="PHOTOSHOOT_SELLING_MODE_UNRESOLVED",
+                        sell_allowed=False, nudge_allowed=False,
+                        recommended_offering_id=None,
+                        recommended_publication_id=None,
+                        recommended_delivery_url=None,
+                    )
         if buyer_uuid is not None:
             try:
                 profile = profile or self.customers.get_by_buyer_uuid(creator_profile_id=creator_profile_id,external_fanvue_user_uuid=buyer_uuid)
@@ -813,7 +902,7 @@ class CustomerSalesBrainService:
                     resolved_photoshoot_lifecycle=existing_active_lifecycle
                 current_lifecycle=existing_active_lifecycle or resolved_photoshoot_lifecycle
                 target_lifecycle=(resolved_photoshoot_lifecycle if current_lifecycle and resolved_photoshoot_lifecycle and current_lifecycle.photoshoot_id!=resolved_photoshoot_lifecycle.photoshoot_id else None)
-                if profile and current_lifecycle:
+                if profile and current_lifecycle and dispatch_mode == "SESSION":
                     repository=self.progression_repository
                     if repository is None:
                         from app.repositories.autonomous_sales_progression_repository import AutonomousSalesProgressionRepository

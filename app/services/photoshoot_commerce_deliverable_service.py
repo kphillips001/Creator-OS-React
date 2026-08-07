@@ -6,12 +6,16 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import NAMESPACE_URL, uuid5
 
+from app.models.photoshoot_selling_mode import PhotoshootSellingMode
+from app.models.bundle_sales_channel import BundleSalesChannel
+
 from app.repositories.content_intelligence_repository import ContentIntelligenceProfileRepository
 from app.repositories.photoshoot_commerce_repository import PhotoshootCommerceRepository
 from app.services.generation_library_service import GenerationLibraryService
 from app.services.photoshoot_queue_service import PhotoshootQueueService
 from app.services.photoshoot_commercial_intelligence_service import (
-    PHOTOSHOOT_INTELLIGENCE_VERSION, PhotoshootCommercialIntelligenceService,
+    PHOTOSHOOT_INTELLIGENCE_VERSION, PhotoshootCommercialIntelligenceIncompleteError,
+    PhotoshootCommercialIntelligenceService,
 )
 
 
@@ -65,11 +69,15 @@ class PhotoshootCommerceDeliverableService:
             display_name=session.title, member_ids=tuple(a for a, _ in members), hero_asset_id=hero,
             gallery_path=gallery_path, completed_at=completed_at,
             intelligence_status="PENDING", commerce_status="ANALYZING")
-        self.run_canonical_intelligence(session)
-        self.session_sales_strategy.generate(
-            str(deliverable["deliverable_id"]), creator_profile_id=creator_profile_id
-        )
-        self.repository.set_completion_intelligence_status(str(deliverable["deliverable_id"]), "READY")
+        try:
+            self.run_canonical_intelligence(session)
+        except Exception as error:
+            self.repository.set_analysis_failure(str(deliverable["deliverable_id"]), str(error))
+        else:
+            self.session_sales_strategy.generate(
+                str(deliverable["deliverable_id"]), creator_profile_id=creator_profile_id
+            )
+            self.repository.set_completion_intelligence_status(str(deliverable["deliverable_id"]), "READY")
         deliverable = self.repository.get(str(deliverable["deliverable_id"]))
         if session.status != "completed" or not dict(session.creative_continuity or {}).get("gallery_ready"):
             session = self.queue.finish_session(session_id)
@@ -123,6 +131,9 @@ class PhotoshootCommerceDeliverableService:
                 progress=lambda stage, state: self.repository.update_intelligence_stage(session_id, stage, dict(state)))
             if preserve_commercial_intelligence and existing:
                 profile = self._preserve_legacy_commercial_intelligence(profile, existing)
+            missing = PhotoshootCommercialIntelligenceService.missing_required_commercial_fields(profile)
+            if missing:
+                raise PhotoshootCommercialIntelligenceIncompleteError(missing)
             self.repository.persist_canonical_intelligence(session_id, intelligence_version, profile)
             return profile
         except Exception as error:
@@ -179,6 +190,53 @@ class PhotoshootCommerceDeliverableService:
         if added is None:
             raise RuntimeError("Photoshoot could not be added to Asset Library.")
         return self.repository.get(deliverable_id)
+
+    def set_selling_mode(self, deliverable_id: str, creator_profile_id: int, selling_mode):
+        mode = PhotoshootSellingMode.parse(selling_mode)
+        existing = self.repository.get(str(deliverable_id))
+        if existing is None or int(existing["creator_profile_id"]) != int(creator_profile_id):
+            raise KeyError("Photoshoot not found.")
+        current = PhotoshootSellingMode.parse(existing.get("selling_mode") or "SESSION")
+        if current is mode:
+            return existing
+        updated = self.repository.update_selling_mode(
+            str(deliverable_id), int(creator_profile_id), mode.value,
+        )
+        if updated is not None:
+            return updated
+        if self.repository.has_protected_commercial_evidence(
+            str(deliverable_id), int(creator_profile_id),
+        ):
+            raise ValueError(
+                "Selling mode cannot be changed after a Photoshoot has a live publication or confirmed purchase."
+            )
+        raise ValueError("Selling mode could not be changed for this Photoshoot.")
+
+    def set_bundle_sales_channel(self, deliverable_id: str,
+                                 creator_profile_id: int, channel):
+        selected = BundleSalesChannel.parse(channel)
+        existing = self.repository.get(str(deliverable_id))
+        if existing is None or int(existing["creator_profile_id"]) != int(creator_profile_id):
+            raise KeyError("Photoshoot not found.")
+        if PhotoshootSellingMode.parse(existing.get("selling_mode") or "SESSION") is not PhotoshootSellingMode.BUNDLE:
+            raise ValueError("Bundle sales channel requires BUNDLE selling mode.")
+        current = BundleSalesChannel.parse(
+            existing.get("bundle_sales_channel") or BundleSalesChannel.CHAT.value
+        )
+        if current is selected:
+            return existing
+        updated = self.repository.update_bundle_sales_channel(
+            str(deliverable_id), int(creator_profile_id), selected.value,
+        )
+        if updated is not None:
+            return updated
+        if self.repository.has_bundle_channel_use_evidence(
+            str(deliverable_id), int(creator_profile_id),
+        ):
+            raise ValueError(
+                "Bundle sales channel cannot be changed after the Bundle has been presented or a purchase intent exists."
+            )
+        raise ValueError("Bundle sales channel could not be changed for this Photoshoot.")
 
     def _ordered_members(self, session_id: str):
         members, images = [], []

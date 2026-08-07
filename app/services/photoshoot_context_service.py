@@ -67,13 +67,10 @@ class PhotoshootContextService:
         if session is None:
             return []
         items = []
-        requests_by_position = {}
-        for request in self.photoshoot_queue.requests_for_session(session.session_id):
-            is_replacement_work = bool(dict(request.metadata or {}).get("replaces_request_id"))
-            if request.status in {"approved", "replacement_pending", "continuity_invalidated"} or (is_replacement_work and request.status in {"queued", "generating"}):
-                requests_by_position[request.sequence_index] = request
-        for request in (requests_by_position[index] for index in sorted(requests_by_position)):
-            shot_number = request.sequence_index
+        positions = self.display_timeline_positions(
+            self.photoshoot_queue.requests_for_session(session.session_id)
+        )
+        for shot_number, request in positions:
             if request.status in {"replacement_pending", "continuity_invalidated", "queued", "generating"}:
                 items.append({
                     "request_id": request.request_id, "sequence_index": request.sequence_index,
@@ -99,6 +96,25 @@ class PhotoshootContextService:
                     "image": self._generation_payload(record),
                 })
         return items
+
+    @staticmethod
+    def display_timeline_positions(requests) -> tuple[tuple[int, Any], ...]:
+        """Return presentation-only shot ordinals without counting failed attempts."""
+        requests_by_position = {}
+        for fallback_position, request in enumerate(requests, start=1):
+            metadata = dict(getattr(request, "metadata", None) or {})
+            is_replacement_work = bool(metadata.get("replaces_request_id"))
+            if request.status in {"approved", "replacement_pending", "continuity_invalidated"} or (is_replacement_work and request.status in {"queued", "generating"}):
+                requests_by_position[int(getattr(request, "sequence_index", fallback_position))] = request
+        visible_requests = tuple(requests_by_position[index] for index in sorted(requests_by_position))
+        return tuple(enumerate(visible_requests, start=1))
+
+    @classmethod
+    def approved_display_count(cls, requests) -> int:
+        return sum(
+            1 for _shot_number, request in cls.display_timeline_positions(requests)
+            if request.status == "approved"
+        )
 
     def _provider_list(self) -> list[dict[str, str]]:
         return [

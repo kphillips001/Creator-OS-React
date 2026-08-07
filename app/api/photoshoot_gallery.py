@@ -31,6 +31,11 @@ def _payload(row):
         "imageUrl": f'/api/v1/assets/{row["hero_asset_id"]}/media' if row["hero_asset_id"] else None,
         "intelligenceStatus": row["intelligence_status"],
         "registrationState": row["registration_state"],
+        "sellingMode": row.get("selling_mode") or "SESSION",
+        "bundleSalesChannel": (
+            row.get("bundle_sales_channel") or "CHAT"
+            if str(row.get("selling_mode") or "SESSION") == "BUNDLE" else None
+        ),
     }
 
 

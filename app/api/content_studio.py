@@ -55,6 +55,7 @@ class TransformTagsRequest(BaseModel):
     plannerQuestion: str | None = None
     plannerItemId: str | None = None
     plannerItemTitle: str | None = None
+    diagnosticTraceId: str | None = None
 
 
 class PromptWorkshopRequest(BaseModel):
@@ -98,6 +99,8 @@ class PromptPreviewRequest(BaseModel):
     promptCount: int
     lane: str = "social"
     explicitInput: ExplicitGenerationInput | None = None
+    origin: str | None = None
+    diagnosticTraceId: str | None = None
 
 
 class GenerationSubmissionRequest(BaseModel):
@@ -112,6 +115,7 @@ class GenerationSubmissionRequest(BaseModel):
     plannerLineage: dict | None = None
     lane: str = "social"
     explicitInput: ExplicitGenerationInput | None = None
+    diagnosticTraceId: str | None = None
 
 
 class AutonomousInspirationRequest(BaseModel):
@@ -275,6 +279,18 @@ def _prompt_workshop_batch_content(batch) -> dict:
     }
 
 
+def _enhance_with_canonical_planner(*, account_id: int | str, concept: str) -> str:
+    """Use the canonical planner's single enhancement path for social concepts."""
+    from app.services.canonical_planner_enhancement_service import (
+        CanonicalPlannerEnhancementService,
+    )
+
+    return CanonicalPlannerEnhancementService().enhance(
+        fanvue_account_id=account_id,
+        selected_item=concept,
+    )
+
+
 def _enhance_tags(request: TransformTagsRequest) -> dict:
     creator_profile, creative_director = _creative_director_context()
     tags = request.tags.strip()
@@ -283,17 +299,43 @@ def _enhance_tags(request: TransformTagsRequest) -> dict:
     if request.origin == "canonical_planner":
         if request.explicit:
             raise ValueError("Canonical Planner enhancement must use the premium lane.")
-        from app.services.canonical_planner_enhancement_service import (
-            CanonicalPlannerEnhancementService,
-        )
         account_id = creator_profile.get("fanvue_account_id") or _current_account_id()
         if account_id is None:
             raise ValueError("Creator account required before enhancing planner ideas.")
-        enhanced_tags = CanonicalPlannerEnhancementService().enhance(
-            fanvue_account_id=account_id,
-            selected_item=tags,
+        enhanced_tags = _enhance_with_canonical_planner(
+            account_id=account_id, concept=tags,
         )
-    elif request.origin in {"manual_creative_concept", "recreate_with_ava"}:
+    elif request.origin == "manual_creative_concept":
+        if request.explicit:
+            raise ValueError("Manual Creative Concept enhancement must use the premium lane.")
+        account_id = creator_profile.get("fanvue_account_id") or _current_account_id()
+        if account_id is None:
+            raise ValueError("Creator account required before enhancing a Creative Concept.")
+        from app.services.generation_request_diagnostic_service import (
+            GenerationRequestDiagnosticService,
+        )
+        diagnostic = GenerationRequestDiagnosticService()
+        diagnostic.record(
+            trace_id=request.diagnosticTraceId, workflow_origin=request.origin,
+            stage="1_workflow_origin", value=request.origin,
+        )
+        diagnostic.record(
+            trace_id=request.diagnosticTraceId, workflow_origin=request.origin,
+            stage="2_initial_creative_input", value=tags,
+        )
+        diagnostic.record(
+            trace_id=request.diagnosticTraceId, workflow_origin=request.origin,
+            stage="3_ava_creator_context_supplied",
+            value={"promptConstructionPath": "canonical_planner_enhancement"},
+        )
+        enhanced_tags = _enhance_with_canonical_planner(
+            account_id=account_id, concept=tags,
+        )
+        diagnostic.record(
+            trace_id=request.diagnosticTraceId, workflow_origin=request.origin,
+            stage="4_enhanced_creative_intent", value=enhanced_tags,
+        )
+    elif request.origin == "recreate_with_ava":
         if request.explicit:
             raise ValueError("Manual Creative Concept enhancement must use the premium lane.")
         from app.services.manual_creative_concept_enhancement_service import (
@@ -305,6 +347,7 @@ def _enhance_tags(request: TransformTagsRequest) -> dict:
         enhanced_tags = ManualCreativeConceptEnhancementService().enhance(
             fanvue_account_id=account_id,
             creative_concept=tags,
+            include_canonical_ava=False,
         )
     else:
         enhanced_tags = creative_director.enhance_premium_tags(
@@ -433,6 +476,22 @@ def _create_prompt_preview(request: PromptPreviewRequest) -> dict:
     ][: request.promptCount]
     if not prompts:
         prompts = [str(plan.prompt_text or "").strip()]
+    from app.services.generation_request_diagnostic_service import GenerationRequestDiagnosticService
+    diagnostic = GenerationRequestDiagnosticService()
+    diagnostic.record(
+        trace_id=request.diagnosticTraceId, workflow_origin=request.origin,
+        stage="5_prompt_plan_input",
+        value={"creativeTags": creative_tags, "creativeMode": creative_mode,
+               "promptCount": request.promptCount, "lane": lane},
+    )
+    diagnostic.record(
+        trace_id=request.diagnosticTraceId, workflow_origin=request.origin,
+        stage="6_prompt_plan_output_and_variations",
+        value={"planId": plan.plan_id, "promptText": plan.prompt_text,
+               "promptMetadata": metadata, "variations": prompts},
+    )
+    diagnostic.record(trace_id=request.diagnosticTraceId, workflow_origin=request.origin,
+                      stage="7_prompt_before_render_locks", value=prompts)
     if lane == "explicit" or creative_mode in {
         "premium_teaser", "spicy", "story_sequence"
     }:
@@ -445,6 +504,8 @@ def _create_prompt_preview(request: PromptPreviewRequest) -> dict:
         metadata["provider_target"] = (
             "provider_selected" if lane == "explicit" else "seedream_5_0_pro"
         )
+    diagnostic.record(trace_id=request.diagnosticTraceId, workflow_origin=request.origin,
+                      stage="8_prompt_after_render_locks", value=prompts)
     return {
         "success": True,
         "error": None,
@@ -513,13 +574,60 @@ def _generation_run_content(run_id: str) -> dict:
     return {"success": True, "error": None, "generation": state}
 
 
+def _background_generation_run_content(run_id: str) -> dict | None:
+    """Compatibility shape for the existing Content Studio result UI."""
+    from app.services.background_operation_service import BackgroundOperationService
+
+    account_id = _current_account_id()
+    if account_id is None:
+        return None
+    creator = get_active_creator_profile(str(account_id))
+    if not creator:
+        return None
+    try:
+        service = BackgroundOperationService()
+        operation = service.get(run_id, creator_profile_id=int(creator["id"]), account_id=account_id)
+    except Exception:
+        return None
+    if operation is None or operation.operation_type not in {
+        "content_studio_generation", "content_studio_autonomous_inspiration",
+    }:
+        return None
+    metadata = dict(operation.metadata or {})
+    outputs = tuple(str(item) for item in metadata.get("outputReferences") or ())
+    status = {
+        "QUEUED": "queued", "RUNNING": "running", "WAITING_EXTERNAL": "running",
+        "SUCCEEDED": "succeeded", "PARTIAL": "partial", "FAILED": "failed",
+        "CANCEL_REQUESTED": "running", "CANCELLED": "failed",
+    }.get(operation.status, operation.status.lower())
+    generation = {
+        "runId": str(operation.operation_id),
+        "jobId": operation.result_reference or metadata.get("jobId"),
+        "promptPlanId": metadata.get("promptPlanId"),
+        "status": status,
+        "message": operation.error_message or operation.stage_message or "Generation queued",
+        "provider": metadata.get("provider") or dict(metadata.get("request") or {}).get("provider"),
+        "completedCount": int(metadata.get("completedCount") or len(outputs)),
+        "failedCount": int(metadata.get("failedCount") or 0),
+        "processedCount": int(operation.progress_current),
+        "totalCount": int(operation.progress_total),
+        "progress": float(operation.progress_percent),
+        "images": [
+            {"index": index, "url": f"/api/v1/content-studio/generations/{run_id}/images/{index}"}
+            for index, _ in enumerate(outputs)
+        ],
+    }
+    return {"success": True, "error": None, "generation": generation}
+
+
 def _update_generation_run(run_id: str, **values) -> None:
     with _generation_runs_lock:
         if run_id in _generation_runs:
             _generation_runs[run_id].update(values)
 
 
-def _execute_content_studio_generation(run_id: str, request: GenerationSubmissionRequest) -> None:
+def _execute_content_studio_generation(run_id: str, request: GenerationSubmissionRequest,
+                                       *, state_callback=None, account_id: int | None = None) -> dict:
     from app.models.generation_engine import GenerationStatus
     from app.services.content_studio_configuration_service import (
         ContentStudioConfigurationService,
@@ -535,8 +643,22 @@ def _execute_content_studio_generation(run_id: str, request: GenerationSubmissio
         generation_completion_message,
     )
 
+    def update(**values):
+        _update_generation_run(run_id, **values)
+        if state_callback is not None:
+            state_callback(dict(values))
+
     try:
-        creator_profile, creative_director = _creative_director_context()
+        if account_id is None:
+            creator_profile, creative_director = _creative_director_context()
+        else:
+            from app.repositories.creator_profile_repository import get_active_creator_profile
+            from app.services.reference_library_service import ReferenceLibraryService
+            creator_profile = get_active_creator_profile(str(account_id))
+            if not creator_profile:
+                raise ValueError("Creator Profile required before using Content Studio.")
+            creative_director = CreativeDirectorService(
+                reference_library_service=ReferenceLibraryService())
         lane = request.lane.strip().lower()
         if lane not in {"social", "explicit"}:
             raise ValueError("Content Studio lane must be social or explicit.")
@@ -563,7 +685,7 @@ def _execute_content_studio_generation(run_id: str, request: GenerationSubmissio
         if request.provider not in available_providers:
             raise ValueError("Select an available Content Studio provider.")
         provider_label = dict(configuration.providers).get(request.provider, request.provider)
-        _update_generation_run(run_id, status="planning", message="Creating prompt plan", provider=provider_label)
+        update(status="planning", message="Creating prompt plan", provider=provider_label)
         prompts = tuple(str(prompt).strip() for prompt in request.promptBatch if str(prompt).strip())
         generation_service = ContentStudioGenerationService(
             creative_director=creative_director,
@@ -584,19 +706,24 @@ def _execute_content_studio_generation(run_id: str, request: GenerationSubmissio
                 request.explicitInput.planning_metadata()
                 if request.explicitInput else None
             ),
+            **({"diagnostic_trace_id": request.diagnosticTraceId}
+               if request.diagnosticTraceId else {}),
         )
-        _update_generation_run(run_id, status="queued", jobId=job.job_id, message="Queued Image 1")
+        update(status="queued", jobId=job.job_id, message="Queued Image 1")
+
+        known_outputs: tuple[str, ...] = ()
 
         def progress_callback(**event) -> None:
+            nonlocal known_outputs
             outputs = tuple(str(value) for value in event.get("output_references") or () if str(value))
             with _generation_runs_lock:
                 previous_outputs = tuple((_generation_runs.get(run_id) or {}).get("outputReferences") or ())
-            outputs = tuple(dict.fromkeys((*previous_outputs, *outputs)))
+            outputs = tuple(dict.fromkeys((*known_outputs, *previous_outputs, *outputs)))
+            known_outputs = outputs
             completed = max(int(event.get("completed_count") or event.get("current") or 0), len(outputs))
             failed = int(event.get("failed_count") or 0)
             processed = int(event.get("processed_count") or completed + failed)
-            _update_generation_run(
-                run_id,
+            update(
                 status="running",
                 message=str(event.get("message") or "Generation running"),
                 completedCount=completed,
@@ -622,8 +749,7 @@ def _execute_content_studio_generation(run_id: str, request: GenerationSubmissio
         if executed.status != GenerationStatus.SUCCEEDED.value and executed.failure:
             message = executed.failure.reason
             final_status = "failed"
-        _update_generation_run(
-            run_id,
+        final = dict(
             status=final_status,
             message=message,
             completedCount=completed,
@@ -633,35 +759,46 @@ def _execute_content_studio_generation(run_id: str, request: GenerationSubmissio
             outputReferences=outputs,
             promptPlanId=plan.plan_id,
         )
+        update(**final)
+        return final
     except ValueError as error:
-        _update_generation_run(run_id, status="failed", message=str(error), failedCount=request.promptCount, processedCount=request.promptCount, progress=100.0)
-    except Exception:
+        final = {"status": "failed", "message": str(error), "failedCount": request.promptCount,
+                 "processedCount": request.promptCount, "progress": 100.0}
+        update(**final); return final
+    except Exception as error:
         logger.exception("Content Studio generation failed")
-        _update_generation_run(run_id, status="failed", message="Generation failed. Please try again.", failedCount=request.promptCount, processedCount=request.promptCount, progress=100.0)
+        final = {"status": "failed", "message": "Generation failed. Please try again.",
+                 "failedCount": request.promptCount, "processedCount": request.promptCount,
+                 "progress": 100.0, "error": str(error)}
+        update(**final); return final
 
 
 def _execute_autonomous_inspiration(
     run_id: str,
     request: AutonomousInspirationRequest,
-) -> None:
+    *, state_callback=None, account_id: int | None = None,
+    directions_override: tuple[str, ...] = (),
+) -> dict:
     from app.services.autonomous_inspiration_engine import (
         AutonomousInspirationEngine,
     )
 
+    def update(**values):
+        _update_generation_run(run_id, **values)
+        if state_callback is not None:
+            state_callback(dict(values))
+
     try:
-        account_id = _current_account_id()
+        account_id = account_id if account_id is not None else _current_account_id()
         if account_id is None:
             raise ValueError(
                 "Creator account required before using autonomous inspiration."
             )
-        _update_generation_run(
-            run_id,
-            status="planning",
-            message="Creating autonomous inspiration",
-        )
-        directions = AutonomousInspirationEngine().create_directions(
-            fanvue_account_id=account_id,
-        )
+        update(status="planning", message="Building creative direction")
+        directions = directions_override or AutonomousInspirationEngine().create_directions(
+            fanvue_account_id=account_id, diagnostic_trace_id=run_id)
+        update(status="planning", message="Creating prompt plan",
+               inspirationDirections=list(directions))
         generation_request = GenerationSubmissionRequest(
             provider=request.provider,
             promptSource="\n".join(directions),
@@ -670,27 +807,34 @@ def _execute_autonomous_inspiration(
             creativeMode="premium_teaser",
             promptCount=AutonomousInspirationEngine.IMAGE_COUNT,
             creatorContext={},
+            origin="autonomous_inspiration",
+            diagnosticTraceId=run_id,
         )
-        _execute_content_studio_generation(run_id, generation_request)
+        return _execute_content_studio_generation(
+            run_id, generation_request, state_callback=state_callback,
+            account_id=account_id)
     except ValueError as error:
-        _update_generation_run(
-            run_id,
+        final = dict(
             status="failed",
             message=str(error),
             failedCount=AutonomousInspirationEngine.IMAGE_COUNT,
             processedCount=AutonomousInspirationEngine.IMAGE_COUNT,
             progress=100.0,
         )
-    except Exception:
+        update(**final)
+        return final
+    except Exception as error:
         logger.exception("Autonomous inspiration failed")
-        _update_generation_run(
-            run_id,
+        final = dict(
             status="failed",
             message="Autonomous inspiration failed. Please try again.",
             failedCount=AutonomousInspirationEngine.IMAGE_COUNT,
             processedCount=AutonomousInspirationEngine.IMAGE_COUNT,
             progress=100.0,
+            error=str(error),
         )
+        update(**final)
+        return final
 
 
 async def _run_tag_action(
@@ -954,6 +1098,37 @@ async def submit_content_studio_generation(
     request: GenerationSubmissionRequest,
     background_tasks: BackgroundTasks,
 ) -> JSONResponse:
+    # Planner batches and Recreate's composite orchestration remain intentionally
+    # on their existing execution path during Phase 1.
+    if request.origin not in {"canonical_planner", "recreate_with_ava"}:
+        from app.services.background_operation_service import BackgroundOperationService
+
+        account_id = _current_account_id()
+        creator = get_active_creator_profile(str(account_id)) if account_id is not None else {}
+        if not creator:
+            return JSONResponse(status_code=400, content={"success": False,
+                                "error": "Active Creator Profile required."})
+        operation, created = BackgroundOperationService().create(
+            operation_type="content_studio_generation",
+            originating_workspace="content_studio",
+            creator_profile_id=int(creator["id"]),
+            account_id=int(account_id),
+            subject_type="creator_profile",
+            subject_id=str(creator["id"]),
+            idempotency_key=f"content-studio-generation:{creator['id']}",
+            executor_key="content_studio_generation",
+            progress_total=request.promptCount,
+            current_stage="QUEUED",
+            stage_message="Generation queued",
+            result_location="/studio/content",
+            cancellation_supported=False,
+            metadata={"request": request.model_dump(), "provider": request.provider,
+                      "completedCount": 0, "failedCount": 0, "outputReferences": []},
+        )
+        return JSONResponse(status_code=202, content={
+            "success": True, "error": None, "runId": str(operation.operation_id),
+            "operationId": str(operation.operation_id), "reused": not created,
+        })
     run_id = f"content_studio_generation_{uuid4().hex}"
     with _generation_runs_lock:
         _generation_runs[run_id] = {
@@ -980,38 +1155,49 @@ async def submit_content_studio_generation(
 @router.post("/inspire")
 async def submit_autonomous_inspiration(
     request: AutonomousInspirationRequest,
-    background_tasks: BackgroundTasks,
 ) -> JSONResponse:
-    run_id = f"content_studio_inspiration_{uuid4().hex}"
-    with _generation_runs_lock:
-        _generation_runs[run_id] = {
-            "runId": run_id,
-            "jobId": None,
-            "promptPlanId": None,
-            "status": "queued",
-            "message": "Preparing inspiration",
+    from app.services.autonomous_inspiration_engine import AutonomousInspirationEngine
+    from app.services.background_operation_service import BackgroundOperationService
+
+    account_id = _current_account_id()
+    creator = get_active_creator_profile(str(account_id)) if account_id is not None else {}
+    if not creator:
+        return JSONResponse(status_code=400, content={"success": False,
+                            "error": "Active Creator Profile required."})
+    operation, created = BackgroundOperationService().create(
+        operation_type="content_studio_autonomous_inspiration",
+        originating_workspace="content_studio",
+        creator_profile_id=int(creator["id"]), account_id=int(account_id),
+        subject_type="creator_profile", subject_id=str(creator["id"]),
+        idempotency_key=f"content-studio-autonomous-inspiration:{creator['id']}:{account_id}",
+        executor_key="content_studio_autonomous_inspiration",
+        progress_total=AutonomousInspirationEngine.IMAGE_COUNT,
+        current_stage="PREPARING_INSPIRATION",
+        stage_message="Preparing inspiration",
+        result_location="/studio/content", cancellation_supported=False,
+        metadata={
+            "request": request.model_dump(),
             "provider": request.provider,
-            "completedCount": 0,
-            "failedCount": 0,
-            "processedCount": 0,
-            "totalCount": 6,
-            "progress": 0.0,
-            "outputReferences": (),
-        }
-    background_tasks.add_task(
-        _execute_autonomous_inspiration,
-        run_id,
-        request,
+            "imageCount": AutonomousInspirationEngine.IMAGE_COUNT,
+            "contentMode": "social",
+            "creativeMode": "premium_teaser",
+            "completedCount": 0, "failedCount": 0, "outputReferences": [],
+        },
     )
     return JSONResponse(
         status_code=202,
-        content={"success": True, "error": None, "runId": run_id},
+        content={"success": True, "error": None,
+                 "runId": str(operation.operation_id),
+                 "operationId": str(operation.operation_id), "reused": not created},
     )
 
 
 @router.get("/generations/{run_id}")
 async def get_content_studio_generation(run_id: str) -> JSONResponse:
     try:
+        background = _background_generation_run_content(run_id)
+        if background is not None:
+            return JSONResponse(status_code=200, content=background)
         return JSONResponse(status_code=200, content=_generation_run_content(run_id))
     except ValueError as error:
         return JSONResponse(status_code=404, content={"success": False, "error": str(error)})
@@ -1019,8 +1205,18 @@ async def get_content_studio_generation(run_id: str) -> JSONResponse:
 
 @router.get("/generations/{run_id}/images/{image_index}")
 async def get_content_studio_generation_image(run_id: str, image_index: int) -> Response:
-    with _generation_runs_lock:
-        outputs = tuple((_generation_runs.get(run_id) or {}).get("outputReferences") or ())
+    outputs: tuple[str, ...] = ()
+    background = _background_generation_run_content(run_id)
+    if background is not None:
+        from app.services.background_operation_service import BackgroundOperationService
+        account_id = _current_account_id()
+        creator = get_active_creator_profile(str(account_id)) if account_id is not None else {}
+        operation = BackgroundOperationService().get(
+            run_id, creator_profile_id=int(creator["id"]), account_id=account_id)
+        outputs = tuple(str(item) for item in dict(operation.metadata).get("outputReferences") or ())
+    else:
+        with _generation_runs_lock:
+            outputs = tuple((_generation_runs.get(run_id) or {}).get("outputReferences") or ())
     if image_index < 0 or image_index >= len(outputs):
         return JSONResponse(status_code=404, content={"success": False, "error": "Generated image not found."})
     reference = str(outputs[image_index])

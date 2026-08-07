@@ -134,18 +134,31 @@ class PhotoshootPlanningContext:
     hairstyle: str
     makeup: str
     continuity_locks: Mapping[str, bool]
-    progression_stage: int
+    progression_stage: int | None
     current_shot: int
     planning_shot: int
     target_shot_count: int
-    remaining_shots: int
-    editorial_stage: str
+    remaining_shots: int | None
+    editorial_stage: str | None
+    progression_enabled: bool
     operator_guidance: str
     required_identity_instructions: str
     latest_approved_shot_reference: str
+    latest_approved_shot: Mapping[str, Any]
     repetition_avoidance: str
 
     def to_prompt_text(self) -> str:
+        progression_values = (
+            ("Progression stage", str(max(0, int(self.progression_stage or 0)))),
+            ("Current shot", str(max(1, int(self.current_shot)))),
+            ("Planning shot", str(max(2, int(self.planning_shot)))),
+            ("Target shots", str(max(2, int(self.target_shot_count)))),
+            ("Remaining shots", str(max(0, int(self.remaining_shots or 0)))),
+            ("Editorial stage", self.editorial_stage),
+        ) if self.progression_enabled else (
+            ("Creative structure", "OPEN_ENDED_NON_PROGRESSIVE"),
+            ("Session length", "Open-ended; the operator decides when to finish"),
+        )
         values = (
             ("Photoshoot summary", self.photoshoot_summary),
             ("Latest approved direction", self.latest_approved_direction),
@@ -156,16 +169,11 @@ class PhotoshootPlanningContext:
             ("Hairstyle", self.hairstyle),
             ("Makeup", self.makeup),
             ("Continuity locks", self._locks_text()),
-            ("Progression stage", str(max(0, int(self.progression_stage)))),
-            ("Current shot", str(max(1, int(self.current_shot)))),
-            ("Planning shot", str(max(2, int(self.planning_shot)))),
-            ("Session length", "Open-ended; the operator decides when to finish" if self.target_shot_count == 0 else ""),
-            ("Target shots", str(max(2, int(self.target_shot_count))) if self.target_shot_count > 0 else ""),
-            ("Remaining shots", str(max(0, int(self.remaining_shots))) if self.target_shot_count > 0 else ""),
-            ("Editorial stage", self.editorial_stage),
+            *progression_values,
             ("Operator guidance", self.operator_guidance),
             ("Required identity instructions", self.required_identity_instructions),
             ("Latest approved shot reference", self.latest_approved_shot_reference),
+            ("Latest approved shot structured continuity", self._latest_shot_text()),
             ("Repetition avoidance", self.repetition_avoidance),
         )
         return " ".join(
@@ -179,6 +187,14 @@ class PhotoshootPlanningContext:
             f"{str(name).replace('_', ' ')}={'locked' if enabled else 'flexible'}"
             for name, enabled in sorted(self.continuity_locks.items())
         ) or "Use established Photoshoot continuity defaults."
+
+    def _latest_shot_text(self) -> str:
+        return "; ".join(
+            f"{str(name).replace('_', ' ')}={str(value).strip()}"
+            for name, value in self.latest_approved_shot.items()
+            if self.progression_enabled or str(name) != "progression_stage"
+            if str(value or "").strip()
+        )
 
 
 @dataclass(frozen=True)

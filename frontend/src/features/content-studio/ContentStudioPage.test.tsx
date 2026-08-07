@@ -306,6 +306,9 @@ describe("ContentStudioPage", () => {
     fireEvent.click(summary);
     expect(accordion).toHaveAttribute("open");
     const explicit = screen.getByRole("region", { name: "Explicit Content" });
+    expect(within(explicit).queryByRole("button", { name: "Create From Tags" })).not.toBeInTheDocument();
+    expect(within(explicit).getByRole("button", { name: "Inspire Me" })).toBeInTheDocument();
+    expect(stylesheetText).toMatch(/\.explicit-content__tabs button\s*\{[^}]*border-color:\s*var\(--color-accent\)[^}]*color:\s*var\(--color-accent\)/);
     expect(within(explicit).getByRole("region", { name: "Explicit Generation Settings" })).toBeInTheDocument();
     expect(within(explicit).getByLabelText("Explicit Provider")).toBeInTheDocument();
     expect(within(explicit).getByLabelText("Explicit Image Count")).toBeInTheDocument();
@@ -313,7 +316,7 @@ describe("ContentStudioPage", () => {
     fireEvent.change(screen.getByLabelText("Explicit Tags"), {
       target: { value: "preserved explicit direction" },
     });
-    fireEvent.click(screen.getByRole("tab", { name: "Inspire Me" }));
+    fireEvent.click(screen.getByRole("button", { name: "Inspire Me" }));
     expect(within(explicit).queryByRole("region", { name: "Explicit Generation Settings" })).not.toBeInTheDocument();
     expect(within(explicit).queryByLabelText("Explicit Provider")).not.toBeInTheDocument();
     expect(within(explicit).queryByLabelText("Explicit Image Count")).not.toBeInTheDocument();
@@ -325,8 +328,8 @@ describe("ContentStudioPage", () => {
     fireEvent.click(summary);
 
     expect(accordion).toHaveAttribute("open");
-    expect(screen.getByRole("tab", { name: "Inspire Me" })).toHaveAttribute("aria-selected", "true");
-    fireEvent.click(screen.getByRole("tab", { name: "Create From Tags" }));
+    expect(screen.queryByRole("button", { name: "Inspire Me" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Back to Tags" }));
     expect(screen.getByLabelText("Explicit Tags")).toHaveValue("preserved explicit direction");
     expect(within(explicit).getByRole("region", { name: "Explicit Generation Settings" })).toBeInTheDocument();
   });
@@ -337,13 +340,50 @@ describe("ContentStudioPage", () => {
     fireEvent.click(screen.getByText("🔞 Explicit Content").closest("summary") as HTMLElement);
 
     const explicit = screen.getByRole("region", { name: "Explicit Content" });
-    fireEvent.click(within(explicit).getByRole("tab", { name: "Inspire Me" }));
+    fireEvent.click(within(explicit).getByRole("button", { name: "Inspire Me" }));
 
     expect(within(explicit).queryByRole("button", { name: "✨ Inspire Me" })).not.toBeInTheDocument();
     expect(within(explicit).getByText("Creating inspiration…")).toBeInTheDocument();
     expect(await within(explicit).findByText("hardcore scene 1")).toBeInTheDocument();
     expect(within(explicit).queryByText(/Ava Blackthorne/i)).not.toBeInTheDocument();
     expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).endsWith("/explicit/inspire"))).toBe(true);
+  });
+
+  it("plans, submits, and displays each selected Explicit concept before preparing the next", async () => {
+    render(<ContentStudioPage />);
+    await screen.findByRole("region", { name: "Inspire Me Workspace" });
+    fireEvent.click(screen.getByText("🔞 Explicit Content").closest("summary") as HTMLElement);
+    const explicit = screen.getByRole("region", { name: "Explicit Content" });
+    fireEvent.click(within(explicit).getByRole("button", { name: "Inspire Me" }));
+    await within(explicit).findByText("hardcore scene 1");
+    fireEvent.click(within(explicit).getByRole("checkbox", { name: /hardcore scene 1/i }));
+    fireEvent.click(within(explicit).getByRole("checkbox", { name: /hardcore scene 2/i }));
+    fireEvent.click(within(explicit).getByRole("button", { name: /Enhance & Generate \(2\)/ }));
+
+    await waitFor(() => expect(
+      vi.mocked(fetch).mock.calls.filter(([url, options]) => (
+        String(url).endsWith("/generations") && options?.method === "POST"
+      )),
+    ).toHaveLength(2), { timeout: 3000 });
+    await waitFor(() => expect(
+      within(explicit).getAllByRole("img", { name: /Generated image/ }),
+    ).toHaveLength(2));
+
+    const workflowCalls = vi.mocked(fetch).mock.calls.filter(([url, options]) => (
+      String(url).endsWith("/creative-tags/enhance")
+      || String(url).endsWith("/prompt-preview")
+      || (String(url).endsWith("/generations") && options?.method === "POST")
+      || (String(url).endsWith("/generations/run-live") && options?.method !== "POST")
+    ));
+    expect(workflowCalls.map(([url]) => (
+      String(url).endsWith("/creative-tags/enhance") ? "enhance"
+        : String(url).endsWith("/prompt-preview") ? "plan"
+          : String(url).endsWith("/generations/run-live") ? "display"
+            : "submit"
+    ))).toEqual([
+      "enhance", "plan", "submit", "display",
+      "enhance", "plan", "submit", "display",
+    ]);
   });
 
   it("shows enhancement timeout failures without planning or contacting the provider", async () => {
@@ -373,7 +413,7 @@ describe("ContentStudioPage", () => {
     await screen.findByRole("region", { name: "Inspire Me Workspace" });
     fireEvent.click(screen.getByText("🔞 Explicit Content").closest("summary") as HTMLElement);
     const explicit = screen.getByRole("region", { name: "Explicit Content" });
-    fireEvent.click(within(explicit).getByRole("tab", { name: "Inspire Me" }));
+    fireEvent.click(within(explicit).getByRole("button", { name: "Inspire Me" }));
     await within(explicit).findByText("hardcore scene 1");
     fireEvent.click(within(explicit).getByText(/Select All \(0 selected\)/));
     fireEvent.click(within(explicit).getByRole("button", { name: /Enhance & Generate \(10\)/ }));
@@ -617,6 +657,7 @@ describe("ContentStudioPage", () => {
     expect(postCalls).toHaveLength(4);
     expect(postCalls[0]![0]).toBe("/api/v1/content-studio/creative-tags/enhance");
     expect(JSON.parse(String(postCalls[0]![1]?.body))).toEqual({
+      diagnosticTraceId: expect.any(String),
       explicit: false,
       origin: "manual_creative_concept",
       tags: "hotel robe",
@@ -626,7 +667,9 @@ describe("ContentStudioPage", () => {
     expect(JSON.parse(String(postCalls[1]![1]?.body))).toEqual({
       creativeMode: "premium_teaser",
       creativeTags: "[ORIGINAL USER TAGS — mandatory: hotel robe] [ENHANCED SUGGESTIONS — vary any wardrobe detail not present in ORIGINAL USER TAGS: enhanced hotel robe]",
+      diagnosticTraceId: expect.any(String),
       lane: "social",
+      origin: "manual_creative_concept",
       promptCount: 5,
     });
   });
@@ -1257,6 +1300,8 @@ describe("ContentStudioPage", () => {
       return call;
     });
     expect(JSON.parse(String(generationCall?.[1]?.body))).toEqual({
+      diagnosticTraceId: expect.any(String),
+      origin: "manual_creative_concept",
       provider: "seedream_5_0_pro",
       promptSource: "[ORIGINAL USER TAGS — mandatory: hotel mirror scene] [ENHANCED SUGGESTIONS — vary any wardrobe detail not present in ORIGINAL USER TAGS: enhanced hotel mirror scene]",
       promptSourceLabel: "Enhanced Tags",

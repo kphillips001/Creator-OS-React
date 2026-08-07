@@ -14,11 +14,27 @@ from app.services.llm_json_parser import parse_llm_json
 
 
 PHOTOSHOOT_INTELLIGENCE_VERSION = "completed_photoshoot_v2"
+REQUIRED_COMMERCIAL_FIELDS = (
+    "commercial_title", "subtitle", "commercial_summary", "buyer_profile",
+    "sales_strategy", "sales_brain_brief",
+)
+
+
+class PhotoshootCommercialIntelligenceIncompleteError(ValueError):
+    error_code = "COMMERCIAL_INTELLIGENCE_INCOMPLETE"
+
+    def __init__(self, missing_fields):
+        self.missing_fields = tuple(missing_fields)
+        super().__init__(
+            "Missing required commercial intelligence fields: "
+            + ", ".join(self.missing_fields)
+        )
 
 
 class PhotoshootIntelligenceStageError(RuntimeError):
     def __init__(self, stage: str, cause: Exception, *, asset_id: int | None = None):
         self.stage, self.cause, self.asset_id = stage, cause, asset_id
+        self.error_code = getattr(cause, "error_code", type(cause).__name__)
         suffix = f" for Asset {asset_id}" if asset_id is not None else ""
         super().__init__(f"{stage}{suffix}: {cause}")
 
@@ -44,7 +60,7 @@ class PhotoshootCommercialIntelligenceService:
         if not self._has_evidence(source):
             raise ValueError("Photoshoot Intelligence requires non-empty approved evidence.")
         try:
-            production = self._required_mapping(self.production_runner(source), "production analysis")
+            production = self._run_complete_production(source)
             if progress: progress("SHOT_ANALYSIS", {"completed_shots": 0, "total_shots": len(ordered)})
         except Exception as error:
             raise PhotoshootIntelligenceStageError("PRODUCTION_ANALYSIS_FAILED", error) from error
@@ -88,6 +104,32 @@ class PhotoshootCommercialIntelligenceService:
         return result
 
     @classmethod
+    def missing_required_commercial_fields(cls, value: Mapping[str, Any] | None) -> tuple[str, ...]:
+        result = dict(value or {})
+        return tuple(field for field in REQUIRED_COMMERCIAL_FIELDS
+                     if not cls._has_evidence(result.get(field)))
+
+    @classmethod
+    def has_complete_commercial_contract(cls, value: Mapping[str, Any] | None) -> bool:
+        return not cls.missing_required_commercial_fields(value)
+
+    def _run_complete_production(self, source: Mapping[str, Any]) -> dict:
+        missing = REQUIRED_COMMERCIAL_FIELDS
+        for attempt in range(3):
+            request = dict(source)
+            if attempt:
+                request["corrective_instruction"] = (
+                    "The previous response was incomplete. All required commercial fields must "
+                    "contain substantive non-null values. Missing fields: " + ", ".join(missing)
+                )
+            production = self._required_mapping(
+                self.production_runner(request), "production analysis")
+            missing = self.missing_required_commercial_fields(production)
+            if not missing:
+                return production
+        raise PhotoshootCommercialIntelligenceIncompleteError(missing)
+
+    @classmethod
     def _has_evidence(cls, value):
         if isinstance(value, Mapping):
             return any(cls._has_evidence(item) for key, item in value.items()
@@ -128,7 +170,8 @@ class PhotoshootCommercialIntelligenceService:
                   "theme, experience, emotional_journey, overall_progression, setting_environment, "
                   "wardrobe_progression, content_escalation, and production_summary. Preserve supported legacy "
                   "commercial_title, subtitle, commercial_summary, buyer_profile, sales_strategy, and "
-                  "sales_brain_brief for existing consumers, but prioritize factual production understanding. "
+                  "sales_brain_brief. Every listed commercial field is required and must contain a substantive, "
+                  "non-null value; buyer_profile and sales_strategy must be non-empty structured objects. "
                   "Return JSON only. Input: " + json.dumps(source, default=str))
         return cls._client_response(prompt)
 

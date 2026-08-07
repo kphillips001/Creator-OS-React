@@ -125,6 +125,7 @@ export function enhanceCreativeTags(
     plannerQuestion?: string;
     plannerItemId?: string;
     plannerItemTitle?: string;
+    diagnosticTraceId?: string;
   },
 ): Promise<string> {
   return postCreativeTagAction(
@@ -210,11 +211,12 @@ export async function createPromptPreview(
   signal?: AbortSignal,
   lane: "social" | "explicit" = "social",
   explicitInput?: ExplicitGenerationInput,
+  diagnostic?: { origin: "manual_creative_concept"; diagnosticTraceId: string },
 ): Promise<PromptPreview> {
   const result = await readJsonResponse<PromptPreviewResponse>(await fetch(
     `${environment.apiBaseUrl}/content-studio/prompt-preview`,
     {
-      body: JSON.stringify({ creativeMode, creativeTags, promptCount, lane, explicitInput }),
+      body: JSON.stringify({ creativeMode, creativeTags, promptCount, lane, explicitInput, ...diagnostic }),
       headers: { "Content-Type": "application/json" },
       method: "POST",
       signal,

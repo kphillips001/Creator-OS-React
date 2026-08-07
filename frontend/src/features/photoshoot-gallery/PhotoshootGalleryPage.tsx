@@ -6,7 +6,7 @@ import { ContainedMediaImage } from "../../shared/ui/ContainedMediaImage";
 import { PhotoshootViewer, type RegistrationState } from "./PhotoshootViewer";
 import "./photoshoot-gallery.css";
 
-type GalleryItem = { deliverableId: string; name: string; description: string | null; completedAt: string; shotCount: number; imageUrl: string | null; registrationState: RegistrationState };
+type GalleryItem = { deliverableId: string; name: string; description: string | null; completedAt: string; shotCount: number; imageUrl: string | null; registrationState: RegistrationState; intelligenceStatus: string };
 
 async function json<T>(response: Response): Promise<T> {
   const body = await response.json().catch(() => null) as T | { detail?: string } | null;
@@ -53,7 +53,7 @@ export function PhotoshootGalleryPage() {
     {!error && items.length === 0 && <div className="photoshoot-gallery-empty">No completed Photoshoots found.</div>}
     <div className="photoshoot-gallery-grid">{items.map((item) => <article id={`photoshoot-gallery-${item.deliverableId}`} key={item.deliverableId} className={item.deliverableId === newlyCompletedDeliverableId ? "photoshoot-gallery-card photoshoot-gallery-card--new" : "photoshoot-gallery-card"} tabIndex={0} aria-label={`Open completed Photoshoot with ${item.shotCount} images`} onClick={() => open(item.deliverableId)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") open(item.deliverableId); }}>
       {item.deliverableId === newlyCompletedDeliverableId && <span className="photoshoot-gallery-card__new-badge">Just completed</span>}
-      {item.imageUrl && <ContainedMediaImage src={item.imageUrl} alt="" />}<div className="photoshoot-gallery-card__footer"><p><Camera aria-hidden="true" size={15} strokeWidth={2} />{item.shotCount} {item.shotCount === 1 ? "Image" : "Images"}</p>{item.registrationState === "PHOTOSHOOT_COMPLETE" ? <LibraryActionButton accent icon={Package} tooltip="Add to Asset Library" disabled={registering === item.deliverableId} onClick={(event) => { event.stopPropagation(); void addToAssetLibrary(item.deliverableId).catch(() => undefined); }} /> : <span className="photoshoot-gallery-card__registered">{registrationLabel(item.registrationState)}</span>}</div>
+      {item.imageUrl && <ContainedMediaImage src={item.imageUrl} alt="" />}<div className="photoshoot-gallery-card__footer"><p><Camera aria-hidden="true" size={15} strokeWidth={2} />{item.shotCount} {item.shotCount === 1 ? "Image" : "Images"}</p><div className="photoshoot-gallery-card__states">{item.intelligenceStatus !== "READY" && <span className="photoshoot-gallery-card__intelligence-attention">Intelligence Needs Attention</span>}{item.registrationState === "PHOTOSHOOT_COMPLETE" ? <LibraryActionButton accent icon={Package} tooltip="Add to Asset Library" disabled={registering === item.deliverableId} onClick={(event) => { event.stopPropagation(); void addToAssetLibrary(item.deliverableId).catch(() => undefined); }} /> : <span className="photoshoot-gallery-card__registered">{registrationLabel(item.registrationState)}</span>}</div></div>
     </article>)}</div>
   </section>;
 }

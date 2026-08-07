@@ -180,13 +180,13 @@ describe("Generation Library Asset Library move", () => {
     expect(screen.getByRole("button", { name: "Move to Asset Library" })).toBeEnabled();
   });
 
-  it("keeps Create Video disabled and does not call a video endpoint", async () => {
+  it("opens the shared Video Studio without calling a duplicate video endpoint", async () => {
     const fetch = vi.spyOn(globalThis, "fetch").mockImplementation(() => jsonResponse({
       records: [selected], total: 1, page: 1, pageSize: 20, totalPages: 1, providers: [], modes: [],
     }));
     render(<MemoryRouter><GenerationLibraryPage /></MemoryRouter>);
     const button = await screen.findByRole("button", { name: /Create Video/ });
-    expect(button).toBeDisabled();
+    expect(button).toBeEnabled();
     fireEvent.click(button);
     expect(fetch.mock.calls.some(([input]) => String(input).includes("/video"))).toBe(false);
   });

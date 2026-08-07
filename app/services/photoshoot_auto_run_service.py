@@ -14,15 +14,19 @@ class PhotoshootAutoRunService:
     ACTIVE = {"READY", "PREPARING", "GENERATING", "WAITING_FOR_REVIEW", "APPROVING", "ADVANCING"}
     SPINNER = {"PREPARING", "GENERATING", "APPROVING", "ADVANCING"}
 
-    def __init__(self, *, repository=None, queue=None, manual=None, director=None):
+    def __init__(self, *, repository=None, queue=None, manual=None, director=None, background_operations=None):
         self.repository = repository or PhotoshootAutoRunRepository()
         self.queue = queue or PhotoshootQueueService()
         self.manual = manual or PhotoshootManualService(queue=self.queue)
         self.director = director or PhotoshootCreativeDirectorWorkflowService(queue=self.queue)
+        self.background_operations = background_operations
 
     def start(self, *, creator_profile_id: int, session_id: str, auto_approve_enabled: bool = True):
         session, plan, index = self._plan(creator_profile_id, session_id)
+        self._ensure_operator_generation_inactive(creator_profile_id, session_id)
         current = self._active_request(session_id)
+        if current is not None and self.repository.get(session_id) is None:
+            raise ValueError("Operator-driven Photoshoot generation currently owns this session.")
         self.repository.start(session_id, current_plan_index=index, total_frames=len(plan),
                               current_request_id=current.request_id if current else None,
                               auto_approve_enabled=auto_approve_enabled)
@@ -37,6 +41,7 @@ class PhotoshootAutoRunService:
 
     def resume(self, *, creator_profile_id: int, session_id: str):
         session, plan, index = self._plan(creator_profile_id, session_id)
+        self._ensure_operator_generation_inactive(creator_profile_id, session_id)
         run = self.repository.get(session_id)
         current = self._active_request(session_id)
         if run is None:
@@ -53,6 +58,7 @@ class PhotoshootAutoRunService:
 
     def retry(self, *, creator_profile_id: int, session_id: str):
         self._plan(creator_profile_id, session_id)
+        self._ensure_operator_generation_inactive(creator_profile_id, session_id)
         self.repository.command(session_id, "retry")
         return self.runtime(creator_profile_id=creator_profile_id, session_id=session_id)
 
@@ -114,6 +120,17 @@ class PhotoshootAutoRunService:
     def _active_request(self, session_id):
         return next((item for item in reversed(self.queue.requests_for_session(session_id))
                      if item.status in {"queued", "generating", "awaiting_review"}), None)
+
+    def _ensure_operator_generation_inactive(self, creator_profile_id: int, session_id: str) -> None:
+        if self.background_operations is None:
+            from app.services.background_operation_service import BackgroundOperationService
+            self.background_operations = BackgroundOperationService()
+        active = self.background_operations.list(
+            creator_profile_id=creator_profile_id, status="active",
+            workspace="photoshoot_studio", subject_type="photoshoot_session", subject_id=session_id,
+        )
+        if any(item.operation_type == "photoshoot_generation" for item in active):
+            raise ValueError("Operator-driven Photoshoot generation currently owns this session.")
 
     @staticmethod
     def _actions(state, auto_approve):

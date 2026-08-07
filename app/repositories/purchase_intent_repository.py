@@ -303,6 +303,41 @@ class PurchaseIntentRepository:
                 )
                 return [self._intent(row) for row in cursor.fetchall()]
 
+    def get_attribution_contexts(
+        self, intent_ids: list[UUID] | tuple[UUID, ...],
+    ) -> dict[UUID, dict[str, Any]]:
+        """Return authoritative product identity used by attribution policy."""
+        if not intent_ids:
+            return {}
+        with self.connection_factory() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """SELECT intent.purchase_intent_id,
+                              offering.offering_type,
+                              offering.source_photoshoot_deliverable_id,
+                              deliverable.selling_mode,
+                              deliverable.bundle_sales_channel,
+                              publication.external_product_id
+                       FROM public.purchase_intents intent
+                       JOIN public.commercial_offerings offering
+                         ON offering.offering_id=intent.commercial_offering_id
+                       JOIN public.commercial_publications publication
+                         ON publication.publication_id=
+                            intent.commercial_publication_id
+                        AND publication.commercial_offering_id=
+                            offering.offering_id
+                       LEFT JOIN public.photoshoot_commerce_deliverables
+                            deliverable
+                         ON deliverable.deliverable_id=
+                            offering.source_photoshoot_deliverable_id
+                       WHERE intent.purchase_intent_id=ANY(%s)""",
+                    (list(intent_ids),),
+                )
+                rows = cursor.fetchall()
+        return {
+            UUID(str(row["purchase_intent_id"])): dict(row) for row in rows
+        }
+
     def expire_due(self, *, now: datetime) -> list[PurchaseIntent]:
         with self.connection_factory() as connection:
             with connection.cursor() as cursor:

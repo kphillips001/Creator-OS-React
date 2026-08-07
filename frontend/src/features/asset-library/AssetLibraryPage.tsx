@@ -1,13 +1,15 @@
-import { ArrowLeft, Camera, ChevronLeft, ChevronRight, Image as ImageIcon, ImageOff, MoveRight, PackagePlus, Search, ShoppingBag, Trash2, Video, X } from "lucide-react";
+import { ArrowLeft, Camera, ChevronLeft, ChevronRight, Image as ImageIcon, ImageOff, MoveRight, PackagePlus, Search, Trash2, Video, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { PageHeader } from "../../shared/ui/PageHeader";
 import { LibraryActionButton, LibraryActionGroup } from "../../shared/ui/LibraryActionButton";
 import { ContainedMediaImage } from "../../shared/ui/ContainedMediaImage";
 import { PhotoshootViewer } from "../photoshoot-gallery/PhotoshootViewer";
-import { readinessBadge } from "./photoshootSalePreparationStatus";
+import { readinessBadge, readinessBadgeStatus } from "./photoshootSalePreparationStatus";
+import { photoshootClassificationOptions, photoshootSalesClassification } from "./photoshootSalesClassification";
 import type { AssetLibraryItem, AssetLibraryResponse } from "./types";
 import "./asset-library.css";
+import { videoStudioLink } from "../../infrastructure/api/videoStudioApi";
 
 const emptyResponse: AssetLibraryResponse = {
   assets: [], total: 0, page: 1, pageSize: 18, totalPages: 1, classifications: [],
@@ -72,7 +74,6 @@ export function AssetLibraryPage() {
   const [selected, setSelected] = useState<AssetLibraryItem | null>(null);
   const [preview, setPreview] = useState<AssetLibraryItem | null>(null);
   const [openPhotoshootId, setOpenPhotoshootId] = useState<string | null>(null);
-  const [initialPreparationDialog, setInitialPreparationDialog] = useState<"prepare" | "retry" | null>(null);
   const [version, setVersion] = useState(0);
   const [actionMessage, setActionMessage] = useState("");
   const [registeringId, setRegisteringId] = useState<string | null>(null);
@@ -236,11 +237,15 @@ export function AssetLibraryPage() {
         : asset),
     }));
   }, []);
+  const synchronizeSellingMode = useCallback((deliverableId: string, sellingMode: NonNullable<AssetLibraryItem["sellingMode"]>) => {
+    setData((current) => ({ ...current, assets: current.assets.map((asset) => asset.deliverableId === deliverableId
+      ? { ...asset, sellingMode, sessionSelling: null } : asset) }));
+  }, []);
 
   if (openPhotoshootId) return <PhotoshootViewer deliverableId={openPhotoshootId} enableSessionSelling
-    initialSessionSellingDialog={initialPreparationDialog}
     onSessionSellingChange={synchronizeSessionSelling}
-    onClose={() => { setOpenPhotoshootId(null); setInitialPreparationDialog(null); }} />;
+    onSellingModeChange={(sellingMode) => synchronizeSellingMode(openPhotoshootId, sellingMode)}
+    onClose={() => setOpenPhotoshootId(null)} />;
 
   return <section className="asset-library-page">
     <PageHeader title="Asset Library" description="Curated generations and registered Creator Assets." />
@@ -266,7 +271,7 @@ export function AssetLibraryPage() {
       </div>
       <div className="asset-library-toolbar asset-library-toolbar--section">
         <label className="asset-library-search"><Search size={16} /><span className="sr-only">Search assets</span><input aria-label="Search assets" onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder={`Search ${selectedAssetType?.label.toLowerCase()}`} value={search} /></label>
-        <label><span>Classification</span><select aria-label="Classification" onChange={(event) => { setClassification(event.target.value); setPage(1); }} value={classification}><option value="">All classifications</option>{data.classifications.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
+        <label><span>Classification</span><select aria-label="Classification" onChange={(event) => { setClassification(event.target.value); setPage(1); }} value={classification}>{(assetType === "photoshoots" ? photoshootClassificationOptions : [{ value: "", label: "All classifications" }, ...data.classifications.map((value) => ({ value, label: value }))]).map((option) => <option key={option.value || "all"} value={option.value}>{option.label}</option>)}</select></label>
         <span className="asset-library-range">{range}</span>
       </div>
 
@@ -277,11 +282,11 @@ export function AssetLibraryPage() {
     {!loading && data.assets.length > 0 && <div className={`asset-library-layout${selected ? "" : " asset-library-layout--cards-only"}`}>
       <div className="asset-library-grid">
         {data.assets.map((asset) => <article className={selected?.libraryItemId === asset.libraryItemId ? "asset-card asset-card--selected" : "asset-card"} key={asset.libraryItemId}>
-          <button className="asset-card__image" disabled={!asset.mediaAvailable} onClick={() => openAsset(asset)} type="button" aria-label={`Open ${asset.itemKind === "photoshoot" ? "Photoshoot" : selectedAssetType?.label.slice(0, -1) || "Asset"}`}>
+          <button className="asset-card__image" disabled={!asset.mediaAvailable} onClick={() => openAsset(asset)} type="button" aria-label={`Open ${asset.itemKind === "photoshoot" ? "Photoshoot cover" : selectedAssetType?.label.slice(0, -1) || "Asset"}`}>
             {asset.imageUrl ? <ContainedMediaImage alt={asset.itemKind === "photoshoot" ? asset.fileName || "Photoshoot" : `${selectedAssetType?.label.slice(0, -1) || "Asset"} preview`} loading="lazy" src={asset.imageUrl} /> : <span><ImageOff /><small>Media unavailable</small></span>}
           </button>
           {asset.itemKind === "photoshoot" ? (
-            <div className="asset-card__photoshoot"><strong>{asset.fileName}</strong><span>Photoshoot • {asset.shotCount} Images</span><em className={`session-selling-badge session-selling-badge--${(asset.sessionSelling?.status || "NOT_PREPARED").toLowerCase()}`}>{readinessBadge(asset.sessionSelling)}</em></div>
+            <div className="asset-card__photoshoot"><strong>{asset.fileName}</strong><span>Photoshoot • {asset.shotCount} Images</span><div className="asset-card__photoshoot-badges"><em className={`session-selling-badge session-selling-badge--${readinessBadgeStatus(asset.sessionSelling)}`}>{readinessBadge(asset.sessionSelling)}</em>{photoshootSalesClassification(asset) && <em className="session-selling-badge photoshoot-sales-classification">{photoshootSalesClassification(asset)}</em>}</div></div>
           ) : asset.itemKind === "registered_asset" ? (
             <div className="asset-card__summary">
               <span><strong>Asset #{asset.assetId}</strong>{asset.isCanonicalReference && <em>Canonical reference - Protected</em>}</span>
@@ -289,18 +294,11 @@ export function AssetLibraryPage() {
             </div>
           ) : null}
           <LibraryActionGroup label="Asset actions">
-            <LibraryActionButton icon={MoveRight} onClick={() => openAsset(asset)} tooltip="Move to Generation Library" />
-            {asset.itemKind === "photoshoot" && asset.deliverableId
-              ? asset.sessionSelling?.status === "READY"
-                ? <LibraryActionButton icon={ShoppingBag} onClick={() => setOpenPhotoshootId(asset.deliverableId!)} tooltip="View Published Assets" />
-                : asset.sessionSelling?.status === "PREPARING"
-                  ? <LibraryActionButton icon={ShoppingBag} onClick={() => setOpenPhotoshootId(asset.deliverableId!)} tooltip="View Preparation Progress" />
-                  : <LibraryActionButton icon={ShoppingBag} onClick={() => {
-                    setInitialPreparationDialog(asset.sessionSelling?.status === "NEEDS_ATTENTION" ? "retry" : "prepare");
-                    setOpenPhotoshootId(asset.deliverableId!);
-                  }} tooltip={asset.sessionSelling?.status === "NEEDS_ATTENTION" ? "Retry Failed Preparation" : "Prepare for Sale"} />
-              : <LibraryActionButton disabled={asset.itemKind === "registered_asset" || Boolean(registeringId)} icon={PackagePlus} onClick={() => void registerAsset(asset)} tooltip="Register Asset" />}
+            <LibraryActionButton icon={MoveRight} onClick={() => openAsset(asset)} tooltip={asset.itemKind === "photoshoot" ? "Open Photoshoot" : "Move to Generation Library"} />
+            {asset.itemKind !== "photoshoot" && <LibraryActionButton disabled={asset.itemKind === "registered_asset" || Boolean(registeringId)} icon={PackagePlus} onClick={() => void registerAsset(asset)} tooltip="Register Asset" />}
             <LibraryActionButton disabled={Boolean(archivingId)} icon={Trash2} onClick={() => void archiveAsset(asset)} tooltip="Delete" />
+            {asset.mediaType === "image" && asset.assetId && <LibraryActionButton icon={Video} onClick={() => { window.location.href = videoStudioLink({ type: "asset", id: String(asset.assetId), previewUrl: asset.imageUrl, label: asset.fileName || `Asset ${asset.assetId}` }); }} tooltip="Create Video" />}
+            {asset.mediaType === "video" && asset.assetId && <LibraryActionButton icon={Video} onClick={() => { window.location.href = videoStudioLink({ type: "asset", id: String(asset.assetId), previewUrl: asset.imageUrl, label: asset.fileName || `Video ${asset.assetId}` }); }} tooltip="Extend Video" />}
           </LibraryActionGroup>
         </article>)}
       </div>
