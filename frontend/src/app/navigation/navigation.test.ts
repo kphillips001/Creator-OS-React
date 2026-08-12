@@ -13,6 +13,7 @@ describe("Business navigation", () => {
       ["Photoshoot Studio","/content/photoshoot"],
       ["Video Studio","/studio/video"],
       ["Edit Studio","/content/edit"],
+      ["Regeneration Studio","/studio/regeneration"],
     ]);
     expect(libraries?.items.map((item) => [item.label,item.path])).toEqual([
       ["Generation Library","/library/generations"],

@@ -1,6 +1,6 @@
 import { environment } from "../config/environment";
 import type { GenerationRecord } from "../../features/generation-library/types";
-import type { CreativeDirectorContext, CreativeDirectorRecommendation, PhotoshootAutoRunRuntime, PhotoshootContext, PhotoshootCurationResult, PhotoshootProvider, PlannedShot, PlanningMode } from "../../features/photoshoot/types";
+import type { CreativeDirectorContext, CreativeDirectorRecommendation, FreeflowIdeaSet, PhotoshootAutoRunRuntime, PhotoshootContext, PhotoshootCurationResult, PhotoshootProvider, PlannedShot, PlanningMode } from "../../features/photoshoot/types";
 
 type PhotoshootContextResponse = {
   creator_profile_exists: boolean;
@@ -153,8 +153,19 @@ type CreativeDirectorContextResponse = {
   current_shot?: number; planning_shot?: number; remaining_shots?: number; editorial_stage?: string;
   planner_explanation?: string;
   session_plan_index?: number; session_plan_approved?: boolean;
-  recommendation_state: { inspiration_ideas: string[]; selected_inspiration: string; recommendation: CreativeDirectorRecommendation; direction_approved: boolean };
+  freeflow_idea_set?: { idea_set_id: string; ideas: string[]; recommended_idea: string; planning_shot: number; approved_shot_count: number; created_at: string; usage: Record<string, string[]> } | null;
+  recommendation_state: { inspiration_ideas: string[]; selected_inspiration: string; inspiration_edits?: Record<string, string>; recommendation: CreativeDirectorRecommendation; direction_approved: boolean };
 };
+
+const mapFreeflowIdeaSet = (value?: CreativeDirectorContextResponse["freeflow_idea_set"]): FreeflowIdeaSet | null => value ? ({
+  ideaSetId: value.idea_set_id,
+  ideas: value.ideas || [],
+  recommendedIdea: value.recommended_idea || "",
+  planningShot: Number(value.planning_shot || 0),
+  approvedShotCount: Number(value.approved_shot_count || 0),
+  createdAt: value.created_at || "",
+  usage: value.usage || {},
+}) : null;
 
 export async function getCreativeDirectorContext(sessionId: string, signal?: AbortSignal): Promise<CreativeDirectorContext> {
   const response = await fetch(`${environment.apiBaseUrl}/photoshoot/creative-director/context?session_id=${encodeURIComponent(sessionId)}`, { cache: "no-store", signal });
@@ -169,6 +180,7 @@ export async function getCreativeDirectorContext(sessionId: string, signal?: Abo
     currentPrompt: result.current_prompt || "",
     ideas: result.recommendation_state?.inspiration_ideas || [],
     selectedInspiration: result.recommendation_state?.selected_inspiration || "",
+    inspirationEdits: result.recommendation_state?.inspiration_edits || {},
     recommendation: recommendation && (recommendation.title || recommendation.creative_direction) ? recommendation : null,
     directionApproved: Boolean(result.recommendation_state?.direction_approved),
     planningMode: result.planning_mode === "full_plan" ? "full_plan" : "frame_by_frame",
@@ -182,10 +194,19 @@ export async function getCreativeDirectorContext(sessionId: string, signal?: Abo
     sessionPlan: Array.isArray(result.session_plan) ? result.session_plan : [],
     sessionPlanIndex: Math.max(0, Number(result.session_plan_index || 0)),
     sessionPlanApproved: Boolean(result.session_plan_approved),
+    freeflowIdeaSet: mapFreeflowIdeaSet(result.freeflow_idea_set),
   };
 }
 
-export const requestPhotoshootInspiration = (body: unknown) => photoshootMutation<{ ideas: string[]; selected_inspiration: string }>("/creative-director/inspiration", body);
+type InspirationResult = { ideas: string[]; selected_inspiration: string; freeflow_idea_set?: CreativeDirectorContextResponse["freeflow_idea_set"] };
+export const requestPhotoshootInspiration = async (body: unknown) => {
+  const result = await photoshootMutation<InspirationResult>("/creative-director/inspiration", body);
+  return { ...result, freeflowIdeaSet: mapFreeflowIdeaSet(result.freeflow_idea_set) };
+};
+export const reusePhotoshootInspiration = async (body: unknown) => {
+  const result = await photoshootMutation<InspirationResult>("/creative-director/existing-inspiration", body);
+  return { ...result, freeflowIdeaSet: mapFreeflowIdeaSet(result.freeflow_idea_set) };
+};
 export const selectPhotoshootInspiration = (body: unknown) => photoshootMutation<{ selected_inspiration: string; creative_hint: string }>("/creative-director/selection", body);
 export const persistPhotoshootGuidance = (body: unknown) => photoshootMutation<{ creator_guidance: string }>("/creative-director/guidance", body);
 export const requestPhotoshootRecommendation = (body: unknown) => photoshootMutation<CreativeDirectorRecommendation>("/creative-director/recommendation", body);

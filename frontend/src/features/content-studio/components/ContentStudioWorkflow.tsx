@@ -36,6 +36,12 @@ const EMPTY_CREATIVE_INPUTS: CreativeToolInputs = {
   explicitTags: "",
 };
 
+const CREATIVE_STUDIO_RECONNECT_ORIGINS = [
+  "canonical_planner",
+  "manual_creative_concept",
+  "recreate_with_ava",
+];
+
 function enhancedPromptInput(originalTags: string, enhancedTags: string) {
   return (
     `[ORIGINAL USER TAGS — mandatory: ${originalTags.trim().replaceAll("\n", ", ")}] `
@@ -179,16 +185,63 @@ export function ContentStudioWorkflow({ context, error, loading }: ContentStudio
   }, [queueEnhancedGeneration]);
 
   useEffect(() => {
-    if (!queuedIdeaGeneration || generationDisabled || generationStartedIdeaId.current === queuedIdeaGeneration) return;
-    generationStartedIdeaId.current = queuedIdeaGeneration;
-    void generationRef.current?.generate({ batchItemId: queuedIdeaGeneration, promptCount: 1 }).then((succeeded) => {
-      generationStartedIdeaId.current = null;
-      setQueuedIdeaGeneration(null);
-      setActivePlannerGeneration(null);
-      queuedGenerationResolver.current?.(succeeded);
-      queuedGenerationResolver.current = null;
-    });
-  }, [effectivePromptInput, generationDisabled, queuedIdeaGeneration]);
+    if (
+      !queuedIdeaGeneration
+      || !activePlannerGeneration
+      || generationDisabled
+      || generationStartedIdeaId.current === queuedIdeaGeneration
+    ) return;
+    const batchItemId = queuedIdeaGeneration;
+    const plannerGeneration = activePlannerGeneration;
+    const compileAndGenerate = async () => {
+      generationStartedIdeaId.current = batchItemId;
+      let succeeded = false;
+      try {
+        const diagnosticTraceId = crypto.randomUUID();
+        const providerNeutralDirection = enhancedPromptInput(
+          plannerGeneration.item.fullText,
+          plannerGeneration.enhancedResult,
+        );
+        const preview = await createPromptPreview(
+          creativeMode ?? "",
+          providerNeutralDirection,
+          1,
+          undefined,
+          "social",
+          undefined,
+          { origin: "canonical_planner", diagnosticTraceId },
+        );
+        succeeded = await generationRef.current?.generate({
+          batchItemId,
+          diagnosticTraceId,
+          origin: "canonical_planner",
+          promptBatch: preview.prompts,
+          promptCount: 1,
+          promptSource: providerNeutralDirection,
+          promptSourceLabel: "Enhanced Tags",
+        }) ?? false;
+      } catch (reason) {
+        updatePlannerBatchItem(batchItemId, {
+          error: reason instanceof Error ? reason.message : "Canonical prompt planning failed",
+          failureStage: "generation",
+          status: "failed",
+        });
+      } finally {
+        generationStartedIdeaId.current = null;
+        setQueuedIdeaGeneration(null);
+        setActivePlannerGeneration(null);
+        queuedGenerationResolver.current?.(succeeded);
+        queuedGenerationResolver.current = null;
+      }
+    };
+    void compileAndGenerate();
+  }, [
+    activePlannerGeneration,
+    creativeMode,
+    generationDisabled,
+    queuedIdeaGeneration,
+    updatePlannerBatchItem,
+  ]);
 
   const startInspiration = async () => {
     if (inspirationPending || ideaGenerationDisabled) return;
@@ -423,6 +476,7 @@ export function ContentStudioWorkflow({ context, error, loading }: ContentStudio
                     plannerBatchProgress={plannerBatchProgress}
                     plannerBatchItems={plannerBatchItems}
                     plannerBatchRunning={plannerBatchRunning}
+                    reconnectOrigins={CREATIVE_STUDIO_RECONNECT_ORIGINS}
                     recreateRuntime={recreateRuntime}
                     onRecreateRuntimeChange={setRecreateRuntime}
                     request={{

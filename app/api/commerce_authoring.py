@@ -192,7 +192,7 @@ def publish_telegram_content_vault(
         )
     except CommerceTelegramVaultError as error:
         raise HTTPException(
-            status_code=409 if error.code == "ALREADY_PUBLISHED" else 400,
+              status_code=409 if error.code in {"ALREADY_PUBLISHED", "PUBLISH_IN_PROGRESS"} else 400,
             detail={"code": error.code, "message": str(error)},
         ) from error
     return {

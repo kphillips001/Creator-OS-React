@@ -26,8 +26,9 @@
 .photoshoot-detail-filmstrip::-webkit-scrollbar { height: 10px; }
 .photoshoot-detail-filmstrip::-webkit-scrollbar-track { border-radius: 999px; background: #171717; }
 .photoshoot-detail-filmstrip::-webkit-scrollbar-thumb { border: 2px solid #171717; border-radius: 999px; background: #555; }
-.photoshoot-detail-shot { display: flex; flex: 0 0 auto; flex-direction: column; align-items: flex-start; gap: 7px; padding: 0!important; border: 0!important; border-radius: 0!important; background: transparent!important; cursor: zoom-in; overflow: visible; scroll-snap-align: start; }
-.photoshoot-detail-shot img { display: block; width: auto; max-width: min(76vw,760px); height: clamp(320px,58vh,680px); background: transparent; transition: transform .2s ease; }
+.photoshoot-detail-shot { display: flex; flex: 0 0 clamp(240px,43.5vh,510px); width:clamp(240px,43.5vh,510px); min-width:clamp(240px,43.5vh,510px); flex-direction: column; align-items: flex-start; gap: 7px; padding: 0!important; border: 0!important; border-radius: 0!important; background: transparent!important; cursor: zoom-in; overflow: visible; scroll-snap-align: start; }
+.photoshoot-detail-shot__media { width:100%; aspect-ratio:3/4; overflow:hidden; background:var(--color-surface-inset,#0d0d0d); }
+.photoshoot-detail-shot img { display: block; width:100%; height:100%; object-fit:contain; background: transparent; transition: transform .2s ease; }
 .photoshoot-detail-shot:hover img { transform: scale(1.012); }
 .photoshoot-detail-shot:focus-visible { outline: 2px solid #ddd; outline-offset: 3px; }
 .photoshoot-detail-shot--selected { outline:2px solid var(--color-accent)!important; outline-offset:-2px; }
@@ -46,6 +47,15 @@
 .photoshoot-detail-sections summary { padding: 16px 18px; cursor: pointer; font-weight: 650; }
 .photoshoot-detail-section-content { padding: 0 18px 18px; color: #ccc; }
 .photoshoot-detail-description { max-width: 75ch; line-height: 1.55; }
+.photoshoot-detail-page>.commercial-assets { display:grid; gap:12px; margin-top:var(--space-4); padding:var(--space-4); border:1px solid var(--color-border-subtle); border-radius:var(--radius-lg); background:var(--color-surface-raised); }
+.photoshoot-detail-page>.commercial-assets header { display:grid; gap:3px; }
+.photoshoot-detail-page>.commercial-assets header small { color:var(--color-accent); font-size:.68rem; font-weight:700; letter-spacing:.05em; text-transform:uppercase; }
+.photoshoot-detail-page>.commercial-assets h2 { margin:0; font-size:1rem; }
+.photoshoot-detail-page>.commercial-assets>div { display:flex; flex-wrap:wrap; gap:12px; }
+.photoshoot-detail-page>.commercial-assets figure { width:min(220px,100%); margin:0; padding:10px; border:1px solid var(--color-border-subtle); border-radius:var(--radius-md); background:var(--color-surface-sunken); }
+.photoshoot-detail-page>.commercial-assets figure img { display:block; width:100%; max-height:280px; object-fit:contain; }
+.photoshoot-detail-page>.commercial-assets figcaption { display:flex; justify-content:space-between; gap:10px; padding-top:8px; color:var(--color-text-secondary); font-size:.76rem; }
+.photoshoot-detail-page>.commercial-assets figcaption span { color:var(--color-success); font-weight:700; text-transform:capitalize; }
 .session-selling-panel { display:grid; gap:12px; margin-top:var(--space-4); padding:var(--space-4); border:1px solid var(--color-border-subtle); border-radius:var(--radius-lg); background:var(--color-surface-raised); }
 .session-selling-panel>header { display:flex; align-items:center; justify-content:space-between; gap:16px; }
 .session-selling-panel h2 { margin:2px 0 0; font-size:1rem; }
@@ -68,7 +78,7 @@
 
 @media (max-width: 720px) {
   .photoshoot-gallery-page,.photoshoot-detail-page { padding: 20px; }
-  .photoshoot-detail-shot img { max-width: 86vw; height: min(55vh,520px); }
+  .photoshoot-detail-shot { flex-basis:min(86vw,390px); width:min(86vw,390px); min-width:min(86vw,390px); }
   .photoshoot-detail-section-content dl div { grid-template-columns: 1fr; gap: 3px; }
 }
 .photoshoot-selling-mode {

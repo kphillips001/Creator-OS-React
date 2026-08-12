@@ -13,6 +13,7 @@ from app.services.runtime_media_resolver import (
     RuntimeMediaPath,
     RuntimeMediaResolver,
 )
+from app.services.asset_intelligence_service import AssetIntelligenceService
 
 if TYPE_CHECKING:
     from app.repositories.asset_repository import AssetRepository
@@ -60,6 +61,7 @@ class AIProductDraftingService:
         product_asset_repository: "ProductAssetRepository | None" = None,
         runtime_media_resolver: RuntimeMediaResolver | None = None,
         experience_service: ExperienceService | None = None,
+        asset_intelligence_service: AssetIntelligenceService | None = None,
     ):
         if asset_repository is None:
             from app.repositories.asset_repository import AssetRepository
@@ -87,6 +89,7 @@ class AIProductDraftingService:
         self.experiences = experience_service or ExperienceService(
             self._default_experience_repository()
         )
+        self.asset_intelligence = asset_intelligence_service or AssetIntelligenceService()
 
     def _default_experience_repository(self):
         from app.repositories.experience_repository import ExperienceRepository
@@ -109,6 +112,17 @@ class AIProductDraftingService:
         stem = re.sub(r"^\d{8}_\d{6}_\d+_", "", stem)
         stem = re.sub(r"[_-]+", " ", stem).strip()
         return stem.title() if stem else f"Asset {asset.id}"
+
+    def _canonical_media_title(self, asset: Asset) -> str | None:
+        try:
+            profile = self.asset_intelligence.get_profile(asset.id)
+            title = str(getattr(profile, "title", None) or "").strip()
+            if title:
+                return title
+        except Exception:
+            pass
+        metadata = dict(asset.media_metadata or {})
+        return str(metadata.get("canonical_media_title") or "").strip() or None
 
     @staticmethod
     def _infer_product_type(asset: Asset) -> ProductType:
@@ -884,6 +898,7 @@ class AIProductDraftingService:
             delivery_type=getattr(commerce_recommendation, "delivery_type", None),
             suggested_title=(
                 getattr(commerce_recommendation, "suggested_name", None)
+                or self._canonical_media_title(asset)
                 or self._humanize_filename(asset)
             ),
             suggested_description=(

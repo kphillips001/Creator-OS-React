@@ -129,6 +129,7 @@ def test_bundle_preparation_creates_one_ordered_complete_offering_and_publicatio
     assert len(ids) == 1
     assert offerings.created == 1 and publications.created == 1
     assert offerings.item.offering_type is CommercialOfferingType.BUNDLE
+    assert offerings.item.title == "Complete Set"
     assert offerings.item.source_photoshoot_deliverable_id == DELIVERABLE
     assert [member.asset_id for member in offerings.item.assets] == [11, 12, 13]
     assert offerings.item.price_minor == 3000
@@ -146,6 +147,17 @@ def test_retry_reuses_offering_publication_and_executor_receives_one_bundle_publ
     assert executor.calls == [(second[0], {"creator_profile_id": 7, "fanvue_account_id": 9})]
 
 
+def test_existing_explicit_bundle_title_is_preserved():
+    service, offerings, publications, _ = subject()
+    service.stage(DELIVERABLE, creator_profile_id=7, fanvue_account_id=9, price_minor=3000)
+    offerings.item = replace(offerings.item, title="Collector's Shower Edition")
+
+    service.stage(DELIVERABLE, creator_profile_id=7, fanvue_account_id=9, price_minor=3000)
+
+    assert offerings.item.title == "Collector's Shower Edition"
+    assert offerings.created == 1 and publications.created == 1
+
+
 def test_ready_requires_live_present_media_link():
     service, offerings, publications, _ = subject()
     service.stage(DELIVERABLE, creator_profile_id=7, fanvue_account_id=9, price_minor=3000)
@@ -159,11 +171,74 @@ def test_ready_requires_live_present_media_link():
     readiness = service.inspect(DELIVERABLE, creator_profile_id=7)
     assert readiness["status"] == "READY"
     assert readiness["statusLabel"] == "Paid Bundle Ready"
+    assert readiness["bundleSalesChannel"] == "CHAT"
+    assert readiness["salesChannel"] == "CHAT"
     assert readiness["deliveryUrl"] == "https://fanvue.example/bundle"
     assert readiness["autonomousSales"] == {
         "status": "NEEDS_SETUP", "statusLabel": "Needs Setup",
         "reason": "Needs promotional teaser",
     }
+
+
+def test_retry_of_live_bundle_with_matching_price_is_an_idempotent_no_op():
+    service, offerings, publications, executor = subject()
+    service.stage(DELIVERABLE, creator_profile_id=7, fanvue_account_id=9, price_minor=3000)
+    offerings.item = replace(offerings.item, status=CommercialOfferingStatus.READY)
+    publication_id = publications.item.publication_id
+    publications.item = replace(
+        publications.item,
+        status=CommercialPublicationStatus.LIVE,
+        provider_resource_status=ProviderResourceStatus.PRESENT,
+        external_product_id="link-1",
+        publication_metadata={
+            **publications.item.publication_metadata,
+            "media_link": {"url": "https://fanvue.example/bundle"},
+        },
+    )
+
+    pending = service.stage(
+        DELIVERABLE, creator_profile_id=7,
+        fanvue_account_id=9, price_minor=3000,
+    )
+    service.execute_staged(pending, creator_profile_id=7, fanvue_account_id=9)
+
+    assert pending == ()
+    assert offerings.created == 1 and publications.created == 1
+    assert publications.item.publication_id == publication_id
+    assert publications.item.status is CommercialPublicationStatus.LIVE
+    assert executor.calls == []
+    readiness = service.inspect(DELIVERABLE, creator_profile_id=7)
+    assert readiness["status"] == "READY"
+    assert readiness["promotionalTeaser"]["status"] == "NOT_CONFIGURED"
+
+
+def test_retry_of_live_bundle_rejects_a_changed_locked_price():
+    service, offerings, publications, _ = subject()
+    service.stage(DELIVERABLE, creator_profile_id=7, fanvue_account_id=9, price_minor=3000)
+    offerings.item = replace(offerings.item, status=CommercialOfferingStatus.READY)
+    publications.item = replace(
+        publications.item,
+        status=CommercialPublicationStatus.LIVE,
+        provider_resource_status=ProviderResourceStatus.PRESENT,
+        external_product_id="link-1",
+    )
+
+    with pytest.raises(ValueError, match="live Bundle Media Link price is locked"):
+        service.stage(
+            DELIVERABLE, creator_profile_id=7,
+            fanvue_account_id=9, price_minor=3100,
+        )
+
+
+def test_bundle_readiness_projects_persisted_content_wall_channel():
+    service, _, _, _ = subject()
+    service.photoshoots.row["bundle_sales_channel"] = "CONTENT_WALL"
+
+    readiness = service.inspect(DELIVERABLE, creator_profile_id=7)
+
+    assert readiness["bundleSalesChannel"] == "CONTENT_WALL"
+    assert readiness["salesChannel"] == "WALL"
+    assert readiness["sellingMode"] == "BUNDLE"
 
 
 @pytest.mark.parametrize(("paid_status", "teaser_status", "expected_status", "reason"), [

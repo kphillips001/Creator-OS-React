@@ -14,7 +14,7 @@
       "delivery_id": "delivery-101",
       "event_id": "63f8f292-80d4-594f-b127-7918fcc7dfbf",
       "event_state": "PURCHASED",
-      "event_timestamp": "2026-08-07T16:43:04Z",
+      "event_timestamp": "2026-08-08T01:12:39Z",
       "experience_id": "experience-1",
       "fulfillment_registration_id": null,
       "outcome_metadata": {
@@ -55,7 +55,7 @@
       "delivery_id": "delivery-101",
       "event_id": "a1bcc3d7-a716-5e10-9673-7248614331ee",
       "event_state": "REFUNDED",
-      "event_timestamp": "2026-08-07T16:43:04Z",
+      "event_timestamp": "2026-08-08T01:12:39Z",
       "experience_id": "experience-1",
       "fulfillment_registration_id": null,
       "outcome_metadata": {
@@ -96,7 +96,7 @@
       "delivery_id": "delivery-202",
       "event_id": "5ac9cf27-e411-5ca3-8f16-bf0edbb64cf5",
       "event_state": "PURCHASED",
-      "event_timestamp": "2026-08-07T16:43:04Z",
+      "event_timestamp": "2026-08-08T01:12:39Z",
       "experience_id": "experience-2",
       "fulfillment_registration_id": null,
       "outcome_metadata": {
@@ -137,7 +137,7 @@
       "delivery_id": "delivery-101",
       "event_id": "532052e8-e47d-582c-b93f-d9a8473f895a",
       "event_state": "PURCHASED",
-      "event_timestamp": "2026-08-07T16:43:04Z",
+      "event_timestamp": "2026-08-08T01:12:39Z",
       "experience_id": "experience-1",
       "fulfillment_registration_id": null,
       "outcome_metadata": {
@@ -178,7 +178,7 @@
       "delivery_id": null,
       "event_id": "73d86061-6215-5438-9716-6037ccf344ff",
       "event_state": "UNMATCHED",
-      "event_timestamp": "2026-08-07T16:43:04Z",
+      "event_timestamp": "2026-08-08T01:12:39Z",
       "experience_id": null,
       "fulfillment_registration_id": null,
       "outcome_metadata": {
@@ -1202,7 +1202,7 @@
       "asset_id": 101,
       "business_learning_context_reference": null,
       "business_registration_id": null,
-      "chat_registration_id": "cb1ab2a2-8d86-43d7-baeb-ea1b155f9ec5",
+      "chat_registration_id": "0c3eb1c0-64b8-4bd6-951d-bef04cf1a59c",
       "content_intelligence_reference": null,
       "conversation_context_reference": null,
       "conversation_id": "conversation-1",
@@ -1211,9 +1211,9 @@
       "delivery_id": "281202a9-dfbe-5831-af1a-85e0515c37fe",
       "event_id": "70c6bb39-77be-5a3a-993d-23413eab93a4",
       "event_state": "DELIVERY_PREPARED",
-      "event_timestamp": "2026-08-07T16:43:04.754593+00:00",
+      "event_timestamp": "2026-08-08T01:59:27.137154+00:00",
       "experience_id": "experience-1",
-      "fulfillment_registration_id": "8eff3616-552a-41f5-8223-6b6805413fc4",
+      "fulfillment_registration_id": "63318880-3a1b-43d3-890f-ea9efe94e615",
       "outcome_metadata": {
         "failure_reason": null,
         "retry_of_delivery_id": null,
@@ -1259,7 +1259,7 @@
       "delivery_id": "281202a9-dfbe-5831-af1a-85e0515c37fe",
       "event_id": "d63d9eff-3999-5c79-bb1b-c3dfa4385a8e",
       "event_state": "DELIVERY_BLOCKED",
-      "event_timestamp": "2026-08-07T16:43:04.770155+00:00",
+      "event_timestamp": "2026-08-08T01:59:27.152655+00:00",
       "experience_id": null,
       "fulfillment_registration_id": null,
       "outcome_metadata": {
@@ -1309,14 +1309,14 @@
       "delivery_id": "281202a9-dfbe-5831-af1a-85e0515c37fe",
       "event_id": "7a50cac5-7206-5fc4-a08c-cb89bf4e9566",
       "event_state": "DELIVERED",
-      "event_timestamp": "2026-08-07T16:43:04.757591+00:00",
+      "event_timestamp": "2026-08-08T01:59:27.139657+00:00",
       "experience_id": "experience-1",
       "fulfillment_registration_id": null,
       "outcome_metadata": {
         "payload": {
           "asset_id": 101,
           "blocking_reason": null,
-          "chat_registration_id": "cb1ab2a2-8d86-43d7-baeb-ea1b155f9ec5",
+          "chat_registration_id": "0c3eb1c0-64b8-4bd6-951d-bef04cf1a59c",
           "conversation_id": "conversation-1",
           "customer_id": "customer-1",
           "delivery_id": "281202a9-dfbe-5831-af1a-85e0515c37fe",
@@ -1330,7 +1330,7 @@
             "experience-1"
           ],
           "fanvue_media_link": "https://fanvue.example/media/101",
-          "fulfillment_id": "8eff3616-552a-41f5-8223-6b6805413fc4",
+          "fulfillment_id": "63318880-3a1b-43d3-890f-ea9efe94e615",
           "media_link": "https://fanvue.example/media/101",
           "metadata": {
             "delivery_owner": "ChatCommerceDeliveryService",
@@ -1386,14 +1386,14 @@
       "delivery_id": "281202a9-dfbe-5831-af1a-85e0515c37fe",
       "event_id": "34adc706-c6ea-5b9a-b447-ed34c3595a5c",
       "event_state": "DELIVERY_FAILED",
-      "event_timestamp": "2026-08-07T16:43:04.759589+00:00",
+      "event_timestamp": "2026-08-08T01:59:27.141655+00:00",
       "experience_id": "experience-1",
       "fulfillment_registration_id": null,
       "outcome_metadata": {
         "payload": {
           "asset_id": 101,
           "blocking_reason": "provider_unavailable",
-          "chat_registration_id": "cb1ab2a2-8d86-43d7-baeb-ea1b155f9ec5",
+          "chat_registration_id": "0c3eb1c0-64b8-4bd6-951d-bef04cf1a59c",
           "conversation_id": "conversation-1",
           "customer_id": "customer-1",
           "delivery_id": "281202a9-dfbe-5831-af1a-85e0515c37fe",
@@ -1407,7 +1407,7 @@
             "experience-1"
           ],
           "fanvue_media_link": "https://fanvue.example/media/101",
-          "fulfillment_id": "8eff3616-552a-41f5-8223-6b6805413fc4",
+          "fulfillment_id": "63318880-3a1b-43d3-890f-ea9efe94e615",
           "media_link": "https://fanvue.example/media/101",
           "metadata": {
             "delivery_owner": "ChatCommerceDeliveryService",
@@ -1454,7 +1454,7 @@
       "asset_id": 101,
       "business_learning_context_reference": null,
       "business_registration_id": null,
-      "chat_registration_id": "cb1ab2a2-8d86-43d7-baeb-ea1b155f9ec5",
+      "chat_registration_id": "0c3eb1c0-64b8-4bd6-951d-bef04cf1a59c",
       "content_intelligence_reference": null,
       "conversation_context_reference": null,
       "conversation_id": "conversation-1",
@@ -1463,9 +1463,9 @@
       "delivery_id": "f86708c9-1d8c-5bd0-b5b1-2ecb3ea884f8",
       "event_id": "defa658a-6293-5bea-b910-90ffbe5aad0b",
       "event_state": "DELIVERY_PREPARED",
-      "event_timestamp": "2026-08-07T16:43:04.765091+00:00",
+      "event_timestamp": "2026-08-08T01:59:27.146655+00:00",
       "experience_id": "experience-1",
-      "fulfillment_registration_id": "8eff3616-552a-41f5-8223-6b6805413fc4",
+      "fulfillment_registration_id": "63318880-3a1b-43d3-890f-ea9efe94e615",
       "outcome_metadata": {
         "failure_reason": null,
         "retry_of_delivery_id": "old",
@@ -1511,7 +1511,7 @@
       "delivery_id": "f86708c9-1d8c-5bd0-b5b1-2ecb3ea884f8",
       "event_id": "8486a3a7-fcbc-5d57-9ede-cd262ecd61d8",
       "event_state": "RETRIED",
-      "event_timestamp": "2026-08-07T16:43:04.765091+00:00",
+      "event_timestamp": "2026-08-08T01:59:27.146655+00:00",
       "experience_id": null,
       "fulfillment_registration_id": null,
       "outcome_metadata": {

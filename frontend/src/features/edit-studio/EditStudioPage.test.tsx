@@ -4,6 +4,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 
 import { navigationGroups } from "../../app/navigation/navigation";
 import { EditStudioPage } from "./EditStudioPage";
+import { calculateCropDrag } from "./quickEditTools";
 
 const generationRecord = {
   image_id: "generated-1", image_url: "/image.png", provider_id: "seedream_5_0_pro",
@@ -36,10 +37,51 @@ const renderPage = () => render(
 );
 
 describe("EditStudioPage", () => {
+  it("calculates independent edges, all corners, and crop repositioning in source pixels", () => {
+    const start = { x: 100, y: 200, width: 600, height: 900 };
+    const bounds = { width: 1200, height: 1800 };
+    expect(calculateCropDrag(start, "n", 0, 50, bounds)).toEqual({ x: 100, y: 250, width: 600, height: 850 });
+    expect(calculateCropDrag(start, "s", 0, -100, bounds)).toEqual({ x: 100, y: 200, width: 600, height: 800 });
+    expect(calculateCropDrag(start, "w", 75, 0, bounds)).toEqual({ x: 175, y: 200, width: 525, height: 900 });
+    expect(calculateCropDrag(start, "e", 80, 0, bounds)).toEqual({ x: 100, y: 200, width: 680, height: 900 });
+    for (const handle of ["nw", "ne", "sw", "se"] as const) {
+      expect(calculateCropDrag(start, handle, 20, 30, bounds)).not.toEqual(start);
+    }
+    expect(calculateCropDrag(start, "move", 90, -50, bounds)).toEqual({ x: 190, y: 150, width: 600, height: 900 });
+  });
+
+  it("nests AI modes and exposes Crop through the Quick Edit tool workspace", async () => {
+    const fetch = vi.spyOn(globalThis, "fetch").mockImplementation((input, init) => {
+      const url = String(input);
+      if (url.includes("/quick-edit/source-info")) return response({ image_id: "generated-1", width: 1200, height: 1800 });
+      if (url.endsWith("/quick-edit/crop") && init?.method === "POST") return response({ success: true, message: "Cropped image added to Generation Library.", result: { ...generationRecord, image_id: "cropped-1", status: "active" } });
+      if (url.endsWith("/edit-studio/references")) return response([]);
+      return response({ creator_profile_exists: true, pending_source: generationRecord, providers: [{ value: "seedream_5_0_pro", label: "Seedream" }] });
+    });
+    renderPage();
+
+    expect(await screen.findByRole("button", { name: /Quick Edit/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /AI Edit/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Single Edit/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Quick Edit/ }));
+    expect(screen.getByRole("heading", { name: "Choose Quick Edit Tool" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Crop/ }));
+    expect(await screen.findByRole("img", { name: "Crop source" })).toHaveAttribute("src", "/image.png");
+    expect(await screen.findByText("1200 × 1800 px")).toBeInTheDocument();
+    expect(screen.getByLabelText("Crop aspect ratio")).toHaveValue("Free");
+    expect(screen.getAllByRole("button", { name: /Resize crop/ })).toHaveLength(8);
+    fireEvent.change(screen.getByLabelText("Crop aspect ratio"), { target: { value: "1:1" } });
+    expect(screen.getByText("1200 × 1200 px")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Apply Crop" }));
+    expect(await screen.findByText("Generation Library destination")).toBeInTheDocument();
+    const request = fetch.mock.calls.find(([url]) => String(url).endsWith("/quick-edit/crop"));
+    expect(JSON.parse(String(request?.[1]?.body))).toMatchObject({ source_image_id: "generated-1", width: 1200, height: 1200 });
+  });
+
   it("is registered in Studios at the required route", () => {
     const studios = navigationGroups.find((group) => group.label === "Studios");
     expect(studios?.items.map(({ label }) => label)).toEqual([
-      "Content Studio", "Photoshoot Studio", "Video Studio", "Edit Studio",
+      "Content Studio", "Regeneration Studio", "Photoshoot Studio", "Video Studio", "Edit Studio",
     ]);
     expect(studios?.items.find(({ label }) => label === "Edit Studio")?.path).toBe("/content/edit");
   });
@@ -85,6 +127,7 @@ describe("EditStudioPage", () => {
     expect(sourceImage).toHaveAttribute("src", "/image.png");
     expect(screen.queryByRole("heading", { name: "Reference Images" })).not.toBeInTheDocument();
 
+    fireEvent.click(screen.getByRole("button", { name: /AI Edit/ }));
     fireEvent.click(screen.getByRole("button", { name: /Single Edit/ }));
     expect(screen.getByRole("img", { name: "Portrait" })).toBe(sourceImage);
     const providerSelect = await screen.findByLabelText("Provider") as HTMLSelectElement;
@@ -166,7 +209,8 @@ describe("EditStudioPage", () => {
     });
 
     renderPage();
-    fireEvent.click(await screen.findByRole("button", { name: /Multi Edit/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /AI Edit/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Multi Edit/ }));
     fireEvent.click(screen.getByRole("button", { name: "+ Add Reference" }));
     fireEvent.click(screen.getByRole("button", { name: "+ Add Reference" }));
     await waitFor(() => expect(screen.getAllByRole("option", { name: "Wardrobe look" })).toHaveLength(2));
@@ -208,7 +252,8 @@ describe("EditStudioPage", () => {
     });
 
     renderPage();
-    fireEvent.click(await screen.findByRole("button", { name: /Multi Edit/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /AI Edit/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Multi Edit/ }));
     fireEvent.click(screen.getByRole("button", { name: "+ Add Reference" }));
     fireEvent.change(screen.getByLabelText("Reference 1 Asset Source"), { target: { value: "upload" } });
     fireEvent.change(screen.getByLabelText("Reference 1 Upload"), {
@@ -244,7 +289,8 @@ describe("EditStudioPage", () => {
     });
 
     renderPage();
-    fireEvent.click(await screen.findByRole("button", { name: /Multi Edit/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /AI Edit/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Multi Edit/ }));
     expect(await screen.findByText(/No creative reference images available/)).toBeInTheDocument();
     expect(screen.getByText(/Use Upload to add one/)).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Prompt"), { target: { value: "Refine the original." } });
@@ -275,7 +321,8 @@ describe("EditStudioPage", () => {
       });
     });
     renderPage();
-    fireEvent.click(await screen.findByRole("button", { name: /Single Edit/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /AI Edit/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Single Edit/ }));
     fireEvent.change(screen.getByLabelText("Prompt"), { target: { value: "Refine portrait." } });
     fireEvent.click(screen.getByRole("button", { name: "Generate Edit" }));
 
@@ -327,7 +374,8 @@ describe("EditStudioPage", () => {
       });
     });
     renderPage();
-    fireEvent.click(await screen.findByRole("button", { name: /Single Edit/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /AI Edit/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Single Edit/ }));
     const prompt = screen.getByLabelText("Prompt");
     fireEvent.change(prompt, { target: { value: "Keep this instruction." } });
     fireEvent.click(screen.getByRole("button", { name: "Generate Edit" }));

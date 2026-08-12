@@ -113,6 +113,26 @@ def test_service_records_provider_output_separately_then_merges():
     assert "provider_specific" not in profile.to_payload()
 
 
+def test_service_can_promote_provider_fields_without_marking_workflow_ready():
+    repository = FakeRepository()
+    service = AssetIntelligenceService(repository=repository)
+    repository.upsert_profile(AssetIntelligenceProfile(
+        asset_id=10, creator_profile_id=2,
+        analysis_status=AssetIntelligenceStatus.CONTENT_INTELLIGENCE_RUNNING,
+    ))
+    repository.save_provider_result(AssetIntelligenceProviderResult(
+        asset_id=10, creator_profile_id=2, provider="grok-vision",
+        raw_response={"title": "Golden Hour Balcony Gaze"},
+        normalized_fields={"title": "Golden Hour Balcony Gaze"},
+        field_confidence={"title": 0.8},
+    ))
+
+    profile = service.merge_provider_results(10, preserve_analysis_status=True)
+
+    assert profile.title == "Golden Hour Balcony Gaze"
+    assert profile.analysis_status == AssetIntelligenceStatus.CONTENT_INTELLIGENCE_RUNNING
+
+
 def test_phase_one_service_has_no_provider_execution_dependencies():
     import app.services.asset_intelligence_service as module
 

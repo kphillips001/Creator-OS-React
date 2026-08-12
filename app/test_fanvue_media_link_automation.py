@@ -123,12 +123,21 @@ def test_missing_write_creator_scope_is_explicit():
 class Uploads:
     def __init__(self, checkpoint=None):
         self.checkpoint, self.parts, self.session_saves = checkpoint, {}, 0
+        self.reusable = None
     def get(self, *_): return self.checkpoint
     def initialize(self, **values):
         self.checkpoint = SimpleNamespace(
             publication_upload_id=uuid4(), provider_media_uuid=None,
             provider_upload_id=None, part_size_bytes=None, total_parts=None,
             uploaded_parts={}, upload_status="pending", processing_status="pending",
+            content_hash=values["content_hash"], file_size_bytes=values["file_size_bytes"])
+        return self.checkpoint
+    def find_ready_reusable(self, **_values): return self.reusable
+    def initialize_reused(self, **values):
+        self.checkpoint = SimpleNamespace(
+            publication_upload_id=uuid4(), provider_media_uuid=values["provider_media_uuid"],
+            provider_upload_id=None, part_size_bytes=None, total_parts=None,
+            uploaded_parts={}, upload_status="uploaded", processing_status="ready",
             content_hash=values["content_hash"], file_size_bytes=values["file_size_bytes"])
         return self.checkpoint
     def save_session(self, _, *, media_uuid, upload_id, part_size, total_parts):
@@ -166,7 +175,7 @@ class UploadClient:
 def test_executor_splits_multiple_parts_and_preserves_ordered_etags(tmp_path):
     path = tmp_path / "asset.jpg"
     path.write_bytes(b"1234567")
-    uploads, client = Uploads(), UploadClient()
+    uploads, client = Uploads(), UploadClient(statuses=("ready",))
     executor = FanvueMediaLinkPublicationExecutor(
         assets=SimpleNamespace(get_by_id=lambda _: SimpleNamespace(
             creator_profile_id=7, media_type="image", local_vault_path=None,
@@ -179,6 +188,20 @@ def test_executor_splits_multiple_parts_and_preserves_ordered_etags(tmp_path):
         {"PartNumber": 2, "ETag": "etag-2"},
         {"PartNumber": 3, "ETag": "etag-3"},
     ]
+
+
+def test_executor_reuses_ready_upload_for_same_account_asset_and_hash(tmp_path):
+    path = tmp_path / "asset.jpg"
+    path.write_bytes(b"same revision")
+    uploads, client = Uploads(), UploadClient(statuses=("ready",))
+    uploads.reusable = SimpleNamespace(provider_media_uuid="existing-media")
+    executor = FanvueMediaLinkPublicationExecutor(
+        assets=SimpleNamespace(get_by_id=lambda _: SimpleNamespace(
+            creator_profile_id=7, media_type="image", local_vault_path=None,
+            file_path=str(path))), uploads=uploads, sleep=lambda _: None)
+    assert executor._upload_asset(client, uuid4(), 10, 7, 3) == "existing-media"
+    assert client.sessions == 0
+    assert client.puts == []
 
 
 def test_processing_timeout_resumes_existing_media_without_new_upload(tmp_path):
@@ -266,6 +289,83 @@ def test_bundle_is_supported_by_existing_multi_media_link_executor():
         assets=(SimpleNamespace(asset_id=1), SimpleNamespace(asset_id=2)),
     )
     FanvueMediaLinkPublicationExecutor._validate(publication, offering)
+
+
+@pytest.mark.parametrize("channel", [
+    PrimarySalesChannel.AI_CHAT,
+    PrimarySalesChannel.TELEGRAM_WALL,
+])
+def test_media_link_executor_accepts_supported_commercial_channels(channel):
+    publication = SimpleNamespace(
+        provider=CommercialPublicationProvider.FANVUE,
+        status=CommercialPublicationStatus.READY_TO_PUBLISH,
+    )
+    offering = SimpleNamespace(
+        status=CommercialOfferingStatus.DRAFT,
+        primary_sales_channel=channel,
+        offering_type=CommercialOfferingType.BUNDLE,
+        price_minor=2499,
+        assets=tuple(SimpleNamespace(asset_id=value) for value in (174, 172, 173)),
+    )
+    FanvueMediaLinkPublicationExecutor._validate(publication, offering)
+
+
+def test_media_link_executor_rejects_unsupported_channel():
+    publication = SimpleNamespace(
+        provider=CommercialPublicationProvider.FANVUE,
+        status=CommercialPublicationStatus.READY_TO_PUBLISH,
+    )
+    offering = SimpleNamespace(
+        status=CommercialOfferingStatus.DRAFT,
+        primary_sales_channel="UNSUPPORTED",
+        offering_type=CommercialOfferingType.BUNDLE,
+        price_minor=2499,
+        assets=(SimpleNamespace(asset_id=174),),
+    )
+    with pytest.raises(ValueError, match="unavailable for this sales channel"):
+        FanvueMediaLinkPublicationExecutor._validate(publication, offering)
+
+
+def test_claimed_validation_failure_is_persisted_and_claim_is_released():
+    publication_id, offering_id = uuid4(), uuid4()
+    publication = SimpleNamespace(
+        publication_id=publication_id, commercial_offering_id=offering_id,
+        provider=CommercialPublicationProvider.FANVUE,
+        status=CommercialPublicationStatus.PUBLISHING,
+    )
+    offering = SimpleNamespace(
+        status=CommercialOfferingStatus.DRAFT,
+        primary_sales_channel="UNSUPPORTED",
+        offering_type=CommercialOfferingType.BUNDLE,
+        price_minor=2499,
+        assets=(SimpleNamespace(asset_id=174),),
+    )
+
+    class Repository:
+        released = None
+        def claim_execution(self, *_args, **_kwargs): return "claim-1"
+        def release_execution(self, publication_id, claim): self.released = (publication_id, claim)
+
+    class PublicationService:
+        failed = None
+        def get_publication(self, *_args, **_kwargs): return publication
+        def mark_failed(self, publication_id, **kwargs):
+            self.failed = (publication_id, kwargs["error"])
+            publication.status = CommercialPublicationStatus.FAILED
+
+    repository, publication_service = Repository(), PublicationService()
+    executor = FanvueMediaLinkPublicationExecutor(
+        publications=repository,
+        offerings=SimpleNamespace(get=lambda *_args, **_kwargs: offering),
+        publication_service=publication_service,
+    )
+    with pytest.raises(ValueError, match="unavailable for this sales channel"):
+        executor.execute(publication_id, creator_profile_id=7, fanvue_account_id=2)
+    assert publication_service.failed == (
+        publication_id, "Fanvue Media Links are unavailable for this sales channel.",
+    )
+    assert publication.status is CommercialPublicationStatus.FAILED
+    assert repository.released == (publication_id, "claim-1")
 
 
 def test_full_bundle_publication_preserves_order_and_reuses_provider_link():

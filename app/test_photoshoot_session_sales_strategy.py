@@ -131,9 +131,10 @@ def test_strategy_rejects_missing_shots_unknown_assets_and_incomplete_progressio
             service.generate("deliverable-1", creator_profile_id=7)
 
 
-def test_completion_invokes_strategy_after_canonical_intelligence_and_sales_brain_reads_it():
+def test_completion_stops_at_intelligence_and_sales_brain_reads_lazy_strategy():
     completion = inspect.getsource(PhotoshootCommerceDeliverableService.complete)
-    assert completion.index("run_canonical_intelligence") < completion.index("session_sales_strategy.generate")
+    assert "run_canonical_intelligence" in completion
+    assert "session_sales_strategy.generate" not in completion
     progression = inspect.getsource(AutonomousSalesProgressionRepository.ordered_assets)
     assert "photoshoot_session_sales_strategies" in progression
     assert "sales_position" in progression

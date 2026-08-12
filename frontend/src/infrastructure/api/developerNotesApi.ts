@@ -12,6 +12,7 @@ export type DeveloperTodo = {
 const base = `${environment.apiBaseUrl}/developer-notes`;
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${base}${path}`, init);
+  if (response.status === 204) return undefined as T;
   const value = await response.json().catch(() => null) as T & { detail?: string };
   if (!response.ok) throw new Error(value?.detail || "Unable to load Developer TODOs.");
   return value;
@@ -27,4 +28,5 @@ export const developerNotesApi = {
     headers: { "content-type": "application/json" },
     body: JSON.stringify(changes),
   }),
+  delete: (id: string) => request<void>(`/todos/${encodeURIComponent(id)}`, { method: "DELETE" }),
 };

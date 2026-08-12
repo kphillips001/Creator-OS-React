@@ -158,6 +158,7 @@ class InspirationRequest(CreativeDirectorInputRequest):
 
 class InspirationSelectionRequest(CreativeDirectorSessionRequest):
     idea: str
+    edited_direction: str = ""
 
 
 class DirectShotRequest(CreativeDirectorSessionRequest):
@@ -301,11 +302,22 @@ def creative_director_inspiration(request: InspirationRequest):
         _creative_director_error(error)
 
 
+@router.post("/creative-director/existing-inspiration")
+def creative_director_existing_inspiration(request: CreativeDirectorSessionRequest):
+    try:
+        return PhotoshootCreativeDirectorWorkflowService().existing_inspiration(
+            creator_profile_id=_creator_profile_id_required(), session_id=request.session_id,
+        )
+    except Exception as error:
+        _creative_director_error(error)
+
+
 @router.post("/creative-director/selection")
 def creative_director_selection(request: InspirationSelectionRequest):
     try:
         return PhotoshootCreativeDirectorWorkflowService().select_inspiration(
             creator_profile_id=_creator_profile_id_required(), session_id=request.session_id, idea=request.idea,
+            edited_direction=request.edited_direction,
         )
     except Exception as error:
         _creative_director_error(error)

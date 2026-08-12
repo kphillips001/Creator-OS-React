@@ -1,6 +1,6 @@
 import { Check, Copy, ExternalLink, RefreshCw, ShoppingBag, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { BundleSellingReadiness, SessionSellingReadiness } from "./types";
+import type { BundleSellingReadiness, ContentVaultCaptionOption, SessionSellingReadiness } from "./types";
 import { readinessBadge } from "./photoshootSalePreparationStatus";
 import { BundlePromotionalTeaser } from "./BundleTeaserEditor";
 
@@ -101,11 +101,11 @@ export function SessionSellingPanel({ deliverableId, initialDialog = null, onRea
   const [readiness, setReadiness] = useState<SessionSellingReadiness | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [strategyError, setStrategyError] = useState("");
-  const [generating, setGenerating] = useState(false);
+  const [strategyActionError, setStrategyActionError] = useState("");
   const [dialog, setDialog] = useState<"prepare" | "retry" | null>(initialDialog);
   const [published, setPublished] = useState(false);
   const readinessRef = useRef<SessionSellingReadiness | null>(null);
+  const ensuringStrategy = useRef(false);
   const updateReadiness = useCallback((value: SessionSellingReadiness) => {
     readinessRef.current = value;
     setReadiness(value);
@@ -125,31 +125,65 @@ export function SessionSellingPanel({ deliverableId, initialDialog = null, onRea
     } finally { if (isInitialLoad) setLoading(false); }
   }, [deliverableId, updateReadiness]);
   useEffect(() => { void load(); }, [load]);
+  const ensureStrategy = useCallback(async () => {
+    if (ensuringStrategy.current) return;
+    ensuringStrategy.current = true; setStrategyActionError("");
+    try {
+      const value = await request<SessionSellingReadiness>(`/api/v1/assets/photoshoots/${encodeURIComponent(deliverableId)}/session-sales-strategy`, { method: "POST" });
+      updateReadiness(value);
+    } catch (reason) {
+      setStrategyActionError(reason instanceof Error ? reason.message : "Unable to start Session strategy preparation.");
+    } finally { ensuringStrategy.current = false; }
+  }, [deliverableId, updateReadiness]);
+  useEffect(() => {
+    if (readiness?.status !== "STRATEGY_REQUIRED" || readiness.strategyOperation) return;
+    void ensureStrategy();
+  }, [ensureStrategy, readiness?.status, readiness?.strategyOperation]);
   useEffect(() => {
     if (readiness?.status !== "PREPARING") return;
     const timer = window.setInterval(() => void load(), 2500);
     return () => window.clearInterval(timer);
   }, [readiness?.status, load]);
+  const strategyOperationStatus = readiness?.strategyOperation?.status;
+  useEffect(() => {
+    if (!strategyOperationStatus || !["QUEUED", "RUNNING", "WAITING_EXTERNAL", "CANCEL_REQUESTED"].includes(strategyOperationStatus)) return;
+    const timer = window.setInterval(() => void load(), 1500);
+    return () => window.clearInterval(timer);
+  }, [strategyOperationStatus, load]);
+  useEffect(() => {
+    const refreshOnFocus = () => {
+      if (readiness?.status === "NEEDS_ATTENTION") void load();
+    };
+    window.addEventListener("focus", refreshOnFocus);
+    return () => window.removeEventListener("focus", refreshOnFocus);
+  }, [readiness?.status, load]);
   const completedSteps = readiness?.steps.filter((step) => step.ready).length || 0;
   const progress = readiness?.steps.length ? Math.round((completedSteps / readiness.steps.length) * 100) : 0;
-  const generateStrategy = async () => {
-    if (generating) return;
-    setGenerating(true); setStrategyError("");
+  const retryStrategy = async () => {
+    const operationId = readiness?.strategyOperation?.operationId;
+    if (!operationId) { await ensureStrategy(); return; }
+    setStrategyActionError("");
     try {
-      await request<SessionSellingReadiness>(`/api/v1/assets/photoshoots/${encodeURIComponent(deliverableId)}/session-sales-strategy`, { method: "POST" });
+      await request(`/api/v1/background-operations/${encodeURIComponent(operationId)}/retry`, { method: "POST" });
       await load();
-      setDialog("prepare");
     } catch (reason) {
-      setStrategyError(reason instanceof Error ? reason.message : "Unable to generate Session Sales Strategy.");
-    } finally { setGenerating(false); }
+      setStrategyActionError(reason instanceof Error ? reason.message : "Unable to retry Session strategy preparation.");
+    }
   };
-  const heading = loading && !readiness ? "Loading…" : strategyError ? "Session Strategy Needs Attention" : error && !readiness ? "Session Selling Unavailable" : readiness?.statusLabel || "Session Selling";
-  return <section className="session-selling-panel"><header><div><small>Session Selling</small><h2>{heading}</h2></div>{readiness && <span className={`session-selling-badge session-selling-badge--${readiness.status.toLowerCase()}`}>{readinessBadge(readiness)}</span>}</header>
+  const strategyFailed = strategyOperationStatus === "FAILED" || strategyOperationStatus === "CANCELLED" || Boolean(strategyActionError);
+  const strategyPreparing = readiness?.status === "STRATEGY_REQUIRED" && !strategyFailed;
+  const pricingRequired = readiness?.status === "NOT_PREPARED";
+  const paidImageNoun = readiness?.paidStepCount === 1 ? "paid image" : "paid images";
+  const priceNoun = readiness?.paidStepCount === 1 ? "a price" : "prices";
+  const heading = loading && !readiness ? "Loading…" : strategyFailed ? "Strategy Needs Attention" : strategyPreparing ? "Preparing Strategy..." : error && !readiness ? "Session Selling Unavailable" : pricingRequired ? "Pricing Required" : readiness?.status === "PREPARING" ? "Preparing..." : readiness?.status === "READY" ? "READY" : readiness?.statusLabel || "Session Selling";
+  return <section className="session-selling-panel"><header><div><small>Session Selling</small><h2>{heading}</h2></div>{readiness && readiness.status !== "STRATEGY_REQUIRED" && <span className={`session-selling-badge session-selling-badge--${readiness.status.toLowerCase()}`}>{pricingRequired ? "Pricing Required" : readinessBadge(readiness)}</span>}</header>
     {error && <p role="alert">{error}</p>}
-    {strategyError && <p className="sale-preparation-error" role="alert">{strategyError}</p>}
-    {!loading && readiness?.status === "STRATEGY_REQUIRED" && <div className="session-selling-strategy-required">
-      <p>No Session Sales Strategy has been created yet.</p>
-      <button disabled={generating} onClick={() => void generateStrategy()} type="button"><ShoppingBag size={16} />{generating ? "Generating Session Strategy…" : strategyError ? "Retry Session Strategy" : "Generate Session Strategy"}</button>
+    {strategyActionError && <p className="sale-preparation-error" role="alert">{strategyActionError}</p>}
+    {!loading && strategyPreparing && <div className="session-selling-strategy-required" role="status"><p>Analyzing the completed Photoshoot for sequential selling.</p></div>}
+    {!loading && strategyFailed && <div className="session-selling-strategy-required">
+      <p>We couldn&apos;t prepare the Session sales strategy.</p>
+      {readiness?.strategyOperation?.errorMessage && <p className="sale-preparation-error">{readiness.strategyOperation.errorMessage}</p>}
+      <button onClick={() => void retryStrategy()} type="button"><RefreshCw size={16} />Retry</button>
     </div>}
     {!loading && readiness && readiness.status !== "STRATEGY_REQUIRED" && <>{readiness.status === "PREPARING" && <div className="session-selling-progress" role="status" aria-live="polite">
       <div><strong>Preparing Photoshoot...</strong><span>{progress}%</span></div>
@@ -163,8 +197,15 @@ export function SessionSellingPanel({ deliverableId, initialDialog = null, onRea
         <strong>Shot {step.shotOrder} · {step.role.replaceAll("_", " ")}</strong><span>{operatorStepError(step)}</span>
       </p>)}
     </div>}
-    <p>Paid steps: {readiness.readyPaidStepCount} of {readiness.paidStepCount} ready</p><div className="session-selling-actions">
-      {readiness.status === "NOT_PREPARED" && <button onClick={() => setDialog("prepare")} type="button"><ShoppingBag size={16} />Prepare Session</button>}
+    {pricingRequired
+      ? <p>{readiness.paidStepCount} {paidImageNoun} need{readiness.paidStepCount === 1 ? "s" : ""} {priceNoun} before this Session can be prepared.</p>
+      : readiness.status === "PREPARING"
+        ? <p>Preparing paid images: {readiness.readyPaidStepCount} of {readiness.paidStepCount}</p>
+        : readiness.status === "READY"
+          ? <p>{readiness.readyPaidStepCount} of {readiness.paidStepCount} paid images ready</p>
+          : <p>Paid images ready: {readiness.readyPaidStepCount} of {readiness.paidStepCount}</p>}
+    <div className="session-selling-actions">
+      {pricingRequired && <button onClick={() => setDialog("prepare")} type="button"><ShoppingBag size={16} />Set Session Prices</button>}
       {readiness.status === "NEEDS_ATTENTION" && <button onClick={() => setDialog("retry")} type="button"><RefreshCw size={16} />Retry Failed Preparation</button>}
       {readiness.status !== "NOT_PREPARED" && <button onClick={() => setPublished((value) => !value)} type="button">View Published Assets</button>}
     </div>{published && <div className="published-assets">{readiness.steps.map((step) => <article key={step.assetId}><div><strong>Shot {step.shotOrder} · {step.role.replaceAll("_", " ")}</strong><span>{step.access === "FREE" ? "Direct Telegram delivery" : `${step.publicationStatus || "Not published"} · ${step.ready ? "Link ready" : "Link unavailable"}`}</span>{step.publishedAt && <span>Published {new Date(step.publishedAt).toLocaleString()}</span>}</div>{step.access === "PAID" && <><span>{step.priceMinor ? `${step.currency} ${(step.priceMinor / 100).toFixed(2)}` : "Price required"}</span>{step.deliveryUrl && <div className="published-assets__link"><code>{step.deliveryUrl}</code><button aria-label={`Copy Shot ${step.shotOrder} link`} onClick={() => void navigator.clipboard.writeText(step.deliveryUrl!)} type="button"><Copy size={14} /></button><a aria-label={`Open Shot ${step.shotOrder} link`} href={step.deliveryUrl} rel="noreferrer" target="_blank"><ExternalLink size={14} /></a></div>}</>}{step.error && <em>{operatorStepError(step)}</em>}</article>)}</div>}</>}
@@ -174,8 +215,91 @@ export function SessionSellingPanel({ deliverableId, initialDialog = null, onRea
 
 const bundlePrice = (minor: number | null | undefined) => minor == null ? "" : (minor / 100).toFixed(2);
 
-export function BundleSellingPanel({ deliverableId, salesChannel = "CHAT" }: {
+function BundleContentVaultPublishing({ deliverableId, readiness, refresh }: {
+  deliverableId: string; readiness: BundleSellingReadiness; refresh: () => Promise<void> | void;
+}) {
+  const publication = readiness.contentVaultPublication;
+  const [options, setOptions] = useState<ContentVaultCaptionOption[]>([]);
+  const [selected, setSelected] = useState<number | "custom" | null>(null);
+  const [customCaption, setCustomCaption] = useState("");
+  const [customError, setCustomError] = useState("");
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [editingCaption, setEditingCaption] = useState(false);
+  const [captionDraft, setCaptionDraft] = useState("");
+  const endpoint = `/api/v1/assets/photoshoots/${encodeURIComponent(deliverableId)}/content-vault`;
+  const generate = async () => {
+    setBusy(true); setError(""); setCustomError(""); setOpen(false); setOptions([]); setSelected(null);
+    try {
+      const result = await request<{ captions: ContentVaultCaptionOption[] }>(`${endpoint}/captions/generate`, {
+        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ tone: "CLASSY" }),
+        signal: AbortSignal.timeout(120_000),
+      });
+      const candidates = Array.isArray(result.captions)
+        ? result.captions.filter((item) => Boolean(item?.text?.trim())) : [];
+      if (candidates.length !== 5) throw new Error("Caption generation did not return five usable options. Please retry.");
+      setOptions(candidates); setOpen(true);
+    } catch (reason) {
+      setOpen(false); setOptions([]);
+      setError(reason instanceof DOMException && reason.name === "TimeoutError"
+        ? "Bundle caption generation timed out. Please retry."
+        : reason instanceof Error ? reason.message : "Unable to generate Bundle captions.");
+    }
+    finally { setBusy(false); }
+  };
+  const persistCaption = async (text: string, source: "MANUAL" | "GROK") => {
+    setBusy(true); setError("");
+    try {
+      await request(`${endpoint}/caption`, { method: "PUT", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ text, source }) });
+      setOpen(false); setEditingCaption(false); setCaptionDraft(""); await refresh();
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to save Bundle caption."); }
+    finally { setBusy(false); }
+  };
+  const save = async () => {
+    const custom = customCaption.trim();
+    if (selected === "custom" && !custom) {
+      setCustomError("Enter a caption before saving.");
+      return;
+    }
+    const option = typeof selected === "number" ? options[selected] : null;
+    if (selected == null || (selected !== "custom" && !option)) return;
+    const text = selected === "custom" ? custom : option!.text;
+    const source = selected === "custom" ? "MANUAL" : "GROK";
+    await persistCaption(text, source);
+  };
+  const publish = async () => {
+    if (!readiness.offeringId || !publication?.canPublish) return;
+    setBusy(true); setError("");
+    try {
+      await request(`/api/v1/commerce-authoring/${readiness.offeringId}/telegram-content-vault`, {
+        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({}),
+      });
+      await refresh();
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to publish Bundle."); }
+    finally { setBusy(false); }
+  };
+  return <section className="content-vault-publishing" aria-labelledby="bundle-vault-publishing-title">
+    <h3 id="bundle-vault-publishing-title">Content Vault Publishing</h3>
+    <p><strong>{readiness.imageCount} Photos</strong> · ${bundlePrice(readiness.priceMinor)}</p>
+    {readiness.promotionalTeaser?.previewUrl && <img className="bundle-content-vault-teaser" src={readiness.promotionalTeaser.previewUrl} alt="Bundle promotional teaser" />}
+    <dl className="content-vault-publishing__preview"><div><dt>Teaser</dt><dd>{readiness.promotionalTeaser?.status || "NOT CONFIGURED"}</dd></div><div><dt>Fanvue Media Link</dt><dd>{readiness.deliveryUrl ? "READY" : "NEEDS ATTENTION"}</dd></div></dl>
+    {editingCaption ? <div className="bundle-caption-editor"><label><span>Content Wall caption</span><textarea aria-label="Content Wall caption" maxLength={1024} rows={4} value={captionDraft} onChange={(event) => setCaptionDraft(event.target.value)} /></label><div className="content-vault-publishing__actions"><button disabled={busy || !captionDraft.trim()} onClick={() => void persistCaption(captionDraft.trim(), "MANUAL")} type="button">Save Caption</button><button disabled={busy} onClick={() => { setEditingCaption(false); setCaptionDraft(""); setError(""); }} type="button">Cancel</button></div></div> : <>
+      {readiness.contentVaultCaption ? <blockquote>{readiness.contentVaultCaption.text}</blockquote> : <p className="content-vault-publishing__empty">No caption selected.</p>}
+      <div className="content-vault-publishing__actions"><button disabled={busy} onClick={() => { setCaptionDraft(readiness.contentVaultCaption?.text || ""); setEditingCaption(true); setError(""); }} type="button">{readiness.contentVaultCaption ? "Edit Caption" : "Write Your Own Caption"}</button><button disabled={busy} onClick={() => void generate()} type="button">{busy ? "Generating Captions…" : "Generate Captions with AI"}</button></div>
+    </>}
+    {publication?.status === "PUBLISHED" && <div className="content-vault-publishing__published"><strong>Published</strong>{publication.publishedAt && <span>{new Date(publication.publishedAt).toLocaleDateString()}</span>}{publication.providerMessageId && <small>Telegram message {publication.providerMessageId}</small>}</div>}
+    {publication?.readinessError && publication.status !== "PUBLISHED" && <small>{publication.readinessError}</small>}
+    {error && <p className="sale-preparation-error" role="alert">{error}</p>}
+    <button className="sale-preparation-primary" disabled={busy || !publication?.canPublish} onClick={() => void publish()} type="button">{publication?.status === "PUBLISHED" ? "Published to Content Vault" : publication?.status === "PUBLISHING" ? "Publishing…" : "Publish to Content Vault"}</button>
+    {open && options.length > 0 && <div className="caption-chooser-backdrop" role="presentation"><div className="caption-chooser" role="dialog" aria-modal="true" aria-label="Choose Bundle Content Vault Caption"><header><div><div><small>Photoshoot Bundle</small><h2>Choose Content Vault Caption</h2></div></div><button aria-label="Close caption chooser" disabled={busy} onClick={() => setOpen(false)} type="button"><X size={18} /></button></header><div className="caption-options">{options.map((option, index) => <button className={selected === index ? "is-selected" : ""} key={option.text} onClick={() => { setSelected(index); setCustomError(""); }} type="button">{option.text}</button>)}</div><div className="bundle-caption-custom"><button className={selected === "custom" ? "is-selected" : ""} onClick={() => { setSelected("custom"); setCustomError(""); }} type="button">Write My Own</button>{selected === "custom" && <label className="caption-chooser__field"><span>Custom Bundle caption</span><textarea aria-label="Custom Bundle caption" autoFocus maxLength={1024} rows={4} value={customCaption} onChange={(event) => { setCustomCaption(event.target.value); setSelected("custom"); setCustomError(""); }} />{customError && <small className="caption-chooser__validation" role="alert">{customError}</small>}<small>{customCaption.length} / 1024</small></label>}</div><footer><button disabled={busy} onClick={() => setOpen(false)} type="button">Cancel</button><button disabled={busy || selected == null || (selected === "custom" && !customCaption.trim())} onClick={() => void save()} type="button">Use Caption</button></footer></div></div>}
+  </section>;
+}
+
+export function BundleSellingPanel({ deliverableId, salesChannel = "CHAT", onReadinessChange }: {
   deliverableId: string; salesChannel?: "CHAT" | "CONTENT_WALL";
+  onReadinessChange?: (value: BundleSellingReadiness) => void;
 }) {
   const [readiness, setReadiness] = useState<BundleSellingReadiness | null>(null);
   const [price, setPrice] = useState("");
@@ -183,8 +307,8 @@ export function BundleSellingPanel({ deliverableId, salesChannel = "CHAT" }: {
   const [saving, setSaving] = useState(false);
   const load = useCallback(() => request<BundleSellingReadiness>(`/api/v1/assets/photoshoots/${encodeURIComponent(deliverableId)}/sale-preparation`).then((value) => {
     if (value.sellingMode !== "BUNDLE") throw new Error("Bundle readiness is unavailable.");
-    setReadiness(value); setPrice((current) => current || bundlePrice(value.priceMinor)); setError("");
-  }).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "Unable to load Bundle readiness.")), [deliverableId]);
+    setReadiness(value); onReadinessChange?.(value); setPrice((current) => current || bundlePrice(value.priceMinor)); setError("");
+  }).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "Unable to load Bundle readiness.")), [deliverableId, onReadinessChange]);
   useEffect(() => { void load(); }, [load]);
   useEffect(() => {
     if (readiness?.status !== "PREPARING") return;
@@ -204,9 +328,12 @@ export function BundleSellingPanel({ deliverableId, salesChannel = "CHAT" }: {
         method: "POST", headers: { "content-type": "application/json" },
         body: JSON.stringify({ priceMinor }),
       });
-      setReadiness(value);
+      setReadiness(value); onReadinessChange?.(value);
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to prepare Bundle."); }
-    finally { setSaving(false); }
+    finally {
+      if (retry) await load();
+      setSaving(false);
+    }
   };
   return <section className="session-selling-panel bundle-selling-panel"><header><div><small>Bundle Selling · Paid Bundle</small><h2>{readiness?.statusLabel || "Loading..."}</h2></div>{readiness && <span className={`session-selling-badge session-selling-badge--${readiness.status.toLowerCase()}`}>{readiness.status === "READY" ? "Ready" : readinessBadge(readiness)}</span>}</header>
     {error && <p className="sale-preparation-error" role="alert">{error}</p>}
@@ -218,8 +345,7 @@ export function BundleSellingPanel({ deliverableId, salesChannel = "CHAT" }: {
           <h3>Ava&apos;s Content Wall</h3>
           <p>This Bundle is designated for Ava&apos;s Content Wall.</p>
           <p><strong>Chat Sales</strong><br />Disabled — designated for Ava&apos;s Content Wall</p>
-          <p><strong>Content Wall Publishing</strong><br />Not configured yet</p>
-          <small>Publishing support will be configured next.</small>
+          <p><strong>Content Wall Publishing</strong><br />Uses the prepared Bundle package below.</p>
         </div>}
       <label className="bundle-selling-price" htmlFor="bundle-price"><span>Bundle Price</span><span><b>$</b><input id="bundle-price" aria-label="Bundle Price" disabled={readiness.status === "READY" || saving} inputMode="decimal" min="3" max="500" step=".01" type="number" value={price} onChange={(event) => setPrice(event.target.value)} /></span></label>
       {readiness.status === "PREPARING" && <div className="session-selling-progress" role="status"><strong>Preparing Bundle...</strong><progress aria-label="Bundle preparation progress" /></div>}
@@ -230,7 +356,11 @@ export function BundleSellingPanel({ deliverableId, salesChannel = "CHAT" }: {
         {readiness.status === "READY" && readiness.deliveryUrl && <a href={readiness.deliveryUrl} rel="noreferrer" target="_blank"><ExternalLink size={14} />Open Fanvue Media Link</a>}
       </div>
       {readiness.status === "READY" && <p>Fanvue Media Link ready · {readiness.currency} {bundlePrice(readiness.priceMinor)}</p>}
-      {readiness.promotionalTeaser && <BundlePromotionalTeaser deliverableId={deliverableId} initial={readiness.promotionalTeaser} onChanged={() => void load()} />}
+      {readiness.promotionalTeaser && <BundlePromotionalTeaser deliverableId={deliverableId} initial={readiness.promotionalTeaser} onChanged={(promotionalTeaser) => {
+        setReadiness((current) => current ? { ...current, promotionalTeaser } : current);
+        void load();
+      }} />}
+      {salesChannel === "CONTENT_WALL" && readiness.status === "READY" && <BundleContentVaultPublishing deliverableId={deliverableId} readiness={readiness} refresh={load} />}
     </>}
   </section>;
 }

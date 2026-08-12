@@ -12,6 +12,7 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Mapping
 
+from app.models.creative_director import new_id
 from app.models.render_policy import photoshoot_planning_mode
 from app.models.photoshoot_queue import (
     CanonicalPhotoshootSeedSummary, PhotoshootPlanningContext, normalize_target_shot_count,
@@ -44,6 +45,7 @@ class PhotoshootCreativeDirectorWorkflowService:
         session_plan = [dict(item) for item in tuple(continuity.get("session_plan") or ()) if isinstance(item, Mapping)]
         planning = self._planning_progress(session)
         ideas_are_current = int(continuity.get("inspiration_planning_shot") or 0) == planning["planning_shot"]
+        freeflow_idea_set = self._freeflow_idea_set_payload(session, continuity)
         return {
             "current_session": asdict(session),
             "session_id": session.session_id,
@@ -67,9 +69,11 @@ class PhotoshootCreativeDirectorWorkflowService:
             "session_plan": session_plan,
             "session_plan_index": max(0, int(continuity.get("session_plan_index") or 0)),
             "session_plan_approved": bool(continuity.get("session_plan_approved")),
+            "freeflow_idea_set": freeflow_idea_set,
             "recommendation_state": {
                 "inspiration_ideas": list(continuity.get("inspiration_ideas") or ()) if ideas_are_current else [],
                 "selected_inspiration": str(continuity.get("selected_inspiration") or "") if ideas_are_current else "",
+                "inspiration_edits": dict(continuity.get("inspiration_edits") or {}) if ideas_are_current else {},
                 "recommendation": dict(continuity.get("current_direction") or {}) if ideas_are_current else {},
                 "direction_approved": bool(continuity.get("direction_approved")) if ideas_are_current else False,
             },
@@ -361,11 +365,76 @@ class PhotoshootCreativeDirectorWorkflowService:
             creative_hint=selected, grok_guidance=creator_guidance, inspiration_ideas=idea_list,
             inspiration_planning_shot=planning["planning_shot"],
             selected_inspiration=selected, continuity_locks=continuity_locks,
+            inspiration_edits={},
             workflow_stage=stage,
         )
-        return {"ideas": idea_list, "selected_inspiration": selected}
+        idea_set = None
+        planning_mode = str(continuity.get("planning_mode") or "frame_by_frame").strip().lower()
+        if session.target_shot_count == 0 and planning_mode == "frame_by_frame" and idea_list:
+            idea_set_id = new_id("freeflow_ideas")
+            self.queue.record_freeflow_idea_set(
+                session_id, idea_set_id=idea_set_id, ideas=idea_list,
+                recommended_idea=idea_list[0], planning_shot=planning["planning_shot"],
+            )
+            persisted = self.queue.get_session(session_id)
+            idea_set = self._freeflow_idea_set_payload(persisted, dict(persisted.creative_continuity or {}))
+        return {"ideas": idea_list, "selected_inspiration": selected, "freeflow_idea_set": idea_set}
 
-    def select_inspiration(self, *, creator_profile_id: int, session_id: str, idea: str) -> dict[str, str]:
+    def existing_inspiration(self, *, creator_profile_id: int, session_id: str) -> dict[str, Any]:
+        """Reactivate the newest persisted Freeflow idea set without invoking AI."""
+        session = self._session(creator_profile_id, session_id)
+        continuity = dict(session.creative_continuity or {})
+        planning_mode = str(continuity.get("planning_mode") or "frame_by_frame").strip().lower()
+        if session.target_shot_count != 0 or planning_mode != "frame_by_frame":
+            raise ValueError("Existing AI ideas are available only in Creative Freeflow.")
+        sets = [dict(item) for item in tuple(continuity.get("freeflow_idea_sets") or ()) if isinstance(item, Mapping)]
+        if not sets:
+            raise ValueError("No persisted Creative Freeflow ideas are available.")
+        latest = sets[-1]
+        idea_set_id = str(latest.get("idea_set_id") or "")
+        planning = self._planning_progress(session)
+        self.queue.activate_freeflow_idea_set(
+            session_id, idea_set_id=idea_set_id, planning_shot=planning["planning_shot"],
+        )
+        restored = self.queue.get_session(session_id)
+        restored_continuity = dict(restored.creative_continuity or {})
+        return {
+            "ideas": list(restored_continuity.get("inspiration_ideas") or ()),
+            "selected_inspiration": "",
+            "freeflow_idea_set": self._freeflow_idea_set_payload(restored, restored_continuity),
+        }
+
+    def _freeflow_idea_set_payload(self, session, continuity: Mapping[str, Any]) -> dict[str, Any] | None:
+        sets = [dict(item) for item in tuple(continuity.get("freeflow_idea_sets") or ()) if isinstance(item, Mapping)]
+        planning_mode = str(continuity.get("planning_mode") or "frame_by_frame").strip().lower()
+        if session.target_shot_count != 0 or planning_mode != "frame_by_frame" or not sets:
+            return None
+        latest = sets[-1]
+        idea_set_id = str(latest.get("idea_set_id") or "")
+        usage: dict[str, list[str]] = {}
+        positions = {request.request_id: shot for shot, request in PhotoshootContextService.display_timeline_positions(self.queue.requests_for_session(session.session_id))}
+        for request in self.queue.requests_for_session(session.session_id):
+            metadata = dict(request.metadata or {})
+            if str(metadata.get("inspiration_idea_set_id") or "") != idea_set_id:
+                continue
+            idea = str(metadata.get("selected_inspiration") or "").strip()
+            if not idea:
+                continue
+            label = f"Shot {positions[request.request_id]}" if request.request_id in positions and request.status == "approved" else "Generated"
+            if label not in usage.setdefault(idea, []):
+                usage[idea].append(label)
+        return {
+            "idea_set_id": idea_set_id,
+            "ideas": list(latest.get("ideas") or ()),
+            "recommended_idea": str(latest.get("recommended_idea") or ""),
+            "planning_shot": int(latest.get("planning_shot") or 0),
+            "approved_shot_count": int(latest.get("approved_shot_count") or 0),
+            "created_at": str(latest.get("created_at") or ""),
+            "usage": usage,
+        }
+
+    def select_inspiration(self, *, creator_profile_id: int, session_id: str, idea: str,
+                           edited_direction: str = "") -> dict[str, str]:
         session = self._session(creator_profile_id, session_id)
         continuity = dict(session.creative_continuity or {})
         planning = self._planning_progress(session)
@@ -374,11 +443,19 @@ class PhotoshootCreativeDirectorWorkflowService:
         selected = str(idea or "").strip()
         if selected not in tuple(continuity.get("inspiration_ideas") or ()):
             raise ValueError("Select an inspiration idea returned for this Photoshoot session.")
+        edits_by_idea = dict(continuity.get("inspiration_edits") or {})
+        edited = str(edited_direction or "").strip()
+        if edited and edited != selected:
+            edits_by_idea[selected] = edited
+        else:
+            edits_by_idea.pop(selected, None)
+        effective = edits_by_idea.get(selected) or selected
         self.queue.update_session_settings(
-            session_id, creative_hint=selected, selected_inspiration=selected,
+            session_id, creative_hint=effective, selected_inspiration=selected,
+            inspiration_edits=edits_by_idea,
             workflow_stage="inspiration_selected",
         )
-        return {"selected_inspiration": selected, "creative_hint": selected}
+        return {"selected_inspiration": selected, "creative_hint": effective, "edited_direction": edits_by_idea.get(selected, "")}
 
     def save_guidance(self, *, creator_profile_id: int, session_id: str, creator_guidance: str) -> dict[str, str]:
         self._session(creator_profile_id, session_id)
@@ -402,6 +479,7 @@ class PhotoshootCreativeDirectorWorkflowService:
         selected = str(continuity.get("selected_inspiration") or "").strip()
         if not selected or selected not in tuple(continuity.get("inspiration_ideas") or ()):
             raise ValueError("Select an AI idea before developing the next shot.")
+        effective = str(dict(continuity.get("inspiration_edits") or {}).get(selected) or selected).strip()
         current, timeline = self._vision_context(session)
         image_bytes, mime_type = self._image_bytes(current.output_reference)
         summary = self.summary.refresh(session.session_id)
@@ -424,12 +502,12 @@ class PhotoshootCreativeDirectorWorkflowService:
             session_context=ai_context,
             approved_history=approved_history,
             creative_mode=session.creative_mode, session_direction=original_direction,
-            creative_hint=selected, continuity_locks=continuity_locks,
+            creative_hint=effective, continuity_locks=continuity_locks,
         )
         payload = asdict(recommendation)
         self.queue.update_session_settings(
             session_id, creator_guidance=creator_guidance,
-            creative_hint=selected, selected_inspiration=selected, continuity_locks=continuity_locks,
+            creative_hint=effective, selected_inspiration=selected, continuity_locks=continuity_locks,
         )
         self.queue.record_pending_recommendation(session_id=session_id, recommendation=payload)
         return payload
@@ -598,14 +676,17 @@ class PhotoshootCreativeDirectorWorkflowService:
         LOGGER.info("[Approve] Canonical planning request built mode=%s elapsed_ms=%.2f", planning_mode, (time.perf_counter() - started) * 1000)
         LOGGER.info("[Approve] Entering Canonical Prompt Planner elapsed_ms=%.2f", (time.perf_counter() - started) * 1000)
         operator_expression = str(recommendation.get("emotion") or "").strip()
+        freeflow_expression = not planning_context.progression_enabled
         result = self.creative_director.plan_prompts(
             mode=planning_mode,
             creative_tags=creative_tags, prompt_count=1, optional_direction=direction,
             metadata={
                 "source": "photoshoot_studio",
                 # Shot-level face direction from Creative Director becomes the
-                # explicit expression override; keeps eyes/face salacious and intentional.
+                # canonical expression override. FreeFlow may vary gaze while
+                # progression-aware sessions retain their existing profile.
                 "operator_expression": operator_expression or None,
+                "freeflow_expression": freeflow_expression,
                 "concept_tier": (
                     "hardcore"
                     if str(session.creative_mode or "").strip().lower() == "explicit"

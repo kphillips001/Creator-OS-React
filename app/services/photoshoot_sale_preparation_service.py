@@ -72,6 +72,11 @@ class PhotoshootSalePreparationService:
             }
         steps = [self._step_projection(row, strategy, shot) for shot in self._ordered(strategy)]
         paid = [step for step in steps if step["access"] == "PAID"]
+        persisted_channels = {
+            str(step.get("primarySalesChannel") or "").upper()
+            for step in paid if step.get("offeringId")
+        }
+        sales_channel = "CHAT" if persisted_channels == {"AI_CHAT"} else None
         ready_paid = sum(step["ready"] for step in paid)
         prepared = any(step.get("offeringId") for step in paid)
         failed = any(step.get("publicationStatus") == "FAILED" or step.get("error") for step in paid)
@@ -84,6 +89,7 @@ class PhotoshootSalePreparationService:
             "deliverableId": str(row["deliverable_id"]),
             "photoshootSessionId": str(row["photoshoot_session_id"]),
             "sellingMode": "SESSION",
+            "salesChannel": sales_channel,
             "strategyVersion": strategy.strategy_version,
             "status": status,
             "statusLabel": {
@@ -311,6 +317,9 @@ class PhotoshootSalePreparationService:
         return {**base, "ready": ready,
                 "offeringId": str(offering.offering_id) if offering else None,
                 "offeringStatus": offering.status.value if offering else None,
+                "primarySalesChannel": (
+                    offering.primary_sales_channel.value if offering else None
+                ),
                 "publicationId": str(publication.publication_id) if publication else None,
                 "publicationStatus": publication.status.value if publication else None,
                 "providerResourceStatus": publication.provider_resource_status.value if publication else None,

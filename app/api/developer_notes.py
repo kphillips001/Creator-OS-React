@@ -53,3 +53,10 @@ def create_todo(body: TodoCreate):
     if not title: raise HTTPException(status_code=422,detail="TODO title is required.")
     note=body.note.strip() if body.note and body.note.strip() else None
     return _payload(DeveloperTodoRepository().create(creator_profile_id,title,note))
+
+
+@router.delete("/todos/{todo_id}", status_code=204)
+def delete_todo(todo_id: str):
+    creator_profile_id, _ = _context()
+    if not DeveloperTodoRepository().delete(creator_profile_id, todo_id):
+        raise HTTPException(status_code=404, detail="Developer TODO not found.")

@@ -1,5 +1,747 @@
 [
   {
+    "publish_request_id": "social_publish_item_758a171a8fd7411aae20c84a7082eb1e",
+    "queue_item_id": "social_queue_item_4fb54bc8abfd4f24a16c08e4a4f8c54e",
+    "platform": "telegram",
+    "caption_id": null,
+    "scheduled_for": null,
+    "status": "posted",
+    "created_at": "2026-08-11T21:28:56.785441",
+    "metadata": {
+      "posting_implemented": true,
+      "caption": "A calm invitation lingers \ud83d\udc40 as my open shirt frames my breasts and the warmth between my legs just for you \ud83d\ude0f",
+      "caption_source": "GROK",
+      "caption_updated_at": "2026-08-11T21:19:01.327945+00:00",
+      "asset_id": 194,
+      "offering_id": "838910ad-90fd-4270-9a80-297c00c71f7f",
+      "teaser_id": "69c740fb-de87-40cc-a849-eb5c3b552744",
+      "derived_teaser_asset_id": 196,
+      "price_minor": 1299,
+      "currency": "USD",
+      "fanvue_publication_id": "4be741bd-2082-4065-96ef-6eb9748aa082",
+      "telegram_destination": "vault",
+      "account_name": null,
+      "telegram_post_to": "vault",
+      "provider_post_id": "21",
+      "provider_media_id": null,
+      "provider_output_url": null,
+      "provider_metadata": {
+        "status_code": 200,
+        "message_id": 21,
+        "response": {
+          "ok": true,
+          "result": {
+            "message_id": 21,
+            "sender_chat": {
+              "id": -1003937188399,
+              "title": "Ava's Content Vault \ud83d\udc8b",
+              "username": "AvaContentVault",
+              "type": "channel"
+            },
+            "chat": {
+              "id": -1003937188399,
+              "title": "Ava's Content Vault \ud83d\udc8b",
+              "username": "AvaContentVault",
+              "type": "channel"
+            },
+            "date": 1786483738,
+            "photo": [
+              {
+                "file_id": "AgACAgEAAyEGAATqrLovAAMVanuUGqDaZb2L3hx2pFZhP3OWBsoAAi8Maxv2fOBHsolNyw2i77gBAAMCAANzAAM9BA",
+                "file_unique_id": "AQADLwxrG_Z84Ed4",
+                "file_size": 1244,
+                "width": 60,
+                "height": 90
+              },
+              {
+                "file_id": "AgACAgEAAyEGAATqrLovAAMVanuUGqDaZb2L3hx2pFZhP3OWBsoAAi8Maxv2fOBHsolNyw2i77gBAAMCAANtAAM9BA",
+                "file_unique_id": "AQADLwxrG_Z84Edy",
+                "file_size": 15858,
+                "width": 213,
+                "height": 320
+              },
+              {
+                "file_id": "AgACAgEAAyEGAATqrLovAAMVanuUGqDaZb2L3hx2pFZhP3OWBsoAAi8Maxv2fOBHsolNyw2i77gBAAMCAAN4AAM9BA",
+                "file_unique_id": "AQADLwxrG_Z84Ed9",
+                "file_size": 76974,
+                "width": 533,
+                "height": 800
+              },
+              {
+                "file_id": "AgACAgEAAyEGAATqrLovAAMVanuUGqDaZb2L3hx2pFZhP3OWBsoAAi8Maxv2fOBHsolNyw2i77gBAAMCAAN5AAM9BA",
+                "file_unique_id": "AQADLwxrG_Z84Ed-",
+                "file_size": 195212,
+                "width": 832,
+                "height": 1248
+              }
+            ],
+            "caption": "A calm invitation lingers \ud83d\udc40 as my open shirt frames my breasts and the warmth between my legs just for you \ud83d\ude0f",
+            "reply_markup": {
+              "inline_keyboard": [
+                [
+                  {
+                    "text": "Unlock Now \u00b7 $12.99",
+                    "url": "https://www.fanvue.com/avablackthorne/media/fvml-36"
+                  }
+                ]
+              ]
+            }
+          }
+        },
+        "post_to": "vault"
+      }
+    }
+  },
+  {
+    "publish_request_id": "social_publish_item_2079ba46ce384452b3e20b9001c79f79",
+    "queue_item_id": "social_queue_item_5596d6d8e0de447bb8c4dc20d9d8b924",
+    "platform": "telegram",
+    "caption_id": null,
+    "scheduled_for": null,
+    "status": "posted",
+    "created_at": "2026-08-11T21:10:21.870493",
+    "metadata": {
+      "posting_implemented": true,
+      "caption": "Golden hour on the rooftop\u2026 \ud83c\udf05 and this lace just wouldn\u2019t stay closed \ud83d\udd25\ud83d\udc8b 3 exclusive shots \ud83d\udcf8 soft light\u2026 bare skin\u2026 every teasing angle \u2728\ud83d\ude08 Unlock the full set and let the evening undress me \ud83d\udda4\ud83d\udd25",
+      "caption_source": "MANUAL",
+      "caption_updated_at": "2026-08-11T21:09:20.866686+00:00",
+      "offering_id": "a2c63f8e-dfe0-43d3-8859-cde6eab748f2",
+      "photoshoot_deliverable_id": "0f58b126-155d-54be-8904-d1fe252e709a",
+      "paid_asset_ids": [
+        192,
+        190,
+        191
+      ],
+      "paid_image_count": 3,
+      "teaser_asset_id": 193,
+      "price_minor": 1899,
+      "currency": "USD",
+      "fanvue_publication_id": "4fc4de13-10dd-492f-b154-55fcfcfdb52d",
+      "telegram_destination": "vault",
+      "account_name": null,
+      "telegram_post_to": "vault",
+      "provider_post_id": "20",
+      "provider_media_id": null,
+      "provider_output_url": null,
+      "provider_metadata": {
+        "status_code": 200,
+        "message_id": 20,
+        "response": {
+          "ok": true,
+          "result": {
+            "message_id": 20,
+            "sender_chat": {
+              "id": -1003937188399,
+              "title": "Ava's Content Vault \ud83d\udc8b",
+              "username": "AvaContentVault",
+              "type": "channel"
+            },
+            "chat": {
+              "id": -1003937188399,
+              "title": "Ava's Content Vault \ud83d\udc8b",
+              "username": "AvaContentVault",
+              "type": "channel"
+            },
+            "date": 1786482623,
+            "photo": [
+              {
+                "file_id": "AgACAgEAAyEGAATqrLovAAMUanuPv5TQWmh2VEugSQyuiU3pyfYAAiwMaxv2fOBH6iU31kUbmcwBAAMCAANzAAM9BA",
+                "file_unique_id": "AQADLAxrG_Z84Ed4",
+                "file_size": 1279,
+                "width": 67,
+                "height": 90
+              },
+              {
+                "file_id": "AgACAgEAAyEGAATqrLovAAMUanuPv5TQWmh2VEugSQyuiU3pyfYAAiwMaxv2fOBH6iU31kUbmcwBAAMCAANtAAM9BA",
+                "file_unique_id": "AQADLAxrG_Z84Edy",
+                "file_size": 13965,
+                "width": 240,
+                "height": 320
+              },
+              {
+                "file_id": "AgACAgEAAyEGAATqrLovAAMUanuPv5TQWmh2VEugSQyuiU3pyfYAAiwMaxv2fOBH6iU31kUbmcwBAAMCAAN4AAM9BA",
+                "file_unique_id": "AQADLAxrG_Z84Ed9",
+                "file_size": 66273,
+                "width": 600,
+                "height": 800
+              },
+              {
+                "file_id": "AgACAgEAAyEGAATqrLovAAMUanuPv5TQWmh2VEugSQyuiU3pyfYAAiwMaxv2fOBH6iU31kUbmcwBAAMCAAN5AAM9BA",
+                "file_unique_id": "AQADLAxrG_Z84Ed-",
+                "file_size": 145211,
+                "width": 864,
+                "height": 1152
+              }
+            ],
+            "caption": "Golden hour on the rooftop\u2026 \ud83c\udf05 and this lace just wouldn\u2019t stay closed \ud83d\udd25\ud83d\udc8b 3 exclusive shots \ud83d\udcf8 soft light\u2026 bare skin\u2026 every teasing angle \u2728\ud83d\ude08 Unlock the full set and let the evening undress me \ud83d\udda4\ud83d\udd25",
+            "reply_markup": {
+              "inline_keyboard": [
+                [
+                  {
+                    "text": "Unlock Now \u00b7 $18.99",
+                    "url": "https://www.fanvue.com/avablackthorne/media/fvml-35"
+                  }
+                ]
+              ]
+            }
+          }
+        },
+        "post_to": "vault"
+      }
+    }
+  },
+  {
+    "publish_request_id": "social_publish_item_ccd784e0b138414a81d8b828e0718673",
+    "queue_item_id": "social_queue_item_07cfccdb0d774fbaa8bc5d8087414175",
+    "platform": "x",
+    "caption_id": "caption_result_4d4568500a9441078bdacc7ff6062c91",
+    "scheduled_for": null,
+    "status": "posted",
+    "created_at": "2026-08-11T15:36:04.554698",
+    "metadata": {
+      "posting_implemented": true,
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "provider_post_id": "2087201395124351365",
+      "provider_media_id": "2087201392683372544",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2087201395124351365",
+      "provider_metadata": {
+        "tweet_data": {
+          "edit_history_tweet_ids": [
+            ""
+          ],
+          "id": "2087201395124351365",
+          "text": "I turned around and caught you a few steps behind \ud83d\udc40\ud83d\ude02 What distracted you? https://t.co/TVs49DIpZE"
+        }
+      }
+    }
+  },
+  {
+    "publish_request_id": "social_publish_item_9787810499b84e0a90c95ca29a9a21cc",
+    "queue_item_id": "social_queue_item_ca4ffb36c26841bb9daaeed47d16d94e",
+    "platform": "telegram",
+    "caption_id": null,
+    "scheduled_for": null,
+    "status": "posted",
+    "created_at": "2026-08-10T20:39:56.186103",
+    "metadata": {
+      "posting_implemented": true,
+      "caption": "My eyes \ud83d\udc40 linger on yours from the railing while this silk shirt falls open at dusk \u2014 unlock the full three-image set to hold every moment \ud83d\udd25",
+      "caption_source": "GROK",
+      "caption_updated_at": "2026-08-10T20:39:11.538302+00:00",
+      "offering_id": "0186d66b-791b-45d4-8afc-5de558923b40",
+      "photoshoot_deliverable_id": "c9a75a6c-bdd8-5f76-ac22-1113e881296b",
+      "paid_asset_ids": [
+        177,
+        175,
+        176
+      ],
+      "paid_image_count": 3,
+      "teaser_asset_id": 178,
+      "price_minor": 1499,
+      "currency": "USD",
+      "fanvue_publication_id": "ed4976ea-e65f-4da7-bb0c-3b94935ecdb9",
+      "telegram_destination": "vault",
+      "account_name": null,
+      "telegram_post_to": "vault",
+      "provider_post_id": "19",
+      "provider_media_id": null,
+      "provider_output_url": null,
+      "provider_metadata": {
+        "status_code": 200,
+        "message_id": 19,
+        "response": {
+          "ok": true,
+          "result": {
+            "message_id": 19,
+            "sender_chat": {
+              "id": -1003937188399,
+              "title": "Ava's Content Vault \ud83d\udc8b",
+              "username": "AvaContentVault",
+              "type": "channel"
+            },
+            "chat": {
+              "id": -1003937188399,
+              "title": "Ava's Content Vault \ud83d\udc8b",
+              "username": "AvaContentVault",
+              "type": "channel"
+            },
+            "date": 1786394397,
+            "photo": [
+              {
+                "file_id": "AgACAgEAAyEGAATqrLovAAMTano3HfuZSAmVYLjPumlznUS8HmQAAoQMaxv2fNBHbSh2HGsLN5gBAAMCAANzAAM9BA",
+                "file_unique_id": "AQADhAxrG_Z80Ed4",
+                "file_size": 1163,
+                "width": 60,
+                "height": 90
+              },
+              {
+                "file_id": "AgACAgEAAyEGAATqrLovAAMTano3HfuZSAmVYLjPumlznUS8HmQAAoQMaxv2fNBHbSh2HGsLN5gBAAMCAANtAAM9BA",
+                "file_unique_id": "AQADhAxrG_Z80Edy",
+                "file_size": 12238,
+                "width": 213,
+                "height": 320
+              },
+              {
+                "file_id": "AgACAgEAAyEGAATqrLovAAMTano3HfuZSAmVYLjPumlznUS8HmQAAoQMaxv2fNBHbSh2HGsLN5gBAAMCAAN4AAM9BA",
+                "file_unique_id": "AQADhAxrG_Z80Ed9",
+                "file_size": 54566,
+                "width": 533,
+                "height": 800
+              },
+              {
+                "file_id": "AgACAgEAAyEGAATqrLovAAMTano3HfuZSAmVYLjPumlznUS8HmQAAoQMaxv2fNBHbSh2HGsLN5gBAAMCAAN5AAM9BA",
+                "file_unique_id": "AQADhAxrG_Z80Ed-",
+                "file_size": 152750,
+                "width": 832,
+                "height": 1248
+              }
+            ],
+            "caption": "My eyes \ud83d\udc40 linger on yours from the railing while this silk shirt falls open at dusk \u2014 unlock the full three-image set to hold every moment \ud83d\udd25",
+            "reply_markup": {
+              "inline_keyboard": [
+                [
+                  {
+                    "text": "Unlock Now \u00b7 $14.99",
+                    "url": "https://www.fanvue.com/avablackthorne/media/fvml-27"
+                  }
+                ]
+              ]
+            }
+          }
+        },
+        "post_to": "vault"
+      }
+    }
+  },
+  {
+    "publish_request_id": "social_publish_item_68b982a91e2247be971b3f1b24922b5f",
+    "queue_item_id": "social_queue_item_bca9c90b814f4d01ae4aa11089f4e2cd",
+    "platform": "telegram",
+    "caption_id": null,
+    "scheduled_for": null,
+    "status": "posted",
+    "created_at": "2026-08-10T15:59:28.584735",
+    "metadata": {
+      "posting_implemented": true,
+      "account_name": null,
+      "telegram_post_to": "main",
+      "provider_post_id": "88",
+      "provider_media_id": null,
+      "provider_output_url": null,
+      "provider_metadata": {
+        "status_code": 200,
+        "message_id": 88,
+        "response": {
+          "ok": true,
+          "result": {
+            "message_id": 88,
+            "sender_chat": {
+              "id": -1002507455539,
+              "title": "Ava Blackthorne",
+              "type": "channel"
+            },
+            "chat": {
+              "id": -1002507455539,
+              "title": "Ava Blackthorne",
+              "type": "channel"
+            },
+            "date": 1786377570,
+            "photo": [
+              {
+                "file_id": "AgACAgEAAyEGAASVdLwzAANYann1Yp5uo8_5H5dxZUMGzUBM4GIAAnoMaxvi09BHrDcrWPb0o-sBAAMCAANzAAM9BA",
+                "file_unique_id": "AQADegxrG-LT0Ed4",
+                "file_size": 1480,
+                "width": 60,
+                "height": 90
+              },
+              {
+                "file_id": "AgACAgEAAyEGAASVdLwzAANYann1Yp5uo8_5H5dxZUMGzUBM4GIAAnoMaxvi09BHrDcrWPb0o-sBAAMCAANtAAM9BA",
+                "file_unique_id": "AQADegxrG-LT0Edy",
+                "file_size": 17220,
+                "width": 213,
+                "height": 320
+              },
+              {
+                "file_id": "AgACAgEAAyEGAASVdLwzAANYann1Yp5uo8_5H5dxZUMGzUBM4GIAAnoMaxvi09BHrDcrWPb0o-sBAAMCAAN4AAM9BA",
+                "file_unique_id": "AQADegxrG-LT0Ed9",
+                "file_size": 80910,
+                "width": 533,
+                "height": 800
+              },
+              {
+                "file_id": "AgACAgEAAyEGAASVdLwzAANYann1Yp5uo8_5H5dxZUMGzUBM4GIAAnoMaxvi09BHrDcrWPb0o-sBAAMCAAN5AAM9BA",
+                "file_unique_id": "AQADegxrG-LT0Ed-",
+                "file_size": 216358,
+                "width": 832,
+                "height": 1248
+              }
+            ],
+            "caption": "A little wet, a little tempting\u2026 exactly how I planned it \ud83d\ude0f\ud83d\udda4"
+          }
+        },
+        "post_to": "main"
+      }
+    }
+  },
+  {
+    "publish_request_id": "social_publish_item_463f9060e75c457cbeea25ba973923e5",
+    "queue_item_id": "social_queue_item_47e332b16f684bdcbbf6cddf055a6926",
+    "platform": "x",
+    "caption_id": null,
+    "scheduled_for": null,
+    "status": "posted",
+    "created_at": "2026-08-10T15:47:28.564225",
+    "metadata": {
+      "posting_implemented": true,
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "provider_post_id": "2086841876024315953",
+      "provider_media_id": "2086841873604239360",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2086841876024315953",
+      "provider_metadata": {
+        "tweet_data": {
+          "edit_history_tweet_ids": [
+            ""
+          ],
+          "id": "2086841876024315953",
+          "text": "Sunset\u2019s starting and we\u2019ve got nowhere to be\u2026 what are we doing next? \ud83d\udc40 https://t.co/9JAY2NHHVs"
+        }
+      }
+    }
+  },
+  {
+    "publish_request_id": "social_publish_item_34dbc717278b494facc6a092a5599086",
+    "queue_item_id": "social_queue_item_7db26dd48b654e15973d4b973b4f1f9a",
+    "platform": "telegram",
+    "caption_id": null,
+    "scheduled_for": null,
+    "status": "posted",
+    "created_at": "2026-08-09T21:23:36.078273",
+    "metadata": {
+      "posting_implemented": true,
+      "caption": "Tongue \ud83d\udc45 stretched out staring at you while my fingers circle my clit and that arousal drips down my thighs \ud83d\udd25\ud83d\ude08",
+      "caption_source": "GROK",
+      "caption_updated_at": "2026-08-09T21:23:22.016004+00:00",
+      "asset_id": 158,
+      "offering_id": "09df17b3-b045-4eab-8f14-10f5e845511c",
+      "teaser_id": "43179927-c9f0-4cae-867d-1248d0154507",
+      "derived_teaser_asset_id": 159,
+      "price_minor": 1999,
+      "currency": "USD",
+      "fanvue_publication_id": "b66e2655-00cf-4b8d-8d1f-a252290e6bda",
+      "telegram_destination": "vault",
+      "account_name": null,
+      "telegram_post_to": "vault",
+      "provider_post_id": "18",
+      "provider_media_id": null,
+      "provider_output_url": null,
+      "provider_metadata": {
+        "status_code": 200,
+        "message_id": 18,
+        "response": {
+          "ok": true,
+          "result": {
+            "message_id": 18,
+            "sender_chat": {
+              "id": -1003937188399,
+              "title": "Ava's Content Vault \ud83d\udc8b",
+              "username": "AvaContentVault",
+              "type": "channel"
+            },
+            "chat": {
+              "id": -1003937188399,
+              "title": "Ava's Content Vault \ud83d\udc8b",
+              "username": "AvaContentVault",
+              "type": "channel"
+            },
+            "date": 1786310617,
+            "photo": [
+              {
+                "file_id": "AgACAgEAAyEGAATqrLovAAMSanjv2ZmtHO36kQszOED4Pu5HkpkAAhsNaxvKpclHm1jIJksjggABAQADAgADcwADPQQ",
+                "file_unique_id": "AQADGw1rG8qlyUd4",
+                "file_size": 1202,
+                "width": 60,
+                "height": 90
+              },
+              {
+                "file_id": "AgACAgEAAyEGAATqrLovAAMSanjv2ZmtHO36kQszOED4Pu5HkpkAAhsNaxvKpclHm1jIJksjggABAQADAgADbQADPQQ",
+                "file_unique_id": "AQADGw1rG8qlyUdy",
+                "file_size": 12661,
+                "width": 213,
+                "height": 320
+              },
+              {
+                "file_id": "AgACAgEAAyEGAATqrLovAAMSanjv2ZmtHO36kQszOED4Pu5HkpkAAhsNaxvKpclHm1jIJksjggABAQADAgADeAADPQQ",
+                "file_unique_id": "AQADGw1rG8qlyUd9",
+                "file_size": 59307,
+                "width": 533,
+                "height": 800
+              },
+              {
+                "file_id": "AgACAgEAAyEGAATqrLovAAMSanjv2ZmtHO36kQszOED4Pu5HkpkAAhsNaxvKpclHm1jIJksjggABAQADAgADeQADPQQ",
+                "file_unique_id": "AQADGw1rG8qlyUd-",
+                "file_size": 154607,
+                "width": 832,
+                "height": 1248
+              }
+            ],
+            "caption": "Tongue \ud83d\udc45 stretched out staring at you while my fingers circle my clit and that arousal drips down my thighs \ud83d\udd25\ud83d\ude08",
+            "reply_markup": {
+              "inline_keyboard": [
+                [
+                  {
+                    "text": "Unlock Now \u00b7 $19.99",
+                    "url": "https://www.fanvue.com/avablackthorne/media/fvml-23"
+                  }
+                ]
+              ]
+            }
+          }
+        },
+        "post_to": "vault"
+      }
+    }
+  },
+  {
+    "publish_request_id": "social_publish_item_bd7687bde87a4a52a74647d07a80a43e",
+    "queue_item_id": "social_queue_item_1dcfaa4cb99b41f9b6c93a9ad0da9eff",
+    "platform": "telegram",
+    "caption_id": null,
+    "scheduled_for": null,
+    "status": "posted",
+    "created_at": "2026-08-09T17:29:22.933363",
+    "metadata": {
+      "posting_implemented": true,
+      "caption": "The robe teases at my shoulders \ud83d\udc51 leaving my body exposed on these sheets just for you \ud83d\udd25",
+      "caption_source": "GROK",
+      "caption_updated_at": "2026-08-09T17:29:09.855338+00:00",
+      "asset_id": 156,
+      "offering_id": "4ced393d-8b4b-4b93-a084-c185e02b186a",
+      "teaser_id": "24b6c22a-69ba-4f69-9a7b-47f31d6125c3",
+      "derived_teaser_asset_id": 157,
+      "price_minor": 999,
+      "currency": "USD",
+      "fanvue_publication_id": "95721268-7d6c-428f-9397-eb74a004147d",
+      "telegram_destination": "vault",
+      "account_name": null,
+      "telegram_post_to": "vault",
+      "provider_post_id": "17",
+      "provider_media_id": null,
+      "provider_output_url": null,
+      "provider_metadata": {
+        "status_code": 200,
+        "message_id": 17,
+        "response": {
+          "ok": true,
+          "result": {
+            "message_id": 17,
+            "sender_chat": {
+              "id": -1003937188399,
+              "title": "Ava's Content Vault \ud83d\udc8b",
+              "username": "AvaContentVault",
+              "type": "channel"
+            },
+            "chat": {
+              "id": -1003937188399,
+              "title": "Ava's Content Vault \ud83d\udc8b",
+              "username": "AvaContentVault",
+              "type": "channel"
+            },
+            "date": 1786296564,
+            "photo": [
+              {
+                "file_id": "AgACAgEAAyEGAATqrLovAAMRani49BixE5BTiXfhrTpnKbREYTgAAg0NaxvKpcFHvtbb8JH-GJ8BAAMCAANzAAM9BA",
+                "file_unique_id": "AQADDQ1rG8qlwUd4",
+                "file_size": 1460,
+                "width": 60,
+                "height": 90
+              },
+              {
+                "file_id": "AgACAgEAAyEGAATqrLovAAMRani49BixE5BTiXfhrTpnKbREYTgAAg0NaxvKpcFHvtbb8JH-GJ8BAAMCAANtAAM9BA",
+                "file_unique_id": "AQADDQ1rG8qlwUdy",
+                "file_size": 15485,
+                "width": 213,
+                "height": 320
+              },
+              {
+                "file_id": "AgACAgEAAyEGAATqrLovAAMRani49BixE5BTiXfhrTpnKbREYTgAAg0NaxvKpcFHvtbb8JH-GJ8BAAMCAAN4AAM9BA",
+                "file_unique_id": "AQADDQ1rG8qlwUd9",
+                "file_size": 64822,
+                "width": 533,
+                "height": 800
+              },
+              {
+                "file_id": "AgACAgEAAyEGAATqrLovAAMRani49BixE5BTiXfhrTpnKbREYTgAAg0NaxvKpcFHvtbb8JH-GJ8BAAMCAAN5AAM9BA",
+                "file_unique_id": "AQADDQ1rG8qlwUd-",
+                "file_size": 158686,
+                "width": 832,
+                "height": 1248
+              }
+            ],
+            "caption": "The robe teases at my shoulders \ud83d\udc51 leaving my body exposed on these sheets just for you \ud83d\udd25",
+            "reply_markup": {
+              "inline_keyboard": [
+                [
+                  {
+                    "text": "Unlock Now \u00b7 $9.99",
+                    "url": "https://www.fanvue.com/avablackthorne/media/fvml-22"
+                  }
+                ]
+              ]
+            }
+          }
+        },
+        "post_to": "vault"
+      }
+    }
+  },
+  {
+    "publish_request_id": "social_publish_item_3e1b33c307304883afa4dcd3be5c527f",
+    "queue_item_id": "social_queue_item_c52af36279824092a32323314a54aa8c",
+    "platform": "x",
+    "caption_id": "caption_result_fba44a88ed6949cd81f50e946c9ca468",
+    "scheduled_for": null,
+    "status": "posted",
+    "created_at": "2026-08-09T16:05:03.458708",
+    "metadata": {
+      "posting_implemented": true,
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "provider_post_id": "2086483912474145187",
+      "provider_media_id": "2086483910272155649",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2086483912474145187",
+      "provider_metadata": {
+        "tweet_data": {
+          "edit_history_tweet_ids": [
+            ""
+          ],
+          "id": "2086483912474145187",
+          "text": "I saved you the perfect spot next to me \u2728 what would you do first when you sat down? https://t.co/2599pI7Nqo"
+        }
+      }
+    }
+  },
+  {
+    "publish_request_id": "social_publish_item_9073ffa0a3dc4f749ec43589f180bf7a",
+    "queue_item_id": "social_queue_item_89f8ee018e6b44c3a3bf64f2af7d0cb9",
+    "platform": "telegram",
+    "caption_id": null,
+    "scheduled_for": null,
+    "status": "posted",
+    "created_at": "2026-08-09T02:09:44.631143",
+    "metadata": {
+      "posting_implemented": true,
+      "caption": "Tongue \ud83d\udc45 out and completely bare as I part my lips between my legs \ud83d\ude08",
+      "caption_source": "GROK",
+      "caption_updated_at": "2026-08-09T02:00:00.108086+00:00",
+      "asset_id": 154,
+      "offering_id": "3abbed0b-5221-4a43-a151-13bdff730bdf",
+      "teaser_id": "3332c4b6-339b-4e56-b9d4-ed2f566835da",
+      "derived_teaser_asset_id": 155,
+      "price_minor": 1799,
+      "currency": "USD",
+      "fanvue_publication_id": "8440bef7-8fc5-4b2b-85a8-b00a8cbca498",
+      "telegram_destination": "vault",
+      "account_name": null,
+      "telegram_post_to": "vault",
+      "provider_post_id": "16",
+      "provider_media_id": null,
+      "provider_output_url": null,
+      "provider_metadata": {
+        "status_code": 200,
+        "message_id": 16,
+        "response": {
+          "ok": true,
+          "result": {
+            "message_id": 16,
+            "sender_chat": {
+              "id": -1003937188399,
+              "title": "Ava's Content Vault \ud83d\udc8b",
+              "username": "AvaContentVault",
+              "type": "channel"
+            },
+            "chat": {
+              "id": -1003937188399,
+              "title": "Ava's Content Vault \ud83d\udc8b",
+              "username": "AvaContentVault",
+              "type": "channel"
+            },
+            "date": 1786241386,
+            "photo": [
+              {
+                "file_id": "AgACAgEAAyEGAATqrLovAAMQanfhaoaVu2NQdNWtcuxZOcQ6apsAAgoNaxvKpblHN9b1eyPpR4ABAAMCAANzAAM9BA",
+                "file_unique_id": "AQADCg1rG8qluUd4",
+                "file_size": 1242,
+                "width": 61,
+                "height": 90
+              },
+              {
+                "file_id": "AgACAgEAAyEGAATqrLovAAMQanfhaoaVu2NQdNWtcuxZOcQ6apsAAgoNaxvKpblHN9b1eyPpR4ABAAMCAANtAAM9BA",
+                "file_unique_id": "AQADCg1rG8qluUdy",
+                "file_size": 12652,
+                "width": 217,
+                "height": 320
+              },
+              {
+                "file_id": "AgACAgEAAyEGAATqrLovAAMQanfhaoaVu2NQdNWtcuxZOcQ6apsAAgoNaxvKpblHN9b1eyPpR4ABAAMCAAN4AAM9BA",
+                "file_unique_id": "AQADCg1rG8qluUd9",
+                "file_size": 59333,
+                "width": 542,
+                "height": 800
+              },
+              {
+                "file_id": "AgACAgEAAyEGAATqrLovAAMQanfhaoaVu2NQdNWtcuxZOcQ6apsAAgoNaxvKpblHN9b1eyPpR4ABAAMCAAN5AAM9BA",
+                "file_unique_id": "AQADCg1rG8qluUd-",
+                "file_size": 157058,
+                "width": 832,
+                "height": 1229
+              }
+            ],
+            "caption": "Tongue \ud83d\udc45 out and completely bare as I part my lips between my legs \ud83d\ude08",
+            "reply_markup": {
+              "inline_keyboard": [
+                [
+                  {
+                    "text": "Unlock Now \u00b7 $17.99",
+                    "url": "https://www.fanvue.com/avablackthorne/media/fvml-21"
+                  }
+                ]
+              ]
+            }
+          }
+        },
+        "post_to": "vault"
+      }
+    }
+  },
+  {
+    "publish_request_id": "social_publish_item_31219440c5cf47f697a2ff345517f1fc",
+    "queue_item_id": "social_queue_item_0a91b02baea54f5ea5b0dc31514e2af9",
+    "platform": "x",
+    "caption_id": "caption_result_b4e0288707be40c58a93eeee0d696caf",
+    "scheduled_for": null,
+    "status": "posted",
+    "created_at": "2026-08-08T16:11:46.397972",
+    "metadata": {
+      "posting_implemented": true,
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "provider_post_id": "2086123214757941483",
+      "provider_media_id": "2086123212534861824",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2086123214757941483",
+      "provider_metadata": {
+        "tweet_data": {
+          "edit_history_tweet_ids": [
+            ""
+          ],
+          "id": "2086123214757941483",
+          "text": "I keep glancing at the horizon like it's holding secrets\u2026 what's one you'd share if we were here together? \ud83c\udf0a https://t.co/kqtkhTqN7l"
+        }
+      }
+    }
+  },
+  {
     "publish_request_id": "social_publish_item_ae0e75fd8a5e45c897964e3784b1408a",
     "queue_item_id": "social_queue_item_363e14cc3ba74ebeb523e82ade69b4ca",
     "platform": "x",

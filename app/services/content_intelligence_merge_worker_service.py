@@ -7,14 +7,17 @@ from app.services.business_asset_analysis_orchestrator import BusinessAssetAnaly
 from app.services.content_intelligence_merge_service import (
     ContentIntelligenceMergeService, MissingRequiredProviderResults,
 )
+from app.services.asset_intelligence_service import AssetIntelligenceService
 
 
 class ContentIntelligenceMergeWorkerService:
-    def __init__(self, *, worker_instance_id: str, jobs=None, merger=None, workflow=None) -> None:
+    def __init__(self, *, worker_instance_id: str, jobs=None, merger=None, workflow=None,
+                 canonical_intelligence=None) -> None:
         self.worker_instance_id = worker_instance_id
         self.jobs = jobs or ContentIntelligenceMergeJobRepository()
         self.merger = merger or ContentIntelligenceMergeService()
         self.workflow = workflow or BusinessAssetAnalysisOrchestrator()
+        self.canonical_intelligence = canonical_intelligence or AssetIntelligenceService()
 
     def process_one(self) -> dict:
         job = self.jobs.claim_next(self.worker_instance_id)
@@ -29,6 +32,12 @@ class ContentIntelligenceMergeWorkerService:
             )
             if profile is None or not profile.ready:
                 raise RuntimeError("Content Intelligence merge did not produce a complete profile.")
+            # Promote every normalized provider-owned field into the canonical
+            # Asset Intelligence profile before the workflow is allowed to
+            # transition to READY. Preserve the workflow state until then.
+            self.canonical_intelligence.merge_provider_results(
+                job.asset_id, preserve_analysis_status=True,
+            )
             if not self.jobs.mark_business_ready(job.asset_id):
                 raise LookupError(f"Business Asset registration not found: {job.asset_id}")
             decision = self.workflow.report_completion(

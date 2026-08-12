@@ -90,6 +90,10 @@ class PhotoshootBundleSalePreparationService:
             "photoshootSessionId": str(row["photoshoot_session_id"]),
             "sellingMode": "BUNDLE",
             "bundleSalesChannel": row.get("bundle_sales_channel") or "CHAT",
+            "salesChannel": (
+                "WALL" if (row.get("bundle_sales_channel") or "CHAT") == "CONTENT_WALL"
+                else "CHAT"
+            ),
             "status": status,
             "statusLabel": {
                 "READY": "Paid Bundle Ready",
@@ -110,6 +114,8 @@ class PhotoshootBundleSalePreparationService:
             "updatedAt": publication.updated_at.isoformat() if publication else None,
             "error": error or (publication.last_error if publication else None),
         }
+        draft = metadata.get("content_vault_caption_draft")
+        result["contentVaultCaption"] = dict(draft) if isinstance(draft, dict) else None
         try:
             result["promotionalTeaser"] = self.teasers.inspect(
                 deliverable_id, creator_profile_id=creator_profile_id,
@@ -131,7 +137,37 @@ class PhotoshootBundleSalePreparationService:
                 )
             ),
         )
+        if result["bundleSalesChannel"] == "CONTENT_WALL" and offering:
+            try:
+                from app.services.commerce_telegram_vault_service import CommerceTelegramVaultService
+                result["contentVaultPublication"] = CommerceTelegramVaultService().status(
+                    offering.offering_id, creator_profile_id=creator_profile_id,
+                )
+            except Exception:
+                result["contentVaultPublication"] = {
+                    "status": "NOT_PUBLISHED", "canPublish": False,
+                    "configured": False, "readinessError": "Content Vault publishing status is unavailable.",
+                }
         return result
+
+    def content_vault_context(self, deliverable_id, *, creator_profile_id: int):
+        """Resolve the one canonical paid Bundle and its Fanvue publication."""
+        row, members = self._context(deliverable_id, creator_profile_id)
+        if (row.get("bundle_sales_channel") or "CHAT") != "CONTENT_WALL":
+            raise ValueError("Content Vault captions are available only for WALL Bundles.")
+        asset_ids = tuple(int(item["asset_id"]) for item in members)
+        offering = self._bundle_offering(row, asset_ids)
+        if offering is None or offering.status != CommercialOfferingStatus.READY:
+            raise ValueError("Bundle sale preparation must be READY before authoring captions.")
+        error = self._shape_error(row, offering, asset_ids)
+        if error:
+            raise ValueError(error)
+        publication = self.publications.get_by_offering_provider(
+            offering.offering_id, CommercialPublicationProvider.FANVUE,
+        )
+        if publication is None:
+            raise ValueError("The prepared Bundle publication could not be found.")
+        return row, members, offering, publication
 
     @staticmethod
     def _autonomous_sales_readiness(*, paid_status, teaser_status, channel,
@@ -184,7 +220,11 @@ class PhotoshootBundleSalePreparationService:
                 offering_type=CommercialOfferingType.BUNDLE,
                 title=prepared["title"], description=prepared["description"],
                 hero_asset_id=prepared["hero_asset_id"],
-                primary_sales_channel=PrimarySalesChannel.AI_CHAT,
+                primary_sales_channel=(
+                    PrimarySalesChannel.TELEGRAM_WALL
+                    if (row.get("bundle_sales_channel") or "CHAT") == "CONTENT_WALL"
+                    else PrimarySalesChannel.AI_CHAT
+                ),
                 asset_ids=asset_ids, price_minor=price, currency="USD",
                 source_photoshoot_deliverable_id=UUID(str(row["deliverable_id"])),
                 idempotency_key=self._idempotency_key(row),
@@ -196,9 +236,14 @@ class PhotoshootBundleSalePreparationService:
             offering.offering_id, CommercialPublicationProvider.FANVUE,
         )
         if publication and publication.status == CommercialPublicationStatus.LIVE:
+            if offering.status != CommercialOfferingStatus.READY:
+                raise ValueError("Bundle publication cannot be prepared from its current state.")
             if offering.price_minor != price:
                 raise ValueError("The live Bundle Media Link price is locked.")
-            return (publication.publication_id,)
+            # A completed Bundle has no execution work left to retry. Returning
+            # an empty batch lets the API return canonical readiness without
+            # reclaiming the LIVE publication or touching provider resources.
+            return ()
         if offering.price_minor != price:
             offering = self.offering_service.update_pricing(
                 offering.offering_id, creator_profile_id=creator_profile_id,

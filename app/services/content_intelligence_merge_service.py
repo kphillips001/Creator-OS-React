@@ -152,6 +152,7 @@ class ContentIntelligenceMergeService:
                                      vr.get("classification"), getattr(asset, "classification", None))
         summary = self._first(gv.get("content_summary"), gv.get("short_description"),
                               gr.get("descriptive_summary"), gr.get("short_description"))
+        title = self._first(gv.get("title"), gr.get("title"))
         safety = self._first(nv.get("safety_classification"))
         explicit = safety == "EXPLICIT" or any(token in label for label in labels for token in ("GENITALIA", "ANUS"))
         exposed = any("EXPOSED" in label for label in labels)
@@ -177,7 +178,7 @@ class ContentIntelligenceMergeService:
         confidence = round(sum(confidence_values) / len(confidence_values), 4) if confidence_values else None
 
         content = {
-            "asset_id": int(asset.id), "summary": summary, "classification": classification,
+            "asset_id": int(asset.id), "title": title, "summary": summary, "classification": classification,
             "confidence": confidence, "themes": themes,
             "tags": self._dedupe(vision_tags, semantic_tags),
             "mood": self._first(gv.get("mood"), gr.get("mood")),
@@ -210,7 +211,7 @@ class ContentIntelligenceMergeService:
         }
         content = self._clean_mapping(content)
         context = {**{key: content.get(key) for key in (
-            "asset_id", "summary", "classification", "confidence", "themes", "tags", "mood",
+            "asset_id", "title", "summary", "classification", "confidence", "themes", "tags", "mood",
             "setting", "outfit", "pose", "activity", "objects", "environment", "activities",
             "clothing", "keywords", "technical_quality")},
             **content.get("ai_metadata", {}).get("safety", {}),
@@ -228,6 +229,7 @@ class ContentIntelligenceMergeService:
                 "outfit": provider_refs["gpt-vision"], "pose": provider_refs["gpt-vision"],
                 "objects": provider_refs["gpt-vision"], "safety": provider_refs["nudenet"],
                 "nudity_level": provider_refs["nudenet"], "summary": provider_refs["grok-vision"],
+                "title": provider_refs["grok-vision"],
                 "themes": provider_refs["grok-vision"], "mood": provider_refs["grok-vision"],
                 "semantic": provider_refs["grok-vision"],
             },

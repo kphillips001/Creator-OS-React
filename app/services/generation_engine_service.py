@@ -23,6 +23,7 @@ from app.models.generation_engine import (
     GenerationResult,
     GenerationStatus,
     GenerationType,
+    ProviderPromptState,
     new_generation_id,
     utc_now,
 )
@@ -178,8 +179,13 @@ class GenerationEngineService:
         *,
         max_retries: int = 0,
     ) -> GenerationJob:
+        job_id = new_generation_id("generation_job")
+        request = replace(
+            request,
+            metadata={**dict(request.metadata or {}), "generation_job_id": job_id},
+        )
         job = GenerationJob(
-            job_id=new_generation_id("generation_job"),
+            job_id=job_id,
             request=request,
             max_retries=max(0, int(max_retries or 0)),
         )
@@ -481,6 +487,12 @@ class GenerationEngineService:
         return candidate if candidate in allowed else GenerationMediaType.IMAGE.value
 
     @staticmethod
+    def _normalize_prompt_state(value: Any) -> str:
+        candidate = str(value or ProviderPromptState.PLANNED.value).strip().upper()
+        allowed = {item.value for item in ProviderPromptState}
+        return candidate if candidate in allowed else ProviderPromptState.PLANNED.value
+
+    @staticmethod
     def _provider_reference_url_from_metadata(metadata: Mapping[str, Any]) -> str | None:
         for key in (
             "reference_image_url",
@@ -514,6 +526,7 @@ class GenerationEngineService:
                 generation_type=cls._normalize_generation_type(request_data.get("generation_type")),
                 media_type=cls._normalize_media_type(request_data.get("media_type")),
                 image_count=max(1, int(request_data.get("image_count") or 1)),
+                prompt_state=cls._normalize_prompt_state(request_data.get("prompt_state")),
                 metadata=request_data.get("metadata") or {},
                 created_at=request_data.get("created_at") or "",
             ),

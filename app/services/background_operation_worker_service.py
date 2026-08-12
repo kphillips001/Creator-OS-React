@@ -4,8 +4,11 @@ from __future__ import annotations
 from app.services.background_operation_service import BackgroundOperationService
 from app.services.content_studio_background_executor import ContentStudioBackgroundExecutor
 from app.services.content_studio_autonomous_background_executor import ContentStudioAutonomousBackgroundExecutor
+from app.services.explicit_inspiration_background_executor import ExplicitInspirationBackgroundExecutor
 from app.services.photoshoot_background_executor import PhotoshootBackgroundExecutor
+from app.services.photoshoot_session_strategy_background_executor import PhotoshootSessionStrategyBackgroundExecutor
 from app.services.video_studio_background_executor import VideoStudioBackgroundExecutor
+from app.services.regeneration_background_executor import RegenerationBackgroundExecutor
 
 
 class BackgroundOperationWorkerService:
@@ -16,11 +19,17 @@ class BackgroundOperationWorkerService:
         autonomous = ContentStudioAutonomousBackgroundExecutor()
         photoshoot = PhotoshootBackgroundExecutor()
         video = VideoStudioBackgroundExecutor()
+        explicit_inspiration = ExplicitInspirationBackgroundExecutor()
+        session_strategy = PhotoshootSessionStrategyBackgroundExecutor()
+        regeneration = RegenerationBackgroundExecutor()
         self.executors = dict(executors or {
             generation.executor_key: generation,
             autonomous.executor_key: autonomous,
             photoshoot.executor_key: photoshoot,
             video.executor_key: video,
+            explicit_inspiration.executor_key: explicit_inspiration,
+            session_strategy.executor_key: session_strategy,
+            regeneration.executor_key: regeneration,
         })
 
     def process_one(self) -> dict:

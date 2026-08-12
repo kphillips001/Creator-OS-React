@@ -589,6 +589,7 @@ class CommercialOfferingSelectorService:
                 key: tuple(dict.fromkeys(values))
                 for key, values in intelligence.items()
             },
+            blurred_teaser_path=selected.blurred_teaser_path,
         )
 
     @classmethod

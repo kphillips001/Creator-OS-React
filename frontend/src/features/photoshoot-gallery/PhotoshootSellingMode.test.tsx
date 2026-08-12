@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { PhotoshootViewer } from "./PhotoshootViewer";
 
@@ -18,6 +18,18 @@ const json = (body: unknown, ok = true) => Promise.resolve({
 afterEach(() => vi.restoreAllMocks());
 
 describe("Photoshoot selling mode", () => {
+  it("shows the canonical promotional teaser as supporting Commercial Assets", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(() => json({
+      ...detail,
+      commercialAssets: [{ assetId: 145, kind: "PROMOTIONAL_TEASER", label: "Promotional Teaser", status: "READY", previewUrl: "/api/v1/assets/145/media" }],
+    }));
+    render(<PhotoshootViewer deliverableId="set-1" onClose={() => undefined} />);
+
+    expect(await screen.findByRole("heading", { name: "Commercial Assets" })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Promotional Teaser" })).toHaveAttribute("src", "/api/v1/assets/145/media");
+    expect(screen.getAllByLabelText(/Select shot/)).toHaveLength(1);
+  });
+
   it("persists Bundle, hides Session controls, and restores them when switched back", async () => {
     let mode = "SESSION";
     const fetch = vi.spyOn(globalThis, "fetch").mockImplementation((input, options) => {
@@ -101,6 +113,44 @@ describe("Photoshoot selling mode", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("Bundle sales channel is locked.");
     expect(screen.getByRole("button", { name: /Chats/ })).toHaveAttribute("aria-pressed", "true");
     expect(screen.queryByText("This Bundle is designated for Ava's Content Wall.")).not.toBeInTheDocument();
+  });
+
+  it("saves a Bundle caption, refreshes readiness, and publishes one persisted WALL package", async () => {
+    let caption: string | null = null;
+    let posted = false;
+    const options = Array.from({ length: 5 }, (_, index) => ({ text: `All 3 photos are in this complete set option ${index + 1}` }));
+    const fetch = vi.spyOn(globalThis, "fetch").mockImplementation((input, init) => {
+      const url = String(input);
+      if (url.endsWith("/content-vault/captions/generate")) return json({ profile: "CONTENT_VAULT_PHOTOSHOOT_BUNDLE", captions: options });
+      if (url.endsWith("/content-vault/caption") && init?.method === "PUT") {
+        caption = JSON.parse(String(init.body)).text;
+        return json({ caption: { text: caption, source: "GROK" } });
+      }
+      if (url.includes("/commerce-authoring/") && init?.method === "POST") {
+        posted = true; return json({ status: "PUBLISHED" });
+      }
+      if (url.includes("sale-preparation")) return json({
+        deliverableId: "set-1", photoshootSessionId: "session-1", sellingMode: "BUNDLE",
+        bundleSalesChannel: "CONTENT_WALL", status: "READY", statusLabel: "Paid Bundle Ready",
+        imageCount: 3, priceMinor: 1799, currency: "USD", offeringId: "offering-1",
+        deliveryUrl: "https://test.invalid/bundle",
+        promotionalTeaser: { status: "READY", previewUrl: "/preview", candidates: [] },
+        contentVaultCaption: caption ? { text: caption, source: "GROK", updatedAt: "now", offeringId: "offering-1", paidImageCount: 3 } : null,
+        contentVaultPublication: { status: posted ? "PUBLISHED" : "NOT_PUBLISHED", canPublish: Boolean(caption) && !posted, configured: true },
+      });
+      return json({ ...detail, sellingMode: "BUNDLE", bundleSalesChannel: "CONTENT_WALL" });
+    });
+    render(<PhotoshootViewer deliverableId="set-1" onClose={() => undefined} enableSessionSelling />);
+    expect(await screen.findByText("3 Photos")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Publish to Content Vault" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Generate Captions" }));
+    const chooser = await screen.findByRole("dialog", { name: "Choose Bundle Content Vault Caption" });
+    fireEvent.click(within(chooser).getByRole("button", { name: options[0]!.text }));
+    fireEvent.click(within(chooser).getByRole("button", { name: "Use Caption" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Publish to Content Vault" })).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", { name: "Publish to Content Vault" }));
+    expect(await screen.findByRole("button", { name: "Published to Content Vault" })).toBeDisabled();
+    expect(fetch).toHaveBeenCalledWith("/api/v1/commerce-authoring/offering-1/telegram-content-vault", expect.objectContaining({ method: "POST" }));
   });
 
   it("surfaces an API error and retains the authoritative displayed mode", async () => {

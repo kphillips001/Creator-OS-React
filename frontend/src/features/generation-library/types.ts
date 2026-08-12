@@ -16,6 +16,8 @@ export type GenerationRecord = {
   prompt_metadata: Record<string, unknown>;
   generation_metadata: Record<string, unknown>;
   creator_profile_id?: number;
+  canRegenerate?: boolean;
+  regenerationIneligibilityReason?: string | null;
 };
 
 export type GenerationCardAction =
@@ -40,6 +42,8 @@ export type GenerationActionResponse = {
   session_id?: string;
   generation_id?: string;
   already_moved?: boolean;
+  asset_id?: number;
+  analysis_status?: string;
 };
 
 export type GenerationLibraryResponse = {

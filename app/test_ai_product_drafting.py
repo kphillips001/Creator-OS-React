@@ -266,12 +266,15 @@ class FakeExperiences:
 
 
 class AIProductDraftingTests(unittest.TestCase):
-    def service(self, asset, products=None, links=None, experiences=None):
+    def service(self, asset, products=None, links=None, experiences=None, intelligence=None):
         return AIProductDraftingService(
             asset_repository=FakeAssets(asset),
             product_repository=products or FakeProducts(),
             product_asset_repository=links or FakeProductAssets(),
             experience_service=experiences or FakeExperiences(),
+            asset_intelligence_service=intelligence or SimpleNamespace(
+                get_profile=lambda _asset_id: None,
+            ),
         )
 
     def test_creates_and_auto_activates_product_from_eligible_asset(self):
@@ -639,6 +642,33 @@ class AIProductDraftingTests(unittest.TestCase):
         self.assertNotIn("media_metadata", source_payload)
         self.assertNotIn("blurred_preview_path", source_payload)
         self.assertNotIn("fanvue_media_preview_uuid", source_payload)
+
+    def test_product_title_prefers_canonical_asset_intelligence_over_filename(self):
+        asset = make_asset(file_name="generated_image_ababc4467fdaf560323e8164.png")
+        intelligence = SimpleNamespace(
+            get_profile=lambda _asset_id: SimpleNamespace(title="Sunlit Kitchen Reveal"),
+        )
+
+        source = self.service(asset, intelligence=intelligence)._draft_source_for_asset(asset)
+
+        self.assertEqual(source.suggested_title, "Sunlit Kitchen Reveal")
+
+    def test_product_title_prefers_explicit_commerce_name_over_canonical_title(self):
+        asset = make_asset()
+        intelligence = SimpleNamespace(
+            get_profile=lambda _asset_id: SimpleNamespace(title="Sunlit Kitchen Reveal"),
+        )
+        recommendation = SimpleNamespace(
+            product_type=None, delivery_type=None, price_band=None,
+            suggested_name="Private Collector Edition", suggested_description=None,
+            suggested_tags=None, suggested_themes=None, metadata={}, confidence=None,
+        )
+
+        source = self.service(asset, intelligence=intelligence)._draft_source_for_asset(
+            asset, recommendation,
+        )
+
+        self.assertEqual(source.suggested_title, "Private Collector Edition")
 
     def test_pricing_decision_for_source_matches_asset_pricing(self):
         asset = make_asset()

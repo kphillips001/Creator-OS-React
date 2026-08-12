@@ -253,6 +253,45 @@ class PhotoshootCommerceRepository:
             WHERE {' AND '.join(filters)}""", tuple(params))
         return int(row["total"] if row else 0)
 
+    def list_asset_library_cards(self, creator_profile_id: int, *, search: str | None = None,
+                                 classification: str | None = None,
+                                 limit: int | None = None):
+        """Return persisted card status without invoking sale-preparation services."""
+        filters = ["d.creator_profile_id=%s", "d.registration_state='IN_ASSET_LIBRARY'", "d.is_archived=FALSE"]
+        params = [creator_profile_id]
+        if search:
+            filters.append("(COALESCE(NULLIF(BTRIM(i.commercial_title),''),d.display_name) ILIKE %s OR COALESCE(NULLIF(BTRIM(i.commercial_summary),''),'') ILIKE %s)")
+            term = f"%{search.strip()}%"; params.extend((term, term))
+        classification_filter = self._asset_library_sales_classification_filter(classification)
+        if classification_filter: filters.append(f"({classification_filter})")
+        suffix = " LIMIT %s OFFSET 0" if limit is not None else ""
+        if limit is not None: params.append(max(0, int(limit)))
+        return self._all(f"""
+            SELECT d.deliverable_id,d.photoshoot_session_id,d.creator_profile_id,
+                   d.display_name,d.completed_at,d.updated_at,d.hero_asset_id,d.shot_count,
+                   d.selling_mode,d.bundle_sales_channel,
+                   COALESCE(NULLIF(BTRIM(i.commercial_title),''),d.display_name) AS display_title,
+                   NULLIF(BTRIM(i.commercial_summary),'') AS display_description,
+                   commerce.offering_count,commerce.ready_offering_count,
+                   commerce.failed_publication_count,commerce.active_publication_count,
+                   commerce.live_publication_count,commerce.wall_offering_id
+            FROM public.photoshoot_commerce_deliverables d
+            LEFT JOIN public.photoshoot_intelligence_profiles i USING (photoshoot_session_id)
+            LEFT JOIN LATERAL (
+              SELECT COUNT(DISTINCT o.offering_id) AS offering_count,
+                     COUNT(DISTINCT o.offering_id) FILTER (WHERE o.status='READY') AS ready_offering_count,
+                     COUNT(DISTINCT p.publication_id) FILTER (WHERE p.status='FAILED') AS failed_publication_count,
+                     COUNT(DISTINCT p.publication_id) FILTER (WHERE p.status IN ('READY_TO_PUBLISH','PUBLISHING')) AS active_publication_count,
+                     COUNT(DISTINCT p.publication_id) FILTER (WHERE p.status='LIVE' AND p.provider_resource_status='PRESENT') AS live_publication_count,
+                     MAX(o.offering_id::text) FILTER (WHERE o.offering_type='BUNDLE' AND o.primary_sales_channel='TELEGRAM_WALL') AS wall_offering_id
+              FROM public.commercial_offerings o
+              LEFT JOIN public.commercial_publications p ON p.commercial_offering_id=o.offering_id AND p.provider='FANVUE'
+              WHERE o.source_photoshoot_deliverable_id=d.deliverable_id AND o.status<>'ARCHIVED'
+            ) commerce ON TRUE
+            WHERE {' AND '.join(filters)}
+            ORDER BY COALESCE(d.updated_at,d.completed_at) DESC NULLS LAST,d.deliverable_id DESC{suffix}
+        """, tuple(params))
+
     def add_to_asset_library(self, deliverable_id: str, creator_profile_id: int):
         return self._one("""UPDATE public.photoshoot_commerce_deliverables
             SET registration_state='IN_ASSET_LIBRARY', updated_at=now()

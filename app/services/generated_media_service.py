@@ -36,9 +36,22 @@ class GeneratedMediaService:
               VALUES(%s,%s,%s,'video',%s,%s,%s,%s,%s,%s,%s::jsonb,%s::jsonb) RETURNING *""",
               (media_id,creator_profile_id,account_id,str(target),poster_path,duration,metadata.get("width"),metadata.get("height"),provider_id,json.dumps(lineage),json.dumps(generation_metadata)))
             record=dict(cur.fetchone())
-        imported=self.import_workflow.import_asset(media_path=target,upload_intent="teaser_video",creator_profile_id=creator_profile_id,creator_intent=CreatorIntent.create("single_asset",legacy_upload_intent="teaser_video",metadata={"source":"video_studio","generated_media_id":str(media_id),"lineage":lineage}),original_filename=target.name,create_product_draft=False,provider_upload_enabled=False,is_test=False,import_session_id=f"video-studio:{media_id}")
+        concept = dict(generation_metadata.get("concept") or {})
+        canonical_title = str(concept.get("title") or "").strip() or None
+        imported=self.import_workflow.import_asset(media_path=target,upload_intent="teaser_video",creator_profile_id=creator_profile_id,creator_intent=CreatorIntent.create("single_asset",legacy_upload_intent="teaser_video",metadata={"source":"video_studio","generated_media_id":str(media_id),"lineage":lineage,"canonical_media_title":canonical_title}),original_filename=target.name,create_product_draft=False,provider_upload_enabled=False,is_test=False,import_session_id=f"video-studio:{media_id}")
         asset_id=getattr(imported,"content_id",None)
         if not getattr(imported,"success",False) or asset_id is None: raise RuntimeError("Generated video was persisted but Asset registration failed.")
+        asset = getattr(imported, "asset", None) or self.import_workflow.assets.get_by_id(int(asset_id))
+        if asset is not None and canonical_title:
+            media_metadata = dict(getattr(asset, "media_metadata", None) or {})
+            media_metadata["canonical_media_title"] = canonical_title
+            media_metadata["video_studio"] = {
+                **dict(media_metadata.get("video_studio") or {}),
+                "generated_media_id": str(media_id),
+                "session_id": str(lineage.get("session_id") or "") or None,
+                "concept_title_source": "selected_concept.title",
+            }
+            self.import_workflow.assets.update_media_metadata(int(asset_id), media_metadata)
         record["asset_id"]=int(asset_id); return record
     @staticmethod
     def probe(path):

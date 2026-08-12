@@ -7,6 +7,7 @@ import {
   MoveRight,
   Pencil,
   Rocket,
+  RotateCw,
   Search,
   SlidersHorizontal,
   Sparkles,
@@ -296,10 +297,11 @@ export function GenerationLibraryPage() {
               </button>
               <LibraryActionGroup label="Generation actions">
                 <LibraryActionButton icon={Rocket} onClick={() => setPublishRecord(record)} tooltip="Publish" />
+                {record.canRegenerate && <LibraryActionButton icon={RotateCw} onClick={() => navigate(`/studio/regeneration?source=${encodeURIComponent(record.image_id)}`)} tooltip="Regenerate from same recipe" />}
                 <LibraryActionButton disabled={pendingAction.endsWith(":edit")} icon={Pencil} onClick={() => runCardAction(record, "edit")} tooltip="Edit Image" />
                 <LibraryActionButton disabled={pendingAction === `${record.image_id}:photoshoot`} icon={Camera} onClick={() => runCardAction(record, "photoshoot")} tooltip="Create Photoshoot" />
                 <LibraryActionButton icon={Video} onClick={() => navigate(videoStudioLink({ type: "generation", id: record.image_id, previewUrl: record.image_url, label: "Generation Library image" }))} tooltip="Create Video" />
-                <LibraryActionButton disabled={pendingAction === `${record.image_id}:move-to-asset-library`} icon={MoveRight} onClick={() => runCardAction(record, "move-to-asset-library")} tooltip="Move to Asset Library" />
+                <LibraryActionButton disabled={pendingAction === `${record.image_id}:move-to-asset-library`} icon={MoveRight} onClick={() => runCardAction(record, "move-to-asset-library")} tooltip={pendingAction === `${record.image_id}:move-to-asset-library` ? "Moving / Analyzing" : "Move to Asset Library"} />
                 <LibraryActionButton disabled={pendingAction === `${record.image_id}:remove`} icon={Trash2} onClick={() => runCardAction(record, "remove")} tooltip="Remove Content" />
               </LibraryActionGroup>
             </article>

@@ -1,9 +1,12 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, useNavigate } from "react-router-dom";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { PhotoshootGalleryPage } from "./PhotoshootGalleryPage";
 
 const item = { deliverableId: "set-1", name: "Golden Hour Escape", description: "A two-image outdoor collection in warm natural light.", completedAt: "2026-07-21T00:00:00Z", shotCount: 2, imageUrl: "/cover", registrationState: "PHOTOSHOOT_COMPLETE", intelligenceStatus: "READY" };
+const stylesheetText = readFileSync(resolve("src/features/photoshoot-gallery/photoshoot-gallery.css"), "utf8");
 
 function GalleryHarness() {
   const navigate = useNavigate();
@@ -12,6 +15,24 @@ function GalleryHarness() {
 
 describe("PhotoshootGalleryPage", () => {
   afterEach(() => vi.restoreAllMocks());
+
+  it("reserves stable filmstrip geometry before shot images load", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation((input) => Promise.resolve(new Response(JSON.stringify(
+      String(input).endsWith("set-1") ? {
+        ...item, intelligence: {}, productionIntelligence: {}, technical: {},
+        members: Array.from({ length: 5 }, (_, index) => ({ assetId: 20 + index, shotOrder: index + 1, imageUrl: `/slow-shot-${index + 1}`, intelligence: {} })),
+      } : { items: [item] }
+    ), { status: 200, headers: { "content-type": "application/json" } })));
+    render(<MemoryRouter><PhotoshootGalleryPage /></MemoryRouter>);
+    fireEvent.click(await screen.findByRole("article"));
+
+    const strip = await screen.findByLabelText("Photoshoot filmstrip");
+    expect(strip.querySelectorAll(".photoshoot-detail-shot__media")).toHaveLength(5);
+    expect(screen.getAllByRole("button", { name: /Select shot/ })).toHaveLength(5);
+    expect(stylesheetText).toMatch(/\.photoshoot-detail-shot\s*\{[^}]*flex:\s*0 0 clamp\([^}]*min-width:\s*clamp\(/);
+    expect(stylesheetText).toMatch(/\.photoshoot-detail-shot__media\s*\{[^}]*width:\s*100%[^}]*aspect-ratio:\s*3\/4/);
+    expect(stylesheetText).toMatch(/\.photoshoot-detail-filmstrip\s*\{[^}]*overflow-x:\s*auto/);
+  });
 
   it("loads Gallery data without triggering intelligence analysis", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(

@@ -245,6 +245,7 @@ class AssetRepository:
         search: str | None,
         media_type: str | None,
         classification: str | None,
+        sale_destination: str | None,
         creator_profile_id: int,
         availability_predicate: str | None = None,
     ) -> tuple[str, list[Any]]:
@@ -270,6 +271,18 @@ class AssetRepository:
         if classification:
             filters.append("classification = %s")
             params.append(classification)
+        if sale_destination:
+            configured_destinations = (
+                "COALESCE(media_metadata->'standalone_sale_preparation'->'destinations', '[]'::jsonb)"
+            )
+            if sale_destination == "CHAT":
+                filters.append(f"{configured_destinations} = '[\"CHAT\"]'::jsonb")
+            elif sale_destination == "CONTENT_VAULT":
+                filters.append(f"{configured_destinations} = '[\"CONTENT_VAULT\"]'::jsonb")
+            elif sale_destination == "NOT_PREPARED":
+                filters.append(f"{configured_destinations} = '[]'::jsonb")
+            else:
+                filters.append("FALSE")
         if media_type == "image":
             filters.append(
                 "(LOWER(COALESCE(media_metadata->>'media_type', '')) = 'image' "
@@ -292,6 +305,7 @@ class AssetRepository:
         search: str | None,
         media_type: str | None,
         classification: str | None,
+        sale_destination: str | None = None,
         creator_profile_id: int,
         limit: int,
         availability_predicate: str | None = None,
@@ -301,6 +315,7 @@ class AssetRepository:
             search=search,
             media_type=media_type,
             classification=classification,
+            sale_destination=sale_destination,
             creator_profile_id=creator_profile_id,
             availability_predicate=availability_predicate,
         )
@@ -333,6 +348,96 @@ class AssetRepository:
             int(summary["total"] or 0),
             tuple(sorted(str(value) for value in (summary["classifications"] or ()))),
         )
+
+    def asset_library_counts(self, creator_profile_id: int) -> dict[str, int]:
+        """Count registered grid media without constructing Asset models."""
+        base = (
+            "COALESCE(is_active, TRUE)=TRUE AND COALESCE(is_test, FALSE)=FALSE "
+            "AND COALESCE(status, '')='approved' AND creator_profile_id=%s "
+            "AND COALESCE(media_metadata->'reference_library'->>'is_reference', 'false')<>'true'"
+        )
+        with self._connection_factory() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(f"""
+                    SELECT
+                      COUNT(*) FILTER (WHERE classification='SINGLE_IMAGE' AND (
+                        LOWER(COALESCE(media_metadata->>'media_type',''))='image'
+                        OR LOWER(COALESCE(file_path,'')) ~ '\\.(gif|jpe?g|png|webp)$'
+                      )) AS images,
+                      COUNT(*) FILTER (WHERE (
+                        LOWER(COALESCE(media_metadata->>'media_type',''))='video'
+                        OR LOWER(COALESCE(file_path,'')) ~ '\\.(m4v|mov|mp4|webm)$'
+                      )) AS videos
+                    FROM public.content_items WHERE {base}
+                """, (int(creator_profile_id),))
+                row = cursor.fetchone() or {}
+                cursor.execute("""
+                    SELECT
+                      (SELECT COUNT(*) FROM public.commercial_offerings
+                       WHERE creator_profile_id=%s AND offering_type='BUNDLE' AND status<>'ARCHIVED') AS bundles,
+                      (SELECT COUNT(*) FROM public.photoshoot_commerce_deliverables
+                       WHERE creator_profile_id=%s AND registration_state='IN_ASSET_LIBRARY'
+                         AND is_archived=FALSE) AS photoshoots
+                """, (int(creator_profile_id), int(creator_profile_id)))
+                related = cursor.fetchone() or {}
+        return {
+            "images": int(row.get("images") or 0),
+            "videos": int(row.get("videos") or 0),
+            "bundles": int(related.get("bundles") or 0),
+            "photoshoots": int(related.get("photoshoots") or 0),
+        }
+
+    def asset_library_card_summaries(
+        self, asset_ids: Iterable[int], *, creator_profile_id: int,
+    ) -> tuple[dict, ...]:
+        """Return one set-oriented, filesystem-free card projection."""
+        ids = tuple(int(value) for value in asset_ids)
+        if not ids:
+            return ()
+        with self._connection_factory() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    SELECT ci.id,ci.file_name,ci.file_path,ci.classification,ci.status,
+                           ci.created_at,ci.media_metadata,ci.local_vault_path,
+                           ci.blurred_preview_path,
+                           aip.analysis_status AS intelligence_status,
+                           aip.error_message AS intelligence_error,
+                           COALESCE(NULLIF(BTRIM(aip.profile_data->>'title'),''),
+                             NULLIF(BTRIM(ci.media_metadata->>'canonical_media_title'),''),
+                             NULLIF(BTRIM(ci.file_name),'')) AS display_name,
+                           offering.offering_id,offering.status AS offering_status,
+                           offering.price_minor,offering.currency,
+                           offering.primary_sales_channel,
+                           publication.publication_id,publication.status AS publication_status,
+                           publication.provider_resource_status,publication.last_error,
+                           publication.publication_metadata,
+                           upload.upload_status,upload.processing_status,
+                           upload.last_error AS upload_error,
+                           teaser.chat_status,teaser.vault_status
+                    FROM public.content_items ci
+                    LEFT JOIN public.asset_intelligence_profiles aip ON aip.asset_id=ci.id
+                    LEFT JOIN LATERAL (
+                      SELECT o.* FROM public.commercial_offering_assets oa
+                      JOIN public.commercial_offerings o ON o.offering_id=oa.offering_id
+                      WHERE oa.asset_id=ci.id AND o.creator_profile_id=%s
+                        AND o.offering_type='SINGLE_IMAGE' AND o.status<>'ARCHIVED'
+                      ORDER BY o.updated_at DESC,o.offering_id DESC LIMIT 1
+                    ) offering ON TRUE
+                    LEFT JOIN public.commercial_publications publication
+                      ON publication.commercial_offering_id=offering.offering_id
+                     AND publication.provider='FANVUE'
+                    LEFT JOIN public.commercial_publication_uploads upload
+                      ON upload.publication_id=publication.publication_id
+                     AND upload.asset_id=ci.id AND upload.provider='FANVUE'
+                    LEFT JOIN LATERAL (
+                      SELECT MAX(status) FILTER (WHERE distribution_use='CHAT') AS chat_status,
+                             MAX(status) FILTER (WHERE distribution_use='CONTENT_VAULT') AS vault_status
+                      FROM public.commercial_teasers WHERE source_asset_id=ci.id
+                    ) teaser ON TRUE
+                    WHERE ci.id=ANY(%s) AND ci.creator_profile_id=%s
+                """, (int(creator_profile_id), list(ids), int(creator_profile_id)))
+                rows = {int(row["id"]): dict(row) for row in cursor.fetchall()}
+        return tuple(rows[value] for value in ids if value in rows)
 
     def get_by_generation_image_id(self, image_id: str) -> Asset | None:
         with self._connection_factory() as conn:
@@ -562,6 +667,17 @@ class AssetRepository:
                 media_metadata,
                 connection=conn,
             )
+
+    def update_blurred_preview(self, asset_id: int, *, path: str,
+                               media_metadata: Mapping[str, Any]) -> None:
+        with self._connection_factory() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """UPDATE public.content_items
+                       SET blurred_preview_path=%s,media_metadata=%s::jsonb
+                       WHERE id=%s""",
+                    (path, json.dumps(dict(media_metadata or {}), default=str), asset_id),
+                )
 
     def update_analysis_fields(
         self,

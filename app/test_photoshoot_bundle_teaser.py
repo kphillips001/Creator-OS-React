@@ -105,6 +105,20 @@ def test_any_member_creates_canonical_derivative_lineage_and_persisted_edit_stat
     assert 100 not in {item["asset_id"] for item in before_members}
 
 
+def test_ready_teaser_is_reconstructed_after_service_reentry(tmp_path):
+    service, repository, lineage, photoshoots = setup(tmp_path)
+    saved = service.save("set-1", creator_profile_id=7, source_asset_id=2,
+        mask_data=mask(), mask_width=20, mask_height=20, blur_strength=30)
+    reopened = PhotoshootBundleTeaserService(
+        photoshoots=photoshoots, repository=repository, assets=service.assets,
+        lineage=lineage, renderer=Renderer(), vault=service.vault,
+    ).inspect("set-1", creator_profile_id=7)
+    assert reopened["status"] == "READY"
+    assert reopened["sourceAssetId"] == saved["sourceAssetId"] == 2
+    assert reopened["teaserAssetId"] == saved["teaserAssetId"] == 100
+    assert reopened["previewUrl"] == "/api/v1/assets/100/media"
+
+
 def test_historical_selective_blur_without_authoritative_teaser_row_is_not_configured(tmp_path):
     service, repository, lineage, _ = setup(tmp_path)
     lineage.calls.append({

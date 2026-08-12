@@ -181,6 +181,21 @@ def test_repeated_preparation_reuses_offerings_and_publications(tmp_path):
     assert publications.created == 2
 
 
+def test_session_readiness_projects_persisted_ai_chat_channel_only_after_preparation(tmp_path):
+    preparation, _, _ = service(tmp_path)
+    unprepared = preparation.inspect("deliverable", creator_profile_id=1)
+    assert unprepared["salesChannel"] is None
+
+    stage(preparation)
+    prepared = preparation.inspect("deliverable", creator_profile_id=1)
+    assert prepared["salesChannel"] == "CHAT"
+    assert {
+        step["primarySalesChannel"]
+        for step in prepared["steps"] if step["access"] == "PAID"
+    } == {"AI_CHAT"}
+    assert prepared["sellingMode"] == "SESSION"
+
+
 def test_aggregate_readiness_requires_every_paid_publication(tmp_path):
     preparation, offerings, publications = service(tmp_path)
     stage(preparation)

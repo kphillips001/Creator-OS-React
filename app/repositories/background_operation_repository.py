@@ -66,6 +66,16 @@ class BackgroundOperationRepository:
             tuple(params),
         )
 
+    def latest_by_idempotency(self, *, creator_profile_id: int,
+                              idempotency_key: str) -> BackgroundOperation | None:
+        """Resolve active or terminal workflow state for durable UI reconnection."""
+        return self._one(
+            """SELECT * FROM public.background_operations
+               WHERE creator_profile_id=%s AND idempotency_key=%s
+               ORDER BY created_at DESC LIMIT 1""",
+            (int(creator_profile_id), str(idempotency_key)),
+        )
+
     def list_active(self, *, creator_profile_id: int, account_id: int | None = None,
                     workspace: str | None = None, subject_type: str | None = None,
                     subject_id: str | None = None) -> tuple[BackgroundOperation, ...]:

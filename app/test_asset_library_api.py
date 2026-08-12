@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 from app.api import asset_library as asset_api
 from app.api import generation_library as generation_api
 from app.models.asset_library import (
+    AssetDerivativeSummary,
     AssetLibraryDetails,
     AssetLibraryFilter,
     AssetLibraryItem,
@@ -25,26 +26,105 @@ from app.services.staged_asset_registration_service import (
 from app.repositories.photoshoot_commerce_repository import PhotoshootCommerceRepository
 
 
-def test_session_strategy_endpoint_uses_canonical_generator_and_returns_readiness(monkeypatch):
-    calls = []
+def test_asset_library_counts_use_lightweight_aggregate_without_hydration(monkeypatch):
+    calls = {"records": 0}
+
+    class Repository:
+        def asset_library_counts(self, creator_profile_id):
+            assert creator_profile_id == 7
+            return {"images": 8, "photoshoots": 3, "videos": 2, "bundles": 4}
+
+    def records():
+        calls["records"] += 1
+        return (
+            SimpleNamespace(creator_profile_id=7, status="staged_asset_library"),
+            SimpleNamespace(creator_profile_id=8, status="staged_asset_library"),
+            SimpleNamespace(creator_profile_id=7, status="active"),
+        )
+
     monkeypatch.setattr(asset_api, "_creator_profile", lambda: {"id": 7})
+    monkeypatch.setattr(asset_api, "AssetRepository", Repository)
+    monkeypatch.setattr(asset_api, "GenerationLibraryService", lambda: SimpleNamespace(list_records=records))
+    monkeypatch.setattr(asset_api, "AssetLibraryService", lambda: (_ for _ in ()).throw(
+        AssertionError("count endpoint must not construct the full Asset Library service")))
+    monkeypatch.setattr(asset_api, "StandaloneImageSalePreparationService", lambda: (_ for _ in ()).throw(
+        AssertionError("count endpoint must not inspect sale preparation")))
+
+    assert asset_api.asset_library_counts() == {
+        "images": 9, "photoshoots": 3, "videos": 2, "bundles": 4,
+    }
+    assert calls["records"] == 1
+
+
+def test_session_strategy_endpoint_queues_one_durable_operation(monkeypatch):
+    calls = []
+    operation = SimpleNamespace(
+        operation_id="operation-1", status="QUEUED", operation_type="photoshoot_session_sales_strategy",
+    )
+    class Operations:
+        repository = SimpleNamespace(latest_by_idempotency=lambda **_: None)
+        def create(self, **values): calls.append(values); return operation, True
+        def payload(self, item): return {"operationId": item.operation_id, "status": item.status}
+    monkeypatch.setattr(asset_api, "_creator_profile", lambda: {"id": 7})
+    monkeypatch.setattr(asset_api, "_current_account_id", lambda: 3)
     monkeypatch.setattr(asset_api, "PhotoshootCommerceRepository", lambda: SimpleNamespace(
         get=lambda _deliverable_id: {
-            "creator_profile_id": 7,
-            "registration_state": "IN_ASSET_LIBRARY",
+            "creator_profile_id": 7, "registration_state": "IN_ASSET_LIBRARY",
+            "selling_mode": "SESSION", "photoshoot_session_id": "session-1",
         }
     ))
-    monkeypatch.setattr(asset_api, "PhotoshootCommerceDeliverableService", lambda: SimpleNamespace(
-        generate_session_sales_strategy=lambda deliverable_id, creator_profile_id, strategy_version: calls.append(
-            (deliverable_id, creator_profile_id, strategy_version))))
+    monkeypatch.setattr(asset_api, "BackgroundOperationService", Operations)
     monkeypatch.setattr(asset_api, "PhotoshootSalePreparationService", lambda: SimpleNamespace(
         inspect=lambda deliverable_id, creator_profile_id: {
             "deliverableId": deliverable_id, "sellingMode": "SESSION",
-            "status": "NOT_PREPARED", "steps": [],
+            "status": "STRATEGY_REQUIRED", "steps": [],
         }))
     result = asset_api.generate_photoshoot_session_sales_strategy("set-1")
-    assert result["status"] == "NOT_PREPARED"
-    assert calls == [("set-1", 7, "photoshoot_session_sales_v1")]
+    assert result["status"] == "STRATEGY_REQUIRED"
+    assert result["strategyOperation"] == {"operationId": "operation-1", "status": "QUEUED"}
+    assert len(calls) == 1
+    assert calls[0]["idempotency_key"] == "photoshoot-session-sales-strategy:set-1:photoshoot_session_sales_v1"
+    assert calls[0]["executor_key"] == "photoshoot_session_sales_strategy"
+
+
+def test_session_strategy_endpoint_reuses_ready_strategy_without_operation(monkeypatch):
+    monkeypatch.setattr(asset_api, "_creator_profile", lambda: {"id": 7})
+    monkeypatch.setattr(asset_api, "PhotoshootCommerceRepository", lambda: SimpleNamespace(get=lambda _: {
+        "creator_profile_id": 7, "registration_state": "IN_ASSET_LIBRARY",
+        "selling_mode": "SESSION", "photoshoot_session_id": "session-1",
+    }))
+    monkeypatch.setattr(asset_api, "PhotoshootSalePreparationService", lambda: SimpleNamespace(
+        inspect=lambda *_args, **_kwargs: {"deliverableId": "set-1", "sellingMode": "SESSION", "status": "NOT_PREPARED", "steps": []}))
+    monkeypatch.setattr(asset_api, "BackgroundOperationService", lambda: (_ for _ in ()).throw(
+        AssertionError("READY strategy must not create or inspect an operation")))
+    assert asset_api.generate_photoshoot_session_sales_strategy("set-1")["status"] == "NOT_PREPARED"
+
+
+def test_session_strategy_endpoint_reuses_active_operation(monkeypatch):
+    active = SimpleNamespace(operation_id="operation-1", status="RUNNING")
+    class Operations:
+        repository = SimpleNamespace(latest_by_idempotency=lambda **_: active)
+        def create(self, **_): raise AssertionError("active operation must be reused")
+        def payload(self, item): return {"operationId": item.operation_id, "status": item.status}
+    monkeypatch.setattr(asset_api, "_creator_profile", lambda: {"id": 7})
+    monkeypatch.setattr(asset_api, "PhotoshootCommerceRepository", lambda: SimpleNamespace(get=lambda _: {
+        "creator_profile_id": 7, "registration_state": "IN_ASSET_LIBRARY",
+        "selling_mode": "SESSION", "photoshoot_session_id": "session-1",
+    }))
+    monkeypatch.setattr(asset_api, "PhotoshootSalePreparationService", lambda: SimpleNamespace(
+        inspect=lambda *_args, **_kwargs: {"deliverableId": "set-1", "sellingMode": "SESSION", "status": "STRATEGY_REQUIRED", "steps": []}))
+    monkeypatch.setattr(asset_api, "BackgroundOperationService", Operations)
+    assert asset_api.generate_photoshoot_session_sales_strategy("set-1")["strategyOperation"]["status"] == "RUNNING"
+
+
+def test_session_strategy_endpoint_rejects_bundle_before_operation(monkeypatch):
+    monkeypatch.setattr(asset_api, "_creator_profile", lambda: {"id": 7})
+    monkeypatch.setattr(asset_api, "PhotoshootCommerceRepository", lambda: SimpleNamespace(get=lambda _: {
+        "creator_profile_id": 7, "registration_state": "IN_ASSET_LIBRARY",
+        "selling_mode": "BUNDLE", "photoshoot_session_id": "session-1",
+    }))
+    with pytest.raises(HTTPException, match="SESSION selling mode"):
+        asset_api.generate_photoshoot_session_sales_strategy("set-1")
 
 
 def test_canonical_asset_id_uses_direct_lookup_without_reference_enrichment(monkeypatch):
@@ -59,6 +139,37 @@ def test_canonical_asset_id_uses_direct_lookup_without_reference_enrichment(monk
     monkeypatch.setattr(asset_api, "ReferenceLibraryService", ReferenceService)
 
     assert asset_api._canonical_asset_id(7) == 84
+
+
+def test_operator_intelligence_payload_is_canonical_and_omits_internal_fields(monkeypatch):
+    profile = SimpleNamespace(
+        title="Golden Hour Balcony Gaze", content_summary="A warm balcony portrait.",
+        short_description=None, setting=None, environment=None, activity=None,
+        pose=None, expression=None, mood="intimate", camera_framing=None,
+        camera_angle=None, lighting=None, safety_classification="NUDITY",
+        nudity_level="partial", themes=("urban intimacy",), tags=("balcony",),
+    )
+    content = SimpleNamespace(content_profile={
+        "summary": "provider fallback must not replace canonical summary",
+        "ai_metadata": {
+            "semantic": {"atmosphere": "warm and luminous", "raw_response": "secret"},
+            "safety": {"detected_explicit_regions": ["internal"]},
+        },
+        "provenance": {"provider": "grok-vision"},
+    })
+    monkeypatch.setattr(asset_api, "ContentIntelligenceProfileRepository", lambda: SimpleNamespace(
+        get_by_asset_id=lambda asset_id: content if asset_id == 151 else None))
+
+    payload = asset_api._operator_intelligence_payload(151, profile)
+
+    assert payload["title"] == "Golden Hour Balcony Gaze"
+    assert payload["status"] == "ANALYZING"
+    assert payload["summary"] == "A warm balcony portrait."
+    assert payload["atmosphere"] == "warm and luminous"
+    assert payload["themes"] == ["urban intimacy"]
+    assert "provenance" not in payload
+    assert "raw_response" not in payload
+    assert "detected_explicit_regions" not in payload
 
 
 def test_registered_asset_archive_and_restore_preserve_identity_and_creator_scope(monkeypatch):
@@ -209,20 +320,29 @@ def test_all_media_merge_is_complete_union_across_sources():
 
 def _move_setup(monkeypatch, record, *, already_moved=False):
     library = SimpleNamespace(get=lambda _image_id: record)
-    library.move_to_asset_library = lambda _image_id: (SimpleNamespace(image_id=record.image_id, status="staged_asset_library"), already_moved)
+    moved = SimpleNamespace(image_id=record.image_id, status="staged_asset_library", creator_profile_id=7)
+    library.move_to_asset_library = lambda _image_id: (moved, already_moved)
+    registrar = SimpleNamespace(register=lambda moved_record, *, creator_profile_id: SimpleNamespace(
+        success=True, asset_id=51, already_registered=already_moved,
+        analysis_status="NUDENET_PENDING",
+        message="Asset is registered. Intelligence analysis is in progress.",
+    ))
     monkeypatch.setattr(generation_api, "_creator_profile_id", lambda: 7)
     monkeypatch.setattr(generation_api, "GenerationLibraryService", lambda: library)
+    monkeypatch.setattr(generation_api, "StagedAssetRegistrationService", lambda **kwargs: registrar)
 
 
-def test_move_generation_stages_without_asset_registration(monkeypatch):
+def test_move_generation_registers_and_queues_intelligence(monkeypatch):
     _move_setup(monkeypatch, _record())
     result = generation_api.move_generation_to_asset_library("generated-1")
     assert result == {
         "success": True,
         "generation_id": "generated-1",
         "already_moved": False,
-        "status": "staged_asset_library",
-        "message": "Image moved to Asset Library.",
+        "status": "analyzing",
+        "asset_id": 51,
+        "analysis_status": "NUDENET_PENDING",
+        "message": "Asset is registered. Intelligence analysis is in progress.",
     }
 
 
@@ -244,6 +364,50 @@ def test_move_back_endpoint_restores_only_staged_generation(monkeypatch):
 
     assert result["status"] == "active"
     assert result["message"] == "Image moved back to Generation Library."
+
+
+def test_registered_generation_return_uses_canonical_reversal(monkeypatch):
+    record = _record(status="business_asset_registered", imported_asset_id=42)
+    active = _record(status="active", imported_asset_id=None)
+    library = SimpleNamespace(get=lambda _image_id: active if getattr(library, "returned", False) else record)
+    class ReturnService:
+        def __init__(self, generation_library): self.library = generation_library
+        def return_single_image(self, generation_id, creator_profile_id):
+            assert generation_id == "generated-1" and creator_profile_id == 7
+            self.library.returned = True
+            return SimpleNamespace(asset_id=42)
+    monkeypatch.setattr(generation_api, "_creator_profile_id", lambda: 7)
+    monkeypatch.setattr(generation_api, "GenerationLibraryService", lambda: library)
+    monkeypatch.setattr(generation_api, "AssetLibraryReturnService", ReturnService)
+
+    result = generation_api.move_generation_back_to_generation_library("generated-1")
+
+    assert result["status"] == "active"
+    assert result["asset_id"] == 42
+    assert "Intelligence was removed" in result["message"]
+
+
+def test_business_registration_reversal_clears_asset_identity_and_stale_markers(tmp_path):
+    service = GenerationLibraryService(storage_dir=tmp_path / "library", asset_repository=SimpleNamespace(get_by_id=lambda _id: None))
+    (tmp_path / "image.png").write_bytes(b"png")
+    record = GeneratedImageRecord(
+        image_id="generated-1", generation_job_id="job-1", generation_request_id="request-1",
+        generation_result_id="result-1", output_reference=str(tmp_path / "image.png"), creator_profile_id=7,
+        provider_id="provider", prompt_plan_id="plan", prompt_text="portrait",
+        creative_mode=None, reference_asset_id=None, status="business_asset_registered",
+        review_state="business_asset_registered", imported_asset_id=42,
+        generation_metadata={"registered_asset_id": 42, "asset_registration_phase": 4,
+                             "business_asset_analysis_status": "READY", "source_marker": "preserved"},
+    )
+    service._write_records([record])
+
+    returned, duplicate = service.move_back_to_generation_library(
+        record.image_id, registration_reversed=True)
+
+    assert duplicate is False
+    assert returned.status == "active" and returned.imported_asset_id is None
+    assert returned.generation_metadata == {"source_marker": "preserved"}
+    assert service.browse().records == (returned,)
 
 
 def test_protected_reference_generation_cannot_be_staged_or_moved_back(tmp_path):
@@ -460,13 +624,13 @@ def test_list_assets_applies_filters_and_pagination(monkeypatch):
     monkeypatch.setattr(asset_api, "AssetLibraryService", lambda: service)
     monkeypatch.setattr(asset_api, "GenerationLibraryService", lambda: SimpleNamespace(list_records=lambda: ()))
 
-    result = asset_api.list_assets(search="face", media_type="image", classification="premium", page=2, page_size=10)
+    result = asset_api.list_assets(search="face", media_type="image", destination="CONTENT_VAULT", page=2, page_size=10)
     assert [item["assetId"] for item in result["assets"]] == list(range(11, 21))
     assert result["totalPages"] == 3
     assert result["assets"][0]["isCanonicalReference"] is False
     assert result["assets"][0]["itemKind"] == "registered_asset"
     filters = captured["filters"]
-    assert (filters.search, filters.media_type, filters.classification, filters.creator_profile_id) == ("face", "image", "premium", 7)
+    assert (filters.search, filters.media_type, filters.classification, filters.sale_destination, filters.creator_profile_id) == ("face", "image", None, "CONTENT_VAULT", 7)
     assert filters.is_reference_image is False
     assert captured["candidate_limit"] == 20
     assert captured["built_ids"] == tuple(range(11, 21))
@@ -524,6 +688,23 @@ def test_asset_library_defensively_excludes_reference_items(monkeypatch):
     payload = asset_api.list_assets(page=1, page_size=18)
 
     assert [item["assetId"] for item in payload["assets"]] == [42]
+
+
+def test_single_image_read_model_exposes_content_vault_publication_state(monkeypatch):
+    state = {"assetId": 42, "offeringId": "offering-1", "destinations": ["CONTENT_VAULT"]}
+    monkeypatch.setattr(asset_api, "StandaloneImageSalePreparationService", lambda: SimpleNamespace(
+        inspect=lambda *_args, **_kwargs: dict(state)))
+    monkeypatch.setattr(asset_api, "CommerceTelegramVaultService", lambda: SimpleNamespace(
+        status=lambda *_args, **_kwargs: {
+            "status": "PUBLISHED", "publishedAt": "2026-08-08T01:00:00Z",
+            "providerMessageId": "telegram-77", "canPublish": False,
+            "configured": True,
+        }))
+
+    result = asset_api._standalone_sale_preparation(42, 7)
+
+    assert result["contentVaultPublication"]["status"] == "PUBLISHED"
+    assert result["contentVaultPublication"]["providerMessageId"] == "telegram-77"
 
 
 def test_list_assets_merges_staged_generation_with_registered_assets(monkeypatch, tmp_path):
@@ -597,8 +778,81 @@ def test_asset_details_and_media_are_creator_scoped(monkeypatch, tmp_path: Path)
 
     payload = asset_api.asset_details(42)
     assert payload["registrationSource"] == "generation_library"
+    assert payload["displayName"] == "Portrait"
     assert payload["mediaAvailable"] is True
     assert Path(asset_api.asset_media(42).path) == media
+
+
+def test_asset_display_name_rejects_generated_and_internal_workflow_labels():
+    profile = SimpleNamespace(title=None)
+    generated = _item(asset_id=146)
+    generated = type(generated)(**{
+        **generated.__dict__,
+        "file_name": "generated_image_ababc4467fdaf560323e8164.png",
+        "media_metadata": {"plannerItemTitle": "Softcore concept 8"},
+    })
+
+    assert asset_api._asset_display_name(generated, profile) == "Asset #146"
+    assert asset_api._meaningful_filename_title("sunlit_kitchen_reveal.png") == "Sunlit Kitchen Reveal"
+
+
+def test_asset_display_name_prefers_intelligence_then_video_metadata():
+    item = _item()
+    item = type(item)(**{**item.__dict__, "media_metadata": {"canonical_media_title": "Steamy Shower Escape"}})
+
+    assert asset_api._asset_display_name(item, SimpleNamespace(title="Sunlit Kitchen Reveal")) == "Sunlit Kitchen Reveal"
+    assert asset_api._asset_display_name(item, SimpleNamespace(title=None)) == "Steamy Shower Escape"
+
+
+def test_asset_details_exposes_existing_blur_without_generating_it(monkeypatch, tmp_path: Path):
+    blur = tmp_path / "portrait_blurred.jpg"
+    blur.write_bytes(b"blur")
+    item = _item()
+    item = type(item)(**{**item.__dict__, "classification": "SINGLE_IMAGE"})
+    details = AssetLibraryDetails(
+        item=item, creator_profile_id=7,
+        derivative=AssetDerivativeSummary(preview_path=str(blur)),
+    )
+    calls = []
+    service = SimpleNamespace(get_asset_details=lambda asset_id: calls.append(asset_id) or details)
+    monkeypatch.setattr(asset_api, "_creator_profile", lambda: {"id": 7})
+    monkeypatch.setattr(asset_api, "_canonical_asset_id", lambda _profile_id: None)
+    monkeypatch.setattr(asset_api, "AssetLibraryService", lambda: service)
+
+    payload = asset_api.asset_details(42)
+
+    # A generic derivative is not a destination-enrolled Commercial Asset.
+    assert payload["commercialAssets"] == []
+    assert Path(asset_api.asset_blurred_preview(42).path) == blur
+    assert calls == [42, 42]
+
+
+def test_unprepared_asset_details_has_no_commercial_preview(monkeypatch):
+    item = _item()
+    item = type(item)(**{**item.__dict__, "classification": "SINGLE_IMAGE"})
+    details = AssetLibraryDetails(item=item, creator_profile_id=7, derivative=AssetDerivativeSummary())
+    monkeypatch.setattr(asset_api, "_creator_profile", lambda: {"id": 7})
+    monkeypatch.setattr(asset_api, "_canonical_asset_id", lambda _profile_id: None)
+    monkeypatch.setattr(asset_api, "AssetLibraryService", lambda: SimpleNamespace(get_asset_details=lambda _id: details))
+
+    assert asset_api.asset_details(42)["commercialAssets"] == []
+
+
+def test_asset_details_exposes_canonical_teaser_distribution_use(monkeypatch):
+    item = _item()
+    item = type(item)(**{**item.__dict__, "classification": "SINGLE_IMAGE"})
+    details = AssetLibraryDetails(item=item, creator_profile_id=7, derivative=AssetDerivativeSummary())
+    monkeypatch.setattr(asset_api, "_creator_profile", lambda: {"id": 7})
+    monkeypatch.setattr(asset_api, "_canonical_asset_id", lambda _profile_id: None)
+    monkeypatch.setattr(asset_api, "AssetLibraryService", lambda: SimpleNamespace(get_asset_details=lambda _id: details))
+    monkeypatch.setattr(asset_api, "CommercialTeaserService", lambda: SimpleNamespace(list=lambda _id: ({
+        "teaser_style": "SELECTIVE_BLUR", "distribution_use": "CONTENT_VAULT",
+        "status": "READY", "derived_asset_id": 91,
+    },)))
+
+    commercial = asset_api.asset_details(42)["commercialAssets"][0]
+    assert commercial["distributionUse"] == "CONTENT_VAULT"
+    assert commercial["label"] == "Content Vault Teaser — Selective Blur"
 
 
 def test_asset_thumbnail_uses_cache_and_preserves_original_route(monkeypatch, tmp_path: Path):

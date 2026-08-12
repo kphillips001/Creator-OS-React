@@ -37,6 +37,7 @@ def test_existing_provider_adapters_normalize_their_owned_fields(tmp_path):
         "reasoning": "must remain raw",
     }).analyze(request(image))
     grok = GrokVisionAssetIntelligenceAdapter(runner=lambda _: {
+        "title": "Quiet Studio Confidence",
         "short_description": "Grok description", "tags": ["confident"],
         "themes": ["editorial"], "safety_classification": "SAFE",
         "quality_score": .9, "keywords": ["portrait", "studio"],
@@ -47,13 +48,14 @@ def test_existing_provider_adapters_normalize_their_owned_fields(tmp_path):
     ]).analyze(request(image))
 
     vision_fields = {"short_description", "tags", "themes", "safety_classification", "quality_score", "keywords"}
-    semantic_fields = vision_fields | {"content_summary", "search_phrases"}
+    semantic_fields = vision_fields | {"title", "content_summary", "search_phrases"}
     assert set(gpt.normalized_fields) == vision_fields
     assert set(grok.normalized_fields) == semantic_fields
     assert set(nude.normalized_fields) <= vision_fields
     assert nude.normalized_fields["safety_classification"] == "NUDITY"
     assert "reasoning" not in gpt.normalized_fields
     assert "private" not in grok.normalized_fields
+    assert grok.normalized_fields["title"] == "Quiet Studio Confidence"
 
 
 def test_three_fake_providers_build_one_ready_unified_profile(tmp_path):
@@ -65,6 +67,7 @@ def test_three_fake_providers_build_one_ready_unified_profile(tmp_path):
             "detected_themes": ["studio"], "classification": "TEASE", "confidence": .8,
         }),
         "grok-vision": GrokVisionAssetIntelligenceAdapter(runner=lambda _: {
+            "title": "Quiet Studio Confidence",
             "short_description": "Unified description", "tags": ["portrait", "confident"],
             "themes": ["studio"], "safety_classification": "SAFE",
             "quality_score": .95, "keywords": ["portrait", "studio"],
@@ -88,6 +91,7 @@ def test_three_fake_providers_build_one_ready_unified_profile(tmp_path):
     assert len(profiles.profiles) == 1
     assert profile.analysis_status == AssetIntelligenceStatus.READY
     assert profile.short_description == "Unified description"
+    assert profile.title == "Quiet Studio Confidence"
     assert profile.tags
     assert profile.themes == ("studio",)
     assert profile.safety_classification == "SAFE"

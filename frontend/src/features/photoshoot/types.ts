@@ -46,6 +46,16 @@ export type CreativeDirectorRecommendation = {
   pose_composition: string;
 };
 
+export type FreeflowIdeaSet = {
+  ideaSetId: string;
+  ideas: string[];
+  recommendedIdea: string;
+  planningShot: number;
+  approvedShotCount: number;
+  createdAt: string;
+  usage: Record<string, string[]>;
+};
+
 export type PlanningMode = "frame_by_frame" | "full_plan";
 
 export type PlannedShot = {
@@ -85,6 +95,11 @@ export type PhotoshootCurationResult = {
   photoshoot_deliverable_id: string | null; image_asset_generation_ids: string[];
 };
 
+export type PhotoshootCompletionSummary = {
+  deliverableId: string | null;
+  savedImageCount: number;
+};
+
 export type CreativeDirectorContext = {
   sessionId: string;
   creativeMode: "safe" | "premium" | "explicit";
@@ -93,6 +108,7 @@ export type CreativeDirectorContext = {
   currentPrompt: string;
   ideas: string[];
   selectedInspiration: string;
+  inspirationEdits: Record<string, string>;
   recommendation: CreativeDirectorRecommendation | null;
   directionApproved: boolean;
   planningMode: PlanningMode;
@@ -106,6 +122,7 @@ export type CreativeDirectorContext = {
   sessionPlan: PlannedShot[];
   sessionPlanIndex: number;
   sessionPlanApproved: boolean;
+  freeflowIdeaSet: FreeflowIdeaSet | null;
 };
 
 export type PhotoshootContext =

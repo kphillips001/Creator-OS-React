@@ -1,4 +1,4 @@
-import { ImagePlus, Pencil, Video } from "lucide-react";
+import { ImagePlus, Pencil, Scissors, Sparkles, Video } from "lucide-react";
 import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -24,6 +24,8 @@ import type {
 import { useEditStudio } from "./useEditStudio";
 import "./edit-studio.css";
 import { videoStudioLink } from "../../infrastructure/api/videoStudioApi";
+import { CropTool } from "./QuickEditWorkspace";
+import { quickEditTools } from "./quickEditTools";
 
 let nextReferenceId = 0;
 const StableSourceImage = memo(LibraryImage);
@@ -32,6 +34,7 @@ export function EditStudioPage() {
   const navigate = useNavigate();
   const { context, loading, error } = useEditStudio();
   const [editMode, setEditMode] = useState<EditMode | null>(null);
+  const [editPath, setEditPath] = useState<"chooser" | "quick" | "crop" | "ai">("chooser");
   const [provider, setProvider] = useState("");
   const [prompt, setPrompt] = useState("");
   const [references, setReferences] = useState<EditStudioReferenceDraft[]>([]);
@@ -51,6 +54,7 @@ export function EditStudioPage() {
     if (lastSourceImageId.current === context.pendingImage.image_id) return;
     lastSourceImageId.current = context.pendingImage.image_id;
     setEditMode(null);
+    setEditPath("chooser");
     setProvider(context.providers[0]?.value || "");
     setPrompt("");
     setReferences([]);
@@ -230,7 +234,7 @@ export function EditStudioPage() {
     <section className="edit-studio">
       <PageHeader
         title="Edit Studio"
-        description="Dedicated image editor for Single Edit and Multi Edit workflows."
+        description="Quick image adjustments and AI-powered editing workflows."
       />
 
       {loading && <div className="edit-studio__state" role="status">Loading Edit Studio…</div>}
@@ -268,19 +272,28 @@ export function EditStudioPage() {
 
           {generationRunning && <section className="edit-studio__section edit-studio__generation" aria-live="polite"><span className="edit-studio__spinner" aria-hidden="true" /><div><h2>Generating Edit...</h2><p>{context.providers.find((item) => item.value === provider)?.label || provider}</p></div></section>}
 
-          <section className="edit-studio__section" aria-labelledby="edit-type-title">
+          {editPath === "chooser" && <section className="edit-studio__section" aria-labelledby="edit-type-title">
             <h2 id="edit-type-title">Choose Edit Type</h2>
             <div className="edit-studio__mode-grid">
-              <button aria-pressed={editMode === "single_image"} className="edit-studio__mode" disabled={generationRunning} onClick={() => setEditMode("single_image")} type="button">
-                <Pencil aria-hidden="true" size={21} /><span><strong>Single Edit</strong><small>Edit this image</small></span>
+              <button className="edit-studio__mode" disabled={generationRunning} onClick={() => setEditPath("quick")} type="button">
+                <Scissors aria-hidden="true" size={21} /><span><strong>Quick Edit</strong><small>Crop, resize, rotate &amp; other image adjustments</small><small>No AI generation</small></span>
               </button>
-              <button aria-pressed={editMode === "multi_image"} className="edit-studio__mode" disabled={generationRunning} onClick={() => setEditMode("multi_image")} type="button">
-                <ImagePlus aria-hidden="true" size={22} /><span><strong>Multi Edit</strong><small>Use one or more reference images</small></span>
+              <button className="edit-studio__mode" disabled={generationRunning} onClick={() => setEditPath("ai")} type="button">
+                <Sparkles aria-hidden="true" size={22} /><span><strong>AI Edit</strong><small>Edit or transform images with AI</small><small>AI-powered</small></span>
               </button>
             </div>
-          </section>
+          </section>}
 
-          {editMode && (
+          {editPath === "quick" && <section className="edit-studio__section" aria-labelledby="quick-edit-title"><div className="edit-studio__nested-heading"><div><h2 id="quick-edit-title">Choose Quick Edit Tool</h2><p>Deterministic adjustments with no AI generation.</p></div><button className="edit-studio__secondary" onClick={() => setEditPath("chooser")} type="button">Back to Edit Types</button></div><div className="edit-studio__mode-grid">{quickEditTools.map((tool) => <button className="edit-studio__mode" key={tool.id} onClick={() => setEditPath(tool.id)} type="button"><tool.icon aria-hidden="true" size={21} /><span><strong>{tool.title}</strong><small>{tool.description}</small></span></button>)}</div></section>}
+
+          {editPath === "crop" && workingSource && <CropTool source={workingSource} onBack={() => setEditPath("quick")} onApplied={(message) => { setActionMessage(message); navigate("/library/generations"); }} />}
+
+          {editPath === "ai" && <section className="edit-studio__section" aria-labelledby="ai-edit-title"><div className="edit-studio__nested-heading"><div><h2 id="ai-edit-title">Choose AI Edit Type</h2></div><button className="edit-studio__secondary" onClick={() => { setEditMode(null); setEditPath("chooser"); }} type="button">Back to Edit Types</button></div><div className="edit-studio__mode-grid">
+            <button aria-pressed={editMode === "single_image"} className="edit-studio__mode" disabled={generationRunning} onClick={() => setEditMode("single_image")} type="button"><Pencil aria-hidden="true" size={21} /><span><strong>Single Edit</strong><small>Edit this image</small></span></button>
+            <button aria-pressed={editMode === "multi_image"} className="edit-studio__mode" disabled={generationRunning} onClick={() => setEditMode("multi_image")} type="button"><ImagePlus aria-hidden="true" size={22} /><span><strong>Multi Edit</strong><small>Use one or more reference images</small></span></button>
+          </div></section>}
+
+          {editPath === "ai" && editMode && (
             <section className="edit-studio__section edit-studio__form" aria-label={editMode === "single_image" ? "Single Edit controls" : "Multi Edit controls"}>
               <fieldset className="edit-studio__form-fields" disabled={generationRunning}>
               <label><span>Provider</span><select onChange={(event) => setProvider(event.target.value)} value={provider}>

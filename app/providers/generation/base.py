@@ -28,6 +28,9 @@ from app.services.seedream_premium_render_locks import (
 )
 from app.services.photoshoot_render_locks import enforce_photoshoot_safe_render_lock
 from app.services.hosted_asset_reference_service import HostedAssetReferenceService
+from app.services.canonical_facial_naturalism import (
+    ensure_canonical_facial_naturalism,
+)
 
 
 TRANSPORT_LOGGER = logging.getLogger("creator_os.transport")
@@ -78,6 +81,7 @@ class ProviderMetadata:
 class ProviderSubmission:
     provider_request_id: str
     raw_response: Mapping[str, Any]
+    generation_recipe_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -141,6 +145,7 @@ class WaveSpeedProviderBase(GenerationProvider):
     lifecycle = "ACTIVE"
     PREMIUM_RENDER_BODY_LOCK = """
 FINAL REFERENCE BODY LOCK - NON-NEGOTIABLE:
+CANONICAL AVA FACE + BODY IDENTITY:
 Use the reference image as the identity, face, hair, skin-tone, body-size, body-shape, and bust-size source of truth only.
 Preserve the exact same woman, face, long dark loose hair, same natural sun-kissed skin tone as the reference image, body size, body weight, and recognizable silhouette.
 Hair must be worn down with a soft center part or natural side part, smooth flat natural top, and loose flowing dark hair over her shoulders or down her back.
@@ -164,7 +169,8 @@ Avoid cropped-off forehead, missing top of head, face pressed against the top ed
 Do not use side/rear all-fours angles that hide or minimize the bust; if using side/rear body orientation, keep the chest, bust, face, and upper torso still visible and prominent.
 Preserve exact facial identity, facial structure, eyes, nose, lips, jawline, cheekbones, smile shape, and natural facial proportions.
 Keep the face photorealistic, natural, anatomically correct, and consistent with the selected expression variation.
-Avoid goofy, silly, cartoonish, distorted, uncanny, melted, asymmetrical, cross-eyed, or over-exaggerated facial expressions.
+Allow subtle natural human asymmetry in expression while preserving facial geometry.
+Avoid goofy, silly, cartoonish, distorted, uncanny, melted, deformed, cross-eyed, or over-exaggerated facial expressions.
 """.strip()
     CLOTHED_PREMIUM_WARDROBE_LOCK = """
 CLOTHED PREMIUM WARDROBE LOCK - NON-NEGOTIABLE:
@@ -180,7 +186,7 @@ TOPLESS RENDER LOCK - NON-NEGOTIABLE:
 The requested image is topless. Do not add a bikini top, bra, lingerie top, swimsuit top, crop top, shirt, robe, towel, dress, or any upper-body clothing.
 Bare breasts and natural nipples must be clearly visible and unobstructed.
 Do not cover breasts with hair, arms, hands, furniture, sheets, pillows, props, water surface, fabric, shadows, or camera crop.
-Preserve visibly full natural D-cup breast volume with rounded upper and lower fullness, natural projection, visible cleavage, and consistent nipple placement in medium-close creator portrait crop.
+Bust size and shape remain owned by the canonical Ava identity boundary.
 """.strip()
     NUDE_GROOMING_RENDER_LOCK = """
 NUDE GROOMING LOCK - NON-NEGOTIABLE:
@@ -211,6 +217,7 @@ Do not render a landing strip, stubble, trimmed pubic hair, shadow hair, peach f
         poll_interval_seconds: float = 3.0,
         max_poll_attempts: int = 40,
         hosted_reference_service=None,
+        recipe_capture_service=None,
         sleep=time.sleep,
     ):
         self.api_key = api_key
@@ -221,6 +228,10 @@ Do not render a landing strip, stubble, trimmed pubic hair, shadow hair, peach f
         self.hosted_references = hosted_reference_service or HostedAssetReferenceService(
             http_client=self.http_client, sleep=sleep,
         )
+        if recipe_capture_service is None:
+            from app.services.generation_recipe_capture_service import GenerationRecipeCaptureService
+            recipe_capture_service = GenerationRecipeCaptureService()
+        self.recipe_capture = recipe_capture_service
         self.transport_timeout = max(1.0, float(os.getenv("WAVESPEED_TRANSPORT_TIMEOUT_SECONDS", "120")))
         self.transport_retry_delays = HostedAssetReferenceService._retry_delays()
 
@@ -267,6 +278,7 @@ Do not render a landing strip, stubble, trimmed pubic hair, shadow hair, peach f
         poll_results: list[ProviderPollResult] = []
         failures: list[Mapping[str, Any]] = []
         output_references: list[str] = []
+        output_recipe_ids: list[str] = []
         total = max(1, int(request.image_count or 1))
         prompt_variations = self._prompt_variations(request)
         for index in range(total):
@@ -274,6 +286,7 @@ Do not render a landing strip, stubble, trimmed pubic hair, shadow hair, peach f
                 request,
                 prompt_text=prompt_variations[index % len(prompt_variations)],
                 image_count=1,
+                metadata={**dict(request.metadata or {}), "provider_submission_index": index},
             )
             if progress_callback:
                 progress_callback(
@@ -323,6 +336,10 @@ Do not render a landing strip, stubble, trimmed pubic hair, shadow hair, peach f
             try:
                 poll_result = self.poll_status(submission)
             except Exception as exc:
+                if submission.generation_recipe_id:
+                    self.recipe_capture.terminal(
+                        submission.generation_recipe_id, "failed", error_message=str(exc),
+                    )
                 failures.append(
                     {
                         "index": index + 1,
@@ -346,6 +363,11 @@ Do not render a landing strip, stubble, trimmed pubic hair, shadow hair, peach f
                 continue
             poll_results.append(poll_result)
             if poll_result.status != GenerationStatus.SUCCEEDED.value:
+                if submission.generation_recipe_id:
+                    self.recipe_capture.terminal(
+                        submission.generation_recipe_id, poll_result.status,
+                        error_message=poll_result.failure_reason,
+                    )
                 failures.append(
                     {
                         "index": index + 1,
@@ -367,13 +389,19 @@ Do not render a landing strip, stubble, trimmed pubic hair, shadow hair, peach f
                         failed=True,
                     )
                 continue
+            if submission.generation_recipe_id:
+                self.recipe_capture.terminal(submission.generation_recipe_id, "succeeded")
             output_references.extend(poll_result.output_references)
+            output_recipe_ids.extend(
+                [submission.generation_recipe_id] * len(poll_result.output_references)
+            )
             if progress_callback:
                 progress_callback(
                     current=len(output_references),
                     total=total,
                     message=f"Image {index + 1} of {total} completed",
                     output_references=tuple(output_references),
+                    output_generation_recipe_ids=tuple(output_recipe_ids),
                     completed_count=len(output_references),
                     failed_count=len(failures),
                     processed_count=index + 1,
@@ -425,6 +453,11 @@ Do not render a landing strip, stubble, trimmed pubic hair, shadow hair, peach f
             generation_metadata={
                 **dict(result.generation_metadata or {}),
                 "partial_success": bool(output_references and failures),
+                "generation_recipe_ids": tuple(
+                    item.generation_recipe_id for item in submissions
+                    if item.generation_recipe_id
+                ),
+                "output_generation_recipe_ids": tuple(output_recipe_ids),
             },
             execution_metadata={
                 **dict(result.execution_metadata or {}),
@@ -442,31 +475,53 @@ Do not render a landing strip, stubble, trimmed pubic hair, shadow hair, peach f
         )
 
     def submit_generation(self, request: GenerationRequest) -> ProviderSubmission:
+        payload = self.build_payload(request)
+        recipe = self.recipe_capture.capture(
+            request=request, provider=self, final_payload=payload,
+        )
+        self.recipe_capture.submission_started(recipe.recipe_id)
         started = time.perf_counter()
         try:
             response = self.http_client.post(
-                self.endpoint, headers=self._headers(content_type=True), json=self.build_payload(request),
+                self.endpoint, headers=self._headers(content_type=True), json=payload,
                 timeout=self.transport_timeout,
             )
         except Exception as exc:
+            self.recipe_capture.submission_failed(recipe.recipe_id, exc, ambiguous=True)
             self._transport_log("wavespeed_submission", self.endpoint, request, 1, started, "ambiguous", error=exc, retry=False)
             raise WaveSpeedSubmissionAmbiguousError(
                 "The provider connection closed during submission. Creator_OS could not safely confirm whether "
                 "the job was accepted. Retry only after checking provider history."
             ) from exc
         self._transport_log("wavespeed_submission", self.endpoint, request, 1, started, "response", status=response.status_code)
-        self._raise_for_status(response, "WaveSpeed submit failed")
-        data = response.json()
+        try:
+            self._raise_for_status(response, "WaveSpeed submit failed")
+        except Exception as exc:
+            self.recipe_capture.submission_failed(recipe.recipe_id, exc)
+            raise
+        try:
+            data = response.json()
+        except Exception as exc:
+            self.recipe_capture.submission_failed(recipe.recipe_id, exc, ambiguous=True)
+            raise GenerationProviderError(
+                "WaveSpeed submission returned an unreadable acceptance response."
+            ) from exc
         provider_request_id = (
             data.get("id")
             or data.get("request_id")
             or data.get("data", {}).get("id")
         )
         if not provider_request_id:
-            raise GenerationProviderError(
+            error = GenerationProviderError(
                 "WaveSpeed accepted no canonical provider request ID."
             )
-        return ProviderSubmission(provider_request_id=str(provider_request_id), raw_response=data)
+            self.recipe_capture.submission_failed(recipe.recipe_id, error, ambiguous=True)
+            raise error
+        self.recipe_capture.submitted(recipe.recipe_id, str(provider_request_id))
+        return ProviderSubmission(
+            provider_request_id=str(provider_request_id), raw_response=data,
+            generation_recipe_id=str(recipe.recipe_id),
+        )
 
     def poll_status(self, submission: ProviderSubmission) -> ProviderPollResult:
         last_result: ProviderPollResult | None = None
@@ -565,7 +620,10 @@ Do not render a landing strip, stubble, trimmed pubic hair, shadow hair, peach f
         return payload
 
     def _render_prompt_text(self, request: GenerationRequest) -> str:
-        prompt = str(request.prompt_text or "").strip()
+        exact_prompt = str(request.prompt_text or "")
+        if self._is_trusted_final_prompt(request, exact_prompt):
+            return exact_prompt
+        prompt = exact_prompt.strip()
         policy = self._render_policy(request)
         if policy == RenderPolicy.CONTENT_STANDARD:
             return f"{prompt}\n\n{SOCIAL_CLOSE_FRAMING_RENDER_LOCK}"
@@ -588,6 +646,20 @@ Do not render a landing strip, stubble, trimmed pubic hair, shadow hair, peach f
         raise GenerationProviderError(f"Unhandled render policy: {policy.value}")
 
     @staticmethod
+    def _is_trusted_final_prompt(request: GenerationRequest, prompt: str | None = None) -> bool:
+        from app.models.generation_engine import ProviderPromptState
+        value = str(prompt if prompt is not None else request.prompt_text or "")
+        metadata = dict(request.metadata or {})
+        expected = str(metadata.get("trusted_final_prompt_sha256") or "")
+        return bool(
+            request.prompt_state == ProviderPromptState.FINAL_PROVIDER_RENDERED.value
+            and metadata.get("regeneration_operation_id")
+            and metadata.get("source_recipe_id")
+            and expected
+            and hashlib.sha256(value.encode("utf-8")).hexdigest() == expected
+        )
+
+    @staticmethod
     def _render_policy(request: GenerationRequest) -> RenderPolicy:
         raw_policy = (request.metadata or {}).get("render_policy")
         if raw_policy is None:
@@ -604,12 +676,19 @@ Do not render a landing strip, stubble, trimmed pubic hair, shadow hair, peach f
 
     @classmethod
     def _with_expression_directive(cls, rendered: str, identity: str) -> str:
-        if "EXPLICIT EXPRESSION VARIATION:" in rendered:
-            return rendered
-        return f"{rendered}\n\n{cls._explicit_expression_directive(identity)}"
+        if (
+            "EXPLICIT EXPRESSION VARIATION:" in rendered
+            or "EXPLICIT EXPRESSION PROFILE" in rendered
+        ):
+            return ensure_canonical_facial_naturalism(rendered)
+        return ensure_canonical_facial_naturalism(
+            f"{rendered}\n\n{cls._explicit_expression_directive(identity)}"
+        )
 
     @staticmethod
     def _prompt_variations(request: GenerationRequest) -> tuple[str, ...]:
+        if WaveSpeedProviderBase._is_trusted_final_prompt(request):
+            return (str(request.prompt_text or ""),)
         prompt_metadata = request.metadata.get("prompt_metadata") or {}
         candidates = (
             request.metadata.get("prompt_variations")
@@ -729,9 +808,7 @@ Do not render a landing strip, stubble, trimmed pubic hair, shadow hair, peach f
         return (
             "EXPLICIT EXPRESSION VARIATION:\n"
             f"Use this single selected expression profile only: {selected}.\n"
-            "Render it like a real creator camera-roll photo: candid, emotionally alive, slightly asymmetrical, "
-            "natural muscle tension, believable human expression, and creator taking her own photos. Avoid mannequin "
-            "face, pageant smile, frozen expression, identical smile repetition, plastic symmetry, and overacted performance.\n\n"
+            "Let the selected expression control emotional intent without redefining Ava's facial geometry or identity.\n\n"
             "EXPLICIT HAIR SHAPE LOCK:\n"
             "Hair must be worn down naturally with a smooth flat natural top and loose dark hair flowing around her face, "
             "over her shoulders, or down her back. No bun, topknot, ponytail, updo, tied-up hair, messy crown, or tall hair shape."

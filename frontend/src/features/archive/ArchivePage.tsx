@@ -1,4 +1,4 @@
-import { ArchiveRestore, Camera, Images, ScrollText, Trash2, Upload, Video } from "lucide-react";
+import { ArchiveRestore, Camera, Images, RotateCw, ScrollText, Trash2, Upload, Video } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useEffect, useState } from "react";
 
@@ -6,6 +6,13 @@ import { PageHeader } from "../../shared/ui/PageHeader";
 import "./archive.css";
 
 const destinations = [
+  {
+    title: "Regenerated Content",
+    description: "Browse regenerated variations archived from Regeneration Studio.",
+    button: "Open Regenerated Content",
+    path: "/system/archive/regenerated",
+    icon: RotateCw,
+  },
   {
     title: "Prompt Workshop Archive",
     description: "Browse historical Prompt Workshop batches and previously generated prompts.",

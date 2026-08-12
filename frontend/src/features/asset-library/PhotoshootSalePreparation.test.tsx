@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { BundleSellingPanel, PrepareForSaleDialog, SessionSellingPanel } from "./PhotoshootSalePreparation";
 
@@ -24,7 +24,7 @@ describe("SessionSellingPanel", () => {
   it("keeps persisted URLs hidden until View Published Assets is opened", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(() => response(readiness));
     render(<SessionSellingPanel deliverableId="deliverable-1" />);
-    expect(await screen.findByText("Ready for Session Selling")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "READY" })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Open Shot 2 link" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "View Published Assets" }));
     expect(screen.getByText("Direct Telegram delivery")).toBeInTheDocument();
@@ -34,7 +34,7 @@ describe("SessionSellingPanel", () => {
   });
 
   it.each([
-    ["READY", "Ready for Session Selling"],
+    ["READY", "READY"],
     ["NEEDS_ATTENTION", "Needs Attention"],
   ] as const)("polls only readiness until preparation becomes %s", async (status, statusLabel) => {
     const preparing = { ...readiness, status: "PREPARING", statusLabel: "Preparing", readyPaidStepCount: 0,
@@ -57,7 +57,7 @@ describe("SessionSellingPanel", () => {
     expect(await screen.findByRole("heading", { name: statusLabel })).toBeInTheDocument();
     expect(onReadinessChange).toHaveBeenLastCalledWith(settled);
     expect(fetch.mock.calls.every(([input]) => String(input) === "/api/v1/assets/photoshoots/deliverable-1/sale-preparation")).toBe(true);
-    if (status === "READY") expect(screen.getByText("Paid steps: 1 of 1 ready")).toBeInTheDocument();
+    if (status === "READY") expect(screen.getByText("1 of 1 paid images ready")).toBeInTheDocument();
     else {
       expect(screen.getByText("Provider rejected upload.")).toBeInTheDocument();
       expect(screen.getByRole("button", { name: "Retry Failed Preparation" })).toBeInTheDocument();
@@ -79,10 +79,11 @@ describe("SessionSellingPanel", () => {
     vi.spyOn(window, "clearInterval").mockImplementation(() => undefined);
 
     render(<SessionSellingPanel deliverableId="deliverable-1" />);
-    expect(await screen.findByRole("heading", { name: "Preparing" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Preparing..." })).toBeInTheDocument();
+    expect(screen.getByText("Preparing paid images: 0 of 1")).toBeInTheDocument();
     poll?.();
     await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
-    expect(screen.getByRole("heading", { name: "Preparing" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Preparing..." })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Loading…" })).not.toBeInTheDocument();
     resolveRefresh?.(await response(preparing));
   });
@@ -103,10 +104,10 @@ describe("SessionSellingPanel", () => {
     vi.spyOn(window, "clearInterval").mockImplementation(() => undefined);
 
     render(<SessionSellingPanel deliverableId="deliverable-1" />);
-    fireEvent.click(await screen.findByRole("button", { name: "Prepare Session" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Set Session Prices" }));
     fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Prepare Session" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-    expect(await screen.findByRole("heading", { name: "Preparing" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Preparing..." })).toBeInTheDocument();
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
@@ -126,7 +127,7 @@ describe("SessionSellingPanel", () => {
     expect(await screen.findByText("Fanvue timed out while preparing FIRST UNLOCK.")).toBeInTheDocument();
     expect(screen.getByText("Shot 2 · FIRST UNLOCK")).toBeInTheDocument();
     expect(screen.queryByText(/HTTPSConnectionPool/)).not.toBeInTheDocument();
-    expect(screen.getByText("Paid steps: 1 of 2 ready")).toBeInTheDocument();
+    expect(screen.getByText("Paid images ready: 1 of 2")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "View Published Assets" }));
     expect(screen.getByRole("link", { name: "Open Shot 3 link" })).toHaveAttribute("href", "https://fanvue.example/live-3");
   });
@@ -137,7 +138,11 @@ describe("SessionSellingPanel", () => {
         { assetId: 3, shotOrder: 3, position: 3, role: "ESCALATION", access: "PAID", ready: false, priceMinor: 900, currency: "USD", imageUrl: "/shot-3" }] };
     const fetch = vi.spyOn(globalThis, "fetch").mockImplementation((_input, options) => response(options?.method === "POST" ? { ...unprepared, status: "PREPARING", statusLabel: "Preparing" } : unprepared));
     render(<SessionSellingPanel deliverableId="deliverable-1" />);
-    fireEvent.click(await screen.findByRole("button", { name: "Prepare Session" }));
+    expect(await screen.findByRole("heading", { name: "Pricing Required" })).toBeInTheDocument();
+    expect(screen.getByText("2 paid images need prices before this Session can be prepared.")).toBeInTheDocument();
+    expect(screen.queryByText(/Paid steps:/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Prepare Session" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Set Session Prices" }));
     const dialog = await screen.findByRole("dialog");
     expect(within(dialog).getAllByText(/Shot [123]/).map((node) => node.textContent)).toEqual(["Shot 1", "Shot 2", "Shot 3"]);
     expect(within(dialog).getByText("Direct Telegram delivery")).toBeInTheDocument();
@@ -183,42 +188,70 @@ describe("SessionSellingPanel", () => {
     expect(screen.getByText(/does not currently support editing/)).toBeInTheDocument();
   });
 
-  it("shows a normal missing-strategy state only after loading finishes", async () => {
+  it("automatically starts durable strategy preparation without a manual generation action", async () => {
     const missing = { ...readiness, strategyVersion: "", strategyExists: false,
       strategyStatus: "MISSING", status: "STRATEGY_REQUIRED", statusLabel: "Not Prepared",
       paidStepCount: 0, readyPaidStepCount: 0, teaserReady: false, steps: [] };
-    vi.spyOn(globalThis, "fetch").mockImplementation(() => response(missing));
+    const queued = { ...missing, strategyOperation: { operationId: "operation-1", status: "QUEUED" } };
+    const fetch = vi.spyOn(globalThis, "fetch").mockImplementation((_input, options) => response(options?.method === "POST" ? queued : missing));
     render(<SessionSellingPanel deliverableId="deliverable-1" />);
     expect(screen.getByRole("heading", { name: "Loading…" })).toBeInTheDocument();
-    expect(await screen.findByRole("heading", { name: "Not Prepared" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Preparing Strategy..." })).toBeInTheDocument();
     expect(screen.queryByText("Loading…")).not.toBeInTheDocument();
-    expect(screen.getByText("No Session Sales Strategy has been created yet.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Generate Session Strategy" })).toBeInTheDocument();
-  });
-
-  it("generates explicitly, refetches readiness, and opens the existing price review", async () => {
-    const missing = { ...readiness, strategyVersion: "", strategyExists: false,
-      strategyStatus: "MISSING", status: "STRATEGY_REQUIRED", statusLabel: "Not Prepared",
-      paidStepCount: 0, readyPaidStepCount: 0, teaserReady: false, steps: [] };
-    const unprepared = { ...readiness, status: "NOT_PREPARED", statusLabel: "Not Prepared",
-      readyPaidStepCount: 0, steps: readiness.steps.map((step) => step.access === "PAID"
-        ? { ...step, ready: false, priceMinor: null, deliveryUrl: null } : step) };
-    let initial = true;
-    const fetch = vi.spyOn(globalThis, "fetch").mockImplementation((_input, options) => {
-      if (options?.method === "POST") return response(unprepared);
-      if (initial) { initial = false; return response(missing); }
-      return response(unprepared);
-    });
-    render(<SessionSellingPanel deliverableId="deliverable-1" />);
-    fireEvent.click(await screen.findByRole("button", { name: "Generate Session Strategy" }));
-    expect(screen.getByRole("button", { name: "Generating Session Strategy…" })).toBeDisabled();
-    const dialog = await screen.findByRole("dialog");
+    expect(screen.getByText("Analyzing the completed Photoshoot for sequential selling.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Generate Session Strategy/ })).not.toBeInTheDocument();
     expect(fetch).toHaveBeenCalledWith(
       "/api/v1/assets/photoshoots/deliverable-1/session-sales-strategy",
       expect.objectContaining({ method: "POST" }),
     );
-    expect(within(dialog).queryByLabelText("Shot 1 price")).not.toBeInTheDocument();
-    expect(await within(dialog).findByLabelText("Shot 2 price")).toBeInTheDocument();
+  });
+
+  it("refreshes to price preparation after the durable strategy operation succeeds", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const missing = { ...readiness, strategyVersion: "", strategyExists: false,
+      strategyStatus: "MISSING", status: "STRATEGY_REQUIRED", statusLabel: "Not Prepared",
+      paidStepCount: 0, readyPaidStepCount: 0, teaserReady: false, steps: [] };
+    const queued = { ...missing, strategyOperation: { operationId: "operation-1", status: "RUNNING" } };
+    const unprepared = { ...readiness, status: "NOT_PREPARED", statusLabel: "Not Prepared",
+      readyPaidStepCount: 0, steps: readiness.steps.map((step) => step.access === "PAID"
+        ? { ...step, ready: false, priceMinor: null, deliveryUrl: null } : step) };
+    let getCount = 0;
+    const fetch = vi.spyOn(globalThis, "fetch").mockImplementation((_input, options) => {
+      if (options?.method === "POST") return response(queued);
+      getCount += 1;
+      if (getCount === 1) return response(missing);
+      return response(unprepared);
+    });
+    render(<SessionSellingPanel deliverableId="deliverable-1" />);
+    expect(await screen.findByRole("heading", { name: "Preparing Strategy..." })).toBeInTheDocument();
+    await act(() => vi.advanceTimersByTimeAsync(1500));
+    expect(await screen.findByRole("heading", { name: "Pricing Required" })).toBeInTheDocument();
+    expect(screen.getByText("1 paid image needs a price before this Session can be prepared.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Set Session Prices" })).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/v1/assets/photoshoots/deliverable-1/session-sales-strategy",
+      expect.objectContaining({ method: "POST" }),
+    );
+  });
+
+  it("reconnects to a durable failed strategy operation and offers retry", async () => {
+    const failed = { ...readiness, strategyVersion: "", strategyExists: false,
+      strategyStatus: "MISSING", status: "STRATEGY_REQUIRED", statusLabel: "Not Prepared",
+      paidStepCount: 0, readyPaidStepCount: 0, teaserReady: false, steps: [],
+      strategyOperation: { operationId: "operation-1", status: "FAILED", errorMessage: "Grok response was invalid." } };
+    const fetch = vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
+      if (String(input).endsWith("/retry")) return response({ success: true });
+      return response(failed);
+    });
+    render(<SessionSellingPanel deliverableId="deliverable-1" />);
+    expect(await screen.findByRole("heading", { name: "Strategy Needs Attention" })).toBeInTheDocument();
+    expect(screen.getByText("Grok response was invalid.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Generate Session Strategy/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    await waitFor(() => expect(fetch).toHaveBeenCalledWith(
+      "/api/v1/background-operations/operation-1/retry", { cache: "no-store", method: "POST" },
+    ));
   });
 
   it("replaces loading with an operator-facing API error", async () => {
@@ -231,6 +264,15 @@ describe("SessionSellingPanel", () => {
 });
 
 describe("BundleSellingPanel", () => {
+  const teaser = (status: "NOT_CONFIGURED" | "READY" = "NOT_CONFIGURED") => ({
+    status, statusLabel: status === "READY" ? "Promotional Teaser Ready" : "Teaser Not Configured",
+    commercialRole: "BUNDLE_PROMOTIONAL_TEASER", sourceAssetId: status === "READY" ? 1 : null,
+    teaserAssetId: status === "READY" ? 100 : null, blurStrength: 24,
+    maskWidth: status === "READY" ? 100 : null, maskHeight: status === "READY" ? 100 : null,
+    maskVersion: "selective_blur_mask_v1", maskUrl: status === "READY" ? "/mask" : null,
+    previewUrl: status === "READY" ? "/preview" : null, error: null,
+    candidates: [{ assetId: 1, shotOrder: 1, imageUrl: "/image-1" }],
+  });
   const bundle = (changes: Record<string, unknown> = {}) => ({
     deliverableId: "deliverable-1", photoshootSessionId: "session-1", sellingMode: "BUNDLE",
     status: "NOT_CONFIGURED", statusLabel: "Paid Bundle Not Configured", imageCount: 5,
@@ -298,5 +340,241 @@ describe("BundleSellingPanel", () => {
     render(<BundleSellingPanel deliverableId="deliverable-1" />);
     expect(await screen.findByRole("heading", { name: "Paid Bundle Ready" })).toBeInTheDocument();
     expect(screen.getByText("Autonomous Sales: Ready to Sell")).toBeInTheDocument();
+  });
+
+  it("authors five Bundle captions while the promotional teaser is not configured", async () => {
+    const options = Array.from({ length: 5 }, (_, index) => ({ text: `Complete 3-photo set option ${index + 1} 🔥` }));
+    const fetch = vi.spyOn(globalThis, "fetch").mockImplementation((input) =>
+      String(input).endsWith("/captions/generate") ? response({ captions: options }) : response(bundle({
+      status: "READY", statusLabel: "Paid Bundle Ready", imageCount: 3, priceMinor: 1499,
+      deliveryUrl: "https://fanvue.example/existing-link",
+      promotionalTeaser: { status: "NOT_CONFIGURED", statusLabel: "Teaser Not Configured", candidates: [] },
+      contentVaultPublication: { status: "NOT_PUBLISHED", canPublish: false,
+        readinessError: "Create a promotional teaser before publishing." },
+    })));
+    render(<BundleSellingPanel deliverableId="deliverable-1" salesChannel="CONTENT_WALL" />);
+    const button = await screen.findByRole("button", { name: "Generate Captions with AI" });
+    expect(button).toBeEnabled();
+    expect(screen.queryByText("A READY promotional teaser is required before authoring captions.")).not.toBeInTheDocument();
+    expect(screen.getByText("Create a promotional teaser before publishing.")).toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Choose Bundle Content Vault Caption" })).not.toBeInTheDocument();
+    fireEvent.click(button);
+    const dialog = await screen.findByRole("dialog", { name: "Choose Bundle Content Vault Caption" });
+    expect(within(dialog).getAllByRole("button").filter((item) => item.textContent?.includes("Complete 3-photo set"))).toHaveLength(5);
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/v1/assets/photoshoots/deliverable-1/content-vault/captions/generate",
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(screen.getByRole("button", { name: "Publish to Content Vault" })).toBeDisabled();
+  });
+
+  it("restores a persisted teaser and caption when the Bundle inspector reopens", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(() => response(bundle({
+      status: "READY", statusLabel: "Paid Bundle Ready", priceMinor: 1499,
+      offeringId: "offering-1", publicationId: "fanvue-publication-1",
+      deliveryUrl: "https://fanvue.example/existing-link", promotionalTeaser: teaser("READY"),
+      contentVaultCaption: { text: "The complete set is waiting for you 🔥", source: "GROK" },
+      contentVaultPublication: { status: "NOT_PUBLISHED", canPublish: true, readinessError: null },
+    })));
+    const view = render(<BundleSellingPanel deliverableId="deliverable-1" salesChannel="CONTENT_WALL" />);
+    expect(await screen.findByRole("button", { name: "Edit Caption" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Generate Captions with AI" })).toBeEnabled();
+    expect(screen.getByText("The complete set is waiting for you 🔥")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Publish to Content Vault" })).toBeEnabled();
+    view.unmount();
+    render(<BundleSellingPanel deliverableId="deliverable-1" salesChannel="CONTENT_WALL" />);
+    expect(await screen.findByRole("button", { name: "Edit Caption" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Publish to Content Vault" })).toBeEnabled();
+  });
+
+  it("enables captions immediately after recovering a missing teaser without preparing paid media", async () => {
+    const missing = bundle({
+      status: "READY", statusLabel: "Paid Bundle Ready", priceMinor: 1499,
+      offeringId: "offering-1", publicationId: "fanvue-publication-1",
+      deliveryUrl: "https://fanvue.example/existing-link", promotionalTeaser: teaser(),
+      contentVaultPublication: { status: "NOT_PUBLISHED", canPublish: false,
+        readinessError: "Create a promotional teaser before publishing." },
+    });
+    const recovered = { ...missing, promotionalTeaser: teaser("READY"),
+      contentVaultPublication: { status: "NOT_PUBLISHED", canPublish: false,
+        readinessError: "Select and save a Content Vault caption before publishing." } };
+    const context = { clearRect: vi.fn(), drawImage: vi.fn(), beginPath: vi.fn(), arc: vi.fn(), fill: vi.fn(),
+      getImageData: vi.fn(() => ({ data: new Uint8ClampedArray([255, 255, 255, 255]) })),
+      globalCompositeOperation: "source-over", fillStyle: "#fff" };
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(context as unknown as CanvasRenderingContext2D);
+    vi.spyOn(HTMLCanvasElement.prototype, "toDataURL").mockReturnValue("data:image/png;base64,bWFzaw==");
+    let teaserSaved = false;
+    const fetch = vi.spyOn(globalThis, "fetch").mockImplementation((_input, init) => {
+      if (init?.method === "PUT") { teaserSaved = true; return response(teaser("READY")); }
+      return response(teaserSaved ? recovered : missing);
+    });
+    render(<BundleSellingPanel deliverableId="deliverable-1" salesChannel="CONTENT_WALL" />);
+    expect(await screen.findByRole("button", { name: "Generate Captions with AI" })).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: "Create Teaser" }));
+    const canvas = screen.getByLabelText("Selective blur mask");
+    Object.defineProperty(canvas, "width", { value: 100, writable: true });
+    Object.defineProperty(canvas, "height", { value: 100, writable: true });
+    vi.spyOn(canvas, "getBoundingClientRect").mockReturnValue(
+      { left: 0, top: 0, width: 100, height: 100 } as DOMRect,
+    );
+    fireEvent.pointerDown(canvas, { pointerId: 1, clientX: 10, clientY: 10 });
+    fireEvent.click(screen.getByRole("button", { name: "Save Teaser" }));
+    expect(await screen.findByRole("button", { name: "Generate Captions with AI" })).toBeEnabled();
+    expect(screen.getByText("Promotional Teaser Ready")).toBeInTheDocument();
+    expect(screen.getByText("Fanvue Media Link ready · USD 14.99")).toBeInTheDocument();
+    expect(fetch.mock.calls.filter(([, init]) => init?.method === "PUT")).toHaveLength(1);
+    expect(fetch.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
+  });
+
+  it("opens the chooser only after five captions arrive and persists the selection", async () => {
+    const options = Array.from({ length: 5 }, (_, index) => ({ text: `The full set is waiting ${index + 1} 🔥` }));
+    const selectedText = "The full set is waiting 2 🔥";
+    const prepared = bundle({
+      status: "READY", statusLabel: "Paid Bundle Ready", priceMinor: 3000,
+      promotionalTeaser: { status: "READY", statusLabel: "Ready", candidates: [] },
+      contentVaultPublication: { status: "NOT_PUBLISHED", canPublish: false,
+        readinessError: "Select and save a Content Vault caption before publishing." },
+    });
+    const selected = { ...prepared, contentVaultCaption: { text: selectedText, source: "GROK" },
+      contentVaultPublication: { status: "NOT_PUBLISHED", canPublish: true, readinessError: null } };
+    let getCount = 0;
+    const fetch = vi.spyOn(globalThis, "fetch").mockImplementation((input, init) => {
+      const url = String(input);
+      if (url.endsWith("/captions/generate")) return response({ captions: options });
+      if (url.endsWith("/caption") && init?.method === "PUT") return response({ caption: { text: selectedText } });
+      getCount += 1;
+      return response(getCount === 1 ? prepared : selected);
+    });
+    render(<BundleSellingPanel deliverableId="deliverable-1" salesChannel="CONTENT_WALL" />);
+    fireEvent.click(await screen.findByRole("button", { name: "Generate Captions with AI" }));
+    expect(screen.queryByRole("dialog", { name: "Choose Bundle Content Vault Caption" })).not.toBeInTheDocument();
+    const dialog = await screen.findByRole("dialog", { name: "Choose Bundle Content Vault Caption" });
+    expect(within(dialog).getAllByRole("button").filter((item) => item.textContent?.includes("full set"))).toHaveLength(5);
+    expect(within(dialog).getByRole("button", { name: "Write My Own" })).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Use Caption" })).toBeDisabled();
+    fireEvent.click(within(dialog).getByRole("button", { name: selectedText }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Use Caption" }));
+    await waitFor(() => expect(fetch).toHaveBeenCalledWith(
+      "/api/v1/assets/photoshoots/deliverable-1/content-vault/caption",
+      expect.objectContaining({ method: "PUT", body: JSON.stringify({ text: selectedText, source: "GROK" }) }),
+    ));
+    expect(await screen.findByText(selectedText)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Publish to Content Vault" })).toBeEnabled();
+  });
+
+  it("persists a direct operator caption through the canonical endpoint without generating captions", async () => {
+    const prepared = bundle({ status: "READY", statusLabel: "Paid Bundle Ready", priceMinor: 1499,
+      promotionalTeaser: teaser("READY"), contentVaultPublication: { status: "NOT_PUBLISHED", canPublish: false } });
+    const saved = { ...prepared, contentVaultCaption: { text: "My own Bundle caption", source: "MANUAL" },
+      contentVaultPublication: { status: "NOT_PUBLISHED", canPublish: true } };
+    let getCount = 0;
+    const fetch = vi.spyOn(globalThis, "fetch").mockImplementation((input, init) => {
+      const url = String(input);
+      if (url.endsWith("/caption") && init?.method === "PUT") return response({ caption: { text: "My own Bundle caption" } });
+      getCount += 1;
+      return response(getCount === 1 ? prepared : saved);
+    });
+    render(<BundleSellingPanel deliverableId="deliverable-1" salesChannel="CONTENT_WALL" />);
+    expect(await screen.findByRole("button", { name: "Write Your Own Caption" })).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: "Write Your Own Caption" }));
+    const textarea = screen.getByRole("textbox", { name: "Content Wall caption" });
+    expect(screen.getByRole("button", { name: "Save Caption" })).toBeDisabled();
+    fireEvent.change(textarea, { target: { value: "   " } });
+    expect(screen.getByRole("button", { name: "Save Caption" })).toBeDisabled();
+    fireEvent.change(textarea, { target: { value: "  My own Bundle caption  " } });
+    fireEvent.click(screen.getByRole("button", { name: "Save Caption" }));
+    await waitFor(() => expect(fetch).toHaveBeenCalledWith(
+      "/api/v1/assets/photoshoots/deliverable-1/content-vault/caption",
+      expect.objectContaining({ method: "PUT", body: JSON.stringify({ text: "My own Bundle caption", source: "MANUAL" }) }),
+    ));
+    expect(await screen.findByText("My own Bundle caption")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Publish to Content Vault" })).toBeEnabled();
+    expect(fetch.mock.calls.some(([input]) => String(input).endsWith("/captions/generate"))).toBe(false);
+  });
+
+  it("edits a persisted Bundle caption without invoking Grok and refreshes readiness", async () => {
+    const prepared = bundle({ status: "READY", statusLabel: "Paid Bundle Ready", priceMinor: 1499,
+      promotionalTeaser: teaser("READY"), contentVaultCaption: { text: "Original wording", source: "GROK" },
+      contentVaultPublication: { status: "NOT_PUBLISHED", canPublish: true } });
+    const saved = { ...prepared, contentVaultCaption: { text: "Operator revision", source: "MANUAL" } };
+    let savedCaption = false;
+    let getCount = 0;
+    const fetch = vi.spyOn(globalThis, "fetch").mockImplementation((input, init) => {
+      const url = String(input);
+      if (url.endsWith("/caption") && init?.method === "PUT") { savedCaption = true; return response({ caption: saved.contentVaultCaption }); }
+      getCount += 1;
+      return response(savedCaption ? saved : prepared);
+    });
+    render(<BundleSellingPanel deliverableId="deliverable-1" salesChannel="CONTENT_WALL" />);
+    fireEvent.click(await screen.findByRole("button", { name: "Edit Caption" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Content Wall caption" }), { target: { value: "Operator revision" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save Caption" }));
+    await waitFor(() => expect(fetch).toHaveBeenCalledWith(expect.stringContaining("/content-vault/caption"),
+      expect.objectContaining({ method: "PUT", body: JSON.stringify({ text: "Operator revision", source: "MANUAL" }) })));
+    await waitFor(() => expect(getCount).toBeGreaterThan(1));
+    expect(fetch.mock.calls.some(([input]) => String(input).endsWith("/captions/generate"))).toBe(false);
+  });
+
+  it.each([
+    ["request failure", { detail: "Grok caption generation failed." }, false, "Grok caption generation failed."],
+    ["zero candidates", { captions: [] }, true, "Caption generation did not return five usable options. Please retry."],
+  ])("keeps the chooser closed on %s", async (_label, body, ok, message) => {
+    vi.spyOn(globalThis, "fetch").mockImplementation((input) => String(input).endsWith("/captions/generate")
+      ? response(body, ok) : response(bundle({
+        status: "READY", statusLabel: "Paid Bundle Ready", priceMinor: 3000,
+        promotionalTeaser: { status: "READY", statusLabel: "Ready", candidates: [] },
+      })));
+    render(<BundleSellingPanel deliverableId="deliverable-1" salesChannel="CONTENT_WALL" />);
+    fireEvent.click(await screen.findByRole("button", { name: "Generate Captions with AI" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(message);
+    expect(screen.queryByRole("dialog", { name: "Choose Bundle Content Vault Caption" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Generate Captions with AI" })).toBeEnabled();
+  });
+
+  it("refreshes authoritative readiness after a rejected retry", async () => {
+    const needsAttention = bundle({
+      status: "NEEDS_ATTENTION", statusLabel: "Paid Bundle Needs Attention", priceMinor: 3000,
+      error: "Old provider error.", promotionalTeaser: { status: "NOT_CONFIGURED", statusLabel: "Teaser Not Configured", candidates: [] },
+    });
+    const ready = bundle({
+      status: "READY", statusLabel: "Paid Bundle Ready", priceMinor: 3000,
+      error: null, deliveryUrl: "https://fanvue.example/bundle",
+      promotionalTeaser: { status: "NOT_CONFIGURED", statusLabel: "Teaser Not Configured", candidates: [] },
+      contentVaultPublication: { status: "NOT_PUBLISHED", canPublish: false, readinessError: "Create a promotional teaser before publishing." },
+    });
+    let gets = 0;
+    vi.spyOn(globalThis, "fetch").mockImplementation((_input, options) => {
+      if (options?.method === "POST") return Promise.resolve(response({ detail: "Conflict" }, false));
+      gets += 1;
+      return Promise.resolve(response(gets === 1 ? needsAttention : ready));
+    });
+    render(<BundleSellingPanel deliverableId="deliverable-1" salesChannel="CONTENT_WALL" />);
+    fireEvent.click(await screen.findByRole("button", { name: "Retry Bundle Preparation" }));
+    expect(await screen.findByRole("heading", { name: "Paid Bundle Ready" })).toBeInTheDocument();
+    expect(screen.queryByText("Old provider error.")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Retry Bundle Preparation" })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Open Fanvue Media Link/ })).toBeInTheDocument();
+    expect(screen.getByText("Teaser Not Configured")).toBeInTheDocument();
+    expect(screen.getByText("Create a promotional teaser before publishing.")).toBeInTheDocument();
+  });
+
+  it("recovers stale needs-attention readiness when the panel remounts", async () => {
+    const needsAttention = bundle({
+      status: "NEEDS_ATTENTION", statusLabel: "Paid Bundle Needs Attention", priceMinor: 3000,
+      error: "Old provider error.",
+    });
+    const ready = bundle({
+      status: "READY", statusLabel: "Paid Bundle Ready", priceMinor: 3000,
+      error: null, deliveryUrl: "https://fanvue.example/bundle",
+    });
+    let gets = 0;
+    vi.spyOn(globalThis, "fetch").mockImplementation(() => Promise.resolve(response(gets++ === 0 ? needsAttention : ready)));
+    const view = render(<BundleSellingPanel deliverableId="deliverable-1" />);
+    expect(await screen.findByRole("button", { name: "Retry Bundle Preparation" })).toBeInTheDocument();
+    view.unmount();
+    render(<BundleSellingPanel deliverableId="deliverable-1" />);
+    expect(await screen.findByRole("heading", { name: "Paid Bundle Ready" })).toBeInTheDocument();
+    expect(screen.queryByText("Old provider error.")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Retry Bundle Preparation" })).not.toBeInTheDocument();
   });
 });

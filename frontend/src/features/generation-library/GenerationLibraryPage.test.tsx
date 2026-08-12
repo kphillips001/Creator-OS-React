@@ -158,14 +158,14 @@ describe("Generation Library Asset Library move", () => {
       });
       if (url.endsWith("/selected-image/move-to-asset-library")) {
         moved = true;
-        return jsonResponse({ success: true, generation_id: "selected-image", already_moved: false, status: "staged_asset_library", message: "Image moved to Asset Library." });
+        return jsonResponse({ success: true, generation_id: "selected-image", asset_id: 51, already_moved: false, status: "analyzing", analysis_status: "NUDENET_PENDING", message: "Asset is registered. Intelligence analysis is in progress." });
       }
       return jsonResponse({ detail: "Unexpected request" }, 500);
     });
     render(<MemoryRouter><GenerationLibraryPage /></MemoryRouter>);
 
     fireEvent.click(await screen.findByRole("button", { name: "Move to Asset Library" }));
-    expect(await screen.findByText("Image moved to Asset Library.")).toBeInTheDocument();
+    expect(await screen.findByText("Asset is registered. Intelligence analysis is in progress.")).toBeInTheDocument();
     expect(await screen.findByText("No generated images match these filters.")).toBeInTheDocument();
     expect(fetch).toHaveBeenCalledWith("/api/v1/generation-library/selected-image/move-to-asset-library", { method: "POST" });
   });
@@ -189,5 +189,19 @@ describe("Generation Library Asset Library move", () => {
     expect(button).toBeEnabled();
     fireEvent.click(button);
     expect(fetch.mock.calls.some(([input]) => String(input).includes("/video"))).toBe(false);
+  });
+});
+
+describe("Generation Library regeneration eligibility", () => {
+  it("shows the canonical action only for eligible records and hands off only the source ID", async () => {
+    const eligible = { ...selected, canRegenerate: true };
+    const legacy = { ...selected, image_id: "legacy-image", canRegenerate: false };
+    vi.spyOn(globalThis, "fetch").mockImplementation(() => jsonResponse({ records: [eligible, legacy], total: 2, page: 1, pageSize: 20, totalPages: 1, providers: [], modes: [] }));
+    render(<MemoryRouter initialEntries={["/library/generations"]}><Routes><Route path="/library/generations" element={<GenerationLibraryPage />} /><Route path="/studio/regeneration" element={<div>Regeneration destination</div>} /></Routes></MemoryRouter>);
+    const actions = await screen.findAllByRole("button", { name: "Regenerate from same recipe" });
+    expect(actions).toHaveLength(1);
+    expect(actions[0]!).toHaveAttribute("title", "Regenerate from same recipe");
+    fireEvent.click(actions[0]!);
+    expect(await screen.findByText("Regeneration destination")).toBeInTheDocument();
   });
 });

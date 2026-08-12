@@ -211,7 +211,10 @@ export async function createPromptPreview(
   signal?: AbortSignal,
   lane: "social" | "explicit" = "social",
   explicitInput?: ExplicitGenerationInput,
-  diagnostic?: { origin: "manual_creative_concept"; diagnosticTraceId: string },
+  diagnostic?: {
+    origin: "canonical_planner" | "manual_creative_concept";
+    diagnosticTraceId: string;
+  },
 ): Promise<PromptPreview> {
   const result = await readJsonResponse<PromptPreviewResponse>(await fetch(
     `${environment.apiBaseUrl}/content-studio/prompt-preview`,
@@ -233,15 +236,19 @@ export type ExplicitInspirationConcepts = {
   softcore: string[];
 };
 
-export async function inspireExplicitContent(countPerTier = 5): Promise<ExplicitInspirationConcepts> {
+export type ExplicitInspirationTierMode = "softcore" | "hardcore" | "both";
+
+export async function inspireExplicitContent(tierMode: ExplicitInspirationTierMode = "both", count = 10): Promise<{ operationId: string; reused: boolean; hardcore: string[]; softcore: string[] }> {
   const result = await readJsonResponse<{
     success: boolean;
     error: string | null;
     hardcore?: string[];
     softcore?: string[];
     concepts?: string[];
+    operationId?: string;
+    reused?: boolean;
   }>(await fetch(`${environment.apiBaseUrl}/content-studio/explicit/inspire`, {
-    body: JSON.stringify({ countPerTier }),
+    body: JSON.stringify({ tierMode, count }),
     headers: { "Content-Type": "application/json" },
     method: "POST",
   }));
@@ -250,16 +257,48 @@ export async function inspireExplicitContent(countPerTier = 5): Promise<Explicit
   }
   const hardcore = Array.isArray(result.hardcore) ? result.hardcore : [];
   const softcore = Array.isArray(result.softcore) ? result.softcore : [];
-  if (hardcore.length || softcore.length) {
-    return { hardcore, softcore };
-  }
-  // Backward-compatible fallback if an older server only returns a flat list.
-  const concepts = Array.isArray(result.concepts) ? result.concepts : [];
-  const midpoint = Math.ceil(concepts.length / 2);
-  return {
-    hardcore: concepts.slice(0, midpoint),
-    softcore: concepts.slice(midpoint),
-  };
+  if (!result.operationId && !hardcore.length && !softcore.length) throw new Error("Explicit inspiration operation was not created");
+  return { operationId: result.operationId || "", reused: Boolean(result.reused), hardcore, softcore };
+}
+
+export async function handoffExplicitInspiration(operationId: string, generationOperationId: string): Promise<void> {
+  const result = await readJsonResponse<{ success: boolean; error?: string }>(await fetch(
+    `${environment.apiBaseUrl}/content-studio/explicit/inspire/${operationId}/handoff`, {
+      body: JSON.stringify({ generationOperationId }), headers: { "Content-Type": "application/json" }, method: "POST",
+    },
+  ));
+  if (!result.success) throw new Error(result.error || "Explicit inspiration handoff could not be saved");
+}
+
+export async function discardExplicitInspiration(operationId: string): Promise<void> {
+  const result = await readJsonResponse<{ success: boolean; error?: string }>(await fetch(
+    `${environment.apiBaseUrl}/content-studio/explicit/inspire/${operationId}/discard`, { method: "POST" },
+  ));
+  if (!result.success) throw new Error(result.error || "Explicit inspiration could not be discarded");
+}
+
+export async function startExplicitGenerationBatch(body: {
+  batchId: string; provider: string; concepts: Array<{ id: string; concept: string; tier: string }>;
+}): Promise<string> {
+  const result = await readJsonResponse<{ success: boolean; error?: string; operationId: string }>(await fetch(
+    `${environment.apiBaseUrl}/content-studio/explicit/batches`, {
+      body: JSON.stringify(body), headers: { "Content-Type": "application/json" }, method: "POST",
+    },
+  ));
+  if (!result.success) throw new Error(result.error || "Explicit batch could not start");
+  return result.operationId;
+}
+
+export async function updateExplicitGenerationBatch(operationId: string, body: {
+  current: number; total: number; stage: string; message: string;
+  metadata: Record<string, unknown>; terminalStatus?: "SUCCEEDED" | "PARTIAL" | "FAILED";
+}): Promise<void> {
+  const result = await readJsonResponse<{ success: boolean; error?: string }>(await fetch(
+    `${environment.apiBaseUrl}/content-studio/explicit/batches/${operationId}/progress`, {
+      body: JSON.stringify(body), headers: { "Content-Type": "application/json" }, method: "POST",
+    },
+  ));
+  if (!result.success) throw new Error(result.error || "Explicit batch progress could not be saved");
 }
 
 export async function askPromptPlanner(question: string, image?: File | null): Promise<string> {

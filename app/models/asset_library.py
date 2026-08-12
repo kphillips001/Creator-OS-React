@@ -12,6 +12,7 @@ class AssetLibraryFilter:
     search: str | None = None
     media_type: str | None = None
     classification: str | None = None
+    sale_destination: str | None = None
     eligible_only: bool = True
     limit: int = 500
     tags: tuple[str, ...] = ()
@@ -103,6 +104,7 @@ class AssetLibraryItem:
     relationship: AssetRelationshipSummary
     publishing: AssetPublishingSummary
     is_reference_image: bool = False
+    media_metadata: Mapping[str, Any] | None = None
 
 
 @dataclass(frozen=True)

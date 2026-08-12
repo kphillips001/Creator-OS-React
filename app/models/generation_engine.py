@@ -39,6 +39,11 @@ class GenerationType(str, Enum):
     VIDEO_EXTEND = "video_extend"
 
 
+class ProviderPromptState(str, Enum):
+    PLANNED = "PLANNED"
+    FINAL_PROVIDER_RENDERED = "FINAL_PROVIDER_RENDERED"
+
+
 @dataclass(frozen=True)
 class GenerationProvider:
     provider_id: str
@@ -79,6 +84,7 @@ class GenerationRequest:
     generation_type: str
     media_type: str
     image_count: int = 1
+    prompt_state: str = ProviderPromptState.PLANNED.value
     metadata: Mapping[str, Any] = field(default_factory=dict)
     created_at: str = field(default_factory=utc_now)
 

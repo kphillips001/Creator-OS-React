@@ -106,6 +106,10 @@ function mockContext(
           hardcore: Array.from({ length: 5 }, (_, index) => `Ava Blackthorne hardcore scene ${index + 1}`),
           softcore: Array.from({ length: 5 }, (_, index) => `Ava Blackthorne softcore scene ${index + 1}`),
         };
+      } else if (url.endsWith("/explicit/batches")) {
+        responseValue = { success: true, operationId: "explicit-batch-1", reused: false };
+      } else if (url.includes("/explicit/batches/") && url.endsWith("/progress")) {
+        responseValue = { success: true };
       } else if (url.endsWith("/inspire")) {
         responseValue = { success: true, error: null, runId: "run-inspire" };
       } else if (url.endsWith("/generations")) {
@@ -343,10 +347,25 @@ describe("ContentStudioPage", () => {
     fireEvent.click(within(explicit).getByRole("button", { name: "Inspire Me" }));
 
     expect(within(explicit).queryByRole("button", { name: "✨ Inspire Me" })).not.toBeInTheDocument();
-    expect(within(explicit).getByText("Creating inspiration…")).toBeInTheDocument();
+    expect(within(explicit).getByText("Generating 10 ideas — 5 Softcore + 5 Hardcore…")).toBeInTheDocument();
     expect(await within(explicit).findByText("hardcore scene 1")).toBeInTheDocument();
     expect(within(explicit).queryByText(/Ava Blackthorne/i)).not.toBeInTheDocument();
     expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).endsWith("/explicit/inspire"))).toBe(true);
+    const inspireCall = vi.mocked(fetch).mock.calls.find(([url]) => String(url).endsWith("/explicit/inspire"));
+    expect(JSON.parse(String(inspireCall?.[1]?.body))).toEqual({ tierMode: "both", count: 10 });
+  });
+
+  it("submits the selected Explicit inspiration tier and total idea count", async () => {
+    render(<ContentStudioPage />);
+    await screen.findByRole("region", { name: "Inspire Me Workspace" });
+    fireEvent.click(screen.getByText("🔞 Explicit Content").closest("summary") as HTMLElement);
+    const explicit = screen.getByRole("region", { name: "Explicit Content" });
+    fireEvent.click(within(explicit).getByRole("button", { name: "Softcore" }));
+    fireEvent.change(within(explicit).getByLabelText("Number of Ideas"), { target: { value: "5" } });
+    fireEvent.click(within(explicit).getByRole("button", { name: "Inspire Me" }));
+    await within(explicit).findByText("hardcore scene 1");
+    const inspireCall = vi.mocked(fetch).mock.calls.find(([url]) => String(url).endsWith("/explicit/inspire"));
+    expect(JSON.parse(String(inspireCall?.[1]?.body))).toEqual({ tierMode: "softcore", count: 5 });
   });
 
   it("plans, submits, and displays each selected Explicit concept before preparing the next", async () => {
@@ -810,7 +829,20 @@ describe("ContentStudioPage", () => {
       expect(call).toBeDefined();
       return call;
     });
-    expect(vi.mocked(fetch).mock.calls.indexOf(enhancementCall!)).toBeLessThan(vi.mocked(fetch).mock.calls.indexOf(generationCall!));
+    const previewCall = vi.mocked(fetch).mock.calls.find(([url]) => String(url).endsWith("/prompt-preview"));
+    expect(previewCall).toBeDefined();
+    expect(vi.mocked(fetch).mock.calls.indexOf(enhancementCall!)).toBeLessThan(vi.mocked(fetch).mock.calls.indexOf(previewCall!));
+    expect(vi.mocked(fetch).mock.calls.indexOf(previewCall!)).toBeLessThan(vi.mocked(fetch).mock.calls.indexOf(generationCall!));
+    const previewBody = JSON.parse(String(previewCall![1]?.body));
+    expect(previewBody).toMatchObject({
+      creativeMode: "premium_teaser",
+      diagnosticTraceId: expect.any(String),
+      lane: "social",
+      origin: "canonical_planner",
+      promptCount: 1,
+    });
+    expect(previewBody.creativeTags).toContain("[ORIGINAL USER TAGS");
+    expect(previewBody.creativeTags).toContain("[ENHANCED SUGGESTIONS");
     const generationBody = JSON.parse(String(generationCall![1]?.body));
     expect(generationBody).toMatchObject({
       creativeMode: "premium_teaser",
@@ -824,6 +856,7 @@ describe("ContentStudioPage", () => {
       promptCount: 1,
       promptSourceLabel: "Enhanced Tags",
       provider: "seedream_5_0_pro",
+      promptBatch: ["preview prompt one", "preview prompt two"],
     });
     expect(generationBody.promptSource).toContain(
       "[ORIGINAL USER TAGS — mandatory: Golden Hour Marina Walk — Ava wears a coral crop top",

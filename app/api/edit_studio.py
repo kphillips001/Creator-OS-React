@@ -19,6 +19,7 @@ from app.services.edit_studio_service import EditStudioService
 from app.services.generation_engine_service import GenerationEngineService
 from app.services.generation_library_service import GenerationLibraryService
 from app.services.reference_library_service import ReferenceLibraryService
+from app.services.quick_edit_service import CropBox, QuickEditService
 
 
 router = APIRouter(prefix="/api/v1/edit-studio", tags=["edit-studio"])
@@ -82,6 +83,14 @@ class GenerateEditRequest(BaseModel):
 class EditStudioActionResponse(BaseModel):
     success: bool
     message: str
+
+
+class CropRequest(BaseModel):
+    source_image_id: str
+    x: int = Field(ge=0)
+    y: int = Field(ge=0)
+    width: int = Field(ge=1)
+    height: int = Field(ge=1)
 
 
 class GenerateEditResponse(EditStudioActionResponse):
@@ -158,6 +167,34 @@ def edit_studio_context(response: Response):
         if record:
             candidate = _record_payload(record, image_url=f"/api/v1/edit-studio/candidates/{record.image_id}/image")
     return {**result, "candidate": candidate}
+
+
+@router.get("/quick-edit/source-info")
+def quick_edit_source_info(image_id: str):
+    profile_id = int(_creator_profile().get("id") or 0)
+    source = GenerationLibraryService().get(image_id)
+    if source.creator_profile_id != profile_id or source.status != "pending_edit":
+        raise HTTPException(status_code=404, detail="Edit Studio source not found.")
+    width, height = QuickEditService.dimensions(source.output_reference)
+    return {"image_id": image_id, "width": width, "height": height}
+
+
+@router.post("/quick-edit/crop")
+def quick_edit_crop(request: CropRequest):
+    profile_id = int(_creator_profile().get("id") or 0)
+    try:
+        result = QuickEditService().crop(
+            request.source_image_id, creator_profile_id=profile_id,
+            box=CropBox(request.x, request.y, request.width, request.height),
+        )
+    except KeyError as error:
+        raise HTTPException(status_code=404, detail="Edit Studio source not found.") from error
+    except (ValueError, FileNotFoundError) as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    return {
+        "success": True, "message": "Cropped image added to Generation Library.",
+        "result": _record_payload(result, image_url=f"/api/generation-library/media/{result.image_id}"),
+    }
 
 
 @router.get("/references", response_model=list[EditStudioReferenceResponse])

@@ -204,6 +204,39 @@ class FakeExperienceService:
 
 
 class AssetLibraryServiceTests(unittest.TestCase):
+    def test_images_grid_positively_scopes_registered_assets_to_single_image(self):
+        captured = {}
+        assets = SimpleNamespace(asset_library_grid_summary=lambda **kwargs: captured.update(kwargs) or ((), 0, ()))
+        service = object.__new__(AssetLibraryService)
+        service.assets = assets
+        service.content_destinations = FakeContentDestinationService()
+
+        service.asset_library_grid_summary(
+            AssetLibraryFilter(media_type="image", classification=None, creator_profile_id=7),
+            candidate_limit=18,
+        )
+
+        self.assertEqual(captured["media_type"], "image")
+        self.assertEqual(captured["classification"], "SINGLE_IMAGE")
+        self.assertIsNone(captured["sale_destination"])
+        self.assertIsNone(captured["availability_predicate"])
+        self.assertEqual(service.content_destinations.expressions, [])
+
+    def test_images_grid_passes_canonical_sale_destination_to_repository(self):
+        captured = {}
+        assets = SimpleNamespace(asset_library_grid_summary=lambda **kwargs: captured.update(kwargs) or ((), 0, ()))
+        service = object.__new__(AssetLibraryService)
+        service.assets = assets
+        service.content_destinations = FakeContentDestinationService()
+
+        service.asset_library_grid_summary(
+            AssetLibraryFilter(media_type="image", sale_destination="CONTENT_VAULT", creator_profile_id=7),
+            candidate_limit=18,
+        )
+
+        self.assertEqual(captured["sale_destination"], "CONTENT_VAULT")
+        self.assertEqual(captured["classification"], "SINGLE_IMAGE")
+
     def test_search_assets_returns_asset_library_result(self):
         asset = make_asset()
         media = FakeMediaProcessingService(preview_path="preview.jpg")

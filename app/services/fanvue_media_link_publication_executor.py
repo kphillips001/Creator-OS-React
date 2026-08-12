@@ -2,6 +2,7 @@
 from __future__ import annotations
 import hashlib
 import json
+import logging
 import random
 import time
 from datetime import datetime, timezone
@@ -18,6 +19,8 @@ from app.services.commercial_publication_service import CommercialPublicationSer
 from app.services.commercial_asset_eligibility_service import CommercialAssetEligibilityService
 from app.services.fanvue_official_client import FanvueOfficialClient
 from app.services.fanvue_oauth_service import FanvueReauthorizationRequired
+
+logger = logging.getLogger(__name__)
 
 class PublicationPending(RuntimeError):
     pass
@@ -48,6 +51,27 @@ class FanvueMediaLinkPublicationExecutor:
             raise ValueError("Commercial Publication execution is already in progress.")
         try:
             return self._execute_claimed(publication, creator_profile_id, fanvue_account_id)
+        except Exception as error:
+            # Validation, eligibility, provider setup, and upload execution are
+            # all terminal attempts once a publication claim has been acquired.
+            # Never strand an executable publication in PUBLISHING merely
+            # because failure occurred before the inner upload boundary.
+            try:
+                current = self.publication_service.get_publication(
+                    publication.publication_id, creator_profile_id=creator_profile_id,
+                )
+                if current and current.status != CommercialPublicationStatus.FAILED:
+                    self.publication_service.mark_failed(
+                        publication.publication_id,
+                        creator_profile_id=creator_profile_id,
+                        error=str(error),
+                    )
+            except Exception:
+                logger.exception(
+                    "Failed to persist terminal Fanvue publication error for %s",
+                    publication.publication_id,
+                )
+            raise
         finally:
             self.publications.release_execution(publication.publication_id, claim)
 
@@ -121,12 +145,35 @@ class FanvueMediaLinkPublicationExecutor:
             for block in iter(lambda: source.read(1024 * 1024), b""):
                 digest.update(block)
         size = path.stat().st_size
+        content_hash = digest.hexdigest()
         checkpoint = self.uploads.get(publication_id, asset_id)
-        if checkpoint and (checkpoint.content_hash != digest.hexdigest() or checkpoint.file_size_bytes != size):
+        if checkpoint and (checkpoint.content_hash != content_hash or checkpoint.file_size_bytes != size):
             raise ValueError(f"Offering Asset changed after upload checkpoint: {asset_id}.")
+        if checkpoint is None:
+            find_reusable = getattr(self.uploads, "find_ready_reusable", None)
+            reusable = find_reusable(
+                asset_id=asset_id, fanvue_account_id=account_id,
+                content_hash=content_hash, file_size_bytes=size,
+            ) if callable(find_reusable) else None
+            reusable_status = ""
+            if reusable is not None:
+                try:
+                    provider_media = client.get_media(reusable.provider_media_uuid)
+                    reusable_status = str(provider_media.get("status") or "").lower()
+                except Exception:
+                    # A stale/missing provider resource is not reusable; start a
+                    # fresh upload checkpoint for this publication instead.
+                    reusable_status = ""
+            if reusable is not None and reusable_status == "ready":
+                checkpoint = self.uploads.initialize_reused(
+                    publication_id=publication_id, asset_id=asset_id,
+                    fanvue_account_id=account_id, media_type=asset.media_type,
+                    content_hash=content_hash, file_size_bytes=size,
+                    provider_media_uuid=reusable.provider_media_uuid,
+                )
         checkpoint = checkpoint or self.uploads.initialize(
             publication_id=publication_id, asset_id=asset_id, fanvue_account_id=account_id,
-            media_type=asset.media_type, content_hash=digest.hexdigest(), file_size_bytes=size)
+            media_type=asset.media_type, content_hash=content_hash, file_size_bytes=size)
         resume_completed_parts = bool(
             checkpoint.provider_media_uuid and checkpoint.total_parts
             and len(checkpoint.uploaded_parts) == int(checkpoint.total_parts)
@@ -196,8 +243,11 @@ class FanvueMediaLinkPublicationExecutor:
             raise ValueError("Commercial Publication is not executable.")
         if offering is None or offering.status == CommercialOfferingStatus.ARCHIVED:
             raise ValueError("Commercial Offering is unavailable or archived.")
-        if offering.primary_sales_channel != PrimarySalesChannel.AI_CHAT:
-            raise ValueError("Fanvue Media Links are only available for AI_CHAT offerings.")
+        if offering.primary_sales_channel not in {
+            PrimarySalesChannel.AI_CHAT,
+            PrimarySalesChannel.TELEGRAM_WALL,
+        }:
+            raise ValueError("Fanvue Media Links are unavailable for this sales channel.")
         if offering.offering_type.value in {"STORY", "STORY_SET"}:
             raise ValueError("This offering type is not supported by Fanvue Media Link execution.")
         if offering.price_minor is None or not 300 <= offering.price_minor <= 50000:

@@ -9,4 +9,8 @@ CREATE TABLE public.developer_todos (
   PRIMARY KEY (creator_profile_id, todo_id)
 );
 CREATE INDEX idx_developer_todos_creator_created ON public.developer_todos(creator_profile_id, created_at, todo_id);
+INSERT INTO public.developer_todos (todo_id, creator_profile_id, title, created_at)
+SELECT 'add-photoshoot-bundle-support', id, 'Add Photoshoot Bundle Support', '2026-08-07T12:00:00+00:00'::timestamptz
+FROM public.creator_profiles
+ON CONFLICT (creator_profile_id, todo_id) DO NOTHING;
 COMMIT;

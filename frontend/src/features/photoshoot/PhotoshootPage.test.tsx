@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
@@ -131,6 +132,7 @@ describe("PhotoshootPage Phase 1", () => {
     expect(screen.getByText("🎬 Story Progression Active")).toBeInTheDocument();
     fireEvent.change(selector, { target: { value: "0" } });
     expect(onTargetShotCount).toHaveBeenCalledWith(0);
+    expect(screen.getByText("🎬 Story Progression Active").closest("div")).toHaveClass("photoshoot-creative-structure--session-target");
   });
 
   it("updates the target mode indicator and full-plan label for Creative Freeflow", () => {
@@ -187,6 +189,93 @@ describe("PhotoshootPage Phase 1", () => {
     fireEvent.click(screen.getByRole("button", { name: "Direct Shot" }));
     const directPrompt = screen.getByLabelText("Direct the Next Shot prompt");
     expect(directPrompt).toHaveFocus();
+  });
+
+  it("shows reusable Freeflow ideas with persisted recommendation and usage while keeping used ideas selectable", () => {
+    const reuse = vi.fn();
+    const select = vi.fn();
+    render(<CreativeDirectionPanel
+      disabled={false} busy={false} guidance="" ideas={["Window portrait", "Seated profile"]}
+      selectedIdea="" directionApproved={false} recommendation={null} creativeMode="premium"
+      existingIdeasAvailable recommendedIdea="Window portrait" ideaUsage={{ "Window portrait": ["Shot 2"] }}
+      onGuidance={vi.fn()} onDirect={vi.fn()} onDirectSelected={vi.fn()} onAsk={vi.fn()}
+      onDifferentIdeas={vi.fn()} onUseExistingIdeas={reuse} onSelectIdea={select}
+      onGenerateSelected={vi.fn()} onChooseAnother={vi.fn()}
+    />);
+    fireEvent.click(screen.getByRole("button", { name: "Use Existing Ideas" }));
+    expect(reuse).toHaveBeenCalledOnce();
+    expect(screen.getByText("Recommended natural next")).toBeInTheDocument();
+    expect(screen.getByText("✓ Used — Shot 2")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("radio", { name: /Window portrait/ }));
+    expect(select).toHaveBeenCalledWith("Window portrait");
+  });
+
+  it("hides Use Existing Ideas outside an applicable persisted Freeflow set", () => {
+    render(<CreativeDirectionPanel
+      disabled={false} busy={false} guidance="" ideas={[]} selectedIdea="" directionApproved={false}
+      recommendation={null} existingIdeasAvailable={false} onGuidance={vi.fn()} onDirect={vi.fn()}
+      onDirectSelected={vi.fn()} onAsk={vi.fn()} onDifferentIdeas={vi.fn()} onUseExistingIdeas={vi.fn()}
+      onSelectIdea={vi.fn()} onGenerateSelected={vi.fn()} onChooseAnother={vi.fn()}
+    />);
+    expect(screen.queryByRole("button", { name: "Use Existing Ideas" })).not.toBeInTheDocument();
+  });
+
+  it("reopens persisted Freeflow ideas without calling the AI inspiration endpoint", async () => {
+    const ideaSet = { idea_set_id: "set-1", ideas: ["Exact saved idea", "Unused saved idea"], recommended_idea: "Exact saved idea", planning_shot: 2, approved_shot_count: 1, created_at: "2026-08-11T12:00:00Z", usage: { "Exact saved idea": ["Shot 2"] } };
+    const fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes("/photoshoot/status")) return response({ request: null, candidate: null });
+      if (url.includes("/creative-director/context")) return response({ session_id: "session-1", creative_mode: "premium", creator_guidance: "", workflow_stage: "ready_for_next_shot", current_prompt: "", current_shot: 2, planning_shot: 3, target_shot_count: 0, planning_mode: "frame_by_frame", recommendation_state: { inspiration_ideas: [], selected_inspiration: "", direction_approved: false, recommendation: null }, freeflow_idea_set: ideaSet });
+      if (url.endsWith("/creative-director/existing-inspiration") && init?.method === "POST") return response({ ideas: ideaSet.ideas, selected_inspiration: "", freeflow_idea_set: ideaSet });
+      if (url.includes("/creative-director/guidance")) return response({ creator_guidance: "" });
+      return response({ creator_profile_exists: true, pending_photoshoot: seed, provider_list: [{ value: "flux", label: "Flux" }], active_session: { session_id: "session-1", title: "Photoshoot Studio", provider_id: "flux", target_shot_count: 0, creative_continuity: {} }, creative_mode: "premium", continuity_settings: { location: true, wardrobe: true, lighting: true, hairstyle: true, makeup: true, camera_style: true }, timeline_summary: [{ request_id: "request-1", sequence_index: 1, shot_number: 1, label: "Shot 1 (Seed)", is_seed: true, status: "approved", image: seed }] });
+    });
+    vi.stubGlobal("fetch", fetch);
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "Use Existing Ideas" }));
+    expect(await screen.findByRole("radio", { name: /Exact saved idea/ })).toBeEnabled();
+    expect(screen.getByText("✓ Used — Shot 2")).toBeInTheDocument();
+    expect(fetch).toHaveBeenCalledWith(expect.stringContaining("/creative-director/existing-inspiration"), expect.objectContaining({ method: "POST" }));
+    expect(fetch.mock.calls.some(([input]) => String(input).endsWith("/creative-director/inspiration"))).toBe(false);
+  });
+
+  it("directly edits each direction inline and keeps Selected Direction synchronized after save", () => {
+    const ideas = ["Hold the shirt up", "Turn toward the window"];
+    const saves: Array<[string, string]> = [];
+    function Harness() {
+      const [selected, setSelected] = useState(ideas[0]!);
+      const [edits, setEdits] = useState<Record<string, string>>({});
+      return <CreativeDirectionPanel disabled={false} busy={false} guidance="" ideas={ideas} selectedIdea={selected} inspirationEdits={edits} directionApproved={false} recommendation={null} onGuidance={vi.fn()} onDirect={vi.fn()} onDirectSelected={vi.fn()} onAsk={vi.fn()} onDifferentIdeas={vi.fn()} onSelectIdea={setSelected} onGenerateSelected={vi.fn()} onChooseAnother={vi.fn()} onDirectionEditSave={(idea,value)=>{saves.push([idea,value]);setEdits(current=>({...current,[idea]:value}));}}/>;
+    }
+    render(<Harness/>);
+    const secondCard = screen.getByText("Turn toward the window").closest(".photoshoot-inspiration__idea")!;
+    fireEvent.doubleClick(secondCard);
+    expect(screen.getByRole("radio", { name: /Turn toward the window/ })).toBeChecked();
+    const editor = screen.getByLabelText("Edit direction 2");
+    expect(editor).toHaveValue("Turn toward the window");
+    expect(screen.queryByText("Additional guidance")).not.toBeInTheDocument();
+    fireEvent.change(editor,{target:{value:"Keep her head turned farther back toward the camera"}});
+    const selectedPanel = screen.getByText("Selected Direction").closest(".photoshoot-selected-direction")!;
+    expect(selectedPanel).toHaveTextContent("Turn toward the window");
+    expect(selectedPanel).not.toHaveTextContent("Keep her head turned farther back");
+    fireEvent.keyDown(editor,{key:"Enter",ctrlKey:true});
+    expect(saves).toEqual([["Turn toward the window","Keep her head turned farther back toward the camera"]]);
+    expect(selectedPanel).toHaveTextContent("Keep her head turned farther back toward the camera");
+    expect(selectedPanel).not.toHaveTextContent("Turn toward the window");
+    expect(screen.getByText("Edited")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("radio",{name:/Hold the shirt up/}));
+    expect(selectedPanel).toHaveTextContent("Hold the shirt up");
+    expect(selectedPanel).not.toHaveTextContent("Keep her head turned farther back");
+    fireEvent.click(screen.getByRole("radio",{name:/Keep her head turned farther back/}));
+    expect(selectedPanel).toHaveTextContent("Keep her head turned farther back");
+    const editedCard = screen.getByRole("radio",{name:/Keep her head turned farther back/}).closest(".photoshoot-inspiration__idea")!;
+    fireEvent.doubleClick(editedCard);
+    const reopened = screen.getByLabelText("Edit direction 2");
+    expect(reopened).toHaveValue("Keep her head turned farther back toward the camera");
+    fireEvent.change(reopened,{target:{value:"Unsaved replacement"}});
+    fireEvent.keyDown(reopened,{key:"Escape"});
+    expect(selectedPanel).toHaveTextContent("Keep her head turned farther back toward the camera");
+    expect(selectedPanel).not.toHaveTextContent("Unsaved replacement");
   });
 
   it("keeps reviewed AI ideas available without exposing the persisted prompt", async () => {
@@ -318,6 +407,7 @@ describe("PhotoshootPage Phase 1", () => {
   it("automatically develops, approves, plans, populates the prompt, and submits the selected shot", async () => {
     let statusCalls = 0;
     const calls: string[] = [];
+    const requestBodies: Array<Record<string, unknown>> = [];
     const candidate = { ...seed, image_id: "candidate-auto", image_url: "/candidate-auto.png", status: "photoshoot_session" };
     vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
@@ -329,8 +419,12 @@ describe("PhotoshootPage Phase 1", () => {
       }
       if (url.includes("/creative-director/context")) return response({
         session_id: "session-1", creative_mode: "premium", creator_guidance: "", workflow_stage: "inspiration_selected",
-        current_prompt: "", recommendation_state: { inspiration_ideas: ["Closer window portrait"], selected_inspiration: "Closer window portrait", direction_approved: false, recommendation: null },
+        current_prompt: "", recommendation_state: { inspiration_ideas: ["Closer window portrait"], selected_inspiration: "Closer window portrait", inspiration_edits: { "Closer window portrait": "Closer portrait with stronger eye contact" }, direction_approved: false, recommendation: null },
       });
+      if (url.endsWith("/creative-director/selection")) {
+        requestBodies.push(JSON.parse(String(init?.body)));
+        return response({ selected_inspiration: "Closer window portrait", creative_hint: "Closer portrait with stronger eye contact" });
+      }
       if (url.endsWith("/creative-director/recommendation")) {
         calls.push("develop");
         return response({ title: "Window turn", creative_direction: "Turn toward the window", continuity_notes: "Keep wardrobe" });
@@ -341,6 +435,7 @@ describe("PhotoshootPage Phase 1", () => {
       }
       if (url.endsWith("/photoshoot/generate") && init?.method === "POST") {
         calls.push("generate");
+        requestBodies.push(JSON.parse(String(init.body)));
         return response({ request_id: "shot-auto", status: "generating" });
       }
       if (url.includes("/creative-director/guidance")) return response({ creator_guidance: "" });
@@ -354,6 +449,9 @@ describe("PhotoshootPage Phase 1", () => {
     expect(screen.queryByText("Final canonical prompt")).not.toBeInTheDocument();
     expect(screen.getByText("View Creative Direction")).toBeInTheDocument();
     expect(calls).toEqual(["develop", "approve-and-plan", "generate"]);
+    expect(requestBodies[0]).toMatchObject({ idea: "Closer window portrait", edited_direction: "Closer portrait with stronger eye contact" });
+    expect(requestBodies[1]).toMatchObject({ creative_hint: "Closer portrait with stronger eye contact" });
+    expect(String(requestBodies[1]?.creative_hint)).not.toContain("Closer window portrait");
   });
 
   it("directs a shot from operator text without requesting AI inspiration", async () => {
@@ -483,12 +581,13 @@ describe("PhotoshootPage Phase 1", () => {
     });
   });
 
-  it("approves a candidate, refreshes planning progress, and waits for the operator", async () => {
+  it("approves a Creative Freeflow candidate and restores its reusable idea set at the next planning ordinal", async () => {
     const approved = { ...seed, image_id: "approved-2", image_url: "/approved-2.png", status: "photoshoot_session" };
     const candidate = { ...seed, image_id: "candidate-2", image_url: "/candidate-2.png", status: "photoshoot_session" };
+    const ideaSet = { idea_set_id: "set-1", ideas: ["Used window idea", "Unused seated idea"], recommended_idea: "Used window idea", planning_shot: 2, approved_shot_count: 1, created_at: "2026-08-11T12:00:00Z", usage: { "Used window idea": ["Shot 2"] } };
     let contextCalls = 0;
     let statusCalls = 0;
-    const fetch = vi.fn((input: RequestInfo | URL) => {
+    const fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (url.includes("/photoshoot/status")) {
         statusCalls += 1;
@@ -496,26 +595,32 @@ describe("PhotoshootPage Phase 1", () => {
       }
       if (url.includes("/creative-director/context")) {
         contextCalls += 1;
-        return response({ session_id: "session-1", creative_mode: "premium", creator_guidance: "", workflow_stage: "ready_for_next_shot", current_prompt: "", current_shot: 2, planning_shot: 3, target_shot_count: 10, remaining_shots: 8, editorial_stage: "Beginning", planner_explanation: "Planning Shot 3 from the approved continuity reference.", recommendation_state: { inspiration_ideas: [], selected_inspiration: "", direction_approved: false, recommendation: {} } });
+        return response({ session_id: "session-1", creative_mode: "premium", creator_guidance: "", workflow_stage: "ready_for_next_shot", current_prompt: "", current_shot: 2, planning_shot: 3, target_shot_count: 0, remaining_shots: 0, editorial_stage: "Freeflow", planner_explanation: "Planning Shot 3 from the approved continuity reference.", planning_mode: "frame_by_frame", recommendation_state: { inspiration_ideas: [], selected_inspiration: "", direction_approved: false, recommendation: {} }, freeflow_idea_set: ideaSet });
       }
+      if (url.endsWith("/creative-director/existing-inspiration") && init?.method === "POST") return response({ ideas: ideaSet.ideas, selected_inspiration: "", freeflow_idea_set: ideaSet });
       if (url.endsWith("/photoshoot/candidate/approve")) return response({ success: true, status: "approved" });
       if (url.includes("/creative-director/guidance")) return response({ creator_guidance: "" });
       const timeline = contextCalls > 0 ? [{ request_id: "request-1", sequence_index: 1, shot_number: 1, label: "Shot 1 (Seed)", is_seed: true, image: seed }, { request_id: "request-2", sequence_index: 2, shot_number: 2, label: "Shot 2", is_seed: false, image: approved }] : [{ request_id: "request-1", sequence_index: 1, shot_number: 1, label: "Shot 1 (Seed)", is_seed: true, image: seed }];
-      return response({ creator_profile_exists: true, pending_photoshoot: seed, provider_list: [{ value: "flux", label: "Flux" }], active_session: { session_id: "session-1", title: "Photoshoot Studio", provider_id: "flux", creative_continuity: { workflow_stage: "ready_for_next_shot" } }, creative_mode: "premium", continuity_settings: { location: true, wardrobe: true, lighting: true, hairstyle: true, makeup: true, camera_style: true }, timeline_summary: timeline });
+      return response({ creator_profile_exists: true, pending_photoshoot: seed, provider_list: [{ value: "flux", label: "Flux" }], active_session: { session_id: "session-1", title: "Photoshoot Studio", provider_id: "flux", target_shot_count: 0, creative_continuity: { workflow_stage: "ready_for_next_shot", planning_mode: "frame_by_frame" } }, creative_mode: "premium", continuity_settings: { location: true, wardrobe: true, lighting: true, hairstyle: true, makeup: true, camera_style: true }, timeline_summary: timeline });
     });
     vi.stubGlobal("fetch", fetch);
     renderPage();
     fireEvent.click(await screen.findByRole("button", { name: "Approve Shot" }));
     expect(await screen.findByRole("status")).toHaveTextContent("Shot Approved");
     expect(screen.getByRole("status")).toHaveTextContent("Updating Photoshoot...");
-    expect(await screen.findByText("Planning Shot 3 of 10")).toBeInTheDocument();
+    expect(await screen.findByText("CREATIVE FREEFLOW")).toBeInTheDocument();
+    expect(screen.getByText("2 approved")).toBeInTheDocument();
     expect(screen.getByText("Ready for Next Shot")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Ask AI" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Use Existing Ideas" })).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: "Use Existing Ideas" }));
+    expect(await screen.findByText("✓ Used — Shot 2")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("radio", { name: /Unused seated idea/ }));
     expect(screen.getByText("Shot 2")).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Candidate Review" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Finish Photoshoot/ })).toBeEnabled();
     expect(fetch).toHaveBeenCalledWith(expect.stringContaining("/photoshoot/candidate/approve"), expect.objectContaining({ method: "POST" }));
-    expect(fetch).not.toHaveBeenCalledWith(expect.stringContaining("/creative-director/inspiration"), expect.anything());
+    expect(fetch.mock.calls.some(([input]) => String(input).endsWith("/creative-director/inspiration"))).toBe(false);
   });
 
   it.each([
@@ -571,33 +676,82 @@ describe("PhotoshootPage Phase 1", () => {
     expect(fetch).not.toHaveBeenCalledWith(expect.stringContaining("/creative-director/inspiration"), expect.anything());
   });
 
-  it("finishes immediately, restores the idle Studio, and offers the completed Gallery", async () => {
+  it("shows honest finishing and success states, prevents duplicate submission, and offers Gallery", async () => {
     const approved = { ...seed, image_id: "approved-2", image_url: "/approved-2.png", status: "photoshoot_session" };
     let finished = false;
+    let finishCalls = 0;
+    let resolveFinish: ((value: Response) => void) | undefined;
+    const pendingFinish = new Promise<Response>((resolve) => { resolveFinish = resolve; });
     vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
       const url = String(input);
       if (url.includes("/photoshoot/status")) return response({ request: null, candidate: null });
       if (url.includes("/creative-director/context")) return response({ session_id: "session-1", creative_mode: "safe", creator_guidance: "", workflow_stage: "ready_for_next_shot", current_prompt: "", recommendation_state: { inspiration_ideas: [], selected_inspiration: "", direction_approved: false, recommendation: {} } });
-      if (url.endsWith("/photoshoot/finish")) {
-        finished = true;
-        return response({ session_id: "session-1", status: "archived", already_confirmed: false, photoshoot_decision: "APPROVED", photoshoot_decided_at: "2026-07-21T00:00:00Z", selected_image_ids: ["approved-2"], photoshoot_created: true, photoshoot_deliverable_id: "set-1", image_asset_generation_ids: [] });
-      }
+      if (url.endsWith("/photoshoot/finish")) { finishCalls += 1; return pendingFinish; }
       if (finished && url.endsWith("/photoshoot/context")) return response({ creator_profile_exists: true, pending_photoshoot: null, provider_list: [], active_session: null, creative_mode: null, continuity_settings: null, timeline_summary: [] });
       return response({ creator_profile_exists: true, pending_photoshoot: seed, provider_list: [{ value: "flux", label: "Flux" }], active_session: { session_id: "session-1", title: "Photoshoot Studio", provider_id: "flux", creative_continuity: { workflow_stage: "ready_for_next_shot" } }, creative_mode: "safe", continuity_settings: { location: true, wardrobe: true, lighting: true, hairstyle: true, makeup: true, camera_style: true }, timeline_summary: [{ request_id: "request-1", sequence_index: 1, shot_number: 1, label: "Shot 1 (Seed)", is_seed: true, image: seed }, { request_id: "request-2", sequence_index: 2, shot_number: 2, label: "Shot 2", is_seed: false, image: approved }] });
     }));
     renderPage();
-    fireEvent.click(await screen.findByRole("button", { name: /Finish Photoshoot/ }));
-    expect(await screen.findByText("✓ Photoshoot completed successfully.")).toBeInTheDocument();
-    expect(screen.getByText("The Photoshoot has been added to the Gallery.")).toBeInTheDocument();
+    const finishButton = await screen.findByRole("button", { name: /Finish Photoshoot/ });
+    fireEvent.click(finishButton);
+    expect(screen.getByRole("heading", { name: "Finishing Photoshoot…" })).toBeInTheDocument();
+    expect(screen.getByText("Saving the completed Photoshoot to Gallery and closing this session.")).toBeInTheDocument();
+    expect(finishButton).toBeDisabled();
+    fireEvent.click(finishButton);
+    expect(finishCalls).toBe(1);
+    finished = true;
+    resolveFinish?.(new Response(JSON.stringify({ session_id: "session-1", status: "archived", already_confirmed: false, photoshoot_decision: "APPROVED", photoshoot_decided_at: "2026-07-21T00:00:00Z", selected_image_ids: ["approved-2"], photoshoot_created: true, photoshoot_deliverable_id: "set-1", image_asset_generation_ids: [] }), { status: 200, headers: { "content-type": "application/json" } }));
+    expect(await screen.findByText("✓ Photoshoot Complete")).toBeInTheDocument();
+    expect(screen.getByText("2 images saved to Photoshoot Gallery.")).toBeInTheDocument();
+    expect(screen.getByText("Photoshoot saved successfully. Resetting Photoshoot Studio…")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Finish Photoshoot/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Stop Photoshoot & Return Seed" })).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Session Planning" })).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "AI Creative Director" })).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Target Photoshoot Length Reached" })).not.toBeInTheDocument();
     expect(fetch).toHaveBeenCalledWith(expect.stringContaining("/photoshoot/finish"), expect.objectContaining({ method: "POST" }));
-    fireEvent.click(screen.getByRole("button", { name: "Open Gallery" }));
+    fireEvent.click(screen.getByRole("button", { name: "View in Photoshoot Gallery" }));
     expect(await screen.findByText("Photoshoot Gallery destination")).toBeInTheDocument();
     expect(fetch).not.toHaveBeenCalledWith(expect.stringContaining("/curation/confirm"), expect.anything());
+  });
+
+  it("preserves the active Photoshoot and permits retry when finishing fails", async () => {
+    let finishCalls = 0;
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/photoshoot/status")) return response({ request: null, candidate: null });
+      if (url.includes("/creative-director/context")) return response({ session_id: "session-1", creative_mode: "safe", creator_guidance: "", workflow_stage: "ready_for_next_shot", current_prompt: "", recommendation_state: {} });
+      if (url.endsWith("/photoshoot/finish")) { finishCalls += 1; return response({ detail: "Gallery storage unavailable." }, 500); }
+      return response({ creator_profile_exists: true, pending_photoshoot: seed, provider_list: [{ value: "flux", label: "Flux" }], active_session: { session_id: "session-1", title: "Photoshoot Studio", provider_id: "flux", creative_continuity: {} }, creative_mode: "safe", continuity_settings: { location: true, wardrobe: true, lighting: true, hairstyle: true, makeup: true, camera_style: true }, timeline_summary: [{ request_id: "request-1", sequence_index: 1, shot_number: 1, label: "Shot 1 (Seed)", is_seed: true, image: seed }] });
+    }));
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: /Finish Photoshoot/ }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Gallery storage unavailable.");
+    expect(screen.getByRole("button", { name: /Finish Photoshoot/ })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Stop Photoshoot & Return Seed" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Finish Photoshoot/ }));
+    await waitFor(() => expect(finishCalls).toBe(2));
+  });
+
+  it("transitions from confirmed completion to the backend-owned idle Studio", async () => {
+    let finished = false;
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/photoshoot/status")) return response({ request: null, candidate: null });
+      if (url.includes("/creative-director/context")) return response({ session_id: "session-1", creative_mode: "safe", creator_guidance: "", workflow_stage: "ready_for_next_shot", current_prompt: "", recommendation_state: {} });
+      if (url.endsWith("/photoshoot/finish")) {
+        finished = true;
+        return response({ session_id: "session-1", status: "archived", already_confirmed: false, photoshoot_decision: "APPROVED", photoshoot_decided_at: "2026-07-21T00:00:00Z", selected_image_ids: [], photoshoot_created: true, photoshoot_deliverable_id: "set-1", image_asset_generation_ids: [] });
+      }
+      if (finished && url.endsWith("/photoshoot/context")) return response({ creator_profile_exists: true, pending_photoshoot: null, provider_list: [], active_session: null, creative_mode: null, continuity_settings: null, timeline_summary: [] });
+      return response({ creator_profile_exists: true, pending_photoshoot: seed, provider_list: [{ value: "flux", label: "Flux" }], active_session: { session_id: "session-1", title: "Photoshoot Studio", provider_id: "flux", creative_continuity: {} }, creative_mode: "safe", continuity_settings: { location: true, wardrobe: true, lighting: true, hairstyle: true, makeup: true, camera_style: true }, timeline_summary: [{ request_id: "request-1", sequence_index: 1, shot_number: 1, label: "Shot 1 (Seed)", is_seed: true, image: seed }] });
+    }));
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: /Finish Photoshoot/ }));
+    expect(await screen.findByText("✓ Photoshoot Complete")).toBeInTheDocument();
+    expect(await screen.findByText(/Choose an image in Generation Library/, {}, { timeout: 2500 })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Finish Photoshoot/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Candidate Review" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "AI Creative Director" })).not.toBeInTheDocument();
   });
 
   it("restores backend-owned Auto Generation progress above the session plan after refresh", async () => {
@@ -722,8 +876,8 @@ describe("PhotoshootPage Phase 1", () => {
     </MemoryRouter>);
 
     const first = mount();
-    expect(await screen.findByLabelText("Photoshoot Generation Progress")).toHaveTextContent("Generating Photoshoot image");
-    expect(screen.getByLabelText("Photoshoot Generation Progress").querySelector("progress")).toHaveAttribute("value", "42");
+    await screen.findByRole("heading", { name: "AI Creative Director" });
+    expect(screen.queryByLabelText("Photoshoot Generation Progress")).not.toBeInTheDocument();
     first.unmount();
     completed = true;
     mount();
@@ -738,7 +892,7 @@ describe("PhotoshootPage Phase 1", () => {
       if (url.includes("/background-operations")) return response({ success: true, operations: url.includes("status=recent") ? [{
         operationId: "failed-operation", operationType: "photoshoot_generation", originatingWorkspace: "photoshoot_studio",
         subjectType: "photoshoot_session", subjectId: "session-1", status: "FAILED",
-        progressCurrent: 0, progressTotal: 1, progressPercent: 35, currentStage: "FAILED",
+        progressCurrent: 0, progressTotal: 2, progressPercent: 35, currentStage: "FAILED",
         stageMessage: "Provider timed out", createdAt: "2026-08-06T12:00:00Z", startedAt: "2026-08-06T12:00:01Z",
         completedAt: "2026-08-06T12:01:00Z", resultLocation: "/content/photoshoot", resultReference: "job-2",
         errorCode: "EXECUTION_FAILED", errorMessage: "Provider timed out", cancellationSupported: false,

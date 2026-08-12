@@ -17,6 +17,7 @@ import {
   regeneratePhotoshootCandidate,
   rejectPhotoshootCandidate,
   requestPhotoshootInspiration,
+  reusePhotoshootInspiration,
   requestDirectPhotoshootRecommendation,
   requestPhotoshootRecommendation,
   replacePhotoshootShot,
@@ -31,7 +32,7 @@ import {
   startPhotoshootAutoRun,
   type PhotoshootStatus,
 } from "../../infrastructure/api/photoshootApi";
-import type { PhotoshootAutoRunRuntime, PhotoshootContext, PlannedShot, PlanningMode } from "./types";
+import type { FreeflowIdeaSet, PhotoshootAutoRunRuntime, PhotoshootCompletionSummary, PhotoshootContext, PlannedShot, PlanningMode } from "./types";
 import type { CreativeDirectorRecommendation } from "./types";
 import { CandidatePanel } from "./components/CandidatePanel";
 import { CreativeDirectionPanel } from "./components/CreativeDirectionPanel";
@@ -62,7 +63,7 @@ function ManualWorkspace({
   refresh: () => Promise<unknown>;
   onReturn: () => void;
   onOpenLibrary: (message?: string) => void;
-  onCompleted: (deliverableId: string | null) => void;
+  onCompleted: (summary: PhotoshootCompletionSummary) => void;
 }) {
   const backgroundOperations = useBackgroundOperations();
   const provider = ready.session.providerId;
@@ -71,7 +72,9 @@ function ManualWorkspace({
   const [guidance, setGuidance] = useState("");
   const [directorRestored, setDirectorRestored] = useState(false);
   const [ideas, setIdeas] = useState<string[]>([]);
+  const [freeflowIdeaSet, setFreeflowIdeaSet] = useState<FreeflowIdeaSet | null>(null);
   const [selectedIdea, setSelectedIdea] = useState("");
+  const [inspirationEdits, setInspirationEdits] = useState<Record<string, string>>({});
   const [recommendation, setRecommendation] = useState<CreativeDirectorRecommendation | null>(null);
   const [directionApproved, setDirectionApproved] = useState(false);
   const [planningMode, setPlanningMode] = useState<PlanningMode>("frame_by_frame");
@@ -91,6 +94,7 @@ function ManualWorkspace({
   const [approvalNotice, setApprovalNotice] = useState(false);
   const [confirmStop, setConfirmStop] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [finishState, setFinishState] = useState<"idle" | "finishing">("idle");
   const [error, setError] = useState("");
   const [selectedShotStage, setSelectedShotStage] = useState<SelectedShotStage | null>(null);
   const [selectedShotError, setSelectedShotError] = useState("");
@@ -105,6 +109,9 @@ function ManualWorkspace({
   ].includes(photoshootOperation.status);
   const photoshootOperationId = photoshootOperation?.operationId;
   const photoshootOperationStatus = photoshootOperation?.status;
+  const showPhotoshootOperationProgress = Boolean(
+    photoshootOperation && photoshootOperation.progressTotal > 1,
+  );
   const working =
     busy ||
     operationActive ||
@@ -165,7 +172,9 @@ function ManualWorkspace({
       setGuidance(recreateScene || state.creatorGuidance);
       if (recreateScene) sessionStorage.removeItem("creator-os:photoshoot-scene");
       setIdeas(state.ideas);
+      setFreeflowIdeaSet(state.freeflowIdeaSet);
       setSelectedIdea(state.selectedInspiration);
+      setInspirationEdits(state.inspirationEdits);
       setRecommendation(state.recommendation);
       setDirectionApproved(state.directionApproved);
       setPlanningMode(state.planningMode);
@@ -225,9 +234,24 @@ function ManualWorkspace({
     try {
       const result = await requestPhotoshootInspiration({ session_id: ready.session.sessionId, creative_mode: mode, creator_guidance: guidance, provider_context: ready.providers.find((item) => item.value === provider)?.label || provider, continuity_locks: continuityBody(), target_shot_count: targetShotCount });
       setIdeas(result.ideas);
+      setFreeflowIdeaSet(result.freeflowIdeaSet);
       setSelectedIdea(result.selected_inspiration || "");
+      setInspirationEdits({});
       setRecommendation(null); setDirectionApproved(false); setPrompt("");
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to generate inspiration ideas."); }
+    finally { setBusy(false); }
+  };
+
+  const useExistingIdeas = async () => {
+    setBusy(true); setError("");
+    try {
+      const result = await reusePhotoshootInspiration({ session_id: ready.session.sessionId });
+      setIdeas(result.ideas);
+      setSelectedIdea("");
+      setInspirationEdits({});
+      setFreeflowIdeaSet(result.freeflowIdeaSet);
+      setRecommendation(null); setDirectionApproved(false); setPrompt("");
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to restore existing AI ideas."); }
     finally { setBusy(false); }
   };
 
@@ -248,6 +272,7 @@ function ManualWorkspace({
       if (next === "frame_by_frame") {
         setIdeas([]);
         setSelectedIdea("");
+        setInspirationEdits({});
         setRecommendation(null);
         setDirectionApproved(false);
         setPrompt("");
@@ -308,6 +333,7 @@ function ManualWorkspace({
       setSessionPlanApproved(false);
       setIdeas([]);
       setSelectedIdea("");
+      setInspirationEdits({});
       setRecommendation(null);
       setDirectionApproved(false);
       setPrompt("");
@@ -358,14 +384,26 @@ function ManualWorkspace({
     finally { setBusy(false); }
   };
 
-  const chooseIdea = async (idea: string) => {
+  const chooseIdea = async (idea: string, editedDirection = inspirationEdits[idea] || "") => {
     setSelectedIdea(idea); setRecommendation(null); setDirectionApproved(false); setPrompt(""); setError("");
-    const save = selectPhotoshootInspiration({ session_id: ready.session.sessionId, idea }).then(() => undefined);
+    const save = selectPhotoshootInspiration({ session_id: ready.session.sessionId, idea, edited_direction: editedDirection }).then(() => undefined);
     selectionSaveRef.current = save;
     try { await save; }
     catch (reason) {
       setError(reason instanceof Error ? reason.message : "Unable to save inspiration selection.");
     }
+  };
+
+  const saveDirectionEdit = (idea: string, value: string) => {
+    const edited = value.trim() === idea.trim() ? "" : value.trim();
+    setInspirationEdits((current) => {
+      const next = { ...current };
+      if (edited) next[idea] = edited; else delete next[idea];
+      return next;
+    });
+    const save = selectPhotoshootInspiration({ session_id: ready.session.sessionId, idea, edited_direction: edited }).then(() => undefined);
+    selectionSaveRef.current = save;
+    void save.catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "Unable to save operator guidance."));
   };
 
   const chooseAnother = async () => {
@@ -484,9 +522,13 @@ function ManualWorkspace({
 
   const generateSelectedShot = async () => {
     if (!selectedIdea) return;
+    const editedDirection = inspirationEdits[selectedIdea]?.trim() || "";
+    const effectiveDirection = editedDirection || selectedIdea;
     setSelectedShotSource("idea");
     await runAutomaticShot(async () => {
-      await selectionSaveRef.current;
+      const save = selectPhotoshootInspiration({ session_id: ready.session.sessionId, idea: selectedIdea, edited_direction: editedDirection }).then(() => undefined);
+      selectionSaveRef.current = save;
+      await save;
       return requestPhotoshootRecommendation({
         session_id: ready.session.sessionId,
         creative_mode: mode,
@@ -494,7 +536,7 @@ function ManualWorkspace({
         continuity_locks: continuityBody(),
         target_shot_count: targetShotCount,
       });
-    }, selectedIdea);
+    }, effectiveDirection);
   };
 
   const directShot = async () => {
@@ -532,11 +574,13 @@ function ManualWorkspace({
         setGuidance("");
         setIdeas([]);
         setSelectedIdea("");
+        setInspirationEdits({});
         setRecommendation(null);
         setDirectionApproved(false);
         setStatus({ request: null, candidate: null });
         await refresh();
         const restored = await getCreativeDirectorContext(ready.session.sessionId);
+        setFreeflowIdeaSet(restored.freeflowIdeaSet);
         setPlanningStatus({ currentShot: restored.currentShot, planningShot: restored.planningShot, targetShotCount: restored.targetShotCount, remainingShots: restored.remainingShots, editorialStage: restored.editorialStage, explanation: restored.plannerExplanation });
         setApprovalNotice(true);
         window.setTimeout(() => setApprovalNotice(false), 3200);
@@ -566,6 +610,7 @@ function ManualWorkspace({
         const restored = await getCreativeDirectorContext(ready.session.sessionId);
         setIdeas(restored.ideas);
         setSelectedIdea(restored.selectedInspiration);
+        setInspirationEdits(restored.inspirationEdits);
         setRecommendation(restored.recommendation);
         setDirectionApproved(restored.directionApproved);
         setPrompt(restored.currentPrompt || prompt);
@@ -581,12 +626,20 @@ function ManualWorkspace({
   };
 
   const finishSession = async () => {
+    if (finishState === "finishing") return;
+    setFinishState("finishing");
     setBusy(true); setError("");
     try {
       const result = await finishPhotoshoot({ session_id: ready.session.sessionId });
-      onCompleted(result.photoshoot_deliverable_id);
-      void refresh().catch(() => undefined);
-    } catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to finish this Photoshoot."); }
+      sessionStorage.removeItem("creator-os:photoshoot-scene");
+      onCompleted({
+        deliverableId: result.photoshoot_deliverable_id,
+        savedImageCount: result.photoshoot_created ? result.selected_image_ids.length + 1 : result.selected_image_ids.length,
+      });
+    } catch (reason) {
+      setFinishState("idle");
+      setError(reason instanceof Error ? reason.message : "Unable to finish this Photoshoot.");
+    }
     finally { setBusy(false); }
   };
 
@@ -606,7 +659,7 @@ function ManualWorkspace({
       await replacePhotoshootShot({ session_id: ready.session.sessionId, request_id: requestId });
       await refresh();
       const state = await getCreativeDirectorContext(ready.session.sessionId);
-      setIdeas(state.ideas); setSelectedIdea(state.selectedInspiration); setRecommendation(state.recommendation);
+      setIdeas(state.ideas); setSelectedIdea(state.selectedInspiration); setInspirationEdits(state.inspirationEdits); setRecommendation(state.recommendation);
       setDirectionApproved(state.directionApproved); setPrompt(state.currentPrompt); setGuidance(state.creatorGuidance);
       setSelectedShotStage(null); setSelectedShotError("");
       setPlanningStatus({ currentShot: state.currentShot, planningShot: state.planningShot, targetShotCount: state.targetShotCount, remainingShots: state.remainingShots, editorialStage: state.editorialStage, explanation: state.plannerExplanation });
@@ -622,6 +675,12 @@ function ManualWorkspace({
       <SeedImageCard seed={ready.seedImage} onReturn={onReturn} />
       <PhotoshootTimeline busy={busy} items={ready.timeline} onReplace={(requestId) => { void replaceShot(requestId); }} />
       <ActivePhotoshootActions busy={busy} onFinish={() => { void finishSession(); }} onStop={() => setConfirmStop(true)} />
+      {finishState === "finishing" && (
+        <section className="photoshoot-card photoshoot-finish-status" aria-live="polite" role="status">
+          <span className="photoshoot-finish-status__spinner" aria-hidden="true" />
+          <div><h2>Finishing Photoshoot…</h2><p>Saving the completed Photoshoot to Gallery and closing this session.</p></div>
+        </section>
+      )}
       {confirmStop && <StopPhotoshootDialog busy={busy} onCancel={() => setConfirmStop(false)} onConfirm={() => { void stopSession(); }} />}
       {approvalNotice && <div className="photoshoot-approval-notice" role="status"><strong>✅ Shot Approved</strong><span>Updating Photoshoot...</span></div>}
       <PhotoshootSettings
@@ -661,7 +720,7 @@ function ManualWorkspace({
         sessionPlanApproved={sessionPlanApproved}
         sessionPlanIndex={sessionPlanIndex}
       />
-      {planningMode === "frame_by_frame" && targetReached ? (
+      {finishState === "finishing" ? null : planningMode === "frame_by_frame" && targetReached ? (
         <section className="photoshoot-card photoshoot-target-complete" role="status">
           <h2>Target Photoshoot Length Reached</h2>
           <p>{planningStatus.currentShot} of {planningStatus.targetShotCount} shots are approved. Finish the Photoshoot when you are ready.</p>
@@ -675,17 +734,23 @@ function ManualWorkspace({
             guidance={guidance}
             ideas={ideas}
             selectedIdea={selectedIdea}
+            inspirationEdits={inspirationEdits}
+            existingIdeasAvailable={targetShotCount === 0 && Boolean(freeflowIdeaSet)}
+            ideaUsage={freeflowIdeaSet?.usage || {}}
+            recommendedIdea={freeflowIdeaSet?.recommendedIdea || ""}
             recommendation={recommendation}
             directionApproved={directionApproved}
             planningStatus={planningStatus}
             onAsk={() => { void askAi(); }}
             onDirect={() => { void directShot(); }}
             onDifferentIdeas={() => { void askAi(); }}
+            onUseExistingIdeas={() => { void useExistingIdeas(); }}
             onGuidance={setGuidance}
             onGenerateSelected={() => { void generateSelectedShot(); }}
             onDirectSelected={() => undefined}
             onChooseAnother={() => { void chooseAnother(); }}
             onSelectIdea={(idea) => { void chooseIdea(idea); }}
+            onDirectionEditSave={saveDirectionEdit}
           />
           {selectedShotStage !== null && <SelectedShotProgress
             activeStage={selectedShotStage}
@@ -698,7 +763,7 @@ function ManualWorkspace({
               {error}
             </div>
           )}
-          {photoshootOperation && (operationActive || photoshootOperation.status === "FAILED") && (
+          {showPhotoshootOperationProgress && photoshootOperation && (operationActive || photoshootOperation.status === "FAILED") && (
             <section className="photoshoot-card photoshoot-operation" aria-label="Photoshoot Generation Progress">
               <header><h2>Live Generation</h2><span>{photoshootOperation.status}</span></header>
               <p>{photoshootOperation.stageMessage || "Preparing next shot"}</p>
@@ -774,9 +839,20 @@ export function PhotoshootPage() {
   const navigate = useNavigate();
   const state = usePhotoshootContext();
   const [returnError, setReturnError] = useState("");
-  const [completedDeliverableId, setCompletedDeliverableId] = useState<string | null | undefined>(undefined);
-  const completed = completedDeliverableId !== undefined;
+  const [completion, setCompletion] = useState<PhotoshootCompletionSummary | null>(null);
+  const completed = completion !== null;
   const ready = !completed && state.context?.status === "ready" ? state.context : null;
+  useEffect(() => {
+    if (!completion) return;
+    let cancelled = false;
+    let timer = 0;
+    void state.refresh().then((context) => {
+      timer = window.setTimeout(() => {
+        if (!cancelled && context.status !== "ready") setCompletion(null);
+      }, 1500);
+    }).catch(() => undefined);
+    return () => { cancelled = true; window.clearTimeout(timer); };
+  }, [completion, state.refresh]);
   const returnToLibrary = async () => {
     setReturnError("");
     try {
@@ -799,13 +875,14 @@ export function PhotoshootPage() {
       )}
       {completed ? (
         <div className="photoshoot-state photoshoot-completion" role="status">
-          <strong>✓ Photoshoot completed successfully.</strong>
-          <p>The Photoshoot has been added to the Gallery.</p>
-          <button className="photoshoot-button photoshoot-button--primary" onClick={() => navigate("/library/photoshoots", { state: { newlyCompletedDeliverableId: completedDeliverableId } })} type="button">Open Gallery</button>
+          <strong>✓ Photoshoot Complete</strong>
+          <p>{completion.savedImageCount} {completion.savedImageCount === 1 ? "image" : "images"} saved to Photoshoot Gallery.</p>
+          <small>Photoshoot saved successfully. Resetting Photoshoot Studio…</small>
+          <button className="photoshoot-button photoshoot-button--secondary" onClick={() => navigate("/library/photoshoots", { state: { newlyCompletedDeliverableId: completion.deliverableId } })} type="button">View in Photoshoot Gallery</button>
         </div>
       ) : (
         <PhotoshootStateGate {...state}>
-          {ready && <ManualWorkspace key={`${ready.session.sessionId}:${ready.seedImage.image_id}`} onCompleted={setCompletedDeliverableId} onOpenLibrary={(message) => navigate("/library/generations", { state: message ? { notification: message } : undefined })} onReturn={() => { void returnToLibrary(); }} ready={ready} refresh={state.refresh} />}
+          {ready && <ManualWorkspace key={`${ready.session.sessionId}:${ready.seedImage.image_id}`} onCompleted={setCompletion} onOpenLibrary={(message) => navigate("/library/generations", { state: message ? { notification: message } : undefined })} onReturn={() => { void returnToLibrary(); }} ready={ready} refresh={state.refresh} />}
         </PhotoshootStateGate>
       )}
     </section>

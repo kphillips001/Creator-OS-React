@@ -1,4 +1,6 @@
 from dataclasses import asdict
+from pathlib import Path
+from types import SimpleNamespace
 import pytest
 from app.models.generation_engine import GenerationRequest
 from app.models.video_studio import SEEDANCE_20_CAPABILITY,VideoProviderCapabilityService
@@ -81,3 +83,43 @@ def test_video_probe_falls_back_without_system_ffprobe(tmp_path):
     for _ in range(10): writer.write(np.zeros((24,32,3),dtype=np.uint8))
     writer.release(); metadata=GeneratedMediaService.probe(path)
     assert metadata["duration"]>0 and metadata["width"]==32 and metadata["height"]==24
+
+def test_generated_video_asset_reuses_selected_concept_title(monkeypatch, tmp_path):
+    class Response:
+        def raise_for_status(self): pass
+        def iter_content(self, _size): return (b"video",)
+    class Cursor:
+        def execute(self, *_args): pass
+        def fetchone(self): return {"media_id": "media-1"}
+        def __enter__(self): return self
+        def __exit__(self, *_args): pass
+    class Connection:
+        def cursor(self): return Cursor()
+        def __enter__(self): return self
+        def __exit__(self, *_args): pass
+    class Assets:
+        def __init__(self): self.updated = None
+        def get_by_id(self, _asset_id): return SimpleNamespace(media_metadata={"media_type": "video"})
+        def update_media_metadata(self, asset_id, metadata): self.updated = (asset_id, metadata)
+    assets = Assets()
+    workflow = SimpleNamespace(
+        assets=assets,
+        import_asset=lambda **_kwargs: SimpleNamespace(success=True, content_id=88, asset=None),
+    )
+    service = GeneratedMediaService(
+        root=tmp_path, http_client=SimpleNamespace(get=lambda *_args, **_kwargs: Response()),
+        connection_factory=lambda: Connection(), import_workflow=workflow,
+    )
+    monkeypatch.setattr(service, "probe", lambda _path: {"duration": 15, "width": 720, "height": 1280})
+    monkeypatch.setattr("app.services.generated_media_service.subprocess.run", lambda *_args, **_kwargs: None)
+
+    result = service.ingest_video(
+        url="https://provider.test/output.mp4", creator_profile_id=7, account_id=9,
+        provider_id="seedance", lineage={"session_id": "session-1"},
+        generation_metadata={"concept": {"title": "Steamy Shower Escape"}},
+    )
+
+    assert result["asset_id"] == 88
+    assert assets.updated[0] == 88
+    assert assets.updated[1]["canonical_media_title"] == "Steamy Shower Escape"
+    assert assets.updated[1]["video_studio"]["concept_title_source"] == "selected_concept.title"

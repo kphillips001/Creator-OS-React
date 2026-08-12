@@ -12,6 +12,8 @@ describe("ArchivePage", () => {
     expect(screen.getByRole("heading", { name: "Edited Content" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Published Content" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Prompt Workshop Archive" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Regenerated Content" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open Regenerated Content" })).toHaveAttribute("href", "/system/archive/regenerated");
     expect(screen.getByRole("link", { name: "Open Prompt Workshop Archive" })).toHaveAttribute("href", "/system/archive/prompts");
     expect(screen.getByRole("link", { name: "Open Edited Content" })).toHaveAttribute("href", "/system/archive/edited");
     expect(screen.getByRole("link", { name: "Open Published Content" })).toHaveAttribute("href", "/system/archive/published");

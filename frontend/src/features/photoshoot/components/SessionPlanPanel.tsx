@@ -107,7 +107,7 @@ export function SessionPlanPanel(props: Props) {
         )}
       </div>
 
-      <div className="photoshoot-creative-structure">
+      <div className="photoshoot-creative-structure photoshoot-creative-structure--session-target">
         <strong>{props.targetShotCount === 0 ? "✨ Creative Freeflow" : "🎬 Story Progression Active"}</strong>
         <span>
           {props.targetShotCount === 0

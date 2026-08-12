@@ -466,6 +466,7 @@ def test_creative_director_context_restores_persisted_workflow_state():
         "creator_guidance": "Progress naturally", "creative_hint": "Idea two", "grok_guidance": "Progress naturally",
         "workflow_stage": "recommendation_ready", "continuity_locks": {"wardrobe": False},
             "inspiration_ideas": ("Idea one", "Idea two"), "selected_inspiration": "Idea two",
+            "inspiration_edits": {"Idea two": "Idea two with stronger eye contact"},
             "inspiration_planning_shot": 2,
         "current_direction": {"title": "Closer framing", "creative_direction": "Move closer"},
         "direction_approved": False,
@@ -479,6 +480,7 @@ def test_creative_director_context_restores_persisted_workflow_state():
     assert result["creator_guidance"] == "Progress naturally"
     assert result["recommendation_state"]["inspiration_ideas"] == ["Idea one", "Idea two"]
     assert result["recommendation_state"]["selected_inspiration"] == "Idea two"
+    assert result["recommendation_state"]["inspiration_edits"] == {"Idea two": "Idea two with stronger eye contact"}
     assert result["recommendation_state"]["recommendation"]["title"] == "Closer framing"
 
 
@@ -486,6 +488,7 @@ def test_creative_director_recommendation_delegates_and_persists(monkeypatch):
     session = _session()
     session = replace(session, creative_continuity={
         **session.creative_continuity, "inspiration_ideas": ("Turn", "Look away"), "selected_inspiration": "Turn", "inspiration_planning_shot": 2,
+        "inspiration_edits": {"Turn": "Keep her head turned farther back toward the camera"},
     })
     queue = Mock()
     queue.get_session.return_value = session
@@ -507,7 +510,7 @@ def test_creative_director_recommendation_delegates_and_persists(monkeypatch):
     )
     assert result["title"] == "Next"
     director.recommend_photoshoot_direction.assert_called_once()
-    assert director.recommend_photoshoot_direction.call_args.kwargs["creative_hint"] == "Turn"
+    assert director.recommend_photoshoot_direction.call_args.kwargs["creative_hint"] == "Keep her head turned farther back toward the camera"
     call = director.recommend_photoshoot_direction.call_args.kwargs
     assert call["session_direction"] == "Seed prompt"
     assert call["session_context"]["original_photoshoot_direction"] == "Seed prompt"
@@ -575,12 +578,15 @@ def test_one_inspiration_selection_is_validated_and_persisted():
     queue = Mock()
     queue.get_session.return_value = session
     result = PhotoshootCreativeDirectorWorkflowService(queue=queue, library=Mock(), creative_director=Mock()).select_inspiration(
-        creator_profile_id=7, session_id="session-1", idea="Second",
+        creator_profile_id=7, session_id="session-1", idea="Second", edited_direction="Lower the shorts another inch while looking back",
     )
     assert result["selected_inspiration"] == "Second"
     queue.update_session_settings.assert_called_once_with(
-        "session-1", creative_hint="Second", selected_inspiration="Second", workflow_stage="inspiration_selected",
+        "session-1", creative_hint="Lower the shorts another inch while looking back",
+        selected_inspiration="Second", inspiration_edits={"Second": "Lower the shorts another inch while looking back"},
+        workflow_stage="inspiration_selected",
     )
+    assert result["edited_direction"] == "Lower the shorts another inch while looking back"
 
 
 def test_ai_ideas_cannot_cross_planning_positions():
@@ -629,7 +635,10 @@ def test_continuity_assessment_warns_only_for_significant_drift(monkeypatch):
 
 
 def test_different_ideas_reuses_session_and_returns_a_fresh_ten(monkeypatch):
-    session = _session()
+    session = replace(_session(), creative_continuity={
+        **_session().creative_continuity,
+        "inspiration_edits": {"Old direction": "Old edited direction"},
+    })
     queue, library, director = Mock(), Mock(), Mock()
     queue.get_session.return_value = session
     queue.update_session_settings.return_value = session
@@ -648,6 +657,90 @@ def test_different_ideas_reuses_session_and_returns_a_fresh_ten(monkeypatch):
     assert first["ideas"] != refreshed["ideas"]
     assert len(refreshed["ideas"]) == 10
     assert director.suggest_photoshoot_inspiration.call_count == 2
+    assert queue.update_session_settings.call_args.kwargs["inspiration_edits"] == {}
+
+
+def test_freeflow_ask_ai_appends_durable_idea_sets_without_overwriting(monkeypatch, tmp_path):
+    queue = PhotoshootQueueService(storage_dir=tmp_path / "queue")
+    session = replace(_session(), target_shot_count=0, creative_continuity={
+        **_session().creative_continuity, "planning_mode": "frame_by_frame", "target_shot_count": 0,
+    })
+    queue._write_sessions((session,))
+    library, director, summary = Mock(), Mock(), Mock()
+    library.get.return_value = _record("seed-1")
+    summary.refresh.return_value = {}
+    director.suggest_photoshoot_inspiration.side_effect = (
+        tuple(f"Original idea {index}" for index in range(1, 11)),
+        tuple(f"Different idea {index}" for index in range(1, 11)),
+    )
+    service = PhotoshootCreativeDirectorWorkflowService(
+        queue=queue, library=library, creative_director=director, summary_service=summary,
+    )
+    monkeypatch.setattr(service, "_image_bytes", lambda _: (b"image", "image/png"))
+    args = dict(creator_profile_id=7, session_id="session-1", creative_mode="premium",
+                creator_guidance="", provider_context="Flux", continuity_locks={"location": True},
+                target_shot_count=0)
+
+    first = service.inspiration(**args)
+    second = service.inspiration(**args)
+
+    continuity = dict(queue.get_session("session-1").creative_continuity)
+    sets = tuple(continuity["freeflow_idea_sets"])
+    assert len(sets) == 2
+    assert sets[0]["ideas"] == first["ideas"]
+    assert sets[1]["ideas"] == second["ideas"]
+    assert sets[0]["idea_set_id"] != sets[1]["idea_set_id"]
+    assert sets[0]["recommended_idea"] == first["ideas"][0]
+    assert director.suggest_photoshoot_inspiration.call_count == 2
+
+
+def test_existing_freeflow_ideas_reactivate_exact_text_without_provider_call(tmp_path):
+    queue = PhotoshootQueueService(storage_dir=tmp_path / "queue")
+    session = replace(_session(), target_shot_count=0, creative_continuity={
+        **_session().creative_continuity, "planning_mode": "frame_by_frame", "target_shot_count": 0,
+    })
+    queue._write_sessions((session,))
+    queue.record_freeflow_idea_set(
+        "session-1", idea_set_id="idea-set-1", ideas=("Exact first idea", "Exact second idea"),
+        recommended_idea="Exact second idea", planning_shot=2,
+    )
+    queue._write_requests((
+        PhotoshootRequest("seed-request", "session-1", "seed-plan", "Seed", 1, "premium", None,
+                          status="approved", metadata={"is_seed_image": True}),
+        PhotoshootRequest("idea-request", "session-1", "idea-plan", "Prompt", 2, "premium", None,
+                          status="approved", metadata={"inspiration_idea_set_id": "idea-set-1", "selected_inspiration": "Exact first idea"}),
+    ))
+    director = Mock()
+    service = PhotoshootCreativeDirectorWorkflowService(queue=queue, library=Mock(), creative_director=director)
+
+    result = service.existing_inspiration(creator_profile_id=7, session_id="session-1")
+
+    assert result["ideas"] == ["Exact first idea", "Exact second idea"]
+    assert result["freeflow_idea_set"]["recommended_idea"] == "Exact second idea"
+    assert result["freeflow_idea_set"]["usage"] == {"Exact first idea": ["Shot 2"]}
+    restored = queue.get_session("session-1")
+    assert tuple(restored.creative_continuity["inspiration_ideas"]) == ("Exact first idea", "Exact second idea")
+    assert restored.creative_continuity["active_freeflow_idea_set_id"] == "idea-set-1"
+    director.suggest_photoshoot_inspiration.assert_not_called()
+    director.recommend_photoshoot_direction.assert_not_called()
+
+
+@pytest.mark.parametrize("target", [5, 10, 20, 27])
+def test_existing_freeflow_ideas_are_not_exposed_in_progression_modes(target):
+    session = replace(_session(), target_shot_count=target, creative_continuity={
+        **_session().creative_continuity,
+        "planning_mode": "frame_by_frame",
+        "freeflow_idea_sets": ({"idea_set_id": "saved", "ideas": ("Keep me",), "recommended_idea": "Keep me"},),
+    })
+    queue = Mock()
+    queue.get_session.return_value = session
+    queue.requests_for_session.return_value = ()
+    director = Mock()
+    service = PhotoshootCreativeDirectorWorkflowService(queue=queue, library=Mock(), creative_director=director)
+    assert service.context(creator_profile_id=7, session_id="session-1")["freeflow_idea_set"] is None
+    with pytest.raises(ValueError, match="only in Creative Freeflow"):
+        service.existing_inspiration(creator_profile_id=7, session_id="session-1")
+    director.suggest_photoshoot_inspiration.assert_not_called()
 
 
 def test_all_modes_request_ten_ideas_with_summary_original_direction_and_guidance(monkeypatch):
@@ -735,6 +828,7 @@ def test_creative_director_approval_uses_canonical_planner_and_existing_queue_hi
     metadata = director.plan_prompts.call_args.kwargs["metadata"]
     assert metadata["source"] == "photoshoot_studio"
     assert metadata["operator_expression"] == recommendation["emotion"]
+    assert metadata["freeflow_expression"] is False
     assert metadata["concept_tier"] == "hardcore"
     queue.record_creative_direction.assert_called_once_with(
         session_id="session-1", recommendation=recommendation, final_prompt="Canonical explicit prompt",

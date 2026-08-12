@@ -17,6 +17,7 @@ from app.services.asset_lineage_service import AssetLineageService
 from app.services.local_vault_service import LocalVaultService
 from app.services.runtime_media_resolver import RuntimeMediaResolver
 from app.services.selective_blur_service import SelectiveBlurService
+from app.services.selective_blur_mask_validator import SelectiveBlurMaskValidator
 
 
 class PhotoshootBundleTeaserService:
@@ -31,6 +32,7 @@ class PhotoshootBundleTeaserService:
         self.lineage = lineage or AssetLineageService(asset_repository=self.assets)
         self.renderer = renderer or SelectiveBlurService()
         self.vault = vault or LocalVaultService()
+        self.mask_validator = SelectiveBlurMaskValidator()
 
     def inspect(self, deliverable_id, *, creator_profile_id: int):
         row, members = self._context(deliverable_id, creator_profile_id)
@@ -163,23 +165,7 @@ class PhotoshootBundleTeaserService:
         return row, tuple(sorted(members, key=lambda item: int(item["shot_order"])))
 
     def _decode_mask(self, value, width, height):
-        try:
-            encoded = str(value).split(",", 1)[1] if str(value).startswith("data:image/png;base64,") else str(value)
-            raw = base64.b64decode(encoded, validate=True)
-            if not raw or len(raw) > self.MAX_MASK_BYTES: raise ValueError
-            with Image.open(BytesIO(raw)) as mask:
-                mask.verify()
-            with Image.open(BytesIO(raw)) as mask:
-                if mask.size != (width, height): raise ValueError
-        except (ValueError, OSError, UnidentifiedImageError, base64.binascii.Error) as error:
-            raise ValueError("Selective blur mask is invalid or corrupt.") from error
-        with Image.open(BytesIO(raw)) as mask:
-            alpha = mask.getchannel("A") if "A" in mask.getbands() else mask.convert("L")
-            if alpha.getbbox() is None:
-                raise ValueError(
-                    "Selective blur mask must contain at least one painted blur region."
-                )
-        return raw
+        return self.mask_validator.decode(value, width, height)
 
     @staticmethod
     def _atomic_bytes(path, value):

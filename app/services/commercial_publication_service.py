@@ -169,6 +169,7 @@ class CommercialPublicationService:
             if metadata.get("source_workflow") in {
                 "photoshoot_session_sale_preparation",
                 "photoshoot_bundle_sale_preparation",
+                "standalone_image_sale_preparation",
             }:
                 self.offerings.update_status(
                     offering.offering_id,

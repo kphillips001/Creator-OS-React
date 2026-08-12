@@ -1455,5 +1455,842 @@
     },
     "created_at": "2026-08-07T18:58:31.083468",
     "updated_at": "2026-08-07T18:58:31.083468"
+  },
+  {
+    "idempotency_key": "photoshoot:photoshoot_session_805d222c558a4640a6dcbb441ff8cea9:photoshoot_request_448b3056d8f44f7f8db377674bc90b2a:generated_image_78e2ab421a4ccb8912831455",
+    "asset_id": 148,
+    "source": {
+      "source_workflow": "photoshoot",
+      "source_item_id": "generated_image_78e2ab421a4ccb8912831455",
+      "source_session_id": "photoshoot_session_805d222c558a4640a6dcbb441ff8cea9",
+      "idempotency_key": "photoshoot:photoshoot_session_805d222c558a4640a6dcbb441ff8cea9:photoshoot_request_448b3056d8f44f7f8db377674bc90b2a:generated_image_78e2ab421a4ccb8912831455"
+    },
+    "workflow_metadata": {
+      "media_reference": "D:\\Ava_CMS\\Content\\Generation\\Photoshoot\\Active\\Photoshoot_2026-08-08_a75\\Candidate_generated_image_78e2ab421a4ccb8912831455.png",
+      "creator_profile_id": 2,
+      "source_metadata": {
+        "generation_job_id": "generation_job_2594ed4b011f4f4baffa40ef11ca989b",
+        "generation_request_id": "generation_request_66abbec6bc0741f49ad88444673e13e2",
+        "generation_result_id": "generation_job_2594ed4b011f4f4baffa40ef11ca989b_live_result",
+        "generated_image_id": "generated_image_78e2ab421a4ccb8912831455",
+        "output_reference": "D:\\Ava_CMS\\Content\\Generation\\Photoshoot\\Active\\Photoshoot_2026-08-08_a75\\Candidate_generated_image_78e2ab421a4ccb8912831455.png",
+        "source_workflow": "photoshoot",
+        "prompt_plan_id": "prompt_plan_2dbd38fef21948149dfff1efaa3bbd3e",
+        "photoshoot_session_id": "photoshoot_session_805d222c558a4640a6dcbb441ff8cea9",
+        "photoshoot_request_id": "photoshoot_request_448b3056d8f44f7f8db377674bc90b2a",
+        "approval_entrypoint": "react_photoshoot_approve_shot",
+        "photoshoot_sequence_index": 3
+      },
+      "post_approval_policy": {},
+      "approved_at": "2026-08-08T16:25:19.065496"
+    },
+    "created_at": "2026-08-08T16:25:28.612455",
+    "updated_at": "2026-08-08T16:25:28.612455"
+  },
+  {
+    "idempotency_key": "photoshoot:photoshoot_session_736dff2acea141f6af396715cf4570bc:photoshoot_request_bd9143e68bb0452babce940c00dde91a:generated_image_144f0571695371d50d27633d",
+    "asset_id": 149,
+    "source": {
+      "source_workflow": "photoshoot",
+      "source_item_id": "generated_image_144f0571695371d50d27633d",
+      "source_session_id": "photoshoot_session_736dff2acea141f6af396715cf4570bc",
+      "idempotency_key": "photoshoot:photoshoot_session_736dff2acea141f6af396715cf4570bc:photoshoot_request_bd9143e68bb0452babce940c00dde91a:generated_image_144f0571695371d50d27633d"
+    },
+    "workflow_metadata": {
+      "media_reference": "D:\\Ava_CMS\\Content\\Generation\\Photoshoot\\Active\\Photoshoot_2026-08-08_22e\\Candidate_generated_image_144f0571695371d50d27633d.png",
+      "creator_profile_id": 2,
+      "source_metadata": {
+        "generation_job_id": "generation_job_a095c459c90f4716a8f848522184acbd",
+        "generation_request_id": "generation_request_012a2aeaf37d4f17b979f5184f5955f9",
+        "generation_result_id": "generation_job_a095c459c90f4716a8f848522184acbd_live_result",
+        "generated_image_id": "generated_image_144f0571695371d50d27633d",
+        "output_reference": "D:\\Ava_CMS\\Content\\Generation\\Photoshoot\\Active\\Photoshoot_2026-08-08_22e\\Candidate_generated_image_144f0571695371d50d27633d.png",
+        "source_workflow": "photoshoot",
+        "prompt_plan_id": "prompt_plan_8d02367f56c446ba992cda0e9945fe0f",
+        "photoshoot_session_id": "photoshoot_session_736dff2acea141f6af396715cf4570bc",
+        "photoshoot_request_id": "photoshoot_request_bd9143e68bb0452babce940c00dde91a",
+        "approval_entrypoint": "react_photoshoot_approve_shot",
+        "photoshoot_sequence_index": 2
+      },
+      "post_approval_policy": {},
+      "approved_at": "2026-08-08T17:06:31.295010"
+    },
+    "created_at": "2026-08-08T17:06:37.851207",
+    "updated_at": "2026-08-08T17:06:37.851207"
+  },
+  {
+    "idempotency_key": "photoshoot:photoshoot_session_736dff2acea141f6af396715cf4570bc:photoshoot_request_6bcb26eef0ea4fa38a6a34b4f06cfe78:generated_image_b51e18edfb3705a633486fca",
+    "asset_id": 150,
+    "source": {
+      "source_workflow": "photoshoot",
+      "source_item_id": "generated_image_b51e18edfb3705a633486fca",
+      "source_session_id": "photoshoot_session_736dff2acea141f6af396715cf4570bc",
+      "idempotency_key": "photoshoot:photoshoot_session_736dff2acea141f6af396715cf4570bc:photoshoot_request_6bcb26eef0ea4fa38a6a34b4f06cfe78:generated_image_b51e18edfb3705a633486fca"
+    },
+    "workflow_metadata": {
+      "media_reference": "D:\\Ava_CMS\\Content\\Generation\\Photoshoot\\Active\\Photoshoot_2026-08-08_22e\\Candidate_generated_image_b51e18edfb3705a633486fca.png",
+      "creator_profile_id": 2,
+      "source_metadata": {
+        "generation_job_id": "generation_job_418cbaab165145dfb52c483a9a84c370",
+        "generation_request_id": "generation_request_b7c47500793f48d2b042a8b6dbc3a1b9",
+        "generation_result_id": "generation_job_418cbaab165145dfb52c483a9a84c370_live_result",
+        "generated_image_id": "generated_image_b51e18edfb3705a633486fca",
+        "output_reference": "D:\\Ava_CMS\\Content\\Generation\\Photoshoot\\Active\\Photoshoot_2026-08-08_22e\\Candidate_generated_image_b51e18edfb3705a633486fca.png",
+        "source_workflow": "photoshoot",
+        "prompt_plan_id": "prompt_plan_cbacf9af36a54834af9e54d5a21c8a9f",
+        "photoshoot_session_id": "photoshoot_session_736dff2acea141f6af396715cf4570bc",
+        "photoshoot_request_id": "photoshoot_request_6bcb26eef0ea4fa38a6a34b4f06cfe78",
+        "approval_entrypoint": "react_photoshoot_approve_shot",
+        "photoshoot_sequence_index": 5
+      },
+      "post_approval_policy": {},
+      "approved_at": "2026-08-08T17:20:41.955277"
+    },
+    "created_at": "2026-08-08T17:20:48.365402",
+    "updated_at": "2026-08-08T17:20:48.365402"
+  },
+  {
+    "idempotency_key": "photoshoot:photoshoot_session_62f6e298139c4ceb8630db3670a0b9cd:photoshoot_request_d52e1df3d6ad4a03b6b9ca0c4fd36b0f:generated_image_69b41c900342b64d2df19a05",
+    "asset_id": 160,
+    "source": {
+      "source_workflow": "photoshoot",
+      "source_item_id": "generated_image_69b41c900342b64d2df19a05",
+      "source_session_id": "photoshoot_session_62f6e298139c4ceb8630db3670a0b9cd",
+      "idempotency_key": "photoshoot:photoshoot_session_62f6e298139c4ceb8630db3670a0b9cd:photoshoot_request_d52e1df3d6ad4a03b6b9ca0c4fd36b0f:generated_image_69b41c900342b64d2df19a05"
+    },
+    "workflow_metadata": {
+      "media_reference": "D:\\Ava_CMS\\Content\\Generation\\Photoshoot\\Active\\Photoshoot_2026-08-09_d80\\Candidate_generated_image_69b41c900342b64d2df19a05.png",
+      "creator_profile_id": 2,
+      "source_metadata": {
+        "generation_job_id": "generation_job_95e5241c9c6048299a98e0cfe41e6128",
+        "generation_request_id": "generation_request_0fa6a666a4d646cf91d0603c27e9fff0",
+        "generation_result_id": "generation_job_95e5241c9c6048299a98e0cfe41e6128_live_result",
+        "generated_image_id": "generated_image_69b41c900342b64d2df19a05",
+        "output_reference": "D:\\Ava_CMS\\Content\\Generation\\Photoshoot\\Active\\Photoshoot_2026-08-09_d80\\Candidate_generated_image_69b41c900342b64d2df19a05.png",
+        "source_workflow": "photoshoot",
+        "prompt_plan_id": "prompt_plan_f81235eb575b48af90d12056389021ff",
+        "photoshoot_session_id": "photoshoot_session_62f6e298139c4ceb8630db3670a0b9cd",
+        "photoshoot_request_id": "photoshoot_request_d52e1df3d6ad4a03b6b9ca0c4fd36b0f",
+        "approval_entrypoint": "react_photoshoot_approve_shot",
+        "photoshoot_sequence_index": 2
+      },
+      "post_approval_policy": {},
+      "approved_at": "2026-08-09T22:05:47.746358"
+    },
+    "created_at": "2026-08-09T22:05:54.822023",
+    "updated_at": "2026-08-09T22:05:54.822023"
+  },
+  {
+    "idempotency_key": "photoshoot:photoshoot_session_62f6e298139c4ceb8630db3670a0b9cd:photoshoot_request_c6492c6da75b4b98afa330936b1e1a29:generated_image_8aeede8fb2a56ee75f4d7e73",
+    "asset_id": 161,
+    "source": {
+      "source_workflow": "photoshoot",
+      "source_item_id": "generated_image_8aeede8fb2a56ee75f4d7e73",
+      "source_session_id": "photoshoot_session_62f6e298139c4ceb8630db3670a0b9cd",
+      "idempotency_key": "photoshoot:photoshoot_session_62f6e298139c4ceb8630db3670a0b9cd:photoshoot_request_c6492c6da75b4b98afa330936b1e1a29:generated_image_8aeede8fb2a56ee75f4d7e73"
+    },
+    "workflow_metadata": {
+      "media_reference": "D:\\Ava_CMS\\Content\\Generation\\Photoshoot\\Active\\Photoshoot_2026-08-09_d80\\Candidate_generated_image_8aeede8fb2a56ee75f4d7e73.png",
+      "creator_profile_id": 2,
+      "source_metadata": {
+        "generation_job_id": "generation_job_464948b2063f46518c4cfa3e6be8e723",
+        "generation_request_id": "generation_request_582403f1d57146cf897486a998e3f909",
+        "generation_result_id": "generation_job_464948b2063f46518c4cfa3e6be8e723_live_result",
+        "generated_image_id": "generated_image_8aeede8fb2a56ee75f4d7e73",
+        "output_reference": "D:\\Ava_CMS\\Content\\Generation\\Photoshoot\\Active\\Photoshoot_2026-08-09_d80\\Candidate_generated_image_8aeede8fb2a56ee75f4d7e73.png",
+        "source_workflow": "photoshoot",
+        "prompt_plan_id": "prompt_plan_2da307151270414996e551699008fd0a",
+        "photoshoot_session_id": "photoshoot_session_62f6e298139c4ceb8630db3670a0b9cd",
+        "photoshoot_request_id": "photoshoot_request_c6492c6da75b4b98afa330936b1e1a29",
+        "approval_entrypoint": "react_photoshoot_approve_shot",
+        "photoshoot_sequence_index": 5
+      },
+      "post_approval_policy": {},
+      "approved_at": "2026-08-09T22:53:39.105373"
+    },
+    "created_at": "2026-08-09T22:53:48.413176",
+    "updated_at": "2026-08-09T22:53:48.413176"
+  },
+  {
+    "idempotency_key": "photoshoot:photoshoot_session_62f6e298139c4ceb8630db3670a0b9cd:photoshoot_request_950c09d533354f31a56172dd7889d9ae:generated_image_74a8e83b8c77bb961c1e735e",
+    "asset_id": 162,
+    "source": {
+      "source_workflow": "photoshoot",
+      "source_item_id": "generated_image_74a8e83b8c77bb961c1e735e",
+      "source_session_id": "photoshoot_session_62f6e298139c4ceb8630db3670a0b9cd",
+      "idempotency_key": "photoshoot:photoshoot_session_62f6e298139c4ceb8630db3670a0b9cd:photoshoot_request_950c09d533354f31a56172dd7889d9ae:generated_image_74a8e83b8c77bb961c1e735e"
+    },
+    "workflow_metadata": {
+      "media_reference": "D:\\Ava_CMS\\Content\\Generation\\Photoshoot\\Active\\Photoshoot_2026-08-09_d80\\Candidate_generated_image_74a8e83b8c77bb961c1e735e.png",
+      "creator_profile_id": 2,
+      "source_metadata": {
+        "generation_job_id": "generation_job_c3b93ca0eb774b919c8e0eebf37b973a",
+        "generation_request_id": "generation_request_229e015260cd4225aef0223a5aaf9746",
+        "generation_result_id": "generation_job_c3b93ca0eb774b919c8e0eebf37b973a_live_result",
+        "generated_image_id": "generated_image_74a8e83b8c77bb961c1e735e",
+        "output_reference": "D:\\Ava_CMS\\Content\\Generation\\Photoshoot\\Active\\Photoshoot_2026-08-09_d80\\Candidate_generated_image_74a8e83b8c77bb961c1e735e.png",
+        "source_workflow": "photoshoot",
+        "prompt_plan_id": "prompt_plan_a07e590f57f04fe58c670d21ed474455",
+        "photoshoot_session_id": "photoshoot_session_62f6e298139c4ceb8630db3670a0b9cd",
+        "photoshoot_request_id": "photoshoot_request_950c09d533354f31a56172dd7889d9ae",
+        "approval_entrypoint": "react_photoshoot_approve_shot",
+        "photoshoot_sequence_index": 6
+      },
+      "post_approval_policy": {},
+      "approved_at": "2026-08-09T23:09:17.485864"
+    },
+    "created_at": "2026-08-09T23:09:24.099429",
+    "updated_at": "2026-08-09T23:09:24.099429"
+  },
+  {
+    "idempotency_key": "photoshoot:photoshoot_session_62f6e298139c4ceb8630db3670a0b9cd:photoshoot_request_7a75d4ff763e4227b44581e91743a8cb:generated_image_5785faee4556a36c41e323c3",
+    "asset_id": 163,
+    "source": {
+      "source_workflow": "photoshoot",
+      "source_item_id": "generated_image_5785faee4556a36c41e323c3",
+      "source_session_id": "photoshoot_session_62f6e298139c4ceb8630db3670a0b9cd",
+      "idempotency_key": "photoshoot:photoshoot_session_62f6e298139c4ceb8630db3670a0b9cd:photoshoot_request_7a75d4ff763e4227b44581e91743a8cb:generated_image_5785faee4556a36c41e323c3"
+    },
+    "workflow_metadata": {
+      "media_reference": "D:\\Ava_CMS\\Content\\Generation\\Photoshoot\\Active\\Photoshoot_2026-08-09_d80\\Candidate_generated_image_5785faee4556a36c41e323c3.png",
+      "creator_profile_id": 2,
+      "source_metadata": {
+        "generation_job_id": "generation_job_421ac33ff32c4a98aba649fed3b2556d",
+        "generation_request_id": "generation_request_e6cf1f37d78d49d990d2a7b2a75aedac",
+        "generation_result_id": "generation_job_421ac33ff32c4a98aba649fed3b2556d_live_result",
+        "generated_image_id": "generated_image_5785faee4556a36c41e323c3",
+        "output_reference": "D:\\Ava_CMS\\Content\\Generation\\Photoshoot\\Active\\Photoshoot_2026-08-09_d80\\Candidate_generated_image_5785faee4556a36c41e323c3.png",
+        "source_workflow": "photoshoot",
+        "prompt_plan_id": "prompt_plan_10056a6b5ea642f3b9e41d1482aca0ab",
+        "photoshoot_session_id": "photoshoot_session_62f6e298139c4ceb8630db3670a0b9cd",
+        "photoshoot_request_id": "photoshoot_request_7a75d4ff763e4227b44581e91743a8cb",
+        "approval_entrypoint": "react_photoshoot_approve_shot",
+        "photoshoot_sequence_index": 9
+      },
+      "post_approval_policy": {},
+      "approved_at": "2026-08-10T00:21:55.156181"
+    },
+    "created_at": "2026-08-10T00:22:00.898209",
+    "updated_at": "2026-08-10T00:22:00.898209"
+  },
+  {
+    "idempotency_key": "generation_library:generation_job_e620ab64fe634914bdbe7d163cea9f5a:generation_job_e620ab64fe634914bdbe7d163cea9f5a_live_result:24a4c398e5f9e22faa0d3e86",
+    "asset_id": 164,
+    "source": {
+      "source_workflow": "photoshoot_seed",
+      "source_item_id": "generated_image_22e6aea639511b02da86b97f",
+      "source_session_id": "photoshoot_session_62f6e298139c4ceb8630db3670a0b9cd",
+      "idempotency_key": "generation_library:generation_job_e620ab64fe634914bdbe7d163cea9f5a:generation_job_e620ab64fe634914bdbe7d163cea9f5a_live_result:24a4c398e5f9e22faa0d3e86"
+    },
+    "workflow_metadata": {
+      "media_reference": "D:\\Ava_CMS\\Content\\Pending_Photoshoot\\generated_image_22e6aea639511b02da86b97f.png",
+      "creator_profile_id": 2,
+      "source_metadata": {
+        "generation_job_id": "generation_job_e620ab64fe634914bdbe7d163cea9f5a",
+        "generation_request_id": "generation_request_a2c58d09c8e343c2be48fc04bf2e5e93",
+        "generation_result_id": "generation_job_e620ab64fe634914bdbe7d163cea9f5a_live_result",
+        "generated_image_id": "generated_image_22e6aea639511b02da86b97f",
+        "output_reference": "D:\\Ava_CMS\\Content\\Pending_Photoshoot\\generated_image_22e6aea639511b02da86b97f.png",
+        "source_workflow": "photoshoot_seed",
+        "prompt_plan_id": "prompt_plan_4032e671d20f4c5eb30402e6c9974e27",
+        "photoshoot_session_id": "photoshoot_session_62f6e298139c4ceb8630db3670a0b9cd",
+        "photoshoot_request_id": null,
+        "approval_entrypoint": "photoshoot_curation_seed",
+        "is_seed_image": true
+      },
+      "post_approval_policy": {},
+      "approved_at": "2026-08-10T00:22:16.851286"
+    },
+    "created_at": "2026-08-10T00:22:22.210569",
+    "updated_at": "2026-08-10T00:22:22.210569"
+  },
+  {
+    "idempotency_key": "photoshoot:photoshoot_session_dccec0f825844db186e46aa8637c0877:photoshoot_request_e51e92f8111c4eca98b2aa62c6d3d407:generated_image_b4e6a497bf8a2e167db8271a",
+    "asset_id": 167,
+    "source": {
+      "source_workflow": "photoshoot",
+      "source_item_id": "generated_image_b4e6a497bf8a2e167db8271a",
+      "source_session_id": "photoshoot_session_dccec0f825844db186e46aa8637c0877",
+      "idempotency_key": "photoshoot:photoshoot_session_dccec0f825844db186e46aa8637c0877:photoshoot_request_e51e92f8111c4eca98b2aa62c6d3d407:generated_image_b4e6a497bf8a2e167db8271a"
+    },
+    "workflow_metadata": {
+      "media_reference": "D:\\Ava_CMS\\Content\\Generation\\Photoshoot\\Active\\Photoshoot_2026-08-10_798\\Candidate_generated_image_b4e6a497bf8a2e167db8271a.png",
+      "creator_profile_id": 2,
+      "source_metadata": {
+        "generation_job_id": "generation_job_9ee0ea1cf646496db9ad4c9f7c80a1b8",
+        "generation_request_id": "generation_request_31792a5550fb4a1f8d87a47c0835e761",
+        "generation_result_id": "generation_job_9ee0ea1cf646496db9ad4c9f7c80a1b8_live_result",
+        "generated_image_id": "generated_image_b4e6a497bf8a2e167db8271a",
+        "output_reference": "D:\\Ava_CMS\\Content\\Generation\\Photoshoot\\Active\\Photoshoot_2026-08-10_798\\Candidate_generated_image_b4e6a497bf8a2e167db8271a.png",
+        "source_workflow": "photoshoot",
+        "prompt_plan_id": "prompt_plan_bcf0569ad8964ef483cc85d1f0679fa8",
+        "photoshoot_session_id": "photoshoot_session_dccec0f825844db186e46aa8637c0877",
+        "photoshoot_request_id": "photoshoot_request_e51e92f8111c4eca98b2aa62c6d3d407",
+        "approval_entrypoint": "react_photoshoot_approve_shot",
+        "photoshoot_sequence_index": 2
+      },
+      "post_approval_policy": {},
+      "approved_at": "2026-08-10T02:06:15.972558"
+    },
+    "created_at": "2026-08-10T02:06:23.631685",
+    "updated_at": "2026-08-10T02:06:23.631685"
+  },
+  {
+    "idempotency_key": "photoshoot:photoshoot_session_dccec0f825844db186e46aa8637c0877:photoshoot_request_1fce2168ed494b9fa535a78055aec882:generated_image_07a05949db2d741bc6a33d24",
+    "asset_id": 168,
+    "source": {
+      "source_workflow": "photoshoot",
+      "source_item_id": "generated_image_07a05949db2d741bc6a33d24",
+      "source_session_id": "photoshoot_session_dccec0f825844db186e46aa8637c0877",
+      "idempotency_key": "photoshoot:photoshoot_session_dccec0f825844db186e46aa8637c0877:photoshoot_request_1fce2168ed494b9fa535a78055aec882:generated_image_07a05949db2d741bc6a33d24"
+    },
+    "workflow_metadata": {
+      "media_reference": "D:\\Ava_CMS\\Content\\Generation\\Photoshoot\\Active\\Photoshoot_2026-08-10_798\\Candidate_generated_image_07a05949db2d741bc6a33d24.png",
+      "creator_profile_id": 2,
+      "source_metadata": {
+        "generation_job_id": "generation_job_8d44165ac50042a5a51a9d6f5633c6ed",
+        "generation_request_id": "generation_request_4899d19a88224e6eb7704ed83bcb7da5",
+        "generation_result_id": "generation_job_8d44165ac50042a5a51a9d6f5633c6ed_live_result",
+        "generated_image_id": "generated_image_07a05949db2d741bc6a33d24",
+        "output_reference": "D:\\Ava_CMS\\Content\\Generation\\Photoshoot\\Active\\Photoshoot_2026-08-10_798\\Candidate_generated_image_07a05949db2d741bc6a33d24.png",
+        "source_workflow": "photoshoot",
+        "prompt_plan_id": "prompt_plan_97df5a803eb84669810d7b11fe125f3e",
+        "photoshoot_session_id": "photoshoot_session_dccec0f825844db186e46aa8637c0877",
+        "photoshoot_request_id": "photoshoot_request_1fce2168ed494b9fa535a78055aec882",
+        "approval_entrypoint": "react_photoshoot_approve_shot",
+        "photoshoot_sequence_index": 3
+      },
+      "post_approval_policy": {},
+      "approved_at": "2026-08-10T02:11:24.926849"
+    },
+    "created_at": "2026-08-10T02:11:31.550090",
+    "updated_at": "2026-08-10T02:11:31.550090"
+  },
+  {
+    "idempotency_key": "generation_library:generation_job_75897b596589485c90ef9277b9a7f003:generation_job_75897b596589485c90ef9277b9a7f003_live_result:de4558cfdee01242611c4917",
+    "asset_id": 169,
+    "source": {
+      "source_workflow": "photoshoot_seed",
+      "source_item_id": "generated_image_990a974bfb5ac61100d6f404",
+      "source_session_id": "photoshoot_session_dccec0f825844db186e46aa8637c0877",
+      "idempotency_key": "generation_library:generation_job_75897b596589485c90ef9277b9a7f003:generation_job_75897b596589485c90ef9277b9a7f003_live_result:de4558cfdee01242611c4917"
+    },
+    "workflow_metadata": {
+      "media_reference": "D:\\Ava_CMS\\Content\\Pending_Photoshoot\\generated_image_990a974bfb5ac61100d6f404.png",
+      "creator_profile_id": 2,
+      "source_metadata": {
+        "generation_job_id": "generation_job_75897b596589485c90ef9277b9a7f003",
+        "generation_request_id": "generation_request_b49fb553aa7844c08c0cfeb3e9511725",
+        "generation_result_id": "generation_job_75897b596589485c90ef9277b9a7f003_live_result",
+        "generated_image_id": "generated_image_990a974bfb5ac61100d6f404",
+        "output_reference": "D:\\Ava_CMS\\Content\\Pending_Photoshoot\\generated_image_990a974bfb5ac61100d6f404.png",
+        "source_workflow": "photoshoot_seed",
+        "prompt_plan_id": "prompt_plan_08c85f17f65b4e479e8ce3080ad4ac62",
+        "photoshoot_session_id": "photoshoot_session_dccec0f825844db186e46aa8637c0877",
+        "photoshoot_request_id": null,
+        "approval_entrypoint": "photoshoot_curation_seed",
+        "is_seed_image": true
+      },
+      "post_approval_policy": {},
+      "approved_at": "2026-08-10T02:12:02.228777"
+    },
+    "created_at": "2026-08-10T02:12:08.101196",
+    "updated_at": "2026-08-10T02:12:08.101196"
+  },
+  {
+    "idempotency_key": "photoshoot:photoshoot_session_4c3d16eb8126460f850cf39fcb8f7b83:photoshoot_request_f549f647f1b84db184dc19292cfe60c9:generated_image_ff25dba052867747a83bf961",
+    "asset_id": 172,
+    "source": {
+      "source_workflow": "photoshoot",
+      "source_item_id": "generated_image_ff25dba052867747a83bf961",
+      "source_session_id": "photoshoot_session_4c3d16eb8126460f850cf39fcb8f7b83",
+      "idempotency_key": "photoshoot:photoshoot_session_4c3d16eb8126460f850cf39fcb8f7b83:photoshoot_request_f549f647f1b84db184dc19292cfe60c9:generated_image_ff25dba052867747a83bf961"
+    },
+    "workflow_metadata": {
+      "media_reference": "D:\\Ava_CMS\\Content\\Generation\\Photoshoot\\Active\\Photoshoot_2026-08-10_d5a\\Candidate_generated_image_ff25dba052867747a83bf961.png",
+      "creator_profile_id": 2,
+      "source_metadata": {
+        "generation_job_id": "generation_job_b4628535c8254c35a82e3c057e117ebe",
+        "generation_request_id": "generation_request_5c915b1eb4fb48bd831fff4d43e13223",
+        "generation_result_id": "generation_job_b4628535c8254c35a82e3c057e117ebe_live_result",
+        "generated_image_id": "generated_image_ff25dba052867747a83bf961",
+        "output_reference": "D:\\Ava_CMS\\Content\\Generation\\Photoshoot\\Active\\Photoshoot_2026-08-10_d5a\\Candidate_generated_image_ff25dba052867747a83bf961.png",
+        "source_workflow": "photoshoot",
+        "prompt_plan_id": "prompt_plan_d15aa43ea21e4a9585de280a715876c7",
+        "photoshoot_session_id": "photoshoot_session_4c3d16eb8126460f850cf39fcb8f7b83",
+        "photoshoot_request_id": "photoshoot_request_f549f647f1b84db184dc19292cfe60c9",
+        "approval_entrypoint": "react_photoshoot_approve_shot",
+        "photoshoot_sequence_index": 2
+      },
+      "post_approval_policy": {},
+      "approved_at": "2026-08-10T18:06:02.471452"
+    },
+    "created_at": "2026-08-10T18:06:16.827382",
+    "updated_at": "2026-08-10T18:06:16.827382"
+  },
+  {
+    "idempotency_key": "photoshoot:photoshoot_session_4c3d16eb8126460f850cf39fcb8f7b83:photoshoot_request_0d210031be924d8f849b55b249a96ea7:generated_image_4c960a3f700a09e972ccaef1",
+    "asset_id": 173,
+    "source": {
+      "source_workflow": "photoshoot",
+      "source_item_id": "generated_image_4c960a3f700a09e972ccaef1",
+      "source_session_id": "photoshoot_session_4c3d16eb8126460f850cf39fcb8f7b83",
+      "idempotency_key": "photoshoot:photoshoot_session_4c3d16eb8126460f850cf39fcb8f7b83:photoshoot_request_0d210031be924d8f849b55b249a96ea7:generated_image_4c960a3f700a09e972ccaef1"
+    },
+    "workflow_metadata": {
+      "media_reference": "D:\\Ava_CMS\\Content\\Generation\\Photoshoot\\Active\\Photoshoot_2026-08-10_d5a\\Candidate_generated_image_4c960a3f700a09e972ccaef1.png",
+      "creator_profile_id": 2,
+      "source_metadata": {
+        "generation_job_id": "generation_job_a1797c59160d417f8ad9cf1393131fff",
+        "generation_request_id": "generation_request_86e5916000ab42b791bec7b4964d769b",
+        "generation_result_id": "generation_job_a1797c59160d417f8ad9cf1393131fff_live_result",
+        "generated_image_id": "generated_image_4c960a3f700a09e972ccaef1",
+        "output_reference": "D:\\Ava_CMS\\Content\\Generation\\Photoshoot\\Active\\Photoshoot_2026-08-10_d5a\\Candidate_generated_image_4c960a3f700a09e972ccaef1.png",
+        "source_workflow": "photoshoot",
+        "prompt_plan_id": "prompt_plan_db3bae5f30d24298a3404e36a29faae8",
+        "photoshoot_session_id": "photoshoot_session_4c3d16eb8126460f850cf39fcb8f7b83",
+        "photoshoot_request_id": "photoshoot_request_0d210031be924d8f849b55b249a96ea7",
+        "approval_entrypoint": "react_photoshoot_approve_shot",
+        "photoshoot_sequence_index": 4
+      },
+      "post_approval_policy": {},
+      "approved_at": "2026-08-10T18:13:14.981731"
+    },
+    "created_at": "2026-08-10T18:13:28.616056",
+    "updated_at": "2026-08-10T18:13:28.616056"
+  },
+  {
+    "idempotency_key": "generation_library:generation_job_767eb38fec6e4e9a8d94fe44ed9e1c99:generation_job_767eb38fec6e4e9a8d94fe44ed9e1c99_live_result:6d6b359c4f6eacb0c19ffc5b",
+    "asset_id": 174,
+    "source": {
+      "source_workflow": "photoshoot_seed",
+      "source_item_id": "generated_image_3ea118c45131bdc9421633f0",
+      "source_session_id": "photoshoot_session_4c3d16eb8126460f850cf39fcb8f7b83",
+      "idempotency_key": "generation_library:generation_job_767eb38fec6e4e9a8d94fe44ed9e1c99:generation_job_767eb38fec6e4e9a8d94fe44ed9e1c99_live_result:6d6b359c4f6eacb0c19ffc5b"
+    },
+    "workflow_metadata": {
+      "media_reference": "D:\\Ava_CMS\\Content\\Pending_Photoshoot\\generated_image_3ea118c45131bdc9421633f0.png",
+      "creator_profile_id": 2,
+      "source_metadata": {
+        "generation_job_id": "generation_job_767eb38fec6e4e9a8d94fe44ed9e1c99",
+        "generation_request_id": "generation_request_07db5d9b4f5a45b086c310a184c8af68",
+        "generation_result_id": "generation_job_767eb38fec6e4e9a8d94fe44ed9e1c99_live_result",
+        "generated_image_id": "generated_image_3ea118c45131bdc9421633f0",
+        "output_reference": "D:\\Ava_CMS\\Content\\Pending_Photoshoot\\generated_image_3ea118c45131bdc9421633f0.png",
+        "source_workflow": "photoshoot_seed",
+        "prompt_plan_id": "prompt_plan_4f476407c4a840e0a9f5ed361fd97e1e",
+        "photoshoot_session_id": "photoshoot_session_4c3d16eb8126460f850cf39fcb8f7b83",
+        "photoshoot_request_id": null,
+        "approval_entrypoint": "photoshoot_curation_seed",
+        "is_seed_image": true
+      },
+      "post_approval_policy": {},
+      "approved_at": "2026-08-10T18:14:44.553000"
+    },
+    "created_at": "2026-08-10T18:14:54.941748",
+    "updated_at": "2026-08-10T18:14:54.941748"
+  },
+  {
+    "idempotency_key": "photoshoot:photoshoot_session_a68eeb0280924cad8ec0c467bec24339:photoshoot_request_6b949c5453114fb0a180636d2857d431:generated_image_06f93df3cc29384b922febca",
+    "asset_id": 175,
+    "source": {
+      "source_workflow": "photoshoot",
+      "source_item_id": "generated_image_06f93df3cc29384b922febca",
+      "source_session_id": "photoshoot_session_a68eeb0280924cad8ec0c467bec24339",
+      "idempotency_key": "photoshoot:photoshoot_session_a68eeb0280924cad8ec0c467bec24339:photoshoot_request_6b949c5453114fb0a180636d2857d431:generated_image_06f93df3cc29384b922febca"
+    },
+    "workflow_metadata": {
+      "media_reference": "D:\\Ava_CMS\\Content\\Generation\\Photoshoot\\Active\\Photoshoot_2026-08-10_22f\\Candidate_generated_image_06f93df3cc29384b922febca.png",
+      "creator_profile_id": 2,
+      "source_metadata": {
+        "generation_job_id": "generation_job_f0fc9028707e4395955f77b48958178c",
+        "generation_request_id": "generation_request_2dae34f1074847ac8ad60a6e47d6522e",
+        "generation_result_id": "generation_job_f0fc9028707e4395955f77b48958178c_live_result",
+        "generated_image_id": "generated_image_06f93df3cc29384b922febca",
+        "output_reference": "D:\\Ava_CMS\\Content\\Generation\\Photoshoot\\Active\\Photoshoot_2026-08-10_22f\\Candidate_generated_image_06f93df3cc29384b922febca.png",
+        "source_workflow": "photoshoot",
+        "prompt_plan_id": "prompt_plan_6d65c53527344da9a089818e4e3745c8",
+        "photoshoot_session_id": "photoshoot_session_a68eeb0280924cad8ec0c467bec24339",
+        "photoshoot_request_id": "photoshoot_request_6b949c5453114fb0a180636d2857d431",
+        "approval_entrypoint": "react_photoshoot_approve_shot",
+        "photoshoot_sequence_index": 2
+      },
+      "post_approval_policy": {},
+      "approved_at": "2026-08-10T19:48:09.393517"
+    },
+    "created_at": "2026-08-10T19:48:25.132084",
+    "updated_at": "2026-08-10T19:48:25.132084"
+  },
+  {
+    "idempotency_key": "photoshoot:photoshoot_session_a68eeb0280924cad8ec0c467bec24339:photoshoot_request_7ef15b1c7e144e04a81f509cfa85217c:generated_image_bd0025545d78530dc8ded2e6",
+    "asset_id": 176,
+    "source": {
+      "source_workflow": "photoshoot",
+      "source_item_id": "generated_image_bd0025545d78530dc8ded2e6",
+      "source_session_id": "photoshoot_session_a68eeb0280924cad8ec0c467bec24339",
+      "idempotency_key": "photoshoot:photoshoot_session_a68eeb0280924cad8ec0c467bec24339:photoshoot_request_7ef15b1c7e144e04a81f509cfa85217c:generated_image_bd0025545d78530dc8ded2e6"
+    },
+    "workflow_metadata": {
+      "media_reference": "D:\\Ava_CMS\\Content\\Generation\\Photoshoot\\Active\\Photoshoot_2026-08-10_22f\\Candidate_generated_image_bd0025545d78530dc8ded2e6.png",
+      "creator_profile_id": 2,
+      "source_metadata": {
+        "generation_job_id": "generation_job_32e0019f7d2948399b665d8bf665bf68",
+        "generation_request_id": "generation_request_e97288289ada46518fd77e946d6c7f68",
+        "generation_result_id": "generation_job_32e0019f7d2948399b665d8bf665bf68_live_result",
+        "generated_image_id": "generated_image_bd0025545d78530dc8ded2e6",
+        "output_reference": "D:\\Ava_CMS\\Content\\Generation\\Photoshoot\\Active\\Photoshoot_2026-08-10_22f\\Candidate_generated_image_bd0025545d78530dc8ded2e6.png",
+        "source_workflow": "photoshoot",
+        "prompt_plan_id": "prompt_plan_be9f249c822d4ef49f7a440ab20df3ae",
+        "photoshoot_session_id": "photoshoot_session_a68eeb0280924cad8ec0c467bec24339",
+        "photoshoot_request_id": "photoshoot_request_7ef15b1c7e144e04a81f509cfa85217c",
+        "approval_entrypoint": "react_photoshoot_approve_shot",
+        "photoshoot_sequence_index": 3
+      },
+      "post_approval_policy": {},
+      "approved_at": "2026-08-10T19:53:10.886050"
+    },
+    "created_at": "2026-08-10T19:53:23.519813",
+    "updated_at": "2026-08-10T19:53:23.519813"
+  },
+  {
+    "idempotency_key": "generation_library:generation_job_171a214eec4244a1b19d0faa87449076:generation_job_171a214eec4244a1b19d0faa87449076_live_result:8e642942efa8c01554a782cc",
+    "asset_id": 177,
+    "source": {
+      "source_workflow": "photoshoot_seed",
+      "source_item_id": "generated_image_914c277f36381ec769b52543",
+      "source_session_id": "photoshoot_session_a68eeb0280924cad8ec0c467bec24339",
+      "idempotency_key": "generation_library:generation_job_171a214eec4244a1b19d0faa87449076:generation_job_171a214eec4244a1b19d0faa87449076_live_result:8e642942efa8c01554a782cc"
+    },
+    "workflow_metadata": {
+      "media_reference": "D:\\Ava_CMS\\Content\\Pending_Photoshoot\\generated_image_914c277f36381ec769b52543.png",
+      "creator_profile_id": 2,
+      "source_metadata": {
+        "generation_job_id": "generation_job_171a214eec4244a1b19d0faa87449076",
+        "generation_request_id": "generation_request_3011eb91199b48d19a51cd159eda8ccc",
+        "generation_result_id": "generation_job_171a214eec4244a1b19d0faa87449076_live_result",
+        "generated_image_id": "generated_image_914c277f36381ec769b52543",
+        "output_reference": "D:\\Ava_CMS\\Content\\Pending_Photoshoot\\generated_image_914c277f36381ec769b52543.png",
+        "source_workflow": "photoshoot_seed",
+        "prompt_plan_id": "prompt_plan_f04b5ff92afc4308930a51543604a313",
+        "photoshoot_session_id": "photoshoot_session_a68eeb0280924cad8ec0c467bec24339",
+        "photoshoot_request_id": null,
+        "approval_entrypoint": "photoshoot_curation_seed",
+        "is_seed_image": true
+      },
+      "post_approval_policy": {},
+      "approved_at": "2026-08-10T19:53:38.424048"
+    },
+    "created_at": "2026-08-10T19:53:50.376572",
+    "updated_at": "2026-08-10T19:53:50.376572"
+  },
+  {
+    "idempotency_key": "photoshoot:photoshoot_session_ca736699f9d142bc972392b11f309319:photoshoot_request_8ef01a7273a14cc58dcdd9dbb07ec6a9:generated_image_e276e1e44cc1022d6a945def",
+    "asset_id": 179,
+    "source": {
+      "source_workflow": "photoshoot",
+      "source_item_id": "generated_image_e276e1e44cc1022d6a945def",
+      "source_session_id": "photoshoot_session_ca736699f9d142bc972392b11f309319",
+      "idempotency_key": "photoshoot:photoshoot_session_ca736699f9d142bc972392b11f309319:photoshoot_request_8ef01a7273a14cc58dcdd9dbb07ec6a9:generated_image_e276e1e44cc1022d6a945def"
+    },
+    "workflow_metadata": {
+      "media_reference": "D:\\Ava_CMS\\Content\\Generation\\Photoshoot\\Active\\Photoshoot_2026-08-11_0b2\\Candidate_generated_image_e276e1e44cc1022d6a945def.png",
+      "creator_profile_id": 2,
+      "source_metadata": {
+        "generation_job_id": "generation_job_d729f894a2064ff6bb0a7d0559c12aac",
+        "generation_request_id": "generation_request_917a0e3fedc34ac7834185674bcadb7b",
+        "generation_result_id": "generation_job_d729f894a2064ff6bb0a7d0559c12aac_live_result",
+        "generated_image_id": "generated_image_e276e1e44cc1022d6a945def",
+        "output_reference": "D:\\Ava_CMS\\Content\\Generation\\Photoshoot\\Active\\Photoshoot_2026-08-11_0b2\\Candidate_generated_image_e276e1e44cc1022d6a945def.png",
+        "source_workflow": "photoshoot",
+        "prompt_plan_id": "prompt_plan_72f003bf5f5f4465babe4c0117a69bfd",
+        "photoshoot_session_id": "photoshoot_session_ca736699f9d142bc972392b11f309319",
+        "photoshoot_request_id": "photoshoot_request_8ef01a7273a14cc58dcdd9dbb07ec6a9",
+        "approval_entrypoint": "react_photoshoot_approve_shot",
+        "photoshoot_sequence_index": 3
+      },
+      "post_approval_policy": {},
+      "approved_at": "2026-08-11T01:31:18.972816"
+    },
+    "created_at": "2026-08-11T01:31:33.664804",
+    "updated_at": "2026-08-11T01:31:33.664804"
+  },
+  {
+    "idempotency_key": "photoshoot:photoshoot_session_ca736699f9d142bc972392b11f309319:photoshoot_request_80e1cb7d28a84b9d89f30f672dc6da07:generated_image_a455a15d88f64caede06dfd6",
+    "asset_id": 180,
+    "source": {
+      "source_workflow": "photoshoot",
+      "source_item_id": "generated_image_a455a15d88f64caede06dfd6",
+      "source_session_id": "photoshoot_session_ca736699f9d142bc972392b11f309319",
+      "idempotency_key": "photoshoot:photoshoot_session_ca736699f9d142bc972392b11f309319:photoshoot_request_80e1cb7d28a84b9d89f30f672dc6da07:generated_image_a455a15d88f64caede06dfd6"
+    },
+    "workflow_metadata": {
+      "media_reference": "D:\\Ava_CMS\\Content\\Generation\\Photoshoot\\Active\\Photoshoot_2026-08-11_0b2\\Candidate_generated_image_a455a15d88f64caede06dfd6.png",
+      "creator_profile_id": 2,
+      "source_metadata": {
+        "generation_job_id": "generation_job_d514be2086714042a0583b2b33ecc49b",
+        "generation_request_id": "generation_request_7545a45f1c0d4b9ba06d104bdee92bc0",
+        "generation_result_id": "generation_job_d514be2086714042a0583b2b33ecc49b_live_result",
+        "generated_image_id": "generated_image_a455a15d88f64caede06dfd6",
+        "output_reference": "D:\\Ava_CMS\\Content\\Generation\\Photoshoot\\Active\\Photoshoot_2026-08-11_0b2\\Candidate_generated_image_a455a15d88f64caede06dfd6.png",
+        "source_workflow": "photoshoot",
+        "prompt_plan_id": "prompt_plan_78d8ac9bcaa041aba856380245d41dc2",
+        "photoshoot_session_id": "photoshoot_session_ca736699f9d142bc972392b11f309319",
+        "photoshoot_request_id": "photoshoot_request_80e1cb7d28a84b9d89f30f672dc6da07",
+        "approval_entrypoint": "react_photoshoot_approve_shot",
+        "photoshoot_sequence_index": 6
+      },
+      "post_approval_policy": {},
+      "approved_at": "2026-08-11T01:47:08.600731"
+    },
+    "created_at": "2026-08-11T01:47:22.473731",
+    "updated_at": "2026-08-11T01:47:22.473731"
+  },
+  {
+    "idempotency_key": "photoshoot:photoshoot_session_ca736699f9d142bc972392b11f309319:photoshoot_request_3dfb034f4a9847668144fa3ff8295aad:generated_image_8349264dbd9700c8790c5a1c",
+    "asset_id": 181,
+    "source": {
+      "source_workflow": "photoshoot",
+      "source_item_id": "generated_image_8349264dbd9700c8790c5a1c",
+      "source_session_id": "photoshoot_session_ca736699f9d142bc972392b11f309319",
+      "idempotency_key": "photoshoot:photoshoot_session_ca736699f9d142bc972392b11f309319:photoshoot_request_3dfb034f4a9847668144fa3ff8295aad:generated_image_8349264dbd9700c8790c5a1c"
+    },
+    "workflow_metadata": {
+      "media_reference": "D:\\Ava_CMS\\Content\\Generation\\Photoshoot\\Active\\Photoshoot_2026-08-11_0b2\\Candidate_generated_image_8349264dbd9700c8790c5a1c.png",
+      "creator_profile_id": 2,
+      "source_metadata": {
+        "generation_job_id": "generation_job_c9dca2962ae3401985d0176ca8bd7c92",
+        "generation_request_id": "generation_request_887cc3a3f9ff451ebcb7758e6f660b0b",
+        "generation_result_id": "generation_job_c9dca2962ae3401985d0176ca8bd7c92_live_result",
+        "generated_image_id": "generated_image_8349264dbd9700c8790c5a1c",
+        "output_reference": "D:\\Ava_CMS\\Content\\Generation\\Photoshoot\\Active\\Photoshoot_2026-08-11_0b2\\Candidate_generated_image_8349264dbd9700c8790c5a1c.png",
+        "source_workflow": "photoshoot",
+        "prompt_plan_id": "prompt_plan_7b806aebc8694abba334961f6752c0a6",
+        "photoshoot_session_id": "photoshoot_session_ca736699f9d142bc972392b11f309319",
+        "photoshoot_request_id": "photoshoot_request_3dfb034f4a9847668144fa3ff8295aad",
+        "approval_entrypoint": "react_photoshoot_approve_shot",
+        "photoshoot_sequence_index": 6
+      },
+      "post_approval_policy": {},
+      "approved_at": "2026-08-11T01:51:56.830020"
+    },
+    "created_at": "2026-08-11T01:52:15.598954",
+    "updated_at": "2026-08-11T01:52:15.598954"
+  },
+  {
+    "idempotency_key": "generation_library:generation_job_f558734283a9423dacba0f0a4fcd1c21:generation_job_f558734283a9423dacba0f0a4fcd1c21_live_result:06bcd252c609e98b824e8eb0",
+    "asset_id": 182,
+    "source": {
+      "source_workflow": "photoshoot_seed",
+      "source_item_id": "generated_image_9092119e79fee930384ab713",
+      "source_session_id": "photoshoot_session_ca736699f9d142bc972392b11f309319",
+      "idempotency_key": "generation_library:generation_job_f558734283a9423dacba0f0a4fcd1c21:generation_job_f558734283a9423dacba0f0a4fcd1c21_live_result:06bcd252c609e98b824e8eb0"
+    },
+    "workflow_metadata": {
+      "media_reference": "D:\\Ava_CMS\\Content\\Pending_Photoshoot\\generated_image_9092119e79fee930384ab713.png",
+      "creator_profile_id": 2,
+      "source_metadata": {
+        "generation_job_id": "generation_job_f558734283a9423dacba0f0a4fcd1c21",
+        "generation_request_id": "generation_request_5a37025fc0d44d1981ad99f483f13349",
+        "generation_result_id": "generation_job_f558734283a9423dacba0f0a4fcd1c21_live_result",
+        "generated_image_id": "generated_image_9092119e79fee930384ab713",
+        "output_reference": "D:\\Ava_CMS\\Content\\Pending_Photoshoot\\generated_image_9092119e79fee930384ab713.png",
+        "source_workflow": "photoshoot_seed",
+        "prompt_plan_id": "prompt_plan_d6259ee95e6a46f89af331b62988d6b6",
+        "photoshoot_session_id": "photoshoot_session_ca736699f9d142bc972392b11f309319",
+        "photoshoot_request_id": null,
+        "approval_entrypoint": "photoshoot_curation_seed",
+        "is_seed_image": true
+      },
+      "post_approval_policy": {},
+      "approved_at": "2026-08-11T01:52:47.841957"
+    },
+    "created_at": "2026-08-11T01:52:57.205730",
+    "updated_at": "2026-08-11T01:52:57.205730"
+  },
+  {
+    "idempotency_key": "photoshoot:photoshoot_session_b66cd8fd6e544b33b5e69cc1927e446c:photoshoot_request_3ec8d291b76e41bcb43aa671d32dc3e1:generated_image_161eb4c23fbad311b0724ac4",
+    "asset_id": 186,
+    "source": {
+      "source_workflow": "photoshoot",
+      "source_item_id": "generated_image_161eb4c23fbad311b0724ac4",
+      "source_session_id": "photoshoot_session_b66cd8fd6e544b33b5e69cc1927e446c",
+      "idempotency_key": "photoshoot:photoshoot_session_b66cd8fd6e544b33b5e69cc1927e446c:photoshoot_request_3ec8d291b76e41bcb43aa671d32dc3e1:generated_image_161eb4c23fbad311b0724ac4"
+    },
+    "workflow_metadata": {
+      "media_reference": "D:\\Ava_CMS\\Content\\Generation\\Photoshoot\\Active\\Photoshoot_2026-08-11_fdf\\Candidate_generated_image_161eb4c23fbad311b0724ac4.png",
+      "creator_profile_id": 2,
+      "source_metadata": {
+        "generation_job_id": "generation_job_db29999b8c7d4a6fa4cd17adf00aeb8b",
+        "generation_request_id": "generation_request_ba6c7a0907684620bc697ed679f45a14",
+        "generation_result_id": "generation_job_db29999b8c7d4a6fa4cd17adf00aeb8b_live_result",
+        "generated_image_id": "generated_image_161eb4c23fbad311b0724ac4",
+        "output_reference": "D:\\Ava_CMS\\Content\\Generation\\Photoshoot\\Active\\Photoshoot_2026-08-11_fdf\\Candidate_generated_image_161eb4c23fbad311b0724ac4.png",
+        "source_workflow": "photoshoot",
+        "prompt_plan_id": "prompt_plan_c413de5345454268b1e0d56b913d9eda",
+        "photoshoot_session_id": "photoshoot_session_b66cd8fd6e544b33b5e69cc1927e446c",
+        "photoshoot_request_id": "photoshoot_request_3ec8d291b76e41bcb43aa671d32dc3e1",
+        "approval_entrypoint": "react_photoshoot_approve_shot",
+        "photoshoot_sequence_index": 2
+      },
+      "post_approval_policy": {},
+      "approved_at": "2026-08-11T20:00:21.011520"
+    },
+    "created_at": "2026-08-11T20:00:41.861667",
+    "updated_at": "2026-08-11T20:00:41.861667"
+  },
+  {
+    "idempotency_key": "photoshoot:photoshoot_session_b66cd8fd6e544b33b5e69cc1927e446c:photoshoot_request_35fbfdca9072481f8500e0a416ec8052:generated_image_0d21b808c9f32ad7ca937fb2",
+    "asset_id": 187,
+    "source": {
+      "source_workflow": "photoshoot",
+      "source_item_id": "generated_image_0d21b808c9f32ad7ca937fb2",
+      "source_session_id": "photoshoot_session_b66cd8fd6e544b33b5e69cc1927e446c",
+      "idempotency_key": "photoshoot:photoshoot_session_b66cd8fd6e544b33b5e69cc1927e446c:photoshoot_request_35fbfdca9072481f8500e0a416ec8052:generated_image_0d21b808c9f32ad7ca937fb2"
+    },
+    "workflow_metadata": {
+      "media_reference": "D:\\Ava_CMS\\Content\\Generation\\Photoshoot\\Active\\Photoshoot_2026-08-11_fdf\\Candidate_generated_image_0d21b808c9f32ad7ca937fb2.png",
+      "creator_profile_id": 2,
+      "source_metadata": {
+        "generation_job_id": "generation_job_fa0a2c05688a47d7919009739badd9ca",
+        "generation_request_id": "generation_request_ce3f766194ba4ae587dd460f4965878a",
+        "generation_result_id": "generation_job_fa0a2c05688a47d7919009739badd9ca_live_result",
+        "generated_image_id": "generated_image_0d21b808c9f32ad7ca937fb2",
+        "output_reference": "D:\\Ava_CMS\\Content\\Generation\\Photoshoot\\Active\\Photoshoot_2026-08-11_fdf\\Candidate_generated_image_0d21b808c9f32ad7ca937fb2.png",
+        "source_workflow": "photoshoot",
+        "prompt_plan_id": "prompt_plan_2806c2db11cc441bb1f72a1b6b84e20a",
+        "photoshoot_session_id": "photoshoot_session_b66cd8fd6e544b33b5e69cc1927e446c",
+        "photoshoot_request_id": "photoshoot_request_35fbfdca9072481f8500e0a416ec8052",
+        "approval_entrypoint": "react_photoshoot_approve_shot",
+        "photoshoot_sequence_index": 3
+      },
+      "post_approval_policy": {},
+      "approved_at": "2026-08-11T20:16:03.314697"
+    },
+    "created_at": "2026-08-11T20:16:23.606500",
+    "updated_at": "2026-08-11T20:16:23.606500"
+  },
+  {
+    "idempotency_key": "generation_library:generation_job_0f8aceeb4c6a445996d7fcbcbde5c8cd:generation_job_0f8aceeb4c6a445996d7fcbcbde5c8cd_live_result:294fc735d23f4367e838805e",
+    "asset_id": 188,
+    "source": {
+      "source_workflow": "photoshoot_seed",
+      "source_item_id": "generated_image_1728e3ac2103c2a533b43708",
+      "source_session_id": "photoshoot_session_b66cd8fd6e544b33b5e69cc1927e446c",
+      "idempotency_key": "generation_library:generation_job_0f8aceeb4c6a445996d7fcbcbde5c8cd:generation_job_0f8aceeb4c6a445996d7fcbcbde5c8cd_live_result:294fc735d23f4367e838805e"
+    },
+    "workflow_metadata": {
+      "media_reference": "D:\\Ava_CMS\\Content\\Pending_Photoshoot\\generated_image_1728e3ac2103c2a533b43708.png",
+      "creator_profile_id": 2,
+      "source_metadata": {
+        "generation_job_id": "generation_job_0f8aceeb4c6a445996d7fcbcbde5c8cd",
+        "generation_request_id": "generation_request_1ceb918f05f943c283a15f51ee101299",
+        "generation_result_id": "generation_job_0f8aceeb4c6a445996d7fcbcbde5c8cd_live_result",
+        "generated_image_id": "generated_image_1728e3ac2103c2a533b43708",
+        "output_reference": "D:\\Ava_CMS\\Content\\Pending_Photoshoot\\generated_image_1728e3ac2103c2a533b43708.png",
+        "source_workflow": "photoshoot_seed",
+        "prompt_plan_id": "prompt_plan_1611491cfb7040ec83c42458c5adbed5",
+        "photoshoot_session_id": "photoshoot_session_b66cd8fd6e544b33b5e69cc1927e446c",
+        "photoshoot_request_id": null,
+        "approval_entrypoint": "photoshoot_curation_seed",
+        "is_seed_image": true
+      },
+      "post_approval_policy": {},
+      "approved_at": "2026-08-11T20:18:17.234557"
+    },
+    "created_at": "2026-08-11T20:18:30.171394",
+    "updated_at": "2026-08-11T20:18:30.171394"
+  },
+  {
+    "idempotency_key": "photoshoot:photoshoot_session_2e31c7efac9a4165897a40a60456e594:photoshoot_request_a9cc9e434e71487ca96b964d403579b5:generated_image_212451b807d0f066c7ae5bfd",
+    "asset_id": 190,
+    "source": {
+      "source_workflow": "photoshoot",
+      "source_item_id": "generated_image_212451b807d0f066c7ae5bfd",
+      "source_session_id": "photoshoot_session_2e31c7efac9a4165897a40a60456e594",
+      "idempotency_key": "photoshoot:photoshoot_session_2e31c7efac9a4165897a40a60456e594:photoshoot_request_a9cc9e434e71487ca96b964d403579b5:generated_image_212451b807d0f066c7ae5bfd"
+    },
+    "workflow_metadata": {
+      "media_reference": "D:\\Ava_CMS\\Content\\Generation\\Photoshoot\\Active\\Photoshoot_2026-08-11_ee8\\Candidate_generated_image_212451b807d0f066c7ae5bfd.png",
+      "creator_profile_id": 2,
+      "source_metadata": {
+        "generation_job_id": "generation_job_6510ca41b04c452b8df7895b7639d59e",
+        "generation_request_id": "generation_request_99799a86009048e582ea6da465561356",
+        "generation_result_id": "generation_job_6510ca41b04c452b8df7895b7639d59e_live_result",
+        "generated_image_id": "generated_image_212451b807d0f066c7ae5bfd",
+        "output_reference": "D:\\Ava_CMS\\Content\\Generation\\Photoshoot\\Active\\Photoshoot_2026-08-11_ee8\\Candidate_generated_image_212451b807d0f066c7ae5bfd.png",
+        "source_workflow": "photoshoot",
+        "prompt_plan_id": "prompt_plan_1369cbae5e5449b587147f8d0ffade4d",
+        "photoshoot_session_id": "photoshoot_session_2e31c7efac9a4165897a40a60456e594",
+        "photoshoot_request_id": "photoshoot_request_a9cc9e434e71487ca96b964d403579b5",
+        "approval_entrypoint": "react_photoshoot_approve_shot",
+        "photoshoot_sequence_index": 2
+      },
+      "post_approval_policy": {},
+      "approved_at": "2026-08-11T20:34:13.264793"
+    },
+    "created_at": "2026-08-11T20:34:35.801849",
+    "updated_at": "2026-08-11T20:34:35.801849"
+  },
+  {
+    "idempotency_key": "photoshoot:photoshoot_session_2e31c7efac9a4165897a40a60456e594:photoshoot_request_5b32f0c7f4524b2d95cf0a6e8c938692:generated_image_9cefffe911e680bff4e728c5",
+    "asset_id": 191,
+    "source": {
+      "source_workflow": "photoshoot",
+      "source_item_id": "generated_image_9cefffe911e680bff4e728c5",
+      "source_session_id": "photoshoot_session_2e31c7efac9a4165897a40a60456e594",
+      "idempotency_key": "photoshoot:photoshoot_session_2e31c7efac9a4165897a40a60456e594:photoshoot_request_5b32f0c7f4524b2d95cf0a6e8c938692:generated_image_9cefffe911e680bff4e728c5"
+    },
+    "workflow_metadata": {
+      "media_reference": "D:\\Ava_CMS\\Content\\Generation\\Photoshoot\\Active\\Photoshoot_2026-08-11_ee8\\Candidate_generated_image_9cefffe911e680bff4e728c5.png",
+      "creator_profile_id": 2,
+      "source_metadata": {
+        "generation_job_id": "generation_job_6b7482dd0839498d94cc1fcbdda42c71",
+        "generation_request_id": "generation_request_dc05fc7329574ffe96f9f8f0e716032a",
+        "generation_result_id": "generation_job_6b7482dd0839498d94cc1fcbdda42c71_live_result",
+        "generated_image_id": "generated_image_9cefffe911e680bff4e728c5",
+        "output_reference": "D:\\Ava_CMS\\Content\\Generation\\Photoshoot\\Active\\Photoshoot_2026-08-11_ee8\\Candidate_generated_image_9cefffe911e680bff4e728c5.png",
+        "source_workflow": "photoshoot",
+        "prompt_plan_id": "prompt_plan_6b5e7c6aebbb44d09c92306bda6b4d42",
+        "photoshoot_session_id": "photoshoot_session_2e31c7efac9a4165897a40a60456e594",
+        "photoshoot_request_id": "photoshoot_request_5b32f0c7f4524b2d95cf0a6e8c938692",
+        "approval_entrypoint": "react_photoshoot_approve_shot",
+        "photoshoot_sequence_index": 3
+      },
+      "post_approval_policy": {},
+      "approved_at": "2026-08-11T20:37:17.107133"
+    },
+    "created_at": "2026-08-11T20:37:35.123930",
+    "updated_at": "2026-08-11T20:37:35.123930"
+  },
+  {
+    "idempotency_key": "generation_library:generation_job_e7e80611d613447eba8294a77fbf6fd9:generation_job_e7e80611d613447eba8294a77fbf6fd9_live_result:c74f176c4187a703ead2a594",
+    "asset_id": 192,
+    "source": {
+      "source_workflow": "photoshoot_seed",
+      "source_item_id": "generated_image_7aba0e07f6e15ed87a14af73",
+      "source_session_id": "photoshoot_session_2e31c7efac9a4165897a40a60456e594",
+      "idempotency_key": "generation_library:generation_job_e7e80611d613447eba8294a77fbf6fd9:generation_job_e7e80611d613447eba8294a77fbf6fd9_live_result:c74f176c4187a703ead2a594"
+    },
+    "workflow_metadata": {
+      "media_reference": "D:\\Ava_CMS\\Content\\Pending_Photoshoot\\generated_image_7aba0e07f6e15ed87a14af73.png",
+      "creator_profile_id": 2,
+      "source_metadata": {
+        "generation_job_id": "generation_job_e7e80611d613447eba8294a77fbf6fd9",
+        "generation_request_id": "generation_request_da4de61e134b4792bbf1b22ee6e999e9",
+        "generation_result_id": "generation_job_e7e80611d613447eba8294a77fbf6fd9_live_result",
+        "generated_image_id": "generated_image_7aba0e07f6e15ed87a14af73",
+        "output_reference": "D:\\Ava_CMS\\Content\\Pending_Photoshoot\\generated_image_7aba0e07f6e15ed87a14af73.png",
+        "source_workflow": "photoshoot_seed",
+        "prompt_plan_id": "prompt_plan_8da16c4b68224c64831049bb9a90ae98",
+        "photoshoot_session_id": "photoshoot_session_2e31c7efac9a4165897a40a60456e594",
+        "photoshoot_request_id": null,
+        "approval_entrypoint": "photoshoot_curation_seed",
+        "is_seed_image": true
+      },
+      "post_approval_policy": {},
+      "approved_at": "2026-08-11T20:37:50.885403"
+    },
+    "created_at": "2026-08-11T20:38:02.983802",
+    "updated_at": "2026-08-11T20:38:02.983802"
   }
 ]

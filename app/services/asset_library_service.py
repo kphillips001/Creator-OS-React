@@ -11,6 +11,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from app.models.asset import Asset
+from app.models.product import ProductType
 from app.models.asset_library import (
     AssetDerivativeSummary,
     AssetExperiencePresentation,
@@ -132,17 +133,25 @@ class AssetLibraryService:
         *,
         candidate_limit: int,
     ) -> tuple[tuple[dict, ...], int, tuple[str, ...]]:
+        # Registered Images are independently managed commercial units.
+        # Photoshoot members and supporting derivatives remain accessible
+        # through their owning Photoshoot instead of this grid.
+        classification = (
+            ProductType.SINGLE_IMAGE.value
+            if filters.media_type == "image"
+            else filters.classification
+        )
         return self.assets.asset_library_grid_summary(
             search=filters.search,
             media_type=filters.media_type,
-            classification=filters.classification,
+            classification=classification,
+            sale_destination=filters.sale_destination if filters.media_type == "image" else None,
             creator_profile_id=int(filters.creator_profile_id or 0),
             limit=candidate_limit,
-            availability_predicate=(
-                self.content_destinations.available_inventory_predicate(
-                    "content_items.id"
-                )
-            ),
+            # Canonical library membership is independent of commercial
+            # destination. A SINGLE_IMAGE remains library-visible after it is
+            # committed to SINGLE_PPV or another legitimate sales destination.
+            availability_predicate=None,
         )
 
     def build_items_by_ids(self, asset_ids: tuple[int, ...]) -> tuple[AssetLibraryItem, ...]:
@@ -320,6 +329,7 @@ class AssetLibraryService:
             relationship=relationship,
             publishing=publishing,
             is_reference_image=self._is_reference_image(asset),
+            media_metadata=asset.media_metadata,
         )
 
     def _safe_asset_understanding(self, asset: Asset) -> Any | None:

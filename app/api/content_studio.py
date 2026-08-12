@@ -8,6 +8,7 @@ import logging
 import threading
 from time import perf_counter
 from pathlib import Path
+from typing import Literal
 from uuid import uuid4
 
 from fastapi import APIRouter, BackgroundTasks, File, Form, UploadFile
@@ -122,6 +123,25 @@ class AutonomousInspirationRequest(BaseModel):
     provider: str
 
 
+class ExplicitBatchStartRequest(BaseModel):
+    batchId: str
+    provider: str
+    concepts: list[dict] = Field(default_factory=list)
+
+
+class ExplicitBatchProgressRequest(BaseModel):
+    current: int
+    total: int
+    stage: str
+    message: str
+    metadata: dict = Field(default_factory=dict)
+    terminalStatus: str | None = None
+
+
+class ExplicitInspirationHandoffRequest(BaseModel):
+    generationOperationId: str
+
+
 def _analyze_recreate_image(
     *, image_bytes: bytes, image_mime_type: str, image_name: str,
 ) -> dict:
@@ -140,7 +160,9 @@ def _analyze_recreate_image(
 
 
 class ExplicitInspirationRequest(BaseModel):
-    countPerTier: int = 5
+    tierMode: Literal["softcore", "hardcore", "both"] = "both"
+    count: int | None = Field(default=None, ge=1, le=12)
+    countPerTier: int | None = Field(default=5, ge=1, le=12)
     # Backward-compatible alias used by older clients.
     conceptCount: int | None = None
 
@@ -1003,32 +1025,131 @@ async def create_content_studio_prompt_preview(request: PromptPreviewRequest) ->
 
 
 @router.post("/explicit/inspire")
-async def inspire_explicit_content(request: ExplicitInspirationRequest) -> JSONResponse:
-    def create() -> dict:
-        from app.services.explicit_inspiration_service import ExplicitInspirationService
+def inspire_explicit_content(request: ExplicitInspirationRequest):
+    from app.services.background_operation_service import BackgroundOperationService
+    from app.services.explicit_inspiration_service import ExplicitInspirationService
 
-        account_id = _current_account_id()
-        if account_id is None:
-            raise ValueError("Creator account required before creating explicit inspiration.")
-        count_per_tier = request.countPerTier
-        if request.conceptCount is not None:
-            count_per_tier = request.conceptCount
-        result = ExplicitInspirationService().create_concepts(
-            fanvue_account_id=account_id,
-            count_per_tier=count_per_tier,
+    account_id = _current_account_id()
+    creator = get_active_creator_profile(str(account_id)) if account_id is not None else {}
+    if not creator:
+        return JSONResponse(status_code=400, content={"success": False, "error": "Active Creator Profile required."})
+    uses_new_contract = request.count is not None or "tierMode" in request.model_fields_set
+    legacy_count = None if uses_new_contract else (
+        request.conceptCount if request.conceptCount is not None else request.countPerTier
+    )
+    mode = request.tierMode if uses_new_contract else "both"
+    count = int(request.count if request.count is not None else (legacy_count or 5) * 2)
+    if count < 1 or count > (ExplicitInspirationService.MAX_CONCEPT_COUNT if uses_new_contract else 24):
+        return JSONResponse(status_code=400, content={"success": False, "error": "Explicit inspiration count is invalid."})
+    softcore_count = count if mode == "softcore" else (count + 1) // 2 if mode == "both" else 0
+    hardcore_count = count if mode == "hardcore" else count // 2 if mode == "both" else 0
+    label = (f"Generating {count} ideas — {softcore_count} Softcore + {hardcore_count} Hardcore…"
+             if mode == "both" else f"Generating {count} {mode.title()} {'idea' if count == 1 else 'ideas'}…")
+    service = BackgroundOperationService()
+    operation, created = service.create(
+        operation_type="content_studio_explicit_inspiration", originating_workspace="content_studio",
+        creator_profile_id=int(creator["id"]), account_id=int(account_id),
+        subject_type="creator_profile", subject_id=str(creator["id"]),
+        idempotency_key=f"content-studio-explicit-inspiration:{creator['id']}",
+        executor_key="content_studio_explicit_inspiration", progress_total=int(hardcore_count > 0) + int(softcore_count > 0),
+        current_stage="QUEUED", stage_message=label, result_location="/studio/content",
+        cancellation_supported=True,
+        metadata={"phase": "QUEUED", "tierMode": mode, "requestedCount": count,
+                  "softcoreCount": softcore_count, "hardcoreCount": hardcore_count,
+                  "requestLabel": label, "conceptGenerationStatus": "QUEUED",
+                  "hardcore": [], "softcore": [], "concepts": [], "tierErrors": {}},
+    )
+    return {"success": True, "error": None, "operationId": str(operation.operation_id),
+            "reused": not created, "operation": service.payload(operation)}
+
+
+@router.post("/explicit/inspire/{operation_id}/handoff")
+def handoff_explicit_inspiration(operation_id: str, request: ExplicitInspirationHandoffRequest):
+    from app.services.background_operation_service import BackgroundOperationService
+    account_id = _current_account_id()
+    creator = get_active_creator_profile(str(account_id)) if account_id is not None else {}
+    service = BackgroundOperationService()
+    operation = service.get(operation_id, creator_profile_id=int(creator.get("id") or 0), account_id=account_id)
+    if operation is None or operation.operation_type != "content_studio_explicit_inspiration":
+        return JSONResponse(status_code=404, content={"success": False, "error": "Explicit inspiration operation not found."})
+    if str(operation.current_stage or "") != "WAITING_SELECTION":
+        return JSONResponse(status_code=409, content={"success": False, "error": "Explicit concepts are not ready for handoff."})
+    updated = service.succeed(
+        operation_id, result_reference=request.generationOperationId,
+        message="Explicit concepts handed off to generation.",
+        metadata={"phase": "HANDED_OFF", "generationOperationId": request.generationOperationId},
+    )
+    return {"success": True, "operation": service.payload(updated)}
+
+
+@router.post("/explicit/inspire/{operation_id}/discard")
+def discard_explicit_inspiration(operation_id: str):
+    from app.services.background_operation_service import BackgroundOperationService
+    account_id = _current_account_id()
+    creator = get_active_creator_profile(str(account_id)) if account_id is not None else {}
+    service = BackgroundOperationService()
+    operation = service.get(operation_id, creator_profile_id=int(creator.get("id") or 0), account_id=account_id)
+    if operation is None or operation.operation_type != "content_studio_explicit_inspiration":
+        return JSONResponse(status_code=404, content={"success": False, "error": "Explicit inspiration operation not found."})
+    if str(operation.current_stage or "") != "WAITING_SELECTION":
+        return JSONResponse(status_code=409, content={"success": False, "error": "Only concepts waiting for selection can be discarded."})
+    updated = service.cancel(operation_id, "Explicit inspiration discarded by operator.")
+    return {"success": True, "operation": service.payload(updated)}
+
+
+@router.post("/explicit/batches")
+def start_explicit_batch(request: ExplicitBatchStartRequest):
+    from app.services.background_operation_service import BackgroundOperationService
+    account_id = _current_account_id()
+    creator = get_active_creator_profile(str(account_id)) if account_id is not None else {}
+    if not creator:
+        return JSONResponse(status_code=400, content={"success": False, "error": "Active Creator Profile required."})
+    total = len(request.concepts)
+    if total < 1:
+        return JSONResponse(status_code=400, content={"success": False, "error": "Select at least one explicit concept."})
+    service = BackgroundOperationService()
+    operation, created = service.create(
+        operation_type="content_studio_explicit_batch", originating_workspace="content_studio",
+        creator_profile_id=int(creator["id"]), account_id=int(account_id),
+        subject_type="creator_profile", subject_id=str(creator["id"]),
+        idempotency_key=f"content-studio-explicit-batch:{request.batchId}",
+        executor_key="content_studio_explicit_batch_client", progress_total=total,
+        current_stage="PREPARING", stage_message=f"Preparing idea 1 of {total}...",
+        result_location="/studio/content", cancellation_supported=False,
+        metadata={"batchId": request.batchId, "provider": request.provider,
+                  "concepts": request.concepts, "items": [], "completedIdeas": 0,
+                  "failedIdeas": 0, "currentIdeaIndex": 1, "phase": "preparing"},
+    )
+    if created:
+        operation = service.repository.transition(
+            operation.operation_id, "RUNNING", stage="PREPARING",
+            message=f"Preparing idea 1 of {total}...",
         )
-        hardcore = list(result.hardcore)
-        softcore = list(result.softcore)
-        return {
-            "success": True,
-            "error": None,
-            "hardcore": hardcore,
-            "softcore": softcore,
-            # Flattened list kept for older clients / debugging.
-            "concepts": [*hardcore, *softcore],
-        }
+    return {"success": True, "operationId": str(operation.operation_id), "reused": not created}
 
-    return await _run_tag_action(create)
+
+@router.post("/explicit/batches/{operation_id}/progress")
+def update_explicit_batch(operation_id: str, request: ExplicitBatchProgressRequest):
+    from app.services.background_operation_service import BackgroundOperationService
+    account_id = _current_account_id()
+    creator = get_active_creator_profile(str(account_id)) if account_id is not None else {}
+    service = BackgroundOperationService()
+    operation = service.get(operation_id, creator_profile_id=int(creator.get("id") or 0), account_id=account_id)
+    if operation is None or operation.operation_type != "content_studio_explicit_batch":
+        return JSONResponse(status_code=404, content={"success": False, "error": "Explicit batch not found."})
+    terminal = str(request.terminalStatus or "").upper()
+    if terminal in {"SUCCEEDED", "PARTIAL"}:
+        updated = service.succeed(operation_id, partial=terminal == "PARTIAL",
+                                  message=request.message, metadata=request.metadata)
+    elif terminal == "FAILED":
+        updated = service.fail(operation_id, request.message, metadata=request.metadata)
+    else:
+        updated = service.progress(
+            operation_id, current=request.current, total=request.total,
+            percent=request.current / max(1, request.total) * 100,
+            stage=request.stage, message=request.message, metadata=request.metadata,
+        )
+    return {"success": True, "operation": service.payload(updated)}
 
 
 @router.post("/prompt-planner/ask")

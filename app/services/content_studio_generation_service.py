@@ -141,6 +141,11 @@ class ContentStudioGenerationService:
                     job_id=job.job_id,
                     provider_id=job.request.provider_id,
                     status=GenerationStatus.SUCCEEDED.value,
+                    generation_metadata={
+                        "output_generation_recipe_ids": tuple(
+                            event.get("output_generation_recipe_ids") or ()
+                        ),
+                    },
                     output_references=outputs,
                 )
                 partial = replace(job, status=GenerationStatus.SUCCEEDED.value, result=replace(result, output_references=outputs))

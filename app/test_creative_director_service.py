@@ -33,6 +33,7 @@ from app.models.asset_library import (
 from app.models.creative_director import CreativeDirectorSettings
 from app.models.reference_library import ReferenceAsset
 from app.services.creative_director_service import CreativeDirectorService
+from app.services.explicit_expression_profile import ExplicitExpressionProfileService
 from app.services.photoshoot_creative_director_service import PhotoshootCreativeDirectorWorkflowService
 
 
@@ -521,11 +522,29 @@ class CreativeDirectorServiceTests(unittest.TestCase):
         self.assertIn("visually distinct", prompt)
         self.assertIn("Avoid an exact duplicate", prompt)
         self.assertIn("operator explicitly requests a change", prompt)
+        self.assertIn("FreeFlow facial performance (REQUIRED)", prompt)
+        self.assertIn("exact facial identity, anatomy, proportions", prompt)
+        self.assertIn("Do not repeat the immediately previous approved shot's facial expression, gaze, and head attitude as a package", prompt)
+        self.assertIn("scene-appropriate", prompt)
+        self.assertIn("expression, gaze direction, mouth state, and head attitude", prompt)
         self.assertIn('"latest_approved_shot"', prompt)
         self.assertNotIn('"progression_stage"', prompt)
         self.assertNotIn('"planning_shot"', prompt)
         self.assertNotIn("next logical small stage", prompt)
         self.assertNotIn("natural progression from", prompt)
+
+    def test_photoshoot_progression_prompt_does_not_receive_freeflow_facial_rule(self):
+        context = PhotoshootCreativeDirectorWorkflowService._ai_context(
+            "shower scene", {"current_location": "shower"}, "",
+            current_shot=5, target_shot_count=10,
+            latest_approved_shot={"facial_expression": "soft direct gaze"},
+        )
+        prompt = CreativeDirectorService._build_photoshoot_creative_director_prompt(
+            session_context=context, approved_history=(), creative_mode="explicit",
+            session_direction="", creative_hint="", continuity_locks={"identity": True},
+        )
+        self.assertNotIn("FreeFlow facial performance (REQUIRED)", prompt)
+        self.assertIn("facial expression, camera angle", prompt)
 
     def test_photoshoot_freeflow_explicit_inspiration_omits_ladder(self):
         prompt = CreativeDirectorService._build_photoshoot_grok_inspiration_prompt(
@@ -539,6 +558,7 @@ class CreativeDirectorServiceTests(unittest.TestCase):
         self.assertIn("Creative Freeflow", prompt)
         self.assertIn("anti-repetition evidence", prompt)
         self.assertIn("distinct compositions", prompt)
+        self.assertIn("Do not repeat the immediately previous approved shot's facial expression, gaze, and head attitude as a package", prompt)
         self.assertNotIn("progressive photoshoot ladder", prompt.lower())
         self.assertNotIn("1. Clothed / dressed tease", prompt)
         self.assertNotIn("Progression stage:", prompt)
@@ -553,8 +573,21 @@ class CreativeDirectorServiceTests(unittest.TestCase):
         self.assertIn("Creative Freeflow variety batch", prompt)
         self.assertIn("Plan 6 distinct photographs", prompt)
         self.assertIn("Vary pose, hands, framing", prompt)
+        self.assertIn("specific facial performance: expression, gaze, mouth state, and head attitude", prompt)
         self.assertNotIn("Explicit progression (required)", prompt)
         self.assertNotIn("one small natural progression", prompt)
+
+    def test_freeflow_explicit_expression_profile_honors_directed_gaze_without_weakening_identity(self):
+        profile = ExplicitExpressionProfileService.build(
+            concept_tier="hardcore",
+            operator_expression="soft candid expression, gaze slightly downward, lips closed, chin lowered",
+            freeflow_expression=True,
+        )
+        self.assertIn("gaze slightly downward", profile.facial_expression)
+        self.assertIn("follow the operator-requested facial performance exactly", profile.eye_contact)
+        self.assertIn("do not replace an averted", profile.eye_contact)
+        self.assertIn("preserve fully recognizable facial identity", profile.eye_contact)
+        self.assertIn("preserve exact facial identity and anatomy", profile.performance_limits)
 
     def test_photoshoot_ask_grok_caps_very_long_timelines_but_keeps_arc(self):
         service = CreativeDirectorService(storage_dir=tempfile.mkdtemp())

@@ -14,6 +14,8 @@ from pydantic import BaseModel
 from app.api.content_studio import _current_account_id
 from app.repositories.creator_profile_repository import get_active_creator_profile
 from app.services.generation_library_service import GenerationLibraryService
+from app.services.staged_asset_registration_service import StagedAssetRegistrationService
+from app.services.asset_library_return_service import AssetLibraryReturnService, AssetReturnConflict
 from app.services.grid_thumbnail_service import GridThumbnailService
 from app.services.photoshoot_queue_service import PhotoshootQueueService
 from app.services.reference_library_service import ReferenceLibraryService
@@ -83,11 +85,17 @@ class AssetLibraryMoveResponse(BaseModel):
     already_moved: bool
     status: str
     message: str
+    asset_id: int | None = None
+    analysis_status: str | None = None
 
 
-def _record_payload(record) -> dict:
+def _record_payload(record, eligibility=None) -> dict:
     payload = asdict(record)
     payload["image_url"] = f"/api/v1/generation-library/{record.image_id}/media?v={record.updated_at or record.generation_date}"
+    payload["canRegenerate"] = bool(eligibility and eligibility.can_regenerate)
+    payload["regenerationIneligibilityReason"] = (
+        eligibility.reason if eligibility and not eligibility.can_regenerate else None
+    )
     return payload
 
 
@@ -124,8 +132,15 @@ def browse_generation_library(
     current_page = min(page, total_pages)
     start = (current_page - 1) * page_size
     all_records = result.records
+    page_records = all_records[start:start + page_size]
+    from app.services.regeneration_eligibility_service import RegenerationEligibilityService
+    eligibility_service = RegenerationEligibilityService(generation_library=library)
+    recipe_records = tuple(record for record in page_records if record.generation_recipe_id)
+    eligibility = eligibility_service.inspect_many(
+        recipe_records, creator_profile_id=_creator_profile_id() or None,
+    )
     return {
-        "records": [_record_payload(record) for record in all_records[start:start + page_size]],
+        "records": [_record_payload(record, eligibility.get(record.image_id)) for record in page_records],
         "total": result.total,
         "page": current_page,
         "pageSize": page_size,
@@ -266,15 +281,32 @@ def move_generation_to_asset_library(generated_image_id: str):
     if record.creator_profile_id != creator_profile_id:
         raise HTTPException(status_code=404, detail="Generated image not found.")
     try:
-        moved, already_moved = library.move_to_asset_library(record.image_id)
+        if record.status == "business_asset_registered":
+            moved, already_moved = record, True
+        else:
+            moved, already_moved = library.move_to_asset_library(record.image_id)
     except ValueError as error:
         raise HTTPException(status_code=409, detail=str(error)) from error
+    try:
+        result = StagedAssetRegistrationService(
+            generation_library_service=library,
+        ).register(moved, creator_profile_id=creator_profile_id)
+    except Exception as error:
+        logger.exception("Canonical Asset intelligence dispatch failed")
+        raise HTTPException(
+            status_code=409,
+            detail="Asset registration was saved, but intelligence could not start. Retry Move to Asset Library.",
+        ) from error
+    if not result.success or result.asset_id is None:
+        raise HTTPException(status_code=409, detail=result.message or "Asset registration failed.")
     return {
         "success": True,
         "generation_id": moved.image_id,
-        "already_moved": already_moved,
-        "status": moved.status,
-        "message": "Image is already in Asset Library." if already_moved else "Image moved to Asset Library.",
+        "already_moved": bool(already_moved or result.already_registered),
+        "status": "analyzing" if result.analysis_status != "READY" else "ready",
+        "asset_id": result.asset_id,
+        "analysis_status": result.analysis_status,
+        "message": result.message,
     }
 
 
@@ -290,16 +322,34 @@ def move_generation_back_to_generation_library(generated_image_id: str):
         raise HTTPException(status_code=404, detail="Staged generation not found.") from error
     if record.creator_profile_id != creator_profile_id:
         raise HTTPException(status_code=404, detail="Staged generation not found.")
+    if record.status == "staged_asset_library":
+        try:
+            moved, already_moved = library.move_back_to_generation_library(record.image_id)
+        except ValueError as error:
+            raise HTTPException(status_code=409, detail=str(error)) from error
+        return {
+            "success": True, "generation_id": moved.image_id,
+            "already_moved": already_moved, "status": moved.status,
+            "message": "Image moved back to Generation Library.",
+        }
     try:
-        moved, already_moved = library.move_back_to_generation_library(record.image_id)
-    except ValueError as error:
+        result = AssetLibraryReturnService(generation_library=library).return_single_image(
+            record.image_id, creator_profile_id=creator_profile_id)
+        moved = library.get(record.image_id)
+    except AssetReturnConflict as error:
         raise HTTPException(status_code=409, detail=str(error)) from error
+    except KeyError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except Exception as error:
+        logger.exception("Asset Library return failed for %s", generated_image_id)
+        raise HTTPException(status_code=409, detail="Unable to return image safely. No lifecycle changes were retained.") from error
     return {
         "success": True,
         "generation_id": moved.image_id,
-        "already_moved": already_moved,
+        "already_moved": False,
         "status": moved.status,
-        "message": "Image is already in Generation Library." if already_moved else "Image moved back to Generation Library.",
+        "asset_id": result.asset_id,
+        "message": "Image returned to Generation Library. Asset Intelligence was removed.",
     }
 
 

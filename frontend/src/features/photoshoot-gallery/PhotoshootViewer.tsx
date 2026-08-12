@@ -3,7 +3,7 @@ import { Video } from "lucide-react";
 
 import { ContainedMediaImage } from "../../shared/ui/ContainedMediaImage";
 import { BundleSellingPanel, SessionSellingPanel } from "../asset-library/PhotoshootSalePreparation";
-import type { BundleSalesChannel, PhotoshootSellingMode, SessionSellingReadiness } from "../asset-library/types";
+import type { BundleSalesChannel, CommercialAsset, PhotoshootSellingMode, SalePreparationReadiness } from "../asset-library/types";
 import "./photoshoot-gallery.css";
 import { videoStudioLink } from "../../infrastructure/api/videoStudioApi";
 
@@ -22,6 +22,7 @@ export type PhotoshootDetail = {
   productionIntelligence: Record<string, unknown>;
   members: { assetId: number; shotOrder: number; imageUrl: string; intelligence: Record<string, unknown> }[];
   technical: Record<string, unknown>;
+  commercialAssets?: CommercialAsset[];
 };
 
 async function readJson<T>(response: Response): Promise<T> {
@@ -87,7 +88,7 @@ export function PhotoshootViewer({ deliverableId, onClose, onAddToAssetLibrary, 
   onCreateOffer?: (deliverableId: string, selectedAssetId: number | null) => void;
   enableSessionSelling?: boolean;
   initialSessionSellingDialog?: "prepare" | "retry" | null;
-  onSessionSellingChange?: (value: SessionSellingReadiness) => void;
+  onSessionSellingChange?: (value: SalePreparationReadiness) => void;
   onSellingModeChange?: (value: PhotoshootSellingMode) => void;
 }) {
   const [detail, setDetail] = useState<PhotoshootDetail | null>(null);
@@ -161,13 +162,17 @@ export function PhotoshootViewer({ deliverableId, onClose, onAddToAssetLibrary, 
       <div className="photoshoot-detail-filmstrip" aria-label="Photoshoot filmstrip">
         {detail.members.map((member) => <button type="button" className={member.assetId === selectedAssetId ? "photoshoot-detail-shot photoshoot-detail-shot--selected" : "photoshoot-detail-shot"} key={member.assetId} onClick={() => setSelectedAssetId(member.assetId)} aria-label={`Select shot ${member.shotOrder}`} aria-pressed={member.assetId === selectedAssetId}>
           <span>Shot {member.shotOrder}</span>
-          <ContainedMediaImage src={member.imageUrl} alt={`Shot ${member.shotOrder}`} />
+          <div className="photoshoot-detail-shot__media"><ContainedMediaImage src={member.imageUrl} alt={`Shot ${member.shotOrder}`} /></div>
         </button>)}
       </div>
       <div className="photoshoot-intelligence-cards" aria-label="Intelligence Inspector">
         <IntelligenceCard title="Photoshoot Summary" intelligence={detail.productionIntelligence || {}} fields={productionFields} />
         <IntelligenceCard title={`Selected Shot — Shot ${selectedMember?.shotOrder ?? 1}`} intelligence={selectedMember?.intelligence || {}} fields={shotFields} />
       </div>
+      {detail.commercialAssets && detail.commercialAssets.length > 0 && <section className="commercial-assets" aria-labelledby="photoshoot-commercial-assets-title">
+        <header><small>Supporting Media</small><h2 id="photoshoot-commercial-assets-title">Commercial Assets</h2></header>
+        <div>{detail.commercialAssets.map((asset) => <figure key={`${asset.kind}-${asset.assetId || asset.previewUrl}`}><ContainedMediaImage src={asset.previewUrl} alt={asset.label} /><figcaption><strong>{asset.label}</strong><span>{asset.status}</span></figcaption></figure>)}</div>
+      </section>}
       {enableSessionSelling && <section className="photoshoot-selling-mode" aria-labelledby="selling-mode-title">
         <header><div><small>Commercial Configuration</small><h2 id="selling-mode-title">Selling Mode</h2></div></header>
         <div className="photoshoot-selling-mode__options">
@@ -186,7 +191,7 @@ export function PhotoshootViewer({ deliverableId, onClose, onAddToAssetLibrary, 
       </section>}
       {enableSessionSelling && detail.sellingMode === "SESSION" && <SessionSellingPanel deliverableId={deliverableId}
         initialDialog={initialSessionSellingDialog} onReadinessChange={onSessionSellingChange} />}
-      {enableSessionSelling && detail.sellingMode === "BUNDLE" && <BundleSellingPanel deliverableId={deliverableId} salesChannel={detail.bundleSalesChannel || "CHAT"} />}
+      {enableSessionSelling && detail.sellingMode === "BUNDLE" && <BundleSellingPanel deliverableId={deliverableId} salesChannel={detail.bundleSalesChannel || "CHAT"} onReadinessChange={onSessionSellingChange} />}
       <div className="photoshoot-detail-sections">
         <details><summary>Commerce</summary><div className="photoshoot-detail-section-content"><p><strong>Asset Library status</strong> {registrationLabel(detail.registrationState)}</p>{detail.registrationState === "PHOTOSHOOT_COMPLETE" && onAddToAssetLibrary && <button type="button" disabled={registering} onClick={() => void register()}>Add to Asset Library</button>}</div></details>
         <details><summary>Technical Details</summary><div className="photoshoot-detail-section-content"><dl>{Object.entries(detail.technical).map(([key, value]) => <div key={key}><dt>{key}</dt><dd>{String(value ?? "")}</dd></div>)}</dl></div></details>

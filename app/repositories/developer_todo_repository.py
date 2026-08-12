@@ -2,24 +2,12 @@
 from app.database import get_db_connection
 from uuid import uuid4
 
-INITIAL_TODO_ID = "add-photoshoot-bundle-support"
-INITIAL_TODO_TITLE = "Add Photoshoot Bundle Support"
-INITIAL_TODO_CREATED_AT = "2026-08-07T12:00:00+00:00"
-
-
 class DeveloperTodoRepository:
     def __init__(self, connection_factory=get_db_connection):
         self.connection_factory = connection_factory
 
     def list_for_creator(self, creator_profile_id: int):
         with self.connection_factory() as connection, connection.cursor() as cursor:
-            cursor.execute(
-                """INSERT INTO public.developer_todos
-                   (todo_id, creator_profile_id, title, created_at)
-                   VALUES (%s, %s, %s, %s)
-                   ON CONFLICT (creator_profile_id, todo_id) DO NOTHING""",
-                (INITIAL_TODO_ID, creator_profile_id, INITIAL_TODO_TITLE, INITIAL_TODO_CREATED_AT),
-            )
             cursor.execute(
                 """SELECT todo_id, title, created_at, completed, completed_at, notes
                    FROM public.developer_todos
@@ -64,3 +52,12 @@ class DeveloperTodoRepository:
             cursor.execute("""SELECT todo_id, title, created_at, completed, completed_at, notes
                               FROM public.developer_todos WHERE creator_profile_id=%s AND todo_id=%s""",(creator_profile_id,todo_id))
             row=cursor.fetchone(); return dict(row) if row else None
+
+    def delete(self, creator_profile_id: int, todo_id: str) -> bool:
+        with self.connection_factory() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """DELETE FROM public.developer_todos
+                   WHERE creator_profile_id=%s AND todo_id=%s""",
+                (creator_profile_id, todo_id),
+            )
+            return cursor.rowcount == 1

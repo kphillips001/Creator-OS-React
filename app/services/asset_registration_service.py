@@ -13,6 +13,7 @@ from app.models.asset_provenance import (
     provenance_context,
 )
 from app.models.generation_engine import utc_now
+from app.models.product import ProductType
 from app.repositories.asset_repository import AssetRepository
 from app.repositories.content_repository import insert_content_item, update_content_item
 from app.services.asset_intelligence_service import AssetIntelligenceService
@@ -111,12 +112,16 @@ class AssetRegistrationService:
             {
                 "file_path": str(source_path),
                 "file_name": source_path.name,
-                "classification": "UNCLASSIFIED",
+                "classification": ProductType.SINGLE_IMAGE.value,
                 "confidence": None,
                 "detected_themes": [],
                 "suggested_tags": [],
                 "nudity_labels": [],
                 "is_explicit": False,
+                # Registered Generation Library Assets are approved inventory
+                # immediately; intelligence enriches them but does not gate
+                # their visibility in Asset Library.
+                "is_active": True,
                 "is_test": False,
                 "requires_nudenet": False,
                 "requires_blur": False,

@@ -1,4 +1,5 @@
 import sys
+import json
 import tempfile
 import threading
 import types
@@ -34,10 +35,11 @@ from app.models.asset_library import (
 )
 from app.models.creative_director import PromptPlan
 from app.models.generation_engine import (
-    GenerationFailure,
+    GenerationFailure, GenerationJob, GenerationRequest,
     GenerationResult,
     GenerationStatus,
     GenerationType,
+    ProviderPromptState,
     new_generation_id,
 )
 from app.models.reference_library import ReferenceAsset
@@ -196,6 +198,56 @@ class GenerationEngineServiceTests(unittest.TestCase):
             reference_library_service=FakeReferenceLibraryService(active_reference),
             providers=providers,
         )
+
+    def test_prompt_state_round_trips_for_planned_and_final_provider_rendered(self):
+        for state in (
+            ProviderPromptState.PLANNED.value,
+            ProviderPromptState.FINAL_PROVIDER_RENDERED.value,
+        ):
+            with self.subTest(state=state):
+                with tempfile.TemporaryDirectory() as storage_dir:
+                    service = GenerationEngineService(
+                        storage_dir=storage_dir,
+                        reference_library_service=FakeReferenceLibraryService(),
+                    )
+                    request = GenerationRequest(
+                        request_id=f"request-{state}", creator_profile_id=7,
+                        prompt_plan_id="plan", prompt_text="exact prompt",
+                        reference_asset_id=93, reference_asset_path="identity.png",
+                        provider_id="fake_provider", generation_type="image_to_image",
+                        media_type="image", prompt_state=state,
+                    )
+                    queued = service.enqueue(request)
+
+                    reloaded = GenerationEngineService(
+                        storage_dir=storage_dir,
+                        reference_library_service=FakeReferenceLibraryService(),
+                    ).get_job(queued.job_id)
+                    self.assertEqual(reloaded.request.prompt_state, state)
+
+    def test_legacy_job_without_prompt_state_defaults_to_planned(self):
+        with tempfile.TemporaryDirectory() as storage_dir:
+            service = GenerationEngineService(
+                storage_dir=storage_dir,
+                reference_library_service=FakeReferenceLibraryService(),
+            )
+            request = GenerationRequest(
+                request_id="legacy-request", creator_profile_id=7,
+                prompt_plan_id="plan", prompt_text="legacy prompt",
+                reference_asset_id=93, reference_asset_path="identity.png",
+                provider_id="fake_provider", generation_type="image_to_image",
+                media_type="image",
+            )
+            service.enqueue(request)
+            persisted = json.loads(service.jobs_path.read_text(encoding="utf-8"))
+            persisted[0]["request"].pop("prompt_state", None)
+            service.jobs_path.write_text(json.dumps(persisted), encoding="utf-8")
+
+            reloaded = GenerationEngineService(
+                storage_dir=storage_dir,
+                reference_library_service=FakeReferenceLibraryService(),
+            ).list_jobs()[0]
+            self.assertEqual(reloaded.request.prompt_state, ProviderPromptState.PLANNED.value)
 
     def test_generation_request_creation_uses_prompt_plan_and_active_reference(self):
         service = self.make_service(reference_asset(asset_id=99, creator_profile_id=7))

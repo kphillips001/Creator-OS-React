@@ -32,23 +32,21 @@ class ExplicitExpressionProfile:
 class ExplicitExpressionProfileService:
     """Build the one canonical expression profile for an explicit prompt."""
 
-    # PPV face mood stack: combine teasing + naughty + seductive + sexually enticing
-    # + appealing + salacious. Eyes stay fully open and alert — never half-lidded.
+    # Explicit profiles describe emotional intent. Canonical facial anatomy and
+    # natural human rendering are owned by the shared facial foundation.
     _PPV_FACE_MOOD = (
         "teasing, naughty, seductive, sexually enticing, appealing, and salacious"
     )
     _PPV_EYE_CONTACT = (
-        "locked camera eye contact that feels teasing, naughty, seductive, sexually "
-        "enticing, appealing, and salacious at once; fully open alert eyes with sharp "
-        "focused pupils and knowing private PPV intensity; eyes must look engaged, "
-        "awake, and intentional — never droopy, sleepy, heavy-lidded, half-lidded, "
-        "half-closed, vacant, or unfocused; preserve any explicit off-camera gaze only "
-        "when the scene demands it"
+        "derive gaze naturally from the scene: teasing eye contact, a coy glance, an "
+        "intimate off-camera look, or returning attention toward the viewer are all "
+        "valid; preserve the scene's gaze direction and never force direct camera eye "
+        "contact when the scene or operator requests otherwise"
     )
     _PPV_LIMITS = (
         "no default grinning, laughing, tongue-out goofy mugging, commercial "
-        "adult-performer energy, sleepy eyes, droopy lids, half-lidded eyes, vacant "
-        "stare, or deadpan blank face"
+        "adult-performer energy, vacant stare, deadpan blank face, rigid facial "
+        "geometry, or exaggerated performance"
     )
 
     _SOFTCORE = ExplicitExpressionProfile(
@@ -58,8 +56,9 @@ class ExplicitExpressionProfileService:
             "emotionally engaged, restrained, and quietly confident"
         ),
         facial_expression=(
-            f"{_PPV_FACE_MOOD} expression with alert features, fully open eyes, "
-            "sharp focused pupils, slight brow lift of intent, and lips softly parted"
+            f"natural scene-appropriate variation of {_PPV_FACE_MOOD} intent; use "
+            "subtle wanting, playful seduction, coy warmth, or breathy intimacy as the "
+            "scene supports, while keeping the performance believable"
         ),
         eye_contact=_PPV_EYE_CONTACT,
         performance_limits=_PPV_LIMITS,
@@ -72,8 +71,9 @@ class ExplicitExpressionProfileService:
             "stronger wanting"
         ),
         facial_expression=(
-            f"{_PPV_FACE_MOOD} expression with heightened intensity, fully open eyes, "
-            "sharp focused pupils, tense brows of wanting, and lips softly parted"
+            f"natural scene-appropriate variation of {_PPV_FACE_MOOD} intent with "
+            "heightened arousal or stronger wanting where the scene supports it; keep "
+            "the intensity believable rather than exaggerated"
         ),
         eye_contact=_PPV_EYE_CONTACT,
         performance_limits=_PPV_LIMITS,
@@ -84,26 +84,39 @@ class ExplicitExpressionProfileService:
         cls,
         concept_tier: str | None,
         operator_expression: str | None = None,
+        freeflow_expression: bool = False,
     ) -> ExplicitExpressionProfile:
         tier = str(concept_tier or "softcore").strip().lower()
         base = cls._HARDCORE if tier == "hardcore" else cls._SOFTCORE
         explicit_override = str(operator_expression or "").strip()
         if not explicit_override:
             return base
+        eye_contact = (
+            "follow the operator-requested facial performance and gaze direction "
+            "exactly; do not replace it with default direct camera eye contact"
+        )
+        performance_limits = (
+            "preserve exact facial identity and natural anatomy while honoring the "
+            "operator's expression, gaze, eye, brow, and mouth direction"
+        )
+        if freeflow_expression:
+            eye_contact = (
+                "follow the operator-requested facial performance exactly, including its gaze direction; "
+                "do not replace an averted, upward, downward, or returning gaze with default direct camera "
+                "eye contact; preserve fully recognizable facial identity and natural, alert eyes"
+            )
+            performance_limits = (
+                "preserve exact facial identity and anatomy while allowing the requested natural expression, "
+                "gaze, mouth state, and head attitude; avoid random, exaggerated, cartoonish, goofy, blank, "
+                "or commercial-performer behavior"
+            )
         return ExplicitExpressionProfile(
             concept_tier=base.concept_tier,
             emotional_identity=base.emotional_identity,
             facial_expression=(
-                f"{explicit_override}; this operator-requested expression is the "
-                "only exception to the default facial policy, but eyes must still "
-                "stay fully open, alert, teasing, naughty, seductive, sexually "
-                "enticing, appealing, and salacious — never droopy, sleepy, or half-lidded"
+                f"{explicit_override}; preserve this operator-requested expression "
+                "and gaze exactly as the authoritative facial-performance direction"
             ),
-            eye_contact=base.eye_contact,
-            performance_limits=(
-                "avoid any goofy, blank, or commercial performer behavior not "
-                "explicitly included in the operator request; never render droopy, "
-                "sleepy, heavy-lidded, or half-lidded eyes unless the operator "
-                "request explicitly asks for that look"
-            ),
+            eye_contact=eye_contact,
+            performance_limits=performance_limits,
         )

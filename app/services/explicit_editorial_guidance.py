@@ -27,7 +27,7 @@ reinterpret, or weaken the Scene, Editorial Direction, Wardrobe, Creator
 Identity, Visual Quality, or Provider Optimization layers.
 
 Do not impose influencer lifestyle, cheerful creator portraiture, commercial
-catalog photography, creator camera-roll energy, generic fashion-campaign
+catalog photography, generic fashion-campaign
 styling, travel/editorial blogging, observed day-in-the-life activity, casual
 environmental interaction, walking into locations, carrying everyday objects,
 creator lifestyle storytelling, premium fashion as the dominant objective, or
@@ -40,7 +40,8 @@ Private premium creator editorial language; intimate atmosphere; intentional,
 scene-faithful body language; quiet confidence; cinematic intimacy; magnetic
 presence; emotional tension; natural seduction; sophisticated luxury finish.
 Avoid influencer lifestyle, cheerful commercial portraiture, catalog energy,
-camera-roll casualness, generic fashion campaigns, and travel-blog aesthetics.
+generic fashion campaigns, and travel-blog aesthetics. Keep facial rendering
+natural and candid even when the scene itself is deliberate and explicit.
 Do not rewrite any concrete scene, wardrobe, expression, gaze, or pose detail.
 """.strip()
 

@@ -174,6 +174,77 @@ def test_generation_library_photoshoot_route_is_registered():
     assert route.response_model.__name__ == "PhotoshootHandoffResponse"
 
 
+def test_move_to_asset_library_registers_and_starts_canonical_intelligence(monkeypatch):
+    selected = _record("image-1")
+    selected.imported_asset_id = None
+    staged = _record("image-1", status="staged_asset_library")
+    staged.imported_asset_id = None
+    library = Mock()
+    library.get.return_value = selected
+    library.move_to_asset_library.return_value = (staged, False)
+    registrar = Mock()
+    registrar.register.return_value = SimpleNamespace(
+        success=True, asset_id=51, already_registered=False,
+        analysis_status="NUDENET_PENDING",
+        message="Asset is registered. Intelligence analysis is in progress.",
+    )
+    monkeypatch.setattr(api, "_creator_profile_id", lambda: 7)
+    monkeypatch.setattr(api, "GenerationLibraryService", lambda: library)
+    monkeypatch.setattr(api, "StagedAssetRegistrationService", lambda **kwargs: registrar)
+
+    result = api.move_generation_to_asset_library("image-1")
+
+    library.move_to_asset_library.assert_called_once_with("image-1")
+    registrar.register.assert_called_once_with(staged, creator_profile_id=7)
+    assert result["asset_id"] == 51
+    assert result["analysis_status"] == "NUDENET_PENDING"
+    assert result["status"] == "analyzing"
+
+
+def test_move_repairs_already_registered_asset_without_restaging(monkeypatch):
+    selected = _record("image-1", status="business_asset_registered")
+    selected.imported_asset_id = 51
+    library = Mock()
+    library.get.return_value = selected
+    registrar = Mock()
+    registrar.register.return_value = SimpleNamespace(
+        success=True, asset_id=51, already_registered=True,
+        analysis_status="VISION_PENDING",
+        message="Asset is registered. Intelligence analysis is in progress.",
+    )
+    monkeypatch.setattr(api, "_creator_profile_id", lambda: 7)
+    monkeypatch.setattr(api, "GenerationLibraryService", lambda: library)
+    monkeypatch.setattr(api, "StagedAssetRegistrationService", lambda **kwargs: registrar)
+
+    result = api.move_generation_to_asset_library("image-1")
+
+    library.move_to_asset_library.assert_not_called()
+    registrar.register.assert_called_once_with(selected, creator_profile_id=7)
+    assert result["already_moved"] is True
+    assert result["asset_id"] == 51
+
+
+def test_move_surfaces_intelligence_dispatch_failure_for_retry(monkeypatch):
+    selected = _record("image-1")
+    selected.imported_asset_id = None
+    staged = _record("image-1", status="staged_asset_library")
+    staged.imported_asset_id = 51
+    library = Mock()
+    library.get.return_value = selected
+    library.move_to_asset_library.return_value = (staged, False)
+    registrar = Mock()
+    registrar.register.side_effect = RuntimeError("provider dispatch unavailable")
+    monkeypatch.setattr(api, "_creator_profile_id", lambda: 7)
+    monkeypatch.setattr(api, "GenerationLibraryService", lambda: library)
+    monkeypatch.setattr(api, "StagedAssetRegistrationService", lambda **kwargs: registrar)
+
+    with pytest.raises(api.HTTPException) as error:
+        api.move_generation_to_asset_library("image-1")
+
+    assert error.value.status_code == 409
+    assert "Retry Move to Asset Library" in error.value.detail
+
+
 def test_version_history_api_exposes_current_and_archived_versions(monkeypatch):
     current = _record("image-1")
     current.provider_id = "nano_banana_pro"

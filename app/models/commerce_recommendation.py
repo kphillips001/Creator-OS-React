@@ -54,6 +54,7 @@ class RecommendationCandidate:
     commercially_eligible: bool = True
     photoshoot_identifier: str | None = None
     intelligence: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
+    blurred_teaser_path: str | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(
@@ -90,6 +91,10 @@ class RecommendationCandidate:
                     value.get("recommendation_intelligence") or {}
                 ).items()
             },
+            blurred_teaser_path=(
+                str(value["blurred_teaser_path"])
+                if value.get("blurred_teaser_path") else None
+            ),
         )
 
 

@@ -24,9 +24,12 @@ function maskHasPaint(canvas: HTMLCanvasElement): boolean {
   return false;
 }
 
-export function BundleTeaserEditor({ deliverableId, state, sourceAssetId, onClose, onSaved }: {
+export type SelectiveBlurSavePayload = { sourceAssetId: number; maskData: string; maskWidth: number; maskHeight: number; blurStrength: number };
+
+export function BundleTeaserEditor({ deliverableId, state, sourceAssetId, onClose, onSaved, saveRequest }: {
   deliverableId: string; state: BundleTeaserReadiness; sourceAssetId: number;
   onClose: () => void; onSaved: (value: BundleTeaserReadiness) => void;
+  saveRequest?: (payload: SelectiveBlurSavePayload) => Promise<void>;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const previewRef = useRef<HTMLCanvasElement>(null);
@@ -251,13 +254,16 @@ export function BundleTeaserEditor({ deliverableId, state, sourceAssetId, onClos
     if (!maskHasPaint(maskCanvas)) { setError("Paint at least one area to blur before saving."); return; }
     setSaving(true); setError("");
     try {
-      const value = await fetch(`/api/v1/assets/photoshoots/${encodeURIComponent(deliverableId)}/bundle-teaser`, {
-        method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({
-          sourceAssetId, maskData: maskCanvas.toDataURL("image/png"), maskWidth: maskCanvas.width,
-          maskHeight: maskCanvas.height, blurStrength,
-        }),
-      }).then(read<BundleTeaserReadiness>);
-      onSaved(value); onClose();
+      const payload = { sourceAssetId, maskData: maskCanvas.toDataURL("image/png"), maskWidth: maskCanvas.width,
+        maskHeight: maskCanvas.height, blurStrength };
+      if (saveRequest) await saveRequest(payload);
+      else {
+        const value = await fetch(`/api/v1/assets/photoshoots/${encodeURIComponent(deliverableId)}/bundle-teaser`, {
+          method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(payload),
+        }).then(read<BundleTeaserReadiness>);
+        onSaved(value);
+      }
+      onClose();
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to save teaser."); }
     finally { setSaving(false); }
   };

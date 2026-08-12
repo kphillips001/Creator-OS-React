@@ -166,6 +166,10 @@ class PhotoshootQueueService:
                 "photoshoot_session_id": session.session_id,
                 "photoshoot_request_id": next_request.request_id,
                 "photoshoot_sequence_index": next_request.sequence_index,
+                "active_reference_image_id": (
+                    dict(next_request.metadata or {}).get("active_reference_image_id")
+                    or dict(session.creative_continuity or {}).get("seed_image_id")
+                ),
                 "creative_continuity": dict(session.creative_continuity or {}),
                 **({
                     "canonical_identity_reference_asset_id": int(frozen_identity.get("asset_id") or 0),
@@ -637,6 +641,9 @@ class PhotoshootQueueService:
                 "inspiration_ideas": tuple(continuity.get("inspiration_ideas") or ()),
                 "selected_inspiration": str(continuity.get("selected_inspiration") or ""),
                 "inspiration_planning_shot": int(continuity.get("inspiration_planning_shot") or 0),
+                "inspiration_idea_set_id": str(continuity.get("active_freeflow_idea_set_id") or "")
+                if session.target_shot_count == 0 and str(continuity.get("planning_mode") or "frame_by_frame") == "frame_by_frame"
+                else "",
             },
         )
         all_requests = list(self.list_requests())
@@ -1097,7 +1104,7 @@ class PhotoshootQueueService:
                 ))
         continuity = dict(session.creative_continuity or {})
         for key in (
-            "inspiration_ideas", "selected_inspiration", "current_direction",
+            "inspiration_ideas", "selected_inspiration", "inspiration_edits", "current_direction",
             "current_prompt", "creator_guidance", "grok_guidance", "creative_hint",
             "direction_approved",
         ):
@@ -1232,6 +1239,7 @@ class PhotoshootQueueService:
         inspiration_ideas: tuple[str, ...] | list[str] | None = None,
         inspiration_planning_shot: int | None = None,
         selected_inspiration: str | None = None,
+        inspiration_edits: Mapping[str, str] | None = None,
         planning_mode: str | None = None,
         plan_frame_count: int | None = None,
         target_shot_count: int | None = None,
@@ -1264,6 +1272,11 @@ class PhotoshootQueueService:
             continuity["inspiration_planning_shot"] = max(0, int(inspiration_planning_shot))
         if selected_inspiration is not None:
             continuity["selected_inspiration"] = str(selected_inspiration)
+        if inspiration_edits is not None:
+            continuity["inspiration_edits"] = {
+                str(key): str(value).strip() for key, value in dict(inspiration_edits).items()
+                if str(key).strip() and str(value).strip()
+            }
         if planning_mode is not None:
             mode = str(planning_mode or "frame_by_frame").strip().lower()
             continuity["planning_mode"] = mode if mode in {"frame_by_frame", "full_plan"} else "frame_by_frame"
@@ -1287,6 +1300,57 @@ class PhotoshootQueueService:
             creative_continuity=continuity,
             updated_at=utc_now(),
         )
+        self._replace_session(updated)
+        return updated
+
+    def record_freeflow_idea_set(
+        self, session_id: str, *, idea_set_id: str, ideas: Iterable[str],
+        recommended_idea: str, planning_shot: int,
+    ) -> PhotoshootSession:
+        """Append one immutable AI idea batch to the owning Photoshoot session."""
+        session = self.get_session(session_id)
+        continuity = dict(session.creative_continuity or {})
+        sets = [dict(item) for item in tuple(continuity.get("freeflow_idea_sets") or ()) if isinstance(item, Mapping)]
+        if not any(str(item.get("idea_set_id") or "") == str(idea_set_id) for item in sets):
+            sets.append({
+                "idea_set_id": str(idea_set_id),
+                "session_id": session_id,
+                "planning_shot": max(1, int(planning_shot)),
+                "approved_shot_count": max(0, int(planning_shot) - 1),
+                "ideas": tuple(str(item) for item in ideas),
+                "recommended_idea": str(recommended_idea or ""),
+                "created_at": utc_now(),
+            })
+        updated = replace(session, creative_continuity={
+            **continuity,
+            "freeflow_idea_sets": tuple(sets),
+            "active_freeflow_idea_set_id": str(idea_set_id),
+        }, updated_at=utc_now())
+        self._replace_session(updated)
+        return updated
+
+    def activate_freeflow_idea_set(self, session_id: str, *, idea_set_id: str, planning_shot: int) -> PhotoshootSession:
+        """Reactivate persisted idea text at the current Freeflow review position."""
+        session = self.get_session(session_id)
+        continuity = dict(session.creative_continuity or {})
+        sets = [dict(item) for item in tuple(continuity.get("freeflow_idea_sets") or ()) if isinstance(item, Mapping)]
+        selected_set = next((item for item in sets if str(item.get("idea_set_id") or "") == str(idea_set_id)), None)
+        if selected_set is None:
+            raise KeyError("Creative Freeflow idea set not found.")
+        ideas = tuple(str(item) for item in tuple(selected_set.get("ideas") or ()) if str(item).strip())
+        updated = replace(session, creative_continuity={
+            **continuity,
+            "inspiration_ideas": ideas,
+            "inspiration_planning_shot": max(1, int(planning_shot)),
+            "selected_inspiration": "",
+            "inspiration_edits": {},
+            "active_freeflow_idea_set_id": str(idea_set_id),
+            "creative_hint": "",
+            "current_direction": {},
+            "current_prompt": "",
+            "direction_approved": False,
+            "workflow_stage": "inspiration_ready",
+        }, updated_at=utc_now())
         self._replace_session(updated)
         return updated
 

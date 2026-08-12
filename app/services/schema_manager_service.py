@@ -103,6 +103,91 @@ class SchemaManagerService:
                 "new_status", "stage", "message", "metadata", "created_at",
             ),
         },
+        "generation_recipes": {
+            "owner": "Generation Engine Recipe Provenance",
+            "migration": "20260811_048_generation_recipes.sql",
+            "repository": "GenerationRecipeRepository",
+            "service": "GenerationRecipeCaptureService",
+            "dashboard": (),
+            "columns": (
+                "recipe_id", "schema_version", "generation_job_id",
+                "generation_request_id", "prompt_plan_id", "submission_index",
+                "source_workflow", "workflow_origin", "provider_id",
+                "provider_family", "provider_adapter", "provider_adapter_version",
+                "provider_endpoint", "provider_model", "provider_model_revision",
+                "generation_type", "media_type", "planned_prompt", "final_prompt",
+                "final_prompt_sha256", "creative_mode", "render_policy",
+                "render_policy_version", "normalized_settings", "output_format",
+                "width", "height", "aspect_ratio", "resolution", "seed",
+                "seed_policy", "sanitized_provider_payload",
+                "sanitized_payload_sha256", "source_generated_image_id",
+                "source_recipe_id", "regeneration_operation_id", "created_at",
+            ),
+        },
+        "regeneration_runs": {
+            "owner": "Regeneration Studio Backend",
+            "migration": "20260811_049_regeneration_workspace.sql",
+            "repository": "RegenerationRepository",
+            "service": "RegenerationService",
+            "dashboard": (),
+            "columns": (
+                "operation_id", "creator_profile_id", "source_generated_image_id",
+                "source_recipe_id", "requested_count", "status", "created_at",
+                "started_at", "completed_at", "updated_at",
+            ),
+        },
+        "regeneration_results": {
+            "owner": "Regeneration Studio Review Workspace",
+            "migration": "20260811_049_regeneration_workspace.sql",
+            "repository": "RegenerationRepository",
+            "service": "RegenerationService",
+            "dashboard": (),
+            "columns": (
+                "regeneration_result_id", "operation_id", "variation_index",
+                "status", "generation_job_id", "generation_result_id",
+                "generated_image_id", "generation_recipe_id", "media_path",
+                "disposition", "error_code", "error_message", "created_at",
+                "started_at", "completed_at", "updated_at",
+            ),
+        },
+        "generation_recipe_references": {
+            "owner": "Generation Engine Ordered Reference Provenance",
+            "migration": "20260811_048_generation_recipes.sql",
+            "repository": "GenerationRecipeRepository",
+            "service": "GenerationRecipeCaptureService",
+            "dashboard": (),
+            "columns": (
+                "recipe_reference_id", "recipe_id", "position", "role",
+                "source_type", "source_id", "asset_id", "generated_image_id",
+                "media_type", "content_sha256", "provider_reference_kind",
+                "diagnostic_metadata", "created_at",
+            ),
+        },
+        "generation_recipe_executions": {
+            "owner": "Generation Engine Recipe Execution Lifecycle",
+            "migration": "20260811_048_generation_recipes.sql",
+            "repository": "GenerationRecipeRepository",
+            "service": "GenerationRecipeCaptureService",
+            "dashboard": (),
+            "columns": (
+                "recipe_id", "status", "provider_request_id",
+                "submission_started_at", "submitted_at", "completed_at",
+                "provider_terminal_status", "error_code", "error_message",
+                "updated_at",
+            ),
+        },
+        "generation_recipe_outputs": {
+            "owner": "Generation Engine Recipe Output Provenance",
+            "migration": "20260811_048_generation_recipes.sql",
+            "repository": "GenerationRecipeRepository",
+            "service": "GenerationLibraryService",
+            "dashboard": (),
+            "columns": (
+                "recipe_output_id", "recipe_id", "generation_result_id",
+                "generated_image_id", "output_index", "output_reference_hash",
+                "created_at",
+            ),
+        },
         "photoshoot_session_sales_strategies": {
             "owner": "Photoshoot Session Sales Brain",
             "migration": "20260804_037_photoshoot_session_sales_strategies.sql",
@@ -589,6 +674,17 @@ class SchemaManagerService:
     }
 
     MIGRATION_SCHEMA_REQUIREMENTS: Mapping[str, Mapping[str, tuple[str, ...]]] = {
+        "20260811_049_regeneration_workspace.sql": {
+            "generation_recipes": (
+                "source_generated_image_id", "source_recipe_id", "regeneration_operation_id",
+            ),
+            "regeneration_runs": (
+                "operation_id", "source_generated_image_id", "source_recipe_id", "requested_count",
+            ),
+            "regeneration_results": (
+                "regeneration_result_id", "operation_id", "variation_index", "generation_recipe_id",
+            ),
+        },
         "20260807_045_photoshoot_bundle_sales_channel.sql": {
             "photoshoot_commerce_deliverables": ("bundle_sales_channel",),
         },
@@ -1156,6 +1252,17 @@ class SchemaManagerService:
                         "blur_strength"),
             "legacy": "current", "compatibility": "CANONICAL",
         },
+        "commercial_teasers": {
+            "owner": "Commercial Media",
+            "migration": "20260807_046_commercial_teasers.sql",
+            "repository": "CommercialTeaserRepository",
+            "service": "CommercialTeaserService",
+            "dashboard": ("Asset Library", "Commerce Library"),
+            "columns": ("teaser_id", "creator_profile_id", "source_asset_id",
+                        "derived_asset_id", "derivative_path", "teaser_style",
+                        "distribution_use", "mask_path", "status"),
+            "legacy": "current", "compatibility": "CANONICAL",
+        },
         "photoshoot_analysis_workflows": {
             "owner": "Photoshoot Analysis",
             "migration": "20260721_006_photoshoot_analysis_orchestrator.sql",
@@ -1457,6 +1564,14 @@ class SchemaManagerService:
     }
 
     REQUIRED_INDEXES: Mapping[str, tuple[str, ...]] = {
+        "generation_recipes": (
+            "idx_generation_recipes_job", "idx_generation_recipes_request",
+            "idx_generation_recipes_source_recipe", "idx_generation_recipes_regeneration_operation",
+        ),
+        "regeneration_runs": ("idx_regeneration_runs_source_image",),
+        "regeneration_results": (
+            "idx_regeneration_results_operation", "uq_regeneration_results_generated_image",
+        ),
         "background_operations": (
             "uq_background_operations_active_idempotency",
             "idx_background_operations_creator_account",
@@ -1510,6 +1625,16 @@ class SchemaManagerService:
     }
 
     CRITICAL_FOREIGN_KEYS: Mapping[str, tuple[str, ...]] = {
+        "generation_recipes": (
+            "generation_recipes_source_recipe_id_fkey",
+            "generation_recipes_regeneration_operation_id_fkey",
+        ),
+        "regeneration_runs": (
+            "regeneration_runs_operation_id_fkey", "regeneration_runs_source_recipe_id_fkey",
+        ),
+        "regeneration_results": (
+            "regeneration_results_operation_id_fkey", "regeneration_results_generation_recipe_id_fkey",
+        ),
         "hosted_asset_references": ("hosted_asset_references_asset_id_fkey",),
         "asset_lineage_relationships": (
             "asset_lineage_relationships_source_asset_id_fkey",

@@ -128,6 +128,22 @@ export function returnEditStudioToLibrary(): Promise<EditStudioActionResponse> {
   return sendEditStudioJson("/edit-studio/return-to-library", { method: "POST" });
 }
 
+export function getQuickEditSourceInfo(imageId: string): Promise<{ imageId: string; width: number; height: number }> {
+  return readEditStudioJson<{ image_id: string; width: number; height: number }>(
+    `/edit-studio/quick-edit/source-info?image_id=${encodeURIComponent(imageId)}`,
+  ).then((result) => ({ imageId: result.image_id, width: result.width, height: result.height }));
+}
+
+export function applyQuickCrop(input: { sourceImageId: string; x: number; y: number; width: number; height: number }): Promise<EditStudioActionResponse & { result: GenerationRecord }> {
+  return sendEditStudioJson("/edit-studio/quick-edit/crop", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      source_image_id: input.sourceImageId, x: input.x, y: input.y,
+      width: input.width, height: input.height,
+    }),
+  });
+}
+
 export function generateEdit(input: GenerateEditInput): Promise<{
   success: boolean; message: string; generation_job_id: string; generation_status: string;
 }> {

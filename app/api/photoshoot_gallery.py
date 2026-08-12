@@ -5,6 +5,7 @@ from fastapi.encoders import jsonable_encoder
 
 from app.api.asset_library import _creator_profile
 from app.repositories.photoshoot_commerce_repository import PhotoshootCommerceRepository
+from app.repositories.photoshoot_bundle_teaser_repository import PhotoshootBundleTeaserRepository
 from app.services.photoshoot_commerce_deliverable_service import PhotoshootCommerceDeliverableService
 
 
@@ -17,6 +18,10 @@ def _repository():
 
 def _service():
     return PhotoshootCommerceDeliverableService(repository=_repository())
+
+
+def _teaser_repository():
+    return PhotoshootBundleTeaserRepository()
 
 
 def _payload(row):
@@ -85,6 +90,14 @@ def photoshoot_details(deliverable_id: str):
                           or member.get("content_profile") or member.get("normalized_context") or {})}
         for member in members
     ]
+    teaser = _teaser_repository().get(str(row["deliverable_id"]))
+    item["commercialAssets"] = ([{
+        "assetId": int(teaser["teaser_asset_id"]),
+        "kind": "PROMOTIONAL_TEASER",
+        "label": "Promotional Teaser",
+        "status": "READY",
+        "previewUrl": f'/api/v1/assets/{int(teaser["teaser_asset_id"])}/media',
+    }] if teaser else [])
     return jsonable_encoder(item)
 
 

@@ -45,6 +45,8 @@ import { ProviderConnectionsPage } from "../../features/administration/ProviderC
 import { DeveloperNotesPage } from "../../features/developer-notes/DeveloperNotesPage";
 import { VideoStudioPage } from "../../features/video-studio/VideoStudioPage";
 import { VideoGalleryPage } from "../../features/video-gallery/VideoGalleryPage";
+import { RegenerationStudioPage } from "../../features/regeneration-studio/RegenerationStudioPage";
+import { RegeneratedContentPage } from "../../features/regenerated-content/RegeneratedContentPage";
 import { AppShell } from "../layout/AppShell";
 import { allNavigationItems } from "../navigation/navigation";
 
@@ -70,6 +72,7 @@ export const router = createBrowserRouter([
             item.path !== "/library/photoshoots" &&
             item.path !== "/gallery/videos" &&
             item.path !== "/studio/content" &&
+            item.path !== "/studio/regeneration" &&
             item.path !== "/content/edit" &&
             item.path !== "/content/photoshoot" &&
             item.path !== "/content/story" &&
@@ -136,6 +139,10 @@ export const router = createBrowserRouter([
       {
         path: "/studio/content",
         element: <ContentStudioPage />,
+      },
+      {
+        path: "/studio/regeneration",
+        element: <RegenerationStudioPage />,
       },
       {
         path: "/content/edit",
@@ -292,6 +299,10 @@ export const router = createBrowserRouter([
       {
         path: "/system/archive/removed",
         element: <RemovedContentPage />,
+      },
+      {
+        path: "/system/archive/regenerated",
+        element: <RegeneratedContentPage />,
       },
       {
         path: "*",

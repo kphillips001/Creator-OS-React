@@ -75,6 +75,7 @@ from app.api.developer_agent_execution import (
 from app.api.video_studio import router as video_studio_router
 from app.api.video_gallery import router as video_gallery_router
 from app.api.developer_notes import router as developer_notes_router
+from app.api.regeneration import router as regeneration_router
 from app.services.fanvue_oauth_service import FanvueOAuthService
 from app.services.fanvue_webhook_monitor_service import fanvue_webhook_monitor
 from app.services.worker_heartbeat_instrumentation import record_heartbeat_safely
@@ -186,6 +187,7 @@ app.include_router(developer_agent_execution_router)
 app.include_router(video_studio_router)
 app.include_router(video_gallery_router)
 app.include_router(developer_notes_router)
+app.include_router(regeneration_router)
 
 
 @app.get("/callback")

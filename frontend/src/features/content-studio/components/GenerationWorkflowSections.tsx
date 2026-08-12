@@ -24,6 +24,7 @@ type GenerationWorkflowSectionsProps = {
   plannerBatchItems?: PlannerBatchItem[];
   plannerBatchProgress?: PlannerBatchProgress | null;
   plannerBatchRunning?: boolean;
+  reconnectOrigins?: string[];
   request: Omit<GenerationSubmission, "creatorContext">;
   workflow: "autonomous" | "manual";
   recreateRuntime?: RecreateRuntimeState | null;
@@ -57,6 +58,17 @@ const NEXT_STEP_STATUSES = new Set(["succeeded", "partial"]);
 const RECONNECTABLE_OPERATION_STATUSES = new Set(["QUEUED", "RUNNING", "WAITING_EXTERNAL"]);
 const TERMINAL_DISMISS_MILLISECONDS = 4000;
 
+function matchesReconnectOwnership(operation: {
+  metadata: Record<string, unknown>;
+}, reconnectOrigins?: string[]) {
+  if (!reconnectOrigins) return true;
+  const durableRequest = operation.metadata.request as Record<string, unknown> | undefined;
+  const origin = String(durableRequest?.origin ?? "");
+  if (origin) return reconnectOrigins.includes(origin);
+  const explicit = durableRequest?.lane === "explicit" || durableRequest?.creativeMode === "explicit";
+  return explicit === reconnectOrigins.includes("explicit_tags");
+}
+
 export function inspirationProgressStage(
   generation: ContentStudioGeneration | null,
   submitting: boolean,
@@ -76,7 +88,7 @@ export function inspirationProgressStage(
 
 export const GenerationWorkflowSections = forwardRef<GenerationWorkflowHandle, GenerationWorkflowSectionsProps>(function GenerationWorkflowSections({
   context, disabled, onManualGenerationStart, onPlannerBatchItemChange, onReconnect, onRunStart,
-  onStartNewGeneration, plannerBatchItems = [], plannerBatchProgress = null, plannerBatchRunning = false, request, workflow, recreateRuntime, onRecreateRuntimeChange,
+  onStartNewGeneration, plannerBatchItems = [], plannerBatchProgress = null, plannerBatchRunning = false, reconnectOrigins, request, workflow, recreateRuntime, onRecreateRuntimeChange,
 }, ref) {
   const [runId, setRunId] = useState("");
   const [generation, setGeneration] = useState<ContentStudioGeneration | null>(null);
@@ -97,7 +109,8 @@ export const GenerationWorkflowSections = forwardRef<GenerationWorkflowHandle, G
       : "content_studio_generation";
     const candidates = backgroundOperations.active
       .filter((operation) => operation.operationType === expectedType
-        && RECONNECTABLE_OPERATION_STATUSES.has(operation.status))
+        && RECONNECTABLE_OPERATION_STATUSES.has(operation.status)
+        && matchesReconnectOwnership(operation, reconnectOrigins))
       .sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt));
     if (candidates[0]) {
       reconnectAttemptedRef.current = true;
@@ -108,7 +121,7 @@ export const GenerationWorkflowSections = forwardRef<GenerationWorkflowHandle, G
       onReconnect?.();
     }
   }, [backgroundOperations.active, backgroundOperations.initialized,
-      onReconnect, request.promptCount, runId, submitting, workflow]);
+      onReconnect, reconnectOrigins, request.promptCount, runId, submitting, workflow]);
 
   function reset() {
     if (completionRef.current && recreateRuntime) onRecreateRuntimeChange?.({ activeStage: recreateRuntime.activeStage, failedStage: recreateRuntime.activeStage, message: "Generation cancelled.", state: "failed" });

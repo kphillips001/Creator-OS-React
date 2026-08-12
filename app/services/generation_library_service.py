@@ -43,6 +43,7 @@ class GenerationLibraryService:
         creator_approval_service: CreatorApprovalService | None = None,
         asset_repository: AssetRepository | None = None,
         creative_intelligence: CreativeIntelligenceLearningService | None = None,
+        recipe_capture_service=None,
     ):
         self.storage_dir = Path(storage_dir or self.DEFAULT_STORAGE_DIR)
         self.archive_service = archive_service or ContentArchiveService()
@@ -51,6 +52,7 @@ class GenerationLibraryService:
         )
         self.assets = asset_repository or AssetRepository()
         self.creative_intelligence = creative_intelligence or CreativeIntelligenceLearningService()
+        self.recipe_capture = recipe_capture_service
 
     @property
     def records_path(self) -> Path:
@@ -70,6 +72,16 @@ class GenerationLibraryService:
 
     def sync_job(self, job: GenerationJob) -> tuple[GeneratedImageRecord, ...]:
         if job.status != GenerationStatus.SUCCEEDED.value or job.result is None:
+            return ()
+        request_metadata = dict(job.request.metadata or {})
+        if str(
+            request_metadata.get("workflow_type")
+            or request_metadata.get("source")
+            or ""
+        ).upper() == "REGENERATION_STUDIO":
+            # Regenerated variations remain in their durable review workspace
+            # until a later explicit promotion action. Global succeeded-job
+            # synchronization must never make them visible prematurely.
             return ()
         records = list(self.list_records())
         existing_image_ids = {record.image_id for record in records}
@@ -92,6 +104,17 @@ class GenerationLibraryService:
             ):
                 continue
             record = self.archive_service.materialize_generation(record)
+            if record.generation_recipe_id:
+                if self.recipe_capture is None:
+                    from app.services.generation_recipe_capture_service import GenerationRecipeCaptureService
+                    self.recipe_capture = GenerationRecipeCaptureService()
+                self.recipe_capture.associate_output(
+                    record.generation_recipe_id,
+                    result_id=job.result.result_id,
+                    image_id=record.image_id,
+                    output_index=0,
+                    output_reference=record.output_reference,
+                )
             records.append(record)
             existing_image_ids.add(record.image_id)
             created.append(record)
@@ -104,6 +127,49 @@ class GenerationLibraryService:
         for job in jobs:
             created.extend(self.sync_job(job))
         return tuple(created)
+
+    def promote_regeneration_result(self, *, job: GenerationJob, media_path: str,
+                                    generated_image_id: str, generation_recipe_id: str) -> tuple[GeneratedImageRecord, bool]:
+        """Copy one reviewed regeneration output into the normal Generation Library."""
+        existing = next((item for item in self.list_records() if item.image_id == generated_image_id), None)
+        if existing:
+            if str(existing.generation_recipe_id or "") != str(generation_recipe_id):
+                raise ValueError("Existing Generation Library record has conflicting recipe lineage.")
+            return existing, False
+        source = Path(media_path).expanduser()
+        if not source.is_file():
+            raise ValueError("Regenerated media is unavailable.")
+        if job.result is None:
+            raise ValueError("Regenerated Generation Engine result is unavailable.")
+        request_metadata = {
+            **dict(job.request.metadata or {}),
+            "source": "REGENERATION_STUDIO",
+            "workflow_type": "REGENERATION_STUDIO",
+            "workflow_origin": "regeneration",
+        }
+        promoted_job = replace(
+            job,
+            request=replace(job.request, metadata=request_metadata),
+            result=replace(job.result, output_references=(str(source),), generation_metadata={
+                **dict(job.result.generation_metadata or {}),
+                "generation_recipe_ids": (str(generation_recipe_id),),
+                "output_generation_recipe_ids": (str(generation_recipe_id),),
+            }),
+        )
+        record = replace(
+            self._record_from_job(promoted_job, str(source)),
+            image_id=str(generated_image_id),
+            generation_recipe_id=str(generation_recipe_id),
+        )
+        record = self.archive_service.copy_generation(record)
+        record = replace(record, generation_metadata={
+            **dict(record.generation_metadata or {}),
+            "regeneration_disposition": "PROMOTED",
+        })
+        records = list(self.list_records())
+        records.append(record)
+        self._write_records(records)
+        return record, True
 
     def browse(
         self,
@@ -263,7 +329,9 @@ class GenerationLibraryService:
         self._replace_record(updated)
         return updated, False
 
-    def move_back_to_generation_library(self, image_id: str) -> tuple[GeneratedImageRecord, bool]:
+    def move_back_to_generation_library(
+        self, image_id: str, *, registration_reversed: bool = False,
+    ) -> tuple[GeneratedImageRecord, bool]:
         """Return a staged generation to the active library without duplicating it."""
         record = self.get(str(image_id))
         if is_protected_generation_metadata(record.generation_metadata):
@@ -274,16 +342,23 @@ class GenerationLibraryService:
                 raise ValueError("Protected Reference assets cannot be moved back.")
         if record.status == "active":
             return record, True
-        if record.status != "staged_asset_library":
+        if record.status == "business_asset_registered" and not registration_reversed:
+            raise ValueError("Registered Assets must be reversed through the Asset Library return workflow.")
+        if record.status not in {"staged_asset_library", "business_asset_registered"}:
             raise ValueError("Only staged Asset Library items can move back to Generation Library.")
         metadata = {
             key: value for key, value in dict(record.generation_metadata or {}).items()
-            if key not in {"asset_library_item_kind", "asset_library_staged_at"}
+            if key not in {
+                "asset_library_item_kind", "asset_library_staged_at",
+                "asset_registration_phase", "registered_asset_id",
+                "business_asset_analysis_status",
+            }
         }
         updated = replace(
             record,
             status="active",
             review_state="unreviewed",
+            imported_asset_id=None if registration_reversed else record.imported_asset_id,
             generation_metadata=metadata,
             updated_at=utc_now(),
         )
@@ -1924,6 +1999,8 @@ class GenerationLibraryService:
         image_id = "generated_image_" + hashlib.sha256(
             f"{job.job_id}:{output_reference}".encode("utf-8")
         ).hexdigest()[:24]
+        recipe_ids = tuple(result.generation_metadata.get("output_generation_recipe_ids") or ())
+        recipe_id = str(recipe_ids[output_index]) if output_index < len(recipe_ids) and recipe_ids[output_index] else None
         return GeneratedImageRecord(
             image_id=image_id,
             generation_job_id=job.job_id,
@@ -1936,6 +2013,7 @@ class GenerationLibraryService:
             prompt_text=GenerationLibraryService._prompt_for_output(job, output_index),
             creative_mode=request_metadata.get("creative_mode"),
             reference_asset_id=job.request.reference_asset_id,
+            generation_recipe_id=recipe_id,
             photoshoot_session_id=request_metadata.get("photoshoot_session_id"),
             photoshoot_request_id=request_metadata.get("photoshoot_request_id"),
             generation_date=result.created_at or job.completed_at or job.updated_at,
@@ -2014,6 +2092,7 @@ class GenerationLibraryService:
             prompt_text=str(data.get("prompt_text") or ""),
             creative_mode=data.get("creative_mode"),
             reference_asset_id=data.get("reference_asset_id"),
+            generation_recipe_id=data.get("generation_recipe_id"),
             photoshoot_session_id=data.get("photoshoot_session_id"),
             photoshoot_request_id=data.get("photoshoot_request_id"),
             generation_date=data.get("generation_date") or "",

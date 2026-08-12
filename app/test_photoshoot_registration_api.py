@@ -88,6 +88,7 @@ def test_gallery_details_reads_persisted_production_and_shot_intelligence(monkey
     repository = Repository()
     monkeypatch.setattr(gallery_api, "_creator_profile", lambda: {"id": 7})
     monkeypatch.setattr(gallery_api, "_repository", lambda: repository)
+    monkeypatch.setattr(gallery_api, "_teaser_repository", lambda: type("Teasers", (), {"get": lambda self, _id: None})())
 
     result = gallery_api.photoshoot_details("set-1")
 
@@ -109,11 +110,33 @@ def test_gallery_details_resolves_legacy_persisted_asset_intelligence_by_asset_i
     )
     monkeypatch.setattr(gallery_api, "_creator_profile", lambda: {"id": 7})
     monkeypatch.setattr(gallery_api, "_repository", lambda: repository)
+    monkeypatch.setattr(gallery_api, "_teaser_repository", lambda: type("Teasers", (), {"get": lambda self, _id: None})())
 
     result = gallery_api.photoshoot_details("set-1")
 
     assert [member["assetId"] for member in result["members"]] == [12, 13]
     assert result["members"][0]["intelligence"]["summary"] == "Persisted opening analysis"
+
+
+def test_gallery_details_projects_promotional_teaser_as_supporting_commercial_asset(monkeypatch):
+    repository = Repository()
+    monkeypatch.setattr(gallery_api, "_creator_profile", lambda: {"id": 7})
+    monkeypatch.setattr(gallery_api, "_repository", lambda: repository)
+    monkeypatch.setattr(gallery_api, "_teaser_repository", lambda: type("Teasers", (), {
+        "get": lambda self, deliverable_id: {
+            "deliverable_id": deliverable_id, "source_asset_id": 12,
+            "teaser_asset_id": 145, "commercial_role": "BUNDLE_PROMOTIONAL_TEASER",
+        }
+    })())
+
+    result = gallery_api.photoshoot_details("set-1")
+
+    assert [member["assetId"] for member in result["members"]] == [12, 13]
+    assert result["commercialAssets"] == [{
+        "assetId": 145, "kind": "PROMOTIONAL_TEASER",
+        "label": "Promotional Teaser", "status": "READY",
+        "previewUrl": "/api/v1/assets/145/media",
+    }]
 
 
 def test_asset_library_register_reuses_one_photoshoot_record():

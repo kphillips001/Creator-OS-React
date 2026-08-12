@@ -1,5 +1,409 @@
 [
   {
+    "caption_result_id": "caption_result_4d4568500a9441078bdacc7ff6062c91",
+    "caption_request_id": "caption_request_ee4250cb2ba24c8bad5f9011e5bb4bc8",
+    "session_id": "caption_session_6118a3a25dfb41debc0bc79a91095878",
+    "platform": "x",
+    "variations": [
+      "Caught me looking back \ud83c\udf05 would you keep walking with me or make us stop right here for a second?",
+      "Be honest... if you found me at the water's edge like this \ud83c\udf0a what's the first thing you'd say?",
+      "Golden hour walks hit different \u2728 help me decide: stay for the sunset or head back before it gets dark?",
+      "I turned around for a reason \ud83d\udc40 finish the sentence: 'if I was there I'd...'",
+      "Quiet beach, warm sand, just us for a minute \ud83c\udf0a would you rather talk or just stand here and listen to the waves?",
+      "Okay but real talk \ud83d\ude18 morning beach dates or golden hour ones like this?",
+      "Someone tell me I'm not the only one who gets this peaceful \ud83d\udcad what would you do if you had this whole shoreline to yourself with me?",
+      "That little look back felt dangerous \ud83d\ude0c choose one: chase me into the water or pull me closer on the sand?",
+      "I was supposed to keep walking but then I saw you \ud83c\udf0a be honest... are you coming closer or staying right there?",
+      "Sand between my toes and zero plans \u2600\ufe0f if you could teleport here for ten minutes, what are we doing first?"
+    ],
+    "selected_text": "I turned around and caught you a few steps behind \ud83d\udc40\ud83d\ude02 What distracted you?",
+    "formatter_metadata": {
+      "provider_neutral": true,
+      "formatter": "CaptionStudioService",
+      "workflow": "x_engagement_publish",
+      "vision_primary": true,
+      "vision_provider": "grok",
+      "vision": {
+        "setting": "sandy beach shoreline with gentle ocean waves",
+        "activity": "standing barefoot on the sand and glancing back toward the camera",
+        "time_of_day": "golden hour / late afternoon",
+        "location": "beach coastline",
+        "wardrobe": "light blue two-piece bikini",
+        "expression": "soft closed-mouth smile, warm and slightly playful eye contact",
+        "body_language": "body angled slightly away while looking back over her shoulder, relaxed and inviting posture",
+        "lighting": "warm golden side lighting with soft natural highlights and shadows",
+        "mood": "candid, intimate, sun-kissed, relaxed",
+        "environment": "open sandy shore, calm water edge, natural outdoor coastal scene"
+      },
+      "themes": [
+        {
+          "theme": "Creator OS Engagement",
+          "persona": "creator_os_engagement",
+          "captions": [
+            "Caught me looking back \ud83c\udf05 would you keep walking with me or make us stop right here for a second?",
+            "Be honest... if you found me at the water's edge like this \ud83c\udf0a what's the first thing you'd say?",
+            "Golden hour walks hit different \u2728 help me decide: stay for the sunset or head back before it gets dark?",
+            "I turned around for a reason \ud83d\udc40 finish the sentence: 'if I was there I'd...'",
+            "Quiet beach, warm sand, just us for a minute \ud83c\udf0a would you rather talk or just stand here and listen to the waves?",
+            "Okay but real talk \ud83d\ude18 morning beach dates or golden hour ones like this?",
+            "Someone tell me I'm not the only one who gets this peaceful \ud83d\udcad what would you do if you had this whole shoreline to yourself with me?",
+            "That little look back felt dangerous \ud83d\ude0c choose one: chase me into the water or pull me closer on the sand?",
+            "I was supposed to keep walking but then I saw you \ud83c\udf0a be honest... are you coming closer or staying right there?",
+            "Sand between my toes and zero plans \u2600\ufe0f if you could teleport here for ten minutes, what are we doing first?"
+          ]
+        }
+      ],
+      "personas": {
+        "creator_os_engagement": "Creator OS Engagement"
+      },
+      "engagement_goals": [
+        "replies",
+        "reposts",
+        "likes",
+        "profile visits",
+        "follows"
+      ]
+    },
+    "created_at": "2026-08-11T15:35:01.951894"
+  },
+  {
+    "caption_result_id": "caption_result_c35fa575291440c79579fcdc3895f29a",
+    "caption_request_id": "caption_request_6164c845a91c4b91ba66ebf59156be27",
+    "session_id": "caption_session_2aebb836abc540b5a165f5c4c86e24a6",
+    "platform": "x",
+    "variations": [
+      "Caught me mid-walk and now I kind of don't want to keep going \u2600\ufe0f would you stay right here with me or keep exploring the shore?",
+      "Be honest\u2026 if you saw me turn around like this on an empty beach \ud83c\udf0a what's the first thing you'd actually say?",
+      "Golden hour walks hit different when the sand is still warm \ud83d\ude0c finish this: 'I'd pull you closer and\u2026'",
+      "Help me decide \ud83d\udc40 sunset picnic on the sand or just walking until the sky goes pink?",
+      "I looked back for half a second and suddenly the whole beach felt quieter \u2728 would that make you smile back or walk a little faster to catch up?",
+      "Okay real talk \u2014 ocean breeze + this light is dangerous \ud83d\ude05 would you rather stay barefoot the whole evening or race me to the water?",
+      "If we had this stretch of sand completely to ourselves right now \ud83c\udf05 what's the first thing we're doing?",
+      "Not sure if I'm inviting you closer or just checking if you're still watching \ud83d\ude09 which one do you think it is?",
+      "Tell me the truth\u2026 would you rather arrive right as the sun dips \u2600\ufe0f or already be walking next to me when it happens?",
+      "Soft waves, warm sand, and that little glance you can't quite ignore \ud83c\udf0a drop a \ud83d\udd25 if you'd turn around too or a \ud83d\udcac with what you'd whisper first"
+    ],
+    "selected_text": null,
+    "formatter_metadata": {
+      "provider_neutral": true,
+      "formatter": "CaptionStudioService",
+      "workflow": "x_engagement_publish",
+      "vision_primary": true,
+      "vision_provider": "grok",
+      "vision": {
+        "setting": "sandy beach shoreline with gentle ocean waves",
+        "activity": "standing barefoot on the sand and glancing back toward the camera",
+        "time_of_day": "golden hour / late afternoon",
+        "location": "beach by the ocean",
+        "wardrobe": "light blue two-piece bikini",
+        "expression": "soft closed-mouth smile, warm and inviting eye contact",
+        "body_language": "slight turn of the torso, relaxed stance, one foot lightly forward",
+        "lighting": "warm side sunlight casting soft golden highlights and natural shadows",
+        "mood": "candid, intimate, relaxed, sun-kissed",
+        "environment": "open sandy shore with calm incoming waves and empty beach space"
+      },
+      "themes": [
+        {
+          "theme": "Creator OS Engagement",
+          "persona": "creator_os_engagement",
+          "captions": [
+            "Caught me mid-walk and now I kind of don't want to keep going \u2600\ufe0f would you stay right here with me or keep exploring the shore?",
+            "Be honest\u2026 if you saw me turn around like this on an empty beach \ud83c\udf0a what's the first thing you'd actually say?",
+            "Golden hour walks hit different when the sand is still warm \ud83d\ude0c finish this: 'I'd pull you closer and\u2026'",
+            "Help me decide \ud83d\udc40 sunset picnic on the sand or just walking until the sky goes pink?",
+            "I looked back for half a second and suddenly the whole beach felt quieter \u2728 would that make you smile back or walk a little faster to catch up?",
+            "Okay real talk \u2014 ocean breeze + this light is dangerous \ud83d\ude05 would you rather stay barefoot the whole evening or race me to the water?",
+            "If we had this stretch of sand completely to ourselves right now \ud83c\udf05 what's the first thing we're doing?",
+            "Not sure if I'm inviting you closer or just checking if you're still watching \ud83d\ude09 which one do you think it is?",
+            "Tell me the truth\u2026 would you rather arrive right as the sun dips \u2600\ufe0f or already be walking next to me when it happens?",
+            "Soft waves, warm sand, and that little glance you can't quite ignore \ud83c\udf0a drop a \ud83d\udd25 if you'd turn around too or a \ud83d\udcac with what you'd whisper first"
+          ]
+        }
+      ],
+      "personas": {
+        "creator_os_engagement": "Creator OS Engagement"
+      },
+      "engagement_goals": [
+        "replies",
+        "reposts",
+        "likes",
+        "profile visits",
+        "follows"
+      ]
+    },
+    "created_at": "2026-08-11T15:30:18.164550"
+  },
+  {
+    "caption_result_id": "caption_result_60803d0dd5094de99b36a9d9aa836b87",
+    "caption_request_id": "caption_request_b80b9cd5a8f441d1933a03d72b398511",
+    "session_id": "caption_session_570ddd4b4af94d849c97c8a3e4cd1561",
+    "platform": "telegram",
+    "variations": [
+      "Sinking into this warm \u2668\ufe0f water with a soft smile just thinking of you \ud83e\udd70",
+      "Droplets on my skin and the gentle steam \ud83d\udca7 make me feel so close to you right now \ud83d\udc95",
+      "This quiet hot tub moment \ud83c\udf0a has my heart feeling all warm and peaceful \ud83d\ude0a",
+      "Wet hair falling over my shoulders \u2728 while I soak in calm thoughts of us \ud83d\ude18",
+      "The soft light and warm water \u2668\ufe0f wrap around me like your favorite hug \u2764\ufe0f",
+      "This little black bikini \ud83d\udda4 clings so tight as I trail my fingers through the warm water \ud83d\udca6",
+      "Water beads sliding down my curves \ud83d\udca7 while the steam rises all around me \ud83d\ude0f",
+      "Feeling every ripple of heat \ud83d\udd25 against my skin in this soaked bikini tonight \ud83d\ude08",
+      "My hand gliding slow through the surface \ud83c\udf0a with this wet top hugging me close \ud83d\udda4",
+      "Steam and droplets catching the light \u2728 on every place this bikini holds me tight \ud83d\udd25"
+    ],
+    "selected_text": null,
+    "formatter_metadata": {
+      "provider_neutral": true,
+      "formatter": "CaptionStudioService",
+      "workflow": "telegram_publish",
+      "vision_primary": true,
+      "vision_provider": "grok",
+      "vision": {
+        "location": "outdoor hot tub on a patio/deck area",
+        "wardrobe": "wet black triangle bikini top and matching bottoms clinging to skin",
+        "expression": "gentle half-smile with warm direct eye contact",
+        "body_language": "seated in water turning upper body slightly toward viewer, one hand trailing through the surface",
+        "lighting": "soft natural daylight with highlights on wet skin and subtle shadows",
+        "mood": "intimate candid relaxed inviting",
+        "environment": "steaming hot tub water with wooden structures railing and open patio background",
+        "activity": "relaxing seated in hot tub trailing hand slowly through water"
+      },
+      "themes": [
+        {
+          "theme": "\ud83d\udc9b Romantic",
+          "persona": "romantic",
+          "captions": [
+            "Sinking into this warm \u2668\ufe0f water with a soft smile just thinking of you \ud83e\udd70",
+            "Droplets on my skin and the gentle steam \ud83d\udca7 make me feel so close to you right now \ud83d\udc95",
+            "This quiet hot tub moment \ud83c\udf0a has my heart feeling all warm and peaceful \ud83d\ude0a",
+            "Wet hair falling over my shoulders \u2728 while I soak in calm thoughts of us \ud83d\ude18",
+            "The soft light and warm water \u2668\ufe0f wrap around me like your favorite hug \u2764\ufe0f"
+          ]
+        },
+        {
+          "theme": "\ud83d\ude08 Teasing / Naughty",
+          "persona": "teasing_naughty",
+          "captions": [
+            "This little black bikini \ud83d\udda4 clings so tight as I trail my fingers through the warm water \ud83d\udca6",
+            "Water beads sliding down my curves \ud83d\udca7 while the steam rises all around me \ud83d\ude0f",
+            "Feeling every ripple of heat \ud83d\udd25 against my skin in this soaked bikini tonight \ud83d\ude08",
+            "My hand gliding slow through the surface \ud83c\udf0a with this wet top hugging me close \ud83d\udda4",
+            "Steam and droplets catching the light \u2728 on every place this bikini holds me tight \ud83d\udd25"
+          ]
+        }
+      ],
+      "personas": {
+        "romantic": "\ud83d\udc9b Romantic",
+        "teasing_naughty": "\ud83d\ude08 Teasing / Naughty"
+      },
+      "engagement_goals": [
+        "creator selects preferred caption",
+        "telegram publishing"
+      ]
+    },
+    "created_at": "2026-08-10T15:57:44.700259"
+  },
+  {
+    "caption_result_id": "caption_result_d1a385bee420496abd7e91ac45b8e8eb",
+    "caption_request_id": "caption_request_fa7eac0b047c48dabc6f72aa74acbc13",
+    "session_id": "caption_session_d30e88de6e2a477daf1e5f02b95aa00a",
+    "platform": "x",
+    "variations": [
+      "Just walked out of the water and caught you staring \ud83d\udc40 be honest\u2026 would you come closer or freeze right there? \ud83c\udf05",
+      "Sunset\u2019s doing the most tonight and I\u2019m still deciding if I should head back in \ud83c\udf0a help me choose: one more swim or stay right here with me? \u2728",
+      "That first step onto warm sand always feels like a tiny reset \ud83d\ude0c what\u2019s the last place that made you completely forget your phone existed?",
+      "Caught mid-adjust and zero regrets \ud83d\ude09 if you were standing where I am right now, what\u2019s the first thing you\u2019d say to me?",
+      "Golden hour + salt water still dripping\u2026 finish this sentence for me: the perfect next move would be ___ \ud83d\udd25",
+      "I keep replaying this exact moment in my head \ud83d\udcad would you rather watch the sun disappear with me or jump straight back into the waves?",
+      "Soft smile, ocean behind me, and I\u2019m curious\u2026 do moments like this make you want to plan a spontaneous trip or just daydream about one? \u2708\ufe0f",
+      "Quick poll while the light\u2019s still perfect \u2600\ufe0f: stay for the last glow or race me down the beach before it gets dark?",
+      "Water droplets and that little confident walk out of the shallows \ud83d\ude0c tell me the truth \u2014 are you more of a \u2018join me\u2019 person or a \u2018watch from afar\u2019 type?",
+      "If I turned around right now and asked you to pick our next stop, where are we going \ud83c\udf05 and don\u2019t say \u2018wherever you want\u2019\u2026 I need real answers \ud83d\ude0f"
+    ],
+    "selected_text": null,
+    "formatter_metadata": {
+      "provider_neutral": true,
+      "formatter": "CaptionStudioService",
+      "workflow": "x_engagement_publish",
+      "vision_primary": true,
+      "vision_provider": "grok",
+      "vision": {
+        "setting": "beach shoreline with ocean waves and wet sand",
+        "activity": "stepping from shallow water onto sand while adjusting bikini side tie",
+        "time_of_day": "sunset",
+        "location": "ocean beach",
+        "wardrobe": "white string bikini",
+        "expression": "soft closed-mouth smile looking at camera",
+        "body_language": "slight torso turn, one hand adjusting side tie, relaxed confident stance",
+        "lighting": "warm golden sunset glow on wet skin",
+        "mood": "intimate, candid, serene, teasing",
+        "environment": "calm ocean waves, sandy shore, soft horizon light"
+      },
+      "themes": [
+        {
+          "theme": "Creator OS Engagement",
+          "persona": "creator_os_engagement",
+          "captions": [
+            "Just walked out of the water and caught you staring \ud83d\udc40 be honest\u2026 would you come closer or freeze right there? \ud83c\udf05",
+            "Sunset\u2019s doing the most tonight and I\u2019m still deciding if I should head back in \ud83c\udf0a help me choose: one more swim or stay right here with me? \u2728",
+            "That first step onto warm sand always feels like a tiny reset \ud83d\ude0c what\u2019s the last place that made you completely forget your phone existed?",
+            "Caught mid-adjust and zero regrets \ud83d\ude09 if you were standing where I am right now, what\u2019s the first thing you\u2019d say to me?",
+            "Golden hour + salt water still dripping\u2026 finish this sentence for me: the perfect next move would be ___ \ud83d\udd25",
+            "I keep replaying this exact moment in my head \ud83d\udcad would you rather watch the sun disappear with me or jump straight back into the waves?",
+            "Soft smile, ocean behind me, and I\u2019m curious\u2026 do moments like this make you want to plan a spontaneous trip or just daydream about one? \u2708\ufe0f",
+            "Quick poll while the light\u2019s still perfect \u2600\ufe0f: stay for the last glow or race me down the beach before it gets dark?",
+            "Water droplets and that little confident walk out of the shallows \ud83d\ude0c tell me the truth \u2014 are you more of a \u2018join me\u2019 person or a \u2018watch from afar\u2019 type?",
+            "If I turned around right now and asked you to pick our next stop, where are we going \ud83c\udf05 and don\u2019t say \u2018wherever you want\u2019\u2026 I need real answers \ud83d\ude0f"
+          ]
+        }
+      ],
+      "personas": {
+        "creator_os_engagement": "Creator OS Engagement"
+      },
+      "engagement_goals": [
+        "replies",
+        "reposts",
+        "likes",
+        "profile visits",
+        "follows"
+      ]
+    },
+    "created_at": "2026-08-10T15:44:52.053508"
+  },
+  {
+    "caption_result_id": "caption_result_fba44a88ed6949cd81f50e946c9ca468",
+    "caption_request_id": "caption_request_03df5a27a7f946f198e8b091b3f43b49",
+    "session_id": "caption_session_ff93c6ac57ab40d6b891efe6af75c350",
+    "platform": "x",
+    "variations": [
+      "Quiet evenings like this hit different \ud83d\ude0c would you steal the remote or just steal the whole couch with me?",
+      "Be honest... if you walked in right now, are we talking all night \ud83d\udcac or sitting in that comfy silence?",
+      "Help me decide \ud83d\ude48 movie marathon or just vibes and snacks on the couch tonight?",
+      "I saved you the perfect spot next to me \u2728 what would you do first when you sat down?",
+      "Finish this... 'the best part of a cozy night in is ___' \ud83d\udd6f\ufe0f I'm curious what you'd say",
+      "Choose one: soft music \ud83c\udfb6 or total quiet while we just exist here together?",
+      "That look when the evening finally slows down \ud83d\ude0f tell me you're coming over without saying it",
+      "Hypothetical: you have the whole night free and this is the scene \ud83d\udecb\ufe0f what's the plan you pitch me?",
+      "Is it weird that I already imagined our conversation starting with you making me laugh? \ud83d\ude02 prove me right",
+      "This energy tonight feels dangerous in the best way \ud83d\udd25 stay for five minutes or stay till morning?"
+    ],
+    "selected_text": "I saved you the perfect spot next to me \u2728 what would you do first when you sat down?",
+    "formatter_metadata": {
+      "provider_neutral": true,
+      "formatter": "CaptionStudioService",
+      "workflow": "x_engagement_publish",
+      "vision_primary": true,
+      "vision_provider": "grok",
+      "vision": {
+        "setting": "indoor living space with a soft velvet or suede couch",
+        "activity": "sitting relaxed and posing toward the camera",
+        "time_of_day": "evening",
+        "location": "indoors, cozy home environment",
+        "wardrobe": "white tight crop tank top with thin straps and black low-rise shorts",
+        "expression": "warm, soft playful smile with direct eye contact",
+        "body_language": "leaning slightly forward, one leg tucked, relaxed shoulders, angled toward viewer",
+        "lighting": "soft ambient evening light with gentle highlights and subtle shadows",
+        "mood": "intimate, candid, cozy, inviting",
+        "environment": "dimly lit living room with blurred background furniture and warm tones"
+      },
+      "themes": [
+        {
+          "theme": "Creator OS Engagement",
+          "persona": "creator_os_engagement",
+          "captions": [
+            "Quiet evenings like this hit different \ud83d\ude0c would you steal the remote or just steal the whole couch with me?",
+            "Be honest... if you walked in right now, are we talking all night \ud83d\udcac or sitting in that comfy silence?",
+            "Help me decide \ud83d\ude48 movie marathon or just vibes and snacks on the couch tonight?",
+            "I saved you the perfect spot next to me \u2728 what would you do first when you sat down?",
+            "Finish this... 'the best part of a cozy night in is ___' \ud83d\udd6f\ufe0f I'm curious what you'd say",
+            "Choose one: soft music \ud83c\udfb6 or total quiet while we just exist here together?",
+            "That look when the evening finally slows down \ud83d\ude0f tell me you're coming over without saying it",
+            "Hypothetical: you have the whole night free and this is the scene \ud83d\udecb\ufe0f what's the plan you pitch me?",
+            "Is it weird that I already imagined our conversation starting with you making me laugh? \ud83d\ude02 prove me right",
+            "This energy tonight feels dangerous in the best way \ud83d\udd25 stay for five minutes or stay till morning?"
+          ]
+        }
+      ],
+      "personas": {
+        "creator_os_engagement": "Creator OS Engagement"
+      },
+      "engagement_goals": [
+        "replies",
+        "reposts",
+        "likes",
+        "profile visits",
+        "follows"
+      ]
+    },
+    "created_at": "2026-08-09T16:01:22.896848"
+  },
+  {
+    "caption_result_id": "caption_result_b4e0288707be40c58a93eeee0d696caf",
+    "caption_request_id": "caption_request_f68a2edb7d674465bcba4e13d6e1b236",
+    "session_id": "caption_session_35c9f6884d334f8ba8421a4331f6b4c6",
+    "platform": "x",
+    "variations": [
+      "Caught me mid-stroll\u2026 would you join for a barefoot walk or just watch the sunset with me? \ud83c\udf05\ud83d\udc63",
+      "Okay be honest\u2026 first thing you'd say if you walked up right now? \ud83d\ude0f\ud83c\udf0a",
+      "Golden hour at the shore and I can't decide: stay here forever or race you into the water? Help \ud83d\ude48",
+      "If this was our little escape, what would you pack just for the two of us? \u2728",
+      "Tide's coming in and so are the good vibes\u2026 finish this: 'The perfect next move would be\u2026' \ud83d\udcad",
+      "Would you rather chase the last light with me or find a quiet spot and just talk? \u2600\ufe0f",
+      "I keep glancing at the horizon like it's holding secrets\u2026 what's one you'd share if we were here together? \ud83c\udf0a",
+      "Quick poll: sunset walk \ud83c\udf05 or spontaneous splash fight \ud83d\udca6 \u2014 pick one and tell me why",
+      "Feeling a little too relaxed out here\u2026 dare you to distract me \ud83d\ude09 what would you do?",
+      "This light makes everything feel softer\u2026 would you stay for the whole golden hour or pull me somewhere new? \u2728"
+    ],
+    "selected_text": "I keep glancing at the horizon like it's holding secrets\u2026 what's one you'd share if we were here together? \ud83c\udf0a",
+    "formatter_metadata": {
+      "provider_neutral": true,
+      "formatter": "CaptionStudioService",
+      "workflow": "x_engagement_publish",
+      "vision_primary": true,
+      "vision_provider": "grok",
+      "vision": {
+        "setting": "coastal shoreline with ocean waves",
+        "activity": "walking barefoot near the water's edge, glancing toward the horizon",
+        "time_of_day": "golden hour / late afternoon",
+        "location": "beach shoreline",
+        "wardrobe": "simple white bikini",
+        "expression": "relaxed soft smile, looking slightly off-camera",
+        "body_language": "three-quarter turn, casual stroll, arms relaxed at sides",
+        "lighting": "warm soft sidelight from low sun, golden highlights on skin",
+        "mood": "candid, serene, intimate, sun-kissed",
+        "environment": "ocean waves, wet sand, gentle surf, open water background"
+      },
+      "themes": [
+        {
+          "theme": "Creator OS Engagement",
+          "persona": "creator_os_engagement",
+          "captions": [
+            "Caught me mid-stroll\u2026 would you join for a barefoot walk or just watch the sunset with me? \ud83c\udf05\ud83d\udc63",
+            "Okay be honest\u2026 first thing you'd say if you walked up right now? \ud83d\ude0f\ud83c\udf0a",
+            "Golden hour at the shore and I can't decide: stay here forever or race you into the water? Help \ud83d\ude48",
+            "If this was our little escape, what would you pack just for the two of us? \u2728",
+            "Tide's coming in and so are the good vibes\u2026 finish this: 'The perfect next move would be\u2026' \ud83d\udcad",
+            "Would you rather chase the last light with me or find a quiet spot and just talk? \u2600\ufe0f",
+            "I keep glancing at the horizon like it's holding secrets\u2026 what's one you'd share if we were here together? \ud83c\udf0a",
+            "Quick poll: sunset walk \ud83c\udf05 or spontaneous splash fight \ud83d\udca6 \u2014 pick one and tell me why",
+            "Feeling a little too relaxed out here\u2026 dare you to distract me \ud83d\ude09 what would you do?",
+            "This light makes everything feel softer\u2026 would you stay for the whole golden hour or pull me somewhere new? \u2728"
+          ]
+        }
+      ],
+      "personas": {
+        "creator_os_engagement": "Creator OS Engagement"
+      },
+      "engagement_goals": [
+        "replies",
+        "reposts",
+        "likes",
+        "profile visits",
+        "follows"
+      ]
+    },
+    "created_at": "2026-08-08T16:11:05.266476"
+  },
+  {
     "caption_result_id": "caption_result_acd36ff6b0cd420dbdc32f15727bf379",
     "caption_request_id": "caption_request_d3659c18fea047b5acbb040a8e480063",
     "session_id": "caption_session_3e10492dc2bd4ba28862942368ca281f",

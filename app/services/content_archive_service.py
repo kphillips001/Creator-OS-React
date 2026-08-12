@@ -113,6 +113,26 @@ class ContentArchiveService:
             updated_at=utc_now(),
         )
 
+    def copy_generation(self, record: GeneratedImageRecord) -> GeneratedImageRecord:
+        """Copy durable source media into the active Generation Library without consuming it."""
+        self.initialize_content_root()
+        destination = self._generation_destination_for_workflow(
+            record.generation_metadata.get("workflow_type")
+            or record.generation_metadata.get("source")
+            or record.creative_mode
+        )
+        copied_path = self._copy_or_materialize(
+            record.output_reference, destination, record.image_id,
+        )
+        if str(copied_path) == record.output_reference:
+            return record
+        return replace(record, output_reference=str(copied_path), generation_metadata={
+            **dict(record.generation_metadata or {}),
+            "original_output_reference": record.output_reference,
+            "output_reference": str(copied_path),
+            "cms_content_root": str(self.content_root),
+        }, updated_at=utc_now())
+
     def archive_published(
         self,
         record: GeneratedImageRecord,

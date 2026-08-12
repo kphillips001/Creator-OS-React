@@ -21,6 +21,7 @@ class GeneratedImageRecord:
     prompt_text: str
     creative_mode: str | None
     reference_asset_id: int | None
+    generation_recipe_id: str | None = None
     photoshoot_session_id: str | None = None
     photoshoot_request_id: str | None = None
     generation_date: str = field(default_factory=utc_now)

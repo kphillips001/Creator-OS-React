@@ -16,6 +16,19 @@ class CommercialPublicationUploadRepository:
             (publication_id, asset_id, provider),
         )
 
+    def find_ready_reusable(self, *, asset_id: int, fanvue_account_id: int,
+                            content_hash: str, file_size_bytes: int,
+                            provider: str = "FANVUE"):
+        return self._one(
+            """SELECT * FROM public.commercial_publication_uploads
+               WHERE asset_id=%s AND fanvue_account_id=%s AND provider=%s
+                 AND content_hash=%s AND file_size_bytes=%s
+                 AND upload_status='uploaded' AND processing_status='ready'
+                 AND provider_media_uuid IS NOT NULL
+               ORDER BY completed_at DESC NULLS LAST,updated_at DESC LIMIT 1""",
+            (asset_id, fanvue_account_id, provider, content_hash, file_size_bytes),
+        )
+
     def list_for_publication(self, publication_id: UUID):
         with self.connection_factory() as connection:
             with connection.cursor() as cursor:
@@ -43,6 +56,21 @@ class CommercialPublicationUploadRepository:
                 )
                 row = cursor.fetchone()
         return self._from_row(row)
+
+    def initialize_reused(self, *, publication_id, asset_id, fanvue_account_id,
+                          media_type, content_hash, file_size_bytes,
+                          provider_media_uuid):
+        checkpoint = self.initialize(
+            publication_id=publication_id, asset_id=asset_id,
+            fanvue_account_id=fanvue_account_id, media_type=media_type,
+            content_hash=content_hash, file_size_bytes=file_size_bytes,
+        )
+        return self._update(
+            checkpoint.publication_upload_id,
+            """provider_media_uuid=%s,upload_status='uploaded',
+               processing_status='ready',completed_at=now(),last_error=NULL""",
+            (provider_media_uuid,),
+        )
 
     def save_session(self, publication_upload_id, *, media_uuid, upload_id,
                      part_size, total_parts):

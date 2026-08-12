@@ -1129,6 +1129,17 @@ attributes precisely and put all uploaded-subject identity attributes in element
             return bool(context["progression_enabled"])
         return normalize_target_shot_count(context.get("target_shot_count")) > 0
 
+    @staticmethod
+    def _freeflow_facial_performance_block() -> str:
+        return """FreeFlow facial performance (REQUIRED):
+- Preserve the subject's exact facial identity, anatomy, proportions, and recognizable features. Facial identity continuity remains strict.
+- Treat the latest approved facial performance as contrast evidence, not as an expression lock.
+- Do not repeat the immediately previous approved shot's facial expression, gaze, and head attitude as a package.
+- Select a visibly distinct but natural, scene-appropriate facial performance for this shot; variation must be intentional rather than random.
+- Specify the expression, gaze direction, mouth state, and head attitude together in the emotion field.
+- Natural options include direct or averted gaze, looking slightly up or down, relaxed or intent eyes, closed or subtly parted lips, a restrained smirk, and small chin or head-angle changes. These are examples, never a fixed rotation.
+- Avoid exaggerated emotion, cartoonish performance, forced large smiles, or facial changes that compromise identity.""".strip()
+
     @classmethod
     def _creative_prompt_context(cls, session_context: Mapping[str, Any] | None) -> dict[str, Any]:
         context = dict(session_context or {})
@@ -1227,6 +1238,15 @@ Natural progression pacing (REQUIRED):
 - Explore another composition, pose, expression, camera angle, natural action, or framing while preserving scene and visual continuity.
 - Do not infer pacing from the current or approved shot count. Do not advance a stage, arc, intensity, undress, climax, or finale merely because another shot was approved.
 - Preserve the current scenario and intensity unless the operator explicitly requests a change; operator-requested evolution remains authoritative."""
+        facial_performance_rules = (
+            "\n" + CreativeDirectorService._freeflow_facial_performance_block() + "\n"
+            if not progression_enabled else ""
+        )
+        latest_expression_rule = (
+            "- Preserve the latest approved environment, location, wardrobe, clothing state, pose, body orientation, hand placement, camera angle, framing, and lighting unless the operator explicitly directs a change. Its facial performance is contrast context governed by the FreeFlow facial-performance rules."
+            if not progression_enabled else
+            "- Preserve its environment, location, wardrobe, clothing state, pose, body orientation, hand placement, facial expression, camera angle, framing, and lighting unless the operator explicitly directs a change."
+        )
         return f"""
 You are the Shot Director for a continuity-locked Creator OS Photoshoot Studio session.
 
@@ -1254,8 +1274,9 @@ Approved direction history:
 {length_pacing}
 Rules:
 {session_pacing_rules}
+{facial_performance_rules}
 - Treat latest_approved_shot in Session memory as a structured continuity contract.
-- Preserve its environment, location, wardrobe, clothing state, pose, body orientation, hand placement, facial expression, camera angle, framing, and lighting unless the operator explicitly directs a change.
+{latest_expression_rule}
 - Change at most one small natural beat by default. Never begin a new composition, wardrobe, location, or camera setup without explicit operator direction.
 - Preserve identity, face continuity, body continuity, hairstyle, makeup, wardrobe, lighting, camera style, and location by default.
 - When a Creative Hint is provided, it has higher priority than continuity locks for the hinted element only.
@@ -1365,6 +1386,8 @@ Creative Freeflow (required):
 - In explicit mode, omit every automatic explicit progression ladder. Maintain the current explicit scenario/intensity unless the operator explicitly requests a change.
 - Preserve location, lighting, hairstyle, makeup, camera style, identity, and all continuity locks unless operator guidance changes a specific element.
 
+{CreativeDirectorService._freeflow_facial_performance_block()}
+
 {CreativeDirectorService._explicit_length_pacing_block(session_context) if mode == "explicit" else ""}
 """.strip()
         elif mode == "explicit":
@@ -1447,6 +1470,10 @@ Safe mode intensity rules:
 - In explicit mode, put the recommended natural next progression first as idea 1; the UI pre-selects it for the creator.
 - Keep alternatives close to the same immediate next beat. Do not create unrelated compositions merely to make ideas different."""
         )
+        freeflow_output_rule = (
+            "- In Creative FreeFlow, put the complete expression, gaze, mouth state, and head attitude in each idea so the immediately previous facial-performance package is not repeated."
+            if not progression_enabled else ""
+        )
         progression_display = f"Progression stage: {progression_stage}" if progression_enabled else "Creative structure: OPEN_ENDED_NON_PROGRESSIVE"
         return f"""
 You are Grok helping with creative inspiration for a Creator OS Photoshoot Studio session.
@@ -1472,6 +1499,7 @@ Output rules:
 - Use latest_approved_shot as a structured continuity contract. Preserve every listed scene and camera attribute unless one small evolution or an explicit operator direction changes it.
 - Return exactly {count} ideas as a plain numbered list: 1. ... through {count}. ...
 - Every idea MUST include a concrete facial expression or eye/mouth change (not just "looks at the camera").
+{freeflow_output_rule}
 - If user guidance is provided, every idea must honor that guidance.
 - Creative inspiration only.
 - Do not write a renderer prompt.
@@ -1571,6 +1599,14 @@ Stay platform-safe. Progress through expression, pose variety, framing, confiden
             if not progression_enabled else
             "why this is the right beat in the arc"
         )
+        facial_performance_rules = (
+            CreativeDirectorService._freeflow_facial_performance_block()
+            if not progression_enabled else ""
+        )
+        emotion_schema = (
+            "specific facial performance: expression, gaze, mouth state, and head attitude"
+            if not progression_enabled else "specific facial expression"
+        )
         return f"""
 You are the Shot Director {planning_role}.
 
@@ -1587,6 +1623,8 @@ Session memory:
 {context_json}
 
 {progression}
+
+{facial_performance_rules}
 
 Rules:
 {fixed_length_rules}
@@ -1607,7 +1645,7 @@ Return ONLY valid JSON:
       "title": "short title",
       "creative_direction": "1-2 sentences describing this shot",
       "reasoning": "{reasoning_description}",
-      "emotion": "specific facial expression",
+      "emotion": "{emotion_schema}",
       "camera_framing": "framing",
       "lighting": "lighting note",
       "pose_composition": "pose/composition",

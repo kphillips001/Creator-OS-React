@@ -131,6 +131,28 @@ class SocialPublishingService:
             source_id, platform=SocialPlatform.TELEGRAM.value
         )
         if existing and existing.status != SocialPublishStatus.ARCHIVED.value:
+            if existing.status == SocialPublishStatus.FAILED.value:
+                refreshed = replace(
+                    existing,
+                    status=SocialPublishStatus.QUEUED.value,
+                    output_reference=str(image_reference),
+                    reference_asset_id=int(hero_asset_id),
+                    updated_at=utc_now(),
+                    generation_metadata={
+                        **dict(existing.generation_metadata or {}),
+                        "commercial_offering_id": str(commercial_offering_id),
+                        "destination": "telegram_content_vault",
+                        "title": str(title or "").strip(),
+                    },
+                )
+                self._replace_queue_item(refreshed)
+                self._append_history(
+                    refreshed,
+                    status=SocialPublishStatus.QUEUED.value,
+                    message="Commercial Offering queued for Telegram Content Vault retry.",
+                    metadata=dict(refreshed.generation_metadata),
+                )
+                return refreshed
             return existing
         item = SocialQueueItem(
             queue_item_id=new_generation_id("social_queue_item"),
@@ -319,7 +341,9 @@ class SocialPublishingService:
         telegram_cta_enabled: bool = False,
         telegram_cta_label: str = "",
         telegram_cta_url: str = "",
+        audit_metadata: Mapping[str, Any] | None = None,
     ) -> SocialQueueItem:
+        audit = dict(audit_metadata or {})
         item = self.get_queue_item(queue_item_id)
         publish_item = self.create_publish_item(
             queue_item_id=item.queue_item_id,
@@ -335,6 +359,7 @@ class SocialPublishingService:
                     status=SocialPublishStatus.FAILED.value,
                     metadata={
                         **dict(publish_item.metadata or {}),
+                        **audit,
                         "error": f"Publishing is only implemented for X and Telegram. Platform: {item.platform}",
                     },
                 )
@@ -343,7 +368,7 @@ class SocialPublishingService:
                 updated,
                 status=SocialPublishStatus.FAILED.value,
                 message=f"Publishing is only implemented for X and Telegram. Platform: {item.platform}",
-                metadata={"caption_id": caption_id or item.caption_id},
+                metadata={**audit, "caption_id": caption_id or item.caption_id},
             )
             return updated
         try:
@@ -364,6 +389,7 @@ class SocialPublishingService:
                 )
         except Exception as exc:
             error_metadata = {
+                **audit,
                 "account_name": account_name,
                 "caption_id": caption_id or item.caption_id,
                 "telegram_post_to": telegram_post_to,
@@ -399,6 +425,7 @@ class SocialPublishingService:
                 status=SocialPublishStatus.POSTED.value,
                 metadata={
                     **dict(publish_item.metadata or {}),
+                    **audit,
                     "account_name": getattr(result, "account_name", None),
                     "telegram_post_to": getattr(result, "post_to", None),
                     "provider_post_id": result.provider_post_id,
@@ -413,6 +440,7 @@ class SocialPublishingService:
             status=SocialPublishStatus.POSTED.value,
             message=result.message or ("Posted to Telegram." if item.platform == SocialPlatform.TELEGRAM.value else "Posted to X."),
             metadata={
+                **audit,
                 "account_name": getattr(result, "account_name", None),
                 "telegram_post_to": getattr(result, "post_to", None),
                 "caption_id": caption_id or item.caption_id,

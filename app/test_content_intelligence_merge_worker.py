@@ -67,13 +67,14 @@ def results():
                   "activity": "Walking", "outfit": "Red Dress", "pose": "Mid-stride",
                   "objects": ["Skyline", "skyline"]}, result_id="vision-new", moment=NOW),
         provider("grok-vision", {"short_description": "Confident city energy",
-                 "content_summary": "Confident city energy", "themes": ("Modern Luxury", "modern luxury"),
+                 "content_summary": "Confident city energy", "title": "Rooftop Confidence",
+                 "themes": ("Modern Luxury", "modern luxury"),
                  "tags": ("Aspirational", "editorial"), "mood": "Confident",
                  "atmosphere": "Aspirational", "emotional_tone": "Empowered",
                  "visual_style": "Editorial Lifestyle", "suggested_collections": ("City Muse",),
                  "search_phrases": ("luxury city confidence",), "keywords": ("city confidence",),
                  "lifestyle_context": "Fashion-forward urban life"},
-                 {"descriptive_summary": "Confident city energy"}, result_id="grok-1"),
+                 {"title": "Rooftop Confidence", "descriptive_summary": "Confident city energy"}, result_id="grok-1"),
     ]
 
 
@@ -97,6 +98,8 @@ def test_deterministic_merge_uses_latest_successes_and_respects_field_ownership(
     assert content["setting"] == "Rooftop" and content["outfit"] == "Red Dress"
     assert content["objects"] == ("Skyline",)
     assert content["summary"] == "Confident city energy"
+    assert content["title"] == "Rooftop Confidence"
+    assert context["title"] == "Rooftop Confidence"
     assert content["themes"] == ("Modern Luxury",) and content["mood"] == "Confident"
     assert context["safety_classification"] == "EXPLICIT"
     assert context["nudity_level"] == "explicit" and context["explicit_content"] is True
@@ -147,16 +150,27 @@ class Workflow:
     def retry(self, asset_id): self.retried.append(asset_id); return SimpleNamespace(changed=True)
 
 
+class CanonicalIntelligence:
+    def __init__(self, error=None): self.calls, self.error = [], error
+    def merge_provider_results(self, asset_id, *, preserve_analysis_status=False):
+        self.calls.append((asset_id, preserve_analysis_status))
+        if self.error: raise self.error
+        return SimpleNamespace(title="Rooftop Confidence")
+
+
 def test_worker_runs_application_merge_only_and_reports_ready():
     merge_service, _ = merger()
     jobs, workflow = Jobs(), Workflow()
+    canonical = CanonicalIntelligence()
     worker = ContentIntelligenceMergeWorkerService(
         worker_instance_id="merge-1", jobs=jobs, merger=merge_service, workflow=workflow,
+        canonical_intelligence=canonical,
     )
     result = worker.process_one()
     assert result["status"] == "READY"
     assert workflow.started == [(42, "CONTENT_INTELLIGENCE")]
     assert workflow.completed[0][1:3] == ("CONTENT_INTELLIGENCE", True)
+    assert canonical.calls == [(42, True)]
     assert jobs.ready == [42] and jobs.released == [(42, "merge-1")]
     assert worker.retry_failed(42) is True and workflow.retried == [42]
 
@@ -168,22 +182,40 @@ def test_restart_reuses_completed_merge_without_rebuilding():
     reusable = NeverMerge(intelligence=merge_service.intelligence, profiles=profiles,
                           assets=merge_service.assets, now=lambda: NOW)
     jobs, workflow = Jobs(), Workflow()
+    canonical = CanonicalIntelligence()
     result = ContentIntelligenceMergeWorkerService(worker_instance_id="merge-2", jobs=jobs,
-        merger=reusable, workflow=workflow).process_one()
+        merger=reusable, workflow=workflow, canonical_intelligence=canonical).process_one()
     assert result["reused"] is True and result["status"] == "READY"
     assert profiles.profile is completed
+    assert canonical.calls == [(42, True)]
 
 
 def test_missing_provider_worker_reports_failed_and_does_not_mark_business_ready():
     merge_service, _ = merger(results()[:-1])
     jobs, workflow = Jobs(), Workflow()
     result = ContentIntelligenceMergeWorkerService(worker_instance_id="merge-3", jobs=jobs,
-        merger=merge_service, workflow=workflow).process_one()
+        merger=merge_service, workflow=workflow,
+        canonical_intelligence=CanonicalIntelligence()).process_one()
     assert result["status"] == "CONTENT_INTELLIGENCE_FAILED"
     assert "grok-vision" in result["error"]
     assert jobs.ready == []
     assert workflow.completed[0][2] is False
     assert workflow.completed[0][3]["error_code"] == "MISSING_REQUIRED_PROVIDER_RESULT"
+
+
+def test_worker_does_not_report_ready_when_canonical_promotion_fails():
+    merge_service, _ = merger()
+    jobs, workflow = Jobs(), Workflow()
+    result = ContentIntelligenceMergeWorkerService(
+        worker_instance_id="merge-4", jobs=jobs, merger=merge_service,
+        workflow=workflow,
+        canonical_intelligence=CanonicalIntelligence(RuntimeError("canonical persistence failed")),
+    ).process_one()
+    assert result["status"] == "CONTENT_INTELLIGENCE_FAILED"
+    assert jobs.ready == []
+    assert workflow.completed == [(42, "CONTENT_INTELLIGENCE", False, {
+        "error_code": "RuntimeError", "error_message": "canonical persistence failed",
+    })]
 
 
 def test_canonical_profile_is_hydrated_for_existing_recommendation_consumers():

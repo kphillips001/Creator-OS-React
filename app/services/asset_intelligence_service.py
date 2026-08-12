@@ -72,12 +72,16 @@ class AssetIntelligenceService:
             raise ValueError("Provider result creator ownership mismatch.")
         return self.repository.save_provider_result(result)
 
-    def merge_provider_results(self, asset_id: int) -> AssetIntelligenceProfile:
+    def merge_provider_results(
+        self, asset_id: int, *, preserve_analysis_status: bool = False,
+    ) -> AssetIntelligenceProfile:
         profile = self._required_profile(asset_id)
         merged = self.merger.merge(
             profile,
             self.repository.list_provider_results(int(asset_id)),
         )
+        if preserve_analysis_status:
+            merged = replace(merged, analysis_status=profile.analysis_status)
         return self.repository.upsert_profile(merged)
 
     def mark_failed(

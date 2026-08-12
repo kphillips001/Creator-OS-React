@@ -496,6 +496,7 @@ class SocialPublishingTests(unittest.TestCase):
             telegram_cta_enabled=True,
             telegram_cta_label="Open",
             telegram_cta_url="https://example.test",
+            audit_metadata={"offering_id": "offering-1", "asset_id": 42, "teaser_id": "teaser-1"},
         )
         archive = generation_library.mark_published(
             item.generated_image_id,
@@ -515,6 +516,8 @@ class SocialPublishingTests(unittest.TestCase):
         self.assertEqual(posted.status, SocialPublishStatus.POSTED.value)
         self.assertEqual(fake_telegram.calls[0]["post_to"], "vault")
         self.assertEqual(social_publishing.list_publish_items()[0].metadata["telegram_post_to"], "vault")
+        self.assertEqual(social_publishing.list_publish_items()[0].metadata["offering_id"], "offering-1")
+        self.assertEqual(social_publishing.list_history()[0].metadata["teaser_id"], "teaser-1")
         self.assertEqual(social_publishing.list_history()[0].status, SocialPublishStatus.POSTED.value)
         self.assertTrue(archive.success)
         archive_record = generation_library.archive_service.list_records(archive_type="published_telegram")[0]

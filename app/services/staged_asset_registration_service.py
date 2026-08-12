@@ -22,7 +22,12 @@ from app.repositories.commerce_registration_repository import (
     CommerceRegistrationRepository,
 )
 from app.services.asset_registration_service import AssetRegistrationService
+from app.services.asset_intelligence_service import AssetIntelligenceService
+from app.services.business_asset_analysis_orchestrator import (
+    BusinessAssetAnalysisOrchestrator,
+)
 from app.services.generation_library_service import GenerationLibraryService
+from app.models.asset_intelligence import AssetIntelligenceStatus
 
 
 @dataclass(frozen=True)
@@ -45,6 +50,8 @@ class StagedAssetRegistrationService:
         asset_registration_service: AssetRegistrationService | None = None,
         commerce_registration_repository: CommerceRegistrationRepository | None = None,
         generation_library_service: GenerationLibraryService | None = None,
+        asset_intelligence_service: AssetIntelligenceService | None = None,
+        analysis_orchestrator: BusinessAssetAnalysisOrchestrator | None = None,
     ) -> None:
         self.generation_library = generation_library_service or GenerationLibraryService()
         self.asset_registration = asset_registration_service or AssetRegistrationService(
@@ -54,6 +61,12 @@ class StagedAssetRegistrationService:
         self.business_assets = (
             commerce_registration_repository or CommerceRegistrationRepository()
         )
+        self.intelligence = (
+            asset_intelligence_service
+            or getattr(self.asset_registration, "asset_intelligence", None)
+            or AssetIntelligenceService()
+        )
+        self.analysis = analysis_orchestrator or BusinessAssetAnalysisOrchestrator()
 
     def register(
         self,
@@ -105,20 +118,45 @@ class StagedAssetRegistrationService:
             )
             already_registered = bool(asset_result.already_registered)
 
+        analysis_status = self._ensure_analysis(
+            asset_id, creator_profile_id=int(creator_profile_id),
+        )
         self.generation_library.mark_business_registered(record.image_id, asset_id)
         return StagedAssetRegistrationResult(
             success=True,
             asset_id=asset_id,
             registration_id=str(business_asset.registration_id),
             already_registered=already_registered,
-            analysis_status="PENDING",
+            analysis_status=analysis_status,
             business_lifecycle_state=business_asset.business_lifecycle_state.value,
             message=(
-                "Asset is already registered."
-                if already_registered
-                else "Asset registered. Analysis is pending."
+                "Asset is already registered. Intelligence analysis is complete."
+                if already_registered and analysis_status == "READY"
+                else "Asset is registered. Intelligence analysis is in progress."
             ),
         )
+
+    def _ensure_analysis(self, asset_id: int, *, creator_profile_id: int) -> str:
+        """Idempotently start or repair the canonical Business Asset analysis chain."""
+        reader = getattr(self.intelligence, "get_profile", None)
+        profile = reader(int(asset_id)) if callable(reader) else None
+        profile = profile or self.intelligence.initialize_pending(
+            asset_id=int(asset_id), creator_profile_id=int(creator_profile_id),
+        )
+        if profile.analysis_status == AssetIntelligenceStatus.READY:
+            return profile.analysis_status.value
+        provider_failures = set(BusinessAssetAnalysisOrchestrator.FAILED.values())
+        if profile.analysis_status in provider_failures:
+            decision = self.analysis.retry(int(asset_id))
+        elif profile.analysis_status == AssetIntelligenceStatus.FAILED:
+            self.analysis.repository.transition(
+                int(asset_id), AssetIntelligenceStatus.FAILED,
+                AssetIntelligenceStatus.PENDING,
+            )
+            decision = self.analysis.advance(int(asset_id))
+        else:
+            decision = self.analysis.advance(int(asset_id))
+        return decision.current_state.value
 
     @staticmethod
     def _pending_business_asset(

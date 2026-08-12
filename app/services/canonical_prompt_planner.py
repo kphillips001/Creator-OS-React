@@ -81,6 +81,7 @@ class CanonicalPromptPlanner:
                         explicit_input.get("operator_expression")
                         or explicit_input.get("operatorExpression")
                     ),
+                    freeflow_expression=bool(explicit_input.get("freeflow_expression")),
                 )
             )
             prompt_builder = "canonical_explicit_prompt_planner"

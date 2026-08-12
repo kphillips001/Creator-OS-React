@@ -45,6 +45,8 @@ Image 1 controls identity. Image 2 controls Photoshoot continuity.
 """.strip()
 
     def _render_prompt_text(self, request):
+        if self._is_trusted_final_prompt(request):
+            return str(request.prompt_text or "")
         prompt = super()._render_prompt_text(request)
         metadata = request.metadata or {}
         policy = self._render_policy(request)

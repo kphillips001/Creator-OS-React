@@ -1,4 +1,5 @@
 from pathlib import Path
+from dataclasses import replace
 from types import SimpleNamespace
 
 from app.models.generation_library import GeneratedImageRecord
@@ -6,6 +7,7 @@ from app.services.asset_registration_service import AssetRegistrationService
 from app.services.staged_asset_registration_service import (
     StagedAssetRegistrationService,
 )
+from app.models.asset_intelligence import AssetIntelligenceStatus
 
 
 class FakeAssets:
@@ -32,12 +34,32 @@ class FakeGenerationLibrary:
 
 
 class FakeIntelligence:
-    def __init__(self):
+    def __init__(self, status=AssetIntelligenceStatus.PENDING):
         self.pending = []
+        self.status = status
+        self.profile = None
 
     def initialize_pending(self, *, asset_id, creator_profile_id):
         self.pending.append((asset_id, creator_profile_id))
-        return SimpleNamespace(analysis_status=SimpleNamespace(value="PENDING"))
+        self.profile = SimpleNamespace(analysis_status=self.status)
+        return self.profile
+
+    def get_profile(self, _asset_id):
+        return self.profile
+
+
+class FakeAnalysis:
+    def __init__(self):
+        self.advanced = []
+        self.retried = []
+
+    def advance(self, asset_id):
+        self.advanced.append(asset_id)
+        return SimpleNamespace(current_state=AssetIntelligenceStatus.NUDENET_PENDING)
+
+    def retry(self, asset_id):
+        self.retried.append(asset_id)
+        return SimpleNamespace(current_state=AssetIntelligenceStatus.NUDENET_PENDING)
 
 
 class FakeBusinessAssets:
@@ -90,6 +112,7 @@ def test_staged_registration_creates_pending_business_asset_without_analysis(tmp
             creator_profile_id=7,
             media_metadata=payload["media_metadata"],
             status="approved",
+            is_active=payload["is_active"],
         )
         return 51
 
@@ -108,16 +131,22 @@ def test_staged_registration_creates_pending_business_asset_without_analysis(tmp
         asset_registration_service=asset_registration,
         commerce_registration_repository=business_assets,
         generation_library_service=library,
+        analysis_orchestrator=FakeAnalysis(),
     )
 
     result = service.register(staged_record(image), creator_profile_id=7)
 
     assert result.success is True
     assert result.asset_id == 51
-    assert result.analysis_status == "PENDING"
+    assert result.analysis_status == "NUDENET_PENDING"
     assert result.business_lifecycle_state == "INTELLIGENCE_PENDING"
     assert no_analysis_calls == []
     assert inserted[0]["file_path"] == str(image)
+    assert inserted[0]["status"] == "approved"
+    assert inserted[0]["is_active"] is True
+    assert inserted[0]["classification"] == "SINGLE_IMAGE"
+    # Visibility is independent of the still-pending intelligence state.
+    assert result.analysis_status == "NUDENET_PENDING"
     assert image.exists()
     metadata = inserted[0]["media_metadata"]["asset_registration"]
     assert metadata["prompt_text"] == "editorial portrait"
@@ -152,6 +181,7 @@ def test_staged_registration_reuses_asset_and_business_registration(tmp_path):
             creator_profile_id=7,
             media_metadata=payload["media_metadata"],
             status="approved",
+            is_active=payload["is_active"],
         )
         return 51
 
@@ -165,6 +195,7 @@ def test_staged_registration_reuses_asset_and_business_registration(tmp_path):
         ),
         commerce_registration_repository=business_assets,
         generation_library_service=library,
+        analysis_orchestrator=FakeAnalysis(),
     )
     record = staged_record(image)
 
@@ -175,5 +206,73 @@ def test_staged_registration_reuses_asset_and_business_registration(tmp_path):
     assert second.success is True
     assert second.already_registered is True
     assert len(inserts) == 1
+    assert inserts[0]["is_active"] is True
+    assert inserts[0]["classification"] == "SINGLE_IMAGE"
     assert business_assets.upserts == 1
     assert len(business_assets.records) == 1
+
+
+def test_completed_intelligence_is_reused_without_dispatch(tmp_path):
+    image = tmp_path / "generation.png"
+    image.write_bytes(b"image")
+    record = replace(staged_record(image), imported_asset_id=51)
+    assets = FakeAssets()
+    assets.asset = SimpleNamespace(
+        id=51, creator_profile_id=7, media_metadata={}, status="approved",
+        is_active=True,
+    )
+    library = FakeGenerationLibrary()
+    intelligence = FakeIntelligence(AssetIntelligenceStatus.READY)
+    business_assets = FakeBusinessAssets()
+    business_assets.records[51] = StagedAssetRegistrationService._pending_business_asset(
+        record, asset_id=51, creator_profile_id=7,
+    )
+    analysis = FakeAnalysis()
+    service = StagedAssetRegistrationService(
+        asset_registration_service=AssetRegistrationService(
+            asset_repository=assets, generation_library_service=library,
+            asset_intelligence_service=intelligence, analyze_on_registration=False,
+        ),
+        commerce_registration_repository=business_assets,
+        generation_library_service=library,
+        analysis_orchestrator=analysis,
+    )
+
+    result = service.register(record, creator_profile_id=7)
+
+    assert result.analysis_status == "READY"
+    assert analysis.advanced == []
+    assert analysis.retried == []
+    assert business_assets.upserts == 0
+    assert assets.asset.is_active is True
+
+
+def test_failed_or_missing_intelligence_can_be_repaired(tmp_path):
+    image = tmp_path / "generation.png"
+    image.write_bytes(b"image")
+    record = replace(staged_record(image), imported_asset_id=51)
+    assets = FakeAssets()
+    assets.asset = SimpleNamespace(id=51, creator_profile_id=7, media_metadata={}, status="analysis_failed")
+    library = FakeGenerationLibrary()
+    intelligence = FakeIntelligence(AssetIntelligenceStatus.GROK_FAILED)
+    business_assets = FakeBusinessAssets()
+    business_assets.records[51] = StagedAssetRegistrationService._pending_business_asset(
+        record, asset_id=51, creator_profile_id=7,
+    )
+    analysis = FakeAnalysis()
+    service = StagedAssetRegistrationService(
+        asset_registration_service=AssetRegistrationService(
+            asset_repository=assets, generation_library_service=library,
+            asset_intelligence_service=intelligence, analyze_on_registration=False,
+        ),
+        commerce_registration_repository=business_assets,
+        generation_library_service=library,
+        analysis_orchestrator=analysis,
+    )
+
+    result = service.register(record, creator_profile_id=7)
+
+    assert result.success is True
+    assert result.analysis_status == "NUDENET_PENDING"
+    assert analysis.retried == [51]
+    assert business_assets.upserts == 0

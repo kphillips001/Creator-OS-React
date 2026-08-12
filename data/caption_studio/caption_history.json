@@ -1,5 +1,122 @@
 [
   {
+    "history_id": "caption_history_4c16e097daf8435d9889c0b426091e2b",
+    "session_id": "caption_session_6118a3a25dfb41debc0bc79a91095878",
+    "caption_request_id": "caption_request_ee4250cb2ba24c8bad5f9011e5bb4bc8",
+    "caption_result_id": "caption_result_4d4568500a9441078bdacc7ff6062c91",
+    "platform": "x",
+    "selected_text": "I turned around and caught you a few steps behind \ud83d\udc40\ud83d\ude02 What distracted you?",
+    "created_at": "2026-08-11T15:36:04.493391",
+    "metadata": {
+      "source_generated_image_id": "generated_image_910c14b61a0efbfce7586e6f",
+      "social_queue_item_id": null
+    }
+  },
+  {
+    "history_id": "caption_history_26dc91011dda4b69b769e6fd47d13ff9",
+    "session_id": "caption_session_6118a3a25dfb41debc0bc79a91095878",
+    "caption_request_id": "caption_request_ee4250cb2ba24c8bad5f9011e5bb4bc8",
+    "caption_result_id": "caption_result_4d4568500a9441078bdacc7ff6062c91",
+    "platform": "x",
+    "selected_text": null,
+    "created_at": "2026-08-11T15:35:01.958405",
+    "metadata": {
+      "source_generated_image_id": "generated_image_910c14b61a0efbfce7586e6f",
+      "social_queue_item_id": null
+    }
+  },
+  {
+    "history_id": "caption_history_399b11ec907d43ab9e89389b3ba7efd1",
+    "session_id": "caption_session_2aebb836abc540b5a165f5c4c86e24a6",
+    "caption_request_id": "caption_request_6164c845a91c4b91ba66ebf59156be27",
+    "caption_result_id": "caption_result_c35fa575291440c79579fcdc3895f29a",
+    "platform": "x",
+    "selected_text": null,
+    "created_at": "2026-08-11T15:30:18.170548",
+    "metadata": {
+      "source_generated_image_id": "generated_image_910c14b61a0efbfce7586e6f",
+      "social_queue_item_id": null
+    }
+  },
+  {
+    "history_id": "caption_history_3db670c95a964c9ea5bad510b36db121",
+    "session_id": "caption_session_570ddd4b4af94d849c97c8a3e4cd1561",
+    "caption_request_id": "caption_request_b80b9cd5a8f441d1933a03d72b398511",
+    "caption_result_id": "caption_result_60803d0dd5094de99b36a9d9aa836b87",
+    "platform": "telegram",
+    "selected_text": null,
+    "created_at": "2026-08-10T15:57:44.705264",
+    "metadata": {
+      "source_generated_image_id": "generated_image_e41306495d2cb9df3fa9a974",
+      "social_queue_item_id": null
+    }
+  },
+  {
+    "history_id": "caption_history_f2b8d071c5ce4441970560b483cf84fb",
+    "session_id": "caption_session_d30e88de6e2a477daf1e5f02b95aa00a",
+    "caption_request_id": "caption_request_fa7eac0b047c48dabc6f72aa74acbc13",
+    "caption_result_id": "caption_result_d1a385bee420496abd7e91ac45b8e8eb",
+    "platform": "x",
+    "selected_text": null,
+    "created_at": "2026-08-10T15:44:52.062510",
+    "metadata": {
+      "source_generated_image_id": "generated_image_cca888e5d20395a6794b2d79",
+      "social_queue_item_id": null
+    }
+  },
+  {
+    "history_id": "caption_history_ccb1b8be9a1c4564a482013608221a77",
+    "session_id": "caption_session_ff93c6ac57ab40d6b891efe6af75c350",
+    "caption_request_id": "caption_request_03df5a27a7f946f198e8b091b3f43b49",
+    "caption_result_id": "caption_result_fba44a88ed6949cd81f50e946c9ca468",
+    "platform": "x",
+    "selected_text": "I saved you the perfect spot next to me \u2728 what would you do first when you sat down?",
+    "created_at": "2026-08-09T16:05:03.409654",
+    "metadata": {
+      "source_generated_image_id": "generated_image_d8934ed44835ae7da0d886fa",
+      "social_queue_item_id": null
+    }
+  },
+  {
+    "history_id": "caption_history_f71df4fd9a7049f1b8945ef51eeee8a2",
+    "session_id": "caption_session_ff93c6ac57ab40d6b891efe6af75c350",
+    "caption_request_id": "caption_request_03df5a27a7f946f198e8b091b3f43b49",
+    "caption_result_id": "caption_result_fba44a88ed6949cd81f50e946c9ca468",
+    "platform": "x",
+    "selected_text": null,
+    "created_at": "2026-08-09T16:01:22.903025",
+    "metadata": {
+      "source_generated_image_id": "generated_image_d8934ed44835ae7da0d886fa",
+      "social_queue_item_id": null
+    }
+  },
+  {
+    "history_id": "caption_history_8adf82177f9243698231628acbcfd7c2",
+    "session_id": "caption_session_35c9f6884d334f8ba8421a4331f6b4c6",
+    "caption_request_id": "caption_request_f68a2edb7d674465bcba4e13d6e1b236",
+    "caption_result_id": "caption_result_b4e0288707be40c58a93eeee0d696caf",
+    "platform": "x",
+    "selected_text": "I keep glancing at the horizon like it's holding secrets\u2026 what's one you'd share if we were here together? \ud83c\udf0a",
+    "created_at": "2026-08-08T16:11:46.348914",
+    "metadata": {
+      "source_generated_image_id": "generated_image_052e9389f28d0ed992a18d89",
+      "social_queue_item_id": null
+    }
+  },
+  {
+    "history_id": "caption_history_0493ae39b80c44b582d2d8807f6ff07f",
+    "session_id": "caption_session_35c9f6884d334f8ba8421a4331f6b4c6",
+    "caption_request_id": "caption_request_f68a2edb7d674465bcba4e13d6e1b236",
+    "caption_result_id": "caption_result_b4e0288707be40c58a93eeee0d696caf",
+    "platform": "x",
+    "selected_text": null,
+    "created_at": "2026-08-08T16:11:05.273497",
+    "metadata": {
+      "source_generated_image_id": "generated_image_052e9389f28d0ed992a18d89",
+      "social_queue_item_id": null
+    }
+  },
+  {
     "history_id": "caption_history_63c4652a3265441f9bcbcaf800bd8778",
     "session_id": "caption_session_3e10492dc2bd4ba28862942368ca281f",
     "caption_request_id": "caption_request_d3659c18fea047b5acbb040a8e480063",

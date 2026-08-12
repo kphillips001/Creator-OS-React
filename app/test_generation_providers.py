@@ -3,6 +3,9 @@ import tempfile
 import sys
 import types
 import unittest
+from types import SimpleNamespace
+from unittest.mock import patch
+from uuid import uuid4
 
 if "psycopg" not in sys.modules:
     psycopg = types.ModuleType("psycopg")
@@ -22,7 +25,7 @@ if "psycopg" not in sys.modules:
 
 from app.models.creative_director import PromptPlan
 from app.models.generation_engine import GenerationStatus
-from app.providers.generation.base import GenerationProviderError
+from app.providers.generation.base import GenerationProviderError, WaveSpeedProviderBase
 from app.providers.generation.nano_banana_provider import NanoBananaProvider
 from app.providers.generation.provider_registry import ProviderRegistry, create_default_registry
 from app.providers.generation.seedream_provider import Seedream45Provider, Seedream50ProProvider
@@ -104,6 +107,29 @@ class ChangingReferenceLibraryService:
 
 
 class GenerationProviderTests(unittest.TestCase):
+    def setUp(self):
+        capture = SimpleNamespace(
+            capture=lambda **_: SimpleNamespace(recipe_id=uuid4()),
+            submission_started=lambda *_: None,
+            submitted=lambda *_: None,
+            submission_failed=lambda *_, **__: None,
+            terminal=lambda *_, **__: None,
+        )
+        mocked = patch(
+            "app.services.generation_recipe_capture_service.GenerationRecipeCaptureService",
+            return_value=capture,
+        )
+        mocked.start()
+        self.addCleanup(mocked.stop)
+
+    def test_canonical_expression_profile_is_not_overridden_by_provider_fallback(self):
+        rendered = "SCENE\nA natural next shot.\n\nEXPLICIT EXPRESSION PROFILE\nGaze slightly away."
+        result = WaveSpeedProviderBase._with_expression_directive(rendered, "identity prompt")
+        self.assertTrue(result.startswith(rendered))
+        self.assertEqual(result.count("EXPLICIT EXPRESSION PROFILE"), 1)
+        self.assertEqual(result.count("CANONICAL AVA FACIAL NATURALISM"), 1)
+        self.assertNotIn("EXPLICIT EXPRESSION VARIATION:", result)
+
     def make_engine(self, registry):
         temp_dir = tempfile.TemporaryDirectory()
         self.addCleanup(temp_dir.cleanup)

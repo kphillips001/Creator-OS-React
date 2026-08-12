@@ -71,7 +71,9 @@ def test_register_generated_image_creates_minimal_creator_asset(tmp_path):
     assert inserted[0]["file_path"] == str(source)
     assert inserted[0]["requires_vision"] is False
     assert inserted[0]["requires_nudenet"] is False
-    assert inserted[0]["classification"] == "UNCLASSIFIED"
+    assert inserted[0]["classification"] == "SINGLE_IMAGE"
+    assert inserted[0]["status"] == "approved"
+    assert inserted[0]["is_active"] is True
     assert "commerce" not in inserted[0]
     assert generation_library.links == [("generated-image-1", 91)]
     assert intelligence.pending == [(91, 2)]
@@ -102,6 +104,31 @@ def test_register_generated_image_prevents_duplicate_insert(tmp_path):
     assert inserts == []
     assert generation_library.links == [("generated-image-1", 44)]
     assert intelligence.pending == [(44, 2)]
+
+
+def test_intelligence_completion_does_not_overwrite_single_image_classification(tmp_path):
+    source = tmp_path / "generated.png"
+    source.write_bytes(b"generated-image")
+    inserted = []
+    updates = []
+    analysis_calls = []
+    service = AssetRegistrationService(
+        asset_repository=FakeAssetRepository(),
+        generation_library_service=FakeGenerationLibrary(),
+        asset_intelligence_service=FakeAssetIntelligenceService(),
+        asset_analysis_service=type(
+            "FakeAnalysis", (), {"analyze": lambda self, **kwargs: analysis_calls.append(kwargs)}
+        )(),
+        content_item_inserter=lambda payload: inserted.append(payload) or 91,
+        content_item_updater=lambda asset_id, payload: updates.append((asset_id, payload)),
+    )
+
+    result = service.register_generated_image(generated_record(source), creator_profile_id=2)
+
+    assert result.success is True
+    assert inserted[0]["classification"] == "SINGLE_IMAGE"
+    assert analysis_calls == [{"asset_id": 91, "creator_profile_id": 2, "progress": None}]
+    assert updates == [(91, {"status": "approved"})]
 
 
 def test_register_generated_image_rejects_protected_reference_role(tmp_path):

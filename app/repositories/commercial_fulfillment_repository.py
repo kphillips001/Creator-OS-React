@@ -99,6 +99,21 @@ class CommercialFulfillmentRepository:
             offering.price_minor,offering.currency,offering.hero_asset_id,
             offering.status AS offering_status,offering.created_at,
             offering.source_photoshoot_deliverable_id,
+            (
+                SELECT COALESCE(
+                    (SELECT commercial_teaser.derivative_path
+                     FROM public.commercial_teasers commercial_teaser
+                     WHERE commercial_teaser.source_asset_id=hero.id
+                       AND commercial_teaser.distribution_use='CHAT'
+                       AND commercial_teaser.status='READY'
+                     LIMIT 1),
+                    NULLIF(hero.blurred_preview_path,''),
+                    hero.media_metadata#>>'{{derivatives,blurred_preview,path}}',
+                    hero.media_metadata#>>'{{derivatives,blur,path}}'
+                )
+                FROM public.content_items hero
+                WHERE hero.id=offering.hero_asset_id
+            ) AS blurred_teaser_path,
             source_deliverable.selling_mode AS photoshoot_selling_mode,
             source_deliverable.bundle_sales_channel AS photoshoot_bundle_sales_channel,
             bundle_teaser.source_asset_id AS bundle_teaser_source_asset_id,

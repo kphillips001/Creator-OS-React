@@ -14,6 +14,8 @@ class FakeRepository:
         if changes["update_completed"]:row["completed"]=changes["completed"];row["completed_at"]=datetime.now(timezone.utc) if changes["completed"] else None
         if changes["update_notes"]:row["notes"]=changes["notes"]
         return row
+    def delete(self,creator,todo_id):
+        before=len(self.items);self.items=[item for item in self.items if item["todo_id"]!=todo_id];return len(self.items)==before-1
 
 
 def setup(monkeypatch):
@@ -35,10 +37,30 @@ def test_create_todo(monkeypatch):
     assert created["id"]=="new-id" and created["title"]=="Future work" and created["note"]=="Details" and created["completed"] is False
 
 
+def test_delete_todo_removes_only_selected_row_and_its_inline_note(monkeypatch):
+    repository=setup(monkeypatch)
+    repository.items.append({"todo_id":"keep","title":"Keep me","created_at":datetime.now(timezone.utc),"completed":False,"completed_at":None,"notes":"Keep note"})
+    assert developer_notes.delete_todo("add-photoshoot-bundle-support") is None
+    assert [item["todo_id"] for item in repository.items] == ["keep"]
+    assert repository.items[0]["notes"] == "Keep note"
+    assert [item["id"] for item in developer_notes.list_todos()["items"]] == ["keep"]
+
+
+def test_delete_missing_todo_returns_not_found(monkeypatch):
+    from fastapi import HTTPException
+    setup(monkeypatch)
+    try:
+        developer_notes.delete_todo("missing")
+        assert False, "Expected a not-found response"
+    except HTTPException as error:
+        assert error.status_code == 404
+
+
 def test_seed_and_notes_migrations_are_idempotent_and_additive():
     repository=Path("app/repositories/developer_todo_repository.py").read_text(encoding="utf-8")
     first=Path("migrations/forward/20260807_041_developer_todos.sql").read_text(encoding="utf-8")
     second=Path("migrations/forward/20260807_042_developer_todo_notes.sql").read_text(encoding="utf-8")
-    assert "ON CONFLICT (creator_profile_id, todo_id) DO NOTHING" in repository
+    assert "ON CONFLICT (creator_profile_id, todo_id) DO NOTHING" in first
+    assert "ON CONFLICT (creator_profile_id, todo_id) DO NOTHING" not in repository
     assert "PRIMARY KEY (creator_profile_id, todo_id)" in first and "ADD COLUMN notes" in second
     assert "ORDER BY completed ASC, created_at DESC" in repository

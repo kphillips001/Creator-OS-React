@@ -1,19 +1,31 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   createPromptPreview,
+  discardExplicitInspiration,
   enhanceCreativeTags,
+  handoffExplicitInspiration,
   inspireExplicitContent,
+  type ExplicitInspirationTierMode,
+  startExplicitGenerationBatch,
 } from "../../../infrastructure/api/contentStudioApi";
+import { useBackgroundOperations } from "../../background-operations/BackgroundOperationsContext";
 import type { ContentStudioContext } from "../types/contentStudioContext";
 import type { ExplicitGenerationInput } from "../types/generation";
 import { type PlannerBatchItem, updatePlannerBatchItems } from "../types/plannerBatch";
 import { useContentStudioConfiguration } from "../hooks/useContentStudioConfiguration";
 import {
+  beginExplicitGenerationBatch,
+  type ExplicitBatchSnapshot,
+} from "../services/explicitGenerationBatch";
+import {
   GenerationWorkflowSections,
   type GenerationWorkflowHandle,
   type PlannerBatchProgress,
 } from "./GenerationWorkflowSections";
+
+const EXPLICIT_RECONNECT_ORIGINS = ["explicit_inspiration", "explicit_tags"];
+const EXPLICIT_IDEA_COUNTS = [1, 2, 3, 5, 10, 12];
 
 type ExplicitLane = "tags" | "inspire";
 type ExplicitTier = "hardcore" | "softcore";
@@ -40,6 +52,8 @@ export function ExplicitContentSection({
   onStartNewGeneration?: () => void;
 }) {
   const generationRef = useRef<GenerationWorkflowHandle>(null);
+  const reconnectedExplicitBatchRef = useRef(false);
+  const backgroundOperations = useBackgroundOperations();
   const { configuration, error: configurationError } = useContentStudioConfiguration();
   const [lane, setLane] = useState<ExplicitLane>("tags");
   const [tags, setTags] = useState("");
@@ -48,11 +62,15 @@ export function ExplicitContentSection({
   const [imageCount, setImageCount] = useState(1);
   const [hardcore, setHardcore] = useState<string[]>([]);
   const [softcore, setSoftcore] = useState<string[]>([]);
+  const [inspirationOperationId, setInspirationOperationId] = useState("");
+  const [inspirationTierMode, setInspirationTierMode] = useState<ExplicitInspirationTierMode>("both");
+  const [inspirationCount, setInspirationCount] = useState(10);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [prompts, setPrompts] = useState<string[]>([]);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const [activated, setActivated] = useState(false);
+  const [accordionOpen, setAccordionOpen] = useState(false);
   const [items, setItems] = useState<PlannerBatchItem[]>([]);
   const [progress, setProgress] = useState<PlannerBatchProgress | null>(null);
 
@@ -82,6 +100,71 @@ export function ExplicitContentSection({
   const blocked = context.status === "reference_missing" || !activeProvider;
   const hasConcepts = conceptItems.length > 0;
   const allSelected = hasConcepts && selected.size === conceptItems.length;
+  const inspirationOperation = backgroundOperations.byWorkspace("content_studio").find((operation) => (
+    operation.operationType === "content_studio_explicit_inspiration"
+    && (operation.status === "QUEUED" || operation.status === "RUNNING" || operation.status === "WAITING_EXTERNAL" || operation.status === "FAILED")
+    && String(operation.metadata.phase || "") !== "HANDED_OFF"
+  ));
+
+  useEffect(() => {
+    if (!inspirationOperation) return;
+    const metadata = inspirationOperation.metadata;
+    const mode = String(metadata.tierMode || "both") as ExplicitInspirationTierMode;
+    const requestedCount = Number(metadata.requestedCount || 10);
+    setInspirationOperationId(inspirationOperation.operationId);
+    setInspirationTierMode(mode);
+    setInspirationCount(requestedCount);
+    setLane("inspire");
+    setAccordionOpen(true);
+    if (inspirationOperation.status === "FAILED") {
+      setPending(false);
+      setError(inspirationOperation.errorMessage || "Explicit inspiration failed. Retry the operation from Jobs.");
+      return;
+    }
+    const waiting = inspirationOperation.currentStage === "WAITING_SELECTION";
+    setPending(!waiting);
+    const tierErrors = metadata.tierErrors && typeof metadata.tierErrors === "object"
+      ? Object.values(metadata.tierErrors as Record<string, unknown>).map(String).filter(Boolean)
+      : [];
+    setError(waiting && tierErrors.length ? `Some concepts could not be generated: ${tierErrors.join("; ")}` : "");
+    if (waiting) {
+      setHardcore((Array.isArray(metadata.hardcore) ? metadata.hardcore : []).map((value) => sceneFirstConcept(String(value))));
+      setSoftcore((Array.isArray(metadata.softcore) ? metadata.softcore : []).map((value) => sceneFirstConcept(String(value))));
+    }
+  }, [inspirationOperation]);
+
+  useEffect(() => {
+    const operation = backgroundOperations.active
+      .filter((candidate) => candidate.operationType === "content_studio_explicit_batch")
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0];
+    if (!operation) {
+      if (reconnectedExplicitBatchRef.current) {
+        reconnectedExplicitBatchRef.current = false;
+        setActivated(false);
+        setPending(false);
+        setItems([]);
+        setProgress(null);
+      }
+      return;
+    }
+    const metadata = operation.metadata as Partial<ExplicitBatchSnapshot>;
+    const totalIdeas = Number(metadata.totalIdeas ?? operation.progressTotal ?? 0);
+    if (!totalIdeas) return;
+    reconnectedExplicitBatchRef.current = true;
+    const restoredItems = Array.isArray(metadata.items) ? metadata.items : [];
+    setActivated(true);
+    setAccordionOpen(true);
+    setPending(true);
+    setItems(restoredItems);
+    setPrompts(Array.isArray(metadata.prompts) ? metadata.prompts : []);
+    setProgress({
+      completedIdeas: Number(metadata.completedIdeas ?? operation.progressCurrent ?? 0),
+      currentIdeaIndex: Number(metadata.currentIdeaIndex ?? 1),
+      failedIdeas: Number(metadata.failedIdeas ?? 0),
+      phase: metadata.phase ?? "preparing",
+      totalIdeas,
+    });
+  }, [backgroundOperations.active]);
 
   const toggleSelected = (id: string) => {
     setSelected((current) => {
@@ -158,18 +241,39 @@ export function ExplicitContentSection({
 
   const inspire = async () => {
     if (pending) return;
+    let durableOperationStarted = false;
     setPending(true);
     setError("");
     try {
-      const next = await inspireExplicitContent(5);
-      setHardcore(next.hardcore.map(sceneFirstConcept));
-      setSoftcore(next.softcore.map(sceneFirstConcept));
+      const next = await inspireExplicitContent(inspirationTierMode, inspirationCount);
+      durableOperationStarted = Boolean(next.operationId);
+      setInspirationOperationId(next.operationId);
+      if (next.hardcore.length || next.softcore.length) {
+        setHardcore(next.hardcore.map(sceneFirstConcept));
+        setSoftcore(next.softcore.map(sceneFirstConcept));
+      }
       setSelected(new Set());
+      await backgroundOperations.refresh();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Explicit inspiration failed");
     } finally {
-      setPending(false);
+      if (!durableOperationStarted) setPending(false);
     }
+  };
+
+  const inspirationStatus = inspirationTierMode === "both"
+    ? `Generating ${inspirationCount} ideas — ${Math.ceil(inspirationCount / 2)} Softcore + ${Math.floor(inspirationCount / 2)} Hardcore…`
+    : `Generating ${inspirationCount} ${inspirationTierMode === "softcore" ? "Softcore" : "Hardcore"} ${inspirationCount === 1 ? "idea" : "ideas"}…`;
+
+  const startOverInspiration = async () => {
+    if (!inspirationOperationId) return;
+    setPending(true); setError("");
+    try {
+      await discardExplicitInspiration(inspirationOperationId);
+      setInspirationOperationId(""); setHardcore([]); setSoftcore([]); setSelected(new Set()); setLane("tags");
+      await backgroundOperations.refresh();
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to discard Explicit inspiration."); }
+    finally { setPending(false); }
   };
 
   const generateSelected = async () => {
@@ -186,107 +290,32 @@ export function ExplicitContentSection({
       status: "pending" as const,
     }));
     setItems(batch);
-    let completedIdeas = 0;
-    let failedIdeas = 0;
-    setProgress({ completedIdeas, currentIdeaIndex: 0, failedIdeas, phase: "preparing", totalIdeas: batch.length });
-    const collectionId = `explicit-collection-${selectedConcepts.map(({ id }) => id).join("-")}`;
-    const finalPrompts: string[] = [];
-    for (const [index, selection] of selectedConcepts.entries()) {
-      const item = batch[index]!;
-      setItems((current) => updatePlannerBatchItems(current, item.id, { status: "enhancing" }));
-      setProgress({ completedIdeas, currentIdeaIndex: index + 1, failedIdeas, phase: "preparing", totalIdeas: batch.length });
-      let enhanced = "";
-      try {
-        enhanced = (await enhanceCreativeTags(selection.concept, true)).replace(/\s*\n+\s*/g, ", ");
-      } catch (reason) {
-        failedIdeas += 1;
-        setItems((current) => updatePlannerBatchItems(current, item.id, {
-          error: reason instanceof Error ? reason.message : "Explicit concept failed",
-          failureStage: "enhancement",
-          status: "failed",
-        }));
-        continue;
-      }
-
-      const explicitInput: ExplicitGenerationInput = {
-        sourceText: enhanced,
-        originalSource: selection.concept,
-        sourceType: "selected_inspiration_concept",
-        origin: "explicit_inspiration",
-        conceptTier: selection.tier,
-        requiredSemanticAttributes: {},
-        requestedImageCount: 1,
-        collectionId,
-        lineage: {
-          collectionPromptIndex: index,
-          plannerItemId: item.id,
-          selectedConcept: selection.concept,
+    setProgress({ completedIdeas: 0, currentIdeaIndex: 0, failedIdeas: 0, phase: "preparing", totalIdeas: batch.length });
+    try {
+      const operationId = await startExplicitGenerationBatch({
+        batchId: crypto.randomUUID(),
+        provider: activeProvider,
+        concepts: selectedConcepts,
+      });
+      if (inspirationOperationId) await handoffExplicitInspiration(inspirationOperationId, operationId);
+      await backgroundOperations.refresh();
+      await beginExplicitGenerationBatch({
+        operationId,
+        concepts: selectedConcepts,
+        provider: activeProvider,
+        context,
+        onSnapshot: (snapshot) => {
+          setItems(snapshot.items);
+          setPrompts(snapshot.prompts);
+          setProgress(snapshot);
         },
-      };
-      let providerPrompt = "";
-      try {
-        const preview = await createPromptPreview(
-          "explicit",
-          enhanced,
-          1,
-          undefined,
-          "explicit",
-          explicitInput,
-        );
-        providerPrompt = preview.prompts[0] ?? "";
-        if (!providerPrompt) throw new Error("Explicit prompt planning returned no prompt");
-        finalPrompts.push(providerPrompt);
-      } catch (reason) {
-        failedIdeas += 1;
-        setItems((current) => updatePlannerBatchItems(current, item.id, {
-          error: reason instanceof Error ? reason.message : "Explicit prompt planning failed",
-          failureStage: "planning",
-          status: "failed",
-        }));
-        continue;
-      }
-
-      try {
-        setProgress({ completedIdeas, currentIdeaIndex: index + 1, failedIdeas, phase: "generating", totalIdeas: batch.length });
-        const tierLabel = selection.tier === "hardcore" ? "Hardcore" : "Softcore";
-        const succeeded = await generationRef.current?.generate({
-          batchItemId: item.id,
-          creativeMode: "explicit",
-          lane: "explicit",
-          promptBatch: [providerPrompt],
-          promptCount: 1,
-          promptSource: enhanced,
-          promptSourceLabel: "Enhanced Explicit Tags",
-          origin: "explicit_inspiration",
-          plannerLineage: {
-            enhancedResult: enhanced,
-            plannerItemId: item.id,
-            plannerItemTitle: `${tierLabel} concept ${index + 1}`,
-            plannerQuestion: "Explicit Inspire Me",
-            selectedPlannerItem: selection.concept,
-          },
-          explicitInput,
-        });
-        if (succeeded) completedIdeas += 1;
-        else failedIdeas += 1;
-      } catch (reason) {
-        failedIdeas += 1;
-        setItems((current) => updatePlannerBatchItems(current, item.id, {
-          error: reason instanceof Error ? reason.message : "Explicit concept failed",
-          failureStage: "generation",
-          status: "failed",
-        }));
-      }
+      });
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Explicit generation failed");
+    } finally {
+      setPending(false);
+      void backgroundOperations.refresh();
     }
-    setPrompts(finalPrompts.filter(Boolean));
-    setProgress({
-      completedIdeas,
-      currentIdeaIndex: batch.length,
-      failedIdeas,
-      phase: "complete",
-      totalIdeas: batch.length,
-    });
-    setPending(false);
   };
 
   const renderTier = (tier: ExplicitTier, concepts: string[], title: string, description: string) => {
@@ -338,7 +367,11 @@ export function ExplicitContentSection({
   };
 
   return (
-    <details className="creative-studio explicit-content-accordion">
+    <details
+      className="creative-studio explicit-content-accordion"
+      onToggle={(event) => setAccordionOpen(event.currentTarget.open)}
+      open={accordionOpen}
+    >
       <summary>
         <span>🔞 Explicit Content</span>
         <small>Create from tags or generate mixed hardcore + softcore PPV concepts.</small>
@@ -347,8 +380,14 @@ export function ExplicitContentSection({
       <header>
         <p className="inspire-workspace__eyebrow">Separate premium workflow</p>
         <h2>Explicit Content</h2>
-        <p>Create with explicit tags or ask Grok for 5 hardcore and 5 softcore concepts you can mix.</p>
+        <p>Create with explicit tags or ask Grok for configurable Softcore and Hardcore concepts.</p>
       </header>
+      <div className="explicit-content__inspiration-controls" aria-label="Inspire Me settings">
+        <fieldset><legend>Content Level</legend><div className="explicit-content__segments">
+          {(["softcore", "hardcore", "both"] as const).map((tierMode) => <button aria-pressed={inspirationTierMode === tierMode} disabled={lane === "inspire"} key={tierMode} onClick={() => setInspirationTierMode(tierMode)} type="button">{tierMode[0]!.toUpperCase() + tierMode.slice(1)}</button>)}
+        </div></fieldset>
+        <label><span>Number of Ideas</span><select disabled={lane === "inspire"} onChange={(event) => setInspirationCount(Number(event.target.value))} value={inspirationCount}>{EXPLICIT_IDEA_COUNTS.map((count) => <option key={count} value={count}>{count}</option>)}</select></label>
+      </div>
       <div className="explicit-content__tabs">
         {lane === "tags" ? <button
           onClick={() => {
@@ -367,7 +406,7 @@ export function ExplicitContentSection({
         </div>
       ) : (
         <div className="explicit-content__lane creative-director-tools creative-director-tools__group">
-          {pending && !hasConcepts && <p className="creative-director-tools__status">Creating inspiration…</p>}
+          {pending && !hasConcepts && <p className="creative-director-tools__status">{inspirationStatus}</p>}
           {hasConcepts && (
             <>
               <div className="explicit-content__selection-bar">
@@ -397,8 +436,10 @@ export function ExplicitContentSection({
               <button disabled={blocked || pending || selected.size === 0} onClick={() => void generateSelected()} type="button">
                 🚀 Enhance &amp; Generate ({selected.size})
               </button>
+              {inspirationOperation?.currentStage === "WAITING_SELECTION" && <button disabled={pending} onClick={() => void startOverInspiration()} type="button">Start Over</button>}
             </>
           )}
+          {inspirationOperation?.status === "FAILED" && <button onClick={() => { void backgroundOperations.retry(inspirationOperation.operationId).then(backgroundOperations.refresh); }} type="button">Retry Inspiration</button>}
         </div>
       )}
 
@@ -434,6 +475,10 @@ export function ExplicitContentSection({
           disabled={blocked}
           onPlannerBatchItemChange={(id, changes) => setItems((current) => updatePlannerBatchItems(current, id, changes))}
           onRunStart={() => setActivated(true)}
+          onReconnect={() => {
+            setActivated(true);
+            setAccordionOpen(true);
+          }}
           onStartNewGeneration={() => {
             setItems([]);
             setProgress(null);
@@ -445,6 +490,7 @@ export function ExplicitContentSection({
           plannerBatchItems={items}
           plannerBatchProgress={progress}
           plannerBatchRunning={pending}
+          reconnectOrigins={EXPLICIT_RECONNECT_ORIGINS}
           request={{
             creativeMode: "explicit",
             lane: "explicit",

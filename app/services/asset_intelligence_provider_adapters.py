@@ -148,7 +148,9 @@ class GrokVisionAssetIntelligenceAdapter(_CallableAdapter):
                 {"type": "input_text", "text": (
                     "Interpret the semantic and creative meaning of this image. Vision already handles factual "
                     "clothing, object, pose, lighting, and environment detection, so do not repeat those tasks. "
-                    "Return only JSON with: descriptive_summary (string), themes (string array), mood (string), "
+                    "Return only JSON with: title (a concise 2-6 word human-readable title grounded in the image; "
+                    "no IDs, provider terms, workflow labels, or generic media labels), "
+                    "descriptive_summary (string), themes (string array), mood (string), "
                     "atmosphere (string), emotional_tone (string), visual_style (string), "
                     "suggested_collections (string array), search_phrases (string array), "
                     "lifestyle_context (string), and tags (semantic string array)."
@@ -163,6 +165,7 @@ class GrokVisionAssetIntelligenceAdapter(_CallableAdapter):
         summary = raw.get("descriptive_summary") or raw.get("natural_language_description") or raw.get("short_description")
         search_phrases = _clean_list(raw.get("search_phrases") or raw.get("keywords"))
         fields = {
+            "title": raw.get("title"),
             "short_description": summary,
             "content_summary": summary,
             "themes": _clean_list(raw.get("themes")),

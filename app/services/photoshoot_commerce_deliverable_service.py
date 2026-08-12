@@ -74,9 +74,8 @@ class PhotoshootCommerceDeliverableService:
         except Exception as error:
             self.repository.set_analysis_failure(str(deliverable["deliverable_id"]), str(error))
         else:
-            self.session_sales_strategy.generate(
-                str(deliverable["deliverable_id"]), creator_profile_id=creator_profile_id
-            )
+            # Session strategy is intentionally lazy. Completion cannot know whether
+            # the operator will sell this Photoshoot as SESSION or BUNDLE.
             self.repository.set_completion_intelligence_status(str(deliverable["deliverable_id"]), "READY")
         deliverable = self.repository.get(str(deliverable["deliverable_id"]))
         if session.status != "completed" or not dict(session.creative_continuity or {}).get("gallery_ready"):
