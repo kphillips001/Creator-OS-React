@@ -3,6 +3,7 @@ import tempfile
 import sys
 import types
 import unittest
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 from uuid import uuid4
@@ -72,8 +73,8 @@ class FakeHttpClient:
 class FakeUploadHttpClient(FakeHttpClient):
     def post(self, url, **kwargs):
         self.posts.append((url, kwargs))
-        if "imgbb.com" in url:
-            return FakeResponse({"data": {"url": "https://cdn.test/hosted-reference.png"}}, 200, url)
+        if url.endswith("/media/upload/binary"):
+            return FakeResponse({"data": {"download_url": "https://cdn.test/hosted-reference.png"}}, 200, url)
         return FakeResponse(self.post_payload, self.post_status, url)
 
 
@@ -167,6 +168,7 @@ class GenerationProviderTests(unittest.TestCase):
                     "canonical_reference_image_url": "https://cdn.test/canonical.png",
                     "reference_image_url": "https://cdn.test/latest-shot.png",
                     "photoshoot_continuity_reference_image_url": "https://cdn.test/latest-shot.png",
+                    "original_photoshoot_seed_reference_image_url": "https://cdn.test/latest-shot.png",
                 },
             )
             self.assertEqual(provider.build_payload(request)["images"], [
@@ -175,9 +177,55 @@ class GenerationProviderTests(unittest.TestCase):
             role_guidance = provider.build_payload(request)["prompt"]
             self.assertIn("Image 1 is the canonical creator identity reference", role_guidance)
             self.assertIn("Image 1 controls identity", role_guidance)
-            self.assertIn("Image 2 is the latest approved Photoshoot image", role_guidance)
-            self.assertIn("Image 2 controls Photoshoot continuity", role_guidance)
-            self.assertIn("Do not use Image 2 to redefine the creator's facial identity", role_guidance)
+            self.assertIn("Image 2 is the immutable original Photoshoot seed", role_guidance)
+            self.assertIn("Image 2 anchors the shoot", role_guidance)
+            self.assertIn("Image 3 controls only local progression", role_guidance)
+
+    def test_seedream_5_photoshoot_payload_orders_all_three_reference_roles(self):
+        provider = Seedream50ProProvider(api_key="test-key", http_client=FakeHttpClient())
+        request = self.make_engine(ProviderRegistry({provider.provider_id: provider})).create_request(
+            creator_profile={"id": 7}, prompt_plan=prompt_plan(), provider_id=provider.provider_id,
+            metadata={
+                "workflow_type": "photoshoot", "creative_mode": "explicit",
+                "canonical_identity_reference_asset_id": 93,
+                "canonical_identity_reference_path": "https://cdn.test/asset-93.png",
+                "canonical_reference_image_url": "https://cdn.test/asset-93.png",
+                "original_photoshoot_seed_reference_image_url": "https://cdn.test/seed.png",
+                "photoshoot_continuity_reference_image_url": "https://cdn.test/shot-3.png",
+                "reference_image_url": "https://cdn.test/shot-3.png",
+                "require_frozen_photoshoot_identity": True,
+            },
+        )
+
+        payload = provider.build_payload(request)
+
+        self.assertEqual(payload["images"], [
+            "https://cdn.test/asset-93.png",
+            "https://cdn.test/seed.png",
+            "https://cdn.test/shot-3.png",
+        ])
+        self.assertIn("Image 3, when present, is only the latest valid approved shot", payload["prompt"])
+
+    def test_seedream_5_shot_two_deduplicates_seed_by_generated_image_identity(self):
+        provider = Seedream50ProProvider(api_key="test-key", http_client=FakeHttpClient())
+        request = self.make_engine(ProviderRegistry({provider.provider_id: provider})).create_request(
+            creator_profile={"id": 7}, prompt_plan=prompt_plan(), provider_id=provider.provider_id,
+            metadata={
+                "workflow_type": "photoshoot", "creative_mode": "explicit",
+                "canonical_identity_reference_asset_id": 93,
+                "canonical_identity_reference_path": "https://cdn.test/asset-93.png",
+                "canonical_reference_image_url": "https://cdn.test/asset-93.png",
+                "original_photoshoot_seed_reference_image_url": "https://cdn.test/seed.png?immutable=1",
+                "original_photoshoot_seed_image_id": "seed-image",
+                "photoshoot_continuity_reference_image_url": "https://cdn.test/seed.png?signed=2",
+                "previous_approved_continuity_reference_image_id": "seed-image",
+                "require_frozen_photoshoot_identity": True,
+            },
+        )
+
+        self.assertEqual(provider.build_payload(request)["images"], [
+            "https://cdn.test/asset-93.png", "https://cdn.test/seed.png?immutable=1",
+        ])
 
     def test_single_reference_provider_keeps_latest_photoshoot_shot(self):
         provider = Seedream45Provider(api_key="test-key", http_client=FakeHttpClient())
@@ -427,6 +475,9 @@ class GenerationProviderTests(unittest.TestCase):
                 http_client=http,
                 poll_interval_seconds=0,
                 max_poll_attempts=1,
+                hosted_reference_service=SimpleNamespace(
+                    resolve=lambda **values: values["uploader"](Path(values["source_path"]))
+                ),
             )
             registry = ProviderRegistry({provider.provider_id: provider})
             engine = self.make_engine(registry)
@@ -436,24 +487,13 @@ class GenerationProviderTests(unittest.TestCase):
                 provider_id=provider.provider_id,
             )
 
-            old_key = os.environ.get("IMGBB_API_KEY")
-            os.environ["IMGBB_API_KEY"] = "imgbb-test-key"
-            try:
-                completed = engine.dispatch_job(job.job_id)
-            finally:
-                if old_key is None:
-                    os.environ.pop("IMGBB_API_KEY", None)
-                else:
-                    os.environ["IMGBB_API_KEY"] = old_key
+            completed = engine.dispatch_job(job.job_id)
 
         self.assertEqual(completed.status, GenerationStatus.SUCCEEDED.value)
-        self.assertEqual(http.posts[0][0], "https://api.imgbb.com/1/upload")
-        self.assertEqual(http.posts[0][1]["params"], {"key": "imgbb-test-key"})
-        upload_name, upload_bytes, upload_type = http.posts[0][1]["files"]["image"]
-        self.assertEqual(upload_name, "reference.jpg")
-        self.assertEqual(upload_bytes, b"fake image bytes")
-        self.assertEqual(upload_type, "image/jpeg")
-        self.assertEqual(http.posts[0][1]["data"], {"name": "reference"})
+        self.assertEqual(http.posts[0][0], provider.media_upload_endpoint)
+        upload_name, upload_source = http.posts[0][1]["files"]["file"]
+        self.assertEqual(upload_name, "reference.png")
+        self.assertTrue(upload_source.closed)
         self.assertEqual(http.posts[1][0], provider.endpoint)
         self.assertEqual(http.posts[1][1]["json"]["images"], ["https://cdn.test/hosted-reference.png"])
 
@@ -519,7 +559,7 @@ class GenerationProviderTests(unittest.TestCase):
         self.assertEqual(completed.status, GenerationStatus.SUCCEEDED.value)
         self.assertEqual(completed.result.output_references, ("https://cdn.test/final.png",))
 
-    def test_polling_exhaustion_becomes_explicit_failure(self):
+    def test_polling_exhaustion_remains_recoverable_provider_work(self):
         http = FakeHttpClient(get_payloads=[{"data": {"status": "processing"}}] * 2)
         provider = Seedream45Provider(
             api_key="test-key",
@@ -533,11 +573,37 @@ class GenerationProviderTests(unittest.TestCase):
             provider_id=provider.provider_id, max_retries=0,
         )
 
-        failed = engine.dispatch_job(job.job_id)
+        waiting = engine.dispatch_job(job.job_id)
 
         self.assertEqual(len(http.gets), 2)
-        self.assertEqual(failed.status, GenerationStatus.FAILED.value)
-        self.assertIn("polling exhausted", failed.failure.reason.lower())
+        self.assertEqual(waiting.status, GenerationStatus.RUNNING.value)
+        self.assertIsNone(waiting.failure)
+        self.assertTrue(waiting.result.execution_metadata["provider_pending"])
+        self.assertEqual(
+            waiting.result.execution_metadata["provider_request_id"],
+            "provider_request_1",
+        )
+
+    def test_realistic_slow_provider_completion_beyond_old_poll_window_succeeds(self):
+        http = FakeHttpClient(get_payloads=[
+            *[{"data": {"status": "processing"}} for _ in range(45)],
+            {"data": {"status": "completed", "outputs": [{"url": "https://cdn.test/slow.png"}]}},
+        ])
+        provider = Seedream45Provider(
+            api_key="test-key", http_client=http, poll_interval_seconds=0,
+            max_poll_attempts=100, max_poll_elapsed_seconds=300,
+        )
+        engine = self.make_engine(ProviderRegistry({provider.provider_id: provider}))
+        job = engine.queue_prompt_plan(
+            creator_profile={"id": 7}, prompt_plan=prompt_plan(),
+            provider_id=provider.provider_id, max_retries=0,
+        )
+
+        completed = engine.dispatch_job(job.job_id)
+
+        self.assertEqual(len(http.gets), 46)
+        self.assertEqual(completed.status, GenerationStatus.SUCCEEDED.value)
+        self.assertEqual(completed.result.output_references, ("https://cdn.test/slow.png",))
 
     def test_retry_behavior_when_provider_api_fails(self):
         http = FakeHttpClient(post_status=500)

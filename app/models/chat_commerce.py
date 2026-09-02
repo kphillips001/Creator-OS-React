@@ -26,6 +26,7 @@ class ChatCommerceDecision:
     no_offering_reason: str | None
     selection_source: str = "NONE"
     legacy_recommendation_used: bool = False
+    product_context: Mapping[str, Any] | None = None
 
     def diagnostics(self) -> Mapping[str, Any]:
         offering = self.offering

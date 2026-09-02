@@ -34,7 +34,7 @@ class FakeClient:
         self.chat = FakeChat(capture)
 
 
-def render_prompt(*, decision, policy, selected_offering=None):
+def render_prompt(*, decision, policy, selected_offering=None, extra_context=None):
     capture = {}
     service = GPTService(api_key="test-key")
     client = FakeClient(capture)
@@ -50,6 +50,7 @@ def render_prompt(*, decision, policy, selected_offering=None):
     }
     if selected_offering is not None:
         commerce["selected_offering"] = selected_offering
+    commerce.update(extra_context or {})
     service.generate_response(
         persona_name="Ava",
         mode="flirty",
@@ -107,14 +108,17 @@ def test_present_offer_has_one_authoritative_commerce_block_and_one_offering():
         selected_offering={
             "title": "Private Beach Release",
             "short_description": "A warm sunset portrait.",
+            "customer_safe_description": "A warm sunset portrait.",
             "price_minor": 999,
             "currency": "USD",
         },
     )
 
     assert prompt.count("AUTHORITATIVE COMMERCE") == 1
-    assert prompt.count("Private Beach Release") == 1
-    assert prompt.count("USD 9.99") == 1
+    assert "Private Beach Release" not in prompt
+    assert prompt.count("A warm sunset portrait.") == 1
+    assert "USD 9.99" not in prompt
+    assert "Price: withheld from conversational generation" in prompt
     assert "Legacy conflicting offer" not in prompt
     assert "https://legacy.invalid/item" not in prompt
     assert "Legacy offer copy" not in prompt
@@ -127,6 +131,32 @@ def test_present_offer_has_one_authoritative_commerce_block_and_one_offering():
     assert "Recommended action:" not in prompt
     assert "Tone Mode: warm" in prompt
     assert "Intent score: 88" in prompt
+
+
+def test_unmapped_present_offer_contract_is_complete_and_price_neutral():
+    prompt = render_prompt(
+        decision="PRESENT_OFFER",
+        policy="COMMERCE_PRESENTATION_ALLOWED",
+        selected_offering={
+            "title": "Controlled Single",
+            "short_description": "A private image.",
+        },
+        extra_context={
+            "identity_resolved": False,
+            "paid_presentation_contract": {
+                "price_neutral": True,
+                "presentation_complete": True,
+                "customer_facing_price_status": "ESTABLISHED_BY_UNLOCK_FLOW",
+            },
+        },
+    )
+
+    assert "Paid-offer presentation is authorized and must be completed now" in prompt
+    assert "suitable to accompany the Creator-OS Unlock button immediately" in prompt
+    assert "do not produce another teaser" in prompt
+    assert "Do not quote the configured base price" in prompt
+    assert "Customer-facing price: shown only by the structured paid presentation" in prompt
+    assert "USD 3.00" not in prompt
 
 
 @pytest.mark.parametrize(
@@ -159,12 +189,14 @@ def test_nudge_references_only_the_active_selected_offering():
         selected_offering={
             "title": "Already Presented Release",
             "short_description": "The active offer.",
+            "customer_safe_description": "The active offer.",
             "price_minor": 1299,
             "currency": "USD",
         },
     )
 
-    assert prompt.count("Already Presented Release") == 1
+    assert "Already Presented Release" not in prompt
+    assert prompt.count("The active offer.") == 1
     assert "existing active Purchase Intent" in prompt
     assert "Do not claim purchase." in prompt
     assert "Legacy conflicting offer" not in prompt
@@ -179,4 +211,87 @@ def test_purchase_acknowledgement_forbids_another_offer():
     assert prompt.count("AUTHORITATIVE COMMERCE") == 1
     assert "Acknowledge the verified purchase warmly." in prompt
     assert "Do not present another paid offer, upsell, or cross-sell." in prompt
+
+
+def test_single_image_prompt_receives_only_compact_verified_intelligence():
+    prompt = render_prompt(
+        decision="PRESENT_OFFER",
+        policy="COMMERCE_PRESENTATION_ALLOWED",
+        selected_offering={
+            "title": "Soft Morning Intimacy", "short_description": "Warm light.",
+            "price_minor": 999, "currency": "USD",
+        },
+        extra_context={"single_image_conversation": {
+            "schemaVersion": "single_image_chat_conversation_v1",
+            "assetId": 195,
+            "canonicalIntelligence": {
+                "contentSummary": "A verified morning portrait.",
+                "sceneEnvironment": "sunlit bedroom",
+                "explicitness": "EXPLICIT",
+                "moodTone": "intimate",
+            },
+            "groundingRules": ["Do not invent absent visual details."],
+        }},
+    )
+    assert "SINGLE IMAGE CHAT PRODUCT CONTEXT" in prompt
+    assert "A verified morning portrait." in prompt
+    assert "sunlit bedroom" in prompt
+    assert "EXPLICIT" in prompt
+    assert "never invent absent visual details" in prompt
+
+
+def test_missing_asset_intelligence_forbids_invented_visual_specifics():
+    prompt = render_prompt(
+        decision="TEASE",
+        policy="COMMERCE_TEASE_ONLY",
+        extra_context={
+            "selected_opportunity": {
+                "title": "Generic Private Release",
+                "short_description": "A private image.",
+                "offering_type": "SINGLE_IMAGE",
+            },
+        },
+    )
+    assert "No verified Asset Intelligence is available" in prompt
+    assert "do not invent wardrobe, pose, setting, expression, mood" in prompt
+
+
+def test_generation_prompt_uses_customer_safe_copy_not_internal_title():
+    prompt = render_prompt(
+        decision="PRESENT_OFFER",
+        policy="COMMERCE_PRESENTATION_ALLOWED",
+        selected_offering={
+            "title": "Certification available 3",
+            "short_description": "Test-only eligible content",
+            "customer_safe_description": (
+                "a playful private photo with a confident, teasing mood"
+            ),
+        },
+    )
+    assert "Certification available 3" not in prompt
+    assert "Test-only eligible content" not in prompt
+    assert "a playful private photo with a confident, teasing mood" in prompt
+
+
+def test_bundle_prompt_block_reaches_gpt_once_with_complete_set_contract():
+    block = (
+        "BUNDLE PHOTOSHOOT CONVERSATION CONTEXT\n"
+        "paidMemberCount: 3\nTheme: dusky kitchen\nStory: tease to reveal\n"
+        "Sales Brain brief: premium complete progression\n"
+        "The entire Photoshoot is one purchase. Never offer individual Bundle members."
+    )
+    prompt = render_prompt(
+        decision="PRESENT_OFFER",
+        policy="COMMERCE_PRESENTATION_ALLOWED",
+        selected_offering={
+            "title": "Dusky Kitchen Wet Tank Reveal",
+            "short_description": "A complete set.",
+            "price_minor": 1899, "currency": "USD",
+        },
+        extra_context={"bundle_conversation": {"promptBlock": block}},
+    )
+    assert prompt.count("BUNDLE PHOTOSHOOT CONVERSATION CONTEXT") == 1
+    assert "paidMemberCount: 3" in prompt
+    assert "dusky kitchen" in prompt
+    assert "Never offer individual Bundle members" in prompt
     assert "Legacy conflicting offer" not in prompt

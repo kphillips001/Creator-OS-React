@@ -8,6 +8,8 @@ Preserve Ava's exact facial identity, facial anatomy, proportions, and recogniza
 Render her expression like a real creator camera-roll photo: candid, emotionally alive, slightly asymmetrical, with natural facial muscle tension and believable human expression.
 Preserve realistic skin and facial texture, natural pores, and photographic detail without smoothing or reshaping her face.
 Expression intent may change her mood, gaze, and emotional performance, but must not redefine her facial geometry or canonical identity.
+Identity continuity must never flatten the requested expression into a vacant, blank, deadpan, or catalog-neutral beauty face.
+When expression guidance asks for teasing, seductive, alluring, naughty, or intimate energy, deliver that performance clearly in the eyes and mouth while keeping her identity stable.
 Avoid mannequin face, pageant smile, frozen expression, plastic symmetry, generic beauty-face replacement, and exaggerated or overacted facial performance.
 """.strip()
 

@@ -96,7 +96,12 @@ class GenerationRecipeCaptureService:
             if photoshoot and index==1:
                 role="CANONICAL_IDENTITY"; source_type="CANONICAL_ASSET"; asset_id=request.reference_asset_id
             elif photoshoot and index==2:
-                role="PHOTOSHOOT_CONTINUITY"; source_type="GENERATED_IMAGE"; generated_image_id=metadata.get("active_reference_image_id"); source_id=generated_image_id
+                if metadata.get("original_photoshoot_seed_reference_image_url"):
+                    role="ORIGINAL_PHOTOSHOOT_SEED"; source_type="GENERATED_IMAGE"; generated_image_id=metadata.get("original_photoshoot_seed_image_id"); source_id=generated_image_id
+                else:
+                    role="PHOTOSHOOT_CONTINUITY"; source_type="GENERATED_IMAGE"; generated_image_id=metadata.get("active_reference_image_id"); source_id=generated_image_id
+            elif photoshoot and index==3:
+                role="PREVIOUS_APPROVED_CONTINUITY"; source_type="GENERATED_IMAGE"; generated_image_id=metadata.get("previous_approved_continuity_reference_image_id") or metadata.get("active_reference_image_id"); source_id=generated_image_id
             elif workflow=="edit" and index==1:
                 role="EDIT_SOURCE"; source_type="GENERATED_IMAGE"; generated_image_id=(metadata.get("source_image_ids") or [None])[0]; source_id=generated_image_id
             elif request.media_type=="video" and index==1:

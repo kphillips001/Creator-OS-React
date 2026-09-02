@@ -2,6 +2,7 @@
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from app.api.asset_library import _creator_profile
@@ -178,6 +179,17 @@ def telegram_content_vault_status(offering_id: UUID):
     return _telegram_service().status(
         offering_id, creator_profile_id=int(_creator_profile()["id"])
     )
+
+
+@router.get("/{offering_id}/telegram-content-vault/media", response_class=FileResponse)
+def telegram_content_vault_media(offering_id: UUID):
+    try:
+        path = _telegram_service().publication_media(
+            offering_id, creator_profile_id=int(_creator_profile()["id"])
+        )
+    except CommerceTelegramVaultError as error:
+        raise HTTPException(status_code=404, detail={"code": error.code, "message": str(error)}) from error
+    return FileResponse(path, media_type="image/jpeg")
 
 
 @router.post("/{offering_id}/telegram-content-vault")

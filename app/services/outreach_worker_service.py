@@ -9,11 +9,14 @@ from app.services.outreach_service import (
 from app.services.global_automation_safety_service import (
     GlobalAutomationSafetyService,
 )
+from app.models.customer_contact import ContactPolicyResult, ContactPurpose
+from app.services.customer_contact_authority_service import CustomerContactAuthorityService
 
 
 class OutreachWorkerService:
 
-    def __init__(self, worker_instance_id: str | None = None):
+    def __init__(self, worker_instance_id: str | None = None,
+                 engagement_scheduler=None):
 
         self.worker_instance_id = worker_instance_id or f"outreach-{uuid4()}"
 
@@ -24,6 +27,17 @@ class OutreachWorkerService:
         self.global_safety_service = (
             GlobalAutomationSafetyService()
         )
+        from app.services.customer_interaction_safety_service import CustomerInteractionSafetyService
+        self.customer_safety_service = CustomerInteractionSafetyService()
+        if engagement_scheduler is None:
+            from app.repositories.engagement_teaser_policy_repository import EngagementTeaserPolicyRepository
+            from app.services.engagement_teaser_policy_service import EngagementTeaserPolicyService
+            from app.services.engagement_teaser_reengagement_scheduler import EngagementTeaserReengagementScheduler
+            engagement_scheduler = EngagementTeaserReengagementScheduler(
+                policy_service=EngagementTeaserPolicyService(
+                    repository=EngagementTeaserPolicyRepository()))
+        self.engagement_scheduler = engagement_scheduler
+        self.contact_authority = CustomerContactAuthorityService()
 
     def process_outreach_queue(
         self,
@@ -39,6 +53,9 @@ class OutreachWorkerService:
                 "processed": [], "failed": [],
             }
 
+        if self.engagement_scheduler is not None:
+            self.engagement_scheduler.schedule_due(limit=limit)
+
         queue_items = (
             claim_due_items(worker_instance_id=self.worker_instance_id, limit=limit)
         )
@@ -50,9 +67,32 @@ class OutreachWorkerService:
 
             queue_id = item["id"]
 
+            # Telegram engagement media requires the authorized Telethon transport.
+            # Keep scheduled work pending; never falsely complete it in this Fanvue
+            # outreach worker's current dry-run execution boundary.
+            if item.get("outreach_type") == "free_engagement_teaser_reengage":
+                release_claim(queue_id, worker_instance_id=self.worker_instance_id)
+                continue
+
             try:
 
                 if not renew_claim(queue_id, worker_instance_id=self.worker_instance_id):
+                    continue
+
+                customer_safety = self.customer_safety_service.decide_for_customer(
+                    fanvue_account_id=int(item["fanvue_account_id"]),
+                    fanvue_user_id=int(item["fanvue_user_id"]))
+                if not customer_safety.allowed:
+                    release_claim(queue_id, worker_instance_id=self.worker_instance_id)
+                    continue
+
+                contact = self.contact_authority.decide(
+                    purpose=(ContactPurpose.RE_ENGAGEMENT if str(item.get("outreach_type") or "").lower() in {"reactivation", "reengagement"}
+                             else ContactPurpose.OUTREACH),
+                    evidence=item,
+                )
+                if contact.result is not ContactPolicyResult.ALLOW:
+                    release_claim(queue_id, worker_instance_id=self.worker_instance_id)
                     continue
 
                 # ==================================================

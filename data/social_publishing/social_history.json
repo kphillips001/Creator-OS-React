@@ -1,5 +1,3823 @@
 [
   {
+    "history_id": "social_publish_history_ca59b865c0bf4529bb987fb5c54cc3af",
+    "queue_item_id": "social_queue_item_379517b6db9d4209813df76b4dde1bc1",
+    "platform": "x",
+    "status": "posted",
+    "message": "Posted to X.",
+    "created_at": "2026-09-02T14:31:10.049711",
+    "metadata": {
+      "x_auto_replies_enabled": false,
+      "x_auto_callback_status": "pending",
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "caption_id": null,
+      "provider_post_id": "2095157587041824901",
+      "provider_media_id": "2095157584298930176",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2095157587041824901"
+    }
+  },
+  {
+    "history_id": "social_publish_history_1d78a14571ec437fb6f410515bd960d0",
+    "queue_item_id": "social_queue_item_8dff92795b804633a69144f7f1e175c4",
+    "platform": "telegram",
+    "status": "posted",
+    "message": "Posted to Telegram.",
+    "created_at": "2026-09-01T16:39:37.536056",
+    "metadata": {
+      "selected_ctas": [
+        "VAULT",
+        "TIP"
+      ],
+      "account_name": null,
+      "telegram_post_to": "main",
+      "caption_id": "caption_result_19b5dac9847945adb0ac404a407e2b67",
+      "provider_post_id": "103",
+      "provider_media_id": null,
+      "provider_output_url": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_461b5e9e8b9d47669df6915f40e23fdc",
+    "queue_item_id": "social_queue_item_8dff92795b804633a69144f7f1e175c4",
+    "platform": "telegram",
+    "status": "caption_attached",
+    "message": "Caption Studio result attached to Social Queue item.",
+    "created_at": "2026-09-01T16:39:35.413541",
+    "metadata": {
+      "caption_id": "caption_result_19b5dac9847945adb0ac404a407e2b67"
+    }
+  },
+  {
+    "history_id": "social_publish_history_74c35a5ca63b41cb9473014774c1bf58",
+    "queue_item_id": "social_queue_item_9e1e02a671fd4a78bfba908624b461b9",
+    "platform": "x",
+    "status": "posted",
+    "message": "Posted to X.",
+    "created_at": "2026-09-01T15:30:18.236181",
+    "metadata": {
+      "x_auto_replies_enabled": true,
+      "x_auto_callback_status": "pending",
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "caption_id": null,
+      "provider_post_id": "2094810081867022772",
+      "provider_media_id": "2094810080088567808",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2094810081867022772"
+    }
+  },
+  {
+    "history_id": "social_publish_history_82c4530e7eb94a62a3a7989e77afcef0",
+    "queue_item_id": "social_queue_item_57576de1ab3b4342831b28d2a05dd4ea",
+    "platform": "x",
+    "status": "posted",
+    "message": "Posted to X.",
+    "created_at": "2026-08-31T13:39:25.674973",
+    "metadata": {
+      "x_auto_replies_enabled": true,
+      "x_auto_callback_status": "pending",
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "caption_id": null,
+      "provider_post_id": "2094419791108784391",
+      "provider_media_id": "2094419789347225600",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2094419791108784391"
+    }
+  },
+  {
+    "history_id": "social_publish_history_955e651722eb4b0aa8dabf3a2c7af922",
+    "queue_item_id": "social_queue_item_37dbb82ea7c643c2a310dae0d22a3136",
+    "platform": "telegram",
+    "status": "posted",
+    "message": "Posted to Telegram.",
+    "created_at": "2026-08-31T01:46:32.399201",
+    "metadata": {
+      "caption": "Fingers gently tracing the fabric \u2728 I let the slip fall just enough to reveal this intimate moment between us \ud83d\udcab",
+      "caption_source": "GROK",
+      "caption_updated_at": "2026-08-31T01:46:24.531126+00:00",
+      "asset_id": 427,
+      "offering_id": "a7838e05-af38-4dad-80d4-4510e8e3f881",
+      "teaser_id": "9adae6b8-8e7a-4d89-a424-e295904150e0",
+      "derived_teaser_asset_id": null,
+      "price_minor": 1299,
+      "currency": "USD",
+      "fanvue_publication_id": "fb47ab08-e110-4b96-a88d-5b2384e228ba",
+      "telegram_destination": "vault",
+      "content_vault_presentation": {
+        "path": "D:\\Ava_CMS\\vault\\blurred\\427_blurred_telegram_presentation_v1.jpg",
+        "width": 960,
+        "height": 1280,
+        "version": 1,
+        "strategy": "privacy_safe_cover_crop",
+        "source_path": "D:\\Ava_CMS\\vault\\blurred\\427_blurred.png",
+        "aspect_ratio": "3:4",
+        "source_sha256": "1eda81b76d72297b3d6a5fd5a199cc16c486d68aad64657bcc20c357e703a149",
+        "source_teaser_path": "D:\\Ava_CMS\\vault\\blurred\\427_blurred.png",
+        "source_teaser_sha256": "1eda81b76d72297b3d6a5fd5a199cc16c486d68aad64657bcc20c357e703a149"
+      },
+      "account_name": null,
+      "telegram_post_to": "vault",
+      "caption_id": null,
+      "provider_post_id": "69",
+      "provider_media_id": null,
+      "provider_output_url": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_bc018b7b9004418a96feb9633e3adb8e",
+    "queue_item_id": "social_queue_item_37dbb82ea7c643c2a310dae0d22a3136",
+    "platform": "telegram",
+    "status": "queued",
+    "message": "Commercial Offering queued for Telegram Content Vault.",
+    "created_at": "2026-08-31T01:46:30.810423",
+    "metadata": {
+      "source_type": "commercial_offering",
+      "commercial_offering_id": "a7838e05-af38-4dad-80d4-4510e8e3f881",
+      "destination": "telegram_content_vault",
+      "title": "Intimate Silk Reverie"
+    }
+  },
+  {
+    "history_id": "social_publish_history_4b36647dfc874b099a32abda898d0ce6",
+    "queue_item_id": "social_queue_item_37304d718ea54bc1ab4049dae5269ff3",
+    "platform": "x",
+    "status": "posted",
+    "message": "Posted to X.",
+    "created_at": "2026-08-31T00:51:52.496599",
+    "metadata": {
+      "x_auto_replies_enabled": false,
+      "x_auto_callback_status": "pending",
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "caption_id": "caption_result_9caaf938ff154f12b6dd4f2a9550eedf",
+      "provider_post_id": "2094226630356930954",
+      "provider_media_id": "2094226628792455169",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2094226630356930954"
+    }
+  },
+  {
+    "history_id": "social_publish_history_359593317d9a4832b81869cce53406a2",
+    "queue_item_id": "social_queue_item_37304d718ea54bc1ab4049dae5269ff3",
+    "platform": "x",
+    "status": "caption_attached",
+    "message": "Caption Studio result attached to Social Queue item.",
+    "created_at": "2026-08-31T00:51:51.442544",
+    "metadata": {
+      "caption_id": "caption_result_9caaf938ff154f12b6dd4f2a9550eedf"
+    }
+  },
+  {
+    "history_id": "social_publish_history_abfd924874884ae9b4a4cdb71cb4e987",
+    "queue_item_id": "social_queue_item_9738f1fb4378447dab574f8e7adc5b99",
+    "platform": "telegram",
+    "status": "posted",
+    "message": "Posted to Telegram.",
+    "created_at": "2026-08-31T00:24:08.868758",
+    "metadata": {
+      "selected_ctas": [
+        "VAULT",
+        "TIP"
+      ],
+      "account_name": null,
+      "telegram_post_to": "main",
+      "caption_id": "caption_result_5966a73fd6594da1ba6ece11c28c2ad1",
+      "provider_post_id": "102",
+      "provider_media_id": null,
+      "provider_output_url": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_62f91919a14d431ab0f8881c5bfc2448",
+    "queue_item_id": "social_queue_item_9738f1fb4378447dab574f8e7adc5b99",
+    "platform": "telegram",
+    "status": "caption_attached",
+    "message": "Caption Studio result attached to Social Queue item.",
+    "created_at": "2026-08-31T00:24:06.957444",
+    "metadata": {
+      "caption_id": "caption_result_5966a73fd6594da1ba6ece11c28c2ad1"
+    }
+  },
+  {
+    "history_id": "social_publish_history_8adf1723729f40fca86c3028a0ab8124",
+    "queue_item_id": "social_queue_item_0b6c8c1bab924b45a051e8447d76ffdb",
+    "platform": "x",
+    "status": "posted",
+    "message": "Posted to X.",
+    "created_at": "2026-08-30T16:11:25.865534",
+    "metadata": {
+      "x_auto_replies_enabled": true,
+      "x_auto_callback_status": "pending",
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "caption_id": null,
+      "provider_post_id": "2094095656252039595",
+      "provider_media_id": "2094095654389755904",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2094095656252039595"
+    }
+  },
+  {
+    "history_id": "social_publish_history_9d52e3ed573d443c9d3d2bfbe39363ce",
+    "queue_item_id": "social_queue_item_168f5b5fdbeb46249db15e65ab148320",
+    "platform": "telegram",
+    "status": "posted",
+    "message": "Posted to Telegram.",
+    "created_at": "2026-08-30T01:57:28.779826",
+    "metadata": {
+      "selected_ctas": [],
+      "account_name": null,
+      "telegram_post_to": "main",
+      "caption_id": "caption_result_8fd23a10b6fa42aa8397453719833560",
+      "provider_post_id": "101",
+      "provider_media_id": null,
+      "provider_output_url": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_1cb0fd7406b34a0a848da5e04b8bce38",
+    "queue_item_id": "social_queue_item_168f5b5fdbeb46249db15e65ab148320",
+    "platform": "telegram",
+    "status": "caption_attached",
+    "message": "Caption Studio result attached to Social Queue item.",
+    "created_at": "2026-08-30T01:57:26.850580",
+    "metadata": {
+      "caption_id": "caption_result_8fd23a10b6fa42aa8397453719833560"
+    }
+  },
+  {
+    "history_id": "social_publish_history_ff578a75656a415d86779963ae1c1945",
+    "queue_item_id": "social_queue_item_d6fbf30cce904e8c8ac2b4ee60e12722",
+    "platform": "x",
+    "status": "posted",
+    "message": "Posted to X.",
+    "created_at": "2026-08-29T16:38:43.077708",
+    "metadata": {
+      "x_auto_replies_enabled": true,
+      "x_auto_callback_status": "pending",
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "caption_id": null,
+      "provider_post_id": "2093740135389036924",
+      "provider_media_id": "2093740133581271040",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2093740135389036924"
+    }
+  },
+  {
+    "history_id": "social_publish_history_a6b671bbbbb34a9389371bfe3b73e485",
+    "queue_item_id": "social_queue_item_df1079acfbc3414b95a90a4f67f9c9bd",
+    "platform": "x",
+    "status": "posted",
+    "message": "Posted to X.",
+    "created_at": "2026-08-28T15:13:17.380884",
+    "metadata": {
+      "x_auto_replies_enabled": true,
+      "x_auto_callback_status": "pending",
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "caption_id": null,
+      "provider_post_id": "2093356248741667259",
+      "provider_media_id": "2093356246904492032",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2093356248741667259"
+    }
+  },
+  {
+    "history_id": "social_publish_history_93667328ee534853ae49c902fc7b33d5",
+    "queue_item_id": "social_queue_item_ccc2054cfff0491caeb29638fc68d07e",
+    "platform": "telegram",
+    "status": "posted",
+    "message": "Posted to Telegram.",
+    "created_at": "2026-08-27T14:46:11.869937",
+    "metadata": {
+      "selected_ctas": [],
+      "account_name": null,
+      "telegram_post_to": "main",
+      "caption_id": "caption_result_5fad96bfccd34d8d8b3e00043a45f3e5",
+      "provider_post_id": "100",
+      "provider_media_id": null,
+      "provider_output_url": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_670497b0ff3b4b8f9a93af2295b3ddc9",
+    "queue_item_id": "social_queue_item_ccc2054cfff0491caeb29638fc68d07e",
+    "platform": "telegram",
+    "status": "caption_attached",
+    "message": "Caption Studio result attached to Social Queue item.",
+    "created_at": "2026-08-27T14:46:09.786697",
+    "metadata": {
+      "caption_id": "caption_result_5fad96bfccd34d8d8b3e00043a45f3e5"
+    }
+  },
+  {
+    "history_id": "social_publish_history_64cda4b0909f460fa26fa9959649a2b0",
+    "queue_item_id": "social_queue_item_4c6fce494e594ace86630380cbdfe118",
+    "platform": "x",
+    "status": "posted",
+    "message": "Posted to X.",
+    "created_at": "2026-08-27T13:28:28.986979",
+    "metadata": {
+      "x_auto_replies_enabled": true,
+      "x_auto_callback_status": "pending",
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "caption_id": null,
+      "provider_post_id": "2092967485536444540",
+      "provider_media_id": "2092967483850268672",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2092967485536444540"
+    }
+  },
+  {
+    "history_id": "social_publish_history_d487630cf89c424ea8ebe9e74410e833",
+    "queue_item_id": "social_queue_item_130d5a0bf17848e7ab246831f734eeb0",
+    "platform": "x",
+    "status": "posted",
+    "message": "Posted to X.",
+    "created_at": "2026-08-26T15:05:03.135053",
+    "metadata": {
+      "x_auto_replies_enabled": true,
+      "x_auto_callback_status": "pending",
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "caption_id": null,
+      "provider_post_id": "2092629399963050474",
+      "provider_media_id": "2092629398146973696",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2092629399963050474"
+    }
+  },
+  {
+    "history_id": "social_publish_history_3e555a529b514cd4ab722e919491e650",
+    "queue_item_id": "social_queue_item_e7d3cde503d142159eb8b5847fd0f966",
+    "platform": "telegram",
+    "status": "posted",
+    "message": "Posted to Telegram.",
+    "created_at": "2026-08-26T00:42:23.061409",
+    "metadata": {
+      "selected_ctas": [
+        "VAULT",
+        "TIP"
+      ],
+      "account_name": null,
+      "telegram_post_to": "main",
+      "caption_id": "caption_result_ec88a2f107794e48b801ce00dc57dd71",
+      "provider_post_id": "99",
+      "provider_media_id": null,
+      "provider_output_url": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_abbfe9350af940bbb08c160b353e22ee",
+    "queue_item_id": "social_queue_item_e7d3cde503d142159eb8b5847fd0f966",
+    "platform": "telegram",
+    "status": "caption_attached",
+    "message": "Caption Studio result attached to Social Queue item.",
+    "created_at": "2026-08-26T00:42:21.176164",
+    "metadata": {
+      "caption_id": "caption_result_ec88a2f107794e48b801ce00dc57dd71"
+    }
+  },
+  {
+    "history_id": "social_publish_history_5cf7a29263d8499f8747f402e36c90b7",
+    "queue_item_id": "social_queue_item_dd63ea5ae68e414ba6362c99b82a7c76",
+    "platform": "x",
+    "status": "posted",
+    "message": "Posted to X.",
+    "created_at": "2026-08-25T15:34:05.488600",
+    "metadata": {
+      "x_auto_replies_enabled": true,
+      "x_auto_callback_status": "pending",
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "caption_id": null,
+      "provider_post_id": "2092274320093364522",
+      "provider_media_id": "2092274318390468608",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2092274320093364522"
+    }
+  },
+  {
+    "history_id": "social_publish_history_be3aded59230478ca2f156bbb0012892",
+    "queue_item_id": "social_queue_item_ab979c24c2d3470cb42868baa30b1a5e",
+    "platform": "x",
+    "status": "posted",
+    "message": "Posted to X.",
+    "created_at": "2026-08-24T15:21:27.086647",
+    "metadata": {
+      "x_auto_replies_enabled": true,
+      "x_auto_callback_status": "pending",
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "caption_id": null,
+      "provider_post_id": "2091908751125053668",
+      "provider_media_id": "2091908749510246400",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2091908751125053668"
+    }
+  },
+  {
+    "history_id": "social_publish_history_e3c0bc81430043aba663a919b7f09907",
+    "queue_item_id": "social_queue_item_66ba032a57fd4554b90d78a69bb358d1",
+    "platform": "telegram",
+    "status": "posted",
+    "message": "Posted to Telegram.",
+    "created_at": "2026-08-24T01:42:17.212837",
+    "metadata": {
+      "caption": "My tits \ud83d\ude08 hang bare in this open shirt as I stare you down \ud83d\udd25 unlock if you need to see these nipples up close \ud83d\udc45",
+      "caption_source": "GROK",
+      "caption_updated_at": "2026-08-24T01:42:12.319951+00:00",
+      "asset_id": 410,
+      "offering_id": "616f2c73-8e62-48b0-b271-d069b758918e",
+      "teaser_id": "f1bca111-097d-4c49-89b6-a83b65877d3f",
+      "derived_teaser_asset_id": null,
+      "price_minor": 999,
+      "currency": "USD",
+      "fanvue_publication_id": "e20d5cba-3dcc-4539-ad00-df458adffe22",
+      "telegram_destination": "vault",
+      "content_vault_presentation": {
+        "path": "D:\\Ava_CMS\\vault\\blurred\\410_blurred_telegram_presentation_v1.jpg",
+        "width": 960,
+        "height": 1280,
+        "version": 1,
+        "strategy": "privacy_safe_cover_crop",
+        "source_path": "D:\\Ava_CMS\\vault\\blurred\\410_blurred.png",
+        "aspect_ratio": "3:4",
+        "source_sha256": "7ef16d2ac371170f7197f8d39dcb4a14ab99caf7bffe7d239c31a25864ef3e00",
+        "source_teaser_path": "D:\\Ava_CMS\\vault\\blurred\\410_blurred.png",
+        "source_teaser_sha256": "7ef16d2ac371170f7197f8d39dcb4a14ab99caf7bffe7d239c31a25864ef3e00"
+      },
+      "account_name": null,
+      "telegram_post_to": "vault",
+      "caption_id": null,
+      "provider_post_id": "68",
+      "provider_media_id": null,
+      "provider_output_url": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_fc927ea6edb94e96990c0607b4670580",
+    "queue_item_id": "social_queue_item_66ba032a57fd4554b90d78a69bb358d1",
+    "platform": "telegram",
+    "status": "queued",
+    "message": "Commercial Offering queued for Telegram Content Vault.",
+    "created_at": "2026-08-24T01:42:15.416810",
+    "metadata": {
+      "source_type": "commercial_offering",
+      "commercial_offering_id": "616f2c73-8e62-48b0-b271-d069b758918e",
+      "destination": "telegram_content_vault",
+      "title": "Sunlit Intimate Repose"
+    }
+  },
+  {
+    "history_id": "social_publish_history_509a4e9c556d4de8aabf2ef0b23d705f",
+    "queue_item_id": "social_queue_item_a5414725a41e4e21bfee36a3f254e51a",
+    "platform": "telegram",
+    "status": "posted",
+    "message": "Posted to Telegram.",
+    "created_at": "2026-08-24T00:55:18.772774",
+    "metadata": {
+      "selected_ctas": [],
+      "account_name": null,
+      "telegram_post_to": "main",
+      "caption_id": "caption_result_b18d6adb801a4ab6aee6320e76b42049",
+      "provider_post_id": "98",
+      "provider_media_id": null,
+      "provider_output_url": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_9482b22b405445a6b56e1a60d7aee131",
+    "queue_item_id": "social_queue_item_a5414725a41e4e21bfee36a3f254e51a",
+    "platform": "telegram",
+    "status": "caption_attached",
+    "message": "Caption Studio result attached to Social Queue item.",
+    "created_at": "2026-08-24T00:55:16.866764",
+    "metadata": {
+      "caption_id": "caption_result_b18d6adb801a4ab6aee6320e76b42049"
+    }
+  },
+  {
+    "history_id": "social_publish_history_f5189bfe8b9b4b5497b0f848db3cbeea",
+    "queue_item_id": "social_queue_item_0301a709c14f462b84deae2f6cea4f2b",
+    "platform": "x",
+    "status": "posted",
+    "message": "Posted to X.",
+    "created_at": "2026-08-23T15:55:14.687808",
+    "metadata": {
+      "x_auto_replies_enabled": true,
+      "x_auto_callback_status": "pending",
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "caption_id": null,
+      "provider_post_id": "2091554867646964125",
+      "provider_media_id": "2091554865990320128",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2091554867646964125"
+    }
+  },
+  {
+    "history_id": "social_publish_history_430650e871934df495225fdffab8c0b6",
+    "queue_item_id": "social_queue_item_d53a205869a34201879bc97b9f14074c",
+    "platform": "telegram",
+    "status": "historical_media_normalization",
+    "message": "REPAIRED",
+    "created_at": "2026-08-23T02:00:56.012570+00:00",
+    "metadata": {
+      "event_type": "HISTORICAL_MEDIA_NORMALIZATION",
+      "publish_request_id": "social_publish_item_698c75bd39a940e7a52461b85afa19ef",
+      "message_id": 80,
+      "channel": "main",
+      "repair_status": "REPAIRED",
+      "message_id_retained": true,
+      "caption_retained": true,
+      "caption_entities_retained": true,
+      "keyboard_retained": true,
+      "error": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_8265ed4477c94741a8319fbca10648dd",
+    "queue_item_id": "social_queue_item_4c1c64f504d448de96baa66db6f435c5",
+    "platform": "telegram",
+    "status": "historical_media_normalization",
+    "message": "REPAIRED",
+    "created_at": "2026-08-23T02:00:49.528567+00:00",
+    "metadata": {
+      "event_type": "HISTORICAL_MEDIA_NORMALIZATION",
+      "publish_request_id": "social_publish_item_d2939d9cac464eaca08157e62d7f24aa",
+      "message_id": 81,
+      "channel": "main",
+      "repair_status": "REPAIRED",
+      "message_id_retained": true,
+      "caption_retained": true,
+      "caption_entities_retained": true,
+      "keyboard_retained": true,
+      "error": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_9aa5e2568d78411fb95001f317a9f7f6",
+    "queue_item_id": "social_queue_item_99cb2342e4964e8d9a5f0c849db8d608",
+    "platform": "telegram",
+    "status": "historical_media_normalization",
+    "message": "REPAIRED",
+    "created_at": "2026-08-23T02:00:44.019984+00:00",
+    "metadata": {
+      "event_type": "HISTORICAL_MEDIA_NORMALIZATION",
+      "publish_request_id": "social_publish_item_2eb808ca9fe74d8b8867101d18e97793",
+      "message_id": 83,
+      "channel": "main",
+      "repair_status": "REPAIRED",
+      "message_id_retained": true,
+      "caption_retained": true,
+      "caption_entities_retained": true,
+      "keyboard_retained": true,
+      "error": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_3291ed086a284af894cc82b6d7326d30",
+    "queue_item_id": "social_queue_item_d168b21ea1d04db9b324cc4b2b12853f",
+    "platform": "telegram",
+    "status": "historical_media_normalization",
+    "message": "FAILED",
+    "created_at": "2026-08-23T02:00:39.478451+00:00",
+    "metadata": {
+      "event_type": "HISTORICAL_MEDIA_NORMALIZATION",
+      "publish_request_id": "social_publish_item_5995324062df414798ffc58849f556b0",
+      "message_id": 84,
+      "channel": "main",
+      "repair_status": "FAILED",
+      "message_id_retained": false,
+      "caption_retained": false,
+      "caption_entities_retained": true,
+      "keyboard_retained": true,
+      "error": "{\"ok\":false,\"error_code\":400,\"description\":\"Bad Request: message to edit not found\"}"
+    }
+  },
+  {
+    "history_id": "social_publish_history_34d0addd6de74156910e1fc253915aa8",
+    "queue_item_id": "social_queue_item_3f5573a0e4be4985ad1a687a7c1c2068",
+    "platform": "telegram",
+    "status": "historical_media_normalization",
+    "message": "FAILED",
+    "created_at": "2026-08-23T02:00:38.534565+00:00",
+    "metadata": {
+      "event_type": "HISTORICAL_MEDIA_NORMALIZATION",
+      "publish_request_id": "social_publish_item_b2f61d2e4f0040f3b0dc4a946e4be3a4",
+      "message_id": 15,
+      "channel": "vault",
+      "repair_status": "FAILED",
+      "message_id_retained": false,
+      "caption_retained": false,
+      "caption_entities_retained": true,
+      "keyboard_retained": true,
+      "error": "{\"ok\":false,\"error_code\":400,\"description\":\"Bad Request: message to edit not found\"}"
+    }
+  },
+  {
+    "history_id": "social_publish_history_58b87a129e1e4ec8b1cfb52268139ac8",
+    "queue_item_id": "social_queue_item_ac8df87aa6c04bd8b1a8333e523dc5d3",
+    "platform": "telegram",
+    "status": "historical_media_normalization",
+    "message": "REPAIRED",
+    "created_at": "2026-08-23T02:00:37.586129+00:00",
+    "metadata": {
+      "event_type": "HISTORICAL_MEDIA_NORMALIZATION",
+      "publish_request_id": "social_publish_item_86256b3874384c8fb9f7c24b220e8d17",
+      "message_id": 85,
+      "channel": "main",
+      "repair_status": "REPAIRED",
+      "message_id_retained": true,
+      "caption_retained": true,
+      "caption_entities_retained": true,
+      "keyboard_retained": true,
+      "error": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_22b34f67efaa41c5978766bfbd7e1624",
+    "queue_item_id": "social_queue_item_bb23ea82e3614b6298f7e7efda6ccfb7",
+    "platform": "telegram",
+    "status": "historical_media_normalization",
+    "message": "REPAIRED",
+    "created_at": "2026-08-23T02:00:32.037998+00:00",
+    "metadata": {
+      "event_type": "HISTORICAL_MEDIA_NORMALIZATION",
+      "publish_request_id": "social_publish_item_d290fc1e4cff40f387653b760b959fb2",
+      "message_id": 86,
+      "channel": "main",
+      "repair_status": "REPAIRED",
+      "message_id_retained": true,
+      "caption_retained": true,
+      "caption_entities_retained": true,
+      "keyboard_retained": true,
+      "error": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_0705c9c57e1349f3b213caa14e387def",
+    "queue_item_id": "social_queue_item_5001eeb2b852409092adcd8273f33424",
+    "platform": "telegram",
+    "status": "historical_media_normalization",
+    "message": "REPAIRED",
+    "created_at": "2026-08-23T02:00:26.177356+00:00",
+    "metadata": {
+      "event_type": "HISTORICAL_MEDIA_NORMALIZATION",
+      "publish_request_id": "social_publish_item_3b2eaff3bd8d486a816161c7babe773d",
+      "message_id": 87,
+      "channel": "main",
+      "repair_status": "REPAIRED",
+      "message_id_retained": true,
+      "caption_retained": true,
+      "caption_entities_retained": true,
+      "keyboard_retained": true,
+      "error": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_626f78868858495ea3a249db9cecb612",
+    "queue_item_id": "social_queue_item_89f8ee018e6b44c3a3bf64f2af7d0cb9",
+    "platform": "telegram",
+    "status": "historical_media_normalization",
+    "message": "REPAIRED",
+    "created_at": "2026-08-23T02:00:24.778214+00:00",
+    "metadata": {
+      "event_type": "HISTORICAL_MEDIA_NORMALIZATION",
+      "publish_request_id": "social_publish_item_9073ffa0a3dc4f749ec43589f180bf7a",
+      "message_id": 16,
+      "channel": "vault",
+      "repair_status": "REPAIRED",
+      "message_id_retained": true,
+      "caption_retained": true,
+      "caption_entities_retained": true,
+      "keyboard_retained": true,
+      "error": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_32a36fc9251a4ce69cb48a623144ee96",
+    "queue_item_id": "social_queue_item_1dcfaa4cb99b41f9b6c93a9ad0da9eff",
+    "platform": "telegram",
+    "status": "historical_media_normalization",
+    "message": "REPAIRED",
+    "created_at": "2026-08-23T02:00:23.369945+00:00",
+    "metadata": {
+      "event_type": "HISTORICAL_MEDIA_NORMALIZATION",
+      "publish_request_id": "social_publish_item_bd7687bde87a4a52a74647d07a80a43e",
+      "message_id": 17,
+      "channel": "vault",
+      "repair_status": "REPAIRED",
+      "message_id_retained": true,
+      "caption_retained": true,
+      "caption_entities_retained": true,
+      "keyboard_retained": true,
+      "error": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_bb90b3af422841b49657964a01d52a74",
+    "queue_item_id": "social_queue_item_7db26dd48b654e15973d4b973b4f1f9a",
+    "platform": "telegram",
+    "status": "historical_media_normalization",
+    "message": "REPAIRED",
+    "created_at": "2026-08-23T02:00:21.931716+00:00",
+    "metadata": {
+      "event_type": "HISTORICAL_MEDIA_NORMALIZATION",
+      "publish_request_id": "social_publish_item_34dbc717278b494facc6a092a5599086",
+      "message_id": 18,
+      "channel": "vault",
+      "repair_status": "REPAIRED",
+      "message_id_retained": true,
+      "caption_retained": true,
+      "caption_entities_retained": true,
+      "keyboard_retained": true,
+      "error": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_dba6cf1b782a4f88b2a56c9b83a7b3ac",
+    "queue_item_id": "social_queue_item_bca9c90b814f4d01ae4aa11089f4e2cd",
+    "platform": "telegram",
+    "status": "historical_media_normalization",
+    "message": "REPAIRED",
+    "created_at": "2026-08-23T02:00:20.591101+00:00",
+    "metadata": {
+      "event_type": "HISTORICAL_MEDIA_NORMALIZATION",
+      "publish_request_id": "social_publish_item_68b982a91e2247be971b3f1b24922b5f",
+      "message_id": 88,
+      "channel": "main",
+      "repair_status": "REPAIRED",
+      "message_id_retained": true,
+      "caption_retained": true,
+      "caption_entities_retained": true,
+      "keyboard_retained": true,
+      "error": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_2e73a217450f4bf393bd67e4704a7724",
+    "queue_item_id": "social_queue_item_ca4ffb36c26841bb9daaeed47d16d94e",
+    "platform": "telegram",
+    "status": "historical_media_normalization",
+    "message": "REPAIRED",
+    "created_at": "2026-08-23T02:00:19.183942+00:00",
+    "metadata": {
+      "event_type": "HISTORICAL_MEDIA_NORMALIZATION",
+      "publish_request_id": "social_publish_item_9787810499b84e0a90c95ca29a9a21cc",
+      "message_id": 19,
+      "channel": "vault",
+      "repair_status": "REPAIRED",
+      "message_id_retained": true,
+      "caption_retained": true,
+      "caption_entities_retained": true,
+      "keyboard_retained": true,
+      "error": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_5e49ea577a4f43488e9269c46f3886f8",
+    "queue_item_id": "social_queue_item_5596d6d8e0de447bb8c4dc20d9d8b924",
+    "platform": "telegram",
+    "status": "historical_media_normalization",
+    "message": "REPAIRED",
+    "created_at": "2026-08-23T02:00:17.906454+00:00",
+    "metadata": {
+      "event_type": "HISTORICAL_MEDIA_NORMALIZATION",
+      "publish_request_id": "social_publish_item_2079ba46ce384452b3e20b9001c79f79",
+      "message_id": 20,
+      "channel": "vault",
+      "repair_status": "REPAIRED",
+      "message_id_retained": true,
+      "caption_retained": true,
+      "caption_entities_retained": true,
+      "keyboard_retained": true,
+      "error": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_7a9f6367d7a84a8eae74941e7278f802",
+    "queue_item_id": "social_queue_item_4fb54bc8abfd4f24a16c08e4a4f8c54e",
+    "platform": "telegram",
+    "status": "historical_media_normalization",
+    "message": "REPAIRED",
+    "created_at": "2026-08-23T02:00:16.243668+00:00",
+    "metadata": {
+      "event_type": "HISTORICAL_MEDIA_NORMALIZATION",
+      "publish_request_id": "social_publish_item_758a171a8fd7411aae20c84a7082eb1e",
+      "message_id": 21,
+      "channel": "vault",
+      "repair_status": "REPAIRED",
+      "message_id_retained": true,
+      "caption_retained": true,
+      "caption_entities_retained": true,
+      "keyboard_retained": true,
+      "error": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_7740974d6aa84ae9a30f0f62054a6176",
+    "queue_item_id": "social_queue_item_c32cfa5ded28477daa27bbd141713568",
+    "platform": "telegram",
+    "status": "historical_media_normalization",
+    "message": "REPAIRED",
+    "created_at": "2026-08-23T02:00:14.877313+00:00",
+    "metadata": {
+      "event_type": "HISTORICAL_MEDIA_NORMALIZATION",
+      "publish_request_id": "social_publish_item_e46c63fb13024da5bb1b891f31be295b",
+      "message_id": 24,
+      "channel": "vault",
+      "repair_status": "REPAIRED",
+      "message_id_retained": true,
+      "caption_retained": true,
+      "caption_entities_retained": true,
+      "keyboard_retained": true,
+      "error": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_0e573d554d0a4ad298304b8afd243be3",
+    "queue_item_id": "social_queue_item_59fcd3f0b3dc44be91cdd30b33f95948",
+    "platform": "telegram",
+    "status": "historical_media_normalization",
+    "message": "REPAIRED",
+    "created_at": "2026-08-23T02:00:13.542262+00:00",
+    "metadata": {
+      "event_type": "HISTORICAL_MEDIA_NORMALIZATION",
+      "publish_request_id": "social_publish_item_208f46d8082c4a96bffbfe7486e84a94",
+      "message_id": 25,
+      "channel": "vault",
+      "repair_status": "REPAIRED",
+      "message_id_retained": true,
+      "caption_retained": true,
+      "caption_entities_retained": true,
+      "keyboard_retained": true,
+      "error": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_ef4cd9fb0c444982be1d36ac36f4e8de",
+    "queue_item_id": "social_queue_item_ecedcc25962745cb952a3fdc5e97b10b",
+    "platform": "telegram",
+    "status": "historical_media_normalization",
+    "message": "REPAIRED",
+    "created_at": "2026-08-23T02:00:12.468649+00:00",
+    "metadata": {
+      "event_type": "HISTORICAL_MEDIA_NORMALIZATION",
+      "publish_request_id": "social_publish_item_9abdd650957e469e8f27ea1b808cc906",
+      "message_id": 26,
+      "channel": "vault",
+      "repair_status": "REPAIRED",
+      "message_id_retained": true,
+      "caption_retained": true,
+      "caption_entities_retained": true,
+      "keyboard_retained": true,
+      "error": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_4dc60758cdbb4736bb78b9eba59e134e",
+    "queue_item_id": "social_queue_item_484bd13fe860430fbe4e24e95b4db838",
+    "platform": "telegram",
+    "status": "historical_media_normalization",
+    "message": "REPAIRED",
+    "created_at": "2026-08-23T02:00:11.194738+00:00",
+    "metadata": {
+      "event_type": "HISTORICAL_MEDIA_NORMALIZATION",
+      "publish_request_id": "social_publish_item_d67a887a0c9640819ce9dd5bc4f46e5f",
+      "message_id": 89,
+      "channel": "main",
+      "repair_status": "REPAIRED",
+      "message_id_retained": true,
+      "caption_retained": true,
+      "caption_entities_retained": true,
+      "keyboard_retained": true,
+      "error": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_2c02f58ec75e484f8c48ba64377da564",
+    "queue_item_id": "social_queue_item_f8859ff2aceb4cb1870674694cee225f",
+    "platform": "telegram",
+    "status": "historical_media_normalization",
+    "message": "REPAIRED",
+    "created_at": "2026-08-23T02:00:04.549221+00:00",
+    "metadata": {
+      "event_type": "HISTORICAL_MEDIA_NORMALIZATION",
+      "publish_request_id": "social_publish_item_6b21f662bc9c458fb914e8b8ac3c3bed",
+      "message_id": 90,
+      "channel": "main",
+      "repair_status": "REPAIRED",
+      "message_id_retained": true,
+      "caption_retained": true,
+      "caption_entities_retained": true,
+      "keyboard_retained": true,
+      "error": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_f94f9d3a0a264ca1b78b81a6a5359c21",
+    "queue_item_id": "social_queue_item_da32af2fa80b4d4b8884fe1fba54d31c",
+    "platform": "telegram",
+    "status": "historical_media_normalization",
+    "message": "REPAIRED",
+    "created_at": "2026-08-23T01:59:58.911668+00:00",
+    "metadata": {
+      "event_type": "HISTORICAL_MEDIA_NORMALIZATION",
+      "publish_request_id": "social_publish_item_21a636d9b0a941388d78eff3923ab780",
+      "message_id": 91,
+      "channel": "main",
+      "repair_status": "REPAIRED",
+      "message_id_retained": true,
+      "caption_retained": true,
+      "caption_entities_retained": true,
+      "keyboard_retained": true,
+      "error": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_c49288ac6b3d4488b28dffcb898b80d9",
+    "queue_item_id": "social_queue_item_06399fd284cd4e59a14ed4749ff0915e",
+    "platform": "telegram",
+    "status": "historical_media_normalization",
+    "message": "REPAIRED",
+    "created_at": "2026-08-23T01:59:52.387424+00:00",
+    "metadata": {
+      "event_type": "HISTORICAL_MEDIA_NORMALIZATION",
+      "publish_request_id": "social_publish_item_33fa5696986341cc83d06a8f4b85268d",
+      "message_id": 92,
+      "channel": "main",
+      "repair_status": "REPAIRED",
+      "message_id_retained": true,
+      "caption_retained": true,
+      "caption_entities_retained": true,
+      "keyboard_retained": true,
+      "error": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_6dff29527bc6483d93f96c8cfc332ba8",
+    "queue_item_id": "social_queue_item_a850bb8e486c4db18aeb601b57a7ed77",
+    "platform": "telegram",
+    "status": "historical_media_normalization",
+    "message": "REPAIRED",
+    "created_at": "2026-08-23T01:59:45.835027+00:00",
+    "metadata": {
+      "event_type": "HISTORICAL_MEDIA_NORMALIZATION",
+      "publish_request_id": "social_publish_item_1e3434046d644f1f965838239e6e70a0",
+      "message_id": 93,
+      "channel": "main",
+      "repair_status": "REPAIRED",
+      "message_id_retained": true,
+      "caption_retained": true,
+      "caption_entities_retained": true,
+      "keyboard_retained": true,
+      "error": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_d2f9c7508adb4a99bee8599f2cef2883",
+    "queue_item_id": "social_queue_item_8aba971e576c4414951c3a6ebbacf83a",
+    "platform": "telegram",
+    "status": "historical_media_normalization",
+    "message": "REPAIRED",
+    "created_at": "2026-08-23T01:59:39.996821+00:00",
+    "metadata": {
+      "event_type": "HISTORICAL_MEDIA_NORMALIZATION",
+      "publish_request_id": "social_publish_item_3da4b7fc05d74858b00f1f8c43e44c78",
+      "message_id": 94,
+      "channel": "main",
+      "repair_status": "REPAIRED",
+      "message_id_retained": true,
+      "caption_retained": true,
+      "caption_entities_retained": true,
+      "keyboard_retained": true,
+      "error": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_7e13cbb3e53849629e417361b0f658cf",
+    "queue_item_id": "social_queue_item_5dc7307e3995422e8d68a41a1c489c42",
+    "platform": "telegram",
+    "status": "historical_media_normalization",
+    "message": "REPAIRED",
+    "created_at": "2026-08-23T01:59:33.424968+00:00",
+    "metadata": {
+      "event_type": "HISTORICAL_MEDIA_NORMALIZATION",
+      "publish_request_id": "social_publish_item_1a8993f960f849dda797c3e4c06fabca",
+      "message_id": 95,
+      "channel": "main",
+      "repair_status": "REPAIRED",
+      "message_id_retained": true,
+      "caption_retained": true,
+      "caption_entities_retained": true,
+      "keyboard_retained": true,
+      "error": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_188d3efcb7bb4cb181bc8113a8fb8487",
+    "queue_item_id": "social_queue_item_99c8b0c4a4c646369c37ab3bdf1b9bd3",
+    "platform": "telegram",
+    "status": "historical_media_normalization",
+    "message": "REPAIRED",
+    "created_at": "2026-08-23T01:59:26.522494+00:00",
+    "metadata": {
+      "event_type": "HISTORICAL_MEDIA_NORMALIZATION",
+      "publish_request_id": "social_publish_item_b1dd5f2a6d2c4d1c8c06c0c0ca7e51ab",
+      "message_id": 96,
+      "channel": "main",
+      "repair_status": "REPAIRED",
+      "message_id_retained": true,
+      "caption_retained": true,
+      "caption_entities_retained": true,
+      "keyboard_retained": true,
+      "error": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_1c1215f943e145cab568bce19ed49592",
+    "queue_item_id": "social_queue_item_84d5997d99384996a550d6c80c2f40d6",
+    "platform": "telegram",
+    "status": "historical_media_normalization",
+    "message": "REPAIRED",
+    "created_at": "2026-08-23T01:59:20.602288+00:00",
+    "metadata": {
+      "event_type": "HISTORICAL_MEDIA_NORMALIZATION",
+      "publish_request_id": "social_publish_item_30cd69fa4caa4fb08401c16f70a45087",
+      "message_id": 97,
+      "channel": "main",
+      "repair_status": "REPAIRED",
+      "message_id_retained": true,
+      "caption_retained": true,
+      "caption_entities_retained": true,
+      "keyboard_retained": true,
+      "error": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_412c61c59c1e4b5395c7386b4ddc1bc5",
+    "queue_item_id": "social_queue_item_84d5997d99384996a550d6c80c2f40d6",
+    "platform": "telegram",
+    "status": "posted",
+    "message": "Posted to Telegram.",
+    "created_at": "2026-08-23T01:37:07.281637",
+    "metadata": {
+      "selected_ctas": [
+        "VAULT",
+        "TIP"
+      ],
+      "account_name": null,
+      "telegram_post_to": "main",
+      "caption_id": "caption_result_fdaa2991a5684534a992b71a9362d98f",
+      "provider_post_id": "97",
+      "provider_media_id": null,
+      "provider_output_url": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_2ba32f00b5c8452b8f20cac98a74c4e8",
+    "queue_item_id": "social_queue_item_84d5997d99384996a550d6c80c2f40d6",
+    "platform": "telegram",
+    "status": "caption_attached",
+    "message": "Caption Studio result attached to Social Queue item.",
+    "created_at": "2026-08-23T01:37:05.661553",
+    "metadata": {
+      "caption_id": "caption_result_fdaa2991a5684534a992b71a9362d98f"
+    }
+  },
+  {
+    "history_id": "social_publish_history_01fea0c1f513418f9f74b489f1667460",
+    "queue_item_id": "social_queue_item_99c8b0c4a4c646369c37ab3bdf1b9bd3",
+    "platform": "telegram",
+    "status": "posted",
+    "message": "Posted to Telegram.",
+    "created_at": "2026-08-22T16:33:42.463549",
+    "metadata": {
+      "selected_ctas": [],
+      "account_name": null,
+      "telegram_post_to": "main",
+      "caption_id": "caption_result_99677aa6bcf04a15a6eed23a96cf1c7e",
+      "provider_post_id": "96",
+      "provider_media_id": null,
+      "provider_output_url": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_96ad808c112e4342908d1c99f87ac730",
+    "queue_item_id": "social_queue_item_99c8b0c4a4c646369c37ab3bdf1b9bd3",
+    "platform": "telegram",
+    "status": "caption_attached",
+    "message": "Caption Studio result attached to Social Queue item.",
+    "created_at": "2026-08-22T16:33:40.676498",
+    "metadata": {
+      "caption_id": "caption_result_99677aa6bcf04a15a6eed23a96cf1c7e"
+    }
+  },
+  {
+    "history_id": "social_publish_history_ea88ce99db7b4b1d830c93a7dae28331",
+    "queue_item_id": "social_queue_item_8acc289b85d8421bafb24f5d7ffff177",
+    "platform": "x",
+    "status": "posted",
+    "message": "Posted to X.",
+    "created_at": "2026-08-22T16:01:21.780329",
+    "metadata": {
+      "x_auto_replies_enabled": true,
+      "x_auto_callback_status": "pending",
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "caption_id": null,
+      "provider_post_id": "2091194019359367406",
+      "provider_media_id": "2091194016712790016",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2091194019359367406"
+    }
+  },
+  {
+    "history_id": "social_publish_history_881024a4837b4805b1a7dcc1009e0e4e",
+    "queue_item_id": "social_queue_item_5dc7307e3995422e8d68a41a1c489c42",
+    "platform": "telegram",
+    "status": "posted",
+    "message": "Posted to Telegram.",
+    "created_at": "2026-08-22T01:11:14.512755",
+    "metadata": {
+      "selected_ctas": [
+        "VAULT",
+        "TIP"
+      ],
+      "account_name": null,
+      "telegram_post_to": "main",
+      "caption_id": "caption_result_be287e4fedff4eb9a9308acaf61fa2b7",
+      "provider_post_id": "95",
+      "provider_media_id": null,
+      "provider_output_url": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_7745c33812e84f329dae7f6cb70cbfcc",
+    "queue_item_id": "social_queue_item_5dc7307e3995422e8d68a41a1c489c42",
+    "platform": "telegram",
+    "status": "caption_attached",
+    "message": "Caption Studio result attached to Social Queue item.",
+    "created_at": "2026-08-22T01:11:12.480908",
+    "metadata": {
+      "caption_id": "caption_result_be287e4fedff4eb9a9308acaf61fa2b7"
+    }
+  },
+  {
+    "history_id": "social_publish_history_ef2adec3381c44fe807572a618548829",
+    "queue_item_id": "social_queue_item_8aba971e576c4414951c3a6ebbacf83a",
+    "platform": "telegram",
+    "status": "posted",
+    "message": "Posted to Telegram.",
+    "created_at": "2026-08-21T18:21:13.743803",
+    "metadata": {
+      "selected_ctas": [
+        "VAULT",
+        "TIP"
+      ],
+      "account_name": null,
+      "telegram_post_to": "main",
+      "caption_id": null,
+      "provider_post_id": "94",
+      "provider_media_id": null,
+      "provider_output_url": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_922c0515dd0b4319a1de5973a66516f9",
+    "queue_item_id": "social_queue_item_6aba09c7768c4410b0e8d487ed2e90fd",
+    "platform": "x",
+    "status": "posted",
+    "message": "Posted to X.",
+    "created_at": "2026-08-21T15:50:07.768573",
+    "metadata": {
+      "x_auto_replies_enabled": true,
+      "x_auto_callback_status": "pending",
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "caption_id": null,
+      "provider_post_id": "2090828804767814046",
+      "provider_media_id": "2090828802230267904",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2090828804767814046"
+    }
+  },
+  {
+    "history_id": "social_publish_history_e2b9e48ce1eb4b5ea9230a7373d862ba",
+    "queue_item_id": "social_queue_item_a850bb8e486c4db18aeb601b57a7ed77",
+    "platform": "telegram",
+    "status": "posted",
+    "message": "Posted to Telegram.",
+    "created_at": "2026-08-21T02:18:15.022412",
+    "metadata": {
+      "selected_ctas": [],
+      "account_name": null,
+      "telegram_post_to": "main",
+      "caption_id": "caption_result_ed15f64cd40842ae95f4b190eb27a761",
+      "provider_post_id": "93",
+      "provider_media_id": null,
+      "provider_output_url": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_87ff6e322a0b45a1b13607621e5bad05",
+    "queue_item_id": "social_queue_item_a850bb8e486c4db18aeb601b57a7ed77",
+    "platform": "telegram",
+    "status": "caption_attached",
+    "message": "Caption Studio result attached to Social Queue item.",
+    "created_at": "2026-08-21T02:18:13.287887",
+    "metadata": {
+      "caption_id": "caption_result_ed15f64cd40842ae95f4b190eb27a761"
+    }
+  },
+  {
+    "history_id": "social_publish_history_0052bc2e02e74fe2bae6d2c319ceec92",
+    "queue_item_id": "social_queue_item_06399fd284cd4e59a14ed4749ff0915e",
+    "platform": "telegram",
+    "status": "posted",
+    "message": "Posted to Telegram.",
+    "created_at": "2026-08-20T19:37:19.304447",
+    "metadata": {
+      "selected_ctas": [],
+      "account_name": null,
+      "telegram_post_to": "main",
+      "caption_id": "caption_result_4515a2fa01de410f94419470a73bc619",
+      "provider_post_id": "92",
+      "provider_media_id": null,
+      "provider_output_url": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_1827ee07ce714f7f9aaf1e11d58764ae",
+    "queue_item_id": "social_queue_item_06399fd284cd4e59a14ed4749ff0915e",
+    "platform": "telegram",
+    "status": "caption_attached",
+    "message": "Caption Studio result attached to Social Queue item.",
+    "created_at": "2026-08-20T19:37:17.553088",
+    "metadata": {
+      "caption_id": "caption_result_4515a2fa01de410f94419470a73bc619"
+    }
+  },
+  {
+    "history_id": "social_publish_history_e419608341ce4268b74d5093032b52af",
+    "queue_item_id": "social_queue_item_b309c11018154f959927c21c3706d7fc",
+    "platform": "x",
+    "status": "posted",
+    "message": "Posted to X.",
+    "created_at": "2026-08-20T15:50:00.916070",
+    "metadata": {
+      "x_auto_replies_enabled": true,
+      "x_auto_callback_status": "pending",
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "caption_id": null,
+      "provider_post_id": "2090466388162822588",
+      "provider_media_id": "2090466385713418240",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2090466388162822588"
+    }
+  },
+  {
+    "history_id": "social_publish_history_945bc95fc54a4823be3869ff25bb3ca9",
+    "queue_item_id": "social_queue_item_da32af2fa80b4d4b8884fe1fba54d31c",
+    "platform": "telegram",
+    "status": "posted",
+    "message": "Posted to Telegram.",
+    "created_at": "2026-08-20T02:01:01.488200",
+    "metadata": {
+      "selected_ctas": [
+        "VAULT",
+        "TIP"
+      ],
+      "account_name": null,
+      "telegram_post_to": "main",
+      "caption_id": "caption_result_bfd430b9bfa14a5881ea36fbd43b58d5",
+      "provider_post_id": "91",
+      "provider_media_id": null,
+      "provider_output_url": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_857612a8b5104b4d9d3d973dad0dbb0a",
+    "queue_item_id": "social_queue_item_da32af2fa80b4d4b8884fe1fba54d31c",
+    "platform": "telegram",
+    "status": "caption_attached",
+    "message": "Caption Studio result attached to Social Queue item.",
+    "created_at": "2026-08-20T02:00:59.766087",
+    "metadata": {
+      "caption_id": "caption_result_bfd430b9bfa14a5881ea36fbd43b58d5"
+    }
+  },
+  {
+    "history_id": "social_publish_history_6eb82b67ac7e4911bad72e8e2b52c8a0",
+    "queue_item_id": "social_queue_item_43c82f2dae2d4e3580958a6f65c7c2db",
+    "platform": "x",
+    "status": "posted",
+    "message": "Posted to X.",
+    "created_at": "2026-08-19T16:33:37.077653",
+    "metadata": {
+      "x_auto_replies_enabled": true,
+      "x_auto_callback_status": "pending",
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "caption_id": null,
+      "provider_post_id": "2090114973481484624",
+      "provider_media_id": "2090114971568873472",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2090114973481484624"
+    }
+  },
+  {
+    "history_id": "social_publish_history_3a69f00f208f4a2ca5117cd6e61482d1",
+    "queue_item_id": "social_queue_item_f8859ff2aceb4cb1870674694cee225f",
+    "platform": "telegram",
+    "status": "posted",
+    "message": "Posted to Telegram.",
+    "created_at": "2026-08-19T01:25:48.966250",
+    "metadata": {
+      "selected_ctas": [
+        "VAULT"
+      ],
+      "account_name": null,
+      "telegram_post_to": "main",
+      "caption_id": "caption_result_925491cc9c1c457bb9f36139c2d64d04",
+      "provider_post_id": "90",
+      "provider_media_id": null,
+      "provider_output_url": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_d9671db2f83349b097da833d433d5f07",
+    "queue_item_id": "social_queue_item_f8859ff2aceb4cb1870674694cee225f",
+    "platform": "telegram",
+    "status": "caption_attached",
+    "message": "Caption Studio result attached to Social Queue item.",
+    "created_at": "2026-08-19T01:25:46.872046",
+    "metadata": {
+      "caption_id": "caption_result_925491cc9c1c457bb9f36139c2d64d04"
+    }
+  },
+  {
+    "history_id": "social_publish_history_9baf0c0e30c949bdbf452b5f0b32885d",
+    "queue_item_id": "social_queue_item_9466681b4ca54bb6a489208f4bcc6f1c",
+    "platform": "telegram",
+    "status": "posted",
+    "message": "Posted to Telegram.",
+    "created_at": "2026-08-18T20:13:56.639852",
+    "metadata": {
+      "caption": "\ud83d\udd25 Bent over for you\u2026 spreading my ass wide open \ud83d\udda4\nPussy and everything on full display \ud83d\udc40\ud83d\udca6\nUnlock me before I stand back up \ud83d\udd25",
+      "caption_source": "MANUAL",
+      "caption_updated_at": "2026-08-18T20:13:39.484723+00:00",
+      "asset_id": 324,
+      "offering_id": "1d9250dc-db1c-4c5c-998f-5466d81e6bb1",
+      "teaser_id": "b9426f8b-2e65-4388-8552-e2db129478d7",
+      "derived_teaser_asset_id": null,
+      "price_minor": 1399,
+      "currency": "USD",
+      "fanvue_publication_id": "deed52e9-9f02-4116-8c98-9deaf7295737",
+      "telegram_destination": "vault",
+      "content_vault_presentation": {
+        "path": "D:\\Ava_CMS\\vault\\blurred\\324_blurred_content_vault_presentation_v1.jpg",
+        "width": 960,
+        "height": 1280,
+        "version": 1,
+        "strategy": "privacy_safe_cover_crop",
+        "aspect_ratio": "3:4",
+        "source_teaser_path": "D:\\Ava_CMS\\vault\\blurred\\324_blurred.png",
+        "source_teaser_sha256": "495b70315460e7ce39e8c20483bc09118f3ae8aedb24c2adaf58fb5b9ffda4fb"
+      },
+      "account_name": null,
+      "telegram_post_to": "vault",
+      "caption_id": null,
+      "provider_post_id": "67",
+      "provider_media_id": null,
+      "provider_output_url": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_7fe4b96c68e9408fab1272177c72a96b",
+    "queue_item_id": "social_queue_item_9466681b4ca54bb6a489208f4bcc6f1c",
+    "platform": "telegram",
+    "status": "queued",
+    "message": "Commercial Offering queued for Telegram Content Vault.",
+    "created_at": "2026-08-18T20:13:55.239363",
+    "metadata": {
+      "source_type": "commercial_offering",
+      "commercial_offering_id": "1d9250dc-db1c-4c5c-998f-5466d81e6bb1",
+      "destination": "telegram_content_vault",
+      "title": "Kitchen Seductive Glance"
+    }
+  },
+  {
+    "history_id": "social_publish_history_07e84f4bfdc24621a90fe7fe5b2ff710",
+    "queue_item_id": "social_queue_item_a7c15100fdeb4c9f8a40fb8c77392b9d",
+    "platform": "telegram",
+    "status": "posted",
+    "message": "Posted to Telegram.",
+    "created_at": "2026-08-18T19:53:40.137478",
+    "metadata": {
+      "caption": "\ud83d\udd25 3 dirty shots of me on the bed\u2026 completely nude \ud83d\udda4 Tongue out\u2026 hands on my tits\u2026 fingers right on my pussy \ud83d\udc40\ud83d\udca6 Unlock me before I stop teasing \ud83d\udd25",
+      "caption_source": "MANUAL",
+      "caption_updated_at": "2026-08-18T19:52:44.638117+00:00",
+      "offering_id": "c6497ffd-b1b2-49f6-80e8-2e3017023603",
+      "bundle_source_id": "3e6c2529-3ea2-569d-ac21-7642b8859b5d",
+      "paid_asset_ids": [
+        322,
+        320,
+        321
+      ],
+      "paid_image_count": 3,
+      "teaser_asset_id": 323,
+      "price_minor": 2499,
+      "currency": "USD",
+      "fanvue_publication_id": "6a9fa859-7c57-43d6-9c40-7ed875808126",
+      "telegram_destination": "vault",
+      "content_vault_presentation": {
+        "path": "D:\\Ava_CMS\\vault\\bundle_teasers\\3e6c2529-3ea2-569d-ac21-7642b8859b5d\\promotional_teaser_source_322_content_vault_presentation_v1.jpg",
+        "width": 960,
+        "height": 1280,
+        "version": 1,
+        "strategy": "privacy_safe_cover_crop",
+        "aspect_ratio": "3:4",
+        "source_teaser_path": "D:\\Ava_CMS\\vault\\bundle_teasers\\3e6c2529-3ea2-569d-ac21-7642b8859b5d\\promotional_teaser_source_322.png",
+        "source_teaser_sha256": "def43f0cf975a64aff3599c9ad3a4075d8e823d81a0704257eb4680df1966a3e"
+      },
+      "account_name": null,
+      "telegram_post_to": "vault",
+      "caption_id": null,
+      "provider_post_id": "66",
+      "provider_media_id": null,
+      "provider_output_url": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_df21beefe53f4965a4df691ef1e7aa0a",
+    "queue_item_id": "social_queue_item_a7c15100fdeb4c9f8a40fb8c77392b9d",
+    "platform": "telegram",
+    "status": "queued",
+    "message": "Commercial Offering queued for Telegram Content Vault.",
+    "created_at": "2026-08-18T19:53:38.500031",
+    "metadata": {
+      "source_type": "commercial_offering",
+      "commercial_offering_id": "c6497ffd-b1b2-49f6-80e8-2e3017023603",
+      "destination": "telegram_content_vault",
+      "title": "Intimate Bedroom Tease \u2013 Premium Explicit Progression"
+    }
+  },
+  {
+    "history_id": "social_publish_history_b7b358253bdb4b508335f5f5dde21f98",
+    "queue_item_id": "social_queue_item_575d24b075b9446689708f39d3cc5e14",
+    "platform": "telegram",
+    "status": "posted",
+    "message": "Posted to Telegram.",
+    "created_at": "2026-08-18T19:26:21.915814",
+    "metadata": {
+      "caption": "My eyes \ud83d\udc40 hold yours across the rain-soaked night while the wet shirt clings to my bare breasts \u2728",
+      "caption_source": "GROK",
+      "caption_updated_at": "2026-08-18T19:26:16.188861+00:00",
+      "asset_id": 318,
+      "offering_id": "74aae98f-1399-46d7-aa5a-df4d4c4c059a",
+      "teaser_id": "3228631f-8676-4a8a-91c7-9b24f07d067c",
+      "derived_teaser_asset_id": 319,
+      "price_minor": 999,
+      "currency": "USD",
+      "fanvue_publication_id": "0a42f9da-f519-4318-b4b5-029bb5bfdbaa",
+      "telegram_destination": "vault",
+      "content_vault_presentation": {
+        "path": "D:\\Ava_CMS\\vault\\commercial_teasers\\318\\content_vault_selective_content_vault_presentation_v1.jpg",
+        "width": 960,
+        "height": 1280,
+        "version": 1,
+        "strategy": "privacy_safe_cover_crop",
+        "aspect_ratio": "3:4",
+        "source_teaser_path": "D:\\Ava_CMS\\vault\\commercial_teasers\\318\\content_vault_selective.png",
+        "source_teaser_sha256": "b72ef562687b854e9147e917fc0800412106f72733bd66f9463737bdb0b59687"
+      },
+      "account_name": null,
+      "telegram_post_to": "vault",
+      "caption_id": null,
+      "provider_post_id": "65",
+      "provider_media_id": null,
+      "provider_output_url": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_344135eb8806470e96bf1ec4de6857f1",
+    "queue_item_id": "social_queue_item_575d24b075b9446689708f39d3cc5e14",
+    "platform": "telegram",
+    "status": "queued",
+    "message": "Commercial Offering queued for Telegram Content Vault.",
+    "created_at": "2026-08-18T19:26:20.193641",
+    "metadata": {
+      "source_type": "commercial_offering",
+      "commercial_offering_id": "74aae98f-1399-46d7-aa5a-df4d4c4c059a",
+      "destination": "telegram_content_vault",
+      "title": "Rain-Soaked Night Allure"
+    }
+  },
+  {
+    "history_id": "social_publish_history_fa44e3615f534834849e166208010be7",
+    "queue_item_id": "social_queue_item_aea23128f514478f915c4c76ca57efd0",
+    "platform": "telegram",
+    "status": "posted",
+    "message": "Posted to Telegram.",
+    "created_at": "2026-08-18T19:14:32.691272",
+    "metadata": {
+      "caption": "\ud83d\udd25 Lying here for you\u2026 tits pressed into the sheets \ud83d\udda4\nSoft light, quiet smile, nothing else on but these little panties \ud83d\udc40\ud83d\udca6\nUnlock me before I roll over \ud83d\udd25",
+      "caption_source": "MANUAL",
+      "caption_updated_at": "2026-08-18T19:14:27.587832+00:00",
+      "asset_id": 317,
+      "offering_id": "b25c2352-5897-435b-b6a7-a7cf18045e3a",
+      "teaser_id": "e7c9c3d0-d273-46d2-892f-65ef4443f722",
+      "derived_teaser_asset_id": null,
+      "price_minor": 999,
+      "currency": "USD",
+      "fanvue_publication_id": "aa02b31a-2fb3-459e-b11f-3029943b5b3e",
+      "telegram_destination": "vault",
+      "content_vault_presentation": {
+        "path": "D:\\Ava_CMS\\vault\\blurred\\317_blurred_content_vault_presentation_v1.jpg",
+        "width": 960,
+        "height": 1280,
+        "version": 1,
+        "strategy": "privacy_safe_cover_crop",
+        "aspect_ratio": "3:4",
+        "source_teaser_path": "D:\\Ava_CMS\\vault\\blurred\\317_blurred.png",
+        "source_teaser_sha256": "ca90fdb5f2a9a65dc2be6b55837c9dc3cfdba7c86fe608eb88e4978625dbb349"
+      },
+      "account_name": null,
+      "telegram_post_to": "vault",
+      "caption_id": null,
+      "provider_post_id": "64",
+      "provider_media_id": null,
+      "provider_output_url": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_022266a83b7d446a90eb53be6bbef7c3",
+    "queue_item_id": "social_queue_item_aea23128f514478f915c4c76ca57efd0",
+    "platform": "telegram",
+    "status": "queued",
+    "message": "Commercial Offering queued for Telegram Content Vault.",
+    "created_at": "2026-08-18T19:14:31.272753",
+    "metadata": {
+      "source_type": "commercial_offering",
+      "commercial_offering_id": "b25c2352-5897-435b-b6a7-a7cf18045e3a",
+      "destination": "telegram_content_vault",
+      "title": "Intimate Bedroom Confidence"
+    }
+  },
+  {
+    "history_id": "social_publish_history_c5ac2281fa5048f0a49906236f8a85e2",
+    "queue_item_id": "social_queue_item_f07b3a7d7dcf4958bdfe804a61998181",
+    "platform": "x",
+    "status": "posted",
+    "message": "Posted to X.",
+    "created_at": "2026-08-18T15:36:45.757403",
+    "metadata": {
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "caption_id": null,
+      "provider_post_id": "2089738277347569877",
+      "provider_media_id": "2089738274969440256",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2089738277347569877"
+    }
+  },
+  {
+    "history_id": "social_publish_history_cba8e36077a54c5a8ea24cf70a773f0a",
+    "queue_item_id": "social_queue_item_484bd13fe860430fbe4e24e95b4db838",
+    "platform": "telegram",
+    "status": "posted",
+    "message": "Posted to Telegram.",
+    "created_at": "2026-08-18T01:53:16.911417",
+    "metadata": {
+      "account_name": null,
+      "telegram_post_to": "main",
+      "caption_id": "caption_result_1371809313c842a99af3b9a87563409c",
+      "provider_post_id": "89",
+      "provider_media_id": null,
+      "provider_output_url": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_762af194873b4f36af16e9900226a303",
+    "queue_item_id": "social_queue_item_484bd13fe860430fbe4e24e95b4db838",
+    "platform": "telegram",
+    "status": "caption_attached",
+    "message": "Caption Studio result attached to Social Queue item.",
+    "created_at": "2026-08-18T01:53:15.196362",
+    "metadata": {
+      "caption_id": "caption_result_1371809313c842a99af3b9a87563409c"
+    }
+  },
+  {
+    "history_id": "social_publish_history_b913c138c1db467797b743f037b1ace3",
+    "queue_item_id": "social_queue_item_ccba0e73d5b44ee7b80a3095990610d9",
+    "platform": "telegram",
+    "status": "posted",
+    "message": "Posted to Telegram.",
+    "created_at": "2026-08-18T00:06:56.200072",
+    "metadata": {
+      "caption": "Firelight warms my bare breasts \ud83d\udc51 as I remain here in calm confidence waiting for your gaze \ud83d\udd25",
+      "caption_source": "GROK",
+      "caption_updated_at": "2026-08-18T00:06:52.003189+00:00",
+      "asset_id": 316,
+      "offering_id": "526442dc-6ae6-4c4e-8dbe-de928e40f40c",
+      "teaser_id": "2c3d5251-e51d-4f28-9ec5-033bcc415b60",
+      "derived_teaser_asset_id": null,
+      "price_minor": 1099,
+      "currency": "USD",
+      "fanvue_publication_id": "170ed241-f069-45df-9994-3399b0eb7ced",
+      "telegram_destination": "vault",
+      "content_vault_presentation": {
+        "path": "D:\\Ava_CMS\\vault\\blurred\\316_blurred_content_vault_presentation_v1.jpg",
+        "width": 960,
+        "height": 1280,
+        "version": 1,
+        "strategy": "privacy_safe_cover_crop",
+        "aspect_ratio": "3:4",
+        "source_teaser_path": "D:\\Ava_CMS\\vault\\blurred\\316_blurred.png",
+        "source_teaser_sha256": "becbaa0e3df548931a19d1aa63bcbb23b928edf80e47086d0b6180c633972f2e"
+      },
+      "account_name": null,
+      "telegram_post_to": "vault",
+      "caption_id": null,
+      "provider_post_id": "63",
+      "provider_media_id": null,
+      "provider_output_url": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_dd501de59e2e4f2c9994e027a5f66b05",
+    "queue_item_id": "social_queue_item_ccba0e73d5b44ee7b80a3095990610d9",
+    "platform": "telegram",
+    "status": "queued",
+    "message": "Commercial Offering queued for Telegram Content Vault.",
+    "created_at": "2026-08-18T00:06:54.869408",
+    "metadata": {
+      "source_type": "commercial_offering",
+      "commercial_offering_id": "526442dc-6ae6-4c4e-8dbe-de928e40f40c",
+      "destination": "telegram_content_vault",
+      "title": "Fireside Intimate Reverie"
+    }
+  },
+  {
+    "history_id": "social_publish_history_3c8682f6dd404a788f0f7c18a26124cc",
+    "queue_item_id": "social_queue_item_d9d91fe05e92416f9b04f7608a2e11fb",
+    "platform": "telegram",
+    "status": "posted",
+    "message": "Posted to Telegram.",
+    "created_at": "2026-08-17T20:41:51.376832",
+    "metadata": {
+      "caption": "My steady gaze \ud83d\udc40 meets yours with calm certainty while soft light reveals my bare breasts \u2728",
+      "caption_source": "GROK",
+      "caption_updated_at": "2026-08-17T20:41:44.002701+00:00",
+      "asset_id": 314,
+      "offering_id": "846748e8-2af8-4c4b-b50c-1c25ccebe78f",
+      "teaser_id": "535443c0-eb24-4cbb-a8f9-680ff08e5734",
+      "derived_teaser_asset_id": 315,
+      "price_minor": 999,
+      "currency": "USD",
+      "fanvue_publication_id": "e91b8293-2192-4b14-9330-e221dd1bb9e7",
+      "telegram_destination": "vault",
+      "content_vault_presentation": {
+        "path": "D:\\Ava_CMS\\vault\\commercial_teasers\\314\\content_vault_selective_content_vault_presentation_v1.jpg",
+        "width": 960,
+        "height": 1280,
+        "version": 1,
+        "strategy": "privacy_safe_cover_crop",
+        "aspect_ratio": "3:4",
+        "source_teaser_path": "D:\\Ava_CMS\\vault\\commercial_teasers\\314\\content_vault_selective.png",
+        "source_teaser_sha256": "d33d3cdb368d2d63504cb0937261b3b9f6b48698f6a2a6cdf9b55c48ec42b103"
+      },
+      "account_name": null,
+      "telegram_post_to": "vault",
+      "caption_id": null,
+      "provider_post_id": "62",
+      "provider_media_id": null,
+      "provider_output_url": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_3678865e76314a4cb22ed348600f6fe5",
+    "queue_item_id": "social_queue_item_d9d91fe05e92416f9b04f7608a2e11fb",
+    "platform": "telegram",
+    "status": "queued",
+    "message": "Commercial Offering queued for Telegram Content Vault.",
+    "created_at": "2026-08-17T20:41:49.853526",
+    "metadata": {
+      "source_type": "commercial_offering",
+      "commercial_offering_id": "846748e8-2af8-4c4b-b50c-1c25ccebe78f",
+      "destination": "telegram_content_vault",
+      "title": "Quiet Bathroom Confidence"
+    }
+  },
+  {
+    "history_id": "social_publish_history_9b368e98e02f434bb038721a689cc8bb",
+    "queue_item_id": "social_queue_item_158de331304343739717e8f75723d412",
+    "platform": "telegram",
+    "status": "posted",
+    "message": "Posted to Telegram.",
+    "created_at": "2026-08-17T20:38:36.754599",
+    "metadata": {
+      "caption": "My natural presence fills the sanctuary with sensual calm \ud83d\udd6f\ufe0f every inch of me revealed in elegant stillness for your eyes \ud83d\ude08",
+      "caption_source": "GROK",
+      "caption_updated_at": "2026-08-17T20:38:30.667901+00:00",
+      "asset_id": 313,
+      "offering_id": "cf0ef6eb-2351-4baa-b2f1-0cfddd4cf421",
+      "teaser_id": "879c6982-86c6-410c-9acb-c491d7b28c00",
+      "derived_teaser_asset_id": null,
+      "price_minor": 1099,
+      "currency": "USD",
+      "fanvue_publication_id": "b54d951f-a219-4b63-aa97-f14dda95cc29",
+      "telegram_destination": "vault",
+      "content_vault_presentation": {
+        "path": "D:\\Ava_CMS\\vault\\blurred\\313_blurred_content_vault_presentation_v1.jpg",
+        "width": 960,
+        "height": 1280,
+        "version": 1,
+        "strategy": "privacy_safe_cover_crop",
+        "aspect_ratio": "3:4",
+        "source_teaser_path": "D:\\Ava_CMS\\vault\\blurred\\313_blurred.png",
+        "source_teaser_sha256": "de74abe745cb57c339be9fad8af9eb7b4d45ccf481006346caf21b41b64eda83"
+      },
+      "account_name": null,
+      "telegram_post_to": "vault",
+      "caption_id": null,
+      "provider_post_id": "61",
+      "provider_media_id": null,
+      "provider_output_url": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_193f05e04ca845f1aeac3d800719c21c",
+    "queue_item_id": "social_queue_item_158de331304343739717e8f75723d412",
+    "platform": "telegram",
+    "status": "queued",
+    "message": "Commercial Offering queued for Telegram Content Vault.",
+    "created_at": "2026-08-17T20:38:35.293185",
+    "metadata": {
+      "source_type": "commercial_offering",
+      "commercial_offering_id": "cf0ef6eb-2351-4baa-b2f1-0cfddd4cf421",
+      "destination": "telegram_content_vault",
+      "title": "Candlelit Bathroom Confidence"
+    }
+  },
+  {
+    "history_id": "social_publish_history_599e67235be245a2b112cf0dd6295289",
+    "queue_item_id": "social_queue_item_d61e9746f51d44f381b52d6eaea51b41",
+    "platform": "telegram",
+    "status": "posted",
+    "message": "Posted to Telegram.",
+    "created_at": "2026-08-17T20:35:18.658115",
+    "metadata": {
+      "caption": "\ud83d\udd25 2 naughty shots of me\u2026 completely nude in this chair \ud83d\udda4 Legs open, nothing left to hide \ud83d\udc40\ud83d\udca6 Unlock me before I cross them \ud83d\udd25",
+      "caption_source": "MANUAL",
+      "caption_updated_at": "2026-08-17T20:35:15.320974+00:00",
+      "offering_id": "1765951f-e742-4756-93d3-cb5d5a456068",
+      "bundle_source_id": "a8b6a8d7-1433-53e0-93c5-ceff24b3b6b6",
+      "paid_asset_ids": [
+        311,
+        310
+      ],
+      "paid_image_count": 2,
+      "teaser_asset_id": 312,
+      "price_minor": 1599,
+      "currency": "USD",
+      "fanvue_publication_id": "e803bb7a-2e90-4b9c-b1d8-55fd6cf88fa7",
+      "telegram_destination": "vault",
+      "content_vault_presentation": {
+        "path": "D:\\Ava_CMS\\vault\\bundle_teasers\\a8b6a8d7-1433-53e0-93c5-ceff24b3b6b6\\promotional_teaser_source_311_content_vault_presentation_v1.jpg",
+        "width": 960,
+        "height": 1280,
+        "version": 1,
+        "strategy": "privacy_safe_cover_crop",
+        "aspect_ratio": "3:4",
+        "source_teaser_path": "D:\\Ava_CMS\\vault\\bundle_teasers\\a8b6a8d7-1433-53e0-93c5-ceff24b3b6b6\\promotional_teaser_source_311.png",
+        "source_teaser_sha256": "5b01279d4d3047d855887211f24d81e1843e9a9d7f46c412f95b540a49295735"
+      },
+      "account_name": null,
+      "telegram_post_to": "vault",
+      "caption_id": null,
+      "provider_post_id": "60",
+      "provider_media_id": null,
+      "provider_output_url": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_5df54d0cbc2a49cdbc1dce75844fe6db",
+    "queue_item_id": "social_queue_item_d61e9746f51d44f381b52d6eaea51b41",
+    "platform": "telegram",
+    "status": "queued",
+    "message": "Commercial Offering queued for Telegram Content Vault.",
+    "created_at": "2026-08-17T20:35:17.039236",
+    "metadata": {
+      "source_type": "commercial_offering",
+      "commercial_offering_id": "1765951f-e742-4756-93d3-cb5d5a456068",
+      "destination": "telegram_content_vault",
+      "title": "Open Display: Afternoon Leather Chair Tease"
+    }
+  },
+  {
+    "history_id": "social_publish_history_8c809d978c5748dea7db44eb7534342f",
+    "queue_item_id": "social_queue_item_f7868879c95d463b83d46afc8c528241",
+    "platform": "telegram",
+    "status": "posted",
+    "message": "Posted to Telegram.",
+    "created_at": "2026-08-17T20:21:10.902866",
+    "metadata": {
+      "caption": "\ud83d\udd25 3 warm shots by the fire\u2026 black lace sliding off \ud83d\udda4 Tits slowly coming free for you \ud83d\udc40\ud83d\udca6 Unlock me before the flames die down \ud83d\udd25",
+      "caption_source": "MANUAL",
+      "caption_updated_at": "2026-08-17T20:21:07.333304+00:00",
+      "offering_id": "fa9f04a4-7d54-4c38-9397-68c439a046a0",
+      "bundle_source_id": "60e99fed-0d99-5190-9f79-5838ddf57d07",
+      "paid_asset_ids": [
+        308,
+        306,
+        307
+      ],
+      "paid_image_count": 3,
+      "teaser_asset_id": 309,
+      "price_minor": 1799,
+      "currency": "USD",
+      "fanvue_publication_id": "9e48b222-1a9a-45d5-ac3d-72a3fe88e0c1",
+      "telegram_destination": "vault",
+      "content_vault_presentation": {
+        "path": "D:\\Ava_CMS\\vault\\bundle_teasers\\60e99fed-0d99-5190-9f79-5838ddf57d07\\promotional_teaser_source_308_content_vault_presentation_v1.jpg",
+        "width": 960,
+        "height": 1280,
+        "version": 1,
+        "strategy": "privacy_safe_cover_crop",
+        "aspect_ratio": "3:4",
+        "source_teaser_path": "D:\\Ava_CMS\\vault\\bundle_teasers\\60e99fed-0d99-5190-9f79-5838ddf57d07\\promotional_teaser_source_308.png",
+        "source_teaser_sha256": "8b629c1ecc828ebd1acfeaa37fe739124ed669403605d51d0a90daa025c2be26"
+      },
+      "account_name": null,
+      "telegram_post_to": "vault",
+      "caption_id": null,
+      "provider_post_id": "59",
+      "provider_media_id": null,
+      "provider_output_url": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_a073980a8e76473a8317210e9a4a83fe",
+    "queue_item_id": "social_queue_item_f7868879c95d463b83d46afc8c528241",
+    "platform": "telegram",
+    "status": "queued",
+    "message": "Commercial Offering queued for Telegram Content Vault.",
+    "created_at": "2026-08-17T20:21:09.256537",
+    "metadata": {
+      "source_type": "commercial_offering",
+      "commercial_offering_id": "fa9f04a4-7d54-4c38-9397-68c439a046a0",
+      "destination": "telegram_content_vault",
+      "title": "Fireside Tease \u2013 Bra Drop Seduction"
+    }
+  },
+  {
+    "history_id": "social_publish_history_34f5f52df00742a0b1093d098becfacf",
+    "queue_item_id": "social_queue_item_41d6a40bfd024d609fb75992e2af6018",
+    "platform": "telegram",
+    "status": "posted",
+    "message": "Posted to Telegram.",
+    "created_at": "2026-08-17T20:01:32.694198",
+    "metadata": {
+      "caption": "\ud83d\udd25 Just woke up\u2026 completely nude on the edge of the bed \ud83d\udda4\nHand between my legs, soft morning light all over me \ud83d\udc40\ud83d\udca6\nUnlock me before I get dressed \ud83d\udd25",
+      "caption_source": "MANUAL",
+      "caption_updated_at": "2026-08-17T20:01:13.860443+00:00",
+      "asset_id": 305,
+      "offering_id": "6b473780-8b6f-4216-aae8-b948c30f357d",
+      "teaser_id": "49540b7a-0561-48e2-9dff-d6d929ca6735",
+      "derived_teaser_asset_id": null,
+      "price_minor": 999,
+      "currency": "USD",
+      "fanvue_publication_id": "8712b470-6c7c-4822-af8d-126b9d0bcda5",
+      "telegram_destination": "vault",
+      "content_vault_presentation": {
+        "path": "D:\\Ava_CMS\\vault\\blurred\\305_blurred_content_vault_presentation_v1.jpg",
+        "width": 960,
+        "height": 1280,
+        "version": 1,
+        "strategy": "privacy_safe_cover_crop",
+        "aspect_ratio": "3:4",
+        "source_teaser_path": "D:\\Ava_CMS\\vault\\blurred\\305_blurred.png",
+        "source_teaser_sha256": "6003515e009243cd81dd27e9f477591a5f58a1ba17470a970fff40187d92924c"
+      },
+      "account_name": null,
+      "telegram_post_to": "vault",
+      "caption_id": null,
+      "provider_post_id": "58",
+      "provider_media_id": null,
+      "provider_output_url": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_950d224be0f0441cb9f6b4d23d3a84f6",
+    "queue_item_id": "social_queue_item_41d6a40bfd024d609fb75992e2af6018",
+    "platform": "telegram",
+    "status": "queued",
+    "message": "Commercial Offering queued for Telegram Content Vault.",
+    "created_at": "2026-08-17T20:01:31.251524",
+    "metadata": {
+      "source_type": "commercial_offering",
+      "commercial_offering_id": "6b473780-8b6f-4216-aae8-b948c30f357d",
+      "destination": "telegram_content_vault",
+      "title": "Intimate Morning Gaze"
+    }
+  },
+  {
+    "history_id": "social_publish_history_80029f15ca894a7f95e30b8775e87e88",
+    "queue_item_id": "social_queue_item_26d3b20d87f141f0b1be8b91fd7c78dd",
+    "platform": "telegram",
+    "status": "posted",
+    "message": "Posted to Telegram.",
+    "created_at": "2026-08-17T19:30:52.559866",
+    "metadata": {
+      "caption": "\ud83d\udd25 Looking back at you\u2026 panties pulled aside \ud83d\udda4\nAss and pussy spread open just for you \ud83d\udc40\ud83d\udca6\nUnlock me before I let go \ud83d\udd25",
+      "caption_source": "MANUAL",
+      "caption_updated_at": "2026-08-17T19:30:45.307793+00:00",
+      "asset_id": 303,
+      "offering_id": "67182799-664a-465a-9735-d704622e2e46",
+      "teaser_id": "bbd171a9-5ae8-4643-9258-e7f8f7a3193d",
+      "derived_teaser_asset_id": null,
+      "price_minor": 1299,
+      "currency": "USD",
+      "fanvue_publication_id": "7b3ca854-15e4-4e77-99f9-0fc83ca69fa7",
+      "telegram_destination": "vault",
+      "content_vault_presentation": {
+        "path": "D:\\Ava_CMS\\vault\\blurred\\303_blurred_content_vault_presentation_v1.jpg",
+        "width": 960,
+        "height": 1280,
+        "version": 1,
+        "strategy": "privacy_safe_cover_crop",
+        "aspect_ratio": "3:4",
+        "source_teaser_path": "D:\\Ava_CMS\\vault\\blurred\\303_blurred.png",
+        "source_teaser_sha256": "1138f7f130616f154fc27a28ccd8916aed80990b3e251eb99ea8ee02f2cd9aed"
+      },
+      "account_name": null,
+      "telegram_post_to": "vault",
+      "caption_id": null,
+      "provider_post_id": "57",
+      "provider_media_id": null,
+      "provider_output_url": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_e1a910cef7b04553b272d3642b65a45c",
+    "queue_item_id": "social_queue_item_26d3b20d87f141f0b1be8b91fd7c78dd",
+    "platform": "telegram",
+    "status": "queued",
+    "message": "Commercial Offering queued for Telegram Content Vault.",
+    "created_at": "2026-08-17T19:30:51.416241",
+    "metadata": {
+      "source_type": "commercial_offering",
+      "commercial_offering_id": "67182799-664a-465a-9735-d704622e2e46",
+      "destination": "telegram_content_vault",
+      "title": "Midnight Intimate Glance"
+    }
+  },
+  {
+    "history_id": "social_publish_history_d4755e17e1b541d49dcb14c582a80f97",
+    "queue_item_id": "social_queue_item_c2f068868d5c452192d6cba64b72d86a",
+    "platform": "telegram",
+    "status": "posted",
+    "message": "Posted to Telegram.",
+    "created_at": "2026-08-17T19:28:11.691311",
+    "metadata": {
+      "caption": "\ud83d\udd25 2 soft shots of me\u2026 corset open, tits out \ud83d\udda4 Head back\u2026 then looking right at you \ud83d\udc40\ud83d\udca6 Unlock me before I lace it back up \ud83d\udd25",
+      "caption_source": "MANUAL",
+      "caption_updated_at": "2026-08-17T19:28:01.821221+00:00",
+      "offering_id": "cfb266f6-d01d-4256-897e-438f72fc77ec",
+      "bundle_source_id": "4b51f942-bec8-51bf-a783-aeee3e79f998",
+      "paid_asset_ids": [
+        301,
+        300
+      ],
+      "paid_image_count": 2,
+      "teaser_asset_id": 302,
+      "price_minor": 1299,
+      "currency": "USD",
+      "fanvue_publication_id": "0de98ab8-d3ea-41ae-a066-9453d9cad518",
+      "telegram_destination": "vault",
+      "content_vault_presentation": {
+        "path": "D:\\Ava_CMS\\vault\\bundle_teasers\\4b51f942-bec8-51bf-a783-aeee3e79f998\\promotional_teaser_source_301_content_vault_presentation_v1.jpg",
+        "width": 960,
+        "height": 1280,
+        "version": 1,
+        "strategy": "privacy_safe_cover_crop",
+        "aspect_ratio": "3:4",
+        "source_teaser_path": "D:\\Ava_CMS\\vault\\bundle_teasers\\4b51f942-bec8-51bf-a783-aeee3e79f998\\promotional_teaser_source_301.png",
+        "source_teaser_sha256": "12965773a11e0875d763d1a890a13bfb8c9b19c98fd9fcc5b073525f40d0df81"
+      },
+      "account_name": null,
+      "telegram_post_to": "vault",
+      "caption_id": null,
+      "provider_post_id": "56",
+      "provider_media_id": null,
+      "provider_output_url": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_90a8071843c34a74ae654c29f9100715",
+    "queue_item_id": "social_queue_item_c2f068868d5c452192d6cba64b72d86a",
+    "platform": "telegram",
+    "status": "queued",
+    "message": "Commercial Offering queued for Telegram Content Vault.",
+    "created_at": "2026-08-17T19:28:10.186876",
+    "metadata": {
+      "source_type": "commercial_offering",
+      "commercial_offering_id": "cfb266f6-d01d-4256-897e-438f72fc77ec",
+      "destination": "telegram_content_vault",
+      "title": "Dusk Studio Reveal"
+    }
+  },
+  {
+    "history_id": "social_publish_history_c9038fd1a253490f98a5071d7d4b88a2",
+    "queue_item_id": "social_queue_item_baeecc11f61c43b28695c46ce5b7698d",
+    "platform": "telegram",
+    "status": "posted",
+    "message": "Posted to Telegram.",
+    "created_at": "2026-08-17T19:00:34.170188",
+    "metadata": {
+      "caption": "\ud83d\udd25 Soft sunlight\u2026 no panties, just bare skin under this sheet \ud83d\udda4\nLooking back at you like this \ud83d\udc40\ud83d\udca6\nUnlock me before I turn away \ud83d\udd25",
+      "caption_source": "MANUAL",
+      "caption_updated_at": "2026-08-17T19:00:29.696628+00:00",
+      "asset_id": 299,
+      "offering_id": "f6de5d4a-4a46-4e43-bd40-77a24ef0a132",
+      "teaser_id": "095e3b1b-e62a-4a02-8002-29306fc61cbc",
+      "derived_teaser_asset_id": null,
+      "price_minor": 999,
+      "currency": "USD",
+      "fanvue_publication_id": "892b8016-d02a-409f-a803-3ba57b43aa15",
+      "telegram_destination": "vault",
+      "content_vault_presentation": {
+        "path": "D:\\Ava_CMS\\vault\\blurred\\299_blurred_content_vault_presentation_v1.jpg",
+        "width": 960,
+        "height": 1280,
+        "version": 1,
+        "strategy": "privacy_safe_cover_crop",
+        "aspect_ratio": "3:4",
+        "source_teaser_path": "D:\\Ava_CMS\\vault\\blurred\\299_blurred.png",
+        "source_teaser_sha256": "386442df29e3a287c299f7dddff3248a5db48fa2f5ebfb3f43b9eda0ff79a70f"
+      },
+      "account_name": null,
+      "telegram_post_to": "vault",
+      "caption_id": null,
+      "provider_post_id": "55",
+      "provider_media_id": null,
+      "provider_output_url": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_07a9640ecbc7457fb55b5478c3dd46ab",
+    "queue_item_id": "social_queue_item_baeecc11f61c43b28695c46ce5b7698d",
+    "platform": "telegram",
+    "status": "queued",
+    "message": "Commercial Offering queued for Telegram Content Vault.",
+    "created_at": "2026-08-17T19:00:32.685820",
+    "metadata": {
+      "source_type": "commercial_offering",
+      "commercial_offering_id": "f6de5d4a-4a46-4e43-bd40-77a24ef0a132",
+      "destination": "telegram_content_vault",
+      "title": "Sunlit Intimate Repose"
+    }
+  },
+  {
+    "history_id": "social_publish_history_a99612b9c5a744078eea103bbc9a2ea8",
+    "queue_item_id": "social_queue_item_0063216904b647ea899f34ef67a675d8",
+    "platform": "telegram",
+    "status": "posted",
+    "message": "Posted to Telegram.",
+    "created_at": "2026-08-17T18:50:24.526170",
+    "metadata": {
+      "caption": "\ud83d\udd25 Soft firelight\u2026 lace bra pulled down under my tits \ud83d\udda4\nKneeling here just for you \ud83d\udc40\ud83d\udca6",
+      "caption_source": "MANUAL",
+      "caption_updated_at": "2026-08-17T18:50:16.821219+00:00",
+      "asset_id": 298,
+      "offering_id": "ba36b923-a625-42bb-8c1c-af39db2af354",
+      "teaser_id": "37d48d07-1955-45b0-9d62-9acd0c7192dd",
+      "derived_teaser_asset_id": null,
+      "price_minor": 999,
+      "currency": "USD",
+      "fanvue_publication_id": "1070d097-fe29-4726-af55-749f8fe74b4d",
+      "telegram_destination": "vault",
+      "content_vault_presentation": {
+        "path": "D:\\Ava_CMS\\vault\\blurred\\298_blurred_content_vault_presentation_v1.jpg",
+        "width": 960,
+        "height": 1280,
+        "version": 1,
+        "strategy": "privacy_safe_cover_crop",
+        "aspect_ratio": "3:4",
+        "source_teaser_path": "D:\\Ava_CMS\\vault\\blurred\\298_blurred.png",
+        "source_teaser_sha256": "c83ba5f3be123914dcab29339ee602a0d63f4841d5f2ea4344f147968f4ed1fb"
+      },
+      "account_name": null,
+      "telegram_post_to": "vault",
+      "caption_id": null,
+      "provider_post_id": "54",
+      "provider_media_id": null,
+      "provider_output_url": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_089c9fcc3e08416493d319661d3cd03a",
+    "queue_item_id": "social_queue_item_0063216904b647ea899f34ef67a675d8",
+    "platform": "telegram",
+    "status": "queued",
+    "message": "Commercial Offering queued for Telegram Content Vault.",
+    "created_at": "2026-08-17T18:50:23.182718",
+    "metadata": {
+      "source_type": "commercial_offering",
+      "commercial_offering_id": "ba36b923-a625-42bb-8c1c-af39db2af354",
+      "destination": "telegram_content_vault",
+      "title": "Fireside Intimate Reverie"
+    }
+  },
+  {
+    "history_id": "social_publish_history_93a01607700742f397eb5aa06de41121",
+    "queue_item_id": "social_queue_item_94365b4c50704dc0972a40ca4c8321d1",
+    "platform": "x",
+    "status": "posted",
+    "message": "Posted to X.",
+    "created_at": "2026-08-17T15:24:08.961405",
+    "metadata": {
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "caption_id": null,
+      "provider_post_id": "2089372715245322361",
+      "provider_media_id": "2089372712850329600",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2089372715245322361"
+    }
+  },
+  {
+    "history_id": "social_publish_history_2f24712333f84590ad535962311efa62",
+    "queue_item_id": "social_queue_item_a101ea6b4e3a44c8ad357cf0a7e34d75",
+    "platform": "telegram",
+    "status": "posted",
+    "message": "Posted to Telegram.",
+    "created_at": "2026-08-16T20:41:07.826485",
+    "metadata": {
+      "caption": "\ud83d\udd25 4 wet shots of me by the rainy window\u2026 stripping out of these soaked clothes \ud83d\udca6 Top up\u2026 jeans open\u2026 down to almost nothing \ud83d\udc40\ud83d\udda4",
+      "caption_source": "MANUAL",
+      "caption_updated_at": "2026-08-16T20:40:29.628250+00:00",
+      "offering_id": "da99be33-d887-4a24-9f0d-119076654bda",
+      "bundle_source_id": "5276d49a-8123-5c8c-b00b-84d2ce167a06",
+      "paid_asset_ids": [
+        296,
+        293,
+        294,
+        295
+      ],
+      "paid_image_count": 4,
+      "teaser_asset_id": 297,
+      "price_minor": 1899,
+      "currency": "USD",
+      "fanvue_publication_id": "ba04424d-8cf9-4de0-864e-fca14ef26b23",
+      "telegram_destination": "vault",
+      "content_vault_presentation": {
+        "path": "D:\\Ava_CMS\\vault\\bundle_teasers\\5276d49a-8123-5c8c-b00b-84d2ce167a06\\promotional_teaser_source_296_content_vault_presentation_v1.jpg",
+        "width": 960,
+        "height": 1280,
+        "version": 1,
+        "strategy": "privacy_safe_cover_crop",
+        "aspect_ratio": "3:4",
+        "source_teaser_path": "D:\\Ava_CMS\\vault\\bundle_teasers\\5276d49a-8123-5c8c-b00b-84d2ce167a06\\promotional_teaser_source_296.png",
+        "source_teaser_sha256": "ea434276b569dfdcc4c1d9e419beddfd30a8baf3d8653dc480930dcd1912fe89"
+      },
+      "account_name": null,
+      "telegram_post_to": "vault",
+      "caption_id": null,
+      "provider_post_id": "53",
+      "provider_media_id": null,
+      "provider_output_url": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_2b0ae0ba89c04e6995e0c9f9447afb0d",
+    "queue_item_id": "social_queue_item_a101ea6b4e3a44c8ad357cf0a7e34d75",
+    "platform": "telegram",
+    "status": "queued",
+    "message": "Commercial Offering queued for Telegram Content Vault.",
+    "created_at": "2026-08-16T20:41:06.448334",
+    "metadata": {
+      "source_type": "commercial_offering",
+      "commercial_offering_id": "da99be33-d887-4a24-9f0d-119076654bda",
+      "destination": "telegram_content_vault",
+      "title": "Rainy Window Wet Striptease"
+    }
+  },
+  {
+    "history_id": "social_publish_history_24c66ff117e343cab2ef0f9df8fbdfa2",
+    "queue_item_id": "social_queue_item_72337cfae8be4e0facb7fdf6c1a94e92",
+    "platform": "telegram",
+    "status": "posted",
+    "message": "Posted to Telegram.",
+    "created_at": "2026-08-16T20:08:45.625895",
+    "metadata": {
+      "caption": "\ud83d\udd25 White tee pulled up\u2026 legs wide open for you \ud83d\udda4\nFingers resting right where you want them \ud83d\udc40\ud83d\udca6Unlock me before I close my legs \ud83d\udd25",
+      "caption_source": "MANUAL",
+      "caption_updated_at": "2026-08-16T20:08:35.233558+00:00",
+      "asset_id": 292,
+      "offering_id": "8e558494-e158-4f0e-acec-89c01b3fac9a",
+      "teaser_id": "d4881bb0-2c66-4b08-b166-ff8616c67aaf",
+      "derived_teaser_asset_id": null,
+      "price_minor": 1399,
+      "currency": "USD",
+      "fanvue_publication_id": "04f3600c-dd4b-4695-a0eb-5e8aa77e16db",
+      "telegram_destination": "vault",
+      "content_vault_presentation": {
+        "path": "D:\\Ava_CMS\\vault\\blurred\\292_blurred_content_vault_presentation_v1.jpg",
+        "width": 960,
+        "height": 1280,
+        "version": 1,
+        "strategy": "privacy_safe_cover_crop",
+        "aspect_ratio": "3:4",
+        "source_teaser_path": "D:\\Ava_CMS\\vault\\blurred\\292_blurred.png",
+        "source_teaser_sha256": "3c04265869c7db025d4ad5a60560ce789841838d92c4866b7752aad4dc6782cc"
+      },
+      "account_name": null,
+      "telegram_post_to": "vault",
+      "caption_id": null,
+      "provider_post_id": "52",
+      "provider_media_id": null,
+      "provider_output_url": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_00b5ad62071c4db4bdab2c612177c11f",
+    "queue_item_id": "social_queue_item_72337cfae8be4e0facb7fdf6c1a94e92",
+    "platform": "telegram",
+    "status": "queued",
+    "message": "Commercial Offering queued for Telegram Content Vault.",
+    "created_at": "2026-08-16T20:08:43.826303",
+    "metadata": {
+      "source_type": "commercial_offering",
+      "commercial_offering_id": "8e558494-e158-4f0e-acec-89c01b3fac9a",
+      "destination": "telegram_content_vault",
+      "title": "Intimate Bedroom Confidence"
+    }
+  },
+  {
+    "history_id": "social_publish_history_5499e8f3623f439c98de9aad094d8a14",
+    "queue_item_id": "social_queue_item_2fb27809811b4bc5a1e9cff97aeb21cb",
+    "platform": "telegram",
+    "status": "posted",
+    "message": "Posted to Telegram.",
+    "created_at": "2026-08-16T20:05:45.306249",
+    "metadata": {
+      "caption": "Shirt pulled aside so my breasts and pussy are yours to unlock \ud83d\ude08 direct stare while I lay here naked \ud83d\udd25 don't wait \ud83d\udc45",
+      "caption_source": "GROK",
+      "caption_updated_at": "2026-08-16T20:05:39.181942+00:00",
+      "asset_id": 291,
+      "offering_id": "7c56249f-1b62-404c-9c35-a459d98bb7a6",
+      "teaser_id": "2a4e33e1-55b0-4784-b2e8-7f40a4623f83",
+      "derived_teaser_asset_id": null,
+      "price_minor": 1299,
+      "currency": "USD",
+      "fanvue_publication_id": "a91392a5-d0d7-46d7-a499-fe014d40a011",
+      "telegram_destination": "vault",
+      "content_vault_presentation": {
+        "path": "D:\\Ava_CMS\\vault\\blurred\\291_blurred_content_vault_presentation_v1.jpg",
+        "width": 960,
+        "height": 1280,
+        "version": 1,
+        "strategy": "privacy_safe_cover_crop",
+        "aspect_ratio": "3:4",
+        "source_teaser_path": "D:\\Ava_CMS\\vault\\blurred\\291_blurred.png",
+        "source_teaser_sha256": "dd7ef09e79ab141e47a3454be209da0ba250a9115ea42999c996865f9d867884"
+      },
+      "account_name": null,
+      "telegram_post_to": "vault",
+      "caption_id": null,
+      "provider_post_id": "51",
+      "provider_media_id": null,
+      "provider_output_url": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_e336c1fcc901481aba666e10fdd5f5ce",
+    "queue_item_id": "social_queue_item_2fb27809811b4bc5a1e9cff97aeb21cb",
+    "platform": "telegram",
+    "status": "queued",
+    "message": "Commercial Offering queued for Telegram Content Vault.",
+    "created_at": "2026-08-16T20:05:43.947944",
+    "metadata": {
+      "source_type": "commercial_offering",
+      "commercial_offering_id": "7c56249f-1b62-404c-9c35-a459d98bb7a6",
+      "destination": "telegram_content_vault",
+      "title": "Intimate Morning Vulnerability"
+    }
+  },
+  {
+    "history_id": "social_publish_history_732d88568d5c4dfab5233e4b357ea913",
+    "queue_item_id": "social_queue_item_eee6e015589d435db23b909f4133c219",
+    "platform": "x",
+    "status": "posted",
+    "message": "Posted to X.",
+    "created_at": "2026-08-16T16:46:51.081915",
+    "metadata": {
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "caption_id": null,
+      "provider_post_id": "2089031140132688160",
+      "provider_media_id": "2089031137645481984",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2089031140132688160"
+    }
+  },
+  {
+    "history_id": "social_publish_history_4715f12985db4e8c9f469ae08cfd9f69",
+    "queue_item_id": "social_queue_item_2e6918593c4144bca3526f7e72cbf2a4",
+    "platform": "telegram",
+    "status": "posted",
+    "message": "Posted to Telegram.",
+    "created_at": "2026-08-16T02:26:02.586975",
+    "metadata": {
+      "caption": "Eyes locked on you while I lick this finger slow \ud83d\udc45 my bare tits and pussy fully exposed in the kitchen \ud83d\udd25 unlock before I put it somewhere else \ud83d\ude08",
+      "caption_source": "GROK",
+      "caption_updated_at": "2026-08-16T02:25:52.822432+00:00",
+      "asset_id": 280,
+      "offering_id": "ff05bdf8-3bfe-4015-9cd7-5d5fa828cd62",
+      "teaser_id": "2174be0b-40c4-4c0e-9b9d-cbea9a2a9f81",
+      "derived_teaser_asset_id": null,
+      "price_minor": 999,
+      "currency": "USD",
+      "fanvue_publication_id": "4df9c288-46da-465e-bc1b-078abcda1c54",
+      "telegram_destination": "vault",
+      "content_vault_presentation": {
+        "path": "D:\\Ava_CMS\\vault\\blurred\\280_blurred_content_vault_presentation_v1.jpg",
+        "width": 960,
+        "height": 1280,
+        "version": 1,
+        "strategy": "privacy_safe_cover_crop",
+        "aspect_ratio": "3:4",
+        "source_teaser_path": "D:\\Ava_CMS\\vault\\blurred\\280_blurred.png",
+        "source_teaser_sha256": "1c19f51db79f5fb8f192b7e59159198c1df9506749207621bcebb790a098fa83"
+      },
+      "account_name": null,
+      "telegram_post_to": "vault",
+      "caption_id": null,
+      "provider_post_id": "50",
+      "provider_media_id": null,
+      "provider_output_url": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_1c4ef077f5124e98b76bf7c0ff5c363e",
+    "queue_item_id": "social_queue_item_2e6918593c4144bca3526f7e72cbf2a4",
+    "platform": "telegram",
+    "status": "queued",
+    "message": "Commercial Offering queued for Telegram Content Vault.",
+    "created_at": "2026-08-16T02:26:01.187208",
+    "metadata": {
+      "source_type": "commercial_offering",
+      "commercial_offering_id": "ff05bdf8-3bfe-4015-9cd7-5d5fa828cd62",
+      "destination": "telegram_content_vault",
+      "title": "Playful Kitchen Temptation"
+    }
+  },
+  {
+    "history_id": "social_publish_history_9e329ccb3cc0486eaad52f02a6a444e3",
+    "queue_item_id": "social_queue_item_c61ed2bf434f47f6b5b974472af822c8",
+    "platform": "telegram",
+    "status": "posted",
+    "message": "Posted to Telegram.",
+    "created_at": "2026-08-16T02:20:23.537992",
+    "metadata": {
+      "caption": "Tongue out and staring straight at you \ud83d\ude08 while my hands press down hard over my pussy on the floor \ud83d\udd25 unlock if you want me to pull them away",
+      "caption_source": "GROK",
+      "caption_updated_at": "2026-08-16T02:20:10.685817+00:00",
+      "asset_id": 290,
+      "offering_id": "494f6126-f888-4472-991b-2242244c0f34",
+      "teaser_id": "20079305-cd3f-4aaf-bcc9-98a5f7970537",
+      "derived_teaser_asset_id": null,
+      "price_minor": 999,
+      "currency": "USD",
+      "fanvue_publication_id": "c6a50833-bd43-4647-adde-019bf093ba93",
+      "telegram_destination": "vault",
+      "content_vault_presentation": {
+        "path": "D:\\Ava_CMS\\vault\\blurred\\290_blurred_content_vault_presentation_v1.jpg",
+        "width": 960,
+        "height": 1280,
+        "version": 1,
+        "strategy": "privacy_safe_cover_crop",
+        "aspect_ratio": "3:4",
+        "source_teaser_path": "D:\\Ava_CMS\\vault\\blurred\\290_blurred.png",
+        "source_teaser_sha256": "0a05eddcf086b5ade8ca944507b69222417af6120c91781b0a62efffb1e5cacb"
+      },
+      "account_name": null,
+      "telegram_post_to": "vault",
+      "caption_id": null,
+      "provider_post_id": "49",
+      "provider_media_id": null,
+      "provider_output_url": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_0570720889274b2f9f05084c00b3746e",
+    "queue_item_id": "social_queue_item_c61ed2bf434f47f6b5b974472af822c8",
+    "platform": "telegram",
+    "status": "queued",
+    "message": "Commercial Offering queued for Telegram Content Vault.",
+    "created_at": "2026-08-16T02:20:22.194663",
+    "metadata": {
+      "source_type": "commercial_offering",
+      "commercial_offering_id": "494f6126-f888-4472-991b-2242244c0f34",
+      "destination": "telegram_content_vault",
+      "title": "Playful Intimate Invitation"
+    }
+  },
+  {
+    "history_id": "social_publish_history_a2673b8e34ee4f799e408c8051ce66f7",
+    "queue_item_id": "social_queue_item_336450443dd745b793cb39ac7ef23980",
+    "platform": "telegram",
+    "status": "posted",
+    "message": "Posted to Telegram.",
+    "created_at": "2026-08-16T02:09:19.151041",
+    "metadata": {
+      "caption": "My eyes \ud83d\udc40 meet yours over one bare shoulder as the lamplight traces every curve of my form \u2728",
+      "caption_source": "GROK",
+      "caption_updated_at": "2026-08-16T02:09:12.252942+00:00",
+      "asset_id": 289,
+      "offering_id": "768d4e5d-1147-4c2b-9fde-3a9db93528c6",
+      "teaser_id": "3e717a89-80d8-406f-a4d3-a0deed1e3c3a",
+      "derived_teaser_asset_id": null,
+      "price_minor": 999,
+      "currency": "USD",
+      "fanvue_publication_id": "faea5b9c-cfca-4c36-88c4-7b2fb04d1095",
+      "telegram_destination": "vault",
+      "content_vault_presentation": {
+        "path": "D:\\Ava_CMS\\vault\\blurred\\289_blurred_content_vault_presentation_v1.jpg",
+        "width": 960,
+        "height": 1280,
+        "version": 1,
+        "strategy": "privacy_safe_cover_crop",
+        "aspect_ratio": "3:4",
+        "source_teaser_path": "D:\\Ava_CMS\\vault\\blurred\\289_blurred.png",
+        "source_teaser_sha256": "75cab176d1b7a9dc286f8221a6550fac7c09a68ea46346c1a76d70d3c0b01227"
+      },
+      "account_name": null,
+      "telegram_post_to": "vault",
+      "caption_id": null,
+      "provider_post_id": "48",
+      "provider_media_id": null,
+      "provider_output_url": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_3d90a0e261a84bd6837780d94e5df915",
+    "queue_item_id": "social_queue_item_336450443dd745b793cb39ac7ef23980",
+    "platform": "telegram",
+    "status": "queued",
+    "message": "Commercial Offering queued for Telegram Content Vault.",
+    "created_at": "2026-08-16T02:09:17.810503",
+    "metadata": {
+      "source_type": "commercial_offering",
+      "commercial_offering_id": "768d4e5d-1147-4c2b-9fde-3a9db93528c6",
+      "destination": "telegram_content_vault",
+      "title": "Intimate Backward Glance"
+    }
+  },
+  {
+    "history_id": "social_publish_history_e973c3f0bcc848778c3ac5838c313a6d",
+    "queue_item_id": "social_queue_item_2a10199751c64d129c1cf11c0e0685b1",
+    "platform": "telegram",
+    "status": "posted",
+    "message": "Posted to Telegram.",
+    "created_at": "2026-08-16T01:24:10.498782",
+    "metadata": {
+      "caption": "Lingerie slips from my arms \ud83d\udda4 as soft light traces every exposed curve \u2728",
+      "caption_source": "GROK",
+      "caption_updated_at": "2026-08-16T01:23:56.923831+00:00",
+      "asset_id": 285,
+      "offering_id": "8f616983-7d37-498c-82ce-cf0b155b9415",
+      "teaser_id": "b80b4669-551e-46dc-b835-46c42a9d5d90",
+      "derived_teaser_asset_id": 286,
+      "price_minor": 1299,
+      "currency": "USD",
+      "fanvue_publication_id": "d377e4a8-02af-4779-9697-e652cd0fbe1a",
+      "telegram_destination": "vault",
+      "content_vault_presentation": {
+        "path": "D:\\Ava_CMS\\vault\\commercial_teasers\\285\\content_vault_selective_content_vault_presentation_v1.jpg",
+        "width": 960,
+        "height": 1280,
+        "version": 1,
+        "strategy": "privacy_safe_cover_crop",
+        "aspect_ratio": "3:4",
+        "source_teaser_path": "D:\\Ava_CMS\\vault\\commercial_teasers\\285\\content_vault_selective.png",
+        "source_teaser_sha256": "3bfc75435b606f46b40f830539474b8edcbf4b99aff25e1909283738b761c322"
+      },
+      "account_name": null,
+      "telegram_post_to": "vault",
+      "caption_id": null,
+      "provider_post_id": "47",
+      "provider_media_id": null,
+      "provider_output_url": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_013419d93a2b4c1db1983609309c8fe7",
+    "queue_item_id": "social_queue_item_2a10199751c64d129c1cf11c0e0685b1",
+    "platform": "telegram",
+    "status": "queued",
+    "message": "Commercial Offering queued for Telegram Content Vault.",
+    "created_at": "2026-08-16T01:24:08.932687",
+    "metadata": {
+      "source_type": "commercial_offering",
+      "commercial_offering_id": "8f616983-7d37-498c-82ce-cf0b155b9415",
+      "destination": "telegram_content_vault",
+      "title": "Library Siren Reverie"
+    }
+  },
+  {
+    "history_id": "social_publish_history_7a0015b9c57a419894c4b165a6f3c375",
+    "queue_item_id": "social_queue_item_80767a6cbd09471594073677ddff91f8",
+    "platform": "telegram",
+    "status": "posted",
+    "message": "Posted to Telegram.",
+    "created_at": "2026-08-16T01:19:36.301324",
+    "metadata": {
+      "caption": "\ud83d\udd25 3 late-night shots of me\u2026 top pulled up, legs spread \ud83d\udda4 Fingers teasing what\u2019s already wet \ud83d\udc40\ud83d\udca6 Unlock me before someone walks by \ud83d\udd25",
+      "caption_source": "MANUAL",
+      "caption_updated_at": "2026-08-16T01:19:00.770107+00:00",
+      "offering_id": "d4783369-b240-40ac-b64f-911367e43819",
+      "bundle_source_id": "6f275750-9e39-5ec4-b9a4-dc2facc1fec5",
+      "paid_asset_ids": [
+        283,
+        281,
+        282
+      ],
+      "paid_image_count": 3,
+      "teaser_asset_id": 284,
+      "price_minor": 1699,
+      "currency": "USD",
+      "fanvue_publication_id": "412c91cb-3dd7-46d5-bc15-2d1a0eaed555",
+      "telegram_destination": "vault",
+      "content_vault_presentation": {
+        "path": "D:\\Ava_CMS\\vault\\bundle_teasers\\6f275750-9e39-5ec4-b9a4-dc2facc1fec5\\promotional_teaser_source_281_content_vault_presentation_v1.jpg",
+        "width": 960,
+        "height": 1280,
+        "version": 1,
+        "strategy": "privacy_safe_cover_crop",
+        "aspect_ratio": "3:4",
+        "source_teaser_path": "D:\\Ava_CMS\\vault\\bundle_teasers\\6f275750-9e39-5ec4-b9a4-dc2facc1fec5\\promotional_teaser_source_281.png",
+        "source_teaser_sha256": "007a77c0012c87e8ee3f51938366a67a2a3e04e1597790f5022f83c8603b61c3"
+      },
+      "account_name": null,
+      "telegram_post_to": "vault",
+      "caption_id": null,
+      "provider_post_id": "46",
+      "provider_media_id": null,
+      "provider_output_url": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_28e7de354a574ceaae6f7191b0d8da50",
+    "queue_item_id": "social_queue_item_80767a6cbd09471594073677ddff91f8",
+    "platform": "telegram",
+    "status": "queued",
+    "message": "Commercial Offering queued for Telegram Content Vault.",
+    "created_at": "2026-08-16T01:19:34.960515",
+    "metadata": {
+      "source_type": "commercial_offering",
+      "commercial_offering_id": "d4783369-b240-40ac-b64f-911367e43819",
+      "destination": "telegram_content_vault",
+      "title": "Midnight Cabana Hover Tease"
+    }
+  },
+  {
+    "history_id": "social_publish_history_988ff53a4cd54bd28731467bcb267d20",
+    "queue_item_id": "social_queue_item_38c3d484be6448059d26322c691dcffc",
+    "platform": "telegram",
+    "status": "posted",
+    "message": "Posted to Telegram.",
+    "created_at": "2026-08-15T22:27:45.172778",
+    "metadata": {
+      "caption": "\ud83d\udd25 3 wet shots of me in the shower\u2026 fully nude, water running everywhere \ud83d\udca6 Skin glistening\u2026 looking right at you \ud83d\udc40",
+      "caption_source": "MANUAL",
+      "caption_updated_at": "2026-08-15T22:27:40.944748+00:00",
+      "offering_id": "9382e8b2-c1f1-43d3-ab00-0b3418099efd",
+      "bundle_source_id": "a3799989-b7bf-5864-b120-713cc26f3507",
+      "paid_asset_ids": [
+        276,
+        277,
+        278
+      ],
+      "paid_image_count": 3,
+      "teaser_asset_id": 279,
+      "price_minor": 1499,
+      "currency": "USD",
+      "fanvue_publication_id": "508c06d9-3817-4982-bc52-63d7591f4295",
+      "telegram_destination": "vault",
+      "content_vault_presentation": {
+        "path": "D:\\Ava_CMS\\vault\\bundle_teasers\\a3799989-b7bf-5864-b120-713cc26f3507\\promotional_teaser_source_276_content_vault_presentation_v1.jpg",
+        "width": 960,
+        "height": 1280,
+        "version": 1,
+        "strategy": "privacy_safe_cover_crop",
+        "aspect_ratio": "3:4",
+        "source_teaser_path": "D:\\Ava_CMS\\vault\\bundle_teasers\\a3799989-b7bf-5864-b120-713cc26f3507\\promotional_teaser_source_276.png",
+        "source_teaser_sha256": "e31907cea3f76f7b7169955a8185fd80ebfc1e054c107dfb9c781a90ebfefeab"
+      },
+      "account_name": null,
+      "telegram_post_to": "vault",
+      "caption_id": null,
+      "provider_post_id": "45",
+      "provider_media_id": null,
+      "provider_output_url": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_51f70d994e1b441cb23b385bcd07233a",
+    "queue_item_id": "social_queue_item_38c3d484be6448059d26322c691dcffc",
+    "platform": "telegram",
+    "status": "queued",
+    "message": "Commercial Offering queued for Telegram Content Vault.",
+    "created_at": "2026-08-15T22:27:43.272530",
+    "metadata": {
+      "source_type": "commercial_offering",
+      "commercial_offering_id": "9382e8b2-c1f1-43d3-ab00-0b3418099efd",
+      "destination": "telegram_content_vault",
+      "title": "Intimate Shower Serenity"
+    }
+  },
+  {
+    "history_id": "social_publish_history_98409219594e4522bbe7588228e89182",
+    "queue_item_id": "social_queue_item_b66a0dd9512c4512a5310c7fbd7b2588",
+    "platform": "telegram",
+    "status": "posted",
+    "message": "Posted to Telegram.",
+    "created_at": "2026-08-15T22:13:19.358320",
+    "metadata": {
+      "caption": "\ud83d\udd25 Wet hair\u2026 soft morning light\u2026 towel barely covering me \ud83d\udda4\nJust woke up like this for you \ud83d\udc40\ud83d\udca6\nUnlock me before I dry off \ud83d\udd25",
+      "caption_source": "MANUAL",
+      "caption_updated_at": "2026-08-15T22:13:15.571937+00:00",
+      "asset_id": 275,
+      "offering_id": "3b1e3907-ba87-4599-93ba-5b57d3fb14d7",
+      "teaser_id": "b6ccd6bd-86a3-448d-9f40-075355a15a91",
+      "derived_teaser_asset_id": null,
+      "price_minor": 999,
+      "currency": "USD",
+      "fanvue_publication_id": "d81e7652-e1f4-4408-899c-3c2f2b8e5046",
+      "telegram_destination": "vault",
+      "content_vault_presentation": {
+        "path": "D:\\Ava_CMS\\vault\\blurred\\275_blurred_content_vault_presentation_v1.jpg",
+        "width": 960,
+        "height": 1280,
+        "version": 1,
+        "strategy": "privacy_safe_cover_crop",
+        "aspect_ratio": "3:4",
+        "source_teaser_path": "D:\\Ava_CMS\\vault\\blurred\\275_blurred.png",
+        "source_teaser_sha256": "3cf16032c6a9eb887080fdc4dd61167d58dc2c61536ced1b36c86426ab2133e8"
+      },
+      "account_name": null,
+      "telegram_post_to": "vault",
+      "caption_id": null,
+      "provider_post_id": "44",
+      "provider_media_id": null,
+      "provider_output_url": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_4220bae741d0470493f96aae1eefce19",
+    "queue_item_id": "social_queue_item_b66a0dd9512c4512a5310c7fbd7b2588",
+    "platform": "telegram",
+    "status": "queued",
+    "message": "Commercial Offering queued for Telegram Content Vault.",
+    "created_at": "2026-08-15T22:13:17.993219",
+    "metadata": {
+      "source_type": "commercial_offering",
+      "commercial_offering_id": "3b1e3907-ba87-4599-93ba-5b57d3fb14d7",
+      "destination": "telegram_content_vault",
+      "title": "Intimate Morning Allure"
+    }
+  },
+  {
+    "history_id": "social_publish_history_0e75eb5ffaf44ee1a34cca5e274cf1ca",
+    "queue_item_id": "social_queue_item_fd113ca3f3834ab6b0e14f4731b5251d",
+    "platform": "telegram",
+    "status": "posted",
+    "message": "Posted to Telegram.",
+    "created_at": "2026-08-15T21:57:30.372677",
+    "metadata": {
+      "caption": "\ud83d\udd25 Soft sheets\u2026 bare tits pressed into the bed \ud83d\udda4\nJust looking at you like this \ud83d\udc40\ud83d\udca6\nUnlock me before I roll over \ud83d\udd25",
+      "caption_source": "MANUAL",
+      "caption_updated_at": "2026-08-15T21:57:24.588760+00:00",
+      "asset_id": 274,
+      "offering_id": "31bffd97-4884-444f-b613-c0b86c81f787",
+      "teaser_id": "6c144902-fd09-45a0-8b8e-a47fe1d5e220",
+      "derived_teaser_asset_id": null,
+      "price_minor": 1299,
+      "currency": "USD",
+      "fanvue_publication_id": "cc343f75-35f1-4481-a767-1bb421944010",
+      "telegram_destination": "vault",
+      "content_vault_presentation": {
+        "path": "D:\\Ava_CMS\\vault\\blurred\\274_blurred_content_vault_presentation_v1.jpg",
+        "width": 960,
+        "height": 1280,
+        "version": 1,
+        "strategy": "privacy_safe_cover_crop",
+        "aspect_ratio": "3:4",
+        "source_teaser_path": "D:\\Ava_CMS\\vault\\blurred\\274_blurred.png",
+        "source_teaser_sha256": "268fab907c5671b542e50e2382f7ba0883d2094f2f86f006e0c4af334c43bf66"
+      },
+      "account_name": null,
+      "telegram_post_to": "vault",
+      "caption_id": null,
+      "provider_post_id": "43",
+      "provider_media_id": null,
+      "provider_output_url": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_b866adf49c744b2490cdddd57a66483c",
+    "queue_item_id": "social_queue_item_fd113ca3f3834ab6b0e14f4731b5251d",
+    "platform": "telegram",
+    "status": "queued",
+    "message": "Commercial Offering queued for Telegram Content Vault.",
+    "created_at": "2026-08-15T21:57:29.045642",
+    "metadata": {
+      "source_type": "commercial_offering",
+      "commercial_offering_id": "31bffd97-4884-444f-b613-c0b86c81f787",
+      "destination": "telegram_content_vault",
+      "title": "Intimate Morning Glow"
+    }
+  },
+  {
+    "history_id": "social_publish_history_af88bf667ec045cc995c0dad7a45c9e1",
+    "queue_item_id": "social_queue_item_d42120c5070343f0a1eeb04b88c32031",
+    "platform": "telegram",
+    "status": "posted",
+    "message": "Posted to Telegram.",
+    "created_at": "2026-08-15T21:55:20.640747",
+    "metadata": {
+      "caption": "\ud83d\udd25 2 quiet shots of me on the velvet couch\u2026 First I\u2019m still in these open shorts \ud83d\udda4 then I let everything go \ud83d\udc40\ud83d\udca6 Unlock me before the candles burn out \ud83d\udd25",
+      "caption_source": "MANUAL",
+      "caption_updated_at": "2026-08-15T21:55:16.902433+00:00",
+      "offering_id": "ddf9cb1a-bdff-4e38-9fcb-a3bd88735da4",
+      "bundle_source_id": "a94a92da-5591-5dc7-9443-3eb77f473ad8",
+      "paid_asset_ids": [
+        272,
+        271
+      ],
+      "paid_image_count": 2,
+      "teaser_asset_id": 273,
+      "price_minor": 1599,
+      "currency": "USD",
+      "fanvue_publication_id": "83fee684-d960-4a7f-b275-f775a265f48d",
+      "telegram_destination": "vault",
+      "content_vault_presentation": {
+        "path": "D:\\Ava_CMS\\vault\\bundle_teasers\\a94a92da-5591-5dc7-9443-3eb77f473ad8\\promotional_teaser_source_272_content_vault_presentation_v1.jpg",
+        "width": 960,
+        "height": 1280,
+        "version": 1,
+        "strategy": "privacy_safe_cover_crop",
+        "aspect_ratio": "3:4",
+        "source_teaser_path": "D:\\Ava_CMS\\vault\\bundle_teasers\\a94a92da-5591-5dc7-9443-3eb77f473ad8\\promotional_teaser_source_272.png",
+        "source_teaser_sha256": "b8d93d29e041d256ba4f8c6751690e927be335b5a868b55a80a11f0281d9f71b"
+      },
+      "account_name": null,
+      "telegram_post_to": "vault",
+      "caption_id": null,
+      "provider_post_id": "42",
+      "provider_media_id": null,
+      "provider_output_url": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_6ec60b6b521c4505b4decdd11a8d868c",
+    "queue_item_id": "social_queue_item_d42120c5070343f0a1eeb04b88c32031",
+    "platform": "telegram",
+    "status": "queued",
+    "message": "Commercial Offering queued for Telegram Content Vault.",
+    "created_at": "2026-08-15T21:55:18.713650",
+    "metadata": {
+      "source_type": "commercial_offering",
+      "commercial_offering_id": "ddf9cb1a-bdff-4e38-9fcb-a3bd88735da4",
+      "destination": "telegram_content_vault",
+      "title": "Candlelit Library Bare Tease"
+    }
+  },
+  {
+    "history_id": "social_publish_history_d60bd3ef9180452bbed1ecea63c8d356",
+    "queue_item_id": "social_queue_item_7d9e992f2d0c43f5838849ee450dffcc",
+    "platform": "telegram",
+    "status": "posted",
+    "message": "Posted to Telegram.",
+    "created_at": "2026-08-15T21:01:46.693558",
+    "metadata": {
+      "caption": "\ud83d\udd25 Golden light all over me\u2026 black garters digging in \ud83d\udda4\nArm up, tits out, sheer panties barely hiding anything \ud83d\udc40\ud83d\udca6\nUnlock me while the sun\u2019s still warm \ud83d\udd25",
+      "caption_source": "MANUAL",
+      "caption_updated_at": "2026-08-15T21:01:40.585577+00:00",
+      "asset_id": 270,
+      "offering_id": "49a3ee27-d539-46c5-bfd6-35dc417620ed",
+      "teaser_id": "92cf8b6c-5daa-4497-a2ce-799635c9a1b5",
+      "derived_teaser_asset_id": null,
+      "price_minor": 1399,
+      "currency": "USD",
+      "fanvue_publication_id": "91a87756-bc13-4798-b8e7-34f52d6425f3",
+      "telegram_destination": "vault",
+      "content_vault_presentation": {
+        "path": "D:\\Ava_CMS\\vault\\blurred\\270_blurred_content_vault_presentation_v1.jpg",
+        "width": 960,
+        "height": 1280,
+        "version": 1,
+        "strategy": "privacy_safe_cover_crop",
+        "aspect_ratio": "3:4",
+        "source_teaser_path": "D:\\Ava_CMS\\vault\\blurred\\270_blurred.png",
+        "source_teaser_sha256": "179e9a34112d7fe6c9f818b2e4707041f0f3ba7122e57ce6ab59d3c596fb4f68"
+      },
+      "account_name": null,
+      "telegram_post_to": "vault",
+      "caption_id": null,
+      "provider_post_id": "41",
+      "provider_media_id": null,
+      "provider_output_url": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_7187ad2ae731494ca05bf219ba60f2a3",
+    "queue_item_id": "social_queue_item_7d9e992f2d0c43f5838849ee450dffcc",
+    "platform": "telegram",
+    "status": "queued",
+    "message": "Commercial Offering queued for Telegram Content Vault.",
+    "created_at": "2026-08-15T21:01:45.319773",
+    "metadata": {
+      "source_type": "commercial_offering",
+      "commercial_offering_id": "49a3ee27-d539-46c5-bfd6-35dc417620ed",
+      "destination": "telegram_content_vault",
+      "title": "Golden Hour Allure"
+    }
+  },
+  {
+    "history_id": "social_publish_history_321126fa281c4c23880a42730b474002",
+    "queue_item_id": "social_queue_item_974595e355bb4315ae60ccb1635005ff",
+    "platform": "telegram",
+    "status": "posted",
+    "message": "Posted to Telegram.",
+    "created_at": "2026-08-15T20:44:13.019682",
+    "metadata": {
+      "caption": "\ud83d\udd25 Just 1 shot of me\u2026 legs wide open on the couch \ud83d\udda4\nPussy right in your face\u2026 already wet for you \ud83d\udc40\ud83d\udca6\nUnlock me before I close my legs \ud83d\udd25",
+      "caption_source": "MANUAL",
+      "caption_updated_at": "2026-08-15T20:43:53.606758+00:00",
+      "asset_id": 268,
+      "offering_id": "7db1eced-455b-432f-a7b1-f7af04830103",
+      "teaser_id": "e0ac9a19-d9ed-4679-b88d-b421b5cf0dfe",
+      "derived_teaser_asset_id": null,
+      "price_minor": 1799,
+      "currency": "USD",
+      "fanvue_publication_id": "90d07632-b441-46d9-820d-06837471a056",
+      "telegram_destination": "vault",
+      "content_vault_presentation": {
+        "path": "D:\\Ava_CMS\\vault\\blurred\\268_blurred_content_vault_presentation_v1.jpg",
+        "width": 960,
+        "height": 1280,
+        "version": 1,
+        "strategy": "privacy_safe_cover_crop",
+        "aspect_ratio": "3:4",
+        "source_teaser_path": "D:\\Ava_CMS\\vault\\blurred\\268_blurred.png",
+        "source_teaser_sha256": "b4f6ecfa86bf852e5c3a1a63e502f4c3410f162f1166227c399dab48043eae77"
+      },
+      "account_name": null,
+      "telegram_post_to": "vault",
+      "caption_id": null,
+      "provider_post_id": "40",
+      "provider_media_id": null,
+      "provider_output_url": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_2784a85c1dd34916b850120efd24347e",
+    "queue_item_id": "social_queue_item_974595e355bb4315ae60ccb1635005ff",
+    "platform": "telegram",
+    "status": "queued",
+    "message": "Commercial Offering queued for Telegram Content Vault.",
+    "created_at": "2026-08-15T20:44:11.619003",
+    "metadata": {
+      "source_type": "commercial_offering",
+      "commercial_offering_id": "7db1eced-455b-432f-a7b1-f7af04830103",
+      "destination": "telegram_content_vault",
+      "title": "Confident Intimate Repose"
+    }
+  },
+  {
+    "history_id": "social_publish_history_9f5b8f56f9d74b65bd388bb450775c95",
+    "queue_item_id": "social_queue_item_c187a90e71c84477a44f1977347cfa68",
+    "platform": "telegram",
+    "status": "posted",
+    "message": "Posted to Telegram.",
+    "created_at": "2026-08-15T17:32:01.871706",
+    "metadata": {
+      "caption": "\ud83d\udd25 2 sunny shots of me\u2026 shirt wide open on the kitchen counter \u2600\ufe0f Legs spread\u2026 pussy right there for you \ud83d\udc40\ud83d\udca6 Unlock me before breakfast gets cold \ud83d\udd25",
+      "caption_source": "MANUAL",
+      "caption_updated_at": "2026-08-15T17:14:26.929193+00:00",
+      "offering_id": "a1c0751c-9a8c-44ed-a6b6-8d3cf63e641c",
+      "bundle_source_id": "abee154c-c07a-5318-b909-df1fe3460dc8",
+      "paid_asset_ids": [
+        266,
+        265
+      ],
+      "paid_image_count": 2,
+      "teaser_asset_id": 267,
+      "price_minor": 1899,
+      "currency": "USD",
+      "fanvue_publication_id": "e6811e7e-ab35-45e9-95d3-7dbe5e1060cb",
+      "telegram_destination": "vault",
+      "content_vault_presentation": {
+        "path": "D:\\Ava_CMS\\vault\\bundle_teasers\\abee154c-c07a-5318-b909-df1fe3460dc8\\promotional_teaser_source_265_content_vault_presentation_v1.jpg",
+        "width": 960,
+        "height": 1280,
+        "version": 1,
+        "strategy": "privacy_safe_cover_crop",
+        "aspect_ratio": "3:4",
+        "source_teaser_path": "D:\\Ava_CMS\\vault\\bundle_teasers\\abee154c-c07a-5318-b909-df1fe3460dc8\\promotional_teaser_source_265.png",
+        "source_teaser_sha256": "e0ea71c5107b419cd1261fe79e82de9178d9431cc5ea8d5045437857b5ada721"
+      },
+      "account_name": null,
+      "telegram_post_to": "vault",
+      "caption_id": null,
+      "provider_post_id": "39",
+      "provider_media_id": null,
+      "provider_output_url": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_fa5de1c75c6c4075b509bc4e245ba728",
+    "queue_item_id": "social_queue_item_c187a90e71c84477a44f1977347cfa68",
+    "platform": "telegram",
+    "status": "queued",
+    "message": "Commercial Offering queued for Telegram Content Vault.",
+    "created_at": "2026-08-15T17:31:59.949549",
+    "metadata": {
+      "source_type": "commercial_offering",
+      "commercial_offering_id": "a1c0751c-9a8c-44ed-a6b6-8d3cf63e641c",
+      "destination": "telegram_content_vault",
+      "title": "Counter Open-Leg Tease"
+    }
+  },
+  {
+    "history_id": "social_publish_history_378065f1247c4eedb97777e1f3a58080",
+    "queue_item_id": "social_queue_item_8f974624d6014465ad0e6087e5695b94",
+    "platform": "telegram",
+    "status": "posted",
+    "message": "Posted to Telegram.",
+    "created_at": "2026-08-15T17:08:01.821241",
+    "metadata": {
+      "caption": "\ud83d\udd25 3 wet shots of me\u2026 soaked white shirt clinging to every curve \ud83d\udca6 Tits pressed to the rainy glass\u2026 city lights behind me \ud83d\udc40 Unlock me before the rain stops \ud83d\udd25",
+      "caption_source": "MANUAL",
+      "caption_updated_at": "2026-08-15T17:07:20.278991+00:00",
+      "offering_id": "dd95dfe7-da16-43e7-98a8-f99a606a1a8b",
+      "bundle_source_id": "83206e1c-59c0-5cb5-a532-4cd3ceb8d03a",
+      "paid_asset_ids": [
+        263,
+        261,
+        262
+      ],
+      "paid_image_count": 3,
+      "teaser_asset_id": 264,
+      "price_minor": 1599,
+      "currency": "USD",
+      "fanvue_publication_id": "32df9896-5d55-44cc-a611-ea61b5654f50",
+      "telegram_destination": "vault",
+      "content_vault_presentation": {
+        "path": "D:\\Ava_CMS\\vault\\bundle_teasers\\83206e1c-59c0-5cb5-a532-4cd3ceb8d03a\\promotional_teaser_source_263_content_vault_presentation_v1.jpg",
+        "width": 960,
+        "height": 1280,
+        "version": 1,
+        "strategy": "privacy_safe_cover_crop",
+        "aspect_ratio": "3:4",
+        "source_teaser_path": "D:\\Ava_CMS\\vault\\bundle_teasers\\83206e1c-59c0-5cb5-a532-4cd3ceb8d03a\\promotional_teaser_source_263.png",
+        "source_teaser_sha256": "90f18520f94406741a8d1229672f0d30bd2bea5a25b09508f106308819edf1ca"
+      },
+      "account_name": null,
+      "telegram_post_to": "vault",
+      "caption_id": null,
+      "provider_post_id": "38",
+      "provider_media_id": null,
+      "provider_output_url": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_ffdb6252c0f9492a9a56864a1ce959c2",
+    "queue_item_id": "social_queue_item_8f974624d6014465ad0e6087e5695b94",
+    "platform": "telegram",
+    "status": "queued",
+    "message": "Commercial Offering queued for Telegram Content Vault.",
+    "created_at": "2026-08-15T17:08:00.078152",
+    "metadata": {
+      "source_type": "commercial_offering",
+      "commercial_offering_id": "dd95dfe7-da16-43e7-98a8-f99a606a1a8b",
+      "destination": "telegram_content_vault",
+      "title": "Neon Rain Window Tease"
+    }
+  },
+  {
+    "history_id": "social_publish_history_29792bf630364d548c0f52a2f22cb4f1",
+    "queue_item_id": "social_queue_item_1d739e60d31240838b2599a477cdc55a",
+    "platform": "telegram",
+    "status": "posted",
+    "message": "Posted to Telegram.",
+    "created_at": "2026-08-15T16:45:35.862591",
+    "metadata": {
+      "caption": "My bare breasts meet your gaze \ud83d\udc40 in this mirror moment \u2014 unlock the full 3-photo set now \ud83d\udd25 to see every intimate angle.",
+      "caption_source": "GROK",
+      "caption_updated_at": "2026-08-15T16:45:23.557226+00:00",
+      "offering_id": "e5cf9c88-23ac-405e-9a8b-28edc94c324b",
+      "bundle_source_id": "1b700a5b-fd71-5dd7-88b9-8df137d6bbd4",
+      "paid_asset_ids": [
+        257,
+        258,
+        259
+      ],
+      "paid_image_count": 3,
+      "teaser_asset_id": 260,
+      "price_minor": 1499,
+      "currency": "USD",
+      "fanvue_publication_id": "c38de9a4-32ae-42cb-8f5d-47ca4cac4f01",
+      "telegram_destination": "vault",
+      "content_vault_presentation": {
+        "path": "D:\\Ava_CMS\\vault\\bundle_teasers\\1b700a5b-fd71-5dd7-88b9-8df137d6bbd4\\promotional_teaser_source_257_content_vault_presentation_v1.jpg",
+        "width": 960,
+        "height": 1280,
+        "version": 1,
+        "strategy": "privacy_safe_cover_crop",
+        "aspect_ratio": "3:4",
+        "source_teaser_path": "D:\\Ava_CMS\\vault\\bundle_teasers\\1b700a5b-fd71-5dd7-88b9-8df137d6bbd4\\promotional_teaser_source_257.png",
+        "source_teaser_sha256": "6725f849c7b0b986c7e3af90db98b058fc688180aeef3322d93e6e98b6abea31"
+      },
+      "account_name": null,
+      "telegram_post_to": "vault",
+      "caption_id": null,
+      "provider_post_id": "37",
+      "provider_media_id": null,
+      "provider_output_url": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_cfb833804e0e490ba3cefc0fd805d7da",
+    "queue_item_id": "social_queue_item_1d739e60d31240838b2599a477cdc55a",
+    "platform": "telegram",
+    "status": "queued",
+    "message": "Commercial Offering queued for Telegram Content Vault.",
+    "created_at": "2026-08-15T16:45:33.864797",
+    "metadata": {
+      "source_type": "commercial_offering",
+      "commercial_offering_id": "e5cf9c88-23ac-405e-9a8b-28edc94c324b",
+      "destination": "telegram_content_vault",
+      "title": "Intimate Mirror Seduction"
+    }
+  },
+  {
+    "history_id": "social_publish_history_4f48b66011e440a295103f0288f899a7",
+    "queue_item_id": "social_queue_item_9423faca4dfa4978a5cf9e32dd0ba5b3",
+    "platform": "x",
+    "status": "posted",
+    "message": "Posted to X.",
+    "created_at": "2026-08-15T15:58:24.521266",
+    "metadata": {
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "caption_id": null,
+      "provider_post_id": "2088656561371537680",
+      "provider_media_id": "2088656559001812992",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2088656561371537680"
+    }
+  },
+  {
+    "history_id": "social_publish_history_3fe5d40c0d9042afa6929e8bdabce700",
+    "queue_item_id": "social_queue_item_d1709e4b7e754240a00f1e39654baa50",
+    "platform": "telegram",
+    "status": "posted",
+    "message": "Posted to Telegram.",
+    "created_at": "2026-08-15T01:02:05.865368",
+    "metadata": {
+      "caption": "\ud83d\udd25 3 dirty shots of me\u2026 jeans around my thighs \ud83d\udc56 tits out \ud83d\udc45 tongue ready\u2026 Then I turn, drop lower & spread my wet pussy right for you \ud83d\udc40\ud83d\udca6Unlock me before I stand up \ud83d\udd25",
+      "caption_source": "MANUAL",
+      "caption_updated_at": "2026-08-15T01:01:58.055880+00:00",
+      "offering_id": "be148e30-9f9a-449f-8df2-6302f8966403",
+      "bundle_source_id": "009894b0-cfe8-53bf-a362-6e30fc1d079b",
+      "paid_asset_ids": [
+        255,
+        253,
+        254
+      ],
+      "paid_image_count": 3,
+      "teaser_asset_id": 256,
+      "price_minor": 2499,
+      "currency": "USD",
+      "fanvue_publication_id": "95b7d4e9-a12c-4f03-8631-c1f13d9b9e64",
+      "telegram_destination": "vault",
+      "content_vault_presentation": {
+        "path": "D:\\Ava_CMS\\vault\\bundle_teasers\\009894b0-cfe8-53bf-a362-6e30fc1d079b\\promotional_teaser_source_254_content_vault_presentation_v1.jpg",
+        "width": 960,
+        "height": 1280,
+        "version": 1,
+        "strategy": "privacy_safe_cover_crop",
+        "aspect_ratio": "3:4",
+        "source_teaser_path": "D:\\Ava_CMS\\vault\\bundle_teasers\\009894b0-cfe8-53bf-a362-6e30fc1d079b\\promotional_teaser_source_254.png",
+        "source_teaser_sha256": "727f733235f076a7d34453e66abe1223665610cc22b0bd2f2ba291cd2f39f367"
+      },
+      "account_name": null,
+      "telegram_post_to": "vault",
+      "caption_id": null,
+      "provider_post_id": "36",
+      "provider_media_id": null,
+      "provider_output_url": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_cef0f1673cb447f0805baec086a55d48",
+    "queue_item_id": "social_queue_item_d1709e4b7e754240a00f1e39654baa50",
+    "platform": "telegram",
+    "status": "queued",
+    "message": "Commercial Offering queued for Telegram Content Vault.",
+    "created_at": "2026-08-15T01:02:03.918366",
+    "metadata": {
+      "source_type": "commercial_offering",
+      "commercial_offering_id": "be148e30-9f9a-449f-8df2-6302f8966403",
+      "destination": "telegram_content_vault",
+      "title": "Hardwood Tease: All-Fours Presenting Set"
+    }
+  },
+  {
+    "history_id": "social_publish_history_1546f1d37e8545debf3554d40333242c",
+    "queue_item_id": "social_queue_item_c83311fbe7e0441bb3a07216d30f2d93",
+    "platform": "telegram",
+    "status": "posted",
+    "message": "Posted to Telegram.",
+    "created_at": "2026-08-14T20:34:53.087427",
+    "metadata": {
+      "caption": "My bare ass and open pussy on display while I smile at you like this \ud83d\udd25 look closer and unlock before I turn away \ud83d\ude0f",
+      "caption_source": "GROK",
+      "caption_updated_at": "2026-08-14T20:34:42.494376+00:00",
+      "asset_id": 252,
+      "offering_id": "f972dc15-bf91-4cf3-8bf4-6beb109eec0e",
+      "teaser_id": "7cae9434-803f-4f8c-b11e-21507a6b2907",
+      "derived_teaser_asset_id": null,
+      "price_minor": 1799,
+      "currency": "USD",
+      "fanvue_publication_id": "0cdf4163-c6fd-4e42-a8f1-e2fb02d215eb",
+      "telegram_destination": "vault",
+      "content_vault_presentation": {
+        "path": "D:\\Ava_CMS\\vault\\blurred\\252_blurred_content_vault_presentation_v1.jpg",
+        "width": 960,
+        "height": 1280,
+        "version": 1,
+        "strategy": "privacy_safe_cover_crop",
+        "aspect_ratio": "3:4",
+        "source_teaser_path": "D:\\Ava_CMS\\vault\\blurred\\252_blurred.png",
+        "source_teaser_sha256": "73c6d3f0e2ea4f2131c53f63123d0d2ce43ae050c376bc3620a67acc31b22896"
+      },
+      "account_name": null,
+      "telegram_post_to": "vault",
+      "caption_id": null,
+      "provider_post_id": "35",
+      "provider_media_id": null,
+      "provider_output_url": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_6393c5488d4142898ca1ffe7e13375ca",
+    "queue_item_id": "social_queue_item_c83311fbe7e0441bb3a07216d30f2d93",
+    "platform": "telegram",
+    "status": "queued",
+    "message": "Commercial Offering queued for Telegram Content Vault.",
+    "created_at": "2026-08-14T20:34:51.627047",
+    "metadata": {
+      "source_type": "commercial_offering",
+      "commercial_offering_id": "f972dc15-bf91-4cf3-8bf4-6beb109eec0e",
+      "destination": "telegram_content_vault",
+      "title": "Sensual Over-Shoulder Glance"
+    }
+  },
+  {
+    "history_id": "social_publish_history_bb6f658c02634735a9d34d4c381db0cd",
+    "queue_item_id": "social_queue_item_03bba60f3ae3495cadf0abaf28e9d2bf",
+    "platform": "telegram",
+    "status": "posted",
+    "message": "Posted to Telegram.",
+    "created_at": "2026-08-14T19:54:39.793947",
+    "metadata": {
+      "caption": "My towel slips just enough to reveal bare breasts glistening under candlelight \ud83d\udc40 while the second shot shows me bent fully nude over the tub \u2014 unlock the 2-photo set now \ud83d\udd25",
+      "caption_source": "GROK",
+      "caption_updated_at": "2026-08-14T19:53:55.681713+00:00",
+      "offering_id": "74c46adb-ecc3-4bfc-b67c-c4a86641faa9",
+      "bundle_source_id": "6e75db25-8cab-5fe0-b86a-09d9a5b185a8",
+      "paid_asset_ids": [
+        217,
+        216
+      ],
+      "paid_image_count": 2,
+      "teaser_asset_id": 251,
+      "price_minor": 1499,
+      "currency": "USD",
+      "fanvue_publication_id": "7f56c8df-f06f-43c0-bbda-4d2a014a1608",
+      "telegram_destination": "vault",
+      "content_vault_presentation": {
+        "path": "D:\\Ava_CMS\\vault\\bundle_teasers\\6e75db25-8cab-5fe0-b86a-09d9a5b185a8\\promotional_teaser_source_217_content_vault_presentation_v1.jpg",
+        "width": 960,
+        "height": 1280,
+        "version": 1,
+        "strategy": "privacy_safe_cover_crop",
+        "aspect_ratio": "3:4",
+        "source_teaser_path": "D:\\Ava_CMS\\vault\\bundle_teasers\\6e75db25-8cab-5fe0-b86a-09d9a5b185a8\\promotional_teaser_source_217.png",
+        "source_teaser_sha256": "693a533110890f652403a84ab5c253e74a5f8a7b50433ec56200f319762e2c9a"
+      },
+      "account_name": null,
+      "telegram_post_to": "vault",
+      "caption_id": null,
+      "provider_post_id": "34",
+      "provider_media_id": null,
+      "provider_output_url": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_132eb690d97044b38208c1d95151dc52",
+    "queue_item_id": "social_queue_item_03bba60f3ae3495cadf0abaf28e9d2bf",
+    "platform": "telegram",
+    "status": "queued",
+    "message": "Commercial Offering queued for Telegram Content Vault.",
+    "created_at": "2026-08-14T19:54:38.498360",
+    "metadata": {
+      "source_type": "commercial_offering",
+      "commercial_offering_id": "74c46adb-ecc3-4bfc-b67c-c4a86641faa9",
+      "destination": "telegram_content_vault",
+      "title": "Steamy Bathroom Tease to Explicit Rear Glance"
+    }
+  },
+  {
+    "history_id": "social_publish_history_dfc101dd121f4beebf34345dd9a62bee",
+    "queue_item_id": "social_queue_item_af0d9e8eafad414f8090c623f07e3015",
+    "platform": "telegram",
+    "status": "posted",
+    "message": "Posted to Telegram.",
+    "created_at": "2026-08-14T19:50:57.231119",
+    "metadata": {
+      "caption": "This confident gaze \ud83d\udc40 meets you as my breasts rest bare beneath the open silk \u2728 \u2014 unlock to linger longer",
+      "caption_source": "GROK",
+      "caption_updated_at": "2026-08-14T19:50:35.317764+00:00",
+      "asset_id": 249,
+      "offering_id": "50ede68e-e2eb-4ae1-b13a-cba75493fc56",
+      "teaser_id": "b18b05dc-85d8-476c-8174-ee6f0a93f576",
+      "derived_teaser_asset_id": 250,
+      "price_minor": 999,
+      "currency": "USD",
+      "fanvue_publication_id": "c6c52ac1-ed79-4f49-bef6-7c13a2129638",
+      "telegram_destination": "vault",
+      "content_vault_presentation": {
+        "path": "D:\\Ava_CMS\\vault\\commercial_teasers\\249\\content_vault_selective_content_vault_presentation_v1.jpg",
+        "width": 960,
+        "height": 1280,
+        "version": 1,
+        "strategy": "privacy_safe_cover_crop",
+        "aspect_ratio": "3:4",
+        "source_teaser_path": "D:\\Ava_CMS\\vault\\commercial_teasers\\249\\content_vault_selective.png",
+        "source_teaser_sha256": "9a62312111651e3b91764376eac45efe5378e74b6d007c6ce817672d77fd46b5"
+      },
+      "account_name": null,
+      "telegram_post_to": "vault",
+      "caption_id": null,
+      "provider_post_id": "33",
+      "provider_media_id": null,
+      "provider_output_url": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_26fae4ed12b741b298da4a383e808842",
+    "queue_item_id": "social_queue_item_af0d9e8eafad414f8090c623f07e3015",
+    "platform": "telegram",
+    "status": "queued",
+    "message": "Commercial Offering queued for Telegram Content Vault.",
+    "created_at": "2026-08-14T19:50:55.409247",
+    "metadata": {
+      "source_type": "commercial_offering",
+      "commercial_offering_id": "50ede68e-e2eb-4ae1-b13a-cba75493fc56",
+      "destination": "telegram_content_vault",
+      "title": "Golden Hour Allure"
+    }
+  },
+  {
+    "history_id": "social_publish_history_081173ad3b0844d6ae95fc3a02558a47",
+    "queue_item_id": "social_queue_item_fec23e22c9ee4711935f4d4edd5a686b",
+    "platform": "telegram",
+    "status": "posted",
+    "message": "Posted to Telegram.",
+    "created_at": "2026-08-14T19:42:03.701238",
+    "metadata": {
+      "caption": "\ud83d\udd25 3 raw shots. Steamy. Sweaty. Pussy fully on display\u2026 Robe barely covering anything \ud83d\udc40\ud83d\udca6Unlock her before the steam fades \ud83d\udd25",
+      "caption_source": "MANUAL",
+      "caption_updated_at": "2026-08-14T19:24:45.978339+00:00",
+      "offering_id": "1d60e2e9-e774-4a26-87e6-dea80fb2d478",
+      "bundle_source_id": "a6791bae-6089-5ecd-8664-45664670fde1",
+      "paid_asset_ids": [
+        246,
+        244,
+        245
+      ],
+      "paid_image_count": 3,
+      "teaser_asset_id": 247,
+      "price_minor": 1899,
+      "currency": "USD",
+      "fanvue_publication_id": "0a1d6071-b767-472f-8da5-1398a4d50922",
+      "telegram_destination": "vault",
+      "content_vault_presentation": {
+        "path": "D:\\Ava_CMS\\vault\\bundle_teasers\\a6791bae-6089-5ecd-8664-45664670fde1\\promotional_teaser_source_246_content_vault_presentation_v1.jpg",
+        "width": 960,
+        "height": 1280,
+        "version": 1,
+        "strategy": "privacy_safe_cover_crop",
+        "aspect_ratio": "3:4",
+        "source_teaser_path": "D:\\Ava_CMS\\vault\\bundle_teasers\\a6791bae-6089-5ecd-8664-45664670fde1\\promotional_teaser_source_246.png",
+        "source_teaser_sha256": "68ad7fb54fa3b7f0699a4e1dc135e89d6e934c4b9e1b55e04705d1186bcfc20d"
+      },
+      "account_name": null,
+      "telegram_post_to": "vault",
+      "caption_id": null,
+      "provider_post_id": "32",
+      "provider_media_id": null,
+      "provider_output_url": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_57952b47b4ae4a09a19a36f44f9ff888",
+    "queue_item_id": "social_queue_item_fec23e22c9ee4711935f4d4edd5a686b",
+    "platform": "telegram",
+    "status": "queued",
+    "message": "Commercial Offering queued for Telegram Content Vault.",
+    "created_at": "2026-08-14T19:42:02.330622",
+    "metadata": {
+      "source_type": "commercial_offering",
+      "commercial_offering_id": "1d60e2e9-e774-4a26-87e6-dea80fb2d478",
+      "destination": "telegram_content_vault",
+      "title": "Dawn Steam Intimacy"
+    }
+  },
+  {
+    "history_id": "social_publish_history_cc7452c66cbe450eba95737b13cb9ae1",
+    "queue_item_id": "social_queue_item_2ee21b9412be42d3ae9b1ae33f13f944",
+    "platform": "x",
+    "status": "posted",
+    "message": "Posted to X.",
+    "created_at": "2026-08-14T15:45:40.497465",
+    "metadata": {
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "caption_id": "caption_result_fa8c2907d06b4211b7cdda9ecbc9dd15",
+      "provider_post_id": "2088290968713781348",
+      "provider_media_id": "2088290966536863744",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2088290968713781348"
+    }
+  },
+  {
+    "history_id": "social_publish_history_df8ce8951d624929bf026f7e33c175f9",
+    "queue_item_id": "social_queue_item_2ee21b9412be42d3ae9b1ae33f13f944",
+    "platform": "x",
+    "status": "caption_attached",
+    "message": "Caption Studio result attached to Social Queue item.",
+    "created_at": "2026-08-14T15:45:39.196845",
+    "metadata": {
+      "caption_id": "caption_result_fa8c2907d06b4211b7cdda9ecbc9dd15"
+    }
+  },
+  {
+    "history_id": "social_publish_history_2509d8573aea47ad9c05146317f95dac",
+    "queue_item_id": "social_queue_item_172c8025d680466097b703be38d9de12",
+    "platform": "telegram",
+    "status": "posted",
+    "message": "Posted to Telegram.",
+    "created_at": "2026-08-14T01:54:09.706839",
+    "metadata": {
+      "caption": "My naked ass and pussy on full display \ud83d\udc40 while I stare over my shoulder at you \ud83d\ude0f",
+      "caption_source": "GROK",
+      "caption_updated_at": "2026-08-14T01:54:05.006631+00:00",
+      "asset_id": 239,
+      "offering_id": "f3caaae6-22f1-4664-b09e-9200343557d8",
+      "teaser_id": "04314c25-96e8-4d12-8bea-74b64405e234",
+      "derived_teaser_asset_id": null,
+      "price_minor": 1899,
+      "currency": "USD",
+      "fanvue_publication_id": "fe849047-1582-487a-abda-e1560cef9113",
+      "telegram_destination": "vault",
+      "content_vault_presentation": {
+        "path": "D:\\Ava_CMS\\vault\\blurred\\239_blurred_content_vault_presentation_v1.jpg",
+        "width": 960,
+        "height": 1280,
+        "version": 1,
+        "strategy": "privacy_safe_cover_crop",
+        "aspect_ratio": "3:4",
+        "source_teaser_path": "D:\\Ava_CMS\\vault\\blurred\\239_blurred.png",
+        "source_teaser_sha256": "17c227989def39846dc816bcfbb67d3814a986f8abc2c1c977efd4343c3a1812"
+      },
+      "account_name": null,
+      "telegram_post_to": "vault",
+      "caption_id": null,
+      "provider_post_id": "31",
+      "provider_media_id": null,
+      "provider_output_url": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_f4b0344b57d04dffa59c1437e1ec03c7",
+    "queue_item_id": "social_queue_item_172c8025d680466097b703be38d9de12",
+    "platform": "telegram",
+    "status": "queued",
+    "message": "Commercial Offering queued for Telegram Content Vault.",
+    "created_at": "2026-08-14T01:54:08.257003",
+    "metadata": {
+      "source_type": "commercial_offering",
+      "commercial_offering_id": "f3caaae6-22f1-4664-b09e-9200343557d8",
+      "destination": "telegram_content_vault",
+      "title": "Sunlit Intimate Glance"
+    }
+  },
+  {
+    "history_id": "social_publish_history_c914b41a624f4217b5546aabcf6dd366",
+    "queue_item_id": "social_queue_item_30cfc5c83d1b4dc6b1c90710aaac6507",
+    "platform": "telegram",
+    "status": "posted",
+    "message": "Posted to Telegram.",
+    "created_at": "2026-08-14T01:36:57.841096",
+    "metadata": {
+      "caption": "Direct stare \ud83d\udc40 while my fingers \ud83d\ude08 hold my naked body open for you",
+      "caption_source": "GROK",
+      "caption_updated_at": "2026-08-14T01:36:50.302060+00:00",
+      "asset_id": 237,
+      "offering_id": "fba3a39b-a2f7-4cbb-a3df-56b829c8b1dc",
+      "teaser_id": "d1b0e6f6-20bb-4beb-86ea-dc3fa9f31531",
+      "derived_teaser_asset_id": 238,
+      "price_minor": 1499,
+      "currency": "USD",
+      "fanvue_publication_id": "5b270c70-237d-47df-914a-16bdaf01c828",
+      "telegram_destination": "vault",
+      "content_vault_presentation": {
+        "path": "D:\\Ava_CMS\\vault\\commercial_teasers\\237\\content_vault_selective_content_vault_presentation_v1.jpg",
+        "width": 960,
+        "height": 1280,
+        "version": 1,
+        "strategy": "privacy_safe_cover_crop",
+        "aspect_ratio": "3:4",
+        "source_teaser_path": "D:\\Ava_CMS\\vault\\commercial_teasers\\237\\content_vault_selective.png",
+        "source_teaser_sha256": "8f726e7d85c3a42b714bef3cbfd650e449bc20fc53318a61364bf71e011973b8"
+      },
+      "account_name": null,
+      "telegram_post_to": "vault",
+      "caption_id": null,
+      "provider_post_id": "30",
+      "provider_media_id": null,
+      "provider_output_url": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_4228311e2f0b45ee9fef17d92fb60c58",
+    "queue_item_id": "social_queue_item_30cfc5c83d1b4dc6b1c90710aaac6507",
+    "platform": "telegram",
+    "status": "queued",
+    "message": "Commercial Offering queued for Telegram Content Vault.",
+    "created_at": "2026-08-14T01:36:56.235774",
+    "metadata": {
+      "source_type": "commercial_offering",
+      "commercial_offering_id": "fba3a39b-a2f7-4cbb-a3df-56b829c8b1dc",
+      "destination": "telegram_content_vault",
+      "title": "Confident Intimate Self-Portrait"
+    }
+  },
+  {
+    "history_id": "social_publish_history_cff1e27c70f142fbae28c1c32bc51438",
+    "queue_item_id": "social_queue_item_8bbda11f137f4cf8b5609a0db32c4994",
+    "platform": "telegram",
+    "status": "posted",
+    "message": "Posted to Telegram.",
+    "created_at": "2026-08-14T01:29:29.452474",
+    "metadata": {
+      "caption": "Top floating away while my bare chest glows in the water \ud83d\udc40 my nipples are hard for your eyes \ud83d\ude08",
+      "caption_source": "GROK",
+      "caption_updated_at": "2026-08-14T01:29:22.033485+00:00",
+      "asset_id": 236,
+      "offering_id": "685e09e7-a06f-4c66-ab1e-1b31558cc524",
+      "teaser_id": "9ccbdda2-b0ea-4e93-84a6-b0c14d5ec984",
+      "derived_teaser_asset_id": null,
+      "price_minor": 999,
+      "currency": "USD",
+      "fanvue_publication_id": "bce63544-5a90-471a-993c-199fadb476eb",
+      "telegram_destination": "vault",
+      "content_vault_presentation": {
+        "path": "D:\\Ava_CMS\\vault\\blurred\\236_blurred_content_vault_presentation_v1.jpg",
+        "width": 960,
+        "height": 1280,
+        "version": 1,
+        "strategy": "privacy_safe_cover_crop",
+        "aspect_ratio": "3:4",
+        "source_teaser_path": "D:\\Ava_CMS\\vault\\blurred\\236_blurred.png",
+        "source_teaser_sha256": "41d32e30ee269e46506a54ab9eb8fd7824062d2a8ee6bcf73d84938c91560c35"
+      },
+      "account_name": null,
+      "telegram_post_to": "vault",
+      "caption_id": null,
+      "provider_post_id": "29",
+      "provider_media_id": null,
+      "provider_output_url": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_72715036bef34272a0a3a4940aea6d74",
+    "queue_item_id": "social_queue_item_8bbda11f137f4cf8b5609a0db32c4994",
+    "platform": "telegram",
+    "status": "queued",
+    "message": "Commercial Offering queued for Telegram Content Vault.",
+    "created_at": "2026-08-14T01:29:27.741718",
+    "metadata": {
+      "source_type": "commercial_offering",
+      "commercial_offering_id": "685e09e7-a06f-4c66-ab1e-1b31558cc524",
+      "destination": "telegram_content_vault",
+      "title": "Midnight Pool Confidence"
+    }
+  },
+  {
+    "history_id": "social_publish_history_51b19ad4a4f24bad91ff6b08d6f2c367",
+    "queue_item_id": "social_queue_item_53aa2a7368b94caba43f67ff50831708",
+    "platform": "telegram",
+    "status": "posted",
+    "message": "Posted to Telegram.",
+    "created_at": "2026-08-14T01:12:00.138207",
+    "metadata": {
+      "caption": "Tits out and pussy wide in this open pose while I hold your stare \ud83d\ude08 unlock right now if you need to see me this exposed \ud83d\udc45",
+      "caption_source": "GROK",
+      "caption_updated_at": "2026-08-14T01:11:55.215025+00:00",
+      "asset_id": 235,
+      "offering_id": "ae56f1c8-62c7-4522-8c16-14935e67dad6",
+      "teaser_id": "9d7ef169-0724-4925-9701-c0d05cb5824b",
+      "derived_teaser_asset_id": null,
+      "price_minor": 1999,
+      "currency": "USD",
+      "fanvue_publication_id": "cb261a3c-4bef-4853-a0ff-67752c8dfbe6",
+      "telegram_destination": "vault",
+      "content_vault_presentation": {
+        "path": "D:\\Ava_CMS\\vault\\blurred\\235_blurred_content_vault_presentation_v1.jpg",
+        "width": 960,
+        "height": 1280,
+        "version": 1,
+        "strategy": "privacy_safe_cover_crop",
+        "aspect_ratio": "3:4",
+        "source_teaser_path": "D:\\Ava_CMS\\vault\\blurred\\235_blurred.png",
+        "source_teaser_sha256": "2338d0d67883f43e953079b83590df17859f0cf50f012d6c3f8cd198f90d4d6c"
+      },
+      "account_name": null,
+      "telegram_post_to": "vault",
+      "caption_id": null,
+      "provider_post_id": "28",
+      "provider_media_id": null,
+      "provider_output_url": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_8b01feb86388459b8fec81dfea23fa7f",
+    "queue_item_id": "social_queue_item_53aa2a7368b94caba43f67ff50831708",
+    "platform": "telegram",
+    "status": "queued",
+    "message": "Commercial Offering queued for Telegram Content Vault.",
+    "created_at": "2026-08-14T01:11:58.666252",
+    "metadata": {
+      "source_type": "commercial_offering",
+      "commercial_offering_id": "ae56f1c8-62c7-4522-8c16-14935e67dad6",
+      "destination": "telegram_content_vault",
+      "title": "Sunlit Intimate Gaze"
+    }
+  },
+  {
+    "history_id": "social_publish_history_b3fb3528e5bc4012a1ef7067dcdf9c27",
+    "queue_item_id": "social_queue_item_3c236bc3b32644e39fe0241c18f0c4c6",
+    "platform": "telegram",
+    "status": "posted",
+    "message": "Posted to Telegram.",
+    "created_at": "2026-08-14T01:04:46.199683",
+    "metadata": {
+      "caption": "Midnight boudoir\u2026 zipper half open, lights low \ud83d\udda4\ud83d\udd25 4 exclusive shots \ud83d\udcf8 leather + bare skin + every slow reveal \u2728\ud83d\ude08 Unlock the full set \ud83d\udc8b",
+      "caption_source": "MANUAL",
+      "caption_updated_at": "2026-08-14T01:04:40.738741+00:00",
+      "offering_id": "a1384c76-27d8-4874-ac1e-a0ce35197410",
+      "bundle_source_id": "207e9874-03d8-5b83-82be-fba24b365347",
+      "paid_asset_ids": [
+        230,
+        231,
+        232,
+        233
+      ],
+      "paid_image_count": 4,
+      "teaser_asset_id": 234,
+      "price_minor": 1799,
+      "currency": "USD",
+      "fanvue_publication_id": "1a390a2f-a722-4323-a380-5ef5e71854ce",
+      "telegram_destination": "vault",
+      "content_vault_presentation": {
+        "path": "D:\\Ava_CMS\\vault\\bundle_teasers\\207e9874-03d8-5b83-82be-fba24b365347\\promotional_teaser_source_230_content_vault_presentation_v1.jpg",
+        "width": 960,
+        "height": 1280,
+        "version": 1,
+        "strategy": "privacy_safe_cover_crop",
+        "aspect_ratio": "3:4",
+        "source_teaser_path": "D:\\Ava_CMS\\vault\\bundle_teasers\\207e9874-03d8-5b83-82be-fba24b365347\\promotional_teaser_source_230.png",
+        "source_teaser_sha256": "9d08b38e46f55bc1c81827808ae5510950a00744145719f3d22b3dd76e16db12"
+      },
+      "account_name": null,
+      "telegram_post_to": "vault",
+      "caption_id": null,
+      "provider_post_id": "27",
+      "provider_media_id": null,
+      "provider_output_url": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_4196e4f461be4da29763bcb7604bab56",
+    "queue_item_id": "social_queue_item_3c236bc3b32644e39fe0241c18f0c4c6",
+    "platform": "telegram",
+    "status": "queued",
+    "message": "Commercial Offering queued for Telegram Content Vault.",
+    "created_at": "2026-08-14T01:04:43.098558",
+    "metadata": {
+      "source_type": "commercial_offering",
+      "commercial_offering_id": "a1384c76-27d8-4874-ac1e-a0ce35197410",
+      "destination": "telegram_content_vault",
+      "title": "Confident Unzipped Allure"
+    }
+  },
+  {
+    "history_id": "social_publish_history_7dff1105cac54c2dac3f8c945eeaf07e",
+    "queue_item_id": "social_queue_item_ecedcc25962745cb952a3fdc5e97b10b",
+    "platform": "telegram",
+    "status": "posted",
+    "message": "Posted to Telegram.",
+    "created_at": "2026-08-13T21:27:36.584758",
+    "metadata": {
+      "caption": "This intimate self-touch captured across four refined frames \ud83d\udc41\ufe0f my eyes and body open only for you, unlock the entire set right now \u2764\ufe0f",
+      "caption_source": "GROK",
+      "caption_updated_at": "2026-08-13T21:26:28.927789+00:00",
+      "offering_id": "8b28078a-a7dd-4c8d-b949-7e3c350100b3",
+      "bundle_source_id": "b44c5791-ece7-52a5-a9d3-d1b599fbb2f2",
+      "paid_asset_ids": [
+        225,
+        226,
+        227,
+        228
+      ],
+      "paid_image_count": 4,
+      "teaser_asset_id": 229,
+      "price_minor": 2499,
+      "currency": "USD",
+      "fanvue_publication_id": "2b855eb4-1544-4adb-a7ee-9458cd9573e4",
+      "telegram_destination": "vault",
+      "account_name": null,
+      "telegram_post_to": "vault",
+      "caption_id": null,
+      "provider_post_id": "26",
+      "provider_media_id": null,
+      "provider_output_url": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_1c4881061e4440e78e1915cb5d15c0b9",
+    "queue_item_id": "social_queue_item_ecedcc25962745cb952a3fdc5e97b10b",
+    "platform": "telegram",
+    "status": "queued",
+    "message": "Commercial Offering queued for Telegram Content Vault.",
+    "created_at": "2026-08-13T21:27:34.927121",
+    "metadata": {
+      "source_type": "commercial_offering",
+      "commercial_offering_id": "8b28078a-a7dd-4c8d-b949-7e3c350100b3",
+      "destination": "telegram_content_vault",
+      "title": "Touching Vagina \u2013 Intimate Afternoon PPV"
+    }
+  },
+  {
+    "history_id": "social_publish_history_a30f4b347f4b472f9434931fa9202f38",
+    "queue_item_id": "social_queue_item_e886e3c0589449efa2e4bd37eadf75db",
+    "platform": "x",
+    "status": "posted",
+    "message": "Posted to X.",
+    "created_at": "2026-08-13T16:20:44.928022",
+    "metadata": {
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "caption_id": "caption_result_ec2005e78d8a4429b4843f517572e8e4",
+      "provider_post_id": "2087937407572205945",
+      "provider_media_id": "2087937405214986240",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2087937407572205945"
+    }
+  },
+  {
+    "history_id": "social_publish_history_aca253a2a3614c2dbab9ce22a345a548",
+    "queue_item_id": "social_queue_item_e886e3c0589449efa2e4bd37eadf75db",
+    "platform": "x",
+    "status": "caption_attached",
+    "message": "Caption Studio result attached to Social Queue item.",
+    "created_at": "2026-08-13T16:20:43.656503",
+    "metadata": {
+      "caption_id": "caption_result_ec2005e78d8a4429b4843f517572e8e4"
+    }
+  },
+  {
+    "history_id": "social_publish_history_c28694bb7cd04500ae76291169a6424c",
+    "queue_item_id": "social_queue_item_59fcd3f0b3dc44be91cdd30b33f95948",
+    "platform": "telegram",
+    "status": "posted",
+    "message": "Posted to Telegram.",
+    "created_at": "2026-08-13T01:41:15.548443",
+    "metadata": {
+      "caption": "Legs spread wide \ud83d\ude08 so you see my pussy and tits fully exposed \ud83d\udc40 unlock before I close them \ud83d\udd25",
+      "caption_source": "GROK",
+      "caption_updated_at": "2026-08-13T01:41:02.775902+00:00",
+      "asset_id": 207,
+      "offering_id": "13b1574b-9f67-420c-9155-03bd7c89cb22",
+      "teaser_id": "8f05807a-3f12-4933-a31f-d0e85d4be3cd",
+      "derived_teaser_asset_id": null,
+      "price_minor": 999,
+      "currency": "USD",
+      "fanvue_publication_id": "b978f281-3f6e-4784-8876-37a495a9f8b7",
+      "telegram_destination": "vault",
+      "account_name": null,
+      "telegram_post_to": "vault",
+      "caption_id": null,
+      "provider_post_id": "25",
+      "provider_media_id": null,
+      "provider_output_url": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_b0aa0a32c77f4e17b1f5d17b19ea2dd6",
+    "queue_item_id": "social_queue_item_59fcd3f0b3dc44be91cdd30b33f95948",
+    "platform": "telegram",
+    "status": "queued",
+    "message": "Commercial Offering queued for Telegram Content Vault.",
+    "created_at": "2026-08-13T01:41:14.230714",
+    "metadata": {
+      "source_type": "commercial_offering",
+      "commercial_offering_id": "13b1574b-9f67-420c-9155-03bd7c89cb22",
+      "destination": "telegram_content_vault",
+      "title": "Midnight Bedroom Intimacy"
+    }
+  },
+  {
+    "history_id": "social_publish_history_837953301c7d42759298bb89747993d2",
+    "queue_item_id": "social_queue_item_c32cfa5ded28477daa27bbd141713568",
+    "platform": "telegram",
+    "status": "posted",
+    "message": "Posted to Telegram.",
+    "created_at": "2026-08-13T00:00:15.095842",
+    "metadata": {
+      "caption": "Leaning into the rain-streaked glass, my open shirt slips further to reveal every curve of my topless form \ud83d\ude0c \u2014 claim the complete bundle and hold all three moments \ud83d\udc8e",
+      "caption_source": "GROK",
+      "caption_updated_at": "2026-08-12T23:58:52.392129+00:00",
+      "offering_id": "84a93ae2-20b1-4032-b7d8-f2918181df77",
+      "bundle_source_id": "ecf707ae-c584-5e83-b1d4-3665cd53b933",
+      "paid_asset_ids": [
+        200,
+        201,
+        202
+      ],
+      "paid_image_count": 3,
+      "teaser_asset_id": 206,
+      "price_minor": 1499,
+      "currency": "USD",
+      "fanvue_publication_id": "2b969abd-1464-49ec-8d21-d80fb67fece2",
+      "telegram_destination": "vault",
+      "account_name": null,
+      "telegram_post_to": "vault",
+      "caption_id": null,
+      "provider_post_id": "24",
+      "provider_media_id": null,
+      "provider_output_url": null
+    }
+  },
+  {
+    "history_id": "social_publish_history_3ffe59b86fe84aa2b65b0a2711327ec8",
+    "queue_item_id": "social_queue_item_c32cfa5ded28477daa27bbd141713568",
+    "platform": "telegram",
+    "status": "queued",
+    "message": "Commercial Offering queued for Telegram Content Vault.",
+    "created_at": "2026-08-13T00:00:08.889075",
+    "metadata": {
+      "source_type": "commercial_offering",
+      "commercial_offering_id": "84a93ae2-20b1-4032-b7d8-f2918181df77",
+      "destination": "telegram_content_vault",
+      "title": "Rain Soaked Tease"
+    }
+  },
+  {
+    "history_id": "social_publish_history_04398d5bea2d4901a22ee980962a846f",
+    "queue_item_id": "social_queue_item_6eda3a5549404b18bd1de56f7e7b8ddb",
+    "platform": "x",
+    "status": "posted",
+    "message": "Posted to X.",
+    "created_at": "2026-08-12T15:39:51.492640",
+    "metadata": {
+      "account_name": "AvaBlackthorne",
+      "telegram_post_to": null,
+      "caption_id": "caption_result_026aec7441e940269d18fa245241373a",
+      "provider_post_id": "2087564729220812900",
+      "provider_media_id": "2087564726309916673",
+      "provider_output_url": "https://x.com/AvaBlackthorne/status/2087564729220812900"
+    }
+  },
+  {
+    "history_id": "social_publish_history_b78c387e556b458ba2d342639668cf4f",
+    "queue_item_id": "social_queue_item_6eda3a5549404b18bd1de56f7e7b8ddb",
+    "platform": "x",
+    "status": "caption_attached",
+    "message": "Caption Studio result attached to Social Queue item.",
+    "created_at": "2026-08-12T15:39:50.043033",
+    "metadata": {
+      "caption_id": "caption_result_026aec7441e940269d18fa245241373a"
+    }
+  },
+  {
     "history_id": "social_publish_history_3c4ef7e1db484cacb18be990bc04ee67",
     "queue_item_id": "social_queue_item_4fb54bc8abfd4f24a16c08e4a4f8c54e",
     "platform": "telegram",

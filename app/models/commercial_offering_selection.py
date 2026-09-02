@@ -1,5 +1,5 @@
 """Immutable output from deterministic Commercial Offering selection."""
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from types import MappingProxyType
 from typing import Any, Mapping
@@ -30,6 +30,8 @@ class OfferingExclusionReason(str, Enum):
     SALES_CHANNEL_MISMATCH = "SALES_CHANNEL_MISMATCH"
     OFFERING_ALREADY_ACTIVE = "OFFERING_ALREADY_ACTIVE"
     OFFERING_ALREADY_PURCHASED = "OFFERING_ALREADY_PURCHASED"
+    OFFERING_REJECTED_CURRENT_SEQUENCE = "OFFERING_REJECTED_CURRENT_SEQUENCE"
+    PRICE_NOT_MATERIALLY_LOWER = "PRICE_NOT_MATERIALLY_LOWER"
     DESTINATION_NOT_COMMERCIALLY_AVAILABLE = (
         "DESTINATION_NOT_COMMERCIALLY_AVAILABLE"
     )
@@ -76,6 +78,9 @@ class SelectedOfferingResult:
     currency: str | None = None
     recommendation_result: RecommendationResult | None = None
     photoshoot_experience: PhotoshootExperienceRecommendation | None = None
+    product_context: Mapping[str, Any] = field(
+        default_factory=lambda: MappingProxyType({})
+    )
 
 
 def immutable_selector_metadata(

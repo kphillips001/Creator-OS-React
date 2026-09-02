@@ -31,6 +31,10 @@ class InvalidTelegramIdentityError(TelegramIdentityError):
     """The supplied identity values are invalid or inconsistent."""
 
 
+class UnverifiedTelegramIdentityError(TelegramIdentityError):
+    """The identity link has not been verified for commerce use."""
+
+
 class TelegramIdentityService:
     """Validates and resolves Telegram identities to canonical users."""
 
@@ -49,10 +53,21 @@ class TelegramIdentityService:
             telegram_user_id,
         )
 
-        mapping = self.repository.get_by_telegram_user_id(
-            telegram_user_id,
-            include_inactive=True,
+        verified_reader = getattr(
+            self.repository, "get_verified_by_telegram_user_id", None
         )
+        mapping = (
+            verified_reader(telegram_user_id)
+            if callable(verified_reader)
+            else self.repository.get_by_telegram_user_id(
+                telegram_user_id, include_inactive=True,
+            )
+        )
+
+        if mapping is None and callable(verified_reader):
+            mapping = self.repository.get_by_telegram_user_id(
+                telegram_user_id, include_inactive=True,
+            )
 
         if not mapping:
             raise TelegramIdentityNotFoundError(
@@ -66,6 +81,71 @@ class TelegramIdentityService:
 
         self.validate_mapping(mapping)
         return CanonicalTelegramIdentity.from_mapping(mapping)
+
+    def observe(self, *, telegram_user_id: int, telegram_chat_id: int,
+                username: str | None = None, display_name: str | None = None):
+        self._require_positive_integer("telegram_user_id", telegram_user_id)
+        self._require_nonzero_integer("telegram_chat_id", telegram_chat_id)
+        return self.repository.observe(
+            telegram_user_id=telegram_user_id,
+            telegram_chat_id=telegram_chat_id,
+            username=self._metadata(username), display_name=self._metadata(display_name),
+        )
+
+    def verify_operator_mapping(
+        self, *, telegram_user_id: int, fanvue_account_id: int,
+        local_fanvue_user_id: int, verification_note: str,
+        operator_source: str = "CREATOR_OS_OPERATIONS",
+    ):
+        self._require_positive_integer("telegram_user_id", telegram_user_id)
+        self._require_positive_integer("fanvue_account_id", fanvue_account_id)
+        self._require_positive_integer("local_fanvue_user_id", local_fanvue_user_id)
+        note = str(verification_note or "").strip()
+        if len(note) < 10 or len(note) > 500:
+            raise InvalidTelegramIdentityError(
+                "Verification evidence must be between 10 and 500 characters."
+            )
+        try:
+            return self.repository.create_verified_mapping(
+                telegram_user_id=telegram_user_id,
+                fanvue_account_id=fanvue_account_id,
+                local_fanvue_user_id=local_fanvue_user_id,
+                verification_method="OPERATOR_CONFIRMED_PROVIDER_IDENTITIES",
+                operator_source=operator_source,
+                evidence={"operator_note": note},
+            )
+        except TelegramIdentityConflictError as error:
+            raise DuplicateTelegramIdentityError(str(error)) from error
+        except TelegramIdentityIntegrityError as error:
+            raise InvalidTelegramIdentityError(str(error)) from error
+
+    def readiness(self, *, fanvue_account_id: int):
+        counts, rows = self.repository.readiness(
+            fanvue_account_id=fanvue_account_id
+        )
+        return {
+            "counts": {key: int(value or 0) for key, value in counts.items()},
+            "items": [{
+                "telegramUserIdMasked": self._mask(row["telegram_user_id"]),
+                "telegramUserId": str(row["telegram_user_id"]),
+                "displayName": row.get("display_name") or row.get("username") or "Telegram customer",
+                "status": (
+                    "UNMAPPED" if row.get("mapping_id") is None
+                    else "MAPPED" if row.get("verification_status") == "VERIFIED" and row.get("is_active")
+                    else "CONFLICT" if row.get("verification_status") == "CONFLICT"
+                    else "INCOMPLETE"
+                ),
+                "lastObservedAt": row.get("last_observed_at"),
+            } for row in rows],
+            "fanvueCandidates": [{
+                "localFanvueUserId": int(row["id"]),
+                "displayName": row.get("display_name") or row.get("username") or "Fanvue customer",
+                "fanvueBuyerId": str(row["fanvue_user_uuid"]),
+                "fanvueBuyerIdMasked": self._mask_uuid(row["fanvue_user_uuid"]),
+            } for row in self.repository.list_fanvue_candidates(
+                fanvue_account_id=fanvue_account_id
+            )],
+        }
 
     def create_mapping(
         self,
@@ -294,3 +374,18 @@ class TelegramIdentityService:
             raise InvalidTelegramIdentityError(
                 f"{name} must be a non-zero integer."
             )
+
+    @staticmethod
+    def _metadata(value):
+        text = str(value or "").strip()
+        return text[:200] or None
+
+    @staticmethod
+    def _mask(value):
+        text = str(value)
+        return "***" + text[-4:]
+
+    @staticmethod
+    def _mask_uuid(value):
+        text = str(value)
+        return text[:4] + "…" + text[-4:]

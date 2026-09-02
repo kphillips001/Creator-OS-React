@@ -100,7 +100,7 @@ describe("PhotoshootPage Phase 1", () => {
     expect(screen.getByRole("button", { name: "Direct Shot" })).toBeEnabled();
     expect(screen.getByText("Replacement in progress")).toBeInTheDocument();
   });
-  it("defaults target length to Standard and supports a custom persisted value", () => {
+  it("offers Mini as the new default preset, removes Extended, and supports custom persisted values", () => {
     const onTargetShotCount = vi.fn();
     const props = {
       autoRunning: false, runtime: null, busy: false, directionApproved: false, disabled: false,
@@ -108,8 +108,11 @@ describe("PhotoshootPage Phase 1", () => {
       onPlanningMode: vi.fn(), onResumePlan: vi.fn(), planningMode: "frame_by_frame" as const,
       planFrameCount: 8, sessionPlan: [], sessionPlanApproved: false, sessionPlanIndex: 0,
     };
-    const view = render(<SessionPlanPanel {...props} targetShotCount={10} onTargetShotCount={onTargetShotCount} />);
-    expect(screen.getByLabelText("Target Photoshoot Length")).toHaveValue("10");
+    const view = render(<SessionPlanPanel {...props} targetShotCount={5} onTargetShotCount={onTargetShotCount} />);
+    expect(screen.getByLabelText("Target Photoshoot Length")).toHaveValue("5");
+    expect(screen.getByRole("option", { name: "Mini (5 shots)" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Standard (10 shots)" })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: "Extended (15 shots)" })).not.toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Target Photoshoot Length"), { target: { value: "custom" } });
     fireEvent.change(screen.getByLabelText("Custom shot count"), { target: { value: "27" } });
     expect(onTargetShotCount).toHaveBeenCalledWith(27);
@@ -307,19 +310,37 @@ describe("PhotoshootPage Phase 1", () => {
     expect(screen.getByText("Seated profile")).toBeInTheDocument();
   });
 
-  it("does not offer another Frame-by-Frame shot after the target is reached", async () => {
-    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
+  it("extends a reached Frame-by-Frame target by exactly one and reopens Ask AI and Direct Shot", async () => {
+    let target = 5;
+    const fetch = vi.fn((input: RequestInfo | URL) => {
       const url = String(input);
       if (url.includes("/photoshoot/status")) return response({ request: null, candidate: null });
-      if (url.includes("/creative-director/context")) return response({ session_id: "session-1", creative_mode: "premium", creator_guidance: "", workflow_stage: "ready_for_next_shot", current_prompt: "", current_shot: 5, planning_shot: 6, target_shot_count: 5, remaining_shots: 0, editorial_stage: "Finale", planner_explanation: "Target reached.", planning_mode: "frame_by_frame", recommendation_state: { inspiration_ideas: [], selected_inspiration: "", direction_approved: false, recommendation: null } });
+      if (url.includes("/creative-director/extend")) { target = 6; return response({ target_shot_count: 6, extended: true, current_shot: 5, planning_shot: 6, remaining_shots: 1, editorial_stage: "Finale", workflow_stage: "ready_for_next_shot" }); }
+      if (url.includes("/creative-director/context")) return response({ session_id: "session-1", creative_mode: "premium", creator_guidance: "", workflow_stage: "ready_for_next_shot", current_prompt: "", current_shot: 5, planning_shot: 6, target_shot_count: target, remaining_shots: target - 5, editorial_stage: "Finale", planner_explanation: "Continue naturally.", planning_mode: "frame_by_frame", recommendation_state: { inspiration_ideas: [], selected_inspiration: "", direction_approved: false, recommendation: null } });
       if (url.includes("/creative-director/guidance")) return response({ creator_guidance: "" });
-      return response({ creator_profile_exists: true, pending_photoshoot: seed, provider_list: [{ value: "flux", label: "Flux" }], active_session: { session_id: "session-1", title: "Photoshoot Studio", provider_id: "flux", creative_continuity: {} }, creative_mode: "premium", continuity_settings: { location: true, wardrobe: true, lighting: true, hairstyle: true, makeup: true, camera_style: true }, timeline_summary: [{ request_id: "request-1", sequence_index: 1, shot_number: 1, label: "Shot 1 (Seed)", is_seed: true, image: seed }] });
-    }));
+      return response({ creator_profile_exists: true, pending_photoshoot: seed, provider_list: [{ value: "flux", label: "Flux" }], active_session: { session_id: "session-1", title: "Photoshoot Studio", provider_id: "flux", target_shot_count: target, creative_continuity: {} }, creative_mode: "premium", continuity_settings: { location: true, wardrobe: true, lighting: true, hairstyle: true, makeup: true, camera_style: true }, timeline_summary: [{ request_id: "request-1", sequence_index: 1, shot_number: 1, label: "Shot 1 (Seed)", is_seed: true, image: seed }] });
+    });
+    vi.stubGlobal("fetch", fetch);
     renderPage();
-    expect(await screen.findByText("Target Photoshoot Length Reached")).toBeInTheDocument();
+    const heading = await screen.findByText("Planned 5-shot Photoshoot complete");
+    const card = heading.closest(".photoshoot-target-complete")!;
+    const timeline = screen.getByRole("heading", { name: "Photoshoot Timeline" }).closest(".photoshoot-card")!;
+    expect(timeline.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: "Stop Photoshoot & Return Seed" })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "Extend Photoshoot" })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "Finish Photoshoot" })).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "Stop Photoshoot & Return Seed" })).toHaveClass("photoshoot-button--danger");
+    fireEvent.click(screen.getByRole("button", { name: "Stop Photoshoot & Return Seed" }));
+    expect(screen.getByRole("dialog", { name: "Stop this Photoshoot?" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(screen.queryByRole("button", { name: "Ask AI" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Direct Shot" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Generate Shot" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Extend Photoshoot" }));
+    expect(await screen.findByRole("button", { name: "Ask AI" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Direct Shot" })).toBeEnabled();
+    expect(screen.queryByText("Planned 5-shot Photoshoot complete")).not.toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /Finish Photoshoot/ })).toHaveLength(1);
+    expect(fetch).toHaveBeenCalledWith(expect.stringContaining("/creative-director/extend"), expect.objectContaining({ method: "POST", body: expect.stringContaining('"expected_target_shot_count":5') }));
   });
   it("uses the Photoshoot route in sidebar navigation", () => {
     const item = navigationGroups.flatMap((group) => group.items).find(({ label }) => label === "Photoshoot Studio");
@@ -623,6 +644,57 @@ describe("PhotoshootPage Phase 1", () => {
     expect(fetch.mock.calls.some(([input]) => String(input).endsWith("/creative-director/inspiration"))).toBe(false);
   });
 
+  it("aborts a stale status refresh while an approved shot is durably committed", async () => {
+    const candidate = { ...seed, image_id: "candidate-race", image_url: "/candidate-race.png", status: "photoshoot_session" };
+    let statusCalls = 0;
+    let stalePollAborted = false;
+    const fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes("/photoshoot/status")) {
+        statusCalls += 1;
+        if (statusCalls === 1) return response({
+          request: { request_id: "request-race", status: "awaiting_review" },
+          candidate,
+          continuity_assessment: { status: "pending" },
+        });
+        if (statusCalls === 2) return new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => {
+            stalePollAborted = true;
+            reject(new DOMException("Aborted", "AbortError"));
+          }, { once: true });
+        });
+        return response({ request: null, candidate: null });
+      }
+      if (url.endsWith("/photoshoot/candidate/approve")) return response({ success: true, status: "approved" });
+      if (url.includes("/creative-director/context")) return response({
+        session_id: "session-1", creative_mode: "premium", creator_guidance: "", workflow_stage: "ready_for_next_shot",
+        current_prompt: "", current_shot: 2, planning_shot: 3, target_shot_count: 5, remaining_shots: 3,
+        editorial_stage: "Middle", planner_explanation: "Ready for the next shot.",
+        recommendation_state: { inspiration_ideas: [], selected_inspiration: "", direction_approved: false, recommendation: null },
+      });
+      if (url.includes("/creative-director/guidance")) return response({ creator_guidance: "" });
+      return response({
+        creator_profile_exists: true, pending_photoshoot: seed,
+        provider_list: [{ value: "flux", label: "Flux" }],
+        active_session: { session_id: "session-1", title: "Photoshoot Studio", provider_id: "flux", target_shot_count: 5, creative_continuity: {} },
+        creative_mode: "premium",
+        continuity_settings: { location: true, wardrobe: true, lighting: true, hairstyle: true, makeup: true, camera_style: true },
+        timeline_summary: [{ request_id: "request-1", sequence_index: 1, shot_number: 1, label: "Shot 1 (Seed)", is_seed: true, image: seed }],
+      });
+    });
+    vi.stubGlobal("fetch", fetch);
+    renderPage();
+
+    expect(await screen.findByRole("heading", { name: "Candidate Review" })).toBeInTheDocument();
+    await waitFor(() => expect(statusCalls).toBe(2), { timeout: 2_000 });
+    fireEvent.click(screen.getByRole("button", { name: "Approve Shot" }));
+
+    await waitFor(() => expect(stalePollAborted).toBe(true));
+    expect(await screen.findByText("Ready for Next Shot")).toBeInTheDocument();
+    expect(screen.queryByText("Unable to refresh Photoshoot generation status.")).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Candidate Review" })).not.toBeInTheDocument();
+  });
+
   it.each([
     { source: "AI", ideas: ["Closer portrait", "Window profile"], selected: "Closer portrait", guidance: "" },
     { source: "manual", ideas: [] as string[], selected: "", guidance: "Turn toward the window" },
@@ -839,10 +911,10 @@ describe("PhotoshootPage Phase 1", () => {
     const operation = () => ({
       operationId: "operation-photoshoot", operationType: "photoshoot_generation",
       originatingWorkspace: "photoshoot_studio", subjectType: "photoshoot_session", subjectId: "session-1",
-      status: completed ? "SUCCEEDED" : "RUNNING", progressCurrent: completed ? 1 : 0,
+      status: completed ? "SUCCEEDED" : "WAITING_EXTERNAL", progressCurrent: completed ? 1 : 0,
       progressTotal: 1, progressPercent: completed ? 100 : 42,
-      currentStage: completed ? "COMPLETE" : "GENERATING",
-      stageMessage: completed ? "Ready for review" : "Generating Photoshoot image",
+      currentStage: completed ? "COMPLETE" : "WAITING_PROVIDER",
+      stageMessage: completed ? "Ready for review" : "Waiting on provider / still processing",
       createdAt: "2026-08-06T12:00:00Z", startedAt: "2026-08-06T12:00:01Z",
       completedAt: completed ? "2026-08-06T12:01:00Z" : null,
       resultLocation: "/content/photoshoot", resultReference: "job-2",
@@ -877,7 +949,7 @@ describe("PhotoshootPage Phase 1", () => {
 
     const first = mount();
     await screen.findByRole("heading", { name: "AI Creative Director" });
-    expect(screen.queryByLabelText("Photoshoot Generation Progress")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Photoshoot Generation Progress")).toHaveTextContent("Waiting on provider / still processing");
     first.unmount();
     completed = true;
     mount();

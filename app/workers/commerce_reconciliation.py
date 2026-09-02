@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 
 from app.repositories.webhook_event_repository import recover_stale_claims
 from app.services.purchase_intent_service import PurchaseIntentService
+from app.services.commerce_signal_service import CommerceSignalService
 from app.services.webhook_event_processor_service import (
     WebhookEventProcessorService,
 )
@@ -22,10 +23,11 @@ logger = logging.getLogger("commerce-reconciliation-worker")
 class CommerceReconciliationWorker:
     def __init__(
         self, *, processor=None, intent_service=None, heartbeat=None,
-        interval_seconds: int = 30,
+        reconciliation_service=None, interval_seconds: int = 30,
     ):
         self.processor = processor or WebhookEventProcessorService()
         self.intents = intent_service or PurchaseIntentService()
+        self.reconciliations = reconciliation_service or CommerceSignalService()
         self.heartbeat = heartbeat or WorkerHeartbeatService(
             worker_name="Commerce Reconciliation",
             worker_type="commerce_reconciliation",
@@ -39,6 +41,7 @@ class CommerceReconciliationWorker:
     def run_once(self):
         recovered = recover_stale_claims(limit=100)
         results = self.processor.process_pending_events()
+        reconciliation_results = self.reconciliations.retry_pending(limit=25)
         expired = self.intents.expire_due()
         self.last_success = datetime.now(timezone.utc)
         self.last_failure = None
@@ -58,6 +61,16 @@ class CommerceReconciliationWorker:
             "last_success": self.last_success.isoformat(),
             "last_failure": None,
             "recovered_count": len(recovered),
+            "webhook_result_count": len(results),
+            "reconciliation_result_count": len(reconciliation_results),
+            "last_successful_claim": (
+                self.last_success.isoformat() if results or reconciliation_results else None
+            ),
+            "last_successful_reconciliation": (
+                self.last_success.isoformat()
+                if any(item.get("success") for item in reconciliation_results
+                       if isinstance(item, dict)) else None
+            ),
             "expired_intent_count": len(expired),
         }
         logger.info("event=commerce_reconciliation_completed diagnostics=%s",
@@ -70,9 +83,24 @@ class CommerceReconciliationWorker:
         try:
             while not stop_event.is_set():
                 try:
-                    self.run_once()
+                    record_heartbeat_safely(
+                        logger, "poll", self.heartbeat.record_poll
+                    )
+                    diagnostics = self.run_once()
                     record_heartbeat_safely(
                         logger, "success", self.heartbeat.record_success
+                    )
+                    record_heartbeat_safely(
+                        logger, "diagnostics",
+                        lambda: self.heartbeat.heartbeat(
+                            idle=not bool(
+                                diagnostics.get("webhook_result_count")
+                                or diagnostics.get("reconciliation_result_count")
+                            ), metadata={**diagnostics,
+                                "last_loop_at": diagnostics.get("last_success"),
+                                "database_healthy": True,
+                                "lifecycle_state": "RUNNING"},
+                        ),
                     )
                 except Exception as error:
                     self.retry_count += 1
@@ -84,7 +112,10 @@ class CommerceReconciliationWorker:
                     )
                     record_heartbeat_safely(
                         logger, "failure",
-                        lambda: self.heartbeat.record_failure(error),
+                        lambda: self.heartbeat.record_failure(error, metadata={
+                            "database_healthy": False,
+                            "lifecycle_state": "DEGRADED",
+                        }),
                     )
                 stop_event.wait(self.interval_seconds)
         finally:
@@ -100,7 +131,7 @@ def _install_shutdown_handlers(stop_event):
     def request_shutdown(_signum, _frame):
         stop_event.set()
 
-    for signal_name in ("SIGINT", "SIGTERM"):
+    for signal_name in ("SIGINT", "SIGTERM", "SIGBREAK"):
         shutdown_signal = getattr(signal, signal_name, None)
         if shutdown_signal is not None:
             signal.signal(shutdown_signal, request_shutdown)

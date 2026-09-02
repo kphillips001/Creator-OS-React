@@ -65,6 +65,7 @@ def test_no_standalone_naming_pipeline_is_referenced():
 
 def test_repository_upsert_is_one_record_per_photoshoot():
     source = inspect.getsource(PhotoshootCommerceRepository.persist_canonical_intelligence)
+    source += inspect.getsource(PhotoshootCommerceRepository._persist_canonical_intelligence)
     assert "photoshoot_shot_intelligence_profiles" in source
     assert "ON CONFLICT (photoshoot_session_id,asset_id,intelligence_version) DO UPDATE" in source
 

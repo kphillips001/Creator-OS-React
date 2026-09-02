@@ -21,13 +21,14 @@ const jsonResponse = (value: unknown, status = 200) => Promise.resolve({
 } as Response);
 
 describe("PublishDialog", () => {
-  it("shows only X and Telegram Broadcast marketing destinations", async () => {
+  it("shows X, Telegram Broadcast, and Instagram handoff destinations", async () => {
     const fetch = vi.spyOn(globalThis, "fetch").mockImplementation(() => jsonResponse({
       success: true, generatedImageId: "generated-1", defaultDestination: "x",
       destinations: [
         { value: "x", label: "X", available: true },
         { value: "telegram_wall", label: "Telegram Broadcast", available: true },
         { value: "telegram_chat", label: "Telegram Chat", available: true },
+        { value: "instagram", label: "Instagram", available: true },
       ],
       xAccounts: [
         { accountName: "AvaBlackthorne", label: "@avablackthorne" },
@@ -38,8 +39,10 @@ describe("PublishDialog", () => {
 
     expect(await screen.findByLabelText("X")).toBeChecked();
     expect(screen.getByLabelText("@avablackthorne")).toBeChecked();
-    expect(screen.getByLabelText("@avablackthorneX")).not.toBeChecked();
+    expect(screen.queryByLabelText("@avablackthorneX")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Enable X-AUTO replies")).toBeChecked();
     expect(screen.getByLabelText("Telegram Broadcast")).toBeInTheDocument();
+    expect(screen.getByLabelText("Instagram")).toBeInTheDocument();
     expect(screen.queryByText("Telegram Chat")).not.toBeInTheDocument();
     expect(screen.queryByText("Fanvue")).not.toBeInTheDocument();
     const selectedImage = within(screen.getByLabelText("Selected image preview")).getByRole("img");
@@ -50,6 +53,44 @@ describe("PublishDialog", () => {
     expect(within(captionPreview as HTMLElement).getByText("Manual caption")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Publish to X" })).toBeEnabled();
     expect(fetch).toHaveBeenCalledTimes(1);
+    fetch.mockRestore();
+  });
+
+  it("hands the exact image and caption to Instagram without Telegram controls", async () => {
+    const fetch = vi.spyOn(globalThis, "fetch");
+    fetch.mockImplementationOnce(() => jsonResponse({
+      success: true, generatedImageId: "generated-1", defaultDestination: "x",
+      destinations: [
+        { value: "x", label: "X", available: true },
+        { value: "telegram_wall", label: "Telegram Broadcast", available: true },
+        { value: "instagram", label: "Instagram", available: true },
+      ],
+      xAccounts: [{ accountName: "AvaBlackthorne", label: "@avablackthorne" }],
+    }));
+    fetch.mockImplementationOnce(() => jsonResponse({
+      success: true, state: "HANDOFF_READY",
+      message: "Sent to phone — finish your post in Instagram.",
+      generatedImageId: "generated-1",
+    }));
+    const onPublished = vi.fn();
+    render(<PublishDialog record={record} onClose={vi.fn()} onPublished={onPublished} />);
+
+    fireEvent.click(await screen.findByLabelText("Instagram"));
+    expect(screen.queryByLabelText("Include CTA buttons")).not.toBeInTheDocument();
+    const editor = screen.getByLabelText("Enter Your Own Caption");
+    expect(editor).toHaveAttribute("placeholder", "Type or paste your own Instagram caption here.");
+    fireEvent.change(editor, { target: { value: "Instagram caption" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send to Instagram" }));
+
+    await waitFor(() => expect(onPublished).toHaveBeenCalledWith(
+      "Sent to phone — finish your post in Instagram.",
+    ));
+    expect(String(fetch.mock.calls[1]![0])).toContain(
+      "/generation-library/generated-1/publish/instagram/handoff",
+    );
+    expect(JSON.parse(String((fetch.mock.calls[1]![1] as RequestInit).body))).toEqual({
+      caption: "Instagram caption",
+    });
     fetch.mockRestore();
   });
 
@@ -88,7 +129,45 @@ describe("PublishDialog", () => {
     fetch.mockRestore();
   });
 
-  it("publishes either or both X accounts with shared or separate captions", async () => {
+  it("publishes all semantic CTAs in canonical order regardless of click order", async () => {
+    const fetch = vi.spyOn(globalThis, "fetch");
+    fetch.mockImplementationOnce(() => jsonResponse({
+      success: true, generatedImageId: "generated-1", defaultDestination: "telegram_wall",
+      destinations: [{ value: "telegram_wall", label: "Telegram Broadcast", available: true }],
+    }));
+    fetch.mockImplementationOnce(() => jsonResponse({ success: true, message: "Published to Telegram." }));
+    render(<PublishDialog record={record} onClose={vi.fn()} onPublished={vi.fn()} />);
+
+    fireEvent.change(await screen.findByLabelText("Enter Your Own Caption"), { target: { value: "Caption" } });
+    expect(screen.queryByRole("button", { name: "🔒 Vault" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("Include CTA buttons"));
+    const vault = screen.getByRole("button", { name: "🔒 Vault" });
+    const chat = screen.getByRole("button", { name: "💬 Chat" });
+    const tip = screen.getByRole("button", { name: "❤️ Tip" });
+    expect(vault).toHaveAttribute("aria-pressed", "false");
+    expect(chat).toHaveAttribute("aria-pressed", "false");
+    expect(tip).toHaveAttribute("aria-pressed", "false");
+    expect(chat).toBeEnabled();
+    expect(tip).toBeEnabled();
+    expect(screen.queryByText("Button Text")).not.toBeInTheDocument();
+    expect(screen.queryByText("Button URL")).not.toBeInTheDocument();
+    fireEvent.click(tip);
+    fireEvent.click(chat);
+    fireEvent.click(vault);
+    expect(vault).toHaveAttribute("aria-pressed", "true");
+    expect(chat).toHaveAttribute("aria-pressed", "true");
+    expect(tip).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(screen.getByRole("button", { name: "Publish to Telegram Broadcast" }));
+
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+    const payload = JSON.parse(String((fetch.mock.calls[1]![1] as RequestInit).body));
+    expect(payload).toMatchObject({ ctaEnabled: true, selectedCtas: ["VAULT", "CHAT", "TIP"] });
+    expect(payload).not.toHaveProperty("ctaLabel");
+    expect(payload).not.toHaveProperty("ctaUrl");
+    fetch.mockRestore();
+  });
+
+  it("publishes the visible X account with explicit per-post X-AUTO policy", async () => {
     const fetch = vi.spyOn(globalThis, "fetch");
     fetch.mockImplementationOnce(() => jsonResponse({
       success: true, generatedImageId: "generated-1", defaultDestination: "x",
@@ -101,43 +180,19 @@ describe("PublishDialog", () => {
         { accountName: "AvaBlackthorneX", label: "@avablackthorneX" },
       ],
     }));
-    fetch.mockImplementation(() => jsonResponse({ success: true, message: "Published to 2 X account(s)." }));
+    fetch.mockImplementation(() => jsonResponse({ success: true, message: "Published to 1 X account(s)." }));
     render(<PublishDialog record={record} onClose={vi.fn()} onPublished={vi.fn()} />);
 
-    fireEvent.click(await screen.findByLabelText("@avablackthorneX"));
-    expect(screen.getByLabelText("Use same caption for both accounts")).toBeChecked();
+    expect(await screen.findByLabelText("@avablackthorne")).toBeChecked();
+    expect(screen.queryByLabelText("@avablackthorneX")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("Enable X-AUTO replies"));
     fireEvent.change(screen.getByLabelText("Enter Your Own Caption"), { target: { value: "Shared caption" } });
     fireEvent.click(screen.getByRole("button", { name: "Publish to X" }));
     await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
-    expect(JSON.parse(String((fetch.mock.calls[1]![1] as RequestInit).body)).xTargets).toEqual([
+    const payload = JSON.parse(String((fetch.mock.calls[1]![1] as RequestInit).body));
+    expect(payload.xAutoRepliesEnabled).toBe(false);
+    expect(payload.xTargets).toEqual([
       expect.objectContaining({ accountName: "AvaBlackthorne", caption: "Shared caption" }),
-      expect.objectContaining({ accountName: "AvaBlackthorneX", caption: "Shared caption" }),
-    ]);
-    fetch.mockRestore();
-  });
-
-  it("supports separate captions for both X accounts", async () => {
-    const fetch = vi.spyOn(globalThis, "fetch");
-    fetch.mockImplementationOnce(() => jsonResponse({
-      success: true, generatedImageId: "generated-1", defaultDestination: "x",
-      destinations: [{ value: "x", label: "X", available: true }],
-      xAccounts: [
-        { accountName: "AvaBlackthorne", label: "@avablackthorne" },
-        { accountName: "AvaBlackthorneX", label: "@avablackthorneX" },
-      ],
-    }));
-    fetch.mockImplementation(() => jsonResponse({ success: true, message: "Published to 2 X account(s)." }));
-    render(<PublishDialog record={record} onClose={vi.fn()} onPublished={vi.fn()} />);
-
-    fireEvent.click(await screen.findByLabelText("@avablackthorneX"));
-    fireEvent.click(screen.getByLabelText("Use same caption for both accounts"));
-    fireEvent.change(screen.getByLabelText("Caption for @avablackthorne"), { target: { value: "Main caption" } });
-    fireEvent.change(screen.getByLabelText("Caption for @avablackthorneX"), { target: { value: "Second caption" } });
-    fireEvent.click(screen.getByRole("button", { name: "Publish to X" }));
-    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
-    expect(JSON.parse(String((fetch.mock.calls[1]![1] as RequestInit).body)).xTargets).toEqual([
-      expect.objectContaining({ accountName: "AvaBlackthorne", caption: "Main caption" }),
-      expect.objectContaining({ accountName: "AvaBlackthorneX", caption: "Second caption" }),
     ]);
     fetch.mockRestore();
   });

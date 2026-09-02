@@ -18,7 +18,7 @@ const state = {
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 const context = (painted = true) => ({
-  clearRect: vi.fn(), drawImage: vi.fn(), beginPath: vi.fn(), arc: vi.fn(),
+  clearRect: vi.fn(), fillRect: vi.fn(), drawImage: vi.fn(), beginPath: vi.fn(), arc: vi.fn(),
   ellipse: vi.fn(), fill: vi.fn(),
   getImageData: vi.fn(() => ({ data: new Uint8ClampedArray([0, 0, 0, painted ? 255 : 0]) })),
   globalCompositeOperation: "source-over", fillStyle: "#fff",
@@ -39,15 +39,68 @@ describe("Bundle promotional teaser", () => {
     fireEvent.click(screen.getByRole("button", { name: "Select Shot 2 as teaser source" }));
     fireEvent.click(screen.getByRole("button", { name: "Create Teaser" }));
     expect(screen.getByRole("dialog", { name: "Selective Blur Editor" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Blur Brush" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Ellipse Blur" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Eraser / Restore" })).toBeInTheDocument();
+    expect(screen.getByRole("toolbar", { name: "Mask tools" }).querySelectorAll("button"))
+      .toHaveLength(4);
+    expect(Array.from(screen.getByRole("toolbar", { name: "Mask tools" }).querySelectorAll("button"))
+      .map((button) => button.textContent)).toEqual([
+        "Full Blur", "Ellipse Blur", "Blur Brush", "Eraser / Restore",
+      ]);
     fireEvent.change(screen.getByLabelText("Brush Size"), { target: { value: "70" } });
     fireEvent.change(screen.getByLabelText("Blur Strength"), { target: { value: "35" } });
     expect(screen.getByLabelText("Brush Size")).toHaveValue("70");
     expect(screen.getByLabelText("Blur Strength")).toHaveValue("35");
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("uses one mask for Full Blur, Restore, Brush, Ellipse, and Reset without saving", () => {
+    const mask = context();
+    const composites: string[] = [];
+    Object.defineProperty(mask, "globalCompositeOperation", {
+      configurable: true, get: () => composites.at(-1) || "source-over",
+      set: (value: string) => composites.push(value),
+    });
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(mask as unknown as CanvasRenderingContext2D);
+    const fetch = vi.spyOn(globalThis, "fetch");
+    render(<BundlePromotionalTeaser deliverableId="set-1" initial={state} />);
+    fireEvent.click(screen.getByRole("button", { name: "Create Teaser" }));
+    const original = screen.getByAltText("Shot 1 working preview");
+    Object.defineProperty(original, "naturalWidth", { value: 100 });
+    Object.defineProperty(original, "naturalHeight", { value: 80 });
+    fireEvent.load(original);
+    const canvas = screen.getByLabelText("Selective blur mask");
+    Object.defineProperty(canvas, "width", { value: 100, writable: true });
+    Object.defineProperty(canvas, "height", { value: 80, writable: true });
+    vi.spyOn(canvas, "getBoundingClientRect").mockReturnValue(
+      { left: 0, top: 0, width: 100, height: 80 } as DOMRect,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Full Blur" }));
+    expect(mask.fillRect).toHaveBeenCalledWith(0, 0, 100, 80);
+    expect(screen.getByLabelText("Blur Strength")).toHaveValue("40");
+    expect(fetch).not.toHaveBeenCalled();
+    const canonical = document.querySelector<HTMLImageElement>('img[src*="full-blur-preview"]')!;
+    expect(canonical).toHaveAttribute("src",
+      "/api/v1/assets/photoshoots/set-1/bundle-teaser/full-blur-preview?sourceAssetId=1");
+    Object.defineProperty(canonical, "complete", { value: true });
+    Object.defineProperty(canonical, "naturalWidth", { value: 864 });
+    fireEvent.load(canonical);
+    expect(mask.drawImage).toHaveBeenCalledWith(canonical, 0, 0, 100, 80);
+
+    fireEvent.click(screen.getByRole("button", { name: "Eraser / Restore" }));
+    pointer(canvas, "pointerdown", 20, 20);
+    expect(composites).toContain("destination-out");
+    fireEvent.click(screen.getByRole("button", { name: "Blur Brush" }));
+    pointer(canvas, "pointerdown", 20, 20, 2);
+    expect(composites.at(-1)).toBe("source-over");
+    fireEvent.click(screen.getByRole("button", { name: "Ellipse Blur" }));
+    pointer(canvas, "pointerdown", 30, 20, 3); pointer(canvas, "pointerup", 70, 60, 3);
+    expect(screen.getByLabelText("Ellipse selection").querySelector("ellipse")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Reset" }));
+    expect(mask.clearRect).toHaveBeenLastCalledWith(0, 0, 100, 80);
+    expect(screen.getByLabelText("Ellipse selection").querySelector("ellipse")).not.toBeInTheDocument();
+    expect(fetch).not.toHaveBeenCalled();
+    expect(document.querySelector('img[src*="full-blur-preview"]')).not.toBeInTheDocument();
   });
 
   it("selects Ellipse Blur with the existing active treatment and hides only Brush Size", () => {
@@ -173,7 +226,7 @@ describe("Bundle promotional teaser", () => {
     vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(mask as unknown as CanvasRenderingContext2D);
     render(<BundlePromotionalTeaser deliverableId="set-1" initial={state} />);
     fireEvent.click(screen.getByRole("button", { name: "Create Teaser" }));
-    const original = screen.getByAltText("Shot 1 original");
+    const original = screen.getByAltText("Shot 1 working preview");
     Object.defineProperty(original, "naturalWidth", { value: 200 });
     Object.defineProperty(original, "naturalHeight", { value: 100 });
     fireEvent.load(original);
@@ -232,7 +285,7 @@ describe("Bundle promotional teaser", () => {
     vi.stubGlobal("Image", MaskImage);
     render(<BundlePromotionalTeaser deliverableId="set-1" initial={{ ...state, sourceAssetId: 1, teaserAssetId: 9, maskUrl: "/mask" }} />);
     fireEvent.click(screen.getByRole("button", { name: "Edit Teaser" }));
-    const original = screen.getByAltText("Shot 1 original");
+    const original = screen.getByAltText("Shot 1 working preview");
     Object.defineProperty(original, "naturalWidth", { value: 200 });
     Object.defineProperty(original, "naturalHeight", { value: 100 });
     fireEvent.load(original);

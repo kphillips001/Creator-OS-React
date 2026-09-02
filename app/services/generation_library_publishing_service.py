@@ -7,13 +7,15 @@ from typing import Any, Mapping
 from app.services.caption_studio_service import CaptionStudioService
 from app.services.generation_library_service import GenerationLibraryService
 from app.services.social_publishing_service import SocialPublishingService
+from app.providers.social.telegram_provider import TelegramPublishingProvider
 
 
 DESTINATION_TARGETS = {
     "x": ("x", None),
     "telegram_wall": ("telegram", "main"),
-    "telegram_chat": ("telegram", "vault"),
+    "instagram": ("instagram", None),
 }
+SEMANTIC_CTA_ORDER = ("VAULT", "CHAT", "TIP")
 
 
 class GenerationLibraryPublishingService:
@@ -35,9 +37,10 @@ class GenerationLibraryPublishingService:
         try:
             return DESTINATION_TARGETS[str(destination or "").strip()]
         except KeyError as exc:
-            raise ValueError("Destination must be X or Telegram Broadcast.") from exc
+            raise ValueError("Destination must be X, Telegram Broadcast, or Instagram.") from exc
 
     def context(self, generated_image_id: str) -> dict[str, Any]:
+        self.social_publishing.reconcile_x_auto_callbacks()
         record = self.generation_library.get(generated_image_id)
         image_reference = self.generation_library.resolve_publishable_image_reference(record.image_id)
         if not image_reference:
@@ -51,6 +54,7 @@ class GenerationLibraryPublishingService:
             "destinations": (
                 {"value": "x", "label": "X", "available": True},
                 {"value": "telegram_wall", "label": "Telegram Broadcast", "available": True},
+                {"value": "instagram", "label": "Instagram", "available": True},
             ),
             "xAccounts": tuple(
                 {
@@ -89,11 +93,12 @@ class GenerationLibraryPublishingService:
             "generation_metadata": dict(record.generation_metadata or {}),
             "idea_seed": max(0, int(idea_seed)),
         }
-        result = (
-            self.caption_studio.generate_x_engagement_themes(**arguments)
-            if platform == "x"
-            else self.caption_studio.generate_telegram_vision_themes(**arguments)
-        )
+        if platform == "x":
+            result = self.caption_studio.generate_x_engagement_themes(**arguments)
+        elif platform == "instagram":
+            result = self.caption_studio.generate_instagram_vision_themes(**arguments)
+        else:
+            result = self.caption_studio.generate_telegram_vision_themes(**arguments)
         themes = tuple(
             {
                 "theme": str(theme.get("theme") or "Captions"),
@@ -117,17 +122,62 @@ class GenerationLibraryPublishingService:
         cta_enabled: bool = False,
         cta_label: str = "",
         cta_url: str = "",
+        selected_ctas: tuple[str, ...] | None = None,
         x_targets: tuple[Mapping[str, Any], ...] | None = None,
+        x_auto_replies_enabled: bool = True,
     ) -> dict[str, Any]:
         platform, telegram_post_to = self.validate_destination(destination)
+        if platform == "instagram":
+            raise ValueError("Instagram uses the phone handoff endpoint.")
         if platform == "x" and x_targets is not None:
             return self._publish_x_targets(
                 generated_image_id=generated_image_id,
                 targets=x_targets,
+                x_auto_replies_enabled=x_auto_replies_enabled,
             )
         selected_caption = str(caption or "").strip()
         if not selected_caption:
             raise ValueError("Caption is required before publishing.")
+
+        semantic_ctas: tuple[str, ...] | None = None
+        semantic_buttons: tuple[Mapping[str, Any], ...] | None = None
+        if platform == "telegram" and selected_ctas is not None:
+            requested_ctas = tuple(dict.fromkeys(
+                str(value or "").strip().upper() for value in selected_ctas
+                if str(value or "").strip()
+            ))
+            unknown = tuple(value for value in requested_ctas if value not in SEMANTIC_CTA_ORDER)
+            if unknown:
+                raise ValueError(f"Unknown Telegram CTA: {', '.join(unknown)}")
+            semantic_ctas = tuple(value for value in SEMANTIC_CTA_ORDER if value in requested_ctas)
+            if cta_enabled and semantic_ctas:
+                config = TelegramPublishingProvider.load_telegram_env()
+                destinations = {
+                    "VAULT": ("🔒 Vault", str(config.get("content_vault_url") or "").strip()),
+                    "CHAT": ("💬 Chat", str(config.get("chat_url") or "").strip()),
+                    "TIP": ("❤️ Tip", str(config.get("cashapp_tip_url") or "").strip()),
+                }
+                semantic_buttons = tuple(
+                    {"identity": identity, "url": destinations[identity][1]}
+                    for identity in semantic_ctas
+                )
+                for button in semantic_buttons:
+                    if not button["url"]:
+                        name = {
+                            "VAULT": "Ava's Content Vault Telegram URL",
+                            "CHAT": "Telegram Chat URL",
+                            "TIP": "Cash App Tip URL",
+                        }[str(button["identity"])]
+                        raise ValueError(f"{name} is not configured.")
+                    if not TelegramPublishingProvider.valid_cta_url(str(button["url"])):
+                        raise ValueError(f"Configured {button['identity']} CTA URL is invalid.")
+                cta_label, cta_url = destinations[semantic_ctas[0]]
+                cta_enabled = True
+            else:
+                cta_enabled = False
+                cta_label = ""
+                cta_url = ""
+                semantic_buttons = ()
 
         record = self.generation_library.get(generated_image_id)
         if not self.generation_library.resolve_publishable_image_reference(record.image_id):
@@ -155,8 +205,7 @@ class GenerationLibraryPublishingService:
         if caption_id:
             self.social_publishing.assign_caption(item.queue_item_id, caption_id=caption_id)
 
-        updated = self.social_publishing.publish_now(
-            item.queue_item_id,
+        publish_arguments = dict(
             caption_text=selected_caption,
             account_name="AvaBlackthorne" if platform == "x" else None,
             caption_id=caption_id,
@@ -164,7 +213,20 @@ class GenerationLibraryPublishingService:
             telegram_cta_enabled=bool(cta_enabled),
             telegram_cta_label=str(cta_label or ""),
             telegram_cta_url=str(cta_url or ""),
+            audit_metadata=(
+                {
+                    "x_auto_replies_enabled": bool(x_auto_replies_enabled),
+                    "x_auto_callback_status": "pending",
+                }
+                if platform == "x"
+                else {"selected_ctas": list(semantic_ctas or ())}
+                if semantic_ctas is not None
+                else None
+            ),
         )
+        if semantic_buttons is not None:
+            publish_arguments["telegram_cta_buttons"] = semantic_buttons
+        updated = self.social_publishing.publish_now(item.queue_item_id, **publish_arguments)
         if updated.status != "posted":
             latest_history = next(iter(self.social_publishing.list_history()), None)
             message = (
@@ -199,14 +261,17 @@ class GenerationLibraryPublishingService:
                     "cta_enabled": bool(cta_enabled),
                     "cta_label": str(cta_label or ""),
                     "cta_url": str(cta_url or ""),
+                    "selected_ctas": list(semantic_ctas or ()),
                 }
             )
-        self.generation_library.mark_published(
+        archive_result = self.generation_library.mark_published(
             record.image_id,
             platform=platform,
             caption=selected_caption,
             metadata=metadata,
         )
+        if not archive_result.success:
+            raise RuntimeError(archive_result.message)
         return {
             "message": f"Published to {'X' if platform == 'x' else 'Telegram'}.",
             "queueItemId": item.queue_item_id,
@@ -217,6 +282,7 @@ class GenerationLibraryPublishingService:
         *,
         generated_image_id: str,
         targets: tuple[Mapping[str, Any], ...],
+        x_auto_replies_enabled: bool = True,
     ) -> dict[str, Any]:
         available_accounts = set(self.social_publishing.x_account_options())
         if not targets:
@@ -270,6 +336,10 @@ class GenerationLibraryPublishingService:
                 telegram_cta_enabled=False,
                 telegram_cta_label="",
                 telegram_cta_url="",
+                audit_metadata={
+                    "x_auto_replies_enabled": bool(x_auto_replies_enabled),
+                    "x_auto_callback_status": "pending",
+                },
             )
             if updated.status == "posted":
                 successful.append((account_name, selected_caption, caption_id, selected_generated))
@@ -306,12 +376,14 @@ class GenerationLibraryPublishingService:
                 for account_name, selected_caption, _caption_id, _selected in successful
             },
         }
-        self.generation_library.mark_published(
+        archive_result = self.generation_library.mark_published(
             record.image_id,
             platform="x",
             caption=successful[0][1],
             metadata=archive_metadata,
         )
+        if not archive_result.success:
+            raise RuntimeError(archive_result.message)
         failed_count = sum(result["status"] == "failed" for result in results)
         message = (
             f"Published to {len(successful)} X account(s); {failed_count} failed."

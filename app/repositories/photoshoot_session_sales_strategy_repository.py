@@ -29,6 +29,19 @@ class PhotoshootSessionSalesStrategyRepository:
             (photoshoot_session_id,),
         )
 
+    def completed_session_teaser_asset_id(self, deliverable_id):
+        with self.connection_factory() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """SELECT teaser_asset_id
+                       FROM public.photoshoot_session_teaser_edit_intents
+                       WHERE deliverable_id=%s AND status='COMPLETED'
+                       ORDER BY completed_at DESC LIMIT 1""",
+                    (deliverable_id,),
+                )
+                row = cursor.fetchone()
+        return int(row["teaser_asset_id"]) if row and row.get("teaser_asset_id") else None
+
     def save(self, *, photoshoot_session_id: str, deliverable_id, creator_profile_id: int,
              strategy_version: str, intelligence_version: str, strategy_data: dict,
              model: str, generated_at):

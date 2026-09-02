@@ -154,6 +154,8 @@ class GrokCaptionService:
         )
 
     _MAX_GENERATE_ATTEMPTS = 3
+    _MAX_BUNDLE_SLOT_REPAIR_ATTEMPTS = 2
+    _BUNDLE_STYLES = ("SHORT", "TEASING", "INVITATION", "DIRECT", "SALES_HOOK")
 
     def generate(
         self,
@@ -190,6 +192,17 @@ class GrokCaptionService:
             + "persisted 3-source intelligence below.\n"
             + json.dumps(normalized, ensure_ascii=False)
         )
+        if bundle:
+            paid_image_count = int(normalized["paid_image_count"])
+            base_user_content += (
+                f"\n\nThis purchase contains exactly {paid_image_count} photos. "
+                "Every one of the five captions must independently and naturally make "
+                "the multi-image purchase unmistakable using accurate wording such as "
+                f"'{paid_image_count} photos', '{paid_image_count}-photo set', "
+                f"'all {paid_image_count} photos', 'full set', or 'Photoshoot Bundle'.\n"
+                "Write the five options in this exact style order while keeping each "
+                "option independently valid: SHORT, TEASING, INVITATION, DIRECT, SALES HOOK."
+            )
         if operator_guidance:
             base_user_content += (
                 "\n\nOperator guidance (priority creative direction about what is "
@@ -197,6 +210,15 @@ class GrokCaptionService:
                 "intelligence is softer; match this act under the selected tone):\n"
                 + operator_guidance
             )
+        if bundle:
+            return self._generate_bundle_options(
+                system_prompt=system_prompt,
+                user_content=base_user_content,
+                profile=selected_profile,
+                tone=selected_tone,
+                paid_image_count=int(normalized["paid_image_count"]),
+            )
+
         last_error: Exception | None = None
         for attempt in range(1, self._MAX_GENERATE_ATTEMPTS + 1):
             user_content = base_user_content
@@ -234,6 +256,97 @@ class GrokCaptionService:
                 continue
         raise ValueError(str(last_error) if last_error else "Grok could not generate captions.")
 
+    def _generate_bundle_options(self, *, system_prompt: str, user_content: str,
+                                 profile: CaptionProfile, tone: CaptionTone,
+                                 paid_image_count: int) -> dict:
+        completion = self.client.chat.completions.create(
+            model=self.model,
+            messages=[{"role": "system", "content": system_prompt},
+                      {"role": "user", "content": user_content}],
+            temperature=1.0, max_tokens=700,
+            response_format={"type": "json_object"},
+        )
+        raw = parse_llm_json(
+            completion.choices[0].message.content,
+            model_name=self.model, caller="GrokCaptionService.generate",
+        )
+        values = raw.get("captions") if isinstance(raw, Mapping) else None
+        if not isinstance(values, list) or len(values) != 5:
+            raise ValueError("Grok must return exactly five caption options.")
+
+        captions: list[dict[str, str] | None] = [None] * 5
+        failures: list[tuple[int, Any, str]] = []
+        fingerprints: set[str] = set()
+        for index, value in enumerate(values):
+            try:
+                candidate = self._validate_candidate(
+                    value, require_woven_emojis=True,
+                    paid_image_count=paid_image_count,
+                )
+                fingerprint = re.sub(r"\W+", "", candidate["text"]).lower()
+                if fingerprint in fingerprints:
+                    raise ValueError("Grok captions must be distinct.")
+                fingerprints.add(fingerprint)
+                captions[index] = {**candidate, "style": self._BUNDLE_STYLES[index]}
+            except ValueError as error:
+                failures.append((index, value, str(error)))
+
+        for index, failed_value, failure in failures:
+            style = self._BUNDLE_STYLES[index]
+            replacement = None
+            last_error = failure
+            for repair_attempt in range(1, self._MAX_BUNDLE_SLOT_REPAIR_ATTEMPTS + 1):
+                repair_prompt = (
+                    f"Repair ONLY caption slot {index + 1} ({style}).\n"
+                    f"The purchase contains exactly {paid_image_count} photos.\n"
+                    f"Failed candidate: {json.dumps(failed_value, ensure_ascii=False)}\n"
+                    f"Exact validation failure: {last_error}\n"
+                    "Return one natural replacement that independently makes the complete "
+                    "multi-image purchase unmistakable and preserves this slot's style. "
+                    "Do not return the other four captions. Return strict JSON only: "
+                    '{"captions":[{"text":"..."}]}'
+                )
+                completion = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=[{"role": "system", "content": system_prompt},
+                              {"role": "user", "content": repair_prompt}],
+                    temperature=1.0, max_tokens=220,
+                    response_format={"type": "json_object"},
+                )
+                repaired = parse_llm_json(
+                    completion.choices[0].message.content,
+                    model_name=self.model, caller="GrokCaptionService.repair_bundle_slot",
+                )
+                repaired_values = repaired.get("captions") if isinstance(repaired, Mapping) else None
+                try:
+                    if not isinstance(repaired_values, list) or len(repaired_values) != 1:
+                        raise ValueError("Grok must return exactly one repaired caption.")
+                    candidate = self._validate_candidate(
+                        repaired_values[0],
+                        require_woven_emojis=repair_attempt < self._MAX_BUNDLE_SLOT_REPAIR_ATTEMPTS,
+                        paid_image_count=paid_image_count,
+                    )
+                    fingerprint = re.sub(r"\W+", "", candidate["text"]).lower()
+                    if fingerprint in fingerprints:
+                        raise ValueError("Grok captions must be distinct.")
+                    fingerprints.add(fingerprint)
+                    replacement = {**candidate, "style": style}
+                    break
+                except ValueError as error:
+                    last_error = str(error)
+            if replacement is None:
+                raise ValueError(last_error)
+            captions[index] = replacement
+
+        final = [caption for caption in captions if caption is not None]
+        if len(final) != 5:
+            raise ValueError("Grok must return exactly five valid Bundle captions.")
+        self._validate_options(
+            {"captions": final}, require_woven_emojis=False,
+            paid_image_count=paid_image_count,
+        )
+        return {"profile": profile.value, "tone": tone.value, "captions": final}
+
     # Emoji sequences including common ZWJ / variation-selector forms.
     _EMOJI_RE = re.compile(
         "(?:"
@@ -264,25 +377,35 @@ class GrokCaptionService:
         options: list[dict[str, str]] = []
         fingerprints: set[str] = set()
         for value in values:
-            if isinstance(value, str):
-                text = " ".join(value.split()).strip()
-            elif isinstance(value, Mapping):
-                text = " ".join(str(value.get("text") or "").split()).strip()
-            else:
-                raise ValueError("Every Grok caption option must be text.")
-            if not text:
-                raise ValueError("Grok returned an empty caption.")
-            if re.search(r"https?://|www\.|\$\s*\d|\b(?:USD|Fanvue Media Link)\b", text, re.I):
-                raise ValueError("Grok captions must not contain URLs or invented prices.")
-            if paid_image_count is not None:
-                cls.validate_bundle_caption(text, paid_image_count)
-            cls._require_emojis(text, require_woven=require_woven_emojis)
+            candidate = cls._validate_candidate(
+                value, require_woven_emojis=require_woven_emojis,
+                paid_image_count=paid_image_count,
+            )
+            text = candidate["text"]
             fingerprint = re.sub(r"\W+", "", text).lower()
             if fingerprint in fingerprints:
                 raise ValueError("Grok captions must be distinct.")
             fingerprints.add(fingerprint)
             options.append({"text": text})
         return options
+
+    @classmethod
+    def _validate_candidate(cls, value: Any, *, require_woven_emojis: bool,
+                            paid_image_count: int | None) -> dict[str, str]:
+        if isinstance(value, str):
+            text = " ".join(value.split()).strip()
+        elif isinstance(value, Mapping):
+            text = " ".join(str(value.get("text") or "").split()).strip()
+        else:
+            raise ValueError("Every Grok caption option must be text.")
+        if not text:
+            raise ValueError("Grok returned an empty caption.")
+        if re.search(r"https?://|www\.|\$\s*\d|\b(?:USD|Fanvue Media Link)\b", text, re.I):
+            raise ValueError("Grok captions must not contain URLs or invented prices.")
+        if paid_image_count is not None:
+            cls.validate_bundle_caption(text, paid_image_count)
+        cls._require_emojis(text, require_woven=require_woven_emojis)
+        return {"text": text}
 
     @staticmethod
     def validate_bundle_caption(text: str, paid_image_count: int) -> str:

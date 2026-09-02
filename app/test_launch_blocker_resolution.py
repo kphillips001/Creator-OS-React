@@ -68,14 +68,33 @@ def test_decision_engine_readiness_is_deterministic_for_greeting_and_purchase():
     )
     assert greeting["conversation_ready_for_offer"] is False
     assert greeting["current_buying_intent"] is False
-    assert purchase == {
-        "conversation_ready_for_offer": True,
-        "current_buying_intent": True,
-        "customer_requested_content": True,
-        "customer_requested_price": True,
-        "customer_requested_purchase": True,
-        "customer_requested_link": True,
-    }
+    assert purchase["conversation_ready_for_offer"] is True
+    assert purchase["current_buying_intent"] is True
+    assert purchase["customer_requested_content"] is True
+    assert purchase["customer_requested_price"] is True
+    assert purchase["customer_requested_purchase"] is True
+    assert purchase["customer_requested_link"] is True
+    assert purchase["positive_tease_response"] is False
+
+
+def test_decision_engine_projects_bounded_progression_classifier_evidence():
+    readiness = DecisionEngine._commerce_readiness(
+        "You have my attention, give me a hint", {
+            "escalation_ready": True,
+            "recommended_action": "build_tension",
+            "user_state": "curious",
+            "curiosity_level": "high",
+            "buyer_likelihood": "medium",
+            "engagement_level": "medium",
+            "buying_intent": False,
+            "close_ready": False,
+        }, {},
+    )
+    assert readiness["positive_tease_response"] is True
+    assert readiness["reveal_request"] is False
+    assert readiness["escalation_ready"] is True
+    assert readiness["recommended_action"] == "build_tension"
+    assert readiness["conversation_ready_for_offer"] is False
 
 
 def test_resolved_new_telegram_user_is_onboarded_as_zero_purchase_prospect():
@@ -229,6 +248,9 @@ def test_reconciliation_worker_recovers_retries_and_expires():
     )
     worker = CommerceReconciliationWorker(
         processor=processor, intent_service=intents,
+        reconciliation_service=SimpleNamespace(
+            retry_pending=lambda limit: calls.append(("reconciled", limit)) or []
+        ),
         heartbeat=SimpleNamespace(), interval_seconds=30,
     )
     import app.workers.commerce_reconciliation as module
@@ -240,7 +262,7 @@ def test_reconciliation_worker_recovers_retries_and_expires():
         diagnostics = worker.run_once()
     finally:
         module.recover_stale_claims = original
-    assert calls == [("recovered", 100), "processed", "expired"]
+    assert calls == [("recovered", 100), "processed", ("reconciled", 25), "expired"]
     assert diagnostics["recovered_count"] == 1
     assert diagnostics["expired_intent_count"] == 1
 
@@ -250,7 +272,9 @@ def test_reconciliation_worker_stops_gracefully_and_can_restart():
 
     class Heartbeat:
         register_startup = lambda self: lifecycle.append("startup")
+        record_poll = lambda self: lifecycle.append("poll")
         record_success = lambda self: lifecycle.append("success")
+        heartbeat = lambda self, **_kwargs: lifecycle.append("heartbeat")
         record_failure = lambda self, _error: lifecycle.append("failure")
         record_stopping = lambda self: lifecycle.append("stopping")
         record_shutdown = lambda self: lifecycle.append("shutdown")
@@ -259,19 +283,20 @@ def test_reconciliation_worker_stops_gracefully_and_can_restart():
     worker = CommerceReconciliationWorker(
         processor=SimpleNamespace(process_pending_events=lambda: []),
         intent_service=SimpleNamespace(expire_due=lambda: []),
+        reconciliation_service=SimpleNamespace(retry_pending=lambda limit: []),
         heartbeat=Heartbeat(),
         interval_seconds=5,
     )
     worker.run_once = lambda: stop.set() or {}
     worker.run(stop)
-    assert lifecycle == ["startup", "success", "stopping", "shutdown"]
+    assert lifecycle == ["startup", "poll", "success", "heartbeat", "stopping", "shutdown"]
 
     restarted = threading.Event()
     worker.run_once = lambda: restarted.set() or stop.set() or {}
     stop.clear()
     worker.run(stop)
     assert restarted.is_set()
-    assert lifecycle[-4:] == ["startup", "success", "stopping", "shutdown"]
+    assert lifecycle[-6:] == ["startup", "poll", "success", "heartbeat", "stopping", "shutdown"]
 
 
 def test_creator_payment_prefers_creator_uuid_resolution(monkeypatch):

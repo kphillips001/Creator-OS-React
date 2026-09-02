@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+from types import SimpleNamespace
 from pathlib import Path
 from unittest.mock import patch
 
@@ -31,6 +32,12 @@ class FakeLoginClient:
 
     async def send_code_request(self, phone):
         self.code_requests.append(phone)
+        return SimpleNamespace(
+            type=type("SentCodeTypeApp", (), {})(),
+            next_type=type("CodeTypeSms", (), {})(),
+            timeout=60,
+            phone_code_hash="must-not-be-logged",
+        )
 
     async def sign_in(self, **kwargs):
         self.sign_ins.append(kwargs)
@@ -49,6 +56,26 @@ class RecordingFactory:
 
 
 class TelethonLoginTests(unittest.IsolatedAsyncioTestCase):
+    async def test_code_delivery_metadata_is_sanitized(self):
+        client = FakeLoginClient()
+        login = TelethonLogin(
+            api_id=12345,
+            api_hash="api-hash",
+            session_path="tg_sessions/test-ava",
+            client_factory=RecordingFactory(client),
+            input_fn=lambda prompt: "+15551234567",
+            secret_input_fn=lambda prompt: "12345",
+        )
+
+        with self.assertLogs("telethon-login", level="INFO") as captured:
+            await login.authorize()
+
+        output = "\n".join(captured.output)
+        self.assertIn("Code delivery: Telegram app", output)
+        self.assertIn("Next delivery option: SMS", output)
+        self.assertIn("Retry available in: 60 seconds", output)
+        self.assertNotIn("must-not-be-logged", output)
+
     def test_builder_loads_repository_env_before_reading_credentials(self):
         loaded_paths = []
 

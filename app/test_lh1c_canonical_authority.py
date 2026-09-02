@@ -19,10 +19,15 @@ class Engine:
 
 
 class Sessions:
-    def __init__(self, order=None):
+    def __init__(self, order=None, *, active=True):
         self.calls = []
         self.order = order if order is not None else []
-        self.session = SimpleNamespace(sales_session_id=uuid4())
+        self.session = SimpleNamespace(sales_session_id=uuid4()) if active else None
+
+    def resolve_active_conversation(self, **values):
+        self.calls.append(values)
+        self.order.append("session")
+        return self.session
 
     def resolve_or_start_conversation(self, **values):
         self.calls.append(values)
@@ -34,7 +39,7 @@ class Sessions:
         self.association = values
 
 
-def test_gateway_resolves_canonical_conversation_session_before_engine():
+def test_gateway_resolves_only_an_active_canonical_session_before_engine():
     sessions = Sessions()
     gateway = ConversationGateway(
         Engine(), allowed_fanvue_hostnames=["fanvue.com"],
@@ -50,11 +55,40 @@ def test_gateway_resolves_canonical_conversation_session_before_engine():
         ),
     ))
     assert sessions.calls[0]["conversation_thread_id"] == 11
-    assert sessions.calls[0]["actor_identifier"] == "ConversationGateway"
+    assert "actor_identifier" not in sessions.calls[0]
 
 
-def _ppv_service(*, dry_run, order):
-    sessions = Sessions(order)
+def test_gateway_records_sanitized_active_session_lookup_error():
+    class BrokenSessions:
+        def resolve_active_conversation(self, **_values):
+            raise ValueError(
+                "lookup failed token=must-not-appear https://private.invalid/path"
+            )
+
+    output = ConversationGateway(
+        Engine(), allowed_fanvue_hostnames=["fanvue.com"],
+        sales_session_service=BrokenSessions(),
+    ).execute(ConversationGatewayInput(
+        engine_user_id="4:8", message_text="hello", chat_history=[],
+        correlation_id="turn-error",
+        brain_context=ConversationBrainContext(
+            creator_profile_id=3, customer_identifier="synthetic-customer",
+            conversation_identifier="thread-11", fanvue_account_id=4,
+            fanvue_user_id=8, conversation_thread_id=11,
+            developer_mode=True,
+        ),
+    ))
+    evidence = output.diagnostic_metadata["salesSessionError"]
+    assert output.error_code == "canonical_sales_session_unavailable"
+    assert evidence["exceptionClass"] == "ValueError"
+    assert evidence["boundary"] == "ConversationGateway.active_sales_session_lookup"
+    assert evidence["scenarioIdentity"] == "synthetic-customer"
+    assert "must-not-appear" not in evidence["message"]
+    assert "private.invalid" not in evidence["message"]
+
+
+def _ppv_service(*, dry_run, order, active_session=True):
+    sessions = Sessions(order, active=active_session)
     offering_id = uuid4()
     publication_id = uuid4()
     decision = SimpleNamespace(
@@ -143,6 +177,18 @@ def test_one_on_one_creates_intent_after_authorization_and_before_delivery():
     assert order == ["session", "authorize", "intent", "associate", "send"]
     assert intents.calls[0]["expected_price_minor"] == 2500
     assert sessions.association["purchase_intent_id"] is not None
+
+
+def test_one_on_one_single_sale_does_not_implicitly_start_session():
+    order = []
+    result, sessions, intents = _ppv_service(
+        dry_run=False, order=order, active_session=False,
+    )
+    assert result["success"] is True
+    assert result["sales_session_id"] is None
+    assert order == ["session", "authorize", "intent", "send"]
+    assert len(intents.calls) == 1
+    assert not hasattr(sessions, "association")
 
 
 def test_supported_production_authority_import_guards():

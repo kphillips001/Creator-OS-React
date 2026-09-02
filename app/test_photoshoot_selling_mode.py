@@ -3,17 +3,19 @@ from types import SimpleNamespace
 import pytest
 from pydantic import ValidationError
 
-from app.api.asset_library import PhotoshootSellingModeRequest
+from app.api.asset_library import PhotoshootCommerceAssignmentRequest, PhotoshootSellingModeRequest
 from app.models.photoshoot_selling_mode import PhotoshootSellingMode
 from app.models.bundle_sales_channel import BundleSalesChannel
 from app.services.photoshoot_commerce_deliverable_service import PhotoshootCommerceDeliverableService
 
 
 class Repository:
-    def __init__(self, row=None, protected=False):
+    def __init__(self, row=None, protected=False, blockers=None):
         self.row = row
         self.protected = protected
+        self.blockers = blockers
         self.updates = []
+        self.invalidations = []
 
     def get(self, _deliverable_id):
         return self.row
@@ -27,6 +29,22 @@ class Repository:
 
     def has_protected_commercial_evidence(self, *_args):
         return self.protected
+
+    def selling_mode_reassignment_blockers(self, *_args):
+        return self.blockers if self.blockers is not None else ({"purchase_intent_count": 1} if self.protected else {})
+
+    def reassign_selling_mode(self, deliverable_id, creator_profile_id, selling_mode):
+        blockers = self.selling_mode_reassignment_blockers(deliverable_id, creator_profile_id)
+        protected_keys = {"publication_count", "purchase_intent_count", "lifecycle_count", "lifecycle_event_count", "sales_session_count"}
+        if any(int(blockers.get(key) or 0) for key in protected_keys):
+            return None, blockers
+        updated = self.update_selling_mode(deliverable_id, creator_profile_id, selling_mode)
+        self.invalidate_session_sales_strategies(deliverable_id, creator_profile_id)
+        return updated, {}
+
+    def invalidate_session_sales_strategies(self, deliverable_id, creator_profile_id):
+        self.invalidations.append((deliverable_id, creator_profile_id))
+        return ()
 
     def update_bundle_sales_channel(self, deliverable_id, creator_profile_id, channel):
         self.updates.append((deliverable_id, creator_profile_id, channel))
@@ -44,6 +62,9 @@ def service(repository):
         repository=repository, queue=SimpleNamespace(), library=SimpleNamespace(),
         intelligence=SimpleNamespace(), commercial_intelligence=SimpleNamespace(),
         session_sales_strategy=SimpleNamespace(), workflows=SimpleNamespace(),
+        bundle_preparation=SimpleNamespace(inspect=lambda *args, **kwargs: {
+            "contentVaultPublication": {"status": "NOT_PUBLISHED"},
+        }),
     )
 
 
@@ -68,6 +89,13 @@ def test_safe_mode_changes_persist_in_both_directions():
     assert repository.updates == [("set-1", 7, "BUNDLE"), ("set-1", 7, "SESSION")]
 
 
+def test_generation_library_import_uses_the_same_canonical_modes():
+    repository = Repository(row(
+        selling_mode="BUNDLE", source_kind="GENERATION_LIBRARY_IMPORT"))
+    assert service(repository).set_selling_mode("set-1", 7, "SESSION")["selling_mode"] == "SESSION"
+    assert repository.updates == [("set-1", 7, "SESSION")]
+
+
 def test_invalid_mode_is_rejected_by_domain_and_api_contract():
     with pytest.raises(ValueError, match="SESSION or BUNDLE"):
         PhotoshootSellingMode.parse("OTHER")
@@ -84,8 +112,34 @@ def test_missing_or_other_creator_deliverable_is_not_disclosed():
 
 def test_protected_commercial_evidence_locks_mode_change():
     repository = Repository(row(), protected=True)
-    with pytest.raises(ValueError, match="live publication or confirmed purchase"):
+    with pytest.raises(ValueError, match="purchase intent or purchase history"):
         service(repository).set_selling_mode("set-1", 7, "BUNDLE")
+
+
+def test_successful_reassignment_invalidates_only_mode_specific_session_strategy():
+    repository = Repository(row())
+    result = service(repository).set_selling_mode("set-1", 7, "BUNDLE")
+    assert result["selling_mode"] == "BUNDLE"
+    assert repository.invalidations == [("set-1", 7)]
+
+
+def test_unconsumed_preparation_is_safe_to_reassign_and_reprepare():
+    repository = Repository(row(), blockers={"offering_count": 2, "teaser_count": 1})
+    assert service(repository).set_selling_mode("set-1", 7, "BUNDLE")["selling_mode"] == "BUNDLE"
+    assert repository.invalidations == [("set-1", 7)]
+
+
+@pytest.mark.parametrize(("blocker", "expected"), [
+    ("sales_session_count", "Photoshoot sales session"),
+    ("lifecycle_count", "customer Photoshoot lifecycle"),
+    ("publication_count", "publication state"),
+])
+def test_customer_and_mode_specific_commerce_blocks_reassignment(blocker, expected):
+    repository = Repository(row(), blockers={blocker: 1})
+    with pytest.raises(ValueError, match=expected):
+        service(repository).set_selling_mode("set-1", 7, "BUNDLE")
+    assert repository.updates == []
+    assert repository.invalidations == []
 
 
 def test_existing_bundle_defaults_to_chat_and_channel_persists_both_directions():
@@ -115,3 +169,44 @@ def test_bundle_channel_use_locks_change_but_preparation_does_not():
     protected = Repository(row(selling_mode="BUNDLE", bundle_sales_channel="CHAT"), protected=True)
     with pytest.raises(ValueError, match="presented or a purchase intent"):
         service(protected).set_bundle_sales_channel("set-1", 7, "CONTENT_WALL")
+
+
+def test_combined_assignment_changes_bundle_channel_without_changing_mode():
+    repository = Repository(row(selling_mode="BUNDLE", bundle_sales_channel="CHAT"))
+    result = service(repository).reassign_commerce(
+        "set-1", 7, selling_mode="BUNDLE", bundle_sales_channel="CONTENT_WALL",
+    )
+    assert result["selling_mode"] == "BUNDLE"
+    assert result["bundle_sales_channel"] == "CONTENT_WALL"
+    assert repository.updates == [("set-1", 7, "CONTENT_WALL")]
+
+
+def test_combined_assignment_rejects_session_channel_and_bundle_without_channel():
+    subject = service(Repository(row()))
+    with pytest.raises(ValueError, match="only for BUNDLE"):
+        subject.reassign_commerce(
+            "set-1", 7, selling_mode="SESSION", bundle_sales_channel="CHAT",
+        )
+    with pytest.raises(ValueError, match="requires CHAT or CONTENT_WALL"):
+        subject.reassign_commerce("set-1", 7, selling_mode="BUNDLE")
+    with pytest.raises(ValidationError):
+        PhotoshootCommerceAssignmentRequest(
+            sellingMode="BUNDLE", bundleSalesChannel="BOTH",
+        )
+
+
+def test_published_wall_bundle_cannot_be_reassigned_to_chat():
+    repository = Repository(row(selling_mode="BUNDLE", bundle_sales_channel="CONTENT_WALL"))
+    subject = PhotoshootCommerceDeliverableService(
+        repository=repository, queue=SimpleNamespace(), library=SimpleNamespace(),
+        intelligence=SimpleNamespace(), commercial_intelligence=SimpleNamespace(),
+        session_sales_strategy=SimpleNamespace(), workflows=SimpleNamespace(),
+        bundle_preparation=SimpleNamespace(inspect=lambda *args, **kwargs: {
+            "contentVaultPublication": {"status": "PUBLISHED"},
+        }),
+    )
+    with pytest.raises(ValueError, match="publishing has started"):
+        subject.reassign_commerce(
+            "set-1", 7, selling_mode="BUNDLE", bundle_sales_channel="CHAT",
+        )
+    assert repository.updates == []

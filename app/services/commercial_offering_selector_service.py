@@ -30,6 +30,7 @@ from app.repositories.commercial_offering_selector_repository import (
 )
 from app.services.commerce_recommendation_engine import (
     CommerceRecommendationEngine,
+    ProductTypeFitStrategy,
 )
 from app.services.ownership_intelligence_service import (
     OwnershipIntelligenceService,
@@ -70,6 +71,14 @@ class CommercialOfferingSelectorService:
     ) -> SelectedOfferingResult:
         started = time.perf_counter()
         context = dict(conversation_context or {})
+        progression = dict(context.get("sales_progression") or {})
+        progression_phase = str(progression.get("phase") or "").upper()
+        bound_offering_id = None
+        if progression_phase in {"TEASE", "BUILD_INTEREST", "PRESENT_OFFER"}:
+            try:
+                bound_offering_id = UUID(str(progression.get("offeringId")))
+            except (TypeError, ValueError, AttributeError):
+                bound_offering_id = None
         constraints = strategy_constraints or StrategyConstraints()
         channel = str(
             context.get("primary_sales_channel") or "AI_CHAT"
@@ -91,13 +100,18 @@ class CommercialOfferingSelectorService:
             recent_conversation_requests=tuple(
                 context.get("recent_conversation_requests") or ()
             )[-3:],
+            buyer_stage=self._buyer_stage(customer_profile, context),
+            engagement_score=self._engagement_score(context),
+            price_sensitive=self._price_sensitive(context),
         )
         account_id = int(getattr(customer_profile, "fanvue_account_id", 0))
         buyer_uuid = getattr(
             customer_profile, "external_fanvue_user_uuid", None
         )
-        ownership = self.ownership_intelligence.answer(
-            OwnershipIdentity(
+        commerce_memory = context.get("_customer_commerce_memory")
+        ownership = getattr(commerce_memory, "ownership", None)
+        if ownership is None:
+            ownership = self.ownership_intelligence.answer(OwnershipIdentity(
                 creator_profile_id=int(creator_profile_id),
                 fanvue_account_id=account_id,
                 external_fanvue_user_uuid=buyer_uuid,
@@ -108,8 +122,7 @@ class CommercialOfferingSelectorService:
                     else None
                 ),
                 core_user_id=context.get("core_user_id"),
-            )
-        )
+            ))
         purchased = frozenset(ownership.owned_offering_ids)
         ownership_conflicts = tuple(getattr(ownership, "conflicts", ()) or ())
         ownership_insufficiencies = tuple(
@@ -121,6 +134,7 @@ class CommercialOfferingSelectorService:
             )
             return self._result(
                 started=started, channel=channel, selected=None,
+                constraints=constraints,
                 reason=OfferingSelectionReason.NO_ELIGIBLE_OFFERING,
                 evaluations=(), candidate_count=0, purchased=purchased,
                 active_intent=active_purchase_intent is not None,
@@ -151,6 +165,7 @@ class CommercialOfferingSelectorService:
                 )
                 return self._result(
                     started=started, channel=channel, selected=None,
+                    constraints=constraints,
                     reason=OfferingSelectionReason.NO_ELIGIBLE_OFFERING,
                     evaluations=(), candidate_count=0, purchased=purchased,
                     active_intent=True,
@@ -168,6 +183,7 @@ class CommercialOfferingSelectorService:
                 )
                 return self._result(
                     started=started, channel=channel,
+                    constraints=constraints,
                     selected=self._selected_projection(
                         (candidate,), recommendation
                     ),
@@ -183,10 +199,56 @@ class CommercialOfferingSelectorService:
             )
             return self._result(
                 started=started, channel=channel, selected=None,
+                constraints=constraints,
                 reason=OfferingSelectionReason.NO_ELIGIBLE_OFFERING,
                 evaluations=(evaluation,), candidate_count=1,
                 purchased=purchased, active_intent=True,
                 recommendation=recommendation,
+            )
+
+        if context.get("controlled_test_commerce") is True:
+            getter = getattr(self.repository, "get_controlled_test_candidate", None)
+            candidate = getter(creator_profile_id=int(creator_profile_id)) if getter else None
+            if candidate is None:
+                recommendation = self.recommendation_engine.rank(
+                    (), recommendation_context, rejection_count=0
+                )
+                return self._result(
+                    started=started, channel=channel, selected=None,
+                    constraints=constraints,
+                    reason=OfferingSelectionReason.NO_ELIGIBLE_OFFERING,
+                    evaluations=(), candidate_count=0, purchased=purchased,
+                    active_intent=False, extra_exclusions=("CONTROLLED_TEST_OFFERING_UNAVAILABLE",),
+                    recommendation=recommendation, strategy="CONTROLLED_TEST_DESIGNATED",
+                )
+            evaluation = self._evaluate(
+                candidate, creator_profile_id=int(creator_profile_id),
+                channel=channel, purchased=purchased, constraints=constraints,
+            )
+            eligible = (candidate,) if evaluation.eligible else ()
+            recommendation = self._rank(
+                eligible, recommendation_context,
+                rejection_count=0 if evaluation.eligible else 1,
+            )
+            return self._result(
+                started=started, channel=channel,
+                constraints=constraints,
+                selected=(self._selected_projection(eligible, recommendation)
+                          if evaluation.eligible else None),
+                reason=(OfferingSelectionReason(recommendation.selection_reason)
+                        if evaluation.eligible else OfferingSelectionReason.NO_ELIGIBLE_OFFERING),
+                evaluations=(evaluation,), candidate_count=1, purchased=purchased,
+                active_intent=False, recommendation=recommendation,
+                strategy="CONTROLLED_TEST_DESIGNATED",
+                bound_offering_id=bound_offering_id,
+                offering_continuity_source=(
+                    "PERSISTED_PROGRESSION"
+                    if evaluation.eligible
+                    and bound_offering_id == UUID(str(candidate["offering_id"]))
+                    else "RESET_AFTER_INVALIDATION"
+                    if bound_offering_id is not None else "NEW_SELECTION"
+                ),
+                offering_revalidated=bound_offering_id is not None,
             )
 
         history_rows = (
@@ -205,23 +267,33 @@ class CommercialOfferingSelectorService:
             if item.status == "PURCHASED"
             and item.attribution_result == "ATTRIBUTED"
         )
+        memory_affinity = getattr(commerce_memory, "affinity", None)
+        historical_tags = tuple(
+            getattr(memory_affinity, "tag_weights", {}).keys()
+        )
+        historical_types = tuple(
+            getattr(memory_affinity, "offering_type_weights", {}).keys()
+        )
+        learning_profile = self._learning_context(
+            self.repository.get_commerce_learning_profile(
+                creator_profile_id=int(creator_profile_id),
+                fanvue_account_id=account_id,
+                external_fanvue_user_uuid=buyer_uuid,
+            )
+            if hasattr(self.repository, "get_commerce_learning_profile")
+            else None
+        )
         recommendation_context = replace(
             recommendation_context,
             verified_affinity_tags=tuple(dict.fromkeys(
-                tag for item in verified for tag in item.intelligence_tags
+                (*historical_tags, *(tag for item in verified for tag in item.intelligence_tags))
             )),
             verified_affinity_offering_types=tuple(dict.fromkeys(
-                item.offering_type for item in verified
+                (*historical_types, *(item.offering_type for item in verified))
             )),
             recent_offer_history=history,
-            commerce_learning_profile=self._learning_context(
-                self.repository.get_commerce_learning_profile(
-                    creator_profile_id=int(creator_profile_id),
-                    fanvue_account_id=account_id,
-                    external_fanvue_user_uuid=buyer_uuid,
-                )
-                if hasattr(self.repository, "get_commerce_learning_profile")
-                else None
+            commerce_learning_profile=self._merge_memory_affinity(
+                learning_profile, memory_affinity
             ),
         )
         candidates = tuple(self.repository.list_candidates(
@@ -270,26 +342,58 @@ class CommercialOfferingSelectorService:
             )
             return self._result(
                 started=started, channel=channel, selected=None,
+                constraints=constraints,
                 reason=OfferingSelectionReason.NO_ELIGIBLE_OFFERING,
                 evaluations=evaluations, candidate_count=len(candidates),
                 purchased=purchased, active_intent=False,
                 recommendation=recommendation,
                 strategy=strategy,
+                lifecycle_active=(
+                    active is not None
+                    and active.status is CustomerPhotoshootStatus.ACTIVE
+                ),
+                bound_offering_id=bound_offering_id,
+                offering_continuity_source=(
+                    "RESET_AFTER_INVALIDATION"
+                    if bound_offering_id is not None else "NEW_SELECTION"
+                ),
+                offering_revalidated=bound_offering_id is not None,
             )
 
+        bound_candidate = next((
+            candidate for candidate in eligible
+            if bound_offering_id is not None
+            and UUID(str(candidate["offering_id"])) == bound_offering_id
+        ), None)
+        continuity_source = (
+            "PERSISTED_PROGRESSION" if bound_candidate is not None
+            else "RESET_AFTER_INVALIDATION" if bound_offering_id is not None
+            else "NEW_SELECTION"
+        )
+        ranked_candidates = (
+            (bound_candidate,) if bound_candidate is not None else eligible
+        )
         recommendation = self._rank(
-            eligible, recommendation_context,
+            ranked_candidates, recommendation_context,
             rejection_count=sum(not item.eligible for item in evaluations),
         )
-        selected = self._selected_projection(eligible, recommendation)
+        selected = self._selected_projection(ranked_candidates, recommendation)
         return self._result(
             started=started, channel=channel, selected=selected,
+            constraints=constraints,
             reason=OfferingSelectionReason(recommendation.selection_reason),
             evaluations=evaluations,
             candidate_count=len(candidates), purchased=purchased,
             active_intent=False,
             recommendation=recommendation,
             strategy=strategy,
+            lifecycle_active=(
+                active is not None
+                and active.status is CustomerPhotoshootStatus.ACTIVE
+            ),
+            bound_offering_id=bound_offering_id,
+            offering_continuity_source=continuity_source,
+            offering_revalidated=bound_offering_id is not None,
         )
 
     def _lifecycle_context(self, creator_profile_id, customer_profile):
@@ -395,6 +499,20 @@ class CommercialOfferingSelectorService:
         offering_id = UUID(str(candidate["offering_id"]))
         offering_type = str(candidate.get("offering_type") or "")
         selling_mode = str(candidate.get("photoshoot_selling_mode") or "")
+        if (
+            constraints.required_selling_modes
+            and selling_mode not in constraints.required_selling_modes
+        ):
+            reasons.append("STRATEGY_SELLING_MODE_MISMATCH")
+        if selling_mode in constraints.excluded_selling_modes:
+            reasons.append("STRATEGY_SELLING_MODE_EXCLUDED")
+        if (
+            offering_type == "SINGLE_IMAGE"
+            and candidate.get("source_photoshoot_deliverable_id") is None
+            and candidate.get("source_bundle_studio_bundle_id") is None
+            and candidate.get("standalone_sale_destination") != "CHAT"
+        ):
+            reasons.append("STANDALONE_DESTINATION_NOT_CHAT")
         bundle_channel = str(
             candidate.get("photoshoot_bundle_sales_channel") or "CHAT"
         )
@@ -465,15 +583,29 @@ class CommercialOfferingSelectorService:
         if constraints.complete_set_required and offering_type != "BUNDLE":
             reasons.append("COMPLETE_SET_REQUIRES_BUNDLE")
         if offering_type == "BUNDLE":
-            lineages = tuple(
-                str(value)
-                for value in candidate.get("photoshoot_identifiers") or ()
-            )
-            if len(lineages) != 1:
-                reasons.append("BUNDLE_PHOTOSHOOT_LINEAGE_INVALID")
+            bundle_studio_source = candidate.get("source_bundle_studio_bundle_id")
+            if not bundle_studio_source:
+                lineages = tuple(
+                    str(value)
+                    for value in candidate.get("photoshoot_identifiers") or ()
+                )
+                if len(lineages) != 1:
+                    reasons.append("BUNDLE_PHOTOSHOOT_LINEAGE_INVALID")
         if offering_id in purchased:
             reasons.append(
                 OfferingExclusionReason.OFFERING_ALREADY_PURCHASED.value
+            )
+        if offering_id in frozenset(constraints.excluded_offering_ids):
+            reasons.append(
+                OfferingExclusionReason.OFFERING_REJECTED_CURRENT_SEQUENCE.value
+            )
+        if (
+            constraints.maximum_price_minor is not None
+            and candidate.get("price_minor") is not None
+            and int(candidate["price_minor"]) > int(constraints.maximum_price_minor)
+        ):
+            reasons.append(
+                OfferingExclusionReason.PRICE_NOT_MATERIALLY_LOWER.value
             )
         unique_reasons = tuple(dict.fromkeys(reasons))
         evaluation = OfferingEligibilityEvaluation(
@@ -543,16 +675,17 @@ class CommercialOfferingSelectorService:
                 photoshoot_groups.setdefault(
                     candidate.photoshoot_identifier, []
                 ).append(candidate)
-        if not photoshoot_groups:
-            return self.recommendation_engine.rank(
-                candidates, context, rejection_count=rejection_count
-            )
+        standalone = tuple(
+            candidate for candidate in candidates
+            if not candidate.photoshoot_identifier
+        )
         experiences = tuple(
             self._aggregate_photoshoot_candidate(group, context)
             for _, group in sorted(photoshoot_groups.items())
         )
         return self.recommendation_engine.rank(
-            experiences, context, rejection_count=rejection_count
+            (*standalone, *experiences), context,
+            rejection_count=rejection_count,
         )
 
     def _aggregate_photoshoot_candidate(self, group, context):
@@ -590,7 +723,70 @@ class CommercialOfferingSelectorService:
                 for key, values in intelligence.items()
             },
             blurred_teaser_path=selected.blurred_teaser_path,
+            selling_mode=selected.selling_mode,
+            member_count=len(tuple(dict.fromkeys(member_ids))),
         )
+
+    @staticmethod
+    def _buyer_stage(customer_profile, context):
+        explicit = str(context.get("buyer_stage") or "").strip().upper()
+        if explicit:
+            return explicit
+        purchases = int(getattr(customer_profile, "purchase_count", 0) or 0)
+        return "REPEAT_BUYER" if purchases >= 2 else "FIRST_BUYER" if purchases else "PROSPECT"
+
+    @staticmethod
+    def _merge_memory_affinity(learning_profile, affinity):
+        result = dict(learning_profile or {})
+        if affinity is None:
+            return result
+        preferences = {
+            key: dict(value) if isinstance(value, dict) else value
+            for key, value in dict(result.get("preferences") or {}).items()
+        }
+        tags = dict(getattr(affinity, "tag_weights", {}) or {})
+        types = dict(getattr(affinity, "offering_type_weights", {}) or {})
+        if tags:
+            historical = dict(preferences.get("historical_purchase") or {})
+            for tag, weight in tags.items():
+                historical.setdefault(tag, {
+                    "score": float(weight), "confidence": float(weight),
+                    "source": "CustomerCommerceMemory",
+                })
+            preferences["historical_purchase"] = historical
+        if types and not result.get("preferredOfferingType"):
+            result["preferredOfferingType"] = next(iter(types))
+        minimum = getattr(affinity, "typical_price_min_minor", None)
+        maximum = getattr(affinity, "typical_price_max_minor", None)
+        if minimum is not None and result.get("preferredPriceMinMinor") is None:
+            result["preferredPriceMinMinor"] = minimum
+        if maximum is not None and result.get("preferredPriceMaxMinor") is None:
+            result["preferredPriceMaxMinor"] = maximum
+        result["preferences"] = preferences
+        result["customerCommerceMemory"] = {
+            "historicalPurchaseCount": getattr(affinity, "historical_purchase_count", 0),
+            "recentPurchaseCount": getattr(affinity, "recent_purchase_count", 0),
+            "offeringTypeWeights": types,
+            "tagWeights": tags,
+            "channelWeights": dict(getattr(affinity, "channel_weights", {}) or {}),
+        }
+        return result
+
+    @staticmethod
+    def _engagement_score(context):
+        raw = context.get("engagement_score", context.get("intent_score", 0))
+        try:
+            value = float(raw or 0)
+        except (TypeError, ValueError):
+            return 0.0
+        return max(0.0, min(1.0, value / 100 if value > 1 else value))
+
+    @staticmethod
+    def _price_sensitive(context):
+        if context.get("price_sensitive") is not None:
+            return bool(context["price_sensitive"])
+        message = str(context.get("latest_message") or "").lower()
+        return any(term in message for term in ProductTypeFitStrategy.PRICE_TERMS)
 
     @classmethod
     def _enriched_projection(cls, candidate):
@@ -720,8 +916,19 @@ class CommercialOfferingSelectorService:
     def _result(
         self, *, started, channel, selected, reason, evaluations,
         candidate_count, purchased, active_intent,
+        constraints=None,
         extra_exclusions=(), recommendation=None, strategy=None,
+        lifecycle_active=False,
+        bound_offering_id=None, offering_continuity_source="NEW_SELECTION",
+        offering_revalidated=False,
     ):
+        constraints = constraints or StrategyConstraints()
+        exclusion_counts = {}
+        for evaluation in evaluations:
+            for exclusion_reason in evaluation.exclusion_reasons:
+                exclusion_counts[exclusion_reason] = (
+                    exclusion_counts.get(exclusion_reason, 0) + 1
+                )
         exclusions = tuple(dict.fromkeys((
             *extra_exclusions,
             *(
@@ -732,6 +939,8 @@ class CommercialOfferingSelectorService:
         )))
         elapsed = round((time.perf_counter() - started) * 1000, 3)
         experience = self._photoshoot_experience(recommendation)
+        product_context = self._product_context(selected)
+        asset_intelligence = dict(product_context.get("assetIntelligence") or {})
         result = SelectedOfferingResult(
             offering_id=(
                 UUID(str(selected["offering_id"])) if selected else None
@@ -763,6 +972,20 @@ class CommercialOfferingSelectorService:
                 "rejectedCount": sum(
                     not evaluation.eligible for evaluation in evaluations
                 ),
+                "rejectedCandidateCountsByReason": exclusion_counts,
+                "candidateEvaluations": [
+                    {
+                        "offeringId": str(evaluation.offering_id),
+                        "title": evaluation.title,
+                        "offeringType": evaluation.offering_type,
+                        "offeringStatus": evaluation.offering_status,
+                        "primarySalesChannel": evaluation.primary_sales_channel,
+                        "publicationStatus": evaluation.publication_status,
+                        "eligible": evaluation.eligible,
+                        "exclusionReasons": list(evaluation.exclusion_reasons),
+                    }
+                    for evaluation in evaluations
+                ],
                 "purchasedOfferingCount": len(purchased),
                 "activeIntentApplied": active_intent,
                 "strategy": strategy,
@@ -840,6 +1063,10 @@ class CommercialOfferingSelectorService:
                     recommendation.recommendation_summary
                     if recommendation else None
                 ),
+                "opportunityReasonCode": self._opportunity_reason_code(
+                    recommendation, active_intent=active_intent,
+                    lifecycle_active=lifecycle_active,
+                ),
                 "recommendationLayer": (
                     "PHOTOSHOOT_EXPERIENCE"
                     if experience else "COMMERCIAL_OFFERING_FALLBACK"
@@ -857,6 +1084,23 @@ class CommercialOfferingSelectorService:
                     "offering_disabled",
                     "featured_flag",
                 ],
+                "boundOfferingId": (
+                    str(bound_offering_id) if bound_offering_id else None
+                ),
+                "offeringContinuitySource": offering_continuity_source,
+                "offeringRevalidated": bool(offering_revalidated),
+                "recoveryConstraints": {
+                    "excludedOfferingIds": [
+                        str(value) for value in constraints.excluded_offering_ids
+                    ],
+                    "maximumPriceMinor": constraints.maximum_price_minor,
+                    "requestedThemes": list(constraints.requested_themes),
+                },
+                "contentIntelligenceAvailable": bool(asset_intelligence),
+                "contentIntelligenceSource": (
+                    "ASSET_INTELLIGENCE_PROFILE"
+                    if asset_intelligence else "NONE"
+                ),
             }),
             title=(str(selected.get("title") or "") if selected else None),
             short_description=(
@@ -872,6 +1116,9 @@ class CommercialOfferingSelectorService:
             ),
             recommendation_result=recommendation,
             photoshoot_experience=experience,
+            product_context=immutable_selector_metadata(
+                product_context
+            ),
         )
         logger.info(
             "event=offer_selected offering_id=%s selection_reason=%s "
@@ -879,6 +1126,89 @@ class CommercialOfferingSelectorService:
             result.offering_id, reason.value, elapsed,
         )
         return result
+
+    @staticmethod
+    def _opportunity_reason_code(
+        recommendation, *, active_intent, lifecycle_active=False,
+    ):
+        if lifecycle_active:
+            return "CONTINUE_ACTIVE_SESSION"
+        if active_intent:
+            return "CONTINUE_ACTIVE_PURCHASE_INTENT"
+        if recommendation is None or not recommendation.ranked_candidates:
+            return None
+        selected = next(
+            (item for item in recommendation.ranked_candidates if item.selected),
+            recommendation.ranked_candidates[0],
+        )
+        component = next(
+            (item for item in selected.components if item.key == "product_type_fit"),
+            None,
+        )
+        return (
+            str(component.evidence.get("reasonCode"))
+            if component and component.evidence.get("reasonCode") else None
+        )
+
+    @classmethod
+    def _product_context(cls, selected):
+        if not selected:
+            return {}
+        offering_type = str(selected.get("offering_type") or "")
+        selling_mode = str(selected.get("photoshoot_selling_mode") or "") or None
+        context = {
+            "offeringType": offering_type,
+            "sellingMode": selling_mode,
+            "heroAssetId": selected.get("hero_asset_id"),
+            "memberCount": len(tuple(selected.get("asset_ids") or ())),
+        }
+        if offering_type != "SINGLE_IMAGE" or selling_mode:
+            return context
+        profiles = cls._sequence(selected.get("asset_intelligence"))
+        hero_id = selected.get("hero_asset_id")
+        profile = next((
+            cls._mapping(item.get("profile_data"))
+            for item in profiles if isinstance(item, dict)
+            and int(item.get("asset_id") or 0) == int(hero_id or 0)
+        ), {})
+        aliases = {
+            "title": ("title",),
+            "contentSummary": ("content_summary", "short_description"),
+            "sceneEnvironment": ("scene_environment", "environment", "setting"),
+            "verifiedVisibleContent": ("verified_visible_content", "detailed_description"),
+            "poseAction": ("pose_action", "pose", "activity"),
+            "wardrobeState": ("wardrobe_state", "clothing"),
+            "facialExpression": ("facial_expression", "expression"),
+            "gaze": ("eye_contact", "gaze"),
+            "explicitness": ("nudity_explicitness", "safety_classification", "explicit_content"),
+            "moodTone": ("emotional_tone", "mood", "atmosphere"),
+            "visualFocus": ("visual_focus",),
+        }
+        intelligence = {}
+        for output, keys in aliases.items():
+            value = next((profile.get(key) for key in keys
+                          if profile.get(key) not in (None, "", [], {})), None)
+            if value is not None:
+                intelligence[output] = cls._bounded_intelligence_value(value)
+        context["assetIntelligence"] = intelligence
+        context["standaloneDestination"] = selected.get("standalone_sale_destination")
+        return context
+
+    @classmethod
+    def _bounded_intelligence_value(cls, value):
+        if isinstance(value, str):
+            return value.strip()[:240]
+        if isinstance(value, (list, tuple, set)):
+            return tuple(
+                str(item).strip()[:80] for item in tuple(value)[:8]
+                if str(item).strip()
+            )
+        if isinstance(value, dict):
+            return {
+                str(key)[:40]: cls._bounded_intelligence_value(item)
+                for key, item in list(value.items())[:8]
+            }
+        return value
 
     @staticmethod
     def _photoshoot_experience(recommendation):

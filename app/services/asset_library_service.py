@@ -146,6 +146,7 @@ class AssetLibraryService:
             media_type=filters.media_type,
             classification=classification,
             sale_destination=filters.sale_destination if filters.media_type == "image" else None,
+            asset_purpose=filters.asset_purpose,
             creator_profile_id=int(filters.creator_profile_id or 0),
             limit=candidate_limit,
             # Canonical library membership is independent of commercial

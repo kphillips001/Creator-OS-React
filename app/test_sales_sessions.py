@@ -288,6 +288,32 @@ def test_conversation_orchestration_reuses_active_session(setup):
     assert len(compatibility.started_items) == 1
 
 
+def test_active_conversation_lookup_does_not_start_for_unmapped_customer(setup):
+    service, repository, _, compatibility = setup
+    assert service.resolve_active_conversation(
+        creator_profile_id=7, fanvue_account_id=2, fanvue_user_id=3,
+        telegram_user_id=100, conversation_thread_id=11,
+    ) is None
+    assert repository.get_active_for_customer(
+        creator_profile_id=7, fanvue_account_id=2, fanvue_user_id=3,
+    ) is None
+    assert compatibility.started_items == []
+
+
+def test_active_conversation_lookup_keeps_mapped_identity_strict(setup):
+    service, _, _, _ = setup
+    session = start(service)
+    assert service.resolve_active_conversation(
+        creator_profile_id=7, fanvue_account_id=2, fanvue_user_id=3,
+        telegram_user_id=99, conversation_thread_id=11,
+    ).sales_session_id == session.sales_session_id
+    with pytest.raises(SalesSessionError, match="Telegram identity"):
+        service.resolve_active_conversation(
+            creator_profile_id=7, fanvue_account_id=2, fanvue_user_id=3,
+            telegram_user_id=100, conversation_thread_id=11,
+        )
+
+
 def test_terminal_session_stays_closed_and_later_conversation_can_start(setup):
     service, _, _, _ = setup
     first = service.resolve_or_start_conversation(

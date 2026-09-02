@@ -31,6 +31,7 @@ class CommercialOfferingRepository:
         price_minor: int | None = None, currency: str = "USD",
         status: CommercialOfferingStatus = CommercialOfferingStatus.DRAFT,
         source_photoshoot_deliverable_id: UUID | None = None,
+        source_bundle_studio_bundle_id: UUID | None = None,
         idempotency_key: str | None = None,
         connection=None,
     ) -> CommercialOffering:
@@ -45,12 +46,12 @@ class CommercialOfferingRepository:
                     """INSERT INTO public.commercial_offerings
                        (offering_id,creator_profile_id,offering_type,title,description,
                         hero_asset_id,primary_sales_channel,status,price_minor,currency,
-                        source_photoshoot_deliverable_id,idempotency_key)
-                       VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING *""",
+                        source_photoshoot_deliverable_id,source_bundle_studio_bundle_id,idempotency_key)
+                       VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING *""",
                     (offering_id, creator_profile_id, offering_type.value, title,
                      description, hero_asset_id, primary_sales_channel.value,
                      status.value, price_minor, currency,
-                     source_photoshoot_deliverable_id, idempotency_key),
+                     source_photoshoot_deliverable_id, source_bundle_studio_bundle_id, idempotency_key),
                 )
                 row = cursor.fetchone()
                 for position, asset_id in enumerate(asset_ids, 1):
@@ -231,4 +232,5 @@ class CommercialOfferingRepository:
                 UUID(str(row["source_photoshoot_deliverable_id"]))
                 if row.get("source_photoshoot_deliverable_id") else None
             ),
+            source_bundle_studio_bundle_id=(UUID(str(row["source_bundle_studio_bundle_id"])) if row.get("source_bundle_studio_bundle_id") else None),
         )

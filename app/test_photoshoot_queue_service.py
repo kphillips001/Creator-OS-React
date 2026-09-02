@@ -1,10 +1,12 @@
 ﻿import sys
 import tempfile
+import threading
 import types
 import unittest
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
 
 if "streamlit" not in sys.modules:
     streamlit = types.ModuleType("streamlit")
@@ -159,8 +161,8 @@ class PhotoshootQueueServiceTests(unittest.TestCase):
 
         self.assertEqual(session.creator_profile_id, 7)
         self.assertEqual(session.provider_id, "seedream_4_5")
-        self.assertEqual(session.target_shot_count, 10)
-        self.assertEqual(session.creative_continuity["target_shot_count"], 10)
+        self.assertEqual(session.target_shot_count, 5)
+        self.assertEqual(session.creative_continuity["target_shot_count"], 5)
         self.assertEqual(session.creative_continuity["generation_mode_behavior"], "photoshoot_queue")
         self.assertEqual(session.creative_continuity["wavespeed_generation_mode_key"], "photoshoot_set")
         self.assertIn("preserve the same selected-shot", session.creative_continuity["continuity"])
@@ -168,6 +170,46 @@ class PhotoshootQueueServiceTests(unittest.TestCase):
         self.assertEqual(tuple(request.sequence_index for request in requests), (1, 2, 3))
         self.assertEqual(tuple(request.prompt_plan_id for request in requests), ("prompt_plan_1", "prompt_plan_2", "prompt_plan_3"))
         self.assertEqual(service.next_queued_request(session.session_id).prompt_plan_id, "prompt_plan_1")
+
+    def test_canonical_session_remains_readable_while_replacement_is_being_written(self):
+        service = self.make_service()
+        session = service.create_session(
+            creator_profile_id=7,
+            prompt_plans=[prompt_plan(1)],
+            provider_id="seedream_4_5",
+        )
+        write_started = threading.Event()
+        allow_write = threading.Event()
+        original_dump = __import__("json").dump
+
+        def delayed_dump(data, file, *args, **kwargs):
+            write_started.set()
+            self.assertTrue(allow_write.wait(timeout=2))
+            return original_dump(data, file, *args, **kwargs)
+
+        writer = threading.Thread(
+            target=service._write_sessions,
+            args=(list(service.list_sessions()),),
+        )
+        read_result = []
+        reader = threading.Thread(
+            target=lambda: read_result.append(service.get_session(session.session_id).session_id),
+        )
+        with patch("app.services.photoshoot_queue_service.json.dump", side_effect=delayed_dump):
+            writer.start()
+            self.assertTrue(write_started.wait(timeout=2))
+            # Readers participate in the same cross-process contract and wait
+            # for the atomic replacement instead of holding a conflicting JSON handle.
+            reader.start()
+            self.assertTrue(reader.is_alive())
+            allow_write.set()
+            writer.join(timeout=2)
+            reader.join(timeout=2)
+
+        self.assertFalse(writer.is_alive())
+        self.assertFalse(reader.is_alive())
+        self.assertEqual(read_result, [session.session_id])
+        self.assertEqual(service.get_session(session.session_id).session_id, session.session_id)
 
     def test_custom_target_shot_count_persists_when_session_is_reloaded(self):
         temp_dir = tempfile.TemporaryDirectory()
@@ -193,6 +235,63 @@ class PhotoshootQueueServiceTests(unittest.TestCase):
         self.assertIsNotNone(reloaded)
         self.assertEqual(reloaded.target_shot_count, 27)
         self.assertEqual(reloaded.creative_continuity["target_shot_count"], 27)
+
+    def test_target_extension_is_durable_one_shot_and_retry_idempotent(self):
+        service = self.make_service()
+        session = service.create_session(
+            creator_profile_id=7, prompt_plans=[prompt_plan(index) for index in range(1, 6)],
+            target_shot_count=5,
+        )
+        for request in service.requests_for_session(session.session_id):
+            service._replace_request(replace(request, status="approved"))
+
+        extended, changed = service.extend_target_one_shot(
+            session.session_id, expected_target_shot_count=5,
+        )
+        retried, retry_changed = service.extend_target_one_shot(
+            session.session_id, expected_target_shot_count=5,
+        )
+
+        self.assertTrue(changed)
+        self.assertFalse(retry_changed)
+        self.assertEqual(extended.target_shot_count, 6)
+        self.assertEqual(retried.target_shot_count, 6)
+        self.assertEqual(service.get_session(session.session_id).target_shot_count, 6)
+        self.assertEqual(extended.creative_continuity["target_shot_count"], 6)
+
+        sixth = service.add_studio_shot_request(
+            session_id=session.session_id, prompt_text="Shot 6", shot_direction="Continue",
+        )
+        service._replace_request(replace(sixth, status="approved"))
+        seventh_target, changed_again = service.extend_target_one_shot(
+            session.session_id, expected_target_shot_count=6,
+        )
+        self.assertTrue(changed_again)
+        self.assertEqual(seventh_target.target_shot_count, 7)
+        self.assertEqual(seventh_target.session_id, session.session_id)
+        self.assertEqual(seventh_target.provider_id, session.provider_id)
+        self.assertEqual(seventh_target.creative_mode, session.creative_mode)
+
+    def test_extension_requires_reached_active_idle_progression_session(self):
+        service = self.make_service()
+        session = service.create_session(
+            creator_profile_id=7, prompt_plans=[prompt_plan(1)], target_shot_count=5,
+        )
+        request = service.requests_for_session(session.session_id)[0]
+        service._replace_request(replace(request, status="rejected"))
+        with self.assertRaisesRegex(ValueError, "has not been reached"):
+            service.extend_target_one_shot(session.session_id, expected_target_shot_count=5)
+        request = service.requests_for_session(session.session_id)[0]
+        service._replace_request(replace(request, status="awaiting_review"))
+        with self.assertRaisesRegex(ValueError, "current shot"):
+            service.extend_target_one_shot(session.session_id, expected_target_shot_count=5)
+
+    def test_existing_fifteen_shot_session_remains_valid(self):
+        service = self.make_service()
+        session = service.create_session(
+            creator_profile_id=7, prompt_plans=[prompt_plan(1)], target_shot_count=15,
+        )
+        self.assertEqual(service.get_session(session.session_id).target_shot_count, 15)
 
     def test_open_ended_target_persists_when_session_is_reloaded(self):
         temp_dir = tempfile.TemporaryDirectory()
@@ -521,6 +620,9 @@ class PhotoshootQueueServiceTests(unittest.TestCase):
         self.assertEqual(job.request.metadata["reference_image_url"], "https://cdn.test/selected-reference.png")
         self.assertEqual(job.request.metadata["photoshoot_continuity_reference_image_url"], "https://cdn.test/selected-reference.png")
         self.assertEqual(job.request.metadata["canonical_reference_image_url"], "https://cdn.test/frozen-identity.png")
+        self.assertEqual(job.request.metadata["original_photoshoot_seed_reference_image_url"], seed.output_reference)
+        self.assertEqual(job.request.metadata["original_photoshoot_seed_image_id"], seed.image_id)
+        self.assertEqual(job.request.metadata["previous_approved_continuity_reference_image_url"], "https://cdn.test/selected-reference.png")
         self.assertEqual(job.request.reference_asset_id, 55)
         self.assertEqual(completed_request.status, "awaiting_review")
         self.assertEqual(completed_request.metadata["generated_image_ids"], ("generated_image_shot_1",))
@@ -553,6 +655,54 @@ class PhotoshootQueueServiceTests(unittest.TestCase):
 
         self.assertEqual(finished.status, "completed")
         self.assertIsNone(service.current_session(creator_profile_id=7))
+
+    def test_later_photoshoot_requests_keep_seed_and_advance_only_previous_approved_reference(self):
+        service = self.make_service()
+        seed = generated_record()
+        session, _ = service.start_studio_session_from_generated_image(
+            seed,
+            canonical_identity_reference={"asset_id": 93, "path": "https://cdn.test/asset-93.png"},
+        )
+        engine = self.make_engine()
+        previous_id = seed.image_id
+        previous_url = seed.output_reference
+
+        for shot_number in (2, 3, 4, 5):
+            request = service.add_studio_shot_request(
+                session_id=session.session_id,
+                prompt_text=f"Shot {shot_number}",
+                shot_direction=f"Direction {shot_number}",
+                active_reference_image_id=previous_id,
+                active_reference_output_reference=previous_url,
+            )
+            job = service.queue_next_prompt(session_id=session.session_id, generation_engine=engine)
+            metadata = job.request.metadata
+            self.assertEqual(metadata["canonical_reference_image_url"], "https://cdn.test/asset-93.png")
+            self.assertEqual(metadata["original_photoshoot_seed_reference_image_url"], seed.output_reference)
+            self.assertEqual(metadata["previous_approved_continuity_reference_image_url"], previous_url)
+            service.mark_generation_complete(
+                generation_job_id=job.job_id, generated_image_ids=(f"shot-{shot_number}",),
+            )
+            service.approve_request(request.request_id)
+            previous_id = f"shot-{shot_number}"
+            previous_url = f"https://cdn.test/shot-{shot_number}.png"
+
+        extended, changed = service.extend_target_one_shot(
+            session.session_id, expected_target_shot_count=5,
+        )
+        self.assertTrue(changed)
+        self.assertEqual(extended.target_shot_count, 6)
+        extension = service.add_studio_shot_request(
+            session_id=session.session_id,
+            prompt_text="Extended shot 6",
+            shot_direction="Direction 6",
+            active_reference_image_id=previous_id,
+            active_reference_output_reference=previous_url,
+        )
+        extension_job = service.queue_next_prompt(session_id=session.session_id, generation_engine=engine)
+        self.assertEqual(extension_job.request.metadata["original_photoshoot_seed_reference_image_url"], seed.output_reference)
+        self.assertEqual(extension_job.request.metadata["previous_approved_continuity_reference_image_id"], "shot-5")
+        self.assertEqual(extension.request_id, extension_job.request.metadata["photoshoot_request_id"])
 
     def test_return_seed_request_removes_seed_from_active_timeline(self):
         service = self.make_service()

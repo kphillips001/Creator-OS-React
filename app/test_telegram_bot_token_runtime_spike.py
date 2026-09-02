@@ -6,6 +6,20 @@ from app.integrations.telegram.bot_token_runtime_spike import (
     TelegramBotTokenUpdateSource,
 )
 from app.models.telegram_inbound import TelegramInboundResult
+from app.services.telegram_delivery_executor import TelegramDeliveryExecutor
+
+
+def allowing_delivery_executor():
+    return TelegramDeliveryExecutor(
+        global_safety_service=type("Safety", (), {
+            "check_global_safety": lambda self: {"allowed": True}
+        })(),
+        customer_safety_service=type("CustomerSafety", (), {
+            "decide": lambda self, **kwargs: type("Decision", (), {
+                "allowed": True, "code": "ALLOWED"
+            })()
+        })(),
+    )
 
 
 class FakeResponse:
@@ -153,6 +167,7 @@ class TelegramBotTokenRuntimeSpikeTests(unittest.TestCase):
             update_source=source,
             inbound_adapter=inbound,
             outbound_sender=outbound,
+            delivery_executor=allowing_delivery_executor(),
         )
 
         result = runtime.run_once()
@@ -184,6 +199,7 @@ class TelegramBotTokenRuntimeSpikeTests(unittest.TestCase):
             update_source=StaticUpdateSource(private_text_update()),
             inbound_adapter=inbound,
             outbound_sender=outbound,
+            delivery_executor=allowing_delivery_executor(),
         )
 
         runtime.run_once()

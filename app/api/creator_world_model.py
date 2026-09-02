@@ -50,7 +50,6 @@ Believable indoor environments include:
 - cabin interior
 - fireplace area
 - coffee shop
-- bookstore
 - office
 - marketing or event venue
 - restaurant
@@ -72,7 +71,6 @@ This section defines environments only. Wardrobe and visual presentation remain 
 - waterfront restaurants
 - historic downtown areas
 - coffee shops
-- bookstores
 - local festivals
 - farmers markets
 - scenic coastal roads

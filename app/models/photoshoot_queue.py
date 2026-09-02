@@ -112,7 +112,7 @@ class CanonicalPhotoshootSeedSummary:
         return source[:match.start()].strip() if match else source.strip()
 
 
-def normalize_target_shot_count(value, *, default: int = 10) -> int:
+def normalize_target_shot_count(value, *, default: int = 5) -> int:
     """Return 0 for an open-ended Photoshoot, otherwise the supported fixed target."""
     try:
         count = int(default if value is None or value == "" else value)
@@ -244,7 +244,7 @@ class PhotoshootSession:
     title: str
     reference_asset_id: int | None
     creative_mode: str
-    target_shot_count: int = 10
+    target_shot_count: int = 5
     status: str = "queued"
     provider_id: str = "future_provider"
     creator_notes: str | None = None

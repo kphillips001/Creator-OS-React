@@ -79,6 +79,29 @@ def test_register_generated_image_creates_minimal_creator_asset(tmp_path):
     assert intelligence.pending == [(91, 2)]
 
 
+def test_photoshoot_member_registration_uses_non_independent_classification(tmp_path):
+    source = tmp_path / "member.png"
+    source.write_bytes(b"generated-image")
+    inserted = []
+    generation_library = FakeGenerationLibrary()
+    service = AssetRegistrationService(
+        asset_repository=FakeAssetRepository(),
+        generation_library_service=generation_library,
+        asset_intelligence_service=FakeAssetIntelligenceService(),
+        content_item_inserter=lambda payload: inserted.append(payload) or 92,
+        analyze_on_registration=False,
+    )
+
+    result = service.register_generated_image(
+        generated_record(source), creator_profile_id=2,
+        classification="UNCLASSIFIED", finalize_generation=False,
+    )
+
+    assert result.success is True
+    assert inserted[0]["classification"] == "UNCLASSIFIED"
+    assert generation_library.links == []
+
+
 def test_register_generated_image_prevents_duplicate_insert(tmp_path):
     source = tmp_path / "generated.png"
     source.write_bytes(b"generated-image")

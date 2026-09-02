@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
+from app.database import get_db_connection
 from app.models.content_destination import (
     AssetContentDestination,
     ContentDestination,
@@ -109,6 +110,44 @@ class ContentDestinationService:
             )
         return self.assign_destination(
             asset_id, normalized, connection=connection, **assignment_context
+        )
+
+    def designate_engagement_teaser(
+        self, asset_id: int, *, creator_profile_id: int, connection=None,
+    ) -> AssetContentDestination:
+        """Commit an available image Asset to reusable, noncommercial Teaser use."""
+        if connection is None:
+            with get_db_connection() as managed_connection:
+                return self.designate_engagement_teaser(
+                    asset_id,
+                    creator_profile_id=creator_profile_id,
+                    connection=managed_connection,
+                )
+        asset = self._asset(int(asset_id), connection=connection)
+        if int(getattr(asset, "creator_profile_id", 0) or 0) != int(creator_profile_id):
+            raise KeyError(f"Canonical Asset not found: {asset_id}")
+        if not asset.is_active or str(asset.status or "").lower() == "archived":
+            raise ValueError("Archived or inactive Assets cannot become Teasers.")
+        if asset.media_type != "image":
+            raise ValueError("Only image Assets can become Teasers.")
+        current = self.get_destination(
+            int(asset_id), connection=connection, for_update=True,
+        )
+        if current.destination == ContentDestination.TEASER:
+            return current
+        if current.destination != ContentDestination.AVAILABLE_INVENTORY:
+            raise ValueError(
+                f"Asset {int(asset_id)} is already committed to "
+                f"{current.destination.value}."
+            )
+        return self.assign_destination(
+            int(asset_id), ContentDestination.TEASER,
+            assigned_by_profile_id=int(creator_profile_id),
+            source_workflow="engagement_teaser_intake",
+            source_reference=f"content_items:{int(asset_id)}",
+            reason="Canonical image designated as reusable engagement Teaser.",
+            metadata={"purpose": "ENGAGEMENT_TEASER"},
+            connection=connection,
         )
 
     def is_available_inventory(self, asset_id: int) -> bool:

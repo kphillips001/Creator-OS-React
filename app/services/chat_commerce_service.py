@@ -14,6 +14,7 @@ from app.services.commerce_sales_service import (
 )
 from app.models.customer_sales_decision import (
     CustomerSalesDecision,
+    CustomerSalesReasonCode,
     CustomerSalesDecisionType,
 )
 
@@ -168,12 +169,31 @@ class ChatCommerceService:
         if (
             not context.purchase_intent
             or
-            decision.decision is not CustomerSalesDecisionType.PRESENT_OFFER
-            or not decision.sell_allowed
+            (
+                decision.decision not in {
+                CustomerSalesDecisionType.PRESENT_OFFER,
+                CustomerSalesDecisionType.PRESENT_ALTERNATIVE_OFFER,
+                CustomerSalesDecisionType.UPSELL,
+                CustomerSalesDecisionType.CROSS_SELL,
+                }
+                and not (
+                    decision.decision
+                    is CustomerSalesDecisionType.NUDGE_ACTIVE_OFFER
+                    and decision.reason_code
+                    is CustomerSalesReasonCode
+                    .CUSTOMER_INITIATED_ACTIVE_OFFER_CONTINUATION
+                )
+            )
+            or not (decision.sell_allowed or decision.nudge_allowed)
             or decision.recommended_offering_id is None
         ):
             if (
-                decision.decision is CustomerSalesDecisionType.PRESENT_OFFER
+                decision.decision in {
+                    CustomerSalesDecisionType.PRESENT_OFFER,
+                    CustomerSalesDecisionType.PRESENT_ALTERNATIVE_OFFER,
+                    CustomerSalesDecisionType.UPSELL,
+                    CustomerSalesDecisionType.CROSS_SELL,
+                }
                 and decision.recommended_offering_id is None
             ):
                 logger.warning(
@@ -214,6 +234,11 @@ class ChatCommerceService:
             True, context.requested_media_type, context.requested_themes,
             offering, decision.reason_code.value, None,
             "COMMERCIAL_OFFERING_SELECTOR", False,
+            (
+                dict(decision.bundle_sales_context or {})
+                if decision.bundle_sales_context
+                else dict(decision.recommended_product_context or {})
+            ),
         )
 
     @classmethod
@@ -224,14 +249,10 @@ class ChatCommerceService:
         return None
 
     @staticmethod
-    def compose_reply(existing_reply: str, decision: ChatCommerceDecision) -> str:
-        offering = decision.offering
-        if offering is None:
-            return existing_reply
-        price = f"{offering.currency} {offering.price_minor / 100:.2f}"
-        description = f" — {offering.description.strip()}" if offering.description else ""
-        return (
-            f"{existing_reply.rstrip()}\n\n"
-            f"{offering.title}{description} is available for {price}: "
-            f"{offering.delivery_url}"
-        )
+    def compose_reply(
+        existing_reply: str, decision: ChatCommerceDecision, *,
+        price_neutral: bool = False,
+    ) -> str:
+        # The durable structured paid presentation owns authoritative price and
+        # destination. Ava's conversational prose never appends either.
+        return existing_reply

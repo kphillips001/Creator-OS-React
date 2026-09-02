@@ -39,9 +39,11 @@ class Seedream50ProProvider(WaveSpeedProviderBase):
 REFERENCE GUIDANCE FOR THIS PHOTOSHOOT:
 Image 1 is the canonical creator identity reference. Treat Image 1 as the authoritative source for the creator's exact identity and overall appearance, including facial identity, face shape, eyes, eyebrows, nose, lips, jawline, cheek structure, hairline, and skin tone. Preserve that creator exactly; do not reinterpret or replace her identity.
 
-Image 2 is the latest approved Photoshoot image. Use Image 2 for the continuing pose, body position, wardrobe, location, lighting, composition, framing, camera angle, expression evolution, and the visual continuity of this Photoshoot. Do not use Image 2 to redefine the creator's facial identity.
+Image 2 is the immutable original Photoshoot seed. Use it as the foundational environment, styling, lighting, and visual-world anchor. Do not let later images override this foundation.
 
-Image 1 controls identity. Image 2 controls Photoshoot continuity.
+Image 3, when present, is only the latest valid approved shot. Use it for local pose, action, framing, and expression progression; it must not override Image 1 identity or Image 2's shoot foundation.
+
+Image 1 controls identity. Image 2 anchors the shoot. Image 3 controls only local progression.
 """.strip()
 
     def _render_prompt_text(self, request):
@@ -58,6 +60,9 @@ Image 1 controls identity. Image 2 controls Photoshoot continuity.
         continuity = str(
             metadata.get("photoshoot_continuity_reference_image_url") or ""
         ).strip()
+        original_seed = str(
+            metadata.get("original_photoshoot_seed_reference_image_url") or continuity
+        ).strip()
         if (
             policy in {
                 RenderPolicy.PHOTOSHOOT_SAFE,
@@ -66,6 +71,7 @@ Image 1 controls identity. Image 2 controls Photoshoot continuity.
             }
             and canonical
             and continuity
+            and original_seed
             and canonical != continuity
         ):
             return f"{prompt}\n\n{self.PHOTOSHOOT_REFERENCE_ROLE_GUIDANCE}"

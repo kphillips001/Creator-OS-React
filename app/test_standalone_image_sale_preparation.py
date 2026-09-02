@@ -58,6 +58,10 @@ class Publications:
     def update_metadata(self, publication_id, **values):
         self.value.publication_metadata = values["metadata"]
         return self.value
+    def update_status(self, publication_id, *, status, **_):
+        self.value.status = status
+        self.value.last_error = None
+        return self.value
 
 
 class Media:
@@ -85,7 +89,7 @@ def make_service(tmp_path):
     original, blurred = tmp_path / "image.jpg", tmp_path / "blur.jpg"
     original.write_bytes(b"image"); blurred.write_bytes(b"blur")
     asset = SimpleNamespace(
-        id=42, creator_profile_id=7, media_type="image",
+        id=42, creator_profile_id=7, media_type="image", classification="SINGLE_IMAGE",
         file_name="image.jpg", file_path=str(original), local_vault_path=str(original),
         blurred_preview_path=None, media_metadata={})
     assets, offerings, publications, media = Assets(asset), Offerings(), Publications(), Media(blurred)
@@ -127,6 +131,24 @@ def test_inspect_derives_ready_only_from_real_persisted_state(tmp_path):
     inspected = service.inspect(42, creator_profile_id=7)
     assert inspected["status"] == "READY"
     assert inspected["destinations"] == ["CHAT"]
+
+
+def test_retry_supersedes_active_failure_without_erasing_retry_history(tmp_path):
+    service, _, _, _, publications, _ = make_service(tmp_path)
+    publication = service.stage(42, creator_profile_id=7, price_minor=1250)
+    publication.status = CommercialPublicationStatus.FAILED
+    publication.last_error = "Fanvue request failed with HTTP 503."
+    publication.retry_count = 1
+
+    retried = service.stage(42, creator_profile_id=7, price_minor=1250)
+
+    assert retried is publication
+    assert retried.status == CommercialPublicationStatus.READY_TO_PUBLISH
+    assert retried.last_error is None
+    assert retried.retry_count == 1
+    inspected = service.inspect(42, creator_profile_id=7)
+    assert inspected["status"] == "PREPARING"
+    assert inspected["error"] is None
 
 
 def test_pending_intelligence_does_not_create_commerce_or_photoshoot_state(tmp_path):
@@ -197,6 +219,36 @@ def test_chat_requires_operator_accepted_selective_teaser(tmp_path):
         assert False
     except ValueError as error:
         assert "selective Chat teaser" in str(error)
+
+
+def test_reassign_destination_preserves_asset_and_uses_canonical_wall_preparation(tmp_path):
+    service, assets, _, _, _, _ = make_service(tmp_path)
+    assets.asset.media_metadata = {"unrelated": {"keep": True}, "standalone_sale_preparation": {
+        "destinations": ["CHAT"], "teaser_style": "SELECTIVE_BLUR",
+    }}
+
+    service.reassign_destination(
+        42, creator_profile_id=7, price_minor=1250,
+        destination="CONTENT_VAULT", teaser_style="FULL_BLUR",
+    )
+
+    persisted = assets.metadata_updates[-1][1]
+    assert persisted["standalone_sale_preparation"]["destinations"] == ["CONTENT_VAULT"]
+    assert persisted["unrelated"] == {"keep": True}
+    assert assets.asset.id == 42
+    assert service.teasers.vault_calls == 1
+
+
+def test_reassign_destination_rejects_noop_cross_creator_and_non_single(tmp_path):
+    service, assets, *_ = make_service(tmp_path)
+    assets.asset.media_metadata = {"standalone_sale_preparation": {"destinations": ["CHAT"]}}
+    with pytest.raises(ValueError, match="different sales destination"):
+        service.reassign_destination(42, creator_profile_id=7, price_minor=1250, destination="CHAT")
+    with pytest.raises(KeyError, match="not found"):
+        service.reassign_destination(42, creator_profile_id=8, price_minor=1250, destination="CONTENT_VAULT")
+    assets.asset.classification = "BUNDLE"
+    with pytest.raises(ValueError, match="standalone Single Images"):
+        service.reassign_destination(42, creator_profile_id=7, price_minor=1250, destination="CONTENT_VAULT")
 
 
 def test_legacy_chat_fallback_requires_ready_canonical_foundation(tmp_path):

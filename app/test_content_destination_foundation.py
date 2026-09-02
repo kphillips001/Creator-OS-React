@@ -14,11 +14,11 @@ from app.services.content_destination_service import ContentDestinationService
 class Assets:
     def __init__(self):
         self.assets = {
-            1: SimpleNamespace(id=1, creator_profile_id=7),
-            2: SimpleNamespace(id=2, creator_profile_id=7),
+            1: SimpleNamespace(id=1, creator_profile_id=7, is_active=True, status="approved", media_type="image"),
+            2: SimpleNamespace(id=2, creator_profile_id=7, is_active=True, status="approved", media_type="image"),
         }
 
-    def get_by_id(self, asset_id):
+    def get_by_id(self, asset_id, connection=None):
         return self.assets.get(asset_id)
 
     def list_by_ids(self, asset_ids):
@@ -31,7 +31,7 @@ class Destinations:
         self.history = {}
         self.assign_calls = 0
 
-    def get(self, asset_id):
+    def get(self, asset_id, connection=None, for_update=False):
         return self.rows.get(asset_id)
 
     @staticmethod
@@ -105,7 +105,29 @@ def test_asset_defaults_to_available_inventory_and_initialization_is_idempotent(
     assert first.destination == ContentDestination.AVAILABLE_INVENTORY
     assert second == first
     assert repository.assign_calls == 1
-    assert len(repository.history[1]) == 1
+
+
+def test_engagement_teaser_is_idempotent_and_exclusive_from_paid_destinations():
+    content_destinations, repository = service()
+    content_destinations.get_destination(1)
+    teaser = content_destinations.designate_engagement_teaser(
+        1, creator_profile_id=7, connection=object(),
+    )
+    assert teaser.destination == ContentDestination.TEASER
+    assert teaser.metadata == {"purpose": "ENGAGEMENT_TEASER"}
+    assert content_destinations.designate_engagement_teaser(
+        1, creator_profile_id=7, connection=object(),
+    ) == teaser
+
+    repository.assign(
+        asset_id=2, destination=ContentDestination.SINGLE_PPV,
+        creator_profile_id=7,
+    )
+    with pytest.raises(ValueError, match="already committed to SINGLE_PPV"):
+        content_destinations.designate_engagement_teaser(
+            2, creator_profile_id=7, connection=object(),
+        )
+    assert len(repository.history[1]) == 2
 
 
 def test_destination_lookup_commitment_and_available_inventory_checks():

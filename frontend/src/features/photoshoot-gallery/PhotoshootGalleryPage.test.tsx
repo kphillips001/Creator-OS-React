@@ -40,6 +40,21 @@ describe("PhotoshootGalleryPage", () => {
     render(<MemoryRouter><PhotoshootGalleryPage /></MemoryRouter>);
     await screen.findByText("2 Images", { exact: false });
     expect(fetchSpy.mock.calls.every(([input]) => !String(input).includes("intelligence"))).toBe(true);
+    expect(fetchSpy).toHaveBeenCalledWith("/api/v1/photoshoot-gallery?page=1&page_size=24", { cache: "no-store" });
+  });
+
+  it("loads bounded Gallery pages on demand", async () => {
+    const second = { ...item, deliverableId: "set-2", shotCount: 3 };
+    const request = vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
+      const pageTwo = String(input).includes("page=2");
+      return Promise.resolve(new Response(JSON.stringify({
+        items: pageTwo ? [second] : [item], page: pageTwo ? 2 : 1, totalPages: 2,
+      }), { status: 200 }));
+    });
+    render(<MemoryRouter><PhotoshootGalleryPage /></MemoryRouter>);
+    fireEvent.click(await screen.findByRole("button", { name: "Load More" }));
+    expect(await screen.findByRole("article", { name: /3 images/ })).toBeInTheDocument();
+    expect(request).toHaveBeenCalledWith("/api/v1/photoshoot-gallery?page=2&page_size=24", { cache: "no-store" });
   });
 
   it("surfaces failed commercial intelligence without exposing an error traceback", async () => {

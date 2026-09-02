@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from app.models.asset import Asset
 from app.models.experience import ExperienceAssetRelationship
 from app.models.product import ProductDeliveryType
+from app.repositories.asset_repository import AssetRepository
 from app.models.asset_library import (
     AssetLibraryDetails,
     AssetLibraryFilter,
@@ -204,6 +205,21 @@ class FakeExperienceService:
 
 
 class AssetLibraryServiceTests(unittest.TestCase):
+    def test_registered_grid_excludes_photoshoot_members_and_photoshoot_dispositions(self):
+        where, params = AssetRepository._library_grid_where(
+            search=None, media_type="image", classification="SINGLE_IMAGE",
+            sale_destination=None, creator_profile_id=7,
+        )
+
+        self.assertIn("photoshoot_asset_memberships", where)
+        self.assertIn("pam.approved=TRUE", where)
+        self.assertIn("generation_image_dispositions", where)
+        self.assertIn("gid.owner='PHOTOSHOOT'", where)
+        self.assertIn("acd.destination='TEASER'", where)
+        self.assertIn("NOT EXISTS", where)
+        self.assertNotIn("PHOTOSHOOT_SESSION_TEASER", where)
+        self.assertEqual(params, [7, "SINGLE_IMAGE"])
+
     def test_images_grid_positively_scopes_registered_assets_to_single_image(self):
         captured = {}
         assets = SimpleNamespace(asset_library_grid_summary=lambda **kwargs: captured.update(kwargs) or ((), 0, ()))
@@ -221,6 +237,17 @@ class AssetLibraryServiceTests(unittest.TestCase):
         self.assertIsNone(captured["sale_destination"])
         self.assertIsNone(captured["availability_predicate"])
         self.assertEqual(service.content_destinations.expressions, [])
+
+    def test_teaser_grid_filters_by_canonical_destination_before_pagination(self):
+        where, params = AssetRepository._library_grid_where(
+            search="sunset", media_type="image", classification="SINGLE_IMAGE",
+            sale_destination=None, asset_purpose="TEASER", creator_profile_id=7,
+        )
+        self.assertIn("asset_content_destinations", where)
+        self.assertIn("acd.destination=%s", where)
+        self.assertNotIn("acd.destination='TEASER'", where)
+        self.assertEqual(params[0:2], [7, "TEASER"])
+        self.assertEqual(params[-1], "SINGLE_IMAGE")
 
     def test_images_grid_passes_canonical_sale_destination_to_repository(self):
         captured = {}

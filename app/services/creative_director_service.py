@@ -1130,8 +1130,17 @@ attributes precisely and put all uploaded-subject identity attributes in element
         return normalize_target_shot_count(context.get("target_shot_count")) > 0
 
     @staticmethod
-    def _freeflow_facial_performance_block() -> str:
-        return """FreeFlow facial performance (REQUIRED):
+    def _ppv_face_mood(creative_mode: str | None = None) -> str:
+        mode = str(creative_mode or "").strip().lower()
+        if mode == "explicit":
+            return "teasing, naughty, seductive, sexually enticing, appealing, and salacious"
+        return "teasing, seductive, alluring, intimate, and appealing"
+
+    @staticmethod
+    def _freeflow_facial_performance_block(creative_mode: str | None = None) -> str:
+        mode = str(creative_mode or "").strip().lower()
+        if mode in {"safe", "standard", "social_safe"}:
+            return """FreeFlow facial performance (REQUIRED):
 - Preserve the subject's exact facial identity, anatomy, proportions, and recognizable features. Facial identity continuity remains strict.
 - Treat the latest approved facial performance as contrast evidence, not as an expression lock.
 - Do not repeat the immediately previous approved shot's facial expression, gaze, and head attitude as a package.
@@ -1139,6 +1148,34 @@ attributes precisely and put all uploaded-subject identity attributes in element
 - Specify the expression, gaze direction, mouth state, and head attitude together in the emotion field.
 - Natural options include direct or averted gaze, looking slightly up or down, relaxed or intent eyes, closed or subtly parted lips, a restrained smirk, and small chin or head-angle changes. These are examples, never a fixed rotation.
 - Avoid exaggerated emotion, cartoonish performance, forced large smiles, or facial changes that compromise identity.""".strip()
+        intensity = CreativeDirectorService._ppv_face_mood(mode)
+        return f"""FreeFlow facial performance (REQUIRED):
+- Preserve the subject's exact facial identity, anatomy, proportions, and recognizable features. Facial identity continuity remains strict.
+- Treat the latest approved facial performance as contrast evidence, not as an expression lock.
+- Do not repeat the immediately previous approved shot's facial expression, gaze, and head attitude as a package.
+- Default face mood for this shoot: {intensity}. Never default to vacant, blank, deadpan, mannequin, catalog-neutral, or soft empty-model stares.
+- Every emotion field must name a concrete PPV face: expression + gaze + mouth state + head attitude.
+- Preferred options include teasing smirk, coy bitten lip, parted lips, locked seductive eye contact, naughty private stare, soft salacious smile with fully open alert eyes. These are examples, never a fixed rotation.
+- Eyes must stay fully open and alert unless true afterglow/orgasm collapse is explicitly requested. No droopy, sleepy, or vacant lids.
+- Identity continuity must not flatten emotional performance into a neutral beauty face.
+- Avoid goofy mugging, cartoonish overacting, forced pageant smiles, or identity-breaking distortion.""".strip()
+
+    @staticmethod
+    def _progression_facial_performance_block(creative_mode: str | None = None) -> str:
+        mode = str(creative_mode or "").strip().lower()
+        if mode in {"safe", "standard", "social_safe"}:
+            return """Progression facial performance (REQUIRED):
+- Face must change slightly every shot (smile, glance, confidence) so faces do not look identical.
+- Keep expression natural and identity-stable.""".strip()
+        intensity = CreativeDirectorService._ppv_face_mood(mode)
+        return f"""Progression facial performance (REQUIRED):
+- Face must evolve every shot. Do NOT keep the same neutral model face, same soft empty smile, or same calm vacant eye contact.
+- Default face mood: {intensity}.
+- Every emotion field must name expression + gaze + mouth state (and head attitude when useful).
+- Prefer teasing smirk, bitten lip, parted lips, locked seductive eye contact, naughty private stare with fully open alert eyes.
+- Never output bland defaults like "natural and connected", "soft smile", or "preserve previous expression".
+- Eyes fully open and alert; no droopy/sleepy/vacant lids except true afterglow/orgasm collapse.
+- Identity continuity must not flatten performance into a catalog beauty face.""".strip()
 
     @classmethod
     def _creative_prompt_context(cls, session_context: Mapping[str, Any] | None) -> dict[str, Any]:
@@ -1239,13 +1276,16 @@ Natural progression pacing (REQUIRED):
 - Do not infer pacing from the current or approved shot count. Do not advance a stage, arc, intensity, undress, climax, or finale merely because another shot was approved.
 - Preserve the current scenario and intensity unless the operator explicitly requests a change; operator-requested evolution remains authoritative."""
         facial_performance_rules = (
-            "\n" + CreativeDirectorService._freeflow_facial_performance_block() + "\n"
-            if not progression_enabled else ""
+            "\n" + CreativeDirectorService._freeflow_facial_performance_block(creative_mode) + "\n"
+            if not progression_enabled else
+            "\n"
+            + CreativeDirectorService._progression_facial_performance_block(creative_mode)
+            + "\n"
         )
         latest_expression_rule = (
             "- Preserve the latest approved environment, location, wardrobe, clothing state, pose, body orientation, hand placement, camera angle, framing, and lighting unless the operator explicitly directs a change. Its facial performance is contrast context governed by the FreeFlow facial-performance rules."
             if not progression_enabled else
-            "- Preserve its environment, location, wardrobe, clothing state, pose, body orientation, hand placement, facial expression, camera angle, framing, and lighting unless the operator explicitly directs a change."
+            "- Preserve its environment, location, wardrobe, clothing state, pose, body orientation, hand placement, camera angle, framing, and lighting unless the operator explicitly directs a change. Evolve facial expression every shot; do not freeze the previous face package."
         )
         return f"""
 You are the Shot Director for a continuity-locked Creator OS Photoshoot Studio session.
@@ -1386,7 +1426,7 @@ Creative Freeflow (required):
 - In explicit mode, omit every automatic explicit progression ladder. Maintain the current explicit scenario/intensity unless the operator explicitly requests a change.
 - Preserve location, lighting, hairstyle, makeup, camera style, identity, and all continuity locks unless operator guidance changes a specific element.
 
-{CreativeDirectorService._freeflow_facial_performance_block()}
+{CreativeDirectorService._freeflow_facial_performance_block(mode)}
 
 {CreativeDirectorService._explicit_length_pacing_block(session_context) if mode == "explicit" else ""}
 """.strip()
@@ -1600,12 +1640,15 @@ Stay platform-safe. Progress through expression, pose variety, framing, confiden
             "why this is the right beat in the arc"
         )
         facial_performance_rules = (
-            CreativeDirectorService._freeflow_facial_performance_block()
-            if not progression_enabled else ""
+            CreativeDirectorService._freeflow_facial_performance_block(mode)
+            if not progression_enabled
+            else CreativeDirectorService._progression_facial_performance_block(mode)
         )
         emotion_schema = (
-            "specific facial performance: expression, gaze, mouth state, and head attitude"
-            if not progression_enabled else "specific facial expression"
+            "specific alluring facial performance: expression, gaze, mouth state, and head attitude "
+            "(teasing/seductive/PPV energy for premium+explicit; never blank or vacant)"
+            if mode not in {"safe", "standard", "social_safe"}
+            else "specific facial performance: expression, gaze, mouth state, and head attitude"
         )
         return f"""
 You are the Shot Director {planning_role}.
@@ -1831,9 +1874,16 @@ Exactly {frame_count} objects in shots, numbered 1..{frame_count} in order.
                 "continuity_notes": "Maintain the current session continuity unless the creator supplied an override.",
                 "camera_framing": "Use close creator framing with the subject as the visual priority.",
                 "lighting": "Preserve the current lighting style.",
-                "emotion": "Keep the expression natural and connected.",
+                "emotion": "",
                 "pose_composition": fallback,
             }
+        from app.services.photoshoot_expression_guidance import normalize_photoshoot_emotion
+
+        mode = str(creative_mode or "premium").strip().lower()
+        emotion = normalize_photoshoot_emotion(
+            str(data.get("emotion") or "").strip(),
+            creative_mode=mode,
+        )
         return PhotoshootCreativeDirection(
             title=str(data.get("title") or "Next Photoshoot Direction").strip(),
             creative_direction=str(data.get("creative_direction") or "").strip(),
@@ -1841,9 +1891,9 @@ Exactly {frame_count} objects in shots, numbered 1..{frame_count} in order.
             continuity_notes=str(data.get("continuity_notes") or "").strip(),
             camera_framing=str(data.get("camera_framing") or "").strip(),
             lighting=str(data.get("lighting") or "").strip(),
-            emotion=str(data.get("emotion") or "").strip(),
+            emotion=emotion,
             pose_composition=str(data.get("pose_composition") or "").strip(),
-            creative_mode=str(creative_mode or "premium").strip().lower(),
+            creative_mode=mode,
             session_direction=str(session_direction or "").strip(),
             continuity_locks=dict(continuity_locks or {}),
             raw_response=text,

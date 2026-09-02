@@ -26,3 +26,11 @@ class SelectiveBlurMaskValidator:
             if isinstance(error, ValueError) and "painted blur" in str(error): raise
             raise ValueError("Selective blur mask is invalid or corrupt.") from error
         return raw
+
+    @staticmethod
+    def is_full_blur(raw: bytes) -> bool:
+        """Classify final mask coverage without trusting the editor's selected tool."""
+        with Image.open(BytesIO(raw)) as mask:
+            alpha = mask.getchannel("A") if "A" in mask.getbands() else mask.convert("L")
+            minimum, maximum = alpha.getextrema()
+            return minimum == 255 and maximum == 255

@@ -8,6 +8,9 @@ from typing import Any, Mapping
 from app.models.generation_engine import utc_now
 
 
+GENERATION_LIBRARY_PAGE_SIZE = 24
+
+
 @dataclass(frozen=True)
 class GeneratedImageRecord:
     image_id: str
@@ -34,11 +37,16 @@ class GeneratedImageRecord:
     generation_metadata: Mapping[str, Any] = field(default_factory=dict)
     created_at: str = field(default_factory=utc_now)
     updated_at: str | None = None
+    is_staged: bool = False
+    staged_at: str | None = None
+    content_classification: str | None = None
+    classification_source: str | None = None
 
 
 @dataclass(frozen=True)
 class GenerationLibraryFilter:
     search: str | None = None
+    content_origin: str | None = None
     provider_id: str | None = None
     status: str | None = None
     creative_mode: str | None = None

@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type CSSProperties } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
 import {
   getContentStudioGeneration,
@@ -29,6 +29,7 @@ type GenerationWorkflowSectionsProps = {
   workflow: "autonomous" | "manual";
   recreateRuntime?: RecreateRuntimeState | null;
   onRecreateRuntimeChange?: (state: RecreateRuntimeState) => void;
+  runtimeStatusAction?: ReactNode;
 };
 
 export type PlannerBatchProgress = {
@@ -88,7 +89,7 @@ export function inspirationProgressStage(
 
 export const GenerationWorkflowSections = forwardRef<GenerationWorkflowHandle, GenerationWorkflowSectionsProps>(function GenerationWorkflowSections({
   context, disabled, onManualGenerationStart, onPlannerBatchItemChange, onReconnect, onRunStart,
-  onStartNewGeneration, plannerBatchItems = [], plannerBatchProgress = null, plannerBatchRunning = false, reconnectOrigins, request, workflow, recreateRuntime, onRecreateRuntimeChange,
+  onStartNewGeneration, plannerBatchItems = [], plannerBatchProgress = null, plannerBatchRunning = false, reconnectOrigins, request, workflow, recreateRuntime, onRecreateRuntimeChange, runtimeStatusAction,
 }, ref) {
   const [runId, setRunId] = useState("");
   const [generation, setGeneration] = useState<ContentStudioGeneration | null>(null);
@@ -402,6 +403,7 @@ export const GenerationWorkflowSections = forwardRef<GenerationWorkflowHandle, G
             ? aggregateProcessed / Math.max(1, plannerBatchProgress.totalIdeas) * 100
             : generation?.progress ?? 0}
           status={plannerBatchProgress ? aggregateStatus : singleImageMode && active ? "Generating Ava recreation..." : generation?.message || (active ? `Queued Image 1 of ${slotCount}` : "Ready")}
+          statusAction={runtimeStatusAction}
           title="Live Generation"
           tone={plannerBatchProgress
             ? plannerBatchProgress.phase === "complete"
@@ -436,7 +438,9 @@ export const GenerationWorkflowSections = forwardRef<GenerationWorkflowHandle, G
                   {completed ? (
                     <img
                       alt={`Generated image ${displayNumber} of ${plannerBatchProgress.totalIdeas}`}
-                      src={item.imageUrl}
+                      loading="lazy"
+                      decoding="async"
+                      src={item.imageUrl?.replace(/\/media(?:\?.*)?$/, "/preview")}
                     />
                   ) : item.status === "failed" ? (
                     <div
@@ -474,7 +478,7 @@ export const GenerationWorkflowSections = forwardRef<GenerationWorkflowHandle, G
               return (
                 <figure className={image ? "generation-live__slot generation-live__slot--complete" : "generation-live__slot"} key={index}>
                   {image ? (
-                    <img alt={`Generated image ${index + 1} of ${slotCount}`} src={image.url} />
+                    <img alt={`Generated image ${index + 1} of ${slotCount}`} loading="lazy" decoding="async" src={image.url.replace(/\/media(?:\?.*)?$/, "/preview")} />
                   ) : (
                     <div
                       aria-label={`Waiting for generated image ${index + 1} of ${slotCount}`}

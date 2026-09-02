@@ -1,0 +1,46 @@
+{
+  "captured_at_utc": "2026-08-27T19:12:00Z",
+  "purpose": "Rollback snapshot before enabling the short Creator-OS Unlock alias route",
+  "secrets_included": false,
+  "dns": {
+    "unlock_record_id": "63362dd166b7fffb04beafcff75396f4",
+    "type": "CNAME",
+    "name": "unlock.avablackthorne.net",
+    "content": "2273901b-98f0-4760-9da1-7b4287f2f1bd.cfargotunnel.com",
+    "proxied": true
+  },
+  "tunnel": {
+    "id": "2273901b-98f0-4760-9da1-7b4287f2f1bd",
+    "name": "creator-os-webhook",
+    "config": {
+      "ingress": [
+        {"service": "http://127.0.0.1:8001", "hostname": "hooks.fanterix.com"},
+        {"path": "^/api/v1/commerce/unlock/[A-Za-z0-9_-]{64}$", "service": "http://127.0.0.1:8001", "hostname": "unlock.avablackthorne.net"},
+        {"service": "http_status:404"}
+      ],
+      "warp-routing": {"enabled": false},
+      "originRequest": null
+    }
+  },
+  "custom_waf": {
+    "ruleset_id": "59fdb1e280dd4ee3be4f207b99466d97",
+    "rule_id": "7819376fc19743b2a0bdac3c0950b083",
+    "action": "block",
+    "enabled": true,
+    "expression": "(http.host eq \"unlock.avablackthorne.net\" and (not ssl or http.request.method ne \"GET\" or not starts_with(http.request.uri.path, \"/api/v1/commerce/unlock/\")))"
+  },
+  "rate_limit": {
+    "ruleset_id": "f818e9204905406f817dd9e36ae03558",
+    "rule_id": "45d036bcaac5416eb29e025029f56a95",
+    "action": "block",
+    "enabled": true,
+    "expression": "(http.host eq \"unlock.avablackthorne.net\" and http.request.method eq \"GET\" and starts_with(http.request.uri.path, \"/api/v1/commerce/unlock/\"))",
+    "ratelimit": {"characteristics": ["cf.colo.id", "ip.src"], "mitigation_timeout": 10, "period": 10, "requests_per_period": 10}
+  },
+  "dynamic_redirect": {
+    "ruleset_id": "a5595f3f73284d14a5c72163f5ab0bc6",
+    "rule_id": "dcfaa565769e4989830e38f0012eeafb",
+    "expression": "http.host ne \"unlock.avablackthorne.net\"",
+    "target": "https://www.fanvue.com/avablackthorne"
+  }
+}

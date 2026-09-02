@@ -28,6 +28,10 @@ class RegenerationEligibilityService:
             record = self.library.get(source_id)
         except KeyError:
             return self._no("SOURCE_NOT_FOUND", "Generated image was not found.", source_id)
+        return self._inspect_record(record, creator_profile_id=creator_profile_id)
+
+    def _inspect_record(self, record, *, creator_profile_id: int | None = None) -> RegenerationEligibility:
+        source_id = str(record.image_id)
         if creator_profile_id is not None and int(record.creator_profile_id) != int(creator_profile_id):
             return self._no("SOURCE_NOT_OWNED", "Generated image does not belong to the active Creator Profile.", source_id)
         if not record.generation_recipe_id:
@@ -82,14 +86,24 @@ class RegenerationEligibilityService:
         records = tuple(records)
         recipe_ids = tuple(record.generation_recipe_id for record in records if record.generation_recipe_id)
         if not recipe_ids or not hasattr(self.recipes, "prefetch"):
-            return {record.image_id: self.inspect(record.image_id, creator_profile_id=creator_profile_id) for record in records}
+            return {
+                record.image_id: self._inspect_record(
+                    record, creator_profile_id=creator_profile_id,
+                )
+                for record in records
+            }
         prefetched = self.recipes.prefetch(recipe_ids)
         cached_references = _CachedReferenceLibrary(self.references)
         service = RegenerationEligibilityService(
-            generation_library=self.library, recipes=prefetched,
+            generation_library=_RecordLookupGenerationLibrary(records, self.library), recipes=prefetched,
             references=cached_references, provider_registry=self.providers,
         )
-        return {record.image_id: service.inspect(record.image_id, creator_profile_id=creator_profile_id) for record in records}
+        return {
+            record.image_id: service._inspect_record(
+                record, creator_profile_id=creator_profile_id,
+            )
+            for record in records
+        }
 
     def resolve_references(self, recipe, creator_profile_id: int):
         resolved = []
@@ -132,3 +146,17 @@ class _CachedReferenceLibrary:
         if key not in self.cache:
             self.cache[key] = self.source.get_owned_reference(asset_id, creator_profile_id=creator_profile_id)
         return self.cache[key]
+
+
+class _RecordLookupGenerationLibrary:
+    """Reuse records already loaded for a page, falling back only for other IDs."""
+
+    def __init__(self, records, source):
+        self.records = {str(record.image_id): record for record in records}
+        self.source = source
+
+    def get(self, image_id):
+        key = str(image_id)
+        if key in self.records:
+            return self.records[key]
+        return self.source.get(key)

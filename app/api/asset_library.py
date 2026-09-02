@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import mimetypes
 import logging
+import time
+from io import BytesIO
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
@@ -11,7 +13,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from pydantic import BaseModel, Field
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 
 from app.api.content_studio import _current_account_id
 from app.models.asset_library import AssetLibraryFilter
@@ -31,6 +33,8 @@ from app.repositories.photoshoot_commerce_repository import PhotoshootCommerceRe
 from app.services.photoshoot_commerce_deliverable_service import PhotoshootCommerceDeliverableService
 from app.services.photoshoot_sale_preparation_service import PhotoshootSalePreparationService
 from app.services.photoshoot_bundle_sale_preparation_service import PhotoshootBundleSalePreparationService
+from app.services.creator_commerce_identity_service import resolve_fanvue_account_id
+from app.services.blur_service import render_full_blur
 from app.services.photoshoot_bundle_teaser_service import PhotoshootBundleTeaserService
 from app.services.creative_intelligence_learning_service import CreativeIntelligenceLearningService
 from app.models.photoshoot_selling_mode import PhotoshootSellingMode
@@ -47,13 +51,33 @@ from app.repositories.commercial_publication_repository import CommercialPublica
 from app.services.content_vault_ppv_caption_context import ContentVaultPPVCaptionContextBuilder
 from app.services.content_vault_bundle_caption_context import ContentVaultBundleCaptionContextBuilder
 from app.services.commerce_telegram_vault_service import CommerceTelegramVaultService
+from app.repositories.free_engagement_teaser_repository import FreeEngagementTeaserRepository
 
 
 router = APIRouter(prefix="/api/v1/assets", tags=["asset-library"])
 logger = logging.getLogger(__name__)
+performance_logger = logging.getLogger("creator-os-performance")
 
 
 _meaningful_filename_title = meaningful_filename_title
+
+
+class EngagementTeaserChatControlRequest(BaseModel):
+    enabled: bool
+
+
+@router.put("/{asset_id}/engagement-teaser/chat-control")
+def set_engagement_teaser_chat_control(
+    asset_id: int, request: EngagementTeaserChatControlRequest,
+):
+    creator_profile_id = int(_creator_profile()["id"])
+    enabled = FreeEngagementTeaserRepository().set_chat_enabled(
+        asset_id=asset_id, creator_profile_id=creator_profile_id,
+        enabled=request.enabled,
+    )
+    if enabled is None:
+        raise HTTPException(status_code=404, detail="Standalone engagement Teaser not found.")
+    return {"assetId": asset_id, "chatEnabled": enabled}
 
 
 def _asset_display_name(item, profile) -> str:
@@ -191,6 +215,12 @@ class StandaloneSalePreparationRequest(BaseModel):
     teaserStyle: Literal["FULL_BLUR", "SELECTIVE_BLUR"] | None = None
 
 
+class StandaloneDestinationReassignmentRequest(BaseModel):
+    destination: Literal["CHAT", "CONTENT_VAULT"]
+    priceMinor: int = Field(ge=300, le=50000)
+    teaserStyle: Literal["FULL_BLUR", "SELECTIVE_BLUR"] | None = None
+
+
 class SelectiveCommercialTeaserRequest(BaseModel):
     maskData: str
     maskWidth: int = Field(ge=1, le=2048)
@@ -245,7 +275,7 @@ def generate_bundle_content_vault_captions(
 ):
     creator_profile_id = int(_creator_profile()["id"])
     try:
-        state, row, members, offering, _ = _bundle_content_vault_caption_state(
+        state, row, members, offering, publication = _bundle_content_vault_caption_state(
             deliverable_id, creator_profile_id,
         )
         context = ContentVaultBundleCaptionContextBuilder().build(
@@ -256,14 +286,34 @@ def generate_bundle_content_vault_captions(
             photoshoot_context=dict(row.get("intelligence_profile") or {}),
             teaser_context=state.get("promotionalTeaser"),
         )
-        return GrokCaptionService().generate(
-            profile=CaptionProfile.CONTENT_VAULT_PHOTOSHOOT_BUNDLE,
-            context=context, guidance=request.guidance, tone=request.tone,
-        )
     except KeyError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
     except ValueError as error:
         raise HTTPException(status_code=409, detail=str(error)) from error
+
+    try:
+        result = GrokCaptionService().generate(
+            profile=CaptionProfile.CONTENT_VAULT_PHOTOSHOOT_BUNDLE,
+            context=context, guidance=request.guidance, tone=request.tone,
+        )
+        captions = list(result.get("captions") or [])
+        if len(captions) != 5:
+            raise ValueError("Grok did not return five usable Bundle captions.")
+        metadata = dict(publication.publication_metadata or {})
+        metadata["content_vault_caption_candidates"] = {
+            "captions": captions,
+            "profile": CaptionProfile.CONTENT_VAULT_PHOTOSHOOT_BUNDLE.value,
+            "tone": result.get("tone") or request.tone,
+            "generatedAt": datetime.now(timezone.utc).isoformat(),
+            "photoshootDeliverableId": deliverable_id,
+            "offeringId": str(offering.offering_id),
+        }
+        CommercialPublicationRepository().update_metadata(
+            publication.publication_id,
+            creator_profile_id=creator_profile_id,
+            metadata=metadata,
+        )
+        return result
     except Exception as error:
         logger.exception("Bundle Content Vault caption generation failed for deliverable_id=%s", deliverable_id)
         raise HTTPException(status_code=502, detail="Grok could not generate Bundle captions. Please retry.") from error
@@ -301,6 +351,7 @@ def save_bundle_content_vault_caption(deliverable_id: str, request: ContentVault
             "offeringId": str(offering.offering_id),
             "paidImageCount": paid_image_count,
         }
+        metadata.pop("content_vault_caption_candidates", None)
         updated = CommercialPublicationRepository().update_metadata(
             publication.publication_id, creator_profile_id=creator_profile_id,
             metadata=metadata,
@@ -412,6 +463,29 @@ def prepare_standalone_image_for_sale(
                 _execute_standalone_sale_preparation, publication.publication_id,
                 creator_profile_id, int(account_id))
         return service.inspect(asset_id, creator_profile_id=creator_profile_id)
+    except KeyError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+
+
+@router.put("/{asset_id}/sale-destination")
+def reassign_standalone_image_sale_destination(
+    asset_id: int, request: StandaloneDestinationReassignmentRequest,
+):
+    creator_profile_id = int(_creator_profile()["id"])
+    service = StandaloneImageSalePreparationService()
+    try:
+        current = _standalone_sale_preparation(asset_id, creator_profile_id)
+        wall_publication = dict(current.get("contentVaultPublication") or {})
+        if wall_publication.get("status") in {"PUBLISHING", "PUBLISHED"}:
+            raise ValueError("A Single Image that is publishing or published to TG Wall cannot be reassigned.")
+        service.reassign_destination(
+            asset_id, creator_profile_id=creator_profile_id,
+            price_minor=request.priceMinor, destination=request.destination,
+            teaser_style=request.teaserStyle,
+        )
+        return _standalone_sale_preparation(asset_id, creator_profile_id)
     except KeyError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
     except ValueError as error:
@@ -627,6 +701,11 @@ def _standalone_card_payload(row: dict, *, canonical_asset_id: int | None,
     media_type = str(metadata.get("media_type") or "").lower()
     if media_type not in {"image", "video", "story"}:
         media_type = "video" if str(row.get("file_path") or "").lower().endswith((".mp4", ".mov", ".m4v", ".webm")) else "image"
+    price_minor = int(row["price_minor"]) if row.get("offering_id") and row.get("price_minor") is not None else None
+    commercial_price = {
+        "status": "PRICED" if price_minor is not None else "NOT_PRICED",
+        "amountMinor": price_minor, "currency": row.get("currency") or "USD", "kind": "SINGLE",
+    }
     return {
         "libraryItemId": f"asset:{asset_id}", "itemKind": "registered_asset",
         "assetId": asset_id, "displayName": row.get("display_name") or f"Asset #{asset_id}",
@@ -639,6 +718,8 @@ def _standalone_card_payload(row: dict, *, canonical_asset_id: int | None,
         "imageUrl": f"/api/v1/assets/{asset_id}/thumbnail",
         "intelligenceStatus": row.get("intelligence_status") or "PENDING",
         "intelligenceError": row.get("intelligence_error"),
+        "contentDestination": row.get("content_destination"),
+        "commercialPrice": commercial_price,
         "standaloneSalePreparation": {
             "assetId": asset_id, "status": preparation_status,
             "statusLabel": {"READY": "Ready", "NEEDS_ATTENTION": "Needs Attention", "PREPARING": "Preparing...", "NOT_PREPARED": "Prepare for Sale"}[preparation_status],
@@ -653,6 +734,7 @@ def _standalone_card_payload(row: dict, *, canonical_asset_id: int | None,
 
 def _photoshoot_card_payload(row: dict, *, posted_offering_ids: set[str]) -> dict:
     mode = str(row.get("selling_mode") or "SESSION")
+    source_kind = str(row.get("source_kind") or "PHOTOSHOOT_STUDIO")
     offering_count = int(row.get("offering_count") or 0)
     if int(row.get("failed_publication_count") or 0): prep = "NEEDS_ATTENTION"
     elif int(row.get("active_publication_count") or 0): prep = "PREPARING"
@@ -664,11 +746,25 @@ def _photoshoot_card_payload(row: dict, *, posted_offering_ids: set[str]) -> dic
         "photoshootSessionId": str(row.get("photoshoot_session_id") or row["deliverable_id"]),
         "sellingMode": mode, "status": prep,
         "statusLabel": {"READY": "Ready", "PREPARING": "Preparing", "NEEDS_ATTENTION": "Needs Attention", "NOT_CONFIGURED": "Not Configured", "NOT_PREPARED": "Not Prepared"}[prep],
-        "salesChannel": "WALL" if row.get("bundle_sales_channel") == "CONTENT_WALL" else "CHAT",
+        "salesChannel": ("WALL" if row.get("bundle_sales_channel") == "CONTENT_WALL"
+                         else "CHAT" if row.get("bundle_sales_channel") == "CHAT" else None),
         "steps": [],
     }
     if mode == "BUNDLE" and wall_id in posted_offering_ids:
         session_selling["contentVaultPublication"] = {"status": "PUBLISHED", "canPublish": False, "configured": True}
+    if mode == "BUNDLE":
+        amount = int(row["bundle_price_minor"]) if row.get("bundle_price_minor") is not None else None
+        commercial_price = {"status": "PRICED" if amount is not None else "NOT_PRICED",
+                            "amountMinor": amount, "currency": row.get("bundle_price_currency") or "USD",
+                            "kind": "BUNDLE"}
+    else:
+        paid_count = int(row.get("paid_step_count") or 0)
+        priced_count = int(row.get("priced_step_count") or 0)
+        amount = int(row["session_total_minor"]) if row.get("session_total_minor") is not None else None
+        price_status = "PRICED" if paid_count > 0 and priced_count == paid_count and amount is not None else "INCOMPLETE" if priced_count > 0 else "NOT_PRICED"
+        commercial_price = {"status": price_status, "amountMinor": amount,
+                            "currency": row.get("session_price_currency") or "USD",
+                            "kind": "SESSION_TOTAL"}
     return {
         "libraryItemId": f"photoshoot:{row['deliverable_id']}", "itemKind": "photoshoot",
         "assetId": None, "generationId": None, "deliverableId": str(row["deliverable_id"]),
@@ -679,13 +775,17 @@ def _photoshoot_card_payload(row: dict, *, posted_offering_ids: set[str]) -> dic
         "tags": [], "themes": [], "isReference": False, "isCanonicalReference": False,
         "mediaAvailable": bool(row.get("hero_asset_id")),
         "imageUrl": f"/api/v1/assets/{row['hero_asset_id']}/thumbnail" if row.get("hero_asset_id") else None,
-        "shotCount": int(row.get("shot_count") or 0), "registrationSource": "Photoshoot Gallery",
+        "shotCount": int(row.get("shot_count") or 0),
+        "registrationSource": "Generation Library" if source_kind == "GENERATION_LIBRARY_IMPORT" else "Photoshoot Gallery",
+        "sourceKind": source_kind,
         "sessionSelling": session_selling, "sellingMode": mode,
         "bundleSalesChannel": row.get("bundle_sales_channel") if mode == "BUNDLE" else None,
+        "commercialPrice": commercial_price,
     }
 
 
 def _photoshoot_payload(row: dict) -> dict:
+    source_kind = str(row.get("source_kind") or "PHOTOSHOOT_STUDIO")
     session_selling = None
     try:
         service = (
@@ -714,13 +814,13 @@ def _photoshoot_payload(row: dict) -> dict:
         "mediaAvailable": bool(row.get("hero_asset_id")),
         "imageUrl": f"/api/v1/assets/{row['hero_asset_id']}/thumbnail" if row.get("hero_asset_id") else None,
         "shotCount": int(row["shot_count"]),
-        "registrationSource": "Photoshoot Gallery",
+        "registrationSource": "Generation Library" if source_kind == "GENERATION_LIBRARY_IMPORT" else "Photoshoot Gallery",
+        "sourceKind": source_kind,
         "sessionSelling": session_selling,
         "sellingMode": row.get("selling_mode") or "SESSION",
-        "bundleSalesChannel": (
-            row.get("bundle_sales_channel") or "CHAT"
-            if str(row.get("selling_mode") or "SESSION") == "BUNDLE" else None
-        ),
+        "bundleSalesChannel": ((row.get("bundle_sales_channel") or (
+            None if source_kind == "GENERATION_LIBRARY_IMPORT" else "CHAT"))
+            if str(row.get("selling_mode") or "SESSION") == "BUNDLE" else None),
     }
 
 
@@ -745,10 +845,24 @@ class SalePreparationRequest(BaseModel):
     fanvueAccountId: int | None = None
 
 
+class BundlePriceReplacementRequest(BaseModel):
+    model_config = {"extra": "forbid"}
+
+    priceMinor: int
+    fanvueAccountId: int | None = None
+
+
 class PhotoshootSellingModeRequest(BaseModel):
     model_config = {"extra": "forbid"}
 
     sellingMode: PhotoshootSellingMode
+
+
+class PhotoshootCommerceAssignmentRequest(BaseModel):
+    model_config = {"extra": "forbid"}
+
+    sellingMode: PhotoshootSellingMode
+    bundleSalesChannel: BundleSalesChannel | None = None
 
 
 class BundleSalesChannelRequest(BaseModel):
@@ -776,6 +890,34 @@ def update_photoshoot_selling_mode(deliverable_id: str, request: PhotoshootSelli
         return {
             "deliverableId": str(row["deliverable_id"]),
             "sellingMode": row.get("selling_mode") or "SESSION",
+            "bundleSalesChannel": (
+                row.get("bundle_sales_channel")
+                if str(row.get("selling_mode") or "SESSION") == "BUNDLE"
+                else None
+            ),
+        }
+    except KeyError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+
+
+@router.put("/photoshoots/{deliverable_id}/commerce-assignment")
+def reassign_photoshoot_commerce(
+    deliverable_id: str, request: PhotoshootCommerceAssignmentRequest,
+):
+    creator_profile_id = int(_creator_profile()["id"])
+    try:
+        row = PhotoshootCommerceDeliverableService().reassign_commerce(
+            deliverable_id, creator_profile_id,
+            selling_mode=request.sellingMode,
+            bundle_sales_channel=request.bundleSalesChannel,
+        )
+        mode = str(row.get("selling_mode") or "SESSION")
+        return {
+            "deliverableId": str(row["deliverable_id"]),
+            "sellingMode": mode,
+            "bundleSalesChannel": row.get("bundle_sales_channel") if mode == "BUNDLE" else None,
         }
     except KeyError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
@@ -808,6 +950,29 @@ def inspect_photoshoot_bundle_teaser(deliverable_id: str):
         return PhotoshootBundleTeaserService().inspect(
             deliverable_id, creator_profile_id=int(_creator_profile()["id"]),
         )
+    except KeyError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+
+
+@router.get("/photoshoots/{deliverable_id}/bundle-teaser/full-blur-preview")
+def preview_photoshoot_bundle_full_blur(deliverable_id: str, sourceAssetId: int = Query(..., gt=0)):
+    creator_profile_id = int(_creator_profile()["id"])
+    try:
+        service = PhotoshootBundleTeaserService()
+        source = service.preview_source(
+            deliverable_id, creator_profile_id=creator_profile_id,
+            source_asset_id=sourceAssetId,
+        )
+        blurred = render_full_blur(source)
+        output = BytesIO()
+        try:
+            blurred.save(output, format="WEBP", quality=92, method=4)
+        finally:
+            blurred.close()
+        return Response(content=output.getvalue(), media_type="image/webp",
+                        headers={"Cache-Control": "private, max-age=300"})
     except KeyError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
     except ValueError as error:
@@ -888,6 +1053,13 @@ def _execute_sale_preparation(publication_ids, creator_profile_id, account_id, s
         if selling_mode == "BUNDLE" else PhotoshootSalePreparationService()
     )
     service.execute_staged(
+        publication_ids, creator_profile_id=creator_profile_id,
+        fanvue_account_id=account_id,
+    )
+
+
+def _execute_bundle_price_replacement(publication_ids, creator_profile_id, account_id):
+    PhotoshootBundleSalePreparationService().execute_price_replacement(
         publication_ids, creator_profile_id=creator_profile_id,
         fanvue_account_id=account_id,
     )
@@ -993,10 +1165,8 @@ def generate_photoshoot_session_sales_strategy(deliverable_id: str):
 def prepare_photoshoot_for_sale(deliverable_id: str, request: SalePreparationRequest,
                                background_tasks: BackgroundTasks):
     profile = _creator_profile()
-    account_id = request.fanvueAccountId or profile.get("fanvue_account_id")
-    if not account_id:
-        raise HTTPException(status_code=409, detail="A connected Fanvue account is required.")
     try:
+        account_id = resolve_fanvue_account_id(profile, request.fanvueAccountId)
         creator_profile_id = int(profile["id"])
         service = _preparation_service(deliverable_id, creator_profile_id)
         selling_mode = "BUNDLE" if isinstance(service, PhotoshootBundleSalePreparationService) else "SESSION"
@@ -1034,6 +1204,34 @@ def retry_photoshoot_sale_preparation(deliverable_id: str, request: SalePreparat
     return prepare_photoshoot_for_sale(deliverable_id, request, background_tasks)
 
 
+@router.put("/photoshoots/{deliverable_id}/bundle-price", status_code=202)
+def replace_photoshoot_bundle_price(
+    deliverable_id: str, request: BundlePriceReplacementRequest,
+    background_tasks: BackgroundTasks,
+):
+    profile = _creator_profile()
+    try:
+        creator_profile_id = int(profile["id"])
+        account_id = resolve_fanvue_account_id(profile, request.fanvueAccountId)
+        service = _preparation_service(deliverable_id, creator_profile_id)
+        if not isinstance(service, PhotoshootBundleSalePreparationService):
+            raise ValueError("Bundle price replacement requires BUNDLE selling mode.")
+        publication_ids = service.stage_price_replacement(
+            deliverable_id, creator_profile_id=creator_profile_id,
+            fanvue_account_id=int(account_id), price_minor=request.priceMinor,
+        )
+        if publication_ids:
+            background_tasks.add_task(
+                _execute_bundle_price_replacement, publication_ids,
+                creator_profile_id, int(account_id),
+            )
+        return service.inspect(deliverable_id, creator_profile_id=creator_profile_id)
+    except KeyError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+
+
 def _asset_sort_timestamp(item: dict) -> float:
     value = item.get("createdAt")
     if isinstance(value, datetime):
@@ -1066,22 +1264,45 @@ def list_assets(
     media_type: str | None = None,
     classification: str | None = None,
     destination: str | None = None,
+    sales_destination: str | None = None,
+    sales_commerce_type: str | None = None,
+    asset_purpose: str | None = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(18, ge=1, le=60),
 ):
+    request_started = time.perf_counter()
     profile = _creator_profile()
     creator_profile_id = int(profile["id"])
+    canonical_purpose = str(asset_purpose or "").strip().upper() or None
+    if canonical_purpose and canonical_purpose != "TEASER":
+        raise HTTPException(status_code=422, detail="Unknown Asset purpose.")
+    if canonical_purpose:
+        media_type = "image"
+    unified_destination = str(sales_destination or "").strip().upper() or None
+    unified_type = str(sales_commerce_type or "ALL").strip().upper()
+    if unified_destination and unified_destination not in {"CHAT", "WALL"}:
+        raise HTTPException(status_code=422, detail="Unknown Sales destination.")
+    if unified_destination and unified_type not in {"ALL", "SINGLE", "BUNDLE", "SESSION"}:
+        raise HTTPException(status_code=422, detail="Unknown Sales commerce type.")
+    if not unified_destination and sales_commerce_type:
+        raise HTTPException(status_code=422, detail="Sales commerce type requires a Sales destination.")
+    if unified_destination == "WALL" and unified_type == "SESSION":
+        unified_type = "ALL"
     sale_destination = str(destination or "").strip().upper() or None
     if sale_destination and sale_destination not in {"CHAT", "CONTENT_VAULT", "NOT_PREPARED"}:
         raise HTTPException(status_code=422, detail="Unknown Single Image sale destination.")
     if sale_destination and str(media_type or "").strip() != "image":
         raise HTTPException(status_code=422, detail="Sale destination filtering is available only for Images.")
+    if unified_destination:
+        sale_destination = "CHAT" if unified_destination == "CHAT" else "CONTENT_VAULT"
+        media_type = "image" if unified_type in {"ALL", "SINGLE"} else "photoshoot"
     service = AssetLibraryService()
     filters = AssetLibraryFilter(
         search=str(search or "").strip() or None,
         media_type=str(media_type or "").strip() or None,
         classification=str(classification or "").strip() or None,
         sale_destination=sale_destination,
+        asset_purpose=canonical_purpose,
         creator_profile_id=creator_profile_id,
         is_reference_image=False,
         eligible_only=True,
@@ -1089,8 +1310,20 @@ def list_assets(
     )
     staged_by_id = {}
     search_value = str(search or "").strip().lower()
-    for record in GenerationLibraryService().list_records():
-        if record.creator_profile_id != creator_profile_id or record.status != "staged_asset_library":
+    generation_library = GenerationLibraryService()
+    staged_started = time.perf_counter()
+    staged_reader = getattr(generation_library, "staged_records", None)
+    staged_records = staged_reader(
+        creator_profile_id=creator_profile_id, search=search_value or None,
+    ) if callable(staged_reader) else tuple(
+        record for record in generation_library.list_records()
+        if record.creator_profile_id == creator_profile_id
+        and record.status == "staged_asset_library"
+    )
+    for record in staged_records:
+        if canonical_purpose:
+            continue
+        if unified_destination:
             continue
         if media_type and media_type != "image":
             continue
@@ -1100,29 +1333,62 @@ def list_assets(
         if search_value and search_value not in haystack:
             continue
         staged_by_id[record.image_id] = _staged_payload(record, check_media=False)
+    staged_ms = (time.perf_counter() - staged_started) * 1000
     photoshoot_repository = PhotoshootCommerceRepository()
     sales_classification = str(classification or "").strip().upper()
     is_photoshoot_classification = sales_classification in {"CHAT", "SESSION", "WALL"}
-    include_photoshoots = (not media_type or media_type == "photoshoot") and (not classification or is_photoshoot_classification)
+    unified_photoshoot_classification = None
+    if unified_destination == "CHAT":
+        unified_photoshoot_classification = {
+            "ALL": "CHAT_DESTINATION", "BUNDLE": "CHAT", "SESSION": "SESSION",
+        }.get(unified_type)
+    elif unified_destination == "WALL" and unified_type in {"ALL", "BUNDLE"}:
+        unified_photoshoot_classification = "WALL"
+    include_photoshoots = (
+        (unified_type in {"ALL", "BUNDLE", "SESSION"}) if unified_destination
+        else (not media_type or media_type == "photoshoot")
+    ) and (not classification or is_photoshoot_classification) and not canonical_purpose
     photoshoot_total = photoshoot_repository.count_asset_library(
         creator_profile_id, search=search_value or None,
-        classification=sales_classification if is_photoshoot_classification else None,
+        classification=unified_photoshoot_classification or (
+            sales_classification if is_photoshoot_classification else None
+        ),
     ) if include_photoshoots else 0
     requested_candidate_limit = page * page_size
-    registered_candidates, registered_total, classifications = (
-        service.asset_library_grid_summary(
-            filters, candidate_limit=requested_candidate_limit
+    grid_started = time.perf_counter()
+    if unified_destination and unified_type in {"ALL", "SINGLE"}:
+        registered_candidates, registered_total, classifications = (
+            AssetRepository().asset_library_sales_image_summary(
+                creator_profile_id=creator_profile_id,
+                destination=unified_destination,
+                search=search_value or None,
+                limit=requested_candidate_limit,
+            )
         )
-    )
+    elif unified_destination:
+        registered_candidates, registered_total, classifications = (), 0, ()
+    else:
+        registered_candidates, registered_total, classifications = (
+            service.asset_library_grid_summary(
+                filters, candidate_limit=requested_candidate_limit
+            )
+        )
+    grid_ms = (time.perf_counter() - grid_started) * 1000
     total = len(staged_by_id) + registered_total + photoshoot_total
     total_pages = max(1, (total + page_size - 1) // page_size)
     current_page = min(page, total_pages)
     start = (current_page - 1) * page_size
     candidate_limit = current_page * page_size
     if candidate_limit != requested_candidate_limit:
-        registered_candidates, _, classifications = service.asset_library_grid_summary(
-            filters, candidate_limit=candidate_limit
-        )
+        if unified_destination and unified_type in {"ALL", "SINGLE"}:
+            registered_candidates, _, classifications = AssetRepository().asset_library_sales_image_summary(
+                creator_profile_id=creator_profile_id, destination=unified_destination,
+                search=search_value or None, limit=candidate_limit,
+            )
+        elif not unified_destination:
+            registered_candidates, _, classifications = service.asset_library_grid_summary(
+                filters, candidate_limit=candidate_limit
+            )
     photoshoot_card_reader = getattr(
         photoshoot_repository, "list_asset_library_cards",
         photoshoot_repository.list_asset_library,
@@ -1130,7 +1396,9 @@ def list_assets(
     photoshoots = photoshoot_card_reader(
         creator_profile_id,
         search=search_value or None,
-        classification=sales_classification if is_photoshoot_classification else None,
+        classification=unified_photoshoot_classification or (
+            sales_classification if is_photoshoot_classification else None
+        ),
         limit=candidate_limit,
     ) if include_photoshoots else ()
     staged_candidates = list(staged_by_id.values())
@@ -1140,7 +1408,9 @@ def list_assets(
         "assetId": int(row["id"]),
         "createdAt": row.get("created_at"),
     } for row in registered_candidates]
+    posted_started = time.perf_counter()
     posted_offering_ids = _posted_offering_ids(creator_profile_id)
+    posted_ms = (time.perf_counter() - posted_started) * 1000
     photoshoot_candidates = [
         _photoshoot_card_payload(row, posted_offering_ids=posted_offering_ids)
         for row in photoshoots
@@ -1163,6 +1433,7 @@ def list_assets(
         getattr(card_repository, "asset_library_card_summaries", None)
         if hasattr(service, "assets") else None
     )
+    cards_started = time.perf_counter()
     if callable(card_reader):
         registered_payloads = {
             int(row["id"]): _standalone_card_payload(
@@ -1196,6 +1467,27 @@ def list_assets(
         if item["itemKind"] != "registered_asset_candidate"
         or item["assetId"] in registered_payloads
     ]
+    if canonical_purpose == "TEASER":
+        summaries = FreeEngagementTeaserRepository().summaries(
+            [item["assetId"] for item in items if item.get("assetId") is not None]
+        )
+        for item in items:
+            summary = summaries.get(int(item["assetId"])) if item.get("assetId") is not None else None
+            if summary:
+                item["chatEnabled"] = bool(summary["chat_enabled"])
+                item["timesSent"] = int(summary["times_sent"] or 0)
+                item["lastSent"] = summary["last_sent"]
+    cards_ms = (time.perf_counter() - cards_started) * 1000
+    total_ms = (time.perf_counter() - request_started) * 1000
+    performance_logger.info(
+        "component=asset_library_cards staged_ms=%.2f grid_ms=%.2f posted_ms=%.2f cards_ms=%.2f total_ms=%.2f items=%s",
+        staged_ms, grid_ms, posted_ms, cards_ms, total_ms, len(items),
+    )
+    if total_ms >= 150:
+        performance_logger.warning(
+            "component=asset_library_cards event=slow total_ms=%.2f threshold_ms=150 items=%s",
+            total_ms, len(items),
+        )
     return {
         "assets": items,
         "total": total,
@@ -1211,16 +1503,44 @@ def asset_library_counts():
     """Lightweight landing-card counts; deliberately performs no hydration."""
     creator_profile_id = int(_creator_profile()["id"])
     registered = AssetRepository().asset_library_counts(creator_profile_id)
-    staged_images = sum(
-        1 for record in GenerationLibraryService().list_records()
-        if record.creator_profile_id == creator_profile_id
-        and record.status == "staged_asset_library"
+    library = GenerationLibraryService()
+    count_reader = getattr(library, "staged_count", None)
+    staged_images = count_reader(creator_profile_id) if callable(count_reader) else sum(
+        1 for record in library.list_records()
+        if record.creator_profile_id == creator_profile_id and record.status == "staged_asset_library"
     )
+    breakdown = dict(registered.get("destination_breakdown") or {})
+    image_breakdown = dict(breakdown.get("images") or {})
+    chat_commerce_types = dict(breakdown.get("chat_commerce_types") or {})
+    image_breakdown["unassigned"] = int(image_breakdown.get("unassigned") or 0) + staged_images
     return {
         "images": int(registered["images"]) + staged_images,
         "photoshoots": int(registered["photoshoots"]),
         "videos": int(registered["videos"]),
         "bundles": int(registered["bundles"]),
+        "teasers": int(registered.get("teasers") or 0),
+        "destinationBreakdown": {
+            "images": {
+                "chat": int(image_breakdown.get("chat") or 0),
+                "wall": int(image_breakdown.get("wall") or 0),
+                "unassigned": int(image_breakdown.get("unassigned") or 0),
+            },
+            "photoshoots": {
+                key: int(value or 0)
+                for key, value in dict(breakdown.get("photoshoots") or {}).items()
+            },
+            "totals": {
+                "chat": int(image_breakdown.get("chat") or 0)
+                + int(dict(breakdown.get("photoshoots") or {}).get("chat") or 0),
+                "wall": int(image_breakdown.get("wall") or 0)
+                + int(dict(breakdown.get("photoshoots") or {}).get("wall") or 0),
+            },
+            "chatCommerceTypes": {
+                "single": int(chat_commerce_types.get("single") or 0),
+                "bundle": int(chat_commerce_types.get("bundle") or 0),
+                "session": int(chat_commerce_types.get("session") or 0),
+            },
+        },
     }
 
 
@@ -1284,7 +1604,10 @@ def archive_registered_asset(asset_id: int):
     row = repository.archive_asset_library_item(asset_id, creator_profile_id)
     if row is None:
         raise HTTPException(status_code=404, detail="Active Asset was not found.")
-    if asset is not None and int(asset.creator_profile_id or 0) == creator_profile_id:
+    if (asset is not None
+            and int(asset.creator_profile_id or 0) == creator_profile_id
+            and bool(asset.is_active)
+            and str(asset.status or "").lower() != "archived"):
         CreativeIntelligenceLearningService().record_negative_safely(
             creator_profile_id=creator_profile_id,
             image_reference=asset.local_vault_path or asset.file_path,
@@ -1336,9 +1659,12 @@ def list_archived_assets():
 @router.post("/archived/assets/{asset_id}/restore")
 def restore_registered_asset(asset_id: int):
     creator_profile_id = int(_creator_profile()["id"])
-    row = AssetRepository().restore_asset_library_item(asset_id, creator_profile_id)
+    repository = AssetRepository()
+    row = repository.restore_asset_library_item(asset_id, creator_profile_id)
     if row is None:
-        raise HTTPException(status_code=404, detail="Archived Asset was not found.")
+        asset = repository.get_by_id(asset_id)
+        if asset is None or int(asset.creator_profile_id or 0) != creator_profile_id or not asset.is_active or asset.status == "archived":
+            raise HTTPException(status_code=404, detail="Archived Asset was not found.")
     return {"success": True, "message": "Asset restored.", "assetId": asset_id}
 
 
@@ -1429,6 +1755,24 @@ def asset_media(asset_id: int):
         path,
         media_type=mimetypes.guess_type(path.name)[0] or "application/octet-stream",
     )
+
+
+@router.get("/{asset_id}/preview", response_class=FileResponse)
+def asset_preview(asset_id: int):
+    profile = _creator_profile()
+    projection = _asset_repository().get_media_projection(asset_id)
+    if projection is None or int(projection.get("creator_profile_id") or 0) != int(profile["id"]):
+        raise HTTPException(status_code=404, detail="Asset not found.")
+    source = RuntimeMediaResolver().resolve_original_path(projection, require_exists=True)
+    if source is None or not source.is_file():
+        raise HTTPException(status_code=404, detail="Asset media is unavailable.")
+    try:
+        path = GridThumbnailService().get_or_create_preview(source, identity=f"asset-{asset_id}")
+    except Exception as error:
+        logger.exception("Asset preview generation failed for Asset %s", asset_id)
+        raise HTTPException(status_code=422, detail="Asset preview is unavailable.") from error
+    return FileResponse(path, media_type="image/webp",
+                        headers={"Cache-Control": "private, max-age=31536000, immutable"})
 
 
 @router.get("/{asset_id}/thumbnail", response_class=FileResponse)

@@ -286,7 +286,7 @@ class GenerationEngineServiceTests(unittest.TestCase):
     def test_seedream_request_reuses_persisted_canonical_hosted_url(self):
         references = FakeReferenceLibraryService(reference_asset(asset_id=99, creator_profile_id=7))
         hosted = Mock()
-        hosted.cached_url.return_value = "https://i.ibb.test/canonical-99.jpg"
+        hosted.cached_url.return_value = "https://cdn.wavespeed.ai/uploads/canonical-99.png"
         temp_dir = tempfile.TemporaryDirectory()
         self.addCleanup(temp_dir.cleanup)
         service = GenerationEngineService(
@@ -296,10 +296,10 @@ class GenerationEngineServiceTests(unittest.TestCase):
         request = service.create_request(
             creator_profile={"id": 7}, prompt_plan=prompt_plan(), provider_id="seedream_5_0_pro",
         )
-        self.assertEqual(request.metadata["canonical_reference_image_url"], "https://i.ibb.test/canonical-99.jpg")
-        self.assertEqual(request.metadata["reference_image_url"], "https://i.ibb.test/canonical-99.jpg")
+        self.assertEqual(request.metadata["canonical_reference_image_url"], "https://cdn.wavespeed.ai/uploads/canonical-99.png")
+        self.assertEqual(request.metadata["reference_image_url"], "https://cdn.wavespeed.ai/uploads/canonical-99.png")
         hosted.cached_url.assert_called_once_with(
-            asset_id=99, source_path=request.reference_asset_path, host_name="imgbb",
+            asset_id=99, source_path=request.reference_asset_path, host_name="wavespeed_media",
         )
 
     def test_generation_job_lifecycle(self):

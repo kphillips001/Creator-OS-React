@@ -24,8 +24,13 @@ export function PhotoshootGalleryPage() {
   const [openDeliverableId, setOpenDeliverableId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [registering, setRegistering] = useState<string | null>(null);
-  const load = useCallback(() => fetch("/api/v1/photoshoot-gallery", { cache: "no-store" })
-    .then((response) => json<{ items: GalleryItem[] }>(response)).then((value) => setItems(value.items)), []);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const load = useCallback((requestedPage = 1, append = false) => fetch(`/api/v1/photoshoot-gallery?page=${requestedPage}&page_size=24`, { cache: "no-store" })
+    .then((response) => json<{ items: GalleryItem[]; totalPages?: number }>(response)).then((value) => {
+      setItems((current) => append ? [...current, ...value.items] : value.items);
+      setPage(requestedPage); setTotalPages(value.totalPages ?? 1);
+    }), []);
 
   useEffect(() => { void load().catch((reason: Error) => setError(reason.message)); }, [load, newlyCompletedDeliverableId]);
   useEffect(() => {
@@ -37,7 +42,7 @@ export function PhotoshootGalleryPage() {
     setRegistering(id); setError("");
     try {
       const added = await fetch(`/api/v1/photoshoot-gallery/${id}/add-to-asset-library`, { method: "POST" }).then((response) => json<GalleryItem>(response));
-      await load();
+      await load(1);
       return added.registrationState;
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Unable to register Photoshoot.");
@@ -55,5 +60,6 @@ export function PhotoshootGalleryPage() {
       {item.deliverableId === newlyCompletedDeliverableId && <span className="photoshoot-gallery-card__new-badge">Just completed</span>}
       {item.imageUrl && <ContainedMediaImage src={item.imageUrl} alt="" />}<div className="photoshoot-gallery-card__footer"><p><Camera aria-hidden="true" size={15} strokeWidth={2} />{item.shotCount} {item.shotCount === 1 ? "Image" : "Images"}</p><div className="photoshoot-gallery-card__states">{item.intelligenceStatus !== "READY" && <span className="photoshoot-gallery-card__intelligence-attention">Intelligence Needs Attention</span>}{item.registrationState === "PHOTOSHOOT_COMPLETE" ? <LibraryActionButton accent icon={Package} tooltip="Add to Asset Library" disabled={registering === item.deliverableId} onClick={(event) => { event.stopPropagation(); void addToAssetLibrary(item.deliverableId).catch(() => undefined); }} /> : <span className="photoshoot-gallery-card__registered">{registrationLabel(item.registrationState)}</span>}</div></div>
     </article>)}</div>
+    {page < totalPages && <button type="button" className="photoshoot-gallery-load-more" onClick={() => void load(page + 1, true).catch((reason: Error) => setError(reason.message))}>Load More</button>}
   </section>;
 }

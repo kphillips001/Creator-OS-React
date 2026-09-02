@@ -53,6 +53,8 @@ export function BusinessCustomersPage() {
   const [error, setError] = useState("");
   const [selected, setSelected] = useState<CustomerWorkspaceItem | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [safetyReason, setSafetyReason] = useState("");
+  const [safetySaving, setSafetySaving] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -87,6 +89,23 @@ export function BusinessCustomersPage() {
     finally { setDetailLoading(false); }
   };
 
+  const changeSafety = async (safetyStatus: "NORMAL" | "UNDERAGE_BLOCKED") => {
+    if (!selected || safetyReason.trim().length < 5) { setError("Enter a reason for this audited safety change."); return; }
+    const action = safetyStatus === "UNDERAGE_BLOCKED" ? "block all autonomous interaction for this customer" : "restore autonomous interaction for this customer";
+    if (!window.confirm(`Confirm you want to ${action}. Historical records will remain unchanged.`)) return;
+    setSafetySaving(true); setError("");
+    try {
+      const response = await fetch(`/api/v1/customers/${encodeURIComponent(selected.customerId)}/safety`, {
+        method: "PUT", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ safetyStatus, reason: safetyReason.trim() }),
+      });
+      const body = await response.json() as CustomerWorkspaceItem & { detail?: string };
+      if (!response.ok) throw new Error(body.detail || "Unable to update customer safety.");
+      setSelected(body); setSafetyReason("");
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to update customer safety."); }
+    finally { setSafetySaving(false); }
+  };
+
   return <section className="business-customers-page">
     <PageHeader title="Customers" description="Understand customer relationships, value, journeys, and Sales Agent readiness in one read-only workspace." />
     <div className="customer-metrics">{metrics.map(([name, value]) => <article key={name}><span>{name}</span><strong>{value}</strong></article>)}</div>
@@ -112,6 +131,7 @@ export function BusinessCustomersPage() {
     </article>)}</div>}
     {data.totalPages > 1 && <nav className="customer-pagination" aria-label="Customers pagination"><button disabled={page <= 1} onClick={() => setPage((value) => value - 1)}><ChevronLeft size={16} />Previous</button><span>Page {data.page} of {data.totalPages}</span><button disabled={page >= data.totalPages} onClick={() => setPage((value) => value + 1)}>Next<ChevronRight size={16} /></button></nav>}
     {selected && <aside className="customer-detail" aria-label="Customer details"><header><div><small>Customer</small><h2>{selected.displayName}</h2></div><button aria-label="Close Customer details" onClick={() => setSelected(null)}><X /></button></header><div className="customer-detail__body">
+      <section className={`customer-detail__section customer-safety${selected.interactionSafety?.safetyStatus === "UNDERAGE_BLOCKED" ? " customer-safety--blocked" : ""}`}><h3>Interaction Safety</h3><strong>{selected.interactionSafety?.safetyStatus === "UNDERAGE_BLOCKED" ? "UNDERAGE — CHAT BLOCKED" : "NORMAL"}</strong><p>{selected.interactionSafety?.safetyStatus === "UNDERAGE_BLOCKED" ? "No autonomous chatbot, sales, Session, link, follow-up, outreach, or reaction interaction is permitted. Historical records remain intact." : "No customer-specific interaction safety block is active."}</p><label>Required reason<input aria-label="Safety change reason" value={safetyReason} onChange={(event) => setSafetyReason(event.target.value)} /></label><button disabled={safetySaving} onClick={() => void changeSafety(selected.interactionSafety?.safetyStatus === "UNDERAGE_BLOCKED" ? "NORMAL" : "UNDERAGE_BLOCKED")} type="button">{selected.interactionSafety?.safetyStatus === "UNDERAGE_BLOCKED" ? "Restore NORMAL" : "Mark UNDERAGE — BLOCKED"}</button>{selected.interactionSafety?.history?.length ? <details><summary>Safety change history</summary><pre>{JSON.stringify(selected.interactionSafety.history, null, 2)}</pre></details> : null}</section>
       <DetailSection heading="Identity" data={selected.identity} />
       <DetailSection heading="Relationship" data={selected.relationship} />
       <DetailSection heading="Customer Value" data={selected.customerValue} />

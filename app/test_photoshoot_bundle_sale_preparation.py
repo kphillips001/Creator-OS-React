@@ -95,6 +95,8 @@ class PublicationService:
 class Executor:
     def __init__(self): self.calls = []
     def execute(self, publication_id, **kwargs): self.calls.append((publication_id, kwargs))
+    def replace_live_media_link(self, publication_id, **kwargs):
+        self.calls.append(("replace", publication_id, kwargs))
 
 
 class Teasers:
@@ -228,6 +230,75 @@ def test_retry_of_live_bundle_rejects_a_changed_locked_price():
             DELIVERABLE, creator_profile_id=7,
             fanvue_account_id=9, price_minor=3100,
         )
+
+
+def test_price_replacement_stages_existing_publication_without_mutating_price_or_link():
+    service, offerings, publications, executor = subject()
+    service.stage(DELIVERABLE, creator_profile_id=7, fanvue_account_id=9, price_minor=1999)
+    offerings.item = replace(offerings.item, status=CommercialOfferingStatus.READY)
+    old_publication_id = publications.item.publication_id
+    publications.item = replace(
+        publications.item, status=CommercialPublicationStatus.LIVE,
+        provider_resource_status=ProviderResourceStatus.PRESENT,
+        external_product_id="old-link", publication_metadata={
+            **publications.item.publication_metadata,
+            "media_link": {"uuid": "old-link", "url": "https://fanvue.example/old",
+                           "price_minor": 1999, "media_uuids": ["m1", "m2", "m3"]},
+        },
+    )
+
+    staged = service.stage_price_replacement(
+        DELIVERABLE, creator_profile_id=7, fanvue_account_id=9, price_minor=2499)
+
+    assert staged == (old_publication_id,)
+    assert offerings.item.price_minor == 1999
+    assert publications.item.external_product_id == "old-link"
+    assert publications.item.publication_metadata["media_link"]["url"].endswith("/old")
+    assert publications.item.publication_metadata["media_link_replacement"] == {
+        "state": "QUEUED", "target_price_minor": 2499, "currency": "USD",
+        "old_uuid": "old-link", "old_url": "https://fanvue.example/old",
+        "old_price_minor": 1999, "asset_ids": [11, 12, 13],
+        "fanvue_account_id": 9,
+    }
+    assert service.inspect(DELIVERABLE, creator_profile_id=7)["status"] == "PREPARING"
+    assert executor.calls == []
+
+
+def test_unchanged_bundle_price_is_an_idempotent_replacement_no_op():
+    service, offerings, publications, executor = subject()
+    service.stage(DELIVERABLE, creator_profile_id=7, fanvue_account_id=9, price_minor=1999)
+    offerings.item = replace(offerings.item, status=CommercialOfferingStatus.READY)
+    publications.item = replace(
+        publications.item, status=CommercialPublicationStatus.LIVE,
+        provider_resource_status=ProviderResourceStatus.PRESENT,
+        external_product_id="old-link", publication_metadata={
+            **publications.item.publication_metadata,
+            "media_link": {"uuid": "old-link", "url": "https://fanvue.example/old"},
+        },
+    )
+
+    assert service.stage_price_replacement(
+        DELIVERABLE, creator_profile_id=7, fanvue_account_id=9, price_minor=1999) == ()
+    assert executor.calls == []
+
+
+def test_second_price_replacement_request_is_rejected_before_execution():
+    service, offerings, publications, _ = subject()
+    service.stage(DELIVERABLE, creator_profile_id=7, fanvue_account_id=9, price_minor=1999)
+    offerings.item = replace(offerings.item, status=CommercialOfferingStatus.READY)
+    publications.item = replace(
+        publications.item, status=CommercialPublicationStatus.LIVE,
+        provider_resource_status=ProviderResourceStatus.PRESENT,
+        external_product_id="old-link", publication_metadata={
+            **publications.item.publication_metadata,
+            "media_link": {"uuid": "old-link", "url": "https://fanvue.example/old"},
+            "media_link_replacement": {"state": "QUEUED", "target_price_minor": 2499},
+        },
+    )
+
+    with pytest.raises(ValueError, match="already in progress"):
+        service.stage_price_replacement(
+            DELIVERABLE, creator_profile_id=7, fanvue_account_id=9, price_minor=2599)
 
 
 def test_bundle_readiness_projects_persisted_content_wall_channel():

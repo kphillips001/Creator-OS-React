@@ -4,10 +4,12 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
+from PIL import Image
 
 from app.models.commercial_offering import CommercialOfferingStatus, CommercialOfferingType
 from app.models.commercial_publication import CommercialPublicationProvider, CommercialPublicationStatus, ProviderResourceStatus
 from app.services.commerce_telegram_vault_service import CommerceTelegramVaultError, CommerceTelegramVaultService
+from app.services.social_publishing_service import SocialPublishingService
 
 
 class Offerings:
@@ -17,17 +19,24 @@ class Offerings:
 
 class Publications:
     def __init__(self, url="https://fanvue.example/media-link", caption="Unlock me now"):
-        self.url, self.caption = url, caption
+        self.url, self.caption, self.repository = url, caption, self
+        self.publication_id = uuid4()
+        self.persisted_metadata = {}
     def list_publications(self, **_kwargs):
         if self.url is None: return ()
+        metadata = {"media_link": {"url": self.url}, **self.persisted_metadata,
+                    "content_vault_caption_draft": {
+                "text": self.caption, "source": "GROK", "updatedAt": "2026-08-08T12:00:00Z"}}
         return (SimpleNamespace(
             provider=CommercialPublicationProvider.FANVUE,
             status=CommercialPublicationStatus.LIVE,
             provider_resource_status=ProviderResourceStatus.PRESENT,
-            publication_id=uuid4(),
-            publication_metadata={"media_link": {"url": self.url}, "content_vault_caption_draft": {
-                "text": self.caption, "source": "GROK", "updatedAt": "2026-08-08T12:00:00Z"}},
+            publication_id=self.publication_id, publication_metadata=metadata,
         ),)
+    def update_metadata(self, publication_id, *, creator_profile_id, metadata):
+        assert publication_id == self.publication_id and creator_profile_id == 7
+        self.persisted_metadata = dict(metadata)
+        return SimpleNamespace(publication_metadata=metadata)
 
 
 class Assets:
@@ -65,12 +74,38 @@ class Teasers:
                 "status": self.status}
 
 
+class CapturingTelegram:
+    def __init__(self, *, fail_first=False):
+        self.calls = []
+        self.fail_first = fail_first
+
+    @staticmethod
+    def load_telegram_env():
+        return {"bot_token": "test-token", "vault_chat_id": "-100-test"}
+
+    def publish(self, **values):
+        self.calls.append(values)
+        if self.fail_first and len(self.calls) == 1:
+            raise RuntimeError("simulated Telegram failure")
+        return SimpleNamespace(
+            post_to=values["post_to"], provider_post_id="message-1",
+            provider_media_id=None, provider_output_url=None,
+            metadata={"reply_markup_preserved": True}, message="Posted to Telegram.",
+        )
+
+
 def make_offering(status=CommercialOfferingStatus.READY):
     return SimpleNamespace(
         offering_id=uuid4(), creator_profile_id=7, hero_asset_id=42,
         title="Beach Set", description="A sunny collection.", status=status,
+        offering_type=CommercialOfferingType.PHOTOSET,
         price_minor=1799, currency="USD",
     )
+
+
+def write_image(path, size=(832, 1248), color=(70, 40, 20)):
+    Image.new("RGB", size, color).save(path)
+    return path
 
 
 def make_service(tmp_path: Path, *, current=None, publications=None, social=None, owner=7):
@@ -98,6 +133,7 @@ def test_success_uses_authoritative_link_preview_and_content_vault(tmp_path):
     assert values["telegram_cta_url"] == "https://fanvue.example/media-link"
     assert "<b>Beach Set</b>" in values["caption_text"]
     assert "Limited release" in values["caption_text"]
+    assert values["caption_text"].endswith("\n\n#Photoshoots")
 
 
 def test_missing_media_link_missing_preview_archived_and_owner_are_rejected(tmp_path):
@@ -130,11 +166,30 @@ def test_duplicate_published_offering_is_protected(tmp_path):
     assert error.value.code == "ALREADY_PUBLISHED"
 
 
+def test_historical_published_record_is_not_normalized_or_modified(tmp_path):
+    class Presentation:
+        VERSION = 1
+        def __init__(self): self.calls = 0
+        def normalize(self, *_args, **_kwargs):
+            self.calls += 1
+            raise AssertionError("historical media must not be regenerated")
+    current = make_offering(); current.offering_type = CommercialOfferingType.SINGLE_IMAGE
+    presentation = Presentation()
+    social = Social(SimpleNamespace(status="posted", queue_item_id="posted-1", updated_at="then"))
+    status = CommerceTelegramVaultService(
+        offerings=Offerings(current), publications=Publications(), assets=Assets(tmp_path / "paid.jpg"),
+        social=social, teasers=Teasers(tmp_path / "safe.jpg"), presentation=presentation,
+    ).status(current.offering_id, creator_profile_id=7)
+    assert status["status"] == "PUBLISHED"
+    assert status["previewUrl"] is None
+    assert presentation.calls == 0
+
+
 def test_standalone_single_image_uses_blurred_teaser_not_original(tmp_path):
     original = tmp_path / "original.jpg"
     blurred = tmp_path / "blurred.jpg"
     original.write_bytes(b"original")
-    blurred.write_bytes(b"blurred")
+    write_image(blurred)
     current, social = make_offering(), Social()
     current.offering_type = CommercialOfferingType.SINGLE_IMAGE
     service = CommerceTelegramVaultService(
@@ -143,16 +198,60 @@ def test_standalone_single_image_uses_blurred_teaser_not_original(tmp_path):
         teasers=Teasers(blurred),
     )
     service.publish(current.offering_id, creator_profile_id=7)
-    assert social.created["image_reference"] == str(blurred)
+    assert social.created["image_reference"].endswith("_telegram_presentation_v1.jpg")
     assert social.created["image_reference"] != str(original)
     values = social.published[1]
-    assert values["caption_text"] == "Unlock me now"
+    assert values["caption_text"] == "Unlock me now\n\n#Photos"
     assert values["telegram_cta_label"] == "🔓 Unlock · $17.99"
     assert values["telegram_cta_url"] == "https://fanvue.example/media-link"
     assert values["telegram_cta_enabled"] is True
     assert values["audit_metadata"]["asset_id"] == 42
     assert "teaser_path" not in values["audit_metadata"]
     assert "delivery_url" not in values["audit_metadata"]
+
+
+def test_runtime_publish_and_retry_append_hashtag_once_without_mutating_authored_caption(tmp_path):
+    original, blurred = tmp_path / "original.jpg", tmp_path / "blurred.jpg"
+    original.write_bytes(b"paid-original"); write_image(blurred)
+    current = make_offering(); current.offering_type = CommercialOfferingType.SINGLE_IMAGE
+    publications = Publications(caption="You caught me right when I stopped behaving")
+    telegram = CapturingTelegram(fail_first=True)
+    social = SocialPublishingService(storage_dir=tmp_path / "social", telegram_provider=telegram)
+    service = CommerceTelegramVaultService(
+        offerings=Offerings(current), publications=publications, assets=Assets(original),
+        social=social, teasers=Teasers(blurred),
+    )
+
+    with pytest.raises(CommerceTelegramVaultError) as error:
+        service.publish(current.offering_id, creator_profile_id=7)
+    assert error.value.code == "TELEGRAM_PUBLISH_FAILED"
+    result = service.publish(current.offering_id, creator_profile_id=7)
+
+    assert result.status == "posted"
+    assert len(telegram.calls) == 2
+    assert all(call["caption"] == "You caught me right when I stopped behaving\n\n#Photos"
+               for call in telegram.calls)
+    assert all(call["caption"].count("#Photos") == 1 for call in telegram.calls)
+    expected_cta = CommerceTelegramVaultService.unlock_cta_label(1799, "USD")
+    assert all(call["cta_label"] == expected_cta for call in telegram.calls)
+    assert all(call["cta_url"] == "https://fanvue.example/media-link" for call in telegram.calls)
+    assert publications.caption == "You caught me right when I stopped behaving"
+
+
+def test_content_type_hashtags_are_canonical_and_caption_normalization_is_idempotent():
+    single = SimpleNamespace(offering_type=CommercialOfferingType.SINGLE_IMAGE)
+    video = SimpleNamespace(offering_type=CommercialOfferingType.VIDEO)
+    photoshoot = SimpleNamespace(offering_type=CommercialOfferingType.BUNDLE,
+                                source_photoshoot_deliverable_id=uuid4())
+    assert CommerceTelegramVaultService.content_type_hashtag(single) == "#Photos"
+    assert CommerceTelegramVaultService.content_type_hashtag(video) == "#Videos"
+    assert CommerceTelegramVaultService.content_type_hashtag(photoshoot) == "#Photoshoots"
+
+    compose = CommerceTelegramVaultService.caption_with_content_type_hashtag
+    assert compose("Original words", "#Photos") == "Original words\n\n#Photos"
+    assert compose("Original words\n\n#Photos", "#Photos") == "Original words\n\n#Photos"
+    assert compose("Original words\n\n#Videos", "#Photos") == "Original words\n\n#Photos"
+    assert compose("Original words #personal\n\n#Videos", "#Photos") == "Original words #personal\n\n#Photos"
 
 
 @pytest.mark.parametrize(("price_minor", "expected"), [
@@ -166,7 +265,7 @@ def test_single_image_uses_canonical_priced_unlock_label(tmp_path, price_minor, 
     original = tmp_path / "original.jpg"
     teaser = tmp_path / "teaser.jpg"
     original.write_bytes(b"paid-original")
-    teaser.write_bytes(b"safe-teaser")
+    write_image(teaser)
     current, social = make_offering(), Social()
     current.offering_type = CommercialOfferingType.SINGLE_IMAGE
     current.price_minor = price_minor
@@ -191,7 +290,7 @@ def test_single_image_fails_closed_without_complete_authoritative_package(
     tmp_path, publications, teaser_status, code,
 ):
     original, teaser = tmp_path / "original.jpg", tmp_path / "teaser.jpg"
-    original.write_bytes(b"paid-original"); teaser.write_bytes(b"safe-teaser")
+    original.write_bytes(b"paid-original"); write_image(teaser)
     current = make_offering(); current.offering_type = CommercialOfferingType.SINGLE_IMAGE
     social = Social()
     service = CommerceTelegramVaultService(
@@ -246,7 +345,7 @@ def test_concurrent_publish_claim_allows_only_one_send(tmp_path):
 
 def test_persisted_caption_changes_authoritative_readiness_without_other_changes(tmp_path):
     original, teaser = tmp_path / "original.jpg", tmp_path / "teaser.jpg"
-    original.write_bytes(b"paid-original"); teaser.write_bytes(b"safe-teaser")
+    original.write_bytes(b"paid-original"); write_image(teaser)
     current = make_offering(); current.offering_type = CommercialOfferingType.SINGLE_IMAGE
     publications = Publications(caption="")
     service = CommerceTelegramVaultService(

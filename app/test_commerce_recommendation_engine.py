@@ -16,17 +16,19 @@ FIRST = UUID("00000000-0000-0000-0000-000000000001")
 SECOND = UUID("00000000-0000-0000-0000-000000000002")
 
 
-def context(active=None):
-    return RecommendationContext(
+def context(active=None, **changes):
+    values = dict(
         creator_profile_id=2,
         active_purchase_intent_offering_id=active,
         evaluated_at=NOW,
         conversation_id="conversation-1",
     )
+    values.update(changes)
+    return RecommendationContext(**values)
 
 
-def candidate(offering_id=FIRST, published_at=NOW, commercially_eligible=True):
-    return RecommendationCandidate(
+def candidate(offering_id=FIRST, published_at=NOW, commercially_eligible=True, **changes):
+    values = dict(
         offering_id=offering_id,
         creator_profile_id=2,
         title=f"Offering {offering_id}",
@@ -41,6 +43,8 @@ def candidate(offering_id=FIRST, published_at=NOW, commercially_eligible=True):
         member_asset_ids=(42,),
         commercially_eligible=commercially_eligible,
     )
+    values.update(changes)
+    return RecommendationCandidate(**values)
 
 
 def test_zero_candidates_returns_no_selection_and_versioned_trace():
@@ -68,10 +72,67 @@ def test_one_candidate_is_selected_with_inspectable_components():
         "active_purchase_intent",
         "semantic_match",
         "customer_affinity",
+        "product_type_fit",
         "freshness",
         "diversification",
         "recent_offer_history",
     ]
+
+
+def opportunity_candidates():
+    single = candidate(
+        FIRST, title="Warm portrait", description="one intimate portrait",
+        price_minor=799,
+    )
+    bundle = candidate(
+        SECOND, title="Complete bedroom set", description="all three photos",
+        offering_type="BUNDLE", price_minor=1999,
+        photoshoot_identifier="bundle", selling_mode="BUNDLE", member_count=3,
+    )
+    session = candidate(
+        UUID("00000000-0000-0000-0000-000000000003"),
+        title="Private progressive session", description="ongoing intimate story",
+        offering_type="SINGLE_IMAGE", price_minor=1299,
+        photoshoot_identifier="session", selling_mode="SESSION", member_count=3,
+    )
+    return single, bundle, session
+
+
+@pytest.mark.parametrize("index", (0, 1, 2))
+def test_each_opportunity_type_wins_when_it_is_the_only_candidate(index):
+    choices = opportunity_candidates()
+    result = CommerceRecommendationEngine().rank((choices[index],), context())
+    assert result.selected_candidate == choices[index]
+
+
+@pytest.mark.parametrize(
+    ("request_context", "expected_index", "reason"),
+    (
+        ({"current_request": "I want the full set"}, 1, "EXPLICIT_BUNDLE_REQUEST"),
+        ({"current_request": "just one pic"}, 0, "EXPLICIT_SINGLE_IMAGE_REQUEST"),
+        ({"current_request": "something cheaper", "price_sensitive": True}, 0, "PRICE_FIT"),
+        ({"engagement_score": 0.95}, 2, "SESSION_HIGH_ENGAGEMENT_MATCH"),
+    ),
+)
+def test_cross_type_selection_follows_explicit_product_fit(
+    request_context, expected_index, reason
+):
+    choices = opportunity_candidates()
+    result = CommerceRecommendationEngine().rank(choices, context(**request_context))
+    assert result.selected_candidate == choices[expected_index]
+    component = next(
+        item for item in result.ranked_candidates[0].components
+        if item.key == "product_type_fit"
+    )
+    assert component.evidence["reasonCode"] == reason
+
+
+def test_relevant_single_beats_unrelated_more_expensive_bundle():
+    single, bundle, _ = opportunity_candidates()
+    result = CommerceRecommendationEngine().rank(
+        (single, bundle), context(current_request="one warm portrait")
+    )
+    assert result.selected_candidate == single
 
 
 def test_newest_publication_wins_independent_of_input_order():

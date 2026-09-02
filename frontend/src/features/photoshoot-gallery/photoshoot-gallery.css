@@ -18,7 +18,8 @@
 
 .photoshoot-detail-page { width: 100%; max-width: 1800px; margin: 0 auto; }
 .photoshoot-detail-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; margin-bottom: 24px; }
-.photoshoot-detail-header__actions { display: flex; align-items: center; gap: 10px; }
+.photoshoot-detail-header__actions { display: flex; align-items: center; justify-content:flex-end; flex-wrap:wrap; gap: 10px; }
+.photoshoot-detail-select { display:inline-flex; align-items:center; gap:7px; border-color:var(--color-accent-border)!important; color:var(--color-accent)!important; }
 .photoshoot-detail-header h1 { margin: 5px 0 8px; font-size: clamp(1.75rem,3vw,2.75rem); }
 .photoshoot-detail-header p:last-child { color: #aaa; margin: 0; }
 .photoshoot-detail-close { flex: 0 0 auto; }
@@ -28,10 +29,24 @@
 .photoshoot-detail-filmstrip::-webkit-scrollbar-thumb { border: 2px solid #171717; border-radius: 999px; background: #555; }
 .photoshoot-detail-shot { display: flex; flex: 0 0 clamp(240px,43.5vh,510px); width:clamp(240px,43.5vh,510px); min-width:clamp(240px,43.5vh,510px); flex-direction: column; align-items: flex-start; gap: 7px; padding: 0!important; border: 0!important; border-radius: 0!important; background: transparent!important; cursor: zoom-in; overflow: visible; scroll-snap-align: start; }
 .photoshoot-detail-shot__media { width:100%; aspect-ratio:3/4; overflow:hidden; background:var(--color-surface-inset,#0d0d0d); }
+.photoshoot-detail-shot__media { position:relative; }
 .photoshoot-detail-shot img { display: block; width:100%; height:100%; object-fit:contain; background: transparent; transition: transform .2s ease; }
 .photoshoot-detail-shot:hover img { transform: scale(1.012); }
 .photoshoot-detail-shot:focus-visible { outline: 2px solid #ddd; outline-offset: 3px; }
 .photoshoot-detail-shot--selected { outline:2px solid var(--color-accent)!important; outline-offset:-2px; }
+.photoshoot-detail-shot--curation-selected { outline:2px solid var(--color-accent)!important; outline-offset:-2px; background:var(--color-accent-surface)!important; }
+.photoshoot-detail-shot__checkbox { position:absolute; top:10px; right:10px; z-index:2; display:grid!important; width:34px; height:34px; place-items:center; border:1px solid var(--color-accent-border); border-radius:8px; background:rgb(8 9 11 / 88%); color:var(--color-accent)!important; }
+.photoshoot-curation-toolbar { position:sticky; top:calc(var(--topbar-height) + .5rem); z-index:9; display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:12px; padding:10px 12px; border:1px solid var(--color-accent-border); border-radius:10px; background:rgb(23 21 17 / 97%); box-shadow:0 10px 30px rgb(0 0 0 / 32%); }
+.photoshoot-curation-toolbar>span { flex-basis:100%; color:var(--color-text-secondary); font-size:.75rem; }
+.photoshoot-curation-toolbar__move { border-color:var(--color-accent-border)!important; color:var(--color-accent)!important; }
+.photoshoot-curation-success { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px; padding:12px 14px; border:1px solid rgb(120 201 154 / 40%); border-radius:10px; background:rgb(120 201 154 / 8%); color:#b9f3cf; }
+.photoshoot-curation-success a { color:var(--color-accent); }
+.photoshoot-curation-confirm { position:fixed; inset:0; z-index:120; display:grid; place-items:center; padding:16px; background:rgb(4 5 7 / 84%); backdrop-filter:blur(12px); }
+.photoshoot-curation-confirm>div { width:min(500px,100%); padding:22px; border:1px solid var(--color-accent-border); border-radius:14px; background:#0d1014; box-shadow:0 28px 90px #000; }
+.photoshoot-curation-confirm h2 { margin:0 0 10px; }
+.photoshoot-curation-confirm p { color:var(--color-text-secondary); line-height:1.5; }
+.photoshoot-curation-confirm footer { display:flex; justify-content:flex-end; gap:8px; margin-top:20px; }
+.photoshoot-curation-confirm__move { border-color:var(--color-accent)!important; background:var(--color-accent)!important; color:#080705!important; font-weight:700; }
 .photoshoot-detail-shot span { color: #aaa; font-size: .78rem; font-weight: 650; letter-spacing: .04em; text-transform: uppercase; }
 .photoshoot-intelligence-cards { display:grid; gap:var(--space-3); margin-top:var(--space-4); }
 .photoshoot-intelligence-card { padding:var(--space-4); border:1px solid var(--color-border-subtle); border-radius:var(--radius-lg); background:var(--color-surface-raised); }
@@ -42,6 +57,7 @@
 .photoshoot-intelligence-fields>div:last-child { border-bottom:0; }
 .photoshoot-intelligence-fields dt { color:var(--color-text-muted); font-size:.66rem; font-weight:700; letter-spacing:.04em; text-transform:uppercase; }
 .photoshoot-intelligence-fields dd { margin:var(--space-1) 0 0; color:var(--color-text-secondary); font-size:.78rem; line-height:1.45; overflow-wrap:anywhere; }
+.photoshoot-intelligence-card__actions { display:flex; justify-content:flex-end; padding-top:var(--space-3); border-top:1px solid var(--color-border-subtle); }
 .photoshoot-detail-sections { display: grid; gap: 10px; margin: 24px 0 48px; }
 .photoshoot-detail-sections details { border: 1px solid #292929; border-radius: 9px; background: #0d0d0d; }
 .photoshoot-detail-sections summary { padding: 16px 18px; cursor: pointer; font-weight: 650; }
@@ -99,6 +115,10 @@
 .bundle-selling-price { display: flex; flex-direction: column; gap: .45rem; margin: 1rem 0; max-width: 18rem; }
 .bundle-selling-price > span:last-child { align-items: center; display: flex; gap: .5rem; }
 .bundle-selling-price input { background: #101010; border: 1px solid #444; border-radius: 8px; color: inherit; padding: .65rem; width: 100%; }
+.bundle-selling-price-row { align-items: flex-end; display: flex; flex-wrap: wrap; gap: .65rem; margin: 1rem 0; }
+.bundle-selling-price-row .bundle-selling-price { margin: 0; }
+.bundle-selling-price-actions { display: flex; gap: .5rem; }
+.asset-library-toast { background: #17140d; border: 1px solid var(--gold, #b59658); border-radius: 8px; color: var(--gold, #d0b06b); margin: .75rem 0; padding: .65rem .8rem; }
 .bundle-promotional-teaser { border-top: 1px solid #333; margin-top: 1.25rem; padding-top: 1.25rem; }
 .bundle-promotional-teaser h3 { margin: .2rem 0; }
 .bundle-teaser-candidates { display: flex; gap: .6rem; margin: .8rem 0; overflow-x: auto; }

@@ -26,13 +26,94 @@ from app.services.staged_asset_registration_service import (
 from app.repositories.photoshoot_commerce_repository import PhotoshootCommerceRepository
 
 
+def _card_row(**changes):
+    row = {
+        "deliverable_id": "set-1", "photoshoot_session_id": "session-1",
+        "display_name": "Session", "display_title": "Session", "display_description": None,
+        "completed_at": datetime.now(timezone.utc), "updated_at": datetime.now(timezone.utc),
+        "hero_asset_id": 1, "shot_count": 6, "selling_mode": "SESSION",
+        "bundle_sales_channel": None, "source_kind": "PHOTOSHOOT_STUDIO",
+        "offering_count": 0, "ready_offering_count": 0, "failed_publication_count": 0,
+        "active_publication_count": 0, "live_publication_count": 0, "wall_offering_id": None,
+        "paid_step_count": 0, "priced_step_count": 0, "session_total_minor": None,
+        "session_price_currency": None, "bundle_price_minor": None, "bundle_price_currency": None,
+    }
+    row.update(changes)
+    return row
+
+
+def test_photoshoot_card_projects_complete_session_total_and_bundle_price():
+    session = asset_api._photoshoot_card_payload(_card_row(
+        paid_step_count=5, priced_step_count=5, session_total_minor=5195,
+        session_price_currency="USD",
+    ), posted_offering_ids=set())
+    assert session["commercialPrice"] == {
+        "status": "PRICED", "amountMinor": 5195, "currency": "USD", "kind": "SESSION_TOTAL",
+    }
+
+    bundle = asset_api._photoshoot_card_payload(_card_row(
+        selling_mode="BUNDLE", bundle_sales_channel="CONTENT_WALL",
+        bundle_price_minor=2499, bundle_price_currency="USD",
+    ), posted_offering_ids=set())
+    assert bundle["commercialPrice"] == {
+        "status": "PRICED", "amountMinor": 2499, "currency": "USD", "kind": "BUNDLE",
+    }
+
+
+def test_session_card_projects_exact_current_paid_shot_sum_without_free_teaser():
+    # Canonical prices are integer minor units; the free teaser is excluded by
+    # the repository before this projection is built.
+    paid_prices = (999, 1299, 1499, 1899)
+    session = asset_api._photoshoot_card_payload(_card_row(
+        shot_count=5, paid_step_count=4, priced_step_count=4,
+        session_total_minor=sum(paid_prices), session_price_currency="USD",
+    ), posted_offering_ids=set())
+
+    assert sum(paid_prices) == 5696
+    assert session["commercialPrice"] == {
+        "status": "PRICED", "amountMinor": 5696,
+        "currency": "USD", "kind": "SESSION_TOTAL",
+    }
+
+
+def test_session_card_fails_closed_for_missing_or_partial_current_prices():
+    missing = asset_api._photoshoot_card_payload(_card_row(), posted_offering_ids=set())
+    partial = asset_api._photoshoot_card_payload(_card_row(
+        paid_step_count=5, priced_step_count=3, session_total_minor=None,
+    ), posted_offering_ids=set())
+    assert missing["commercialPrice"]["status"] == "NOT_PRICED"
+    assert missing["commercialPrice"]["amountMinor"] is None
+    assert partial["commercialPrice"]["status"] == "INCOMPLETE"
+    assert partial["commercialPrice"]["amountMinor"] is None
+
+
+def test_standalone_card_projects_authoritative_teaser_destination():
+    card = asset_api._standalone_card_payload({
+        "id": 42, "file_name": "teaser.jpg", "file_path": "teaser.jpg",
+        "classification": "SINGLE_IMAGE", "status": "approved",
+        "created_at": datetime.now(timezone.utc),
+        "media_metadata": {"media_type": "image"},
+        "intelligence_status": "READY", "content_destination": "TEASER",
+    }, canonical_asset_id=None, posted_offering_ids=set())
+
+    assert card["contentDestination"] == "TEASER"
+    assert card["standaloneSalePreparation"]["status"] == "NOT_PREPARED"
+
+
 def test_asset_library_counts_use_lightweight_aggregate_without_hydration(monkeypatch):
     calls = {"records": 0}
 
     class Repository:
         def asset_library_counts(self, creator_profile_id):
             assert creator_profile_id == 7
-            return {"images": 8, "photoshoots": 3, "videos": 2, "bundles": 4}
+            return {
+                "images": 8, "photoshoots": 3, "videos": 2, "bundles": 4, "teasers": 0,
+                "destination_breakdown": {
+                    "images": {"chat": 5, "wall": 2, "unassigned": 1},
+                    "photoshoots": {"chat": 2, "wall": 1, "unassigned": 0},
+                    "chat_commerce_types": {"single": 5, "bundle": 1, "session": 1},
+                },
+            }
 
     def records():
         calls["records"] += 1
@@ -51,7 +132,13 @@ def test_asset_library_counts_use_lightweight_aggregate_without_hydration(monkey
         AssertionError("count endpoint must not inspect sale preparation")))
 
     assert asset_api.asset_library_counts() == {
-        "images": 9, "photoshoots": 3, "videos": 2, "bundles": 4,
+            "images": 9, "photoshoots": 3, "videos": 2, "bundles": 4, "teasers": 0,
+        "destinationBreakdown": {
+            "images": {"chat": 5, "wall": 2, "unassigned": 2},
+            "photoshoots": {"chat": 2, "wall": 1, "unassigned": 0},
+            "totals": {"chat": 7, "wall": 3},
+            "chatCommerceTypes": {"single": 5, "bundle": 1, "session": 1},
+        },
     }
     assert calls["records"] == 1
 
@@ -192,6 +279,36 @@ def test_registered_asset_archive_and_restore_preserve_identity_and_creator_scop
     assert asset_api.archive_registered_asset(42)["assetId"] == 42
     assert asset_api.restore_registered_asset(42)["assetId"] == 42
     assert calls == [("archive", 42, 7), ("restore", 42, 7)]
+
+
+def test_registered_asset_archive_and_restore_are_idempotent(monkeypatch):
+    archived_asset = SimpleNamespace(
+        id=42, creator_profile_id=7, status="archived", is_active=False,
+        media_metadata={"asset_library_archive": {"previous_status": "approved"}},
+        local_vault_path="vault/42.png", file_path="source/42.png",
+    )
+    active_asset = SimpleNamespace(
+        id=42, creator_profile_id=7, status="approved", is_active=True,
+        media_metadata={}, local_vault_path="vault/42.png", file_path="source/42.png",
+    )
+    class Repository:
+        mode = "archived"
+        def get_by_id(self, _asset_id):
+            return archived_asset if self.mode == "archived" else active_asset
+        def archive_asset_library_item(self, asset_id, creator_profile_id):
+            return {"id": asset_id}
+        def restore_asset_library_item(self, asset_id, creator_profile_id):
+            return None
+    repository = Repository()
+    monkeypatch.setattr(asset_api, "_creator_profile", lambda: {"id": 7})
+    monkeypatch.setattr(asset_api, "AssetRepository", lambda: repository)
+    monkeypatch.setattr(asset_api, "CreativeIntelligenceLearningService", lambda: SimpleNamespace(
+        record_negative_safely=lambda **_kwargs: None,
+    ))
+
+    assert asset_api.archive_registered_asset(42)["assetId"] == 42
+    repository.mode = "active"
+    assert asset_api.restore_registered_asset(42)["assetId"] == 42
 
 
 def test_photoshoot_archive_and_restore_preserve_deliverable_identity(monkeypatch):
@@ -636,6 +753,80 @@ def test_list_assets_applies_filters_and_pagination(monkeypatch):
     assert captured["built_ids"] == tuple(range(11, 21))
 
 
+def test_unified_chat_sales_view_combines_images_sessions_and_chat_bundles(monkeypatch):
+    captured = {}
+    photoshoots = ({
+        "deliverable_id": f"set-{index}", "display_name": f"Set {index}",
+        "completed_at": f"2026-08-0{index}T10:00:00Z", "updated_at": f"2026-08-0{index}T10:00:00Z",
+        "hero_asset_id": 40 + index, "shot_count": 3,
+        "selling_mode": mode, "bundle_sales_channel": channel,
+    } for index, (mode, channel) in enumerate((("SESSION", None), ("BUNDLE", "CHAT")), 1))
+    photoshoots = tuple(photoshoots)
+
+    class Assets:
+        def asset_library_sales_image_summary(self, **kwargs):
+            captured["images"] = kwargs
+            return (({"id": 7, "created_at": "2026-08-03T10:00:00Z"},), 1, ("SINGLE_IMAGE",))
+
+        def asset_library_card_summaries(self, asset_ids, **_kwargs):
+            assert tuple(asset_ids) == (7,)
+            return ({"id": 7, "file_name": "image.jpg", "file_path": "image.jpg",
+                     "classification": "SINGLE_IMAGE", "status": "approved",
+                     "created_at": "2026-08-03T10:00:00Z", "media_metadata": {
+                         "media_type": "image", "standalone_sale_preparation": {"destinations": ["CHAT"]},
+                     }},)
+
+    class Photoshoots:
+        def count_asset_library(self, _creator_profile_id, **kwargs):
+            captured["photoshoot_count"] = kwargs
+            return 2
+
+        def list_asset_library_cards(self, _creator_profile_id, **kwargs):
+            captured["photoshoot_list"] = kwargs
+            return photoshoots
+
+        list_asset_library = list_asset_library_cards
+
+    monkeypatch.setattr(asset_api, "_creator_profile", lambda: {"id": 7})
+    monkeypatch.setattr(asset_api, "_canonical_asset_id", lambda _profile_id: None)
+    monkeypatch.setattr(asset_api, "_posted_offering_ids", lambda _profile_id: set())
+    monkeypatch.setattr(asset_api, "AssetRepository", Assets)
+    monkeypatch.setattr(asset_api, "PhotoshootCommerceRepository", Photoshoots)
+    monkeypatch.setattr(asset_api, "AssetLibraryService", lambda: SimpleNamespace(assets=True))
+    monkeypatch.setattr(asset_api, "GenerationLibraryService", lambda: SimpleNamespace(list_records=lambda: ()))
+
+    result = asset_api.list_assets(
+        sales_destination="CHAT", sales_commerce_type="ALL", page=1, page_size=18,
+    )
+
+    assert result["total"] == 3
+    assert {item["itemKind"] for item in result["assets"]} == {"registered_asset", "photoshoot"}
+    assert captured["images"]["destination"] == "CHAT"
+    assert captured["photoshoot_count"]["classification"] == "CHAT_DESTINATION"
+    assert captured["photoshoot_list"]["classification"] == "CHAT_DESTINATION"
+
+
+def test_wall_session_filter_safely_normalizes_to_wall_all(monkeypatch):
+    monkeypatch.setattr(asset_api, "_creator_profile", lambda: {"id": 7})
+    monkeypatch.setattr(asset_api, "_canonical_asset_id", lambda _profile_id: None)
+    monkeypatch.setattr(asset_api, "_posted_offering_ids", lambda _profile_id: set())
+    monkeypatch.setattr(asset_api, "AssetLibraryService", lambda: SimpleNamespace(assets=True))
+    monkeypatch.setattr(asset_api, "GenerationLibraryService", lambda: SimpleNamespace(list_records=lambda: ()))
+    monkeypatch.setattr(asset_api, "AssetRepository", lambda: SimpleNamespace(
+        asset_library_sales_image_summary=lambda **_: ((), 0, ()),
+        asset_library_card_summaries=lambda *_args, **_kwargs: (),
+    ))
+    captured = {}
+    class Photoshoots:
+        def count_asset_library(self, _creator, **kwargs): captured.update(kwargs); return 0
+        def list_asset_library(self, *_args, **_kwargs): return ()
+        list_asset_library_cards = list_asset_library
+    monkeypatch.setattr(asset_api, "PhotoshootCommerceRepository", Photoshoots)
+    result = asset_api.list_assets(sales_destination="WALL", sales_commerce_type="SESSION", page=1, page_size=18)
+    assert result["total"] == 0
+    assert captured["classification"] == "WALL"
+
+
 @pytest.mark.parametrize("classification", ("CHAT", "SESSION", "WALL"))
 def test_list_assets_filters_photoshoots_by_commercial_classification(monkeypatch, classification):
     captured = {}
@@ -705,6 +896,42 @@ def test_single_image_read_model_exposes_content_vault_publication_state(monkeyp
 
     assert result["contentVaultPublication"]["status"] == "PUBLISHED"
     assert result["contentVaultPublication"]["providerMessageId"] == "telegram-77"
+
+
+def test_reassign_single_image_destination_uses_canonical_service(monkeypatch):
+    calls = []
+    service = SimpleNamespace(reassign_destination=lambda *args, **kwargs: calls.append((args, kwargs)))
+    states = iter([
+        {"assetId": 42, "destinations": ["CHAT"]},
+        {"assetId": 42, "destinations": ["CONTENT_VAULT"], "status": "READY"},
+    ])
+    monkeypatch.setattr(asset_api, "_creator_profile", lambda: {"id": 7})
+    monkeypatch.setattr(asset_api, "StandaloneImageSalePreparationService", lambda: service)
+    monkeypatch.setattr(asset_api, "_standalone_sale_preparation", lambda *_: next(states))
+
+    result = asset_api.reassign_standalone_image_sale_destination(
+        42, asset_api.StandaloneDestinationReassignmentRequest(
+            destination="CONTENT_VAULT", priceMinor=1250, teaserStyle="FULL_BLUR"))
+
+    assert result["destinations"] == ["CONTENT_VAULT"]
+    assert calls == [((42,), {"creator_profile_id": 7, "price_minor": 1250,
+                              "destination": "CONTENT_VAULT", "teaser_style": "FULL_BLUR"})]
+
+
+@pytest.mark.parametrize("status", ["PUBLISHING", "PUBLISHED"])
+def test_reassign_single_image_destination_rejects_live_wall_publication(monkeypatch, status):
+    monkeypatch.setattr(asset_api, "_creator_profile", lambda: {"id": 7})
+    monkeypatch.setattr(asset_api, "StandaloneImageSalePreparationService", lambda: SimpleNamespace())
+    monkeypatch.setattr(asset_api, "_standalone_sale_preparation", lambda *_: {
+        "assetId": 42, "destinations": ["CONTENT_VAULT"],
+        "contentVaultPublication": {"status": status},
+    })
+
+    with pytest.raises(asset_api.HTTPException) as error:
+        asset_api.reassign_standalone_image_sale_destination(
+            42, asset_api.StandaloneDestinationReassignmentRequest(
+                destination="CHAT", priceMinor=1250, teaserStyle="SELECTIVE_BLUR"))
+    assert error.value.status_code == 409
 
 
 def test_list_assets_merges_staged_generation_with_registered_assets(monkeypatch, tmp_path):

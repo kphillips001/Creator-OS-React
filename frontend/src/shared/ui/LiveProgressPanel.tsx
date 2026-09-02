@@ -13,10 +13,11 @@ type Props = {
   active?: boolean;
   children?: ReactNode;
   actions?: ReactNode;
+  statusAction?: ReactNode;
 };
 
 export function LiveProgressPanel({
-  title, progressLabel, progressPercent, status, tone, active = false, children, actions,
+  title, progressLabel, progressPercent, status, tone, active = false, children, actions, statusAction,
 }: Props) {
   const value = Math.max(0, Math.min(100, progressPercent));
   return (
@@ -29,7 +30,8 @@ export function LiveProgressPanel({
       {children}
       <div className="live-progress__status" role="status">
         {active && <span className="creator-os-spinner" aria-label="Active work" role="img" />}
-        <span><small>Runtime Status</small><strong>{status}</strong></span>
+        <span className="live-progress__status-copy"><small>Runtime Status</small><strong>{status}</strong></span>
+        {statusAction && <span className="live-progress__status-action">{statusAction}</span>}
       </div>
       {actions && <div className="live-progress__actions">{actions}</div>}
     </div>

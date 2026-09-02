@@ -203,3 +203,10 @@ export function discardEditCandidate(candidateImageId: string): Promise<EditStud
     body: JSON.stringify({ candidate_image_id: candidateImageId }),
   });
 }
+
+export function useAsPhotoshootTeaser(intentId: string, candidateImageId: string): Promise<EditStudioActionResponse & { deliverableId: string }> {
+  return sendEditStudioJson("/edit-studio/use-as-photoshoot-teaser", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ intent_id: intentId, candidate_image_id: candidateImageId }),
+  });
+}

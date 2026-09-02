@@ -1,0 +1,3 @@
+BEGIN;
+DROP SCHEMA IF EXISTS ig_intelligence CASCADE;
+COMMIT;

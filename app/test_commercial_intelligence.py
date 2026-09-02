@@ -210,6 +210,27 @@ def test_selector_enforces_bundle_and_complete_ownership_constraints():
     assert "BUNDLE_FULLY_OWNED" in complete.exclusion_reasons
 
 
+def test_selector_enforces_authoritative_session_selling_mode_constraint():
+    service = CommercialOfferingSelectorService(repository=SimpleNamespace())
+    ordinary = candidate()
+    ordinary["photoshoot_selling_mode"] = None
+    session = candidate()
+    session["photoshoot_selling_mode"] = "SESSION"
+    constraints = StrategyConstraints(required_selling_modes=("SESSION",))
+
+    ordinary_result = service._evaluate(
+        ordinary, creator_profile_id=1, channel="AI_CHAT",
+        purchased=frozenset(), constraints=constraints,
+    )
+    session_result = service._evaluate(
+        session, creator_profile_id=1, channel="AI_CHAT",
+        purchased=frozenset(), constraints=constraints,
+    )
+
+    assert "STRATEGY_SELLING_MODE_MISMATCH" in ordinary_result.exclusion_reasons
+    assert "STRATEGY_SELLING_MODE_MISMATCH" not in session_result.exclusion_reasons
+
+
 def test_selector_fails_closed_when_progression_role_evidence_is_missing():
     service = CommercialOfferingSelectorService(repository=SimpleNamespace())
     value = candidate()
@@ -283,16 +304,23 @@ class Sessions:
         self.calls.append(values)
 
 
+class SyntheticUnlockGateway:
+    def issue(self, _intent):
+        return None, "https://creator.example/api/v1/commerce/unlock/synthetic"
+
+
 def test_authorized_session_purchase_intent_uses_canonical_association():
     sessions = Sessions()
     service = TelegramPurchaseIntentService(
         creator_profile_id=1, fanvue_account_id=2,
         identity_repository=Identity(), purchase_intent_service=Intents(),
         sales_session_service=sessions,
+        unlock_gateway_service=SyntheticUnlockGateway(),
     )
     session_id = uuid4()
     result = SimpleNamespace(
         correlation_id=str(uuid4()),
+        delivery_payload={"message_text": "Synthetic session offer."},
         diagnostic_metadata={
             "final_offer_authorized": True,
             "customer_sales_brain_evaluated": True,

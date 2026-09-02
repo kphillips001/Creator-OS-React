@@ -141,7 +141,8 @@ class WaveSpeedProviderBase(GenerationProvider):
     provider_family = "wavespeed"
     result_url_template = "https://api.wavespeed.ai/api/v3/predictions/{request_id}/result"
     api_key_env = "WAVESPEED_API_KEY"
-    image_host_api_key_env = "IMGBB_API_KEY"
+    media_upload_endpoint = "https://api.wavespeed.ai/api/v3/media/upload/binary"
+    provider_reference_host = "wavespeed_media"
     lifecycle = "ACTIVE"
     PREMIUM_RENDER_BODY_LOCK = """
 FINAL REFERENCE BODY LOCK - NON-NEGOTIABLE:
@@ -195,15 +196,15 @@ The pubic area must be fully smooth, hairless, and clean-shaven.
 Do not render a landing strip, stubble, trimmed pubic hair, shadow hair, peach fuzz, or visible pubic hair texture.
 """.strip()
     EXPRESSION_PROFILES = (
-        (20, "relaxed natural smile, authentic creator smile, subtle warmth, relaxed cheeks, natural eye contact"),
-        (15, "neutral relaxed face, calm expression, direct eye contact, candid portrait energy"),
-        (15, "playful expression, teasing grin, amused smile, casual creator-photo energy"),
-        (10, "laughing naturally, caught mid-laugh, genuine happiness, spontaneous camera-roll moment"),
-        (10, "looking away thoughtfully, soft smile while looking off-camera, candid private moment"),
-        (10, "confident expression, confident eye contact, slight smile, relaxed self-assured presence"),
-        (10, "teasing naughty seductive sexually enticing appealing salacious locked eye contact, fully open alert eyes, soft intimate private PPV mood"),
-        (5, "parted lips, intimate expression, quiet close-camera connection"),
-        (5, "playful lower-lip bite, amused eyes, casual teasing energy"),
+        (22, "teasing naughty seductive sexually enticing appealing salacious locked eye contact, fully open alert eyes, soft intimate private PPV mood"),
+        (18, "parted lips, intimate seductive expression, fully open bedroom-alert eyes, quiet close-camera wanting"),
+        (15, "playful lower-lip bite, teasing eyes fully open, coy naughty creator energy"),
+        (12, "teasing coy smirk, fully open seductive eyes, alluring private appeal"),
+        (10, "soft salacious smile, locked intimate eye contact, fully open alert eyes, sensual confidence"),
+        (8, "playful expression, teasing grin, amused smile, casual creator-photo energy"),
+        (7, "confident seductive eye contact, slight smirk, relaxed self-assured presence"),
+        (5, "relaxed natural smile, authentic creator smile, subtle warmth, natural eye contact"),
+        (3, "looking away thoughtfully with a coy private smile, candid intimate moment"),
     )
     EXPLICIT_TERMS = ("explicit", "nude", "naked", "topless", "bare breasts", "visible nipples", "masturbation", "touching her vagina", "vulva", "clit", "pussy", "dildo", "toy", "insertion")
     TOPLESS_TERMS = ("topless", "bare breasts", "bare breast", "no bra", "no bikini top", "no upper-body clothing", "upper body uncovered")
@@ -215,7 +216,8 @@ Do not render a landing strip, stubble, trimmed pubic hair, shadow hair, peach f
         api_key: str | None = None,
         http_client: HttpClient | None = None,
         poll_interval_seconds: float = 3.0,
-        max_poll_attempts: int = 40,
+        max_poll_attempts: int = 100,
+        max_poll_elapsed_seconds: float = 300.0,
         hosted_reference_service=None,
         recipe_capture_service=None,
         sleep=time.sleep,
@@ -224,6 +226,7 @@ Do not render a landing strip, stubble, trimmed pubic hair, shadow hair, peach f
         self.http_client = http_client or requests
         self.poll_interval_seconds = poll_interval_seconds
         self.max_poll_attempts = max(1, int(max_poll_attempts or 1))
+        self.max_poll_elapsed_seconds = max(30.0, float(max_poll_elapsed_seconds or 300))
         self.sleep = sleep
         self.hosted_references = hosted_reference_service or HostedAssetReferenceService(
             http_client=self.http_client, sleep=sleep,
@@ -245,7 +248,7 @@ Do not render a landing strip, stubble, trimmed pubic hair, shadow hair, peach f
             capabilities=self.capabilities,
             metadata={
                 "api_key_env": self.api_key_env,
-                "reference_image_host_api_key_env": self.image_host_api_key_env,
+                "reference_image_host": self.provider_reference_host,
                 "lifecycle": self.lifecycle,
             },
         )
@@ -362,6 +365,18 @@ Do not render a landing strip, stubble, trimmed pubic hair, shadow hair, peach f
                     )
                 continue
             poll_results.append(poll_result)
+            if poll_result.status == GenerationStatus.RUNNING.value:
+                return GenerationResult(
+                    result_id=new_generation_id("generation_result"), request_id=request.request_id,
+                    job_id="provider_pending", provider_id=self.provider_id,
+                    status=GenerationStatus.RUNNING.value,
+                    generation_metadata={"provider_family": self.provider_family,
+                                         "generation_recipe_ids": tuple(item.generation_recipe_id for item in submissions if item.generation_recipe_id)},
+                    execution_metadata={"provider_pending": True,
+                                        "provider_request_id": submission.provider_request_id,
+                                        "polling": dict(poll_result.raw_response or {})},
+                    image_metadata={"requested_image_count": total, "output_count": 0},
+                )
             if poll_result.status != GenerationStatus.SUCCEEDED.value:
                 if submission.generation_recipe_id:
                     self.recipe_capture.terminal(
@@ -524,23 +539,56 @@ Do not render a landing strip, stubble, trimmed pubic hair, shadow hair, peach f
         )
 
     def poll_status(self, submission: ProviderSubmission) -> ProviderPollResult:
+        started = time.monotonic()
         last_result: ProviderPollResult | None = None
+        transient_errors = 0
+        attempts = 0
         for attempt in range(self.max_poll_attempts):
-            result = self.poll_status_once(submission)
+            attempts = attempt + 1
+            try:
+                result = self.poll_status_once(submission)
+                transient_errors = 0
+            except Exception as error:
+                transient_errors += 1
+                if transient_errors >= 3:
+                    return ProviderPollResult(
+                        provider_request_id=submission.provider_request_id,
+                        status=GenerationStatus.RUNNING.value,
+                        raw_response={"polling_deferred": True, "poll_attempts": attempt + 1,
+                                      "poll_error": type(error).__name__},
+                        failure_reason=None,
+                    )
+                self.sleep(self.poll_interval_seconds)
+                continue
             if result.status in {
                 GenerationStatus.SUCCEEDED.value,
                 GenerationStatus.FAILED.value,
                 GenerationStatus.CANCELLED.value,
             }:
+                TRANSPORT_LOGGER.info(
+                    "provider_poll_terminal provider_request_id=%s attempts=%s elapsed_seconds=%.2f status=%s",
+                    submission.provider_request_id, attempts, time.monotonic() - started, result.status,
+                )
                 return result
             last_result = result
+            elapsed = time.monotonic() - started
+            if elapsed >= self.max_poll_elapsed_seconds:
+                break
             if attempt < self.max_poll_attempts - 1:
-                self.sleep(self.poll_interval_seconds)
+                self.sleep(self.poll_interval_seconds if elapsed < 60 else min(6.0, self.poll_interval_seconds * 2))
+        elapsed = time.monotonic() - started
+        TRANSPORT_LOGGER.info(
+            "provider_poll_deferred provider_request_id=%s attempts=%s elapsed_seconds=%.2f last_status=%s",
+            submission.provider_request_id, attempts, elapsed,
+            last_result.status if last_result else "unknown",
+        )
         return ProviderPollResult(
             provider_request_id=submission.provider_request_id,
-            status=GenerationStatus.FAILED.value,
-            raw_response=(last_result.raw_response if last_result else submission.raw_response),
-            failure_reason="Provider polling exhausted without a terminal status.",
+            status=GenerationStatus.RUNNING.value,
+            raw_response={"polling_deferred": True, "poll_attempts": attempts,
+                          "poll_elapsed_seconds": elapsed,
+                          "last_response": last_result.raw_response if last_result else submission.raw_response},
+            failure_reason=None,
         )
 
     def poll_status_once(self, submission: ProviderSubmission) -> ProviderPollResult:
@@ -838,10 +886,19 @@ Do not render a landing strip, stubble, trimmed pubic hair, shadow hair, peach f
         path = Path(reference).expanduser()
         if not path.exists():
             raise GenerationProviderError(f"Reference image was not found: {reference}")
-        return self._upload_reference_image(path)
+        if request.reference_asset_id:
+            return self.hosted_references.resolve(
+                asset_id=int(request.reference_asset_id), source_path=str(path),
+                host_name=self.provider_reference_host,
+                uploader=lambda source: self._upload_reference_image(
+                    source, asset_id=int(request.reference_asset_id), request_id=request.request_id,
+                ),
+            )
+        return self._upload_reference_image(path, request_id=request.request_id)
 
     def _provider_reference_images(self, request: GenerationRequest) -> list[str]:
         continuity = str(request.metadata.get("photoshoot_continuity_reference_image_url") or "").strip()
+        original_seed = str(request.metadata.get("original_photoshoot_seed_reference_image_url") or "").strip()
         frozen_identity_required = bool(request.metadata.get("require_frozen_photoshoot_identity"))
         photoshoot_policies = {
             RenderPolicy.PHOTOSHOOT_SAFE,
@@ -862,26 +919,48 @@ Do not render a landing strip, stubble, trimmed pubic hair, shadow hair, peach f
                 )
             if not canonical or not continuity:
                 raise GenerationProviderError("The frozen identity and evolving continuity references are both required.")
+            if "original_photoshoot_seed_reference_image_url" in request.metadata and not original_seed:
+                raise GenerationProviderError("The immutable original Photoshoot seed reference is required.")
         if (
             self._render_policy(request) not in photoshoot_policies
             or self.capabilities.max_reference_images < 2
             or not continuity
         ):
             return [self._provider_reference_image(request)]
+        seed_image_id = str(request.metadata.get("original_photoshoot_seed_image_id") or "").strip()
+        previous_image_id = str(
+            request.metadata.get("previous_approved_continuity_reference_image_id")
+            or request.metadata.get("active_reference_image_id")
+            or ""
+        ).strip()
         ordered = []
-        for reference in (canonical, continuity):
-            if reference and reference not in ordered:
-                ordered.append(reference)
+        seen_references = set()
+        seen_generated_images = set()
+        for reference, generated_image_id in (
+            (canonical, ""), (original_seed, seed_image_id), (continuity, previous_image_id),
+        ):
+            if not reference or reference in seen_references:
+                continue
+            if generated_image_id and generated_image_id in seen_generated_images:
+                continue
+            ordered.append(reference)
+            seen_references.add(reference)
+            if generated_image_id:
+                seen_generated_images.add(generated_image_id)
         if len(ordered) < 2:
             if frozen_identity_required:
                 raise GenerationProviderError("The identity and continuity references must be distinct Photoshoot images.")
             return [self._provider_reference_image(request)]
+        if len(ordered) > self.capabilities.max_reference_images:
+            raise GenerationProviderError(
+                f"{self.provider_id} cannot preserve all mandatory Photoshoot reference anchors."
+            )
         values = []
-        for index, reference in enumerate(ordered[:self.capabilities.max_reference_images]):
+        for index, reference in enumerate(ordered):
             if index == 0 and not self._is_remote_url(reference) and request.reference_asset_id:
                 values.append(self.hosted_references.resolve(
                     asset_id=int(request.reference_asset_id), source_path=reference,
-                    host_name="imgbb", uploader=lambda path: self._upload_reference_image(
+                    host_name=self.provider_reference_host, uploader=lambda path: self._upload_reference_image(
                         path, asset_id=int(request.reference_asset_id), request_id=request.request_id,
                     ),
                 ))
@@ -913,46 +992,27 @@ Do not render a landing strip, stubble, trimmed pubic hair, shadow hair, peach f
 
     def _upload_reference_image(self, path: Path, *, asset_id: int | None = None,
                                 request_id: str | None = None) -> str:
-        api_key = os.getenv(self.image_host_api_key_env)
-        if not api_key:
+        try:
+            with path.open("rb") as source:
+                response = self._safe_request(
+                    "post", self.media_upload_endpoint, stage="canonical_reference_upload",
+                    asset_id=asset_id, request_id=request_id or path.stem,
+                    headers=self._headers(), files={"file": (path.name, source)},
+                    timeout=self.transport_timeout,
+                )
+        except OSError as error:
             raise GenerationProviderError(
-                f"{self.provider_id} needs a public reference image URL. "
-                f"Set {self.image_host_api_key_env} to upload local Creator OS reference assets."
+                f"Provider input preparation failed: canonical reference {path.name} could not be read."
+            ) from error
+        self._raise_for_status(response, "Provider reference upload failed")
+        data = response.json()
+        body = data.get("data") if isinstance(data, dict) else None
+        image_url = str((body or {}).get("download_url") or (body or {}).get("url") or "").strip()
+        if not image_url or not self._is_remote_url(image_url):
+            raise GenerationProviderError(
+                "Provider input preparation failed: WaveSpeed did not return a usable media URL."
             )
-        # Prefer a compressed JPEG for ImgBB — large local PNGs often fail with HTTP 400 / code 111.
-        payloads = self._reference_upload_payloads(path)
-        last_error: Exception | None = None
-        for index, payload in enumerate(payloads):
-            response = self._safe_request(
-                "post", "https://api.imgbb.com/1/upload", stage="canonical_reference_upload",
-                asset_id=asset_id, request_id=request_id or path.stem,
-                params={"key": api_key},
-                files={"image": (f"{path.stem}.jpg", payload, "image/jpeg")},
-                data={"name": path.stem},
-                timeout=self.transport_timeout,
-            )
-            try:
-                self._raise_for_status(response, "Reference image upload failed")
-                data = response.json()
-                image_url = self._extract_hosted_image_url(data)
-                if not image_url:
-                    raise GenerationProviderError(
-                        f"No hosted reference URL returned from image host. Response: {data}"
-                    )
-                return image_url
-            except GenerationProviderError as error:
-                last_error = error
-                # Retry with a smaller payload when ImgBB rejects the first attempt.
-                if index + 1 < len(payloads):
-                    continue
-                raise GenerationProviderError(
-                    f"Reference image upload failed after {len(payloads)} attempt(s) "
-                    f"({path.name}, {len(payload)} bytes). {error}"
-                ) from error
-        if last_error is not None:
-            raise last_error
-        raise GenerationProviderError(f"Reference image upload failed for {path}.")
-
+        return image_url
     def _safe_request(self, method: str, url: str, *, stage: str, asset_id, request_id: str, **kwargs):
         attempts = len(self.transport_retry_delays) + 1
         for attempt in range(1, attempts + 1):
@@ -997,61 +1057,6 @@ Do not render a landing strip, stubble, trimmed pubic hair, shadow hair, peach f
             round((time.perf_counter() - started) * 1000, 2), outcome, status,
             error.__class__.__name__ if error else None, retry,
         )
-
-    @classmethod
-    def _reference_upload_payloads(cls, path: Path) -> tuple[bytes, ...]:
-        """Build one or more ImgBB-safe payloads, largest acceptable first."""
-        raw = path.read_bytes()
-        if not raw:
-            raise GenerationProviderError(f"Reference image file is empty: {path}")
-        compressed = cls._compress_reference_image_bytes(raw, max_edge=2048, quality=90)
-        smaller = cls._compress_reference_image_bytes(raw, max_edge=1536, quality=82)
-        tiniest = cls._compress_reference_image_bytes(raw, max_edge=1280, quality=75)
-        ordered: list[bytes] = []
-        # Prefer compressed JPEGs for reliability; keep original only when already small.
-        for candidate in (compressed, smaller, tiniest, raw if len(raw) <= 4 * 1024 * 1024 else b""):
-            if not candidate:
-                continue
-            if candidate not in ordered:
-                ordered.append(candidate)
-        return tuple(ordered) or (raw,)
-
-    @staticmethod
-    def _compress_reference_image_bytes(raw: bytes, *, max_edge: int, quality: int) -> bytes:
-        try:
-            from io import BytesIO
-
-            from PIL import Image
-        except Exception:
-            return b""
-        try:
-            with Image.open(BytesIO(raw)) as image:
-                image.load()
-                if image.mode not in {"RGB", "L"}:
-                    image = image.convert("RGB")
-                elif image.mode == "L":
-                    image = image.convert("RGB")
-                image.thumbnail((max(256, int(max_edge)), max(256, int(max_edge))), Image.Resampling.LANCZOS)
-                buffer = BytesIO()
-                image.save(buffer, format="JPEG", quality=max(60, min(95, int(quality))), optimize=True)
-                return buffer.getvalue()
-        except Exception:
-            return b""
-
-    @staticmethod
-    def _extract_hosted_image_url(data: Mapping[str, Any]) -> str | None:
-        data_section = data.get("data", {}) if isinstance(data.get("data"), Mapping) else {}
-        candidates = (
-            data_section.get("image", {}).get("url") if isinstance(data_section.get("image"), Mapping) else None,
-            data_section.get("url"),
-            data_section.get("display_url"),
-            data_section.get("medium", {}).get("url") if isinstance(data_section.get("medium"), Mapping) else None,
-            data_section.get("thumb", {}).get("url") if isinstance(data_section.get("thumb"), Mapping) else None,
-        )
-        for candidate in candidates:
-            if isinstance(candidate, str) and candidate.strip():
-                return candidate.strip()
-        return None
 
     @staticmethod
     def _extract_outputs(data: Mapping[str, Any]) -> tuple[str, ...]:

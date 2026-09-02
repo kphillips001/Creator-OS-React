@@ -1,7 +1,10 @@
 import logging
 from uuid import uuid4
 
-from app.repositories.webhook_event_repository import claim_due_items, renew_claim, complete_claim, fail_claim
+from app.repositories.webhook_event_repository import (
+    claim_due_items, renew_claim, complete_claim, fail_claim,
+    ignore_claim, quarantine_claim,
+)
 
 from app.services.webhook_event_router_service import (
     WebhookEventRouterService,
@@ -22,13 +25,13 @@ class WebhookEventProcessorService:
     - mark failed events retryable
     """
 
-    def __init__(self, worker_instance_id: str | None = None):
-        self.router = WebhookEventRouterService()
+    def __init__(self, worker_instance_id: str | None = None, router=None):
+        self.router = router or WebhookEventRouterService()
         self.worker_instance_id = worker_instance_id or f"webhook-processor-{uuid4()}"
         self.logger = logging.getLogger("webhook-event-processor")
 
-    def process_pending_events(self):
-        events = claim_due_items(worker_instance_id=self.worker_instance_id)
+    def process_pending_events(self, *, limit: int = 25):
+        events = claim_due_items(worker_instance_id=self.worker_instance_id, limit=limit)
 
         self.logger.info(
             "event=webhook_batch_claimed pending_count=%s", len(events)
@@ -39,17 +42,6 @@ class WebhookEventProcessorService:
         for event in events:
             result = self._process_single_event(event)
             processing_results.append(result)
-
-        reconciliation_results = (
-            self.router.commerce_signal_service.retry_pending(limit=25)
-        )
-        processing_results.extend(
-            {
-                "pipeline": "commerce_signal_reconciliation",
-                "result": result,
-            }
-            for result in reconciliation_results
-        )
 
         return processing_results
 
@@ -69,8 +61,22 @@ class WebhookEventProcessorService:
                 return {"success": False, "error": "claim_not_owned"}
 
             route_result = self.router.route_event(event)
-
-            complete_claim(webhook_event_id, worker_instance_id=self.worker_instance_id)
+            outcome = route_result.get("outcome", "SUCCEEDED") if isinstance(route_result, dict) else "TERMINAL_FAILED"
+            if outcome == "IGNORED":
+                ignore_claim(webhook_event_id, worker_instance_id=self.worker_instance_id,
+                             reason=route_result.get("reason", "ignored"))
+            elif outcome == "QUARANTINED":
+                quarantine_claim(webhook_event_id, worker_instance_id=self.worker_instance_id,
+                                 reason=route_result.get("reason", "quarantined"))
+            elif outcome == "RETRYABLE":
+                fail_claim(webhook_event_id=webhook_event_id,
+                           worker_instance_id=self.worker_instance_id,
+                           error_message=str(route_result.get("result") or "retryable"))
+            elif outcome == "SUCCEEDED":
+                complete_claim(webhook_event_id, worker_instance_id=self.worker_instance_id)
+            else:
+                quarantine_claim(webhook_event_id, worker_instance_id=self.worker_instance_id,
+                                 reason=route_result.get("reason", "terminal_failed"))
 
             self.logger.info(
                 "event=webhook_processing_completed webhook_event_id=%s "

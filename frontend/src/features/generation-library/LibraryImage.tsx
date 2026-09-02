@@ -1,10 +1,10 @@
 import { ImageIcon } from "lucide-react";
 import { useState } from "react";
 
-import type { GenerationRecord } from "./types";
+import type { GenerationLibraryCard, GenerationRecord } from "./types";
 
 export function LibraryImage({ record, src, alt, priority = false }: {
-  record?: GenerationRecord;
+  record?: GenerationRecord | GenerationLibraryCard | Pick<GenerationRecord, "image_id" | "image_url">;
   src?: string;
   alt?: string;
   priority?: boolean;
@@ -22,11 +22,11 @@ export function LibraryImage({ record, src, alt, priority = false }: {
 
   return (
     <img
-      alt={alt || record?.prompt_text || `Generated image ${record?.image_id || "version"}`}
+      alt={alt || ("prompt_text" in (record || {}) ? (record as GenerationRecord).prompt_text : "") || `Generated image ${record?.image_id || "version"}`}
       decoding="async"
       loading={priority ? "eager" : "lazy"}
       onError={() => setFailed(true)}
-      src={src || record?.image_url}
+      src={src || record?.image_url?.replace(/\/media(?:\?.*)?$/, "/thumbnail")}
     />
   );
 }

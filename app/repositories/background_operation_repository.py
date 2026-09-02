@@ -20,9 +20,25 @@ class BackgroundOperationRepository:
                progress_total: int = 0, current_stage: str | None = None,
                stage_message: str | None = None, result_location: str | None = None,
                cancellation_supported: bool = False,
-               metadata: Mapping[str, Any] | None = None) -> tuple[BackgroundOperation, bool]:
+               metadata: Mapping[str, Any] | None = None,
+               exclusive_active_type: bool = False) -> tuple[BackgroundOperation, bool]:
         operation_id = uuid4()
         with self.connection_factory() as connection, connection.cursor() as cursor:
+            if exclusive_active_type:
+                cursor.execute(
+                    "SELECT pg_advisory_xact_lock(hashtext(%s))",
+                    (f"background-operation:{int(creator_profile_id)}:{operation_type}",),
+                )
+                cursor.execute(
+                    """SELECT * FROM public.background_operations
+                       WHERE creator_profile_id=%s AND operation_type=%s
+                         AND status IN ('QUEUED','RUNNING','WAITING_EXTERNAL','CANCEL_REQUESTED')
+                       ORDER BY created_at DESC LIMIT 1""",
+                    (int(creator_profile_id), str(operation_type)),
+                )
+                active = cursor.fetchone()
+                if active is not None:
+                    return BackgroundOperation.from_row(active), False
             cursor.execute(
                 """INSERT INTO public.background_operations(
                      operation_id,operation_type,originating_workspace,creator_profile_id,
@@ -97,8 +113,9 @@ class BackgroundOperationRepository:
             cursor.execute(
                 """WITH candidate AS (
                      SELECT operation_id,status FROM public.background_operations
-                     WHERE status='QUEUED'
-                        OR (status IN ('RUNNING','WAITING_EXTERNAL') AND lease_expires_at<NOW())
+                     WHERE executor_key<>'content_studio_explicit_batch_client'
+                       AND (status='QUEUED'
+                        OR (status IN ('RUNNING','WAITING_EXTERNAL') AND lease_expires_at<NOW()))
                      ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT 1
                    )
                    UPDATE public.background_operations operation
@@ -151,7 +168,7 @@ class BackgroundOperationRepository:
             """UPDATE public.background_operations SET status=%s,current_stage=COALESCE(%s,current_stage),
                stage_message=COALESCE(%s,stage_message),result_reference=COALESCE(%s,result_reference),
                error_code=%s,error_message=%s,metadata=metadata||%s::jsonb,
-               completed_at=CASE WHEN %s THEN NOW() ELSE completed_at END,
+               completed_at=CASE WHEN %s THEN NOW() ELSE NULL END,
                lease_expires_at=CASE WHEN %s THEN NULL ELSE lease_expires_at END,updated_at=NOW()
                WHERE operation_id=%s RETURNING *""",
             (status, stage, message, result_reference, error_code, error_message,
@@ -159,6 +176,51 @@ class BackgroundOperationRepository:
         )
         self.append_event(operation_id, status, prior.status, status, stage, message, metadata)
         return row
+
+    def complete_explicit_batch_and_consume_workspace(
+        self, operation_id: UUID | str, *, message: str,
+        metadata: Mapping[str, Any] | None = None,
+    ) -> BackgroundOperation:
+        """Atomically finalize a successful Explicit batch and consume its prompt workspace."""
+        consumed = {**dict(metadata or {}), "workspaceDismissed": True, "workspaceConsumed": True}
+        with self.connection_factory() as connection, connection.cursor() as cursor:
+            cursor.execute("SELECT * FROM public.background_operations WHERE operation_id=%s FOR UPDATE", (operation_id,))
+            prior = cursor.fetchone()
+            if prior is None or prior["operation_type"] != "content_studio_explicit_batch":
+                raise KeyError("Explicit batch not found.")
+            if prior["status"] in {"PARTIAL", "FAILED", "CANCELLED"}:
+                raise ValueError("Only a successful Explicit batch can consume its workspace.")
+            if prior["status"] == "SUCCEEDED" and bool((prior.get("metadata") or {}).get("workspaceConsumed")):
+                return BackgroundOperation.from_row(prior)
+            cursor.execute(
+                """UPDATE public.background_operations SET status='SUCCEEDED',current_stage='COMPLETE',
+                   stage_message=%s,error_code=NULL,error_message=NULL,metadata=metadata||%s::jsonb,
+                   progress_current=progress_total,progress_percent=100,completed_at=COALESCE(completed_at,NOW()),
+                   lease_expires_at=NULL,updated_at=NOW() WHERE operation_id=%s RETURNING *""",
+                (message, json.dumps(consumed), operation_id),
+            )
+            row = cursor.fetchone()
+            cursor.execute(
+                """UPDATE public.background_operations SET
+                   metadata=metadata||jsonb_build_object(
+                     'workspaceDismissed',TRUE,'workspaceConsumed',TRUE,
+                     'consumedByGenerationOperationId',%s::text),updated_at=NOW()
+                   WHERE operation_type='content_studio_explicit_inspiration' AND status='SUCCEEDED'
+                     AND metadata->>'phase'='HANDED_OFF'
+                     AND (result_reference=%s::text OR metadata->>'generationOperationId'=%s::text)
+                     AND COALESCE((metadata->>'workspaceConsumed')::boolean,FALSE)=FALSE
+                   RETURNING operation_id,current_stage""",
+                (str(operation_id), str(operation_id), str(operation_id)),
+            )
+            linked = cursor.fetchall()
+            self._insert_event(cursor, operation_id, "SUCCEEDED", prior["status"], "SUCCEEDED",
+                               "COMPLETE", message, consumed)
+            for inspiration in linked:
+                self._insert_event(cursor, inspiration["operation_id"], "WORKSPACE_CONSUMED",
+                                   "SUCCEEDED", "SUCCEEDED", inspiration["current_stage"],
+                                   "Explicit workspace consumed after successful generation.",
+                                   {"generationOperationId": str(operation_id)})
+        return BackgroundOperation.from_row(row)
 
     def request_cancellation(self, operation_id: UUID | str, *, creator_profile_id: int) -> BackgroundOperation:
         operation = self.get(operation_id, creator_profile_id=creator_profile_id)
@@ -196,6 +258,78 @@ class BackgroundOperationRepository:
         self.append_event(operation_id, "RETRIED", operation.status, "QUEUED",
                           "QUEUED", "Queued for retry", {})
         return row
+
+    def begin_explicit_failed_retry(
+        self, operation_id: UUID | str, *, creator_profile_id: int,
+    ) -> tuple[BackgroundOperation, bool]:
+        """Atomically claim one retry cycle for the failed slots of a partial Explicit batch."""
+        with self.connection_factory() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT * FROM public.background_operations WHERE operation_id=%s AND creator_profile_id=%s FOR UPDATE",
+                (operation_id, int(creator_profile_id)),
+            )
+            row = cursor.fetchone()
+            if row is None or row["operation_type"] != "content_studio_explicit_batch":
+                raise KeyError("Explicit batch not found.")
+            metadata = dict(row.get("metadata") or {})
+            cycle = dict(metadata.get("retryCycle") or {})
+            if row["status"] in {"QUEUED", "RUNNING", "CANCEL_REQUESTED"} and cycle.get("status") == "ACTIVE":
+                return BackgroundOperation.from_row(row), False
+            if row["status"] != "PARTIAL":
+                raise ValueError("Only a partial Explicit batch can retry failed items.")
+            if bool(metadata.get("workspaceDismissed")):
+                raise ValueError("A dismissed Explicit workspace cannot be retried.")
+            items = [dict(item) for item in metadata.get("items") or ()]
+            failed = [item for item in items if item.get("status") == "failed"]
+            if not failed:
+                raise ValueError("This Explicit batch has no failed items to retry.")
+            cycle_number = int(metadata.get("retryCycleCount") or 0) + 1
+            cycle_id = f"{operation_id}:retry:{cycle_number}"
+            failed_ids = {str(item.get("id")) for item in failed}
+            next_items = []
+            for item in items:
+                if str(item.get("id")) not in failed_ids:
+                    next_items.append(item)
+                    continue
+                attempts = list(item.get("attempts") or ())
+                if not attempts or attempts[-1].get("operationId") != item.get("jobId"):
+                    attempts.append({
+                        "attemptNumber": len(attempts) + 1,
+                        "operationId": item.get("jobId"),
+                        "status": "failed",
+                        "error": item.get("error") or "Generation failed",
+                        "failureStage": item.get("failureStage"),
+                    })
+                next_items.append({
+                    **item, "attempts": attempts, "status": "pending", "error": "",
+                    "failureStage": None, "retryCycleId": cycle_id,
+                })
+            next_metadata = {
+                **metadata, "items": next_items, "phase": "preparing",
+                "failedIdeas": 0, "retryingIdeas": len(failed_ids),
+                "retryCycleCount": cycle_number,
+                "retryCycle": {
+                    "cycleId": cycle_id, "cycleNumber": cycle_number, "status": "ACTIVE",
+                    "failedItemIds": sorted(failed_ids), "failedItemCount": len(failed_ids),
+                },
+            }
+            completed_count = sum(item.get("status") == "completed" for item in next_items)
+            cursor.execute(
+                """UPDATE public.background_operations SET status='QUEUED',executor_key='content_studio_explicit_failed_retry',
+                   current_stage='RETRY_QUEUED',stage_message=%s,completed_at=NULL,error_code=NULL,error_message=NULL,
+                   worker_id=NULL,lease_expires_at=NULL,progress_current=%s,
+                   progress_percent=%s,metadata=%s::jsonb,updated_at=NOW()
+                   WHERE operation_id=%s RETURNING *""",
+                (f"Retrying {len(failed_ids)} failed items...", completed_count,
+                 completed_count / max(1, len(next_items)) * 100, json.dumps(next_metadata), operation_id),
+            )
+            updated = cursor.fetchone()
+            self._insert_event(
+                cursor, operation_id, "FAILED_ITEMS_RETRY_QUEUED", "PARTIAL", "QUEUED",
+                "RETRY_QUEUED", f"Retrying {len(failed_ids)} failed items...",
+                {"retryCycleId": cycle_id, "failedItemIds": sorted(failed_ids)},
+            )
+        return BackgroundOperation.from_row(updated), True
 
     def append_event(self, operation_id, event_type, previous_status=None, new_status=None,
                      stage=None, message=None, metadata=None) -> None:

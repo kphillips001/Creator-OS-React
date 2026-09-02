@@ -37,6 +37,11 @@ export type CustomerWorkspaceItem = {
   retentionAndGrowth?: Record<string, unknown>;
   businessGuidance?: Record<string, unknown>;
   customerIntelligenceProfile?: Record<string, unknown>;
+  interactionSafety?: {
+    safetyStatus: "NORMAL" | "UNDERAGE_BLOCKED"; decision: string;
+    policyEnabled: boolean; reason: string | null; effectiveAt: string | null;
+    history: Array<Record<string, unknown>>;
+  };
 };
 
 export type CustomerListResponse = {

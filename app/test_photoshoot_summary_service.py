@@ -5,6 +5,7 @@ from unittest.mock import Mock
 
 from app.models.photoshoot_queue import PhotoshootSession
 from app.services.photoshoot_manual_service import PhotoshootManualService
+from app.services.photoshoot_creative_director_service import PhotoshootCreativeDirectorWorkflowService
 from app.services.photoshoot_summary_service import PhotoshootSummaryService
 
 
@@ -69,8 +70,8 @@ def test_summary_uses_only_approved_shots_and_synthesizes_repeated_prompts():
     serialized = json.dumps(summary).lower()
 
     assert summary["approved_shot_count"] == 3
-    assert summary["major_poses_explored"] == ["Seated at the window", "standing", "seated"]
-    assert summary["camera_compositions_explored"] == ["Medium shot", "full body"]
+    assert summary["major_poses_explored"] == ["Seated at the window", "seated"]
+    assert summary["camera_compositions_explored"] == ["Medium shot"]
     assert "rejected" not in serialized and "neon" not in serialized and "beach" not in serialized
     assert "candidate" not in serialized and "kitchen" not in serialized and "bikini" not in serialized
     assert "Same hotel, seated medium shot in a black dress." not in summary["summary_text"]
@@ -88,6 +89,111 @@ def test_summary_refresh_persists_and_evolves_after_approval():
     assert after["current_location"] == "mirror"
     assert len(queue.recorded) == 2
     assert queue.session.creative_continuity["photoshoot_summary"] == after
+
+
+def test_structured_state_precedes_negated_prompt_mentions():
+    queue = FakeQueue()
+    queue.requests[-1] = _request(
+        "candidate", "approved",
+        "Do not add a bikini. Do not create a bed shot. Preserve the marble shower. Fully nude.",
+        {"location": "shower", "nudity": "nude", "wetness": "soaking wet"},
+    )
+
+    summary = PhotoshootSummaryService(queue=queue).build("session-1")
+
+    assert summary["current_location"] == "shower"
+    assert summary["current_wardrobe"] == "nude"
+    assert summary["wetness"] == "soaking wet"
+    assert "bed" not in summary["summary_text"].lower()
+    assert "bikini" not in summary["summary_text"].lower()
+
+
+def test_latest_approved_direction_progression_precedes_seed_baseline():
+    queue = FakeQueue()
+    queue.session = replace(queue.session, creative_continuity={
+        **queue.session.creative_continuity,
+        "canonical_seed_summary": {"scene": "Hotel bedroom", "wardrobe": "black dress"},
+    })
+    queue.requests = [_request(
+        "approved", "approved", "Rendered prompt with provider locks.",
+        {"creative_direction": "Progress into the marble shower, now fully nude."},
+    )]
+
+    summary = PhotoshootSummaryService(queue=queue).build("session-1")
+
+    assert summary["current_location"] == "shower"
+    assert summary["current_wardrobe"] == "nude"
+
+
+def test_legacy_fallback_ignores_negative_provider_locks():
+    queue = FakeQueue()
+    queue.session = replace(queue.session, creative_continuity={"seed_image_id": "seed-1"})
+    queue.requests = [_request(
+        "legacy", "approved",
+        "Never use a bed. Don't move to the bedroom. Without a bikini. Marble bathroom with soft light. Fully nude.",
+    )]
+
+    summary = PhotoshootSummaryService(queue=queue).build("session-1")
+
+    assert summary["current_location"] == "bathroom"
+    assert summary["current_wardrobe"] == "nude"
+    assert summary["lighting"] == "soft light"
+
+
+def test_summary_memory_uses_only_latest_approved_prompt_as_bounded_fallback():
+    queue = FakeQueue()
+    historical = "Unique historical prose that must not recursively survive. " * 200
+    queue.requests = [
+        _request("seed", "approved", historical + "Hotel studio."),
+        _request("shot-2", "approved", historical + "Bedroom bikini."),
+        _request("shot-3", "approved", "Marble shower. Fully nude. Medium shot."),
+    ]
+
+    summary = PhotoshootSummaryService(queue=queue).build("session-1")
+    serialized = json.dumps(summary)
+
+    assert "Unique historical prose" not in serialized
+    assert len(summary["summary_text"]) < 2000
+    assert summary["current_location"] == "shower"
+    assert summary["current_wardrobe"] == "nude"
+
+
+def test_creative_direction_context_uses_compact_seed_summary_not_rendered_seed_prompt():
+    session = _session()
+    recursive_prompt = "historical rendered prompt " * 1000
+    session = replace(session, creative_continuity={
+        **session.creative_continuity,
+        "seed_prompt_text": recursive_prompt,
+        "canonical_seed_summary": {
+            "scene": "Marble shower",
+            "wardrobe": "Fully nude",
+            "mood_and_editorial_intent": "Intimate editorial",
+        },
+    })
+
+    context = PhotoshootCreativeDirectorWorkflowService._original_direction(session)
+
+    assert "Original scene: Marble shower" in context
+    assert "Wardrobe foundation: Fully nude" in context
+    assert "historical rendered prompt" not in context
+    assert len(context) < 500
+
+
+def test_rejected_and_invalidated_state_cannot_advance_summary():
+    queue = FakeQueue()
+    queue.requests = [
+        _request("seed", "approved", "Marble shower. Fully nude.", {"location": "shower", "nudity": "nude"}),
+        _request("rejected", "rejected", "Sunny beach in a bikini.", {"location": "beach", "wardrobe": "bikini"}),
+        _request("invalidated", "invalidated", "Hotel bed in lingerie.", {"location": "bed", "wardrobe": "lingerie"}),
+    ]
+
+    summary = PhotoshootSummaryService(queue=queue).build("session-1")
+
+    assert summary["approved_shot_count"] == 1
+    assert summary["current_location"] == "shower"
+    assert summary["current_wardrobe"] == "nude"
+    assert "beach" not in json.dumps(summary).lower()
+    assert "lingerie" not in json.dumps(summary).lower()
 
 
 def test_approving_a_candidate_automatically_refreshes_summary():

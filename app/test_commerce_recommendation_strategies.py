@@ -70,6 +70,7 @@ def test_default_weights_are_validated_and_sum_to_one():
     weights = RecommendationWeights()
     assert sum((
         weights.semantic_match, weights.customer_affinity,
+        weights.product_type_fit,
         weights.freshness, weights.diversification,
         weights.recent_offer_history,
     )) == pytest.approx(1.0)
@@ -282,11 +283,11 @@ def test_custom_weights_change_ranking_without_strategy_changes():
     fresh = candidate(TWO, title="Studio", published_at=NOW)
     semantic_only = RecommendationWeights(
         semantic_match=1, customer_affinity=0, freshness=0,
-        diversification=0, recent_offer_history=0,
+        product_type_fit=0, diversification=0, recent_offer_history=0,
     )
     freshness_only = RecommendationWeights(
         semantic_match=0, customer_affinity=0, freshness=1,
-        diversification=0, recent_offer_history=0,
+        product_type_fit=0, diversification=0, recent_offer_history=0,
     )
     request = context(current_request="beach")
     assert CommerceRecommendationEngine(

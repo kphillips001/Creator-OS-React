@@ -99,6 +99,17 @@ class CommercialFulfillmentRepository:
             offering.price_minor,offering.currency,offering.hero_asset_id,
             offering.status AS offering_status,offering.created_at,
             offering.source_photoshoot_deliverable_id,
+            offering.source_bundle_studio_bundle_id,
+            CASE WHEN offering.offering_type='SINGLE_IMAGE'
+                      AND offering.source_photoshoot_deliverable_id IS NULL
+                      AND offering.source_bundle_studio_bundle_id IS NULL
+                 THEN (
+                    SELECT standalone.media_metadata#>>
+                        '{{standalone_sale_preparation,destinations,0}}'
+                    FROM public.content_items standalone
+                    WHERE standalone.id=offering.hero_asset_id
+                 )
+            END AS standalone_sale_destination,
             (
                 SELECT COALESCE(
                     (SELECT commercial_teaser.derivative_path
@@ -114,11 +125,16 @@ class CommercialFulfillmentRepository:
                 FROM public.content_items hero
                 WHERE hero.id=offering.hero_asset_id
             ) AS blurred_teaser_path,
-            source_deliverable.selling_mode AS photoshoot_selling_mode,
-            source_deliverable.bundle_sales_channel AS photoshoot_bundle_sales_channel,
-            bundle_teaser.source_asset_id AS bundle_teaser_source_asset_id,
-            bundle_teaser.teaser_asset_id AS bundle_teaser_asset_id,
-            (bundle_teaser_asset.id IS NOT NULL) AS bundle_teaser_registered,
+            COALESCE(source_deliverable.selling_mode,
+                CASE WHEN offering.source_bundle_studio_bundle_id IS NOT NULL THEN 'BUNDLE' END
+            ) AS photoshoot_selling_mode,
+            COALESCE(source_deliverable.bundle_sales_channel,
+                CASE WHEN offering.primary_sales_channel='AI_CHAT' THEN 'CHAT'
+                     WHEN offering.primary_sales_channel='TELEGRAM_WALL' THEN 'CONTENT_WALL' END
+            ) AS photoshoot_bundle_sales_channel,
+            COALESCE(bundle_teaser.source_asset_id,studio_teaser.source_asset_id) AS bundle_teaser_source_asset_id,
+            COALESCE(bundle_teaser.teaser_asset_id,studio_teaser.teaser_asset_id) AS bundle_teaser_asset_id,
+            (COALESCE(bundle_teaser_asset.id,studio_teaser_asset.id) IS NOT NULL) AS bundle_teaser_registered,
             array_agg(member.asset_id ORDER BY member.position) AS asset_ids,
             array_agg(member_asset.content_type ORDER BY member.position) AS asset_content_types,
             array_agg(destination.destination ORDER BY member.position) AS destinations,
@@ -212,12 +228,18 @@ class CommercialFulfillmentRepository:
           ON bundle_teaser.deliverable_id=source_deliverable.deliverable_id
         LEFT JOIN public.content_items bundle_teaser_asset
           ON bundle_teaser_asset.id=bundle_teaser.teaser_asset_id
+        LEFT JOIN public.bundle_studio_teasers studio_teaser
+          ON studio_teaser.bundle_id=offering.source_bundle_studio_bundle_id
+        LEFT JOIN public.content_items studio_teaser_asset
+          ON studio_teaser_asset.id=studio_teaser.teaser_asset_id
         WHERE {where}
           AND {commercial_asset_eligibility_sql("member_asset")}
         GROUP BY offering.offering_id,publication.publication_id,
                  source_deliverable.selling_mode,source_deliverable.bundle_sales_channel,
                  bundle_teaser.source_asset_id,
-                 bundle_teaser.teaser_asset_id,bundle_teaser_asset.id
+                 bundle_teaser.teaser_asset_id,bundle_teaser_asset.id,
+                 studio_teaser.source_asset_id,studio_teaser.teaser_asset_id,
+                 studio_teaser_asset.id
         {having}"""
 
     @staticmethod
@@ -228,6 +250,17 @@ class CommercialFulfillmentRepository:
             AND publication.provider_resource_status='PRESENT'
             AND publication.external_product_id IS NOT NULL
             AND COALESCE(publication.publication_metadata#>>'{media_link,url}','')<>''
+            AND (
+                offering.offering_type<>'SINGLE_IMAGE'
+                OR offering.source_photoshoot_deliverable_id IS NOT NULL
+                OR offering.source_bundle_studio_bundle_id IS NOT NULL
+                OR (
+                    SELECT standalone.media_metadata#>>
+                        '{{standalone_sale_preparation,destinations,0}}'
+                    FROM public.content_items standalone
+                    WHERE standalone.id=offering.hero_asset_id
+                )='CHAT'
+            )
             AND (
                 (offering.offering_type IN ('SINGLE_IMAGE','VIDEO')
                  AND COUNT(*)=1

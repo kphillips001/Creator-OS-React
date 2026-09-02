@@ -458,6 +458,18 @@ class SocialPublishingTests(unittest.TestCase):
         self.assertIn("reply_markup", kwargs["data"])
         self.assertIn("photo", kwargs["files"])
 
+    def test_telegram_preparation_preserves_normalized_content_vault_ratio(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            image_path = Path(temp_dir) / "content-vault.jpg"
+            Image.new("RGB", (960, 1280), "black").save(image_path)
+            prepared = TelegramPublishingProvider().prepare_telegram_photo(image_path)
+            try:
+                with Image.open(prepared) as image:
+                    self.assertEqual(image.size, (960, 1280))
+                    self.assertEqual(image.format, "JPEG")
+            finally:
+                prepared.unlink(missing_ok=True)
+
     def test_telegram_provider_reports_friendly_missing_configuration(self):
         provider = TelegramPublishingProvider(http_client=FakeTelegramHttp())
         old_token = telegram_provider_module.settings.TELEGRAM_BOT_TOKEN_AVA
@@ -483,10 +495,13 @@ class SocialPublishingTests(unittest.TestCase):
     def test_telegram_publish_success_history_and_retry(self):
         fake_telegram = FakeTelegramProvider()
         social_publishing, generation_library = self.make_services(telegram_provider=fake_telegram)
-        item = social_publishing.create_queue_item(
-            generated_image_id="generated_image_social_1",
-            generation_library=generation_library,
-            platform=SocialPlatform.TELEGRAM.value,
+        source = generation_library.get("generated_image_social_1")
+        item = social_publishing.create_commerce_queue_item(
+            commercial_offering_id="offering-1",
+            creator_profile_id=source.creator_profile_id,
+            hero_asset_id=42,
+            image_reference=source.output_reference,
+            title="Commercial image",
         )
 
         posted = social_publishing.publish_now(
@@ -497,12 +512,6 @@ class SocialPublishingTests(unittest.TestCase):
             telegram_cta_label="Open",
             telegram_cta_url="https://example.test",
             audit_metadata={"offering_id": "offering-1", "asset_id": 42, "teaser_id": "teaser-1"},
-        )
-        archive = generation_library.mark_published(
-            item.generated_image_id,
-            platform=SocialPlatform.TELEGRAM.value,
-            caption="Manual Telegram caption",
-            metadata={"post_to": "vault", "social_queue_item_id": item.queue_item_id},
         )
         failed_service, failed_library = self.make_services(telegram_provider=FakeTelegramProvider(fail=True))
         failed_item = failed_service.create_queue_item(
@@ -519,12 +528,26 @@ class SocialPublishingTests(unittest.TestCase):
         self.assertEqual(social_publishing.list_publish_items()[0].metadata["offering_id"], "offering-1")
         self.assertEqual(social_publishing.list_history()[0].metadata["teaser_id"], "teaser-1")
         self.assertEqual(social_publishing.list_history()[0].status, SocialPublishStatus.POSTED.value)
-        self.assertTrue(archive.success)
-        archive_record = generation_library.archive_service.list_records(archive_type="published_telegram")[0]
-        self.assertIn("Telegram", archive_record.current_file_path)
-        self.assertIn("Vault", archive_record.current_file_path)
         self.assertEqual(failed.status, SocialPublishStatus.FAILED.value)
         self.assertEqual(retried.status, SocialPublishStatus.QUEUED.value)
+
+    def test_non_commercial_queue_cannot_bypass_canonical_content_vault_publisher(self):
+        fake_telegram = FakeTelegramProvider()
+        social_publishing, generation_library = self.make_services(telegram_provider=fake_telegram)
+        item = social_publishing.create_queue_item(
+            generated_image_id="generated_image_social_1",
+            generation_library=generation_library,
+            platform=SocialPlatform.TELEGRAM.value,
+        )
+
+        with self.assertRaisesRegex(ValueError, "canonical Commercial Offering"):
+            social_publishing.publish_now(
+                item.queue_item_id,
+                caption_text="Bypass attempt",
+                telegram_post_to="vault",
+            )
+
+        self.assertEqual(fake_telegram.calls, [])
 
     def test_x_publish_failure_and_retry(self):
         social_publishing, generation_library = self.make_services(x_provider=FakeXProvider(fail=True))
@@ -572,6 +595,7 @@ class SocialPublishingTests(unittest.TestCase):
                 "account_name": "AvaBlackthorne",
                 "tweet_id": "tweet_123",
                 "published_at": payload["published_at"],
+                "auto_replies_enabled": True,
             },
         )
         self.assertTrue(str(payload["published_at"]).endswith("+00:00"))
@@ -609,11 +633,16 @@ class SocialPublishingTests(unittest.TestCase):
             "published_at": "2026-07-18T18:00:00+00:00",
         }
 
-        SocialPublishingService._send_x_auto_callback(payload)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            service = SocialPublishingService(storage_dir=Path(temp_dir))
+            service._send_x_auto_callback(payload)
 
         self.assertEqual(post.call_count, 2)
         self.assertEqual(post.call_args.args[0], "http://127.0.0.1:8765/api/publish/x")
-        self.assertEqual(post.call_args.kwargs["json"], payload)
+        self.assertEqual(
+            post.call_args.kwargs["json"],
+            {**payload, "auto_replies_enabled": True},
+        )
         wait.assert_called_once_with(5)
 
     @patch("app.services.social_publishing_service.sleep")
@@ -640,6 +669,9 @@ class SocialPublishingTests(unittest.TestCase):
         self.assertEqual(posted.status, SocialPublishStatus.POSTED.value)
         self.assertEqual(post.call_count, 2)
         wait.assert_called_once_with(5)
+        publish_item = social_publishing.list_publish_items()[0]
+        self.assertEqual(publish_item.metadata["x_auto_callback_status"], "pending")
+        self.assertEqual(publish_item.metadata["x_auto_replies_enabled"], True)
 
     def test_scheduled_state_is_tracked(self):
         social_publishing, generation_library = self.make_services(x_provider=FakeXProvider())

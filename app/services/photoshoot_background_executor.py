@@ -29,13 +29,26 @@ class PhotoshootBackgroundExecutor:
         # submit the same paid provider work for a second time.
         if operation.attempt_count > 1 and operation.result_reference:
             if job.status == GenerationStatus.SUCCEEDED.value and job.result:
-                records = manual.library.sync_job(job)
-                completed = manual.synchronize_completed(session_id=session_id, job=job, records=records)
-                result = {"status": "succeeded", "job_id": job.job_id,
-                          "request_id": completed.request_id if completed else request_id,
-                          "image_ids": [record.image_id for record in records]}
+                result = manual.reconcile_local_completion(
+                    session_id=session_id, request_id=request_id,
+                )
                 self._finish(operation, operations, result)
                 return
+            if job.status == GenerationStatus.RUNNING.value:
+                result = manual.reconcile_provider_task(session_id=session_id, job=job)
+                if result.get("status") == "provider_pending":
+                    operations.repository.transition(
+                        operation.operation_id, "WAITING_EXTERNAL", stage="WAITING_PROVIDER",
+                        message="Waiting on provider / still processing",
+                        metadata={"providerRequestId": result.get("provider_request_id")},
+                    )
+                    return
+                if result.get("status") == "succeeded":
+                    self._finish(operation, operations, result)
+                    return
+                if result.get("status") == "provider_failed":
+                    operations.fail(operation.operation_id, result.get("message"), code="PROVIDER_FAILED")
+                    return
             if job.status != GenerationStatus.QUEUED.value:
                 operations.fail(
                     operation.operation_id,
@@ -67,6 +80,27 @@ class PhotoshootBackgroundExecutor:
             )
 
         result = manual.execute(session_id=session_id, job=job, progress_callback=observe)
+        if result.get("status") == "finalization_required":
+            operations.fail(
+                operation.operation_id,
+                str(result.get("message") or "Image generated; local Photoshoot finalization is required."),
+                code="PHOTOSHOOT_FINALIZATION_REQUIRED",
+                metadata={"providerJobId": result.get("job_id"),
+                          "requestId": result.get("request_id"),
+                          "imageIds": result.get("image_ids", []),
+                          "providerSucceeded": True},
+            )
+            return
+        if result.get("status") == "provider_pending":
+            operations.repository.transition(
+                operation.operation_id, "WAITING_EXTERNAL", stage="WAITING_PROVIDER",
+                message="Waiting on provider / still processing",
+                result_reference=job_id,
+                metadata={"providerJobId": job_id,
+                          "providerRequestId": result.get("provider_request_id"),
+                          "pollingExhausted": True},
+            )
+            return
         self._finish(operation, operations, result)
 
     @staticmethod

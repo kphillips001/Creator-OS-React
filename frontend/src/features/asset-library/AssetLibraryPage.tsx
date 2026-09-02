@@ -1,5 +1,6 @@
 import {
   ArrowLeft,
+  ArrowRightLeft,
   ArrowRight,
   BadgeDollarSign,
   Camera,
@@ -9,8 +10,10 @@ import {
   ExternalLink,
   Image as ImageIcon,
   ImageOff,
+  Megaphone,
+  Heart,
+  MessageCircle,
   MoveRight,
-  Package,
   PackagePlus,
   Search,
   Trash2,
@@ -39,6 +42,7 @@ import { isPostedToContentWall } from "./contentWallPublication";
 import type { AssetLibraryItem, AssetLibraryResponse, ContentVaultCaptionDraft, ContentVaultCaptionOption, ContentVaultCaptionTone, ContentVaultPublicationState, StandaloneSalePreparation } from "./types";
 import "./asset-library.css";
 import { videoStudioLink } from "../../infrastructure/api/videoStudioApi";
+import { consumeMovedAssetHandoff } from "./assetLibraryHandoff";
 
 const emptyResponse: AssetLibraryResponse = {
   assets: [],
@@ -48,6 +52,8 @@ const emptyResponse: AssetLibraryResponse = {
   totalPages: 1,
   classifications: [],
 };
+
+const photoshootFromLocation = () => new URLSearchParams(window.location.search).get("photoshoot");
 
 const CAPTION_TONE_STORAGE_KEY = "creator-os.content-vault-caption-tone";
 
@@ -75,6 +81,21 @@ const moneyLabel = (minor: number, currency?: string | null) => {
   } catch {
     return `${code} ${(minor / 100).toFixed(2)}`;
   }
+};
+
+const commercialPriceLabel = (asset: AssetLibraryItem) => {
+  const price = asset.commercialPrice;
+  if (price?.status === "PRICED" && price.amountMinor != null) {
+    return `${moneyLabel(price.amountMinor, price.currency)}${price.kind === "SESSION_TOTAL" ? " Total" : ""}`;
+  }
+  if (price?.status === "INCOMPLETE") return "Pricing Incomplete";
+  if (asset.itemKind === "registered_asset") {
+    const preparation = asset.standaloneSalePreparation;
+    if (preparation?.status === "READY" && preparation.priceMinor != null && preparation.priceMinor > 0) {
+      return moneyLabel(preparation.priceMinor, preparation.currency);
+    }
+  }
+  return "Not Priced";
 };
 
 const assetClassificationLabel = (value: string | null) =>
@@ -153,8 +174,8 @@ const StandaloneDestinationBadges = ({
   ) : null;
 };
 
-const SingleImageDetailPanel = ({ asset, onClose, onEdit, onPreview, onPreparationRefresh }: {
-  asset: AssetLibraryItem; onClose: () => void; onEdit: () => void;
+const SingleImageDetailPanel = ({ asset, onClose, onEdit, onReassign, onPreview, onPreparationRefresh }: {
+  asset: AssetLibraryItem; onClose: () => void; onEdit: () => void; onReassign: () => void;
   onPreview: (imageUrl: string, label: string) => void;
   onPreparationRefresh: (preparation: StandaloneSalePreparation) => void;
 }) => {
@@ -173,6 +194,7 @@ const SingleImageDetailPanel = ({ asset, onClose, onEdit, onPreview, onPreparati
   const [editingCaption, setEditingCaption] = useState(false);
   const [captionEdit, setCaptionEdit] = useState("");
   const [captionGuidance, setCaptionGuidance] = useState("");
+  const [manualCaptionDraft, setManualCaptionDraft] = useState("");
   const [captionTone, setCaptionTone] = useState<ContentVaultCaptionTone>(() => readStoredCaptionTone());
   const [publication, setPublication] = useState<ContentVaultPublicationState | null>(preparation?.contentVaultPublication || null);
   const [publishing, setPublishing] = useState(false);
@@ -200,6 +222,7 @@ const SingleImageDetailPanel = ({ asset, onClose, onEdit, onPreview, onPreparati
     setCaptionModalOpen(true);
     setCaptionError("");
     setSelectedCaption(null);
+    setManualCaptionDraft(caption?.text || "");
   };
   const selectCaptionTone = (tone: ContentVaultCaptionTone) => {
     setCaptionTone(tone);
@@ -276,6 +299,10 @@ const SingleImageDetailPanel = ({ asset, onClose, onEdit, onPreview, onPreparati
     }
   };
   const publicationStatus = publishing ? "PUBLISHING" : publication?.status || "NOT_PUBLISHED";
+  const currentDestination = preparation?.destinations?.length === 1
+    ? preparation.destinations[0] : null;
+  const reassignmentBlocked = currentDestination === "CONTENT_VAULT"
+    && (publicationStatus === "PUBLISHING" || publicationStatus === "PUBLISHED");
   const canPublish = Boolean(publication?.canPublish
     && publicationStatus !== "PUBLISHING" && publicationStatus !== "PUBLISHED");
   return <aside className="asset-details single-image-commercial-detail" aria-label="Selected asset details">
@@ -288,11 +315,21 @@ const SingleImageDetailPanel = ({ asset, onClose, onEdit, onPreview, onPreparati
         {asset.commercialAssets?.map((commercialAsset) => <article className="single-image-detail-teaser" key={`${commercialAsset.kind}:${commercialAsset.label}`}><header><strong>{commercialAsset.label.replace(/\s+—\s+(Selective Blur|Full Blur)$/i, "")}</strong><em>{commercialAsset.status}</em></header><button aria-label={`Open ${commercialAsset.label} preview`} onClick={() => onPreview(commercialAsset.previewUrl, commercialAsset.label)} type="button"><ContainedMediaImage src={commercialAsset.previewUrl} alt={commercialAsset.label} /></button><div><strong>{commercialAsset.styleLabel || (commercialAsset.kind === "PROMOTIONAL_TEASER" ? "Selective Blur" : "Full Blur")}</strong><span>{commercialAsset.distributionUse === "CONTENT_VAULT" ? "Used for Content Vault" : "Used for Chat Selling"}</span></div></article>)}
         <div className="single-image-detail-delivery"><div className="single-image-detail-delivery__heading"><div><strong>Paid Delivery</strong><span>Fanvue Media Link</span></div><em className={deliveryReady ? "is-ready" : "needs-attention"}>{deliveryReady ? "Ready" : preparation.status === "PREPARING" ? "Preparing" : "Needs Attention"}</em></div>{deliveryReady && preparation.deliveryUrl && <div className="single-image-detail-delivery__link"><code title={preparation.deliveryUrl}>{preparation.deliveryUrl}</code><div><a href={preparation.deliveryUrl} target="_blank" rel="noopener noreferrer">Open <ExternalLink size={13} /></a><button onClick={() => void copyDeliveryUrl()} type="button"><Copy size={13} />{copied ? "Copied" : "Copy"}</button></div></div>}</div>
         {preparation.error && <p className="sale-preparation-error">{preparation.error}</p>}
-        <button className="sale-preparation-secondary" onClick={onEdit} type="button">{preparation.status === "NEEDS_ATTENTION" ? "Retry Sale Preparation" : "Edit Sale Preparation"}</button>
+        <div className="single-image-detail-sale-actions">
+          <button className="sale-preparation-secondary" onClick={onEdit} type="button">{preparation.status === "NEEDS_ATTENTION" ? "Retry Sale Preparation" : "Edit Sale Preparation"}</button>
+          {currentDestination && <button
+            className="sale-preparation-secondary"
+            disabled={reassignmentBlocked}
+            onClick={onReassign}
+            title={reassignmentBlocked ? "Images publishing or published to TG Wall cannot be reassigned." : undefined}
+            type="button"
+          >Reassign Destination</button>}
+        </div>
       </>}
     </section>
     {isWallReady && <section className="content-vault-publishing" aria-labelledby="content-vault-publishing-title">
       <h3 id="content-vault-publishing-title">Content Vault Publishing</h3>
+      {publication?.previewUrl && <ContainedMediaImage src={publication.previewUrl} alt="Content Vault publication preview" />}
       <strong>Caption</strong>
       {!caption ? <><p className="content-vault-publishing__empty">No caption selected.</p><button className="sale-preparation-primary" onClick={openCaptionChooser} type="button">Choose Caption</button></> : editingCaption ? <>
         <textarea aria-label="Content Vault caption" value={captionEdit} onChange={(event) => setCaptionEdit(event.target.value)} rows={6} />
@@ -307,6 +344,15 @@ const SingleImageDetailPanel = ({ asset, onClose, onEdit, onPreview, onPreparati
     </section>}
     {captionModalOpen && <div className="caption-chooser-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !captionSaving) setCaptionModalOpen(false); }}><div className="caption-chooser" role="dialog" aria-modal="true" aria-label="Choose Content Vault Caption">
       <header><div>{asset.imageUrl && <ContainedMediaImage src={asset.imageUrl} alt="" />}<div><small>Choose Content Vault Caption</small><h2>{asset.displayName || `Asset #${asset.assetId}`}</h2></div></div><button aria-label="Close caption chooser" onClick={() => setCaptionModalOpen(false)} type="button"><X size={18} /></button></header>
+      <section className="caption-chooser__manual" aria-labelledby="manual-caption-title">
+        <label className="caption-chooser__field">
+          <span id="manual-caption-title">Your Caption</span>
+          <textarea aria-label="Your Content Vault caption" disabled={captionSaving} maxLength={2000} onChange={(event) => { setManualCaptionDraft(event.target.value); setSelectedCaption(null); }} placeholder="Write your own Content Vault caption…" rows={4} value={manualCaptionDraft} />
+          <small>{manualCaptionDraft.length} / 2000</small>
+        </label>
+        <button disabled={!manualCaptionDraft.trim() || captionSaving} onClick={() => { setSelectedCaption(null); void persistCaption(manualCaptionDraft.trim(), null, "MANUAL"); }} type="button">{captionSaving && selectedCaption === null ? "Saving…" : "Use My Caption"}</button>
+      </section>
+      <div className="caption-chooser__divider"><span>Or generate with AI</span></div>
       <div className="caption-tone-toggle" role="radiogroup" aria-label="Caption tone">
         <span className="caption-tone-toggle__label">Tone</span>
         <div className="caption-tone-toggle__options">
@@ -387,14 +433,24 @@ const SingleImageDetailPanel = ({ asset, onClose, onEdit, onPreview, onPreparati
 
 const originalImageUrl = (imageUrl: string | null) =>
   imageUrl?.replace(/\/thumbnail(?:\?.*)?$/, "/media") || null;
+const previewImageUrl = (imageUrl: string | null) =>
+  imageUrl?.replace(/\/thumbnail(?:\?.*)?$/, "/preview") || null;
 
 type RegistrationResponse = {
   message?: string;
   detail?: string;
   error?: string;
 };
-type AssetType = "images" | "photoshoots" | "videos";
-type AssetLibraryCounts = Record<AssetType | "bundles", number>;
+type AssetType = "images" | "photoshoots" | "videos" | "teasers";
+type SalesDestination = "CHAT" | "WALL";
+type SalesCommerceType = "ALL" | "SINGLE" | "BUNDLE" | "SESSION";
+type DestinationCounts = { chat: number; wall: number; unassigned: number };
+type AssetLibraryCounts = Record<AssetType | "bundles", number> & {
+  destinationBreakdown?: Partial<Record<AssetType, DestinationCounts>> & {
+    totals?: { chat: number; wall: number };
+    chatCommerceTypes?: { single: number; bundle: number; session: number };
+  };
+};
 
 const assetTypes = [
   {
@@ -420,11 +476,31 @@ const assetTypes = [
   },
 ];
 
+const teaserAssetType = {
+  id: "teasers" as const,
+  label: "Teasers",
+  countLabel: "Assets",
+  mediaType: "image",
+  icon: Heart,
+};
+const allAssetTypes = [...assetTypes, teaserAssetType];
+
 const assetTypeFromLocation = (): AssetType | null => {
   const value = new URLSearchParams(window.location.search).get("assetType");
-  return assetTypes.some((item) => item.id === value)
+  return allAssetTypes.some((item) => item.id === value)
     ? (value as AssetType)
     : null;
+};
+const salesDestinationFromLocation = (): SalesDestination | null => {
+  const value = new URLSearchParams(window.location.search).get("sales")?.toUpperCase();
+  return value === "CHAT" || value === "WALL" ? value : null;
+};
+const salesCommerceTypeFromLocation = (): SalesCommerceType => {
+  const destination = salesDestinationFromLocation();
+  const value = new URLSearchParams(window.location.search).get("salesType")?.toUpperCase();
+  if (value === "SINGLE" || value === "BUNDLE") return value;
+  if (value === "SESSION" && destination === "CHAT") return value;
+  return "ALL";
 };
 
 async function readRegistrationResponse(
@@ -454,11 +530,14 @@ async function readRegistrationResponse(
 }
 
 export function AssetLibraryPage() {
+  const [requestedAssetId] = useState<number | null>(consumeMovedAssetHandoff);
   const [data, setData] = useState<AssetLibraryResponse>(emptyResponse);
   const [search, setSearch] = useState("");
   const [assetType, setAssetType] = useState<AssetType | null>(
     assetTypeFromLocation,
   );
+  const [salesDestination, setSalesDestination] = useState<SalesDestination | null>(salesDestinationFromLocation);
+  const [salesCommerceType, setSalesCommerceType] = useState<SalesCommerceType>(salesCommerceTypeFromLocation);
   const [counts, setCounts] = useState<Partial<AssetLibraryCounts>>({});
   const [countsLoading, setCountsLoading] = useState(true);
   const [countsError, setCountsError] = useState(false);
@@ -470,25 +549,72 @@ export function AssetLibraryPage() {
   const [selected, setSelected] = useState<AssetLibraryItem | null>(null);
   const [preview, setPreview] = useState<AssetLibraryItem | null>(null);
   const [previewNavigable, setPreviewNavigable] = useState(false);
-  const [openPhotoshootId, setOpenPhotoshootId] = useState<string | null>(null);
+  const [openPhotoshootId, setOpenPhotoshootId] = useState<string | null>(photoshootFromLocation);
   const [version, setVersion] = useState(0);
   const [actionMessage, setActionMessage] = useState("");
   const [registeringId, setRegisteringId] = useState<string | null>(null);
   const [archivingId, setArchivingId] = useState<string | null>(null);
   const [returningId, setReturningId] = useState<string | null>(null);
+  const [teaserControlId, setTeaserControlId] = useState<number | null>(null);
+  const [sellingModeAsset, setSellingModeAsset] = useState<AssetLibraryItem | null>(null);
+  const [sellingModeSelection, setSellingModeSelection] = useState<"SESSION" | "BUNDLE">("SESSION");
+  const [sellingChannelSelection, setSellingChannelSelection] = useState<"CHAT" | "CONTENT_WALL">("CHAT");
+  const [sellingModeSaving, setSellingModeSaving] = useState(false);
   const [salePreparationAsset, setSalePreparationAsset] =
+    useState<AssetLibraryItem | null>(null);
+  const [reassignDestinationAsset, setReassignDestinationAsset] =
     useState<AssetLibraryItem | null>(null);
 
   const selectedAssetType =
-    assetTypes.find((item) => item.id === assetType) || null;
+    allAssetTypes.find((item) => item.id === assetType) || null;
+
+  const setTeaserChatEnabled = async (asset: AssetLibraryItem) => {
+    if (asset.assetId === null) return;
+    setTeaserControlId(asset.assetId);
+    setActionMessage("");
+    try {
+      const response = await fetch(`/api/v1/assets/${asset.assetId}/engagement-teaser/chat-control`, {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled: !asset.chatEnabled }),
+      });
+      const result = await response.json() as { chatEnabled?: boolean; detail?: string };
+      if (!response.ok) throw new Error(result.detail || "Unable to update Chat availability.");
+      setVersion((current) => current + 1);
+    } catch (reason) {
+      setActionMessage(reason instanceof Error ? reason.message : "Unable to update Chat availability.");
+    } finally {
+      setTeaserControlId(null);
+    }
+  };
+
+  useEffect(() => {
+    if (requestedAssetId === null) return;
+    const controller = new AbortController();
+    setError("");
+    fetch(`/api/v1/assets/${requestedAssetId}`, { cache: "no-store", signal: controller.signal })
+      .then(async (response) => {
+        const result = await response.json() as AssetLibraryItem & { detail?: string };
+        if (!response.ok) throw new Error(result.detail || "Unable to locate the moved Asset.");
+        return result;
+      })
+      .then(setSelected)
+      .catch((reason: unknown) => {
+        if ((reason as { name?: string }).name === "AbortError") return;
+        setError(reason instanceof Error ? reason.message : "Unable to locate the moved Asset.");
+      });
+    return () => controller.abort();
+  }, [requestedAssetId]);
 
   useEffect(() => {
     const onPopState = () => {
       setAssetType(assetTypeFromLocation());
+      setSalesDestination(salesDestinationFromLocation());
+      setSalesCommerceType(salesCommerceTypeFromLocation());
       setPage(1);
       setSearch("");
       setClassification("");
       setDestination("");
+      setOpenPhotoshootId(photoshootFromLocation());
     };
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
@@ -517,7 +643,7 @@ export function AssetLibraryPage() {
   }, [version]);
 
   useEffect(() => {
-    if (!selectedAssetType) {
+    if (!selectedAssetType && !salesDestination) {
       setData(emptyResponse);
       setLoading(false);
       return;
@@ -525,7 +651,13 @@ export function AssetLibraryPage() {
     const controller = new AbortController();
     const params = new URLSearchParams({ page: String(page), page_size: "18" });
     if (search.trim()) params.set("search", search.trim());
-    params.set("media_type", selectedAssetType.mediaType);
+    if (salesDestination) {
+      params.set("sales_destination", salesDestination);
+      params.set("sales_commerce_type", salesCommerceType);
+    } else if (selectedAssetType) {
+      params.set("media_type", selectedAssetType.mediaType);
+      if (assetType === "teasers") params.set("asset_purpose", "TEASER");
+    }
     if (classification) params.set("classification", classification);
     if (assetType === "images" && destination) params.set("destination", destination);
     setLoading(true);
@@ -556,7 +688,7 @@ export function AssetLibraryPage() {
         setLoading(false);
       });
     return () => controller.abort();
-  }, [assetType, classification, destination, page, search, selectedAssetType, version]);
+  }, [assetType, classification, destination, page, salesCommerceType, salesDestination, search, selectedAssetType, version]);
 
   useEffect(() => {
     const analyzing = data.assets.filter(
@@ -623,12 +755,13 @@ export function AssetLibraryPage() {
     );
     if (!preparing.length) return;
     let active = true;
+    const controller = new AbortController();
     const timer = window.setTimeout(() => {
       void Promise.all(
         preparing.map(async (item) => {
           const response = await fetch(
             `/api/v1/assets/${item.assetId}/sale-preparation`,
-            { cache: "no-store" },
+            { cache: "no-store", signal: controller.signal },
           );
           const result = (await response.json()) as NonNullable<
             AssetLibraryItem["standaloneSalePreparation"]
@@ -673,27 +806,61 @@ export function AssetLibraryPage() {
     }, 4000);
     return () => {
       active = false;
+      controller.abort();
       window.clearTimeout(timer);
     };
   }, [data.assets]);
 
   const chooseAssetType = (type: AssetType) => {
     const url = new URL(window.location.href);
+    url.searchParams.delete("sales");
+    url.searchParams.delete("salesType");
     url.searchParams.set("assetType", type);
     window.history.pushState({ assetLibraryType: type }, "", url);
     setAssetType(type);
+    setSalesDestination(null);
     setPage(1);
     setSearch("");
     setClassification("");
     setDestination("");
+    setSelected(null);
+  };
+
+  const chooseSalesDestination = (sales: SalesDestination) => {
+    const url = new URL(window.location.href);
+    url.searchParams.delete("assetType");
+    url.searchParams.set("sales", sales.toLowerCase());
+    url.searchParams.delete("salesType");
+    window.history.pushState({ assetLibrarySales: sales }, "", url);
+    setAssetType(null);
+    setSalesDestination(sales);
+    setSalesCommerceType("ALL");
+    setPage(1);
+    setSearch("");
+    setClassification("");
+    setDestination("");
+    setSelected(null);
+  };
+
+  const chooseSalesCommerceType = (type: SalesCommerceType) => {
+    const url = new URL(window.location.href);
+    if (type === "ALL") url.searchParams.delete("salesType");
+    else url.searchParams.set("salesType", type.toLowerCase());
+    window.history.pushState({ assetLibrarySalesType: type }, "", url);
+    setSalesCommerceType(type);
+    setPage(1);
     setSelected(null);
   };
 
   const backToAssetTypes = () => {
     const url = new URL(window.location.href);
     url.searchParams.delete("assetType");
+    url.searchParams.delete("sales");
+    url.searchParams.delete("salesType");
     window.history.pushState({ assetLibraryType: null }, "", url);
     setAssetType(null);
+    setSalesDestination(null);
+    setSalesCommerceType("ALL");
     setPage(1);
     setSearch("");
     setClassification("");
@@ -701,9 +868,14 @@ export function AssetLibraryPage() {
     setSelected(null);
   };
 
-  const archiveAsset = async (asset: AssetLibraryItem) => {
-    const identity =
-      asset.deliverableId || asset.generationId || String(asset.assetId || "");
+const archiveAsset = async (asset: AssetLibraryItem) => {
+    const identity = asset.itemKind === "photoshoot"
+      ? asset.deliverableId
+      : asset.itemKind === "staged_generation"
+        ? asset.generationId
+        : asset.assetId != null
+          ? String(asset.assetId)
+          : null;
     if (!identity || archivingId) return;
     setArchivingId(identity);
     setError("");
@@ -718,10 +890,19 @@ export function AssetLibraryPage() {
       const response = await fetch(endpoint, { method: "POST" });
       const result = (await response.json()) as {
         message?: string;
-        detail?: string;
+        detail?: unknown;
       };
-      if (!response.ok)
-        throw new Error(result.detail || "Unable to archive Asset.");
+      if (!response.ok) {
+        const detail = typeof result.detail === "string"
+          ? result.detail
+          : Array.isArray(result.detail)
+            ? result.detail.map((item) => typeof item === "object" && item && "msg" in item
+              ? String((item as { msg: unknown }).msg) : String(item)).join("; ")
+            : result.detail && typeof result.detail === "object" && "message" in result.detail
+              ? String((result.detail as { message: unknown }).message)
+              : "Unable to archive Asset.";
+        throw new Error(detail);
+      }
       setSelected(null);
       setActionMessage(result.message || "Asset archived.");
       setVersion((current) => current + 1);
@@ -853,6 +1034,9 @@ export function AssetLibraryPage() {
           : item,
       ),
     }));
+    setSelected((current) => current?.assetId === assetId
+      ? { ...current, standaloneSalePreparation: result }
+      : current);
     setActionMessage(
       result.status === "READY"
         ? "Asset is ready for sale."
@@ -926,18 +1110,59 @@ export function AssetLibraryPage() {
     (
       deliverableId: string,
       sellingMode: NonNullable<AssetLibraryItem["sellingMode"]>,
+      bundleSalesChannel?: AssetLibraryItem["bundleSalesChannel"],
     ) => {
       setData((current) => ({
         ...current,
         assets: current.assets.map((asset) =>
           asset.deliverableId === deliverableId
-            ? { ...asset, sellingMode, sessionSelling: null }
+            ? { ...asset, sellingMode, bundleSalesChannel: sellingMode === "BUNDLE" ? (bundleSalesChannel || "CHAT") : null, sessionSelling: null }
             : asset,
         ),
       }));
     },
     [],
   );
+
+  const openSellingModeReassignment = (asset: AssetLibraryItem) => {
+    setSellingModeAsset(asset);
+    setSellingModeSelection(asset.sellingMode || "SESSION");
+    setSellingChannelSelection(asset.bundleSalesChannel || "CHAT");
+    setError("");
+  };
+
+  const reassignSellingMode = async () => {
+    if (!sellingModeAsset?.deliverableId || sellingModeSaving) return;
+    const currentMode = sellingModeAsset.sellingMode || "SESSION";
+    const currentChannel = sellingModeAsset.bundleSalesChannel || "CHAT";
+    if (sellingModeSelection === currentMode
+        && (sellingModeSelection !== "BUNDLE" || sellingChannelSelection === currentChannel)) {
+      setSellingModeAsset(null);
+      return;
+    }
+    setSellingModeSaving(true);
+    setError("");
+    try {
+      const response = await fetch(
+        `/api/v1/assets/photoshoots/${encodeURIComponent(sellingModeAsset.deliverableId)}/commerce-assignment`,
+        { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
+          sellingMode: sellingModeSelection,
+          bundleSalesChannel: sellingModeSelection === "BUNDLE" ? sellingChannelSelection : null,
+        }) },
+      );
+      const result = await response.json() as { sellingMode?: "SESSION" | "BUNDLE"; bundleSalesChannel?: "CHAT" | "CONTENT_WALL" | null; detail?: string };
+      if (!response.ok) throw new Error(result.detail || "Unable to reassign selling mode.");
+      const mode = result.sellingMode || sellingModeSelection;
+      synchronizeSellingMode(sellingModeAsset.deliverableId, mode, result.bundleSalesChannel);
+      setActionMessage(`Photoshoot reassigned to ${mode === "BUNDLE" ? `${result.bundleSalesChannel === "CONTENT_WALL" ? "Wall" : "Chat"} Bundle` : "Session"} selling.`);
+      setSellingModeAsset(null);
+      setVersion((current) => current + 1);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Unable to reassign selling mode.");
+    } finally {
+      setSellingModeSaving(false);
+    }
+  };
 
   if (openPhotoshootId)
     return (
@@ -948,7 +1173,16 @@ export function AssetLibraryPage() {
         onSellingModeChange={(sellingMode) =>
           synchronizeSellingMode(openPhotoshootId, sellingMode)
         }
-        onClose={() => setOpenPhotoshootId(null)}
+        onMembersChanged={(detail) => setData((current) => ({ ...current,
+          assets: current.assets.map((asset) => asset.deliverableId === detail.deliverableId
+            ? { ...asset, shotCount: detail.shotCount, imageUrl: detail.imageUrl }
+            : asset) }))}
+        onClose={() => {
+          setOpenPhotoshootId(null);
+          // Session pricing is persisted while the viewer replaces the grid.
+          // Reconcile the card from the canonical projection when returning.
+          setVersion((current) => current + 1);
+        }}
       />
     );
 
@@ -959,16 +1193,17 @@ export function AssetLibraryPage() {
         description="Curated generations and registered Creator Assets."
       />
 
-      {!assetType && (
+      {!assetType && !salesDestination && (
         <section
           className="asset-type-dashboard"
           aria-labelledby="asset-type-heading"
         >
           <header>
             <span>Asset workspace</span>
-            <h2 id="asset-type-heading">Choose Asset Type</h2>
-            <p>Select a library to manage its assets.</p>
+            <h2 id="asset-type-heading">Browse Inventory</h2>
+            <p>Browse by asset type or current sales destination.</p>
           </header>
+          <h3 className="asset-dashboard-label">ASSET TYPE</h3>
           <div className="asset-type-grid">
             {assetTypes.map((item) => (
               <button
@@ -992,29 +1227,50 @@ export function AssetLibraryPage() {
                 </span>
               </button>
             ))}
-            <a className="asset-type-card" href="/library/bundles">
-              <span className="asset-type-card__icon">
-                <Package aria-hidden="true" size={34} />
-              </span>
-              <span>
-                <strong>Bundles</strong>
-                <small>{countsLoading ? "Loading…" : countsError ? "Count unavailable" : `${counts.bundles} Bundles`}</small>
-              </span>
-            </a>
+          </div>
+          <h3 className="asset-dashboard-label">SALES</h3>
+          <div className="asset-type-grid asset-type-grid--sales">
+            <button className="asset-type-card" onClick={() => chooseSalesDestination("CHAT")} type="button">
+              <span className="asset-type-card__icon"><MessageCircle size={34} /></span>
+              <span><strong>Chat</strong><small>{countsLoading ? "Loading…" : countsError ? "Count unavailable" : `${counts.destinationBreakdown?.totals?.chat ?? 0} Assets`}</small></span>
+            </button>
+            <button className="asset-type-card" onClick={() => chooseSalesDestination("WALL")} type="button">
+              <span className="asset-type-card__icon"><Megaphone size={34} /></span>
+              <span><strong>TG Wall</strong><small>{countsLoading ? "Loading…" : countsError ? "Count unavailable" : `${counts.destinationBreakdown?.totals?.wall ?? 0} Assets`}</small></span>
+            </button>
+          </div>
+          <h3 className="asset-dashboard-label">ENGAGEMENT</h3>
+          <div className="asset-type-grid asset-type-grid--engagement">
+            <button className="asset-type-card" onClick={() => chooseAssetType("teasers")} type="button">
+              <span className="asset-type-card__icon"><Heart size={34} /></span>
+              <span><strong>Teasers</strong><small>{countsLoading ? "Loading…" : countsError ? "Count unavailable" : `${counts.teasers ?? 0} Assets`}</small></span>
+            </button>
           </div>
         </section>
       )}
 
-      {assetType && (
+      {(assetType || salesDestination) && (
         <>
           <div className="asset-library-section-header">
             <button onClick={backToAssetTypes} type="button">
               <ArrowLeft size={17} />
               Back to Asset Types
             </button>
-            <h2>{selectedAssetType?.label}</h2>
+            <h2>{salesDestination ? (salesDestination === "CHAT" ? "Chat" : "TG Wall") : selectedAssetType?.label}</h2>
           </div>
-          <div className="asset-library-toolbar asset-library-toolbar--section">
+          {salesDestination && (
+            <div className="asset-sales-type-filter" aria-label="Sales commerce type">
+              {(salesDestination === "CHAT" ? ["ALL", "SINGLE", "BUNDLE", "SESSION"] as const : ["ALL", "SINGLE", "BUNDLE"] as const).map((type) => (
+                <button className={salesCommerceType === type ? "is-active" : ""} key={type} onClick={() => chooseSalesCommerceType(type)} type="button">
+                  {{ ALL: "All", SINGLE: "Single", BUNDLE: "Bundle", SESSION: "Session" }[type]}
+                  {salesDestination === "CHAT" && <span className="asset-sales-type-filter__count"> · {type === "ALL"
+                    ? counts.destinationBreakdown?.totals?.chat ?? 0
+                    : counts.destinationBreakdown?.chatCommerceTypes?.[type.toLowerCase() as "single" | "bundle" | "session"] ?? 0}</span>}
+                </button>
+              ))}
+            </div>
+          )}
+          <div className={`asset-library-toolbar asset-library-toolbar--section${salesDestination ? " asset-library-toolbar--sales" : ""}`}>
             <label className="asset-library-search">
               <Search size={16} />
               <span className="sr-only">Search assets</span>
@@ -1024,11 +1280,11 @@ export function AssetLibraryPage() {
                   setSearch(event.target.value);
                   setPage(1);
                 }}
-                placeholder={`Search ${selectedAssetType?.label.toLowerCase()}`}
+                placeholder={`Search ${salesDestination ? (salesDestination === "CHAT" ? "Chat" : "TG Wall") : selectedAssetType?.label.toLowerCase()}`}
                 value={search}
               />
             </label>
-            <label>
+            {!salesDestination && assetType !== "teasers" && <label>
               <span>{assetType === "images" ? "Destination" : "Classification"}</span>
               <select
                 aria-label={assetType === "images" ? "Destination" : "Classification"}
@@ -1061,7 +1317,7 @@ export function AssetLibraryPage() {
                   </option>
                 ))}
               </select>
-            </label>
+            </label>}
             <span className="asset-library-range">{range}</span>
           </div>
 
@@ -1133,6 +1389,10 @@ export function AssetLibraryPage() {
                       <div className="asset-card__photoshoot">
                         <strong>{asset.fileName}</strong>
                         <span>Photoshoot • {asset.shotCount} Images</span>
+                        <dl>
+                          <div><dt>Registered</dt><dd>{dateLabel(asset.createdAt)}</dd></div>
+                          <div><dt>Price</dt><dd>{commercialPriceLabel(asset)}</dd></div>
+                        </dl>
                         <div className="asset-card__photoshoot-badges">
                           <em
                             className={`session-selling-badge session-selling-badge--${readinessBadgeStatus(asset.sessionSelling)}`}
@@ -1181,14 +1441,31 @@ export function AssetLibraryPage() {
                             <dt>Registered</dt>
                             <dd>{dateLabel(asset.createdAt)}</dd>
                           </div>
-                          {assetType === "images" && asset.classification === "SINGLE_IMAGE" &&
-                            asset.standaloneSalePreparation?.status === "READY" &&
-                            asset.standaloneSalePreparation.priceMinor != null &&
-                            asset.standaloneSalePreparation.priceMinor > 0 && (
-                              <div className="asset-card__price"><dt>Price</dt><dd>{moneyLabel(asset.standaloneSalePreparation.priceMinor, asset.standaloneSalePreparation.currency)}</dd></div>
-                            )}
+                          {assetType !== "teasers" && asset.mediaType === "image" && !asset.isReference && (
+                            <div>
+                              <dt>Price</dt>
+                              <dd>{commercialPriceLabel(asset)}</dd>
+                            </div>
+                          )}
                         </dl>
-                        {asset.mediaType === "image" &&
+                        {asset.contentDestination === "TEASER" ? (
+                          <>
+                            <div className="standalone-commercial-badges">
+                              <em className="session-selling-badge photoshoot-sales-classification photoshoot-badge--single">TEASER</em>
+                            </div>
+                            <div className="engagement-teaser-chat-control" onClick={(event) => event.stopPropagation()}>
+                              <button
+                                aria-label={`${asset.chatEnabled ? "Disable" : "Enable"} ${asset.displayName || `Asset ${asset.assetId}`} for Chat`}
+                                disabled={teaserControlId === asset.assetId}
+                                onClick={() => void setTeaserChatEnabled(asset)} type="button"
+                              >
+                                Chat {asset.chatEnabled ? "Enabled" : "Disabled"}
+                              </button>
+                              <span>Times Sent <strong>{asset.timesSent ?? 0}</strong></span>
+                              <span>Last Sent <strong>{asset.lastSent ? dateLabel(asset.lastSent) : "Never"}</strong></span>
+                            </div>
+                          </>
+                        ) : asset.mediaType === "image" &&
                           !asset.isReference &&
                           asset.standaloneSalePreparation && (
                             <div className="standalone-commercial-badges">
@@ -1199,6 +1476,9 @@ export function AssetLibraryPage() {
                                   asset.standaloneSalePreparation.status,
                                 )}
                               </em>
+                              {salesDestination && (
+                                <em className="session-selling-badge photoshoot-sales-classification photoshoot-badge--single">SINGLE</em>
+                              )}
                               <StandaloneDestinationBadges
                                 destinations={
                                   asset.standaloneSalePreparation.destinations ||
@@ -1240,7 +1520,7 @@ export function AssetLibraryPage() {
                         />
                       )}
                       {asset.itemKind === "registered_asset" &&
-                        asset.mediaType === "image" &&
+                        assetType !== "teasers" && asset.mediaType === "image" &&
                         !asset.isReference && (
                           <LibraryActionButton
                             accent={
@@ -1264,11 +1544,28 @@ export function AssetLibraryPage() {
                             }
                           />
                         )}
+                      {assetType === "images" && asset.itemKind === "registered_asset" &&
+                        asset.classification === "SINGLE_IMAGE" &&
+                        asset.standaloneSalePreparation?.destinations?.length === 1 && (
+                          <LibraryActionButton
+                            icon={ArrowRightLeft}
+                            onClick={() => setReassignDestinationAsset(asset)}
+                            tooltip="Reassign sales destination"
+                          />
+                        )}
+                      {asset.itemKind === "photoshoot" && (
+                        <LibraryActionButton
+                          disabled={sellingModeSaving}
+                          icon={ArrowRightLeft}
+                          onClick={() => openSellingModeReassignment(asset)}
+                          tooltip="Reassign Photoshoot commerce"
+                        />
+                      )}
                       <LibraryActionButton
                         disabled={Boolean(archivingId)}
                         icon={Trash2}
                         onClick={() => void archiveAsset(asset)}
-                        tooltip="Delete"
+                        tooltip="Archive"
                       />
                       {asset.mediaType === "image" && asset.assetId && (
                         <LibraryActionButton
@@ -1303,10 +1600,11 @@ export function AssetLibraryPage() {
                 ))}
               </div>
               {selected && (
-                selected.classification === "SINGLE_IMAGE" ? <SingleImageDetailPanel
+                assetType !== "teasers" && selected.classification === "SINGLE_IMAGE" ? <SingleImageDetailPanel
                   asset={selected}
                   onClose={() => setSelected(null)}
                   onEdit={() => setSalePreparationAsset(selected)}
+                  onReassign={() => setReassignDestinationAsset(selected)}
                   onPreview={(imageUrl, label) => { setPreviewNavigable(false); setPreview({ ...selected, imageUrl, fileName: label }); }}
                   onPreparationRefresh={(result) => selected.assetId != null && standalonePreparationRefreshed(selected.assetId, result)}
                 /> :
@@ -1483,13 +1781,14 @@ export function AssetLibraryPage() {
               <div>
                 {preview.imageUrl ? (
                   <ContainedMediaImage
-                    alt={`${preview.displayName || `Asset #${preview.assetId}`} full-size image`}
-                    src={originalImageUrl(preview.imageUrl) || preview.imageUrl}
+                    alt={`${preview.displayName || `Asset #${preview.assetId}`} preview`}
+                    src={previewImageUrl(preview.imageUrl) || preview.imageUrl}
                   />
                 ) : (
                   <span>Media unavailable</span>
                 )}
                 {!previewNavigable && <p>Asset #{preview.assetId}</p>}
+                {originalImageUrl(preview.imageUrl) && <a href={originalImageUrl(preview.imageUrl)!} target="_blank" rel="noreferrer">View Full Resolution</a>}
               </div>
               {previewNavigable && <button className="asset-preview__next" aria-label="Next image" disabled={displayedSingleImages.findIndex((item) => item.libraryItemId === preview.libraryItemId) >= displayedSingleImages.length - 1} onClick={() => movePreview(1)} type="button"><ArrowRight /></button>}
             </div>
@@ -1510,6 +1809,58 @@ export function AssetLibraryPage() {
                 setSalePreparationAsset(null);
               }}
             />
+          )}
+          {reassignDestinationAsset?.assetId && (
+            <StandaloneSalePreparationDialog
+              asset={reassignDestinationAsset}
+              reassign
+              onClose={() => setReassignDestinationAsset(null)}
+              onStarted={(result) => {
+                standalonePreparationStarted(reassignDestinationAsset.assetId!, result);
+                setActionMessage(`Destination changed to ${result.destinations[0] === "CHAT" ? "Chat" : "TG Wall"}.`);
+                setReassignDestinationAsset(null);
+                setVersion((current) => current + 1);
+              }}
+            />
+          )}
+          {sellingModeAsset && (
+            <div className="sale-preparation-dialog photoshoot-selling-mode-dialog" role="dialog" aria-modal="true" aria-labelledby="reassign-selling-mode-title">
+              <div>
+                <header>
+                  <div><small>Photoshoot Commerce</small><h2 id="reassign-selling-mode-title">Reassign Photoshoot</h2></div>
+                  <button aria-label="Close selling mode dialog" onClick={() => setSellingModeAsset(null)} type="button"><X size={18} /></button>
+                </header>
+                <p><strong>{sellingModeAsset.fileName}</strong></p>
+                <p>Current selling mode: <strong>{sellingModeAsset.sellingMode || "SESSION"}</strong></p>
+                <div className="photoshoot-selling-mode-dialog__options">
+                  <label className={sellingModeSelection === "SESSION" ? "is-selected" : ""}>
+                    <input checked={sellingModeSelection === "SESSION"} name="photoshoot-selling-mode" onChange={() => setSellingModeSelection("SESSION")} type="radio" />
+                    <span><strong>Session</strong><small>Sell the Photoshoot sequentially through the existing Photoshoot Session commerce flow.</small></span>
+                  </label>
+                  <label className={sellingModeSelection === "BUNDLE" ? "is-selected" : ""}>
+                    <input checked={sellingModeSelection === "BUNDLE"} name="photoshoot-selling-mode" onChange={() => setSellingModeSelection("BUNDLE")} type="radio" />
+                    <span><strong>Bundle</strong><small>Sell the complete Photoshoot as one multi-image set through the existing Bundle commerce flow.</small></span>
+                  </label>
+                </div>
+                <p><strong>Sales channel</strong></p>
+                {sellingModeSelection === "BUNDLE" ? <div className="photoshoot-selling-mode-dialog__options">
+                  <label className={sellingChannelSelection === "CHAT" ? "is-selected" : ""}>
+                    <input checked={sellingChannelSelection === "CHAT"} name="photoshoot-sales-channel" onChange={() => setSellingChannelSelection("CHAT")} type="radio" />
+                    <span><strong>Chat</strong><small>Sell this Bundle directly in customer conversations.</small></span>
+                  </label>
+                  <label className={sellingChannelSelection === "CONTENT_WALL" ? "is-selected" : ""}>
+                    <input checked={sellingChannelSelection === "CONTENT_WALL"} name="photoshoot-sales-channel" onChange={() => setSellingChannelSelection("CONTENT_WALL")} type="radio" />
+                    <span><strong>Wall</strong><small>Prepare and publish this Bundle through Ava&apos;s Content Wall.</small></span>
+                  </label>
+                </div> : <p className="photoshoot-selling-mode__guidance">Session selling uses the existing Chat workflow.</p>}
+                <footer>
+                  <button disabled={sellingModeSaving} onClick={() => setSellingModeAsset(null)} type="button">Cancel</button>
+                  <button className="asset-primary-action" disabled={sellingModeSaving || (sellingModeSelection === (sellingModeAsset.sellingMode || "SESSION") && (sellingModeSelection !== "BUNDLE" || sellingChannelSelection === (sellingModeAsset.bundleSalesChannel || "CHAT")))} onClick={() => void reassignSellingMode()} type="button">
+                    {sellingModeSaving ? "Reassigning..." : "Reassign"}
+                  </button>
+                </footer>
+              </div>
+            </div>
           )}
         </>
       )}

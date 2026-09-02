@@ -4,7 +4,7 @@ import { isPostedToContentWall } from "./contentWallPublication";
 export type PhotoshootSalesClassification = "CHAT" | "SESSION" | "WALL";
 
 export type PhotoshootCommercialBadges = {
-  channel: "CHAT" | "WALL";
+  channel?: "CHAT" | "WALL";
   sellingMode: "SESSION" | "BUNDLE";
   posted?: boolean;
 };
@@ -13,11 +13,11 @@ export function photoshootCommercialBadges(
   value: Pick<AssetLibraryItem, "sellingMode" | "bundleSalesChannel" | "sessionSelling">,
 ): PhotoshootCommercialBadges | null {
   const readiness = value.sessionSelling;
-  if (!readiness || ["NOT_PREPARED", "NOT_CONFIGURED", "STRATEGY_REQUIRED"].includes(readiness.status)) {
-    return null;
-  }
-  const sellingMode = value.sellingMode || readiness.sellingMode;
+  const sellingMode = value.sellingMode || readiness?.sellingMode;
   if (sellingMode === "SESSION") {
+    if (!readiness || ["NOT_PREPARED", "NOT_CONFIGURED", "STRATEGY_REQUIRED"].includes(readiness.status)) {
+      return { sellingMode: "SESSION" };
+    }
     const persistedPaidSteps = "steps" in readiness
       ? readiness.steps.filter((step) => step.access === "PAID" && Boolean(step.offeringId))
       : [];
@@ -34,9 +34,12 @@ export function photoshootCommercialBadges(
       || (readiness.status === "READY" && persistedPaidSteps.length > 0 ? "CHAT" : null);
     return sessionChannel === "CHAT"
       ? { channel: "CHAT", sellingMode: "SESSION" }
-      : null;
+      : { sellingMode: "SESSION" };
   }
   if (sellingMode !== "BUNDLE") return null;
+  if (!readiness || ["NOT_PREPARED", "NOT_CONFIGURED", "STRATEGY_REQUIRED"].includes(readiness.status)) {
+    return { sellingMode: "BUNDLE" };
+  }
   const channel = value.bundleSalesChannel === "CONTENT_WALL" ? "WALL"
     : value.bundleSalesChannel === "CHAT" ? "CHAT"
       : readiness.salesChannel || null;

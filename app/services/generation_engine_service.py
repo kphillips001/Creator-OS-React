@@ -99,14 +99,14 @@ class GenerationEngineService:
             else prompt_plan.reference_asset_path
         )
         reference_metadata = dict(active_reference.metadata or {}) if active_reference else {}
-        provider_reference_url = self._provider_reference_url_from_metadata(reference_metadata)
+        provider_reference_url = None
         if (
-            not provider_reference_url and active_reference and reference_asset_id
+            active_reference and reference_asset_id
             and reference_asset_path and str(provider_id) == "seedream_5_0_pro"
         ):
             resolver = self.hosted_references or HostedAssetReferenceService()
             provider_reference_url = resolver.cached_url(
-                asset_id=int(reference_asset_id), source_path=str(reference_asset_path), host_name="imgbb",
+                asset_id=int(reference_asset_id), source_path=str(reference_asset_path), host_name="wavespeed_media",
             )
         if not request_metadata.get("render_policy"):
             workflow = str(
@@ -389,6 +389,14 @@ class GenerationEngineService:
         )
         if result.status == GenerationStatus.SUCCEEDED.value:
             return self.complete_job(job_id, result)
+        if result.status == GenerationStatus.RUNNING.value:
+            waiting = replace(
+                job, status=GenerationStatus.RUNNING.value, result=result, failure=None,
+                completed_at=None, updated_at=utc_now(),
+                progress=replace(job.progress, message="Waiting on provider"),
+            )
+            self._replace_job(waiting)
+            return waiting
         retryable_failure = any(
             bool(item.get("provider_error"))
             for item in dict(result.execution_metadata or {}).get("failures", ())

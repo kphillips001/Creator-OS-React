@@ -9,6 +9,8 @@ from app.services.photoshoot_background_executor import PhotoshootBackgroundExec
 from app.services.photoshoot_session_strategy_background_executor import PhotoshootSessionStrategyBackgroundExecutor
 from app.services.video_studio_background_executor import VideoStudioBackgroundExecutor
 from app.services.regeneration_background_executor import RegenerationBackgroundExecutor
+from app.services.assembled_photoshoot_background_executor import AssembledPhotoshootBackgroundExecutor
+from app.services.explicit_failed_retry_background_executor import ExplicitFailedRetryBackgroundExecutor
 
 
 class BackgroundOperationWorkerService:
@@ -22,6 +24,8 @@ class BackgroundOperationWorkerService:
         explicit_inspiration = ExplicitInspirationBackgroundExecutor()
         session_strategy = PhotoshootSessionStrategyBackgroundExecutor()
         regeneration = RegenerationBackgroundExecutor()
+        assembled_photoshoot = AssembledPhotoshootBackgroundExecutor()
+        explicit_failed_retry = ExplicitFailedRetryBackgroundExecutor()
         self.executors = dict(executors or {
             generation.executor_key: generation,
             autonomous.executor_key: autonomous,
@@ -30,6 +34,8 @@ class BackgroundOperationWorkerService:
             explicit_inspiration.executor_key: explicit_inspiration,
             session_strategy.executor_key: session_strategy,
             regeneration.executor_key: regeneration,
+            assembled_photoshoot.executor_key: assembled_photoshoot,
+            explicit_failed_retry.executor_key: explicit_failed_retry,
         })
 
     def process_one(self) -> dict:

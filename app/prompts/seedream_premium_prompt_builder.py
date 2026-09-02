@@ -1251,7 +1251,7 @@ Example concepts:
 - sitting on floor
 - stretching beside fireplace
 - window seat near fireplace
-- reading beside fireplace
+- relaxing beside fireplace
 
 The required elements remain.
 
@@ -1399,7 +1399,7 @@ Examples:
 - enjoying city lights from a window
 - sitting beside a balcony window
 - relaxing on a couch
-- reading in bed
+- relaxing in bed
 - stretching after waking up
 - wrapped loosely in bedding
 - enjoying a quiet evening indoors
@@ -1668,7 +1668,7 @@ Example concepts:
 - sitting on floor
 - stretching beside fireplace
 - window seat near fireplace
-- reading beside fireplace
+- relaxing beside fireplace
 
 The required elements remain.
 
@@ -1902,7 +1902,7 @@ indoors:
 - hallway doorway
 - bathroom mirror
 - balcony doorway
-- reading chair
+- lounge chair
 - floor cushion
 
 outdoors:

@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import re
 
 from app.services.situation_routing_service import SituationRoutingService
 from app.services.silent_buyer_service import SilentBuyerService
@@ -88,6 +89,28 @@ from app.services.final_relationship_intelligence_service import (
 from app.models.runtime_decision import DecisionEngineResult
 
 class DecisionEngine:
+    @staticmethod
+    def _canonical_attention_compatibility(projection: dict) -> dict:
+        """Flatten the canonical per-turn projection for legacy GPT inputs."""
+        canonical = dict(projection or {})
+        compatibility = dict(canonical.get("compatibility") or {})
+        compatibility.update({
+            "attention_tier": str(
+                canonical.get("attentionTier") or "MEDIUM"
+            ).lower(),
+            "effort_mode": str(
+                canonical.get("effortMode") or "BALANCED"
+            ).lower(),
+            "user_value_tier": str(
+                canonical.get("valueTier") or "STANDARD"
+            ).lower(),
+            "is_whale": canonical.get("valueTier") == "WHALE",
+            "timewaster_flags": list(
+                canonical.get("timeWasterEvidence") or ()
+            ),
+        })
+        return compatibility
+
     def __init__(
         self,
         memory_service,
@@ -915,6 +938,20 @@ class DecisionEngine:
         except Exception:
             return False
     
+    @staticmethod
+    def _explicit_request_detected(message: str, classifier_result: dict) -> bool:
+        """Use affirmative classifier values and user text, never dict key names."""
+        classifier = classifier_result or {}
+        if bool(classifier.get("sexual_engagement") or
+                classifier.get("explicit_without_buying_intent")):
+            return True
+        text = str(message or "").lower()
+        return any(re.search(pattern, text) for pattern in (
+            r"\bsexually explicit\b", r"\bexplicit (?:content|photo|video|chat)\b",
+            r"\bnsfw\b", r"\bdirty talk\b", r"\bsext(?:ing)?\b",
+            r"\b(?:cock|penis|pussy|fuck(?:ing)?)\b",
+        ))
+
     def _build_explicit_vs_buying_profile(
         self,
         message: str,
@@ -937,32 +974,8 @@ class DecisionEngine:
         classifier_result = classifier_result or {}
         routing_result = routing_result or {}
 
-        source_text = " ".join(
-            [
-                str(message or ""),
-                str(classifier_result or ""),
-                str(routing_result or ""),
-                str(routing_result.get("reason") or ""),
-            ]
-        ).lower()
-
-        explicit_requested = any(
-            marker in source_text
-            for marker in [
-                "explicit",
-                "sexually explicit",
-                "sexual",
-                "nsfw",
-                "adult",
-                "dirty talk",
-                "sexting",
-                "fantasy",
-                "cock",
-                "penis",
-                "pussy",
-                "ass",
-                "fuck",
-            ]
+        explicit_requested = self._explicit_request_detected(
+            message, classifier_result
         )
 
         buying_intent = bool(
@@ -1045,25 +1058,53 @@ class DecisionEngine:
                 "photo", "picture", "image", "set", "video", "content",
             )
         )
+        suppressed = bool(
+            (explicit_profile or {}).get("suppress_sales_pressure")
+        )
+        from app.services.conversational_sales_progression_service import (
+            ConversationalSalesProgressionService,
+        )
+        transition = ConversationalSalesProgressionService.transition_features(
+            message
+        )
+        requested_content = bool(
+            requested_content or transition.get("content_request")
+        )
         buying_intent = bool(
             classifier.get("buying_intent")
             or classifier.get("close_ready")
             or requested_purchase
             or requested_link
             or requested_price
+            or transition.get("content_request")
         )
-        suppressed = bool(
-            (explicit_profile or {}).get("suppress_sales_pressure")
+        conversational_action = (
+            ConversationalSalesProgressionService
+            .recommended_conversational_action(
+                message, classifier, explicit_profile,
+            )
         )
         return {
             "conversation_ready_for_offer": bool(
-                buying_intent and not suppressed
+                conversational_action == "PRESENT_OFFER" and not suppressed
             ),
+            "recommended_conversational_action": conversational_action,
+            "recommended_offering_id": None,
+            "offering_authority": "DETERMINISTIC_SELECTOR_ONLY",
             "current_buying_intent": buying_intent,
             "customer_requested_content": requested_content,
             "customer_requested_price": requested_price,
             "customer_requested_purchase": requested_purchase,
             "customer_requested_link": requested_link,
+            **transition,
+            "escalation_ready": bool(classifier.get("escalation_ready")),
+            "recommended_action": classifier.get("recommended_action"),
+            "user_state": classifier.get("user_state"),
+            "curiosity_level": classifier.get("curiosity_level"),
+            "buyer_likelihood": classifier.get("buyer_likelihood"),
+            "engagement_level": classifier.get("engagement_level"),
+            "classifier_buying_intent": bool(classifier.get("buying_intent")),
+            "classifier_close_ready": bool(classifier.get("close_ready")),
         }
 
     def process_message(
@@ -1281,7 +1322,7 @@ class DecisionEngine:
             memory=user_memory,
         )
 
-        print("🔥 OBJECTION BLOCK EXECUTED")
+        self.logger.info("[15.5 OBJECTION BLOCK EXECUTED]")
 
         self.logger.info(f"[15.5 OBJECTION RESULT] {objection_result}")
        
@@ -1653,6 +1694,128 @@ class DecisionEngine:
         effort_mode = attention_result.get("effort_mode", "balanced")
         timewaster_flags = attention_result.get("timewaster_flags", [])
 
+        # Canonical provider-backed value wins over legacy user_memory. Legacy
+        # attention remains useful behavioral evidence, never buyer truth.
+        from app.services.customer_value_attention_service import CustomerValueAttentionService
+        canonical_value = dict(runtime_injection.get("customer_value_attention") or {})
+        value_attention = None
+        if canonical_value.get("schemaVersion") == "customer_value_attention_v1":
+            # ConversationGateway carries the CustomerSalesBrain projection for
+            # this exact turn.  It is already canonical and must not be fed back
+            # through the legacy projector (which loses contextual hostility and
+            # can silently restore BALANCED effort).
+            value_attention_mapping = canonical_value
+            compatibility = self._canonical_attention_compatibility(
+                canonical_value
+            )
+        else:
+            value_attention = CustomerValueAttentionService().project(
+                commerce_memory=canonical_value,
+                behavior={
+                **pre_attention_memory,
+                "presented_opportunity_count": canonical_value.get(
+                    "presentedOpportunityCount", 0
+                ),
+                "failed_nonconverted_opportunity_count": canonical_value.get(
+                    "failedNonconvertedOpportunityCount", 0
+                ),
+                "converted_opportunity_count": canonical_value.get(
+                    "convertedOpportunityCount", 0
+                ),
+                "active_unresolved_opportunity": canonical_value.get(
+                    "activeUnresolvedOpportunity", False
+                ),
+                "direct_buying_intent": bool(
+                    classifier_result.get("buying_intent")
+                    or classifier_result.get("close_ready")
+                ),
+                "sexual_engagement_only": bool(
+                    classifier_result.get("explicit_without_buying_intent")
+                ),
+                "sales_progression_phase": dict(
+                    (runtime_injection.get("commerce_decision") or {}).get(
+                        "sales_progression"
+                    ) or {}
+                ).get("phase"),
+                "active_purchase_intent": bool(
+                    (runtime_injection.get("commerce_decision") or {}).get(
+                        "current_offer_status"
+                    )
+                ),
+            },
+                legacy={
+                    **attention_result,
+                    "user_value_tier": user_value_tier,
+                    "is_whale": is_whale,
+                },
+            )
+            value_attention_mapping = dict(value_attention.to_mapping())
+            compatibility = dict(value_attention.compatibility)
+        user_value_tier = str(compatibility["user_value_tier"])
+        is_whale = bool(compatibility["is_whale"])
+        attention_tier = str(compatibility["attention_tier"])
+        effort_mode = str(compatibility["effort_mode"])
+        timewaster_flags = list(compatibility["timewaster_flags"])
+        canonical_buyer_value = (
+            value_attention_mapping.get("authority")
+            == "COMMERCE_BACKED_AUTHORITATIVE_VALUE"
+        )
+        if canonical_buyer_value:
+            canonical_tier_map = {
+                "WHALE": "WHALE",
+                "HIGH_VALUE": "HIGH_VALUE",
+                "REPEAT_BUYER": "ACTIVE_BUYER",
+                "BUYER": "LOW_SPENDER",
+                "ENGAGED_PROSPECT": "NON_BUYER",
+                "PROSPECT": "NON_BUYER",
+                "LOW_VALUE_PROSPECT": "NON_BUYER",
+            }
+            intent_result["tier"] = canonical_tier_map.get(
+                value_attention_mapping.get("valueTier"), "NON_BUYER"
+            )
+            relationship_route = (
+                "whale" if is_whale else
+                "subscriber" if is_subscriber else
+                "follower" if is_follower else None
+            )
+        canonical_buyer_memory = {
+            **user_memory,
+            "buyer_status": value_attention_mapping.get("buyerStatus"),
+            "buyer_stage": value_attention_mapping.get("buyerStage"),
+            "buyer_tier": value_attention_mapping.get("valueTier"),
+            "user_value_tier": value_attention_mapping.get("valueTier"),
+            "is_whale": value_attention_mapping.get("valueTier") == "WHALE",
+            "is_top_spender": value_attention_mapping.get("valueTier") in {
+                "HIGH_VALUE", "WHALE",
+            },
+            "purchase_count": value_attention_mapping.get("purchaseCount", 0),
+            "total_spend": (
+                float(value_attention_mapping.get("lifetimeSpendMinor") or 0)
+                / 100.0
+            ),
+            "recent_purchase_active": (
+                value_attention_mapping.get("retentionLifecycle")
+                == "ACTIVE_BUYER"
+            ),
+            "last_purchase_at": value_attention_mapping.get("lastPurchaseAt"),
+            "relationship_investment": value_attention_mapping.get(
+                "relationshipInvestment"
+            ),
+            "current_commercial_momentum": value_attention_mapping.get(
+                "commercialMomentum"
+            ),
+            "dormant_whale": bool(
+                value_attention_mapping.get("valueTier") == "WHALE"
+                and value_attention_mapping.get("retentionLifecycle")
+                    == "DORMANT_BUYER"
+            ),
+            "whale_reactivation_mode": (
+                value_attention_mapping.get("reactivationState")
+                == "REACTIVATED_BUYER"
+            ),
+            "customer_value_authority": value_attention_mapping.get("authority"),
+        }
+
         # ✅ 3C + 3D — Prevent follower/outreach-style flags from applying to subscribers
         if relationship_route == "subscriber":
             subscriber_excluded_flags = {
@@ -1818,7 +1981,20 @@ class DecisionEngine:
 
         intimacy_overrides = (
             self.intimacy_integration_service.build_overrides(
-                user_memory
+                user_memory,
+                runtime_state={
+                    "active_buying_window": bool(
+                        dict(runtime_injection.get("active_buying_window") or {}).get(
+                            "active"
+                        )
+                    ),
+                    "current_commercial_momentum": value_attention_mapping.get(
+                        "commercialMomentum"
+                    ) or dict(
+                        runtime_injection.get("active_buying_window") or {}
+                    ).get("currentCommercialMomentum"),
+                },
+                canonical_buyer_memory=canonical_buyer_memory,
             )
         )
 
@@ -1826,7 +2002,7 @@ class DecisionEngine:
             self.smooth_intimacy_escalation_service.build_escalation_profile(
                 intimacy_context=intimacy_overrides,
                 spend_profile=user_memory,
-                buyer_memory=user_memory,
+                buyer_memory=canonical_buyer_memory,
                 conversation_state={
                     "conversation_mode": conversation_mode,
                     "heat_score": user_memory.get("heat_score"),
@@ -1880,7 +2056,7 @@ class DecisionEngine:
 
         whale_retention_profile = (
             self.whale_retention_psychology_service.build_retention_profile(
-                buyer_memory=user_memory,
+                buyer_memory=canonical_buyer_memory,
                 conversation_state={
                     "conversation_mode": conversation_mode,
                     "intent_score": intent_result.get("score"),
@@ -1919,7 +2095,7 @@ class DecisionEngine:
         premium_relationship_memory_profile = (
             self.premium_relationship_memory_service
             .build_relationship_memory_profile(
-                buyer_memory=user_memory,
+                buyer_memory=canonical_buyer_memory,
                 conversation_state={
                     "conversation_mode": conversation_mode,
                     "intent_score": intent_result.get("score"),
@@ -1938,7 +2114,7 @@ class DecisionEngine:
         emotional_presence_profile = (
             self.emotional_presence_refinement_service
             .build_emotional_presence_profile(
-                buyer_memory=user_memory,
+                buyer_memory=canonical_buyer_memory,
                 conversation_state={
                     "conversation_mode": conversation_mode,
                     "intent_score": intent_result.get("score"),
@@ -1961,7 +2137,7 @@ class DecisionEngine:
         premium_conversation_continuity_profile = (
             self.premium_conversation_continuity_service
             .build_continuity_profile(
-                buyer_memory=user_memory,
+                buyer_memory=canonical_buyer_memory,
                 conversation_state={
                     "conversation_mode": conversation_mode,
                     "intent_score": intent_result.get("score"),
@@ -1985,7 +2161,7 @@ class DecisionEngine:
         whale_burnout_profile = (
             self.whale_burnout_prevention_service
             .build_burnout_profile(
-                buyer_memory=user_memory,
+                buyer_memory=canonical_buyer_memory,
                 conversation_state={
                     "conversation_mode": conversation_mode,
                     "intent_score": intent_result.get("score"),
@@ -2041,7 +2217,7 @@ class DecisionEngine:
         long_term_stability_profile = (
             self.long_term_emotional_stability_service
             .build_stability_profile(
-                buyer_memory=user_memory,
+                buyer_memory=canonical_buyer_memory,
                 conversation_state={
                     "conversation_mode": conversation_mode,
                     "intent_score": intent_result.get("score"),
@@ -2108,6 +2284,7 @@ class DecisionEngine:
                 if timewaster_flags
                 else []
             ),
+            "customer_value_attention": value_attention_mapping,
             "current_route": effective_route,
             "last_route": effective_route,
             "last_route_confidence": route_confidence,
@@ -3576,6 +3753,7 @@ class DecisionEngine:
             "nudge_type": (
                 "purchase_intent_follow_up" if nudge_allowed else None
             ),
+            "customer_value_attention": value_attention_mapping,
         }
 
         if legacy_commerce_enabled:
@@ -3701,6 +3879,7 @@ class DecisionEngine:
                 if timewaster_flags
                 else []
             ),
+            "customer_value_attention": value_attention_mapping,
             "current_route": effective_route,
             "last_route": effective_route,
             "last_route_confidence": route_confidence,
@@ -3759,6 +3938,7 @@ class DecisionEngine:
                 working_memory.get("buyer_session_active")
                 if legacy_commerce_enabled else False
             ),
+            "customer_value_attention": value_attention_mapping,
             "buyer_session_step": (
                 working_memory.get("buyer_session_step")
                 if legacy_commerce_enabled else None
@@ -4061,41 +4241,18 @@ class DecisionEngine:
             or working_memory_after_offer.get("buyer_tier")
             or "NON_BUYER"
         )
+        intimacy_entitlement = str(
+            intimacy_overrides.get("intimacy_entitlement") or "GATED"
+        ).upper()
 
-        explicit_source_text = " ".join(
-            [
-                str(message or ""),
-                str(route_reason or ""),
-                str(gpt_classifier_result or ""),
-                str(routing_result or ""),
-            ]
-        ).lower()
-
-        explicit_requested = any(
-            marker in explicit_source_text
-            for marker in [
-                "explicit",
-                "sexually explicit",
-                "sexual",
-                "nsfw",
-                "adult",
-                "dirty talk",
-                "cock",
-                "penis",
-                "pussy",
-                "ass",
-                "fuck",
-            ]
+        explicit_requested = self._explicit_request_detected(
+            message, gpt_classifier_result
         )
 
         premium_qualified = bool(
             premium_sexting_allowed
             and explicit_allowed
-            and str(buyer_tier).upper() in (
-                "ACTIVE_BUYER",
-                "HIGH_VALUE",
-                "WHALE",
-            )
+            and intimacy_entitlement in ("PREMIUM", "VIP")
         )
 
         grok_eligible = bool(
@@ -4128,6 +4285,22 @@ class DecisionEngine:
             "provider": selected_provider,
             "runtime_mode": runtime_mode,
             "buyer_tier": buyer_tier,
+            "intimacy_entitlement": intimacy_entitlement,
+            "intimacy_entitlement_reason": intimacy_overrides.get(
+                "intimacy_entitlement_reason"
+            ),
+            "intimacy_investment": intimacy_overrides.get(
+                "intimacy_investment"
+            ),
+            "intimacy_investment_inputs": dict(
+                intimacy_overrides.get("intimacy_investment_inputs") or {}
+            ),
+            "canonical_buyer_authority_used": bool(
+                intimacy_overrides.get("canonical_buyer_authority_used")
+            ),
+            "legacy_buyer_memory_authority_used": bool(
+                intimacy_overrides.get("legacy_buyer_memory_authority_used")
+            ),
             "adult_generation_allowed": adult_generation_allowed,
             "premium_sexting_allowed": premium_sexting_allowed,
             "explicit_allowed": explicit_allowed,
@@ -4140,11 +4313,7 @@ class DecisionEngine:
 
         intimacy_continuation = bool(
             runtime_mode == "premium_intimacy"
-            and str(buyer_tier).upper() in [
-                "ACTIVE_BUYER",
-                "HIGH_VALUE",
-                "WHALE",
-            ]
+            and intimacy_entitlement in ("PREMIUM", "VIP")
             and gpt_classifier_result.get(
                 "sexual_engagement",
                 False,
@@ -4195,6 +4364,12 @@ class DecisionEngine:
                     message,
                     {
                     **working_memory_after_offer,
+                    # ConversationGateway's canonical per-turn context must
+                    # reach the actual generation boundary, not diagnostics only.
+                    "runtime_injection": runtime_injection,
+                    "conversational_memory": runtime_injection.get(
+                        "conversational_memory", {}
+                    ),
                     "creator_profile": creator_profile,
                     "fanvue_account_id": fanvue_account_id,
                     "fanvue_user_id": fanvue_user_id,
@@ -4208,6 +4383,23 @@ class DecisionEngine:
                     "adult_generation_allowed": adult_generation_allowed,
                     "premium_qualified": premium_qualified,
                     "grok_eligible": grok_eligible,
+                    "explicit_requested": explicit_requested,
+                    "intimacy_entitlement": intimacy_entitlement,
+                    "intimacy_entitlement_reason": intimacy_overrides.get(
+                        "intimacy_entitlement_reason"
+                    ),
+                    "intimacy_investment": intimacy_overrides.get(
+                        "intimacy_investment"
+                    ),
+                    "intimacy_investment_inputs": dict(
+                        intimacy_overrides.get("intimacy_investment_inputs") or {}
+                    ),
+                    "canonical_buyer_authority_used": bool(
+                        intimacy_overrides.get("canonical_buyer_authority_used")
+                    ),
+                    "legacy_buyer_memory_authority_used": bool(
+                        intimacy_overrides.get("legacy_buyer_memory_authority_used")
+                    ),
                     "intimacy_continuation": intimacy_continuation,
                     "intimacy_strategy": intimacy_strategy,
 
@@ -4664,40 +4856,14 @@ class DecisionEngine:
             or "NON_BUYER"
         )
 
-        explicit_source_text = " ".join(
-            [
-                str(message or ""),
-                str(route_reason or ""),
-                str(gpt_classifier_result or ""),
-                str(routing_result or ""),
-            ]
-        ).lower()
-
-        explicit_requested = any(
-            marker in explicit_source_text
-            for marker in [
-                "explicit",
-                "sexually explicit",
-                "sexual",
-                "nsfw",
-                "adult",
-                "dirty talk",
-                "cock",
-                "penis",
-                "pussy",
-                "ass",
-                "fuck",
-            ]
+        explicit_requested = self._explicit_request_detected(
+            message, gpt_classifier_result
         )
 
         premium_qualified = bool(
             premium_sexting_allowed
             and explicit_allowed
-            and str(buyer_tier).upper() in (
-                "ACTIVE_BUYER",
-                "HIGH_VALUE",
-                "WHALE",
-            )
+            and intimacy_entitlement in ("PREMIUM", "VIP")
         )
 
         grok_eligible = bool(
@@ -4726,10 +4892,27 @@ class DecisionEngine:
             )
 
         provider_preview = {
+            **provider_preview,
             "selected_provider": selected_provider,
             "provider": selected_provider,
             "runtime_mode": runtime_mode,
             "buyer_tier": buyer_tier,
+            "intimacy_entitlement": intimacy_entitlement,
+            "intimacy_entitlement_reason": intimacy_overrides.get(
+                "intimacy_entitlement_reason"
+            ),
+            "intimacy_investment": intimacy_overrides.get(
+                "intimacy_investment"
+            ),
+            "intimacy_investment_inputs": dict(
+                intimacy_overrides.get("intimacy_investment_inputs") or {}
+            ),
+            "canonical_buyer_authority_used": bool(
+                intimacy_overrides.get("canonical_buyer_authority_used")
+            ),
+            "legacy_buyer_memory_authority_used": bool(
+                intimacy_overrides.get("legacy_buyer_memory_authority_used")
+            ),
             "adult_generation_allowed": adult_generation_allowed,
             "premium_sexting_allowed": premium_sexting_allowed,
             "explicit_allowed": explicit_allowed,

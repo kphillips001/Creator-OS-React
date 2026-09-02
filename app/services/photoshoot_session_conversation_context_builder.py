@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from collections.abc import Mapping
 from typing import Any
 
@@ -45,6 +46,8 @@ ROLE_OBJECTIVES = {
     },
 }
 
+logger = logging.getLogger("photoshoot-session-conversation-context")
+
 
 class PhotoshootSessionConversationContextBuilder:
     """Read persisted intelligence and render one non-decision-making prompt block."""
@@ -64,22 +67,43 @@ class PhotoshootSessionConversationContextBuilder:
         if not runtime or not session_id:
             return None
 
-        intelligence = self._safe_call(self.photoshoots.get_intelligence, session_id) or {}
-        deliverable = self._safe_call(self.photoshoots.get_by_session, session_id) or {}
+        intelligence = self._safe_call(
+            self.photoshoots.get_intelligence, session_id,
+            section="photoshoot_intelligence", session_id=session_id,
+        ) or {}
+        deliverable = self._safe_call(
+            self.photoshoots.get_by_session, session_id,
+            section="photoshoot_deliverable", session_id=session_id,
+        ) or {}
         profile = dict(intelligence.get("profile_data") or {})
         production = dict(intelligence.get("production_analysis") or profile.get("production_analysis") or profile)
-        strategy = self._safe_call(self.strategies.latest, session_id)
+        strategy = self._safe_call(
+            self.strategies.latest, session_id,
+            section="session_sales_strategy", session_id=session_id,
+        )
         shots = tuple(getattr(strategy, "shots", ()) or ())
         current_asset_id = self._integer(runtime.get("currentAssetId"))
         next_asset_id = self._integer(runtime.get("nextAssetId"))
         current_strategy = next((shot for shot in shots if shot.asset_id == current_asset_id), None)
         next_strategy = next((shot for shot in shots if shot.asset_id == next_asset_id), None)
-        shot_rows = self._safe_call(self.photoshoots.latest_shot_intelligence, session_id) or ()
+        shot_rows = self._safe_call(
+            self.photoshoots.latest_shot_intelligence, session_id,
+            section="shot_intelligence", session_id=session_id,
+        ) or ()
         current_shot = next(
             (dict(row.get("profile_data") or {}) for row in shot_rows
              if self._integer(row.get("asset_id")) == current_asset_id),
             {},
         )
+        if current_asset_id is not None and not current_shot:
+            logger.error(
+                "event=session_current_shot_intelligence_missing "
+                "session_id=%s asset_id=%s fallback=fail_closed",
+                session_id, current_asset_id,
+            )
+            raise ValueError(
+                "Canonical current-shot intelligence is unavailable."
+            )
 
         role = str(runtime.get("currentSalesRole") or getattr(current_strategy, "sales_role", "") or "").upper()
         role_objectives = dict(ROLE_OBJECTIVES.get(role) or {
@@ -101,6 +125,26 @@ class PhotoshootSessionConversationContextBuilder:
             getattr(current_strategy, "customer_journey_purpose", None),
             current_shot.get("sequence_role"),
         )
+        paid_shots = tuple(
+            shot for shot in shots
+            if str(getattr(shot, "access_recommendation", "") or "").upper() != "FREE"
+        )
+        owned_ids = {
+            self._integer(value) for value in (runtime.get("ownedAssetIds") or ())
+        }
+        previous_paid_unlocked = sum(
+            1 for shot in paid_shots if self._integer(shot.asset_id) in owned_ids
+        )
+        paid_step = next((
+            index for index, shot in enumerate(paid_shots, start=1)
+            if self._integer(shot.asset_id) == current_asset_id
+        ), None)
+        remaining_after_current = (
+            max(0, len(paid_shots) - int(paid_step))
+            if paid_step is not None else None
+        )
+        if role == "FINALE":
+            remaining_after_current = 0
         context = {
             "schemaVersion": self.SCHEMA_VERSION,
             "authority": {
@@ -133,6 +177,22 @@ class PhotoshootSessionConversationContextBuilder:
                 "currentLifecycleStage": (
                     (runtime.get("metadata") or {}).get("lifecycleStatus")
                     or runtime.get("sessionStatus")
+                ),
+            },
+            "progressionAwareness": {
+                "currentRole": role or None,
+                "currentPaidStep": paid_step,
+                "totalPaidSteps": len(paid_shots),
+                "previousPaidUnlocks": previous_paid_unlocked,
+                "remainingAfterCurrent": remaining_after_current,
+                "sessionTeaserPreviouslyShown": any(
+                    str(getattr(shot, "sales_role", "") or "").upper() == "FREE_TEASER"
+                    and self._integer(shot.asset_id) in owned_ids
+                    for shot in shots
+                ),
+                "continuityInstruction": (
+                    "Continue the same unfolding experience. Do not restart it as a new sale, "
+                    "state internal counts unless conversationally useful, or reveal future Assets."
                 ),
             },
             "conversation": {
@@ -173,10 +233,15 @@ class PhotoshootSessionConversationContextBuilder:
         return {key: profile[key] for key in keys if profile.get(key) not in (None, "", [], {})}
 
     @staticmethod
-    def _safe_call(function, *arguments):
+    def _safe_call(function, *arguments, section="unknown", session_id=None):
         try:
             return function(*arguments)
-        except Exception:
+        except Exception as error:
+            logger.warning(
+                "event=session_context_read_failed session_id=%s section=%s "
+                "error_type=%s fallback=omit_optional",
+                session_id, section, type(error).__name__,
+            )
             return None
 
     @staticmethod

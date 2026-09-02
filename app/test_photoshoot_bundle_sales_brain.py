@@ -425,7 +425,7 @@ class IntentWriter:
 
     def replace_active_intent(self, **values):
         self.values.append(values)
-        return SimpleNamespace(purchase_intent_id=uuid4())
+        return SimpleNamespace(purchase_intent_id=uuid4(), **values)
 
 
 def test_one_paid_bundle_presentation_creates_one_intent_for_one_offering():
@@ -441,6 +441,9 @@ def test_one_paid_bundle_presentation_creates_one_intent_for_one_offering():
         creator_profile_id=1, fanvue_account_id=2,
         identity_repository=identities, purchase_intent_service=writer,
         sales_session_service=SimpleNamespace(), clock=lambda: NOW,
+        unlock_gateway_service=SimpleNamespace(
+            issue=lambda intent: (intent, "https://test.invalid/bundle")
+        ),
     )
     diagnostics = {
         "final_offer_authorized": True,
@@ -457,6 +460,7 @@ def test_one_paid_bundle_presentation_creates_one_intent_for_one_offering():
     }
     result = SimpleNamespace(
         diagnostic_metadata=diagnostics, correlation_id=uuid4(),
+        delivery_payload={},
     )
     payload = SimpleNamespace(telegram_user_id=3, message_id=10)
     service.create_before_delivery(result, payload)
@@ -562,6 +566,22 @@ def test_selector_suppresses_bundle_member_collisions_and_missing_teaser():
         creator_profile_id=1, channel="AI_CHAT", purchased=frozenset(),
     )
     assert "BUNDLE_TEASER_NOT_READY" in missing.exclusion_reasons
+
+
+def test_selector_accepts_canonical_bundle_studio_lineage_for_chat():
+    selector = CommercialOfferingSelectorService.__new__(
+        CommercialOfferingSelectorService
+    )
+    result = selector._evaluate(
+        bundle_candidate(
+            source_bundle_studio_bundle_id="studio-bundle-1",
+            photoshoot_identifier=None,
+            photoshoot_identifiers=[],
+        ),
+        creator_profile_id=1, channel="AI_CHAT", purchased=frozenset(),
+    )
+    assert result.eligible is True
+    assert "BUNDLE_PHOTOSHOOT_LINEAGE_INVALID" not in result.exclusion_reasons
 
 
 def test_active_bundle_opportunity_reuses_canonical_bundle_without_progression():

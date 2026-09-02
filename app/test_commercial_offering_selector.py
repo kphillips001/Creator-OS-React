@@ -16,6 +16,7 @@ from app.services.commerce_recommendation_engine import (
 )
 from app.models.autonomous_sales_progression import ProgressionAssetRole, SellableProgressionAsset
 from app.models.customer_photoshoot_lifecycle import CustomerPhotoshootLifecycle, CustomerPhotoshootStatus
+from app.models.commercial_intelligence import StrategyConstraints
 
 
 NOW = datetime(2026, 7, 26, tzinfo=timezone.utc)
@@ -30,6 +31,9 @@ def candidate(**changes):
         "primary_sales_channel": "AI_CHAT", "price_minor": 999,
         "currency": "USD", "hero_asset_id": 42,
         "offering_status": "READY", "created_at": NOW - timedelta(days=2),
+        "source_photoshoot_deliverable_id": None,
+        "source_bundle_studio_bundle_id": None,
+        "standalone_sale_destination": "CHAT",
         "asset_ids": [42], "destinations": ["SINGLE_PPV"],
         "publication_id": uuid4(), "provider": "FANVUE",
         "external_product_id": "media-link-1",
@@ -67,6 +71,9 @@ class Repository:
             None,
         )
 
+    def get_controlled_test_candidate(self, **kwargs):
+        return self.candidates[-1] if self.candidates else None
+
     def list_purchased_offering_ids(self, **kwargs):
         self.purchase_calls += 1
         return self.purchased
@@ -101,7 +108,7 @@ def profile(telegram_user_id=22):
     )
 
 
-def select(repository, *, active=None):
+def select(repository, *, active=None, conversation_context=None, constraints=None):
     return CommercialOfferingSelectorService(
         repository=repository, clock=lambda: NOW,
         ownership_intelligence=Ownership(repository),
@@ -109,8 +116,34 @@ def select(repository, *, active=None):
         creator_profile_id=2, telegram_user_id=22,
         customer_profile=profile(), commerce_signal=None,
         active_purchase_intent=active,
-        conversation_context={"primary_sales_channel": "AI_CHAT"},
+        conversation_context=(
+            conversation_context or {"primary_sales_channel": "AI_CHAT"}
+        ),
+        strategy_constraints=constraints,
     )
+
+
+def test_price_recovery_excludes_rejected_and_selects_materially_lower_offer():
+    rejected = candidate(price_minor=1200)
+    tiny_drop = candidate(price_minor=1150)
+    lower = candidate(price_minor=900)
+    result = select(Repository((rejected, tiny_drop, lower)), constraints=StrategyConstraints(
+        excluded_offering_ids=(rejected["offering_id"],),
+        maximum_price_minor=1080,
+    ))
+    assert result.offering_id == lower["offering_id"]
+    assert "OFFERING_REJECTED_CURRENT_SEQUENCE" in result.exclusion_reasons
+    assert "PRICE_NOT_MATERIALLY_LOWER" in result.exclusion_reasons
+
+
+def test_price_recovery_with_no_lower_inventory_returns_none():
+    rejected = candidate(price_minor=300)
+    result = select(Repository((rejected,)), constraints=StrategyConstraints(
+        excluded_offering_ids=(rejected["offering_id"],),
+        maximum_price_minor=299,
+    ))
+    assert result.offering_id is None
+    assert result.selector_metadata["recoveryConstraints"]["maximumPriceMinor"] == 299
 
 
 def test_active_intent_reuses_same_offering():
@@ -125,6 +158,185 @@ def test_active_intent_reuses_same_offering():
     assert result.selector_metadata["recommendationTrace"][0][
         "activeIntentMatch"
     ] == 1.0
+
+
+def test_controlled_context_selects_only_designated_test_candidate():
+    normal = candidate(title="Intimate Evening Repose", price_minor=999)
+    controlled = candidate(title="CONTROLLED SMOKE TEST", price_minor=300)
+    result = select(Repository((normal, controlled)), conversation_context={
+        "primary_sales_channel": "AI_CHAT", "controlled_test_commerce": True,
+    })
+    assert result.offering_id == controlled["offering_id"]
+    assert result.price_minor == 300
+    assert result.selector_metadata["strategy"] == "CONTROLLED_TEST_DESIGNATED"
+
+
+def test_standalone_single_image_requires_canonical_chat_destination():
+    chat = candidate(hero_asset_id=195, standalone_sale_destination="CHAT")
+    wall = candidate(
+        hero_asset_id=249, standalone_sale_destination="CONTENT_VAULT"
+    )
+    missing = candidate(hero_asset_id=252, standalone_sale_destination=None)
+
+    result = select(Repository((wall, missing, chat)))
+
+    assert result.offering_id == chat["offering_id"]
+    evaluations = {item.offering_id: item for item in result.evaluations}
+    assert evaluations[chat["offering_id"]].eligible is True
+    assert "STANDALONE_DESTINATION_NOT_CHAT" in evaluations[
+        wall["offering_id"]
+    ].exclusion_reasons
+    assert "STANDALONE_DESTINATION_NOT_CHAT" in evaluations[
+        missing["offering_id"]
+    ].exclusion_reasons
+
+
+def test_photoshoot_session_single_image_is_not_treated_as_standalone():
+    session = candidate(
+        source_photoshoot_deliverable_id=uuid4(),
+        standalone_sale_destination=None,
+        photoshoot_selling_mode="SESSION",
+    )
+    result = select(Repository((session,)))
+    assert result.offering_id == session["offering_id"]
+
+
+def test_selected_single_image_projects_compact_verified_intelligence_only():
+    item = candidate(
+        hero_asset_id=195,
+        asset_intelligence=[{"asset_id": 195, "profile_data": {
+            "title": "Soft Morning Intimacy",
+            "content_summary": "A verified sunlit bedroom portrait.",
+            "environment": "sunlit bedroom",
+            "safety_classification": "EXPLICIT",
+            "mood": "intimate",
+            "internal_provider_payload": "must-not-leak",
+        }}],
+    )
+    result = select(Repository((item,)))
+    context = dict(result.product_context)
+    assert context["heroAssetId"] == 195
+    assert context["assetIntelligence"] == {
+        "title": "Soft Morning Intimacy",
+        "contentSummary": "A verified sunlit bedroom portrait.",
+        "sceneEnvironment": "sunlit bedroom",
+        "explicitness": "EXPLICIT",
+        "moodTone": "intimate",
+    }
+    assert "internal_provider_payload" not in str(context)
+    assert result.selector_metadata["contentIntelligenceAvailable"] is True
+    assert result.selector_metadata["contentIntelligenceSource"] == (
+        "ASSET_INTELLIGENCE_PROFILE"
+    )
+
+
+@pytest.mark.parametrize("phase", ("TEASE", "BUILD_INTEREST", "PRESENT_OFFER"))
+def test_valid_persisted_progression_offering_wins_over_new_higher_rank(phase):
+    bound = candidate(
+        title="Bound conversation offering",
+        published_at=NOW - timedelta(days=30),
+    )
+    newer = candidate(title="New higher-ranked offering", published_at=NOW)
+    result = select(Repository((newer, bound)), conversation_context={
+        "primary_sales_channel": "AI_CHAT",
+        "sales_progression": {
+            "phase": phase, "offeringId": str(bound["offering_id"]),
+            "teaseCount": 1,
+        },
+    })
+
+    assert result.offering_id == bound["offering_id"]
+    assert result.selector_metadata["boundOfferingId"] == str(
+        bound["offering_id"]
+    )
+    assert result.selector_metadata["offeringContinuitySource"] == (
+        "PERSISTED_PROGRESSION"
+    )
+    assert result.selector_metadata["offeringRevalidated"] is True
+
+
+@pytest.mark.parametrize("invalid_change", (
+    {"publication_status": "FAILED"},
+    {"provider_resource_status": "MISSING"},
+    {"delivery_url": None},
+))
+def test_invalid_bound_offering_resets_to_normal_eligible_selection(invalid_change):
+    bound = candidate(title="Invalid bound", **invalid_change)
+    replacement = candidate(title="Replacement", published_at=NOW)
+    result = select(Repository((replacement, bound)), conversation_context={
+        "primary_sales_channel": "AI_CHAT",
+        "sales_progression": {
+            "phase": "BUILD_INTEREST",
+            "offeringId": str(bound["offering_id"]), "teaseCount": 2,
+        },
+    })
+
+    assert result.offering_id == replacement["offering_id"]
+    assert result.selector_metadata["offeringContinuitySource"] == (
+        "RESET_AFTER_INVALIDATION"
+    )
+    assert result.selector_metadata["offeringRevalidated"] is True
+
+
+def test_owned_bound_offering_is_not_reused():
+    bound = candidate(title="Already purchased")
+    replacement = candidate(title="Unowned replacement")
+    result = select(
+        Repository(
+            (replacement, bound), purchased=(bound["offering_id"],),
+        ),
+        conversation_context={
+            "primary_sales_channel": "AI_CHAT",
+            "sales_progression": {
+                "phase": "TEASE", "offeringId": str(bound["offering_id"]),
+                "teaseCount": 1,
+            },
+        },
+    )
+    assert result.offering_id == replacement["offering_id"]
+    assert result.selector_metadata["offeringContinuitySource"] == (
+        "RESET_AFTER_INVALIDATION"
+    )
+
+
+def test_new_conversation_keeps_normal_ranking_and_missing_intelligence_generic():
+    older = candidate(title="Older", published_at=NOW - timedelta(days=20))
+    newer = candidate(title="Newer", published_at=NOW)
+    result = select(Repository((older, newer)))
+
+    assert result.offering_id == newer["offering_id"]
+    assert result.selector_metadata["offeringContinuitySource"] == "NEW_SELECTION"
+    assert result.selector_metadata["boundOfferingId"] is None
+    assert result.selector_metadata["contentIntelligenceAvailable"] is False
+    assert result.selector_metadata["contentIntelligenceSource"] == "NONE"
+    assert dict(result.product_context)["assetIntelligence"] == {}
+
+
+def test_bound_offering_intelligence_cannot_leak_from_other_candidate():
+    bound = candidate(
+        hero_asset_id=42, published_at=NOW - timedelta(days=20),
+        asset_intelligence=[{"asset_id": 42, "profile_data": {
+            "environment": "private studio",
+        }}],
+    )
+    other = candidate(
+        hero_asset_id=43, published_at=NOW,
+        asset_ids=[43],
+        asset_intelligence=[{"asset_id": 43, "profile_data": {
+            "environment": "sunset beach",
+        }}],
+    )
+    result = select(Repository((other, bound)), conversation_context={
+        "primary_sales_channel": "AI_CHAT",
+        "sales_progression": {
+            "phase": "TEASE", "offeringId": str(bound["offering_id"]),
+            "teaseCount": 1,
+        },
+    })
+
+    intelligence = dict(result.product_context)["assetIntelligence"]
+    assert intelligence["sceneEnvironment"] == "private studio"
+    assert "sunset beach" not in str(result.product_context)
 
 
 def test_invalid_active_intent_preserves_no_fallback_behavior():
@@ -428,6 +640,7 @@ def test_active_photoshoot_blocks_every_other_commercial_recommendation():
         conversation_context={"primary_sales_channel": "AI_CHAT"},
     )
     assert result.offering_id == current["offering_id"]
+    assert result.selector_metadata["opportunityReasonCode"] == "CONTINUE_ACTIVE_SESSION"
 
 
 def test_photoshoot_teaser_can_never_be_selected_as_a_paid_offering():
@@ -531,6 +744,55 @@ def test_content_wall_bundle_and_member_offerings_are_suppressed_from_chat():
     assert result.offering_id is None
     assert "BUNDLE_CHANNEL_CONTENT_WALL" in result.exclusion_reasons
     assert "BUNDLE_MEMBER_OFFERING_SUPPRESSED" in result.exclusion_reasons
+
+
+def test_standalone_and_photoshoot_opportunities_compete_in_one_ranking():
+    single = candidate(
+        title="One portrait", price_minor=799, asset_ids=[91],
+    )
+    bundle = candidate(
+        title="Complete three photo set", offering_type="BUNDLE",
+        price_minor=1999, asset_ids=[101, 102, 103],
+        destinations=["BUNDLE", "BUNDLE", "BUNDLE"],
+        photoshoot_identifier="bundle-shoot",
+        photoshoot_identifiers=["bundle-shoot"],
+        photoshoot_selling_mode="BUNDLE",
+        bundle_teaser_asset_id=201, bundle_teaser_source_asset_id=101,
+        bundle_teaser_registered=True,
+    )
+    result = select(
+        Repository((single, bundle)),
+        conversation_context={
+            "primary_sales_channel": "AI_CHAT",
+            "latest_message": "I want the full set",
+            "requested_media_type": "BUNDLE",
+        },
+    )
+    assert result.offering_id == bundle["offering_id"]
+    assert result.selector_metadata["opportunityReasonCode"] == "EXPLICIT_BUNDLE_REQUEST"
+    assert len(result.selector_metadata["recommendationTrace"]) == 2
+
+
+def test_explicit_one_picture_intent_selects_standalone_over_bundle():
+    single = candidate(title="One portrait", price_minor=799, asset_ids=[91])
+    bundle = candidate(
+        title="Complete set", offering_type="BUNDLE", price_minor=1999,
+        asset_ids=[101, 102], destinations=["BUNDLE", "BUNDLE"],
+        photoshoot_identifier="bundle-shoot",
+        photoshoot_identifiers=["bundle-shoot"],
+        photoshoot_selling_mode="BUNDLE", bundle_teaser_asset_id=201,
+        bundle_teaser_source_asset_id=101, bundle_teaser_registered=True,
+    )
+    result = select(
+        Repository((bundle, single)),
+        conversation_context={
+            "primary_sales_channel": "AI_CHAT",
+            "latest_message": "just one pic",
+            "requested_media_type": "SINGLE_IMAGE",
+        },
+    )
+    assert result.offering_id == single["offering_id"]
+    assert result.selector_metadata["opportunityReasonCode"] == "EXPLICIT_SINGLE_IMAGE_REQUEST"
 
 
 def test_read_only_developer_api(monkeypatch):

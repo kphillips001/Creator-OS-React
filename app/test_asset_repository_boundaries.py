@@ -95,6 +95,50 @@ class AssetRepositoryBoundaryTests(unittest.TestCase):
 
         self.assertEqual([row["id"] for row in rows], [1, 2])
 
+    def test_asset_library_counts_resolve_current_sales_destinations_exclusively(self):
+        class AggregateCursor:
+            def __init__(self):
+                self.queries = []
+                self.index = 0
+
+            def __enter__(self): return self
+            def __exit__(self, *_): return False
+            def execute(self, query, params=None): self.queries.append(str(query))
+            def fetchone(self):
+                rows = (
+                    {"images": 8, "image_chat": 3, "image_wall": 4, "videos": 2},
+                    {"bundles": 4, "photoshoots": 5, "photoshoot_chat": 3,
+                     "photoshoot_chat_bundle": 1, "photoshoot_chat_session": 2,
+                     "photoshoot_wall": 1},
+                    {"teasers": 1},
+                )
+                row = rows[self.index]
+                self.index += 1
+                return row
+
+        cursor = AggregateCursor()
+
+        class Connection:
+            def __enter__(self): return self
+            def __exit__(self, *_): return False
+            def cursor(self): return cursor
+
+        result = AssetRepository(connection_factory=lambda: Connection()).asset_library_counts(7)
+
+        self.assertEqual(result["destination_breakdown"], {
+            "images": {"chat": 3, "wall": 4, "unassigned": 1},
+            "photoshoots": {"chat": 3, "wall": 1, "unassigned": 1},
+            "chat_commerce_types": {"single": 3, "bundle": 1, "session": 2},
+        })
+        photoshoot_query = cursor.queries[1]
+        self.assertIn("COALESCE(selling_mode,'SESSION')='SESSION'", photoshoot_query)
+        self.assertIn("COALESCE(bundle_sales_channel,'CHAT')='CHAT'", photoshoot_query)
+        self.assertIn("bundle_sales_channel='CONTENT_WALL'", photoshoot_query)
+        image_query = cursor.queries[0]
+        self.assertGreaterEqual(image_query.count("acd.destination='TEASER'"), 3)
+        self.assertEqual(result["images"], 8)
+        self.assertEqual(result["teasers"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()

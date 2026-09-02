@@ -1,7 +1,9 @@
 import {
+  activateExplicitGenerationBatch,
   createPromptPreview,
   enhanceCreativeTags,
   getContentStudioGeneration,
+  getBackgroundOperation,
   submitContentStudioGeneration,
   updateExplicitGenerationBatch,
 } from "../../../infrastructure/api/contentStudioApi";
@@ -27,14 +29,33 @@ export type ExplicitBatchSnapshot = {
 
 const runningBatches = new Map<string, Promise<void>>();
 const TERMINAL = new Set(["succeeded", "partial", "failed"]);
+const CANCELLED = new Set(["CANCEL_REQUESTED", "CANCELLED"]);
+
+export class ExplicitBatchCancelledError extends Error {
+  constructor() { super("Generation stopped. Completed images were preserved."); }
+}
 
 function wait(milliseconds: number) {
   return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
 }
 
-async function waitForGeneration(runId: string) {
+async function assertNotCancelled(operationId: string) {
+  try {
+    const operation = await getBackgroundOperation(operationId);
+    if (CANCELLED.has(operation.status)) throw new ExplicitBatchCancelledError();
+  } catch (reason) {
+    if (reason instanceof ExplicitBatchCancelledError) throw reason;
+    // A transient status-read failure must not convert a healthy provider job
+    // into a failed batch. The canonical progress endpoint independently
+    // rejects every late mutation once cancellation is persisted.
+  }
+}
+
+async function waitForGeneration(runId: string, operationId: string) {
   for (;;) {
+    await assertNotCancelled(operationId);
     const generation = await getContentStudioGeneration(runId);
+    await assertNotCancelled(operationId);
     if (TERMINAL.has(generation.status)) return generation;
     await wait(350);
   }
@@ -67,6 +88,7 @@ export function beginExplicitGenerationBatch(args: {
   provider: string;
   context: ContentStudioContext;
   onSnapshot?: (snapshot: ExplicitBatchSnapshot) => void;
+  onTerminal?: (status: "SUCCEEDED" | "PARTIAL" | "FAILED") => void;
 }) {
   const existing = runningBatches.get(args.operationId);
   if (existing) return existing;
@@ -89,16 +111,21 @@ export function beginExplicitGenerationBatch(args: {
       args.onSnapshot?.(snapshot);
       await persist(args.operationId, snapshot, terminalStatus);
     };
+    await activateExplicitGenerationBatch(args.operationId);
+    await assertNotCancelled(args.operationId);
     await publish();
 
     for (const [index, selection] of args.concepts.entries()) {
+      await assertNotCancelled(args.operationId);
       const item = snapshot.items[index]!;
       snapshot = { ...snapshot, currentIdeaIndex: index + 1, phase: "preparing", items: patchItem(snapshot.items, item.id, { status: "enhancing" }) };
       await publish();
       let enhanced: string;
       try {
         enhanced = (await enhanceCreativeTags(selection.concept, true)).replace(/\s*\n+\s*/g, ", ");
+        await assertNotCancelled(args.operationId);
       } catch (reason) {
+        if (reason instanceof ExplicitBatchCancelledError) throw reason;
         snapshot = {
           ...snapshot,
           failedIdeas: snapshot.failedIdeas + 1,
@@ -124,11 +151,14 @@ export function beginExplicitGenerationBatch(args: {
       };
       let providerPrompt: string;
       try {
+        await assertNotCancelled(args.operationId);
         const preview = await createPromptPreview("explicit", enhanced, 1, undefined, "explicit", explicitInput);
+        await assertNotCancelled(args.operationId);
         providerPrompt = preview.prompts[0] ?? "";
         if (!providerPrompt) throw new Error("Explicit prompt planning returned no prompt");
         snapshot = { ...snapshot, prompts: [...snapshot.prompts, providerPrompt] };
       } catch (reason) {
+        if (reason instanceof ExplicitBatchCancelledError) throw reason;
         snapshot = {
           ...snapshot,
           failedIdeas: snapshot.failedIdeas + 1,
@@ -142,8 +172,10 @@ export function beginExplicitGenerationBatch(args: {
       }
 
       try {
+        await assertNotCancelled(args.operationId);
         snapshot = { ...snapshot, phase: "generating", items: patchItem(snapshot.items, item.id, { status: "submitting" }) };
         await publish();
+        await assertNotCancelled(args.operationId);
         const tierLabel = selection.tier === "hardcore" ? "Hardcore" : "Softcore";
         const runId = await submitContentStudioGeneration({
           provider: args.provider,
@@ -157,9 +189,11 @@ export function beginExplicitGenerationBatch(args: {
           },
           explicitInput,
         });
+        await assertNotCancelled(args.operationId);
         snapshot = { ...snapshot, items: patchItem(snapshot.items, item.id, { jobId: runId, status: "generating" }) };
         await publish();
-        const generation = await waitForGeneration(runId);
+        const generation = await waitForGeneration(runId, args.operationId);
+        await assertNotCancelled(args.operationId);
         const image = generation.images[0];
         if (generation.status === "failed" || !image) throw new Error(generation.message || "Generation failed");
         snapshot = {
@@ -167,6 +201,7 @@ export function beginExplicitGenerationBatch(args: {
           items: patchItem(snapshot.items, item.id, { error: "", imageUrl: image.url, jobId: generation.jobId ?? runId, status: "completed" }),
         };
       } catch (reason) {
+        if (reason instanceof ExplicitBatchCancelledError) throw reason;
         snapshot = {
           ...snapshot, failedIdeas: snapshot.failedIdeas + 1,
           items: patchItem(snapshot.items, item.id, {
@@ -178,9 +213,11 @@ export function beginExplicitGenerationBatch(args: {
       await publish();
     }
 
+    await assertNotCancelled(args.operationId);
     snapshot = { ...snapshot, currentIdeaIndex: totalIdeas, phase: "complete" };
     const terminal = snapshot.failedIdeas === 0 ? "SUCCEEDED" : snapshot.completedIdeas > 0 ? "PARTIAL" : "FAILED";
     await publish(terminal);
+    args.onTerminal?.(terminal);
   })().finally(() => runningBatches.delete(args.operationId));
   runningBatches.set(args.operationId, promise);
   return promise;

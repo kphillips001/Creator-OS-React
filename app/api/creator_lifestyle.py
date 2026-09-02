@@ -36,7 +36,6 @@ DEFAULT_DOCUMENT = {
 - beach days
 - road trips
 - coffee shops
-- bookstores
 - festivals
 - exploring new places
 - spending time outdoors""",

@@ -30,9 +30,71 @@ $FrontendErrorLog = Join-Path $LogDirectory "react_error.log"
 $LauncherLog = Join-Path $LogDirectory "launcher.log"
 $LauncherFailureLog = Join-Path $LogDirectory "launcher_failure.txt"
 $ServiceStatePath = Join-Path $LogDirectory "launcher_services.json"
+$Session5CertificationConfigPath = Join-Path $ProjectRoot ".env.session5.local"
 $WorkerSupervisorModule = "tools.launcher.worker_supervisor"
 $DesktopShortcutHelper = Join-Path $PSScriptRoot "create_desktop_shortcut.ps1"
 $script:CurrentStep = "initialization"
+
+# Optional, local-only Session 5 certification environment. The marker file is
+# gitignored and deliberately contains only non-secret mode/database-name
+# settings. Each test connection reuses the local DATABASE_URL credentials while
+# replacing only its database name; durable purpose markers plus the existing
+# test-database guard remain authoritative and fail closed.
+if (Test-Path -LiteralPath $Session5CertificationConfigPath) {
+    $session5Config = @{}
+    foreach ($line in Get-Content -LiteralPath $Session5CertificationConfigPath) {
+        if ($line -match '^\s*(?<name>[A-Z0-9_]+)\s*=\s*(?<value>.*?)\s*$') {
+            $session5Config[$Matches.name] = $Matches.value.Trim('"').Trim("'")
+        }
+    }
+    if ($session5Config["CREATOR_OS_CERTIFICATION_SCENARIO_MODE"] -match '^(?i:true)$') {
+        $session5Databases = @{
+            "SESSION5_SCENARIO_LAB_DATABASE_URL" = [string]$session5Config["CREATOR_OS_SCENARIO_LAB_DATABASE_NAME"]
+            "SESSION5_INTEGRATION_DATABASE_URL" = [string]$session5Config["CREATOR_OS_INTEGRATION_TEST_DATABASE_NAME"]
+            "SESSION5_RECOVERY_DATABASE_URL" = [string]$session5Config["CREATOR_OS_RECOVERY_TEST_DATABASE_NAME"]
+        }
+        $databaseLine = Get-Content -LiteralPath (Join-Path $ProjectRoot ".env") |
+            Where-Object { $_ -match '^\s*DATABASE_URL\s*=' } |
+            Select-Object -Last 1
+        if ([string]::IsNullOrWhiteSpace($databaseLine)) {
+            throw "DATABASE_URL is required to derive the local Session 5 test connection."
+        }
+        $productionDatabaseUrl = (($databaseLine -split '=', 2)[1]).Trim().Trim('"').Trim("'")
+        foreach ($entry in $session5Databases.GetEnumerator()) {
+            $testDatabaseName = $entry.Value
+            if ($testDatabaseName -notmatch '^(?i:[a-z0-9_]*test[a-z0-9_]*)$') {
+                throw "Every Session 5 database name must be explicitly test-scoped."
+            }
+            if ($productionDatabaseUrl -match '(?<prefix>[?&]dbname=)[^&]*') {
+                $testDatabaseUrl = [regex]::Replace(
+                    $productionDatabaseUrl, '(?<prefix>[?&]dbname=)[^&]*',
+                    "`${prefix}$testDatabaseName", 1
+                )
+            } else {
+                $testDatabaseUrl = [regex]::Replace(
+                    $productionDatabaseUrl, '/[^/?]+(?<query>\?.*)?$',
+                    "/$testDatabaseName`${query}"
+                )
+            }
+            if ($testDatabaseUrl -eq $productionDatabaseUrl) {
+                throw "Session 5 database derivation must differ from production."
+            }
+            [Environment]::SetEnvironmentVariable($entry.Key, $testDatabaseUrl, "Process")
+        }
+        [Environment]::SetEnvironmentVariable("CREATOR_OS_CERTIFICATION_SCENARIO_MODE", "true", "Process")
+    }
+}
+
+# This launcher is the canonical local-development entry point. Direct
+# production/runtime module launches remain non-reloading by default.
+$DevAutoReloadSwitch = "CREATOR_OS_DEV_AUTO_RELOAD"
+if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($DevAutoReloadSwitch))) {
+    [Environment]::SetEnvironmentVariable($DevAutoReloadSwitch, "true", "Process")
+}
+$DevAutoReloadEnabled = [Environment]::GetEnvironmentVariable($DevAutoReloadSwitch) -match '^(?i:1|true|yes|on)$'
+if ($DevAutoReloadEnabled) {
+    $BackendArguments += @("--reload", "--reload-dir", (Join-Path $ProjectRoot "app"), "--reload-delay", "1")
+}
 
 # Core Business Asset analysis is part of the Creator_OS application lifecycle,
 # not optional automation. Explicit user environment values still win.
@@ -44,7 +106,8 @@ foreach ($workerSwitch in @(
     "CREATOR_OS_LAUNCH_GROK_ANALYSIS",
     "CREATOR_OS_LAUNCH_CONTENT_INTELLIGENCE_MERGE",
     "CREATOR_OS_LAUNCH_PHOTOSHOOT_ANALYSIS",
-    "CREATOR_OS_LAUNCH_PHOTOSHOOT_AUTO_RUN"
+    "CREATOR_OS_LAUNCH_PHOTOSHOOT_AUTO_RUN",
+    "CREATOR_OS_LAUNCH_X_COMPETITOR_REFRESH"
 )) {
     if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($workerSwitch))) {
         [Environment]::SetEnvironmentVariable($workerSwitch, "true", "Process")
@@ -297,7 +360,7 @@ function Start-CreatorService {
 }
 
 function Invoke-WorkerSupervisor {
-    param([Parameter(Mandatory)][ValidateSet("start-enabled", "stop-managed")][string]$Action)
+    param([Parameter(Mandatory)][ValidateSet("start-enabled", "stop-managed", "monitor-telegram")][string]$Action)
 
     $python = Get-Command "python.exe" -ErrorAction SilentlyContinue
     if ($null -eq $python) {
@@ -305,6 +368,13 @@ function Invoke-WorkerSupervisor {
     }
     $commandDisplay = "$($python.Source) -m $WorkerSupervisorModule $Action"
     Write-LauncherEvent -Message "Command: $commandDisplay; working directory: $ProjectRoot"
+    if ($Action -eq "monitor-telegram") {
+        Start-Process -FilePath $python.Source -ArgumentList @("-m", $WorkerSupervisorModule, $Action) `
+            -WorkingDirectory $ProjectRoot -WindowStyle Hidden `
+            -RedirectStandardOutput (Join-Path $LogDirectory "telegram_supervisor.log") `
+            -RedirectStandardError (Join-Path $LogDirectory "telegram_supervisor_error.log") | Out-Null
+        return
+    }
     $output = & $python.Source -m $WorkerSupervisorModule $Action 2>&1
     $output | ForEach-Object { Write-LauncherEvent -Message ([string]$_) }
     if ($LASTEXITCODE -ne 0) {
@@ -342,6 +412,7 @@ try {
     New-Item -ItemType Directory -Path $LogDirectory -Force | Out-Null
     Remove-Item -LiteralPath $LauncherFailureLog -Force -ErrorAction SilentlyContinue
     Write-LauncherEvent -Message "Creator_OS restart requested from $ProjectRoot."
+    Write-LauncherEvent -Message "Development auto-reload enabled=$DevAutoReloadEnabled switch=$DevAutoReloadSwitch"
 
     Set-LauncherStep -Name "desktop-shortcut"
     try {
@@ -390,6 +461,7 @@ try {
     Wait-ForFastApiHeartbeat -TimeoutSeconds $BackendStartupTimeoutSeconds
     Set-LauncherStep -Name "start-workers"
     Invoke-WorkerSupervisor -Action "start-enabled"
+    Invoke-WorkerSupervisor -Action "monitor-telegram"
 
     Set-LauncherStep -Name "start-frontend"
     $frontendIds = @(Start-CreatorService `

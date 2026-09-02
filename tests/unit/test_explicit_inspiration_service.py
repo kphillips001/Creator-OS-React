@@ -8,12 +8,18 @@ from app.services.explicit_prompt_service import (
     compact_explicit_anchor_line,
     extract_editorial_direction,
     generate_explicit_prompts,
+    operator_requested_fluids,
+    strip_unsolicited_fluids,
 )
 from app.services.explicit_expression_profile import (
     EXPLICIT_EXPRESSION_SECTION,
     ExplicitExpressionProfileService,
 )
 from app.services.seedream_premium_render_locks import enforce_premium_render_body_lock
+from app.services.canonical_prompt_planner import (
+    CanonicalPromptPlanner,
+    CanonicalPromptPlanningRequest,
+)
 
 
 def semantic_fields(text: str) -> dict[str, set[str]]:
@@ -65,6 +71,14 @@ def test_explicit_inspiration_returns_hardcore_and_softcore_lists():
     assert call_count["n"] == 2
     assert any("HARDCORE REQUIREMENTS" in prompt for prompt in captured)
     assert any("SOFTCORE REQUIREMENTS" in prompt for prompt in captured)
+    hardcore_prompt = next(prompt for prompt in captured if "HARDCORE REQUIREMENTS" in prompt)
+    assert "DEFAULT FLUID POLICY" in hardcore_prompt
+    assert "Do NOT invent fluids" in hardcore_prompt
+    assert "glistening juices" not in hardcore_prompt
+    assert "POSE / FRAMING PRIORITY" in hardcore_prompt
+    assert "sellable pose" in hardcore_prompt.lower()
+    softcore_only = next(prompt for prompt in captured if "SOFTCORE REQUIREMENTS" in prompt)
+    assert "DEFAULT FLUID POLICY" not in softcore_only
     assert all("Do not invent biographical facts" in prompt for prompt in captured)
     assert all('"id"' not in prompt for prompt in captured)
     assert all("Ava" not in prompt for prompt in captured)
@@ -83,6 +97,67 @@ def test_explicit_inspiration_returns_hardcore_and_softcore_lists():
     softcore_prompt = next(prompt for prompt in captured if "SOFTCORE REQUIREMENTS" in prompt)
     assert "already-generated concepts" in softcore_prompt
     assert "hardcore visual concept 1" in softcore_prompt
+
+
+def test_hardcore_inspire_strips_unsolicited_fluids_from_concepts():
+    def generate(prompt: str) -> str:
+        if "SOFTCORE REQUIREMENTS" in prompt:
+            return "\n".join(f"softcore concept {index}" for index in range(1, 6))
+        return "\n".join(
+            [
+                "On all fours she presents herself with glistening juices dripping down her thighs",
+                "Kneeling oral tease toward camera, tongue out, dry skin, intense eye contact",
+                "Seated self-touch with legs parted and wet arousal trails of slick",
+                "Doggy presentation, hands on ass, no fluids",
+                "Masturbation on the bed edge with creamy discharge running down her legs",
+            ]
+        )
+
+    service = ExplicitInspirationService(
+        profile_loader=lambda _: {"id": 42},
+        text_generator=generate,
+    )
+
+    result = service.create_concepts(fanvue_account_id=7, count_per_tier=5)
+
+    assert len(result.hardcore) == 5
+    joined = " | ".join(result.hardcore).lower()
+    assert "glistening juices" not in joined
+    assert "dripping" not in joined
+    assert "creamy discharge" not in joined
+    assert "wet arousal" not in joined
+    assert "trail of slick" not in joined
+    assert "oral tease" in joined
+    assert "doggy presentation" in joined
+
+
+def test_explicit_inspiration_softcore_keeps_wet_shirt_language():
+    def generate(prompt: str) -> str:
+        if "HARDCORE REQUIREMENTS" in prompt:
+            return "\n".join(f"hardcore concept {index}" for index in range(1, 6))
+        return "\n".join(
+            f"softcore wet shirt cling concept {index}" for index in range(1, 6)
+        )
+
+    service = ExplicitInspirationService(
+        profile_loader=lambda _: {"id": 42},
+        text_generator=generate,
+    )
+
+    result = service.create_concepts(fanvue_account_id=7, count_per_tier=5)
+
+    assert all("wet shirt cling" in concept for concept in result.softcore)
+
+
+def test_fluid_opt_in_helpers_preserve_operator_requested_wetness():
+    assert operator_requested_fluids("make it dripping wet")
+    assert not operator_requested_fluids("hardcore doggy presentation")
+    cleaned = strip_unsolicited_fluids(
+        "Doggy presentation with glistening juices dripping down her thighs"
+    )
+    assert "glistening juices" not in cleaned.lower()
+    assert "dripping" not in cleaned.lower()
+    assert "doggy presentation" in cleaned.lower()
 
 
 def test_explicit_inspiration_rejects_incomplete_hardcore_output():
@@ -439,6 +514,44 @@ def test_explicit_planner_selects_only_explicit_editorial_guidance():
     assert explicit_prompt_service.EXPLICIT_EDITORIAL_GUIDANCE == guidance
     assert not hasattr(explicit_prompt_service, "editorial_quality_guidance")
     assert guidance.metadata()["scope"] == "explicit_only"
+
+
+def test_canonical_explicit_planner_accepts_freeflow_expression_contract(monkeypatch):
+    """Protect the mounted prompt-preview path from planner/service signature drift."""
+    editorial = {
+        "emotional_tone": "playful",
+        "facial_expression": "a natural coy smile",
+        "eye_contact": "glancing back toward the viewer",
+        "body_language": "relaxed",
+        "editorial_energy": "intimate",
+        "visual_storytelling": "private moment",
+        "subject_awareness": "aware of the viewer",
+        "camera_engagement": "returning gaze",
+    }
+
+    def fake_grok(instruction, _key):
+        if "Return one JSON object" in instruction:
+            import json
+            return json.dumps(editorial)
+        return "1. Photorealistic treatment preserving the requested scene."
+
+    monkeypatch.setattr(explicit_prompt_service, "get_grok_api_key", lambda: "test-key")
+    monkeypatch.setattr(explicit_prompt_service, "generate_prompts_with_grok", fake_grok)
+
+    result = CanonicalPromptPlanner().plan(CanonicalPromptPlanningRequest(
+        mode="explicit",
+        creative_tags="private window scene",
+        prompt_count=1,
+        metadata={
+            "concept_tier": "hardcore",
+            "operator_expression": "a natural coy smile while glancing back",
+            "freeflow_expression": True,
+        },
+    ))
+
+    assert len(result.prompts) == 1
+    assert "a natural coy smile while glancing back" in result.prompts[0]
+    assert "follow the operator-requested facial performance exactly" in result.prompts[0]
 
 
 def test_social_editorial_guidance_remains_independent():

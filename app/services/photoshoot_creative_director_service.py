@@ -19,6 +19,7 @@ from app.models.photoshoot_queue import (
 )
 from app.services.creative_director_service import CreativeDirectorService
 from app.services.generation_library_service import GenerationLibraryService
+from app.services.photoshoot_expression_guidance import normalize_photoshoot_emotion
 from app.services.photoshoot_queue_service import PhotoshootQueueService
 from app.services.photoshoot_summary_service import PhotoshootSummaryService
 from app.services.photoshoot_context_service import PhotoshootContextService
@@ -86,7 +87,7 @@ class PhotoshootCreativeDirectorWorkflowService:
         session_id: str,
         planning_mode: str,
         plan_frame_count: int = 8,
-        target_shot_count: int = 10,
+        target_shot_count: int = 5,
     ) -> dict[str, Any]:
         self._session(creator_profile_id, session_id)
         mode = str(planning_mode or "frame_by_frame").strip().lower()
@@ -136,6 +137,23 @@ class PhotoshootCreativeDirectorWorkflowService:
         )
         return {"target_shot_count": session.target_shot_count}
 
+    def extend_photoshoot(self, *, creator_profile_id: int, session_id: str,
+                          expected_target_shot_count: int) -> dict[str, Any]:
+        self._session(creator_profile_id, session_id)
+        session, extended = self.queue.extend_target_one_shot(
+            session_id, expected_target_shot_count=expected_target_shot_count,
+        )
+        progress = self._planning_progress(session)
+        return {
+            "target_shot_count": session.target_shot_count,
+            "extended": extended,
+            "current_shot": progress["current_shot"],
+            "planning_shot": progress["planning_shot"],
+            "remaining_shots": progress["remaining_shots"],
+            "editorial_stage": progress["editorial_stage"],
+            "workflow_stage": "ready_for_next_shot",
+        }
+
     def generate_session_plan(
         self,
         *,
@@ -145,7 +163,7 @@ class PhotoshootCreativeDirectorWorkflowService:
         creator_guidance: str,
         continuity_locks: Mapping[str, bool],
         plan_frame_count: int = 8,
-        target_shot_count: int = 10,
+        target_shot_count: int = 5,
     ) -> dict[str, Any]:
         session = self._session(creator_profile_id, session_id)
         session = self.queue.update_session_settings(
@@ -255,7 +273,10 @@ class PhotoshootCreativeDirectorWorkflowService:
             "continuity_notes": str(item.get("continuity_notes") or "Preserve locked continuity.").strip(),
             "camera_framing": str(item.get("camera_framing") or "").strip(),
             "lighting": str(item.get("lighting") or "").strip(),
-            "emotion": str(item.get("emotion") or "").strip(),
+            "emotion": normalize_photoshoot_emotion(
+                item.get("emotion"),
+                creative_mode=session.creative_mode,
+            ),
             "pose_composition": str(item.get("pose_composition") or "").strip(),
             "creative_mode": session.creative_mode,
             "session_direction": self._original_direction(session),
@@ -317,7 +338,7 @@ class PhotoshootCreativeDirectorWorkflowService:
 
     def inspiration(self, *, creator_profile_id: int, session_id: str, creative_mode: str,
                     creator_guidance: str, provider_context: str,
-                    continuity_locks: Mapping[str, bool], target_shot_count: int = 10) -> dict[str, Any]:
+                    continuity_locks: Mapping[str, bool], target_shot_count: int = 5) -> dict[str, Any]:
         session = self._session(creator_profile_id, session_id)
         session = self.queue.update_session_settings(
             session_id, creative_mode=creative_mode, target_shot_count=target_shot_count,
@@ -467,7 +488,7 @@ class PhotoshootCreativeDirectorWorkflowService:
 
     def recommendation(self, *, creator_profile_id: int, session_id: str, creative_mode: str,
                        creator_guidance: str, continuity_locks: Mapping[str, bool],
-                       target_shot_count: int = 10):
+                       target_shot_count: int = 5):
         session = self._session(creator_profile_id, session_id)
         session = self.queue.update_session_settings(
             session_id, creative_mode=creative_mode, target_shot_count=target_shot_count,
@@ -520,7 +541,7 @@ class PhotoshootCreativeDirectorWorkflowService:
         creative_mode: str,
         operator_direction: str,
         continuity_locks: Mapping[str, bool],
-        target_shot_count: int = 10,
+        target_shot_count: int = 5,
     ) -> dict[str, Any]:
         direction = str(operator_direction or "").strip()
         if not direction:
@@ -675,7 +696,10 @@ class PhotoshootCreativeDirectorWorkflowService:
         planning_mode = photoshoot_planning_mode(session.creative_mode)
         LOGGER.info("[Approve] Canonical planning request built mode=%s elapsed_ms=%.2f", planning_mode, (time.perf_counter() - started) * 1000)
         LOGGER.info("[Approve] Entering Canonical Prompt Planner elapsed_ms=%.2f", (time.perf_counter() - started) * 1000)
-        operator_expression = str(recommendation.get("emotion") or "").strip()
+        operator_expression = normalize_photoshoot_emotion(
+            recommendation.get("emotion"),
+            creative_mode=session.creative_mode,
+        )
         freeflow_expression = not planning_context.progression_enabled
         result = self.creative_director.plan_prompts(
             mode=planning_mode,
@@ -683,9 +707,10 @@ class PhotoshootCreativeDirectorWorkflowService:
             metadata={
                 "source": "photoshoot_studio",
                 # Shot-level face direction from Creative Director becomes the
-                # canonical expression override. FreeFlow may vary gaze while
-                # progression-aware sessions retain their existing profile.
-                "operator_expression": operator_expression or None,
+                # canonical expression override. Weak/bland continuity phrases are
+                # normalized to alluring defaults so identity locks cannot freeze
+                # a vacant model face across the shoot.
+                "operator_expression": operator_expression,
                 "freeflow_expression": freeflow_expression,
                 "concept_tier": (
                     "hardcore"
@@ -750,9 +775,13 @@ class PhotoshootCreativeDirectorWorkflowService:
     @staticmethod
     def _original_direction(session) -> str:
         continuity = dict(session.creative_continuity or {})
+        seed_summary = continuity.get("canonical_seed_summary")
+        if isinstance(seed_summary, Mapping) and str(seed_summary.get("scene") or "").strip():
+            return CanonicalPhotoshootSeedSummary.from_dict(seed_summary).to_prompt_text()
+        if isinstance(seed_summary, str) and seed_summary.strip():
+            return seed_summary.strip()
         return str(
-            continuity.get("seed_prompt_text")
-            or continuity.get("original_photoshoot_direction")
+            continuity.get("original_photoshoot_direction")
             or session.creator_notes
             or "Continue the selected seed as one cohesive photoshoot."
         ).strip()
@@ -909,9 +938,11 @@ class PhotoshootCreativeDirectorWorkflowService:
             "pose": pose or "Preserve the latest approved pose with only one small natural evolution.",
             "body_orientation": pose or "Preserve the latest approved body orientation.",
             "hand_placement": pose or "Preserve the latest approved hand placement.",
-            "facial_expression": str(
-                direction.get("emotion") or "Preserve the latest approved expression with only a subtle evolution."
-            ).strip(),
+            "facial_expression": normalize_photoshoot_emotion(
+                direction.get("emotion"),
+                creative_mode=getattr(session, "creative_mode", None),
+            ),
+
             "camera_angle": framing or "Preserve the latest approved camera angle.",
             "framing": framing or str(
                 summary.get("visual_style") or defaults.get("camera_style")
@@ -956,7 +987,7 @@ class PhotoshootCreativeDirectorWorkflowService:
         planning_shot: int | None = None,
         editorial_stage: str = "Beginning",
         timeline_image_count: int = 0,
-        target_shot_count: int = 10,
+        target_shot_count: int = 5,
         latest_approved_shot: Mapping[str, Any] | None = None,
     ) -> dict[str, Any]:
         current_shot = max(1, int(current_shot or 1))

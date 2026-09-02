@@ -10,6 +10,8 @@ class CustomerSalesBrainConfig:
     offer_nudge_delay: timedelta
     offer_expiration: timedelta
     photoshoot_objection_recovery_limit: int = 2
+    sexual_receptiveness_min_engagements: int = 4
+    sexual_receptiveness_min_history_turns: int = 3
 
     @classmethod
     def from_environment(cls):
@@ -25,6 +27,12 @@ class CustomerSalesBrainConfig:
             )),
             photoshoot_objection_recovery_limit=cls._positive_int(
                 "PHOTOSHOOT_OBJECTION_RECOVERY_LIMIT", 2
+            ),
+            sexual_receptiveness_min_engagements=cls._positive_int(
+                "CUSTOMER_SALES_SEXUAL_RECEPTIVENESS_MIN_ENGAGEMENTS", 4
+            ),
+            sexual_receptiveness_min_history_turns=cls._positive_int(
+                "CUSTOMER_SALES_SEXUAL_RECEPTIVENESS_MIN_HISTORY_TURNS", 3
             ),
         )
 

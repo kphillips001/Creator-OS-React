@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import replace
+from pathlib import Path
 
 from app.models.generation_engine import GenerationStatus
 from app.services.content_studio_generation_service import ContentStudioGenerationService
@@ -78,20 +80,157 @@ class PhotoshootManualService:
         try:
             executed, records = generation.execute(job, progress_callback=progress_callback)
             if executed.status == GenerationStatus.SUCCEEDED.value and records:
-                completed = self.synchronize_completed(session_id=session_id, job=executed, records=records)
+                try:
+                    completed = self.synchronize_completed(session_id=session_id, job=executed, records=records)
+                except Exception as error:
+                    self._preserve_finalization_failure(executed, records, error)
+                    return {
+                        "status": "finalization_required", "job_id": executed.job_id,
+                        "request_id": job.request.request_id,
+                        "image_ids": [record.image_id for record in records],
+                        "message": str(error),
+                    }
                 return {
                     "status": "succeeded", "job_id": executed.job_id,
                     "request_id": completed.request_id if completed is not None else job.request.request_id,
                     "image_ids": [record.image_id for record in records],
                 }
+            if executed.status == GenerationStatus.RUNNING.value and executed.result:
+                return {"status": "provider_pending", "job_id": executed.job_id,
+                        "request_id": job.request.request_id,
+                        "provider_request_id": dict(executed.result.execution_metadata or {}).get("provider_request_id")}
             reason = executed.failure.reason if executed.failure else "Generation failed. Please try again."
             self.queue.mark_generation_failed(executed.job_id, reason=reason)
             return {"status": "failed", "job_id": executed.job_id, "message": reason}
         except Exception as error:
+            local_records = tuple(record for record in self.library.list_records()
+                                  if record.generation_job_id == job.job_id)
+            current_job = self.engine.get_job(job.job_id)
+            if current_job is not None and current_job.status == GenerationStatus.SUCCEEDED.value and local_records:
+                self._preserve_finalization_failure(current_job, local_records, error)
+                return {"status": "finalization_required", "job_id": job.job_id,
+                        "request_id": job.request.request_id,
+                        "image_ids": [record.image_id for record in local_records], "message": str(error)}
             self.queue.mark_generation_failed(job.job_id, reason=str(error))
             return {"status": "failed", "job_id": job.job_id, "message": str(error)}
 
-    def synchronize_completed(self, *, session_id: str, job, records) -> object | None:
+    def _preserve_finalization_failure(self, job, records, error: Exception) -> None:
+        try:
+            self.queue.mark_finalization_required(
+                job.job_id,
+                generated_image_ids=(record.image_id for record in records),
+                reason=str(error),
+            )
+        except Exception:
+            logging.getLogger("creator_os.photoshoot.finalization").exception(
+                "Unable to persist finalization-required marker job_id=%s", job.job_id,
+            )
+
+    def reconcile_local_completion(self, *, session_id: str, request_id: str | None = None) -> dict:
+        """Finalize a durably completed local result without contacting its provider."""
+        session = self.queue.get_session(session_id)
+        requests = self.queue.requests_for_session(session_id)
+        request = next((item for item in requests if item.request_id == request_id), None) if request_id else next((
+            item for item in reversed(requests)
+            if item.status == "finalization_required" or dict(item.metadata or {}).get("finalization_required")
+        ), None)
+        if request is None or not request.generation_job_id:
+            return {"status": "not_available", "message": "No Photoshoot finalization is awaiting recovery."}
+        job = self.engine.get_job(request.generation_job_id)
+        if job is None or job.status != GenerationStatus.SUCCEEDED.value or not job.result:
+            return {"status": "not_available", "message": "Generation completion is not durably proven."}
+        records = tuple(record for record in self.library.list_records()
+                        if record.generation_job_id == job.job_id)
+        records = self.resolve_completed_records(job, records)
+        for record in records:
+            metadata = {**dict(record.prompt_metadata or {}), **dict(record.generation_metadata or {})}
+            record_session = str(record.photoshoot_session_id or metadata.get("photoshoot_session_id") or "")
+            record_request = str(record.photoshoot_request_id or metadata.get("photoshoot_request_id") or "")
+            if record_session != session.session_id or record_request != request.request_id:
+                raise RuntimeError("Successful output lineage does not match this Photoshoot request.")
+            output_path = Path(str(record.output_reference or ""))
+            if output_path.is_absolute() and not output_path.is_file():
+                raise RuntimeError("The persisted Photoshoot output artifact is unavailable.")
+        completed = self.synchronize_completed(
+            session_id=session_id, job=job, records=records, assess_continuity=False,
+        )
+        return {
+            "status": "succeeded", "job_id": job.job_id,
+            "request_id": completed.request_id if completed else request.request_id,
+            "image_ids": [record.image_id for record in records],
+        }
+
+    def reconcile_provider_task(self, *, session_id: str, job) -> dict:
+        """Resume an accepted provider task without ever submitting replacement work."""
+        from app.models.generation_engine import GenerationStatus
+        from app.providers.generation.base import ProviderSubmission
+        from app.repositories.generation_recipe_repository import GenerationRecipeRepository
+
+        recipes = GenerationRecipeRepository()
+        recipe = recipes.get_by_request(job.request.request_id, 0)
+        execution = recipes.get_execution(recipe.recipe_id) if recipe else None
+        provider_request_id = str(execution.provider_request_id or "") if execution else ""
+        if not recipe or not provider_request_id:
+            return {"status": "unknown", "job_id": job.job_id,
+                    "message": "The accepted provider task could not be resolved safely."}
+        provider = self.engine.provider_registry.get(job.request.provider_id)
+        if provider is None:
+            return {"status": "unknown", "job_id": job.job_id, "message": "Generation provider unavailable."}
+        submission = ProviderSubmission(provider_request_id=provider_request_id,
+                                        raw_response={}, generation_recipe_id=str(recipe.recipe_id))
+        try:
+            polled = provider.poll_status_once(submission)
+        except Exception as error:
+            logging.getLogger("creator_os.photoshoot.provider_recovery").warning(
+                "provider_reconcile_deferred session_id=%s job_id=%s provider_request_id=%s error=%s",
+                session_id, job.job_id, provider_request_id, type(error).__name__,
+            )
+            return {"status": "provider_pending", "job_id": job.job_id,
+                    "provider_request_id": provider_request_id,
+                    "message": "Provider status is temporarily unavailable; reconciliation will retry."}
+        logging.getLogger("creator_os.photoshoot.provider_recovery").info(
+            "provider_reconcile session_id=%s job_id=%s provider_request_id=%s status=%s",
+            session_id, job.job_id, provider_request_id, polled.status,
+        )
+        if polled.status == GenerationStatus.RUNNING.value:
+            return {"status": "provider_pending", "job_id": job.job_id,
+                    "provider_request_id": provider_request_id}
+        if polled.status != GenerationStatus.SUCCEEDED.value:
+            provider.recipe_capture.terminal(recipe.recipe_id, polled.status,
+                                             error_message=polled.failure_reason)
+            return {"status": "provider_failed", "job_id": job.job_id,
+                    "message": polled.failure_reason or "Provider generation failed."}
+        result = provider.retrieve_result(job.request, submission, polled)
+        result = replace(result, job_id=job.job_id, request_id=job.request.request_id,
+                         provider_id=job.request.provider_id,
+                         generation_metadata={
+                             **dict(result.generation_metadata or {}),
+                             "generation_recipe_ids": (str(recipe.recipe_id),),
+                             "output_generation_recipe_ids": tuple(
+                                 str(recipe.recipe_id) for _ in result.output_references
+                             ),
+                         })
+        provider.recipe_capture.terminal(recipe.recipe_id, "succeeded")
+        completed_job = self.engine.complete_job(job.job_id, result)
+        records = self.library.sync_job(completed_job)
+        if not records:
+            records = tuple(
+                record for record in self.library.list_records()
+                if record.generation_job_id == job.job_id
+            )
+        for output_index, record in enumerate(records):
+            provider.recipe_capture.associate_output(
+                recipe.recipe_id, result_id=result.result_id, image_id=record.image_id,
+                output_index=output_index, output_reference=record.output_reference,
+            )
+        completed = self.synchronize_completed(session_id=session_id, job=completed_job, records=records)
+        return {"status": "succeeded", "job_id": completed_job.job_id,
+                "request_id": completed.request_id if completed else job.request.request_id,
+                "image_ids": [record.image_id for record in records],
+                "provider_request_id": provider_request_id}
+
+    def synchronize_completed(self, *, session_id: str, job, records, assess_continuity: bool = True) -> object | None:
+        records = self.resolve_completed_records(job, records)
         session = self.queue.get_session(session_id)
         marked = self.library.mark_photoshoot_session_records(
             (record.image_id for record in records), session_id=session_id, session_title=session.title,
@@ -103,6 +242,8 @@ class PhotoshootManualService:
         )
         if completed is None:
             return None
+        if not assess_continuity:
+            return completed
         self.queue.record_continuity_assessment(completed.request_id, {"status": "pending", "warning": False})
         try:
             from app.services.photoshoot_creative_director_service import PhotoshootCreativeDirectorWorkflowService
@@ -122,13 +263,39 @@ class PhotoshootManualService:
             self.queue.record_continuity_assessment(completed.request_id, {"status": "unavailable", "warning": False})
         return completed
 
+    def resolve_completed_records(self, job, records=()):
+        """Resolve an already-registered provider result during idempotent recovery."""
+        resolved = tuple(records or ())
+        if not resolved:
+            resolved = tuple(record for record in self.library.list_records()
+                             if record.generation_job_id == job.job_id)
+        if not resolved:
+            raise RuntimeError("Successful Photoshoot output is not registered in Generation Library.")
+        return resolved
+
     def status(self, *, creator_profile_id: int, session_id: str) -> dict:
         session = self.session_for_creator(session_id, creator_profile_id)
         requests = self.queue.requests_for_session(session_id)
-        current = next((item for item in reversed(requests) if item.status in {"queued", "generating", "awaiting_review"}), None)
+        current = next((item for item in reversed(requests) if item.status in {
+            "queued", "preparation_recovery_required", "generating", "finalization_required", "awaiting_review"
+        }), None)
         candidate = self._candidate_record(current) if current and current.status == "awaiting_review" else None
         failure = str(dict(current.metadata or {}).get("last_generation_failure") or "") if current else ""
-        return {"session": session, "request": current, "candidate": candidate, "failure": failure}
+        finalization_required = bool(current and (
+            current.status == "finalization_required"
+            or dict(current.metadata or {}).get("finalization_required")
+        ))
+        preparation_recovery_required = bool(current and (
+            current.status == "preparation_recovery_required"
+            or dict(current.metadata or {}).get("preparation_recovery_required")
+        ))
+        return {
+            "session": session, "request": current, "candidate": candidate, "failure": failure,
+            "finalization_required": finalization_required,
+            "finalization_error": str(dict(current.metadata or {}).get("finalization_error") or "") if current else "",
+            "preparation_recovery_required": preparation_recovery_required,
+            "preparation_error": str(dict(current.metadata or {}).get("preparation_error") or "") if current else "",
+        }
 
     def approve(self, *, creator_profile_id: int, session_id: str, request_id: str):
         session = self.session_for_creator(session_id, creator_profile_id)

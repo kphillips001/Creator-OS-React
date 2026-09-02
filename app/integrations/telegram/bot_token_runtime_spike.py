@@ -1,5 +1,6 @@
 """One-shot Telegram Bot Token runtime with plain-text outbound delivery."""
 
+import json
 import logging
 import os
 from collections.abc import Mapping
@@ -7,6 +8,9 @@ from typing import Any, Protocol
 
 import requests
 
+from app.integrations.telegram.business_connection_capture import (
+    BOT_API_ALLOWED_UPDATES,
+)
 from app.models.telegram_inbound import (
     TelegramInboundPayload,
     TelegramInboundResult,
@@ -67,7 +71,7 @@ class TelegramBotTokenUpdateSource:
         params: dict[str, Any] = {
             "timeout": self._timeout_seconds,
             "limit": 1,
-            "allowed_updates": '["message"]',
+            "allowed_updates": json.dumps(BOT_API_ALLOWED_UPDATES),
         }
         if self._offset is not None:
             params["offset"] = self._offset
@@ -180,6 +184,9 @@ class TelegramBotTokenRuntimeSpike:
                     "chat_id": payload.telegram_chat_id,
                     "correlation_id": result.correlation_id,
                     "engine_user_id": result.engine_user_id,
+                    "creator_profile_id": result.diagnostic_metadata.get("creator_profile_id"),
+                    "fanvue_account_id": result.diagnostic_metadata.get("fanvue_account_id"),
+                    "fanvue_user_id": result.diagnostic_metadata.get("fanvue_user_id"),
                     "fallback_message_text": result.response_text,
                     "raise_on_failure": True,
                     "text_sender": self._outbound_sender,

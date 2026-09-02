@@ -324,7 +324,9 @@ class TelegramBrainCompositionTests(unittest.TestCase):
 
         self.assertFalse(output.blocked)
         self.assertTrue(output.offer_authorized)
-        self.assertEqual(output.offer_link, FANVUE_LINK)
+        # Legacy DecisionEngine commerce may authorize conversation intent,
+        # but an ungrounded direct link is deliberately not executable.
+        self.assertIsNone(output.offer_link)
 
     def test_authoritative_wait_skips_legacy_commerce_side_effects(self):
         engine, memory = self.build_engine(

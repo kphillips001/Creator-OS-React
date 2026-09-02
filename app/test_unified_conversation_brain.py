@@ -125,8 +125,13 @@ def test_developer_and_telegram_paths_have_commerce_reply_parity(
     telegram = execute_telegram(Brain(), telegram_sales, message)
 
     assert developer.response_text == telegram.response_text
-    assert selected.title in developer.response_text
-    assert selected.delivery_url in developer.response_text
+    assert developer.response_text == ""
+    assert developer.blocked is telegram.blocked is True
+    assert developer.offer_authorized is telegram.offer_authorized is False
+    assert developer.error_code == telegram.error_code == (
+        "PAID_PRESENTATION_NOT_AN_OFFER"
+    )
+    assert selected.delivery_url not in developer.response_text
     for key in (
         "selected_provider", "commerce_lookup_attempted",
         "requested_media_type", "offering_id", "offering_type",
@@ -134,6 +139,14 @@ def test_developer_and_telegram_paths_have_commerce_reply_parity(
         "fulfillable", "recommendation_reason", "delivery_url",
     ):
         assert developer.diagnostic_metadata[key] == telegram.diagnostic_metadata[key]
+    assert developer.diagnostic_metadata["paid_presentation_validated"] is False
+    assert telegram.diagnostic_metadata["paid_presentation_validated"] is False
+    assert developer.diagnostic_metadata["presentation_copy_failure_reason"] == (
+        "PAID_PRESENTATION_NOT_AN_OFFER"
+    )
+    assert telegram.diagnostic_metadata["presentation_copy_failure_reason"] == (
+        "PAID_PRESENTATION_NOT_AN_OFFER"
+    )
     assert len(developer_sales.calls) == 1
     assert len(telegram_sales.calls) == 1
 

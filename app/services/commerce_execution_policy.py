@@ -29,6 +29,15 @@ def derive_commerce_execution_policy(
         CustomerSalesDecisionType.PRESENT_OFFER: (
             CommerceExecutionPolicy.PRESENTATION_ALLOWED
         ),
+        CustomerSalesDecisionType.PRESENT_ALTERNATIVE_OFFER: (
+            CommerceExecutionPolicy.PRESENTATION_ALLOWED
+        ),
+        CustomerSalesDecisionType.UPSELL: (
+            CommerceExecutionPolicy.PRESENTATION_ALLOWED
+        ),
+        CustomerSalesDecisionType.CROSS_SELL: (
+            CommerceExecutionPolicy.PRESENTATION_ALLOWED
+        ),
         CustomerSalesDecisionType.NUDGE_ACTIVE_OFFER: (
             CommerceExecutionPolicy.NUDGE_ALLOWED
         ),

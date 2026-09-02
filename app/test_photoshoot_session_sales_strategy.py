@@ -12,11 +12,12 @@ from app.services.photoshoot_session_sales_strategy_service import (
 
 
 class Strategies:
-    def __init__(self): self.rows = {}; self.saved = []
+    def __init__(self, authored_teaser_asset_id=None): self.rows = {}; self.saved = []; self.authored_teaser_asset_id = authored_teaser_asset_id
     def get(self, session_id, version): return self.rows.get((session_id, version))
     def latest(self, session_id):
         rows = [value for (candidate, _), value in self.rows.items() if candidate == session_id]
         return rows[-1] if rows else None
+    def completed_session_teaser_asset_id(self, _deliverable_id): return self.authored_teaser_asset_id
     def save(self, **values):
         model = SimpleNamespace(
             photoshoot_session_id=values["photoshoot_session_id"],
@@ -100,6 +101,37 @@ def test_completed_photoshoot_generates_complete_strategy_from_persisted_intelli
     assert calls[0]["ordered_shots"][1]["shot_intelligence"]["teaser_suitability"] == "high"
     assert calls[0]["cross_validation"]["teaser_asset_id"] == 20
     assert "image_reference" not in str(calls[0]) and "file_path" not in str(calls[0])
+
+
+def test_authored_session_teaser_can_lack_original_shot_intelligence_and_is_only_free_step():
+    photoshoots = Photoshoots()
+    photoshoots.members = lambda _session_id: (
+        {"asset_id": 40, "shot_order": 1}, {"asset_id": 10, "shot_order": 2},
+        {"asset_id": 20, "shot_order": 3}, {"asset_id": 30, "shot_order": 4},
+    )
+    result = strategy()
+    result["best_teaser_asset_id"] = 40
+    result["suggested_sales_progression"] = [40, 10, 20, 30]
+    result["recommended_stopping_points"] = [{"after_asset_id": 10, "goal": "Check engagement"}]
+    result["shots"] = [
+        {"asset_id": 40, "sales_position": 1, "sales_role": "FREE_TEASER",
+         "teaser_recommended": True, "access_recommendation": "FREE",
+         "recommended_progression": "Open the session", "suggested_next_asset_id": 10,
+         "customer_journey_purpose": "Entry", "escalation_role": "Set expectation",
+         "psychological_objective": "Build curiosity", "conversation_goal": "Gain engagement"},
+        *[{**item, "sales_position": index + 2, "shot_order": index + 2,
+           "access_recommendation": "PAID", "sales_role": item["sales_role"] if item["sales_role"] != "FREE_TEASER" else "ESCALATION"}
+          for index, item in enumerate(strategy()["shots"])],
+    ]
+    calls = []
+    generated = PhotoshootSessionSalesStrategyService(
+        repository=Strategies(authored_teaser_asset_id=40), photoshoots=photoshoots,
+        strategy_runner=lambda source: calls.append(source) or result,
+    ).generate("deliverable-1", creator_profile_id=7)
+
+    assert calls[0]["ordered_shots"][0]["shot_intelligence"]["purpose"] == "PHOTOSHOOT_SESSION_TEASER"
+    assert [shot.access_recommendation for shot in generated.shots].count("FREE") == 1
+    assert [shot.access_recommendation for shot in generated.shots].count("PAID") == 3
 
 
 def test_same_version_is_idempotent_and_new_version_generates_cleanly():

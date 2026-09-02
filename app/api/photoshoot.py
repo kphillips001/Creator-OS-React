@@ -119,6 +119,10 @@ class CandidateActionRequest(BaseModel):
     request_id: str
 
 
+class FinalizeCandidateRequest(CandidateActionRequest):
+    pass
+
+
 class RejectCandidateRequest(CandidateActionRequest):
     disposition: Literal["discard", "save_to_generation_library"] = "discard"
 
@@ -149,7 +153,7 @@ class CreativeDirectorInputRequest(CreativeDirectorSessionRequest):
     creative_mode: str
     creator_guidance: str = ""
     continuity_locks: ContinuitySettingsResponse
-    target_shot_count: TargetShotCount = 10
+    target_shot_count: TargetShotCount = 5
 
 
 class InspirationRequest(CreativeDirectorInputRequest):
@@ -165,7 +169,7 @@ class DirectShotRequest(CreativeDirectorSessionRequest):
     creative_mode: str
     operator_direction: str
     continuity_locks: ContinuitySettingsResponse
-    target_shot_count: TargetShotCount = 10
+    target_shot_count: TargetShotCount = 5
 
 
 class CreatorGuidanceRequest(CreativeDirectorSessionRequest):
@@ -175,11 +179,15 @@ class CreatorGuidanceRequest(CreativeDirectorSessionRequest):
 class PlanningModeRequest(CreativeDirectorSessionRequest):
     planning_mode: str = "frame_by_frame"
     plan_frame_count: int = 8
-    target_shot_count: TargetShotCount = 10
+    target_shot_count: TargetShotCount = 5
 
 
 class TargetShotCountRequest(CreativeDirectorSessionRequest):
-    target_shot_count: TargetShotCount = 10
+    target_shot_count: TargetShotCount = 5
+
+
+class ExtendPhotoshootRequest(CreativeDirectorSessionRequest):
+    expected_target_shot_count: TargetShotCount
 
 
 class SessionPlanRequest(CreativeDirectorInputRequest):
@@ -414,6 +422,23 @@ def creative_director_target_shot_count(request: TargetShotCountRequest):
         _creative_director_error(error)
 
 
+@router.post("/creative-director/extend")
+def creative_director_extend(request: ExtendPhotoshootRequest):
+    try:
+        creator_profile_id = _creator_profile_id_required()
+        _ensure_manual_generation_available(creator_profile_id, request.session_id)
+        if _active_manual_operation(creator_profile_id, request.session_id) is not None:
+            raise ValueError("Wait for the active Photoshoot generation before extending.")
+        service = PhotoshootCreativeDirectorWorkflowService()
+        return service.extend_photoshoot(
+            creator_profile_id=creator_profile_id,
+            session_id=request.session_id,
+            expected_target_shot_count=request.expected_target_shot_count,
+        )
+    except Exception as error:
+        _creative_director_error(error)
+
+
 @router.post("/creative-director/session-plan")
 def creative_director_session_plan(request: SessionPlanRequest):
     try:
@@ -527,6 +552,50 @@ def generate_manual_photoshoot(request: ManualGenerateRequest):
                     "request_id": metadata.get("requestId"),
                     "generation_job_id": metadata.get("generationJobId") or existing.result_reference,
                     "operation_id": str(existing.operation_id), "status": existing.status.lower()}
+        prior_state = service.status(creator_profile_id=creator_profile_id, session_id=request.session_id)
+        prior_request = prior_state.get("request")
+        if prior_request is not None and prior_state.get("failure") and prior_request.generation_job_id:
+            prior_job = service.engine.get_job(prior_request.generation_job_id)
+            recovered = service.reconcile_local_completion(
+                session_id=request.session_id, request_id=prior_request.request_id,
+            )
+            if recovered.get("status") != "succeeded":
+                recovered = service.reconcile_provider_task(session_id=request.session_id, job=prior_job)
+            operations = BackgroundOperationService()
+            prior_operation = next((item for item in operations.list(
+                creator_profile_id=creator_profile_id, account_id=_current_account_id(), status="recent",
+                workspace="photoshoot_studio",
+            ) if item.subject_id == request.session_id and item.operation_type == "photoshoot_generation"
+                and str(item.result_reference or "") == prior_job.job_id), None)
+            if recovered.get("status") == "succeeded":
+                if prior_operation:
+                    operations.succeed(
+                        prior_operation.operation_id, result_reference=prior_job.job_id,
+                        message="Provider completion recovered and ready for review.",
+                        metadata={"providerReconciled": True,
+                                  "providerRequestId": recovered.get("provider_request_id"),
+                                  "imageIds": recovered.get("image_ids", [])},
+                    )
+                return {"success": True, "session_id": request.session_id,
+                        "request_id": recovered.get("request_id"),
+                        "generation_job_id": prior_job.job_id,
+                        "operation_id": str(prior_operation.operation_id) if prior_operation else "",
+                        "status": "succeeded"}
+            if recovered.get("status") == "provider_pending":
+                if prior_operation:
+                    operations.repository.transition(
+                        prior_operation.operation_id, "WAITING_EXTERNAL", stage="WAITING_PROVIDER",
+                        message="Waiting on provider / still processing",
+                        metadata={"providerReconciled": True,
+                                  "providerRequestId": recovered.get("provider_request_id")},
+                    )
+                return {"success": True, "session_id": request.session_id,
+                        "request_id": prior_request.request_id,
+                        "generation_job_id": prior_job.job_id,
+                        "operation_id": str(prior_operation.operation_id) if prior_operation else "",
+                        "status": "waiting_external"}
+            if recovered.get("status") == "unknown":
+                raise ValueError(recovered.get("message") or "Existing provider task could not be reconciled safely.")
         _ensure_manual_generation_available(creator_profile_id, request.session_id)
         shot, job = service.create_manual_request(
             creator_profile_id=creator_profile_id, session_id=request.session_id,
@@ -566,10 +635,65 @@ def manual_photoshoot_status(session_id: str):
             "request_id": request.request_id, "status": request.status, "prompt": request.prompt_text,
             "provider_id": state["session"].provider_id, "generation_job_id": request.generation_job_id,
             "failure": state["failure"] or None,
+            "preparation_recovery_required": state["preparation_recovery_required"],
+            "preparation_error": state["preparation_error"] or None,
+            "finalization_required": state["finalization_required"],
+            "finalization_error": state["finalization_error"] or None,
         },
         "candidate": None if candidate is None else PhotoshootContextService._generation_payload(candidate),
         "continuity_assessment": dict((request.metadata or {}).get("continuity_assessment") or {}) if request else {},
     }
+
+
+@router.post("/candidate/retry-preparation", response_model=ManualGenerateResponse, status_code=202)
+def retry_candidate_preparation(request: CandidateActionRequest):
+    service = PhotoshootManualService()
+    creator_profile_id = _creator_profile_id_required()
+    try:
+        _ensure_manual_generation_available(creator_profile_id, request.session_id)
+        service.session_for_creator(request.session_id, creator_profile_id)
+        shot = service.queue.resume_prepared_request(request.request_id)
+        job = service.engine.get_job(shot.generation_job_id)
+        if job is None or job.status != "queued":
+            raise ValueError("The prepared generation job is not safely queued for submission.")
+        session = service.queue.get_session(request.session_id)
+        operation = _create_photoshoot_operation(
+            creator_profile_id=creator_profile_id, session=session, shot=shot, job=job,
+            request_payload={"prompt": shot.prompt_text, "recoveredPreparation": True},
+        )
+        return {"success": True, "session_id": request.session_id,
+                "request_id": shot.request_id, "generation_job_id": job.job_id,
+                "operation_id": str(operation.operation_id), "status": "queued"}
+    except Exception as error:
+        _manual_error(error)
+
+
+@router.post("/candidate/retry-finalization")
+def retry_candidate_finalization(request: FinalizeCandidateRequest):
+    service = PhotoshootManualService()
+    creator_profile_id = _creator_profile_id_required()
+    try:
+        service.session_for_creator(request.session_id, creator_profile_id)
+        result = service.reconcile_local_completion(
+            session_id=request.session_id, request_id=request.request_id,
+        )
+        if result.get("status") != "succeeded":
+            raise ValueError(result.get("message") or "Local finalization is not available.")
+        operation = next((item for item in BackgroundOperationService().list(
+            creator_profile_id=creator_profile_id, account_id=_current_account_id(), status="recent",
+            workspace="photoshoot_studio",
+        ) if item.subject_id == request.session_id and item.operation_type == "photoshoot_generation"
+            and str(item.result_reference or "") == str(result.get("job_id") or "")), None)
+        if operation is not None:
+            BackgroundOperationService().succeed(
+                operation.operation_id, result_reference=str(result["job_id"]),
+                message="Local Photoshoot finalization recovered; ready for review.",
+                metadata={"requestId": result["request_id"], "imageIds": result["image_ids"],
+                          "localFinalizationRecovered": True},
+            )
+        return {"success": True, **result}
+    except Exception as error:
+        _manual_error(error)
 
 
 @router.post("/candidate/approve")

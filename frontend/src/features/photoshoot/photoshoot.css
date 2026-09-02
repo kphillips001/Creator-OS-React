@@ -68,6 +68,7 @@
 .photoshoot-continuity-warning { margin-bottom: var(--space-3); padding: var(--space-3); border: 1px solid var(--color-warning-border); border-radius: var(--radius-sm); background: var(--color-warning-surface); color: var(--color-warning-text); font-size: .76rem; line-height: 1.45; }
 .photoshoot-target-complete { grid-column: 1 / -1; text-align: center; }
 .photoshoot-target-complete p { margin: var(--space-2) 0 0; color: var(--color-text-secondary); font-size: .78rem; }
+.photoshoot-target-complete__actions { display: flex; justify-content: center; gap: var(--space-3); margin-top: var(--space-4); flex-wrap: wrap; }
 .photoshoot-completion { display: grid; justify-items: start; gap: var(--space-3); text-align: left; }
 .photoshoot-completion strong { color: var(--color-accent); }
 .photoshoot-completion p { margin: 0; color: var(--color-text-secondary); }

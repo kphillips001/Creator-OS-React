@@ -26,14 +26,14 @@ Include variety:
 - casual couch shots
 - checking her phone
 - coffee at home
-- downtown Wilmington
+- coastal downtown
 - beach walks
 - lake days
 - country roads
 - porches
 - mountain weekends
 - brunch
-- bookstore visits
+- farmers market visits
 - workday mini skirt moments
 - classy evening outfits
 

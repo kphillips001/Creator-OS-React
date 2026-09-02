@@ -43,10 +43,15 @@ import { NotFoundPage } from "../../features/not-found/NotFoundPage";
 import { AdministrationPage } from "../../features/administration/AdministrationPage";
 import { ProviderConnectionsPage } from "../../features/administration/ProviderConnectionsPage";
 import { DeveloperNotesPage } from "../../features/developer-notes/DeveloperNotesPage";
+import { AiTrainingPage } from "../../features/ai-training/AiTrainingPage";
+import { AiTrainingControlsPage } from "../../features/ai-training-controls/AiTrainingControlsPage";
 import { VideoStudioPage } from "../../features/video-studio/VideoStudioPage";
 import { VideoGalleryPage } from "../../features/video-gallery/VideoGalleryPage";
 import { RegenerationStudioPage } from "../../features/regeneration-studio/RegenerationStudioPage";
 import { RegeneratedContentPage } from "../../features/regenerated-content/RegeneratedContentPage";
+import { BundleLibraryPage } from "../../features/bundle-library/BundleLibraryPage";
+import { XCompetitorIntelligencePage } from "../../features/x-competitor-intelligence/XCompetitorIntelligencePage";
+import { IgCompetitorIntelligencePage } from "../../features/ig-competitor-intelligence/IgCompetitorIntelligencePage";
 import { AppShell } from "../layout/AppShell";
 import { allNavigationItems } from "../navigation/navigation";
 
@@ -101,6 +106,10 @@ export const router = createBrowserRouter([
             item.path !== "/business/operations" &&
             item.path !== "/administration" &&
             item.path !== "/administration/developer-notes" &&
+            item.path !== "/tools/x-intelligence" &&
+            item.path !== "/tools/ig-intelligence" &&
+            item.path !== "/tools/ai-training" &&
+            item.path !== "/agents/ai-training" &&
             item.path !== "/agents/ava-coach",
         )
         .map((item) => ({
@@ -145,6 +154,10 @@ export const router = createBrowserRouter([
         element: <RegenerationStudioPage />,
       },
       {
+        path: "/studio/bundles",
+        element: <Navigate to="/library/generations" replace />,
+      },
+      {
         path: "/content/edit",
         element: <EditStudioPage />,
       },
@@ -170,7 +183,7 @@ export const router = createBrowserRouter([
       },
       {
         path: "/library/bundles",
-        element: <PlaceholderPage title="Bundle Library" description="Create and manage reusable content Bundles." />,
+        element: <BundleLibraryPage />,
       },
       {
         path: "/library/generations",
@@ -277,8 +290,33 @@ export const router = createBrowserRouter([
         element: <DeveloperNotesPage />,
       },
       {
+        path: "/agents/ai-training",
+        element: <AiTrainingControlsPage />,
+      },
+      {
+        path: "/tools/ai-training",
+        element: <AiTrainingPage />,
+      },
+      {
+        path: "/tools/x-scraper",
+        element: <Navigate to="/tools/x-intelligence" replace />,
+      },
+      {
+        path: "/tools/x-intelligence",
+        element: <XCompetitorIntelligencePage />,
+      },
+      {
+        path: "/tools/ig-intelligence",
+        element: <IgCompetitorIntelligencePage />,
+      },
+      {
         path: "/administration/:section",
-        element: <PlaceholderPage title="Administration" description="This administration capability is not available in React yet." />,
+        element: (
+          <PlaceholderPage
+            title="Administration"
+            description="This administration capability is not available in React yet."
+          />
+        ),
       },
       {
         path: "/system/archive",

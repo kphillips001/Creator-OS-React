@@ -1,5 +1,93 @@
 [
   {
+    "image_id": "generated_image_f33fc86107467e37e17cf520",
+    "generation_job_id": "generation_job_5d908880dd844c3b9f05bb0ab160069c",
+    "action": "approved",
+    "output_reference": "D:\\Ava_CMS\\Content\\Generation\\Active\\generated_image_f33fc86107467e37e17cf520.png",
+    "original_output_reference": "https://d2h7xmz5gqybh9.cloudfront.net/output/c957feaa-9f44-4ffb-87d4-92d05dbe5071.png",
+    "reviewed_at": "2026-08-31T02:18:46.244748"
+  },
+  {
+    "image_id": "generated_image_088e286bcd0ac99959b357ea",
+    "generation_job_id": "generation_job_f753dde961c043fca1938be7c7545e4c",
+    "action": "approved",
+    "output_reference": "D:\\Ava_CMS\\Content\\Generation\\Active\\generated_image_088e286bcd0ac99959b357ea.png",
+    "original_output_reference": "https://d2h7xmz5gqybh9.cloudfront.net/output/73439f85-c296-4770-8714-4c23142233fe.png",
+    "reviewed_at": "2026-08-30T21:46:28.778520"
+  },
+  {
+    "image_id": "generated_image_1853c35b6760aca9a55061d1",
+    "generation_job_id": "generation_job_dfb98dcee7064d4f9c3aa9654b3e2bfb",
+    "action": "approved",
+    "output_reference": "D:\\Ava_CMS\\Content\\Generation\\Active\\generated_image_1853c35b6760aca9a55061d1.png",
+    "original_output_reference": "https://d2h7xmz5gqybh9.cloudfront.net/output/8aed0b75-b8ef-4f02-89f9-23a51f2b985b.png",
+    "reviewed_at": "2026-08-30T21:42:07.427781"
+  },
+  {
+    "image_id": "generated_image_39c908cd2105a32d8b9e8229",
+    "generation_job_id": "generation_job_e74afd9bdcc94246bf6e607de53dabcd",
+    "action": "discarded",
+    "output_reference": "D:\\Ava_CMS\\Content\\Generation\\Active\\generated_image_39c908cd2105a32d8b9e8229.png",
+    "original_output_reference": "https://d2h7xmz5gqybh9.cloudfront.net/output/cdcd4a20-a232-4f60-9de3-8c6354c4a27d.png",
+    "reviewed_at": "2026-08-30T21:37:35.625570"
+  },
+  {
+    "image_id": "generated_image_820bacd0568638707fd16816",
+    "generation_job_id": "generation_job_534a8859b5264b9d8458032c9ecffa00",
+    "action": "approved",
+    "output_reference": "D:\\Ava_CMS\\Content\\Generation\\Active\\generated_image_820bacd0568638707fd16816.png",
+    "original_output_reference": "https://d2h7xmz5gqybh9.cloudfront.net/output/3bf2038d-60b0-4c15-ae30-16c8bdbb1ab1.png",
+    "reviewed_at": "2026-08-30T21:37:32.341764"
+  },
+  {
+    "image_id": "generated_image_74401b1628a1fdd0412eb78c",
+    "generation_job_id": "generation_job_9f0f11f83afc4f69b61226eeb38d032c",
+    "action": "discarded",
+    "output_reference": "D:\\Ava_CMS\\Content\\Generation\\Active\\generated_image_74401b1628a1fdd0412eb78c.png",
+    "original_output_reference": "https://d2h7xmz5gqybh9.cloudfront.net/output/3f4684ca-f573-4a57-8e06-449fb23d07f3.png",
+    "reviewed_at": "2026-08-30T21:33:04.222962"
+  },
+  {
+    "image_id": "generated_image_39962993a56aae5712751d7c",
+    "generation_job_id": "generation_job_ed17628be9d243fb8bfa6b5348be7be2",
+    "action": "approved",
+    "output_reference": "D:\\Ava_CMS\\Content\\Generation\\Active\\generated_image_39962993a56aae5712751d7c.png",
+    "original_output_reference": "https://d2h7xmz5gqybh9.cloudfront.net/output/72fd703f-829c-4767-a337-17b460ba29e9.png",
+    "reviewed_at": "2026-08-30T21:32:59.314247"
+  },
+  {
+    "image_id": "generated_image_3a5436c5983f70152119a6ae",
+    "generation_job_id": "generation_job_b3ff4ec33e504de7a88a5f8449b7881a",
+    "action": "approved",
+    "output_reference": "D:\\Ava_CMS\\Content\\Generation\\Active\\generated_image_3a5436c5983f70152119a6ae.png",
+    "original_output_reference": "https://d2h7xmz5gqybh9.cloudfront.net/output/9124db9d-c66d-466a-be51-7f4306bc5a28.png",
+    "reviewed_at": "2026-08-30T21:28:14.345068"
+  },
+  {
+    "image_id": "generated_image_1f60c77b83589ace0993a316",
+    "generation_job_id": "generation_job_48b65107ce69463b9eafe4ad7afab3ac",
+    "action": "approved",
+    "output_reference": "D:\\Ava_CMS\\Content\\Generation\\Active\\generated_image_1f60c77b83589ace0993a316.png",
+    "original_output_reference": "https://d2h7xmz5gqybh9.cloudfront.net/output/bd6ee057-662f-4052-a951-fdec5ad88a15.png",
+    "reviewed_at": "2026-08-30T21:23:09.232988"
+  },
+  {
+    "image_id": "generated_image_c9c37bd52a0a6c15068ee5b0",
+    "generation_job_id": "generation_job_b1cf5ad06fb54d1780a8e561f69f42fc",
+    "action": "discarded",
+    "output_reference": "D:\\Ava_CMS\\Content\\Generation\\Active\\generated_image_c9c37bd52a0a6c15068ee5b0.png",
+    "original_output_reference": "https://d2h7xmz5gqybh9.cloudfront.net/output/2502d125-c347-4640-9164-3f3a17a9c0ab.png",
+    "reviewed_at": "2026-08-21T21:58:30.508106"
+  },
+  {
+    "image_id": "generated_image_7390831459b6b8f657a76f6b",
+    "generation_job_id": "generation_job_ec95c7139d8942d4a15e0c1084f35254",
+    "action": "discarded",
+    "output_reference": "D:\\Ava_CMS\\Content\\Generation\\Active\\generated_image_7390831459b6b8f657a76f6b.png",
+    "original_output_reference": "https://d2h7xmz5gqybh9.cloudfront.net/output/049bc4ba-8b7c-4697-a03c-cdaaa6e655b1.png",
+    "reviewed_at": "2026-08-21T21:56:12.287646"
+  },
+  {
     "image_id": "generated_image_99f06a5acb9419bdf76fbd5d",
     "generation_job_id": "generation_job_e39da526b3df4700b307f8be13285196",
     "action": "approved",

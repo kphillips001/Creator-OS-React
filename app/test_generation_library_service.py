@@ -6,6 +6,7 @@ import hashlib
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import Mock
 
 if "streamlit" not in sys.modules:
     streamlit = types.ModuleType("streamlit")
@@ -263,6 +264,43 @@ class GenerationLibraryServiceTests(unittest.TestCase):
         }
         self.assertIn("https://cdn.test/generated-1.png", original_references)
 
+    def test_posting_stage_is_durable_ordered_and_idempotent(self):
+        service = self.make_service()
+        root = service.archive_service.content_paths()["generation_active"]
+        first_path, second_path = root / "first.png", root / "second.png"
+        first_path.parent.mkdir(parents=True, exist_ok=True)
+        first_path.write_bytes(b"first")
+        second_path.write_bytes(b"second")
+        first = self.version_record("first", first_path, 1, "provider", "First")
+        second = self.version_record("second", second_path, 2, "provider", "Second")
+        service._write_records([first, second])
+
+        staged = service.set_posting_stage("first", staged=True)
+        repeated = service.set_posting_stage("first", staged=True)
+
+        self.assertTrue(staged.is_staged)
+        self.assertIsNotNone(staged.staged_at)
+        self.assertEqual(repeated.staged_at, staged.staged_at)
+        self.assertEqual(service.get("first").staged_at, staged.staged_at)
+        self.assertEqual(service.browse().records[0].image_id, "first")
+        unstaged = service.set_posting_stage("first", staged=False)
+        self.assertFalse(unstaged.is_staged)
+        self.assertIsNone(unstaged.staged_at)
+
+    def test_posting_stage_is_cleared_when_record_leaves_active_library(self):
+        service = self.make_service()
+        path = service.archive_service.content_paths()["generation_active"] / "staged.png"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"image")
+        service._write_records([self.version_record("staged", path, 1, "provider", "Prompt")])
+        staged = service.set_posting_stage("staged", staged=True)
+
+        service._upsert_records((replace(staged, status="pending_edit"),))
+
+        moved = service.get("staged")
+        self.assertFalse(moved.is_staged)
+        self.assertIsNone(moved.staged_at)
+
     def test_search_filtering_and_sorting(self):
         service = self.make_service()
         service.sync_job(successful_job(job_id="social_job", provider_id="seedream_4_5"))
@@ -497,6 +535,41 @@ class GenerationLibraryServiceTests(unittest.TestCase):
         self.assertTrue(Path(archive_record.current_file_path).exists())
         self.assertEqual(archive_record.provider_id, "seedream_4_5")
         self.assertEqual(archive_record.prompt_text, record.prompt_text)
+
+    def test_successful_publish_consumes_posting_stage_before_archiving(self):
+        service = self.make_service()
+        record = service.sync_job(successful_job())[0]
+        staged = service.set_posting_stage(record.image_id, staged=True)
+
+        action = service.mark_published(
+            staged.image_id, platform="x", caption="Posted caption",
+        )
+
+        self.assertTrue(action.success)
+        with self.assertRaises(KeyError):
+            service.get(staged.image_id)
+        archived = service.archive_service.list_records(archive_type="published_x")[0]
+        self.assertFalse(archived.generation_record["is_staged"])
+        self.assertIsNone(archived.generation_record["staged_at"])
+        self.assertEqual(archived.caption, "Posted caption")
+        self.assertEqual(archived.archive_type, "published_x")
+
+    def test_failed_archive_transition_preserves_posting_stage(self):
+        service = self.make_service()
+        record = service.sync_job(successful_job())[0]
+        staged = service.set_posting_stage(record.image_id, staged=True)
+        service.archive_service.archive_published = Mock(
+            side_effect=RuntimeError("archive unavailable")
+        )
+
+        action = service.mark_published(
+            staged.image_id, platform="x", caption="Caption",
+        )
+
+        self.assertFalse(action.success)
+        retained = service.get(staged.image_id)
+        self.assertTrue(retained.is_staged)
+        self.assertEqual(retained.staged_at, staged.staged_at)
 
     def test_configurable_content_root_moves_local_file(self):
         service = self.make_service()
@@ -751,7 +824,7 @@ class GenerationLibraryServiceTests(unittest.TestCase):
             "def _render_archive_page",
             1,
         )[0]
-        gallery_source = source.split("page_size = 18", 1)[1].split(
+        gallery_source = source.split("page_size = GENERATION_LIBRARY_PAGE_SIZE", 1)[1].split(
             "def _render_archive_page",
             1,
         )[0]
@@ -766,7 +839,7 @@ class GenerationLibraryServiceTests(unittest.TestCase):
         self.assertIn("Permanent Delete", source)
         self.assertIn("Preview", source)
         self.assertNotIn("Preview", generation_library_source)
-        self.assertIn("page_size = 18", generation_library_source)
+        self.assertIn("page_size = GENERATION_LIBRARY_PAGE_SIZE", generation_library_source)
         self.assertIn("generation_library_pagination_top", generation_library_source)
         self.assertIn("generation_library_pagination_bottom", generation_library_source)
         self.assertIn("◀ Previous", source)

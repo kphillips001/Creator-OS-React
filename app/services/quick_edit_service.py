@@ -68,14 +68,14 @@ class QuickEditService:
             },
             created_at=now, updated_at=now,
         )
-        original_records = list(self.library.list_records())
+        original_source = source
         try:
             returned = self.library.return_pending_edit_to_library(source.image_id)
             if not returned.success:
                 raise RuntimeError("Original image could not be returned to Generation Library.")
-            self.library._write_records([derived, *self.library.list_records()])
+            self.library._upsert_records((derived,))
         except Exception:
-            self.library._write_records(original_records)
+            self.library._upsert_records((original_source,))
             destination.unlink(missing_ok=True)
             raise
         return derived

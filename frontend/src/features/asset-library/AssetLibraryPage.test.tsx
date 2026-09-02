@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AssetLibraryPage } from "./AssetLibraryPage";
 import { StandaloneSalePreparationDialog } from "./StandaloneSalePreparationDialog";
-import type { ContentVaultCaptionDraft } from "./types";
+import type { AssetLibraryItem, ContentVaultCaptionDraft } from "./types";
 
 const stylesheetText = readFileSync(resolve("src/features/asset-library/asset-library.css"), "utf8");
 const sharedStylesheetText = readFileSync(resolve("src/shared/ui/shared-ui.css"), "utf8");
@@ -34,14 +34,37 @@ const response = (body: unknown, ok = true) => Promise.resolve(new Response(
   { status: ok ? 200 : 500, headers: { "Content-Type": "application/json" } },
 ));
 
-beforeEach(() => window.history.replaceState({}, "", "/library/assets"));
+beforeEach(() => {
+  window.history.replaceState({}, "", "/library/assets");
+  window.sessionStorage.removeItem("creator-os.asset-library.moved-asset-id");
+});
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
 
-async function openAssetType(name: "Images" | "Photoshoots" | "Videos") {
+async function openAssetType(name: "Images" | "Photoshoots" | "Videos" | "Teasers") {
   fireEvent.click(await screen.findByRole("button", { name: new RegExp(`^${name}`) }));
 }
 
 describe("AssetLibraryPage", () => {
+  it("consumes a moved Asset handoff and opens the existing inspector even when the Asset is not on page one", async () => {
+    const movedAsset = { ...asset, libraryItemId: "asset:77", assetId: 77, displayName: "Newly Moved Portrait", fileName: "moved.png" };
+    window.history.replaceState({}, "", "/library/assets?assetType=images");
+    window.sessionStorage.setItem("creator-os.asset-library.moved-asset-id", "77");
+    const fetch = vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
+      const url = String(input);
+      if (url === "/api/v1/assets/counts") return response({ images: 2, photoshoots: 0, videos: 0 });
+      if (url === "/api/v1/assets/77") return response(movedAsset);
+      if (url.startsWith("/api/v1/assets?")) return response({ assets: [{ ...asset, displayName: "First Page Portrait" }], total: 2, page: 1, pageSize: 18, totalPages: 1, classifications: [] });
+      return response({ detail: "Unexpected request" }, false);
+    });
+
+    render(<AssetLibraryPage />);
+
+    expect(await screen.findByRole("heading", { name: "Newly Moved Portrait" })).toBeInTheDocument();
+    expect(screen.getByText("Asset #77")).toBeInTheDocument();
+    expect(fetch).toHaveBeenCalledWith("/api/v1/assets/77", expect.objectContaining({ cache: "no-store" }));
+    expect(window.sessionStorage.getItem("creator-os.asset-library.moved-asset-id")).toBeNull();
+  });
+
   it("keeps independent Chat and Wall selective drafts valid while switching destinations", () => {
     const teaser = (distributionUse: "CHAT" | "CONTENT_VAULT") => ({
       id: distributionUse, distributionUse, teaserStyle: "SELECTIVE_BLUR" as const,
@@ -78,14 +101,92 @@ describe("AssetLibraryPage", () => {
     }));
     render(<StandaloneSalePreparationDialog asset={{ ...asset, classification: "SINGLE_IMAGE", displayName: "Wall Draft" }} onClose={vi.fn()} onStarted={onStarted} />);
     const dialog = screen.getByRole("dialog", { name: "Prepare for Sale" });
+    expect(within(dialog).getByRole("spinbutton", { name: "Price" })).toHaveValue(9.99);
     fireEvent.click(within(dialog).getByLabelText("Ava's Content Vault"));
     expect(within(dialog).getByLabelText("Full Blur")).toBeChecked();
     expect(within(dialog).getByRole("button", { name: "Prepare for Sale" })).toBeEnabled();
     fireEvent.click(within(dialog).getByRole("button", { name: "Prepare for Sale" }));
     await waitFor(() => expect(onStarted).toHaveBeenCalled());
     expect(fetch).toHaveBeenCalledWith("/api/v1/assets/42/sale-preparation", expect.objectContaining({
-      body: JSON.stringify({ priceMinor: 1000, destinations: ["CONTENT_VAULT"], teaserStyle: "FULL_BLUR" }),
+      body: JSON.stringify({ priceMinor: 999, destinations: ["CONTENT_VAULT"], teaserStyle: "FULL_BLUR" }),
     }));
+  });
+
+  it("reassigns a prepared Single Image through the canonical destination endpoint", async () => {
+    const onStarted = vi.fn();
+    const preparedAsset = { ...asset, classification: "SINGLE_IMAGE", displayName: "Chat Image", standaloneSalePreparation: {
+      assetId: 42, status: "READY" as const, statusLabel: "Ready", intelligenceReady: true,
+      blurredTeaserReady: false,
+      destinations: ["CHAT" as const], teaserStyle: "SELECTIVE_BLUR" as const,
+      foundationReady: true, chatReady: true, vaultReady: false, teasers: [], priceMinor: 1099,
+    } };
+    const fetch = vi.spyOn(globalThis, "fetch").mockImplementation(() => response({
+      ...preparedAsset.standaloneSalePreparation, destinations: ["CONTENT_VAULT"],
+      teaserStyle: "FULL_BLUR", vaultReady: true,
+    }));
+    render(<StandaloneSalePreparationDialog asset={preparedAsset} reassign onClose={vi.fn()} onStarted={onStarted} />);
+
+    const dialog = screen.getByRole("dialog", { name: "Reassign Sales Destination" });
+    expect(within(dialog).getByText(/Current Destination:/)).toHaveTextContent("Chat");
+    expect(within(dialog).getByLabelText("Ava's Content Vault")).toBeChecked();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Reassign" }));
+
+    await waitFor(() => expect(onStarted).toHaveBeenCalled());
+    expect(fetch).toHaveBeenCalledWith("/api/v1/assets/42/sale-destination", expect.objectContaining({
+      method: "PUT",
+      body: JSON.stringify({ priceMinor: 1099, destination: "CONTENT_VAULT", teaserStyle: "FULL_BLUR" }),
+    }));
+  });
+
+  it("enables Wall to Chat reassignment when an accepted Chat teaser already exists", () => {
+    const chatTeaser = { id: "chat-ready", distributionUse: "CHAT" as const, teaserStyle: "SELECTIVE_BLUR" as const,
+      status: "READY" as const, derivedAssetId: 90, previewUrl: "/chat.png" };
+    const preparedAsset = { ...asset, classification: "SINGLE_IMAGE", standaloneSalePreparation: {
+      assetId: 42, status: "READY" as const, statusLabel: "Ready", intelligenceReady: true,
+      blurredTeaserReady: true, destinations: ["CONTENT_VAULT" as const], teaserStyle: "SELECTIVE_BLUR" as const,
+      foundationReady: true, chatReady: true, vaultReady: true, teasers: [chatTeaser], priceMinor: 999,
+    } };
+    render(<StandaloneSalePreparationDialog asset={preparedAsset} reassign onClose={vi.fn()} onStarted={vi.fn()} />);
+
+    expect(screen.getByLabelText("Chat Selling")).toBeChecked();
+    expect(screen.getByRole("button", { name: "Reassign" })).toBeEnabled();
+    expect(screen.getByText("Teaser Ready")).toBeInTheDocument();
+  });
+
+  it("explains and exposes the missing Chat teaser prerequisite without accepting the Wall teaser", () => {
+    const wallTeaser = { id: "wall-ready", distributionUse: "CONTENT_VAULT" as const, teaserStyle: "SELECTIVE_BLUR" as const,
+      status: "READY" as const, derivedAssetId: 91, previewUrl: "/wall.png" };
+    const preparedAsset = { ...asset, classification: "SINGLE_IMAGE", standaloneSalePreparation: {
+      assetId: 42, status: "READY" as const, statusLabel: "Ready", intelligenceReady: true,
+      blurredTeaserReady: true, destinations: ["CONTENT_VAULT" as const], teaserStyle: "SELECTIVE_BLUR" as const,
+      foundationReady: true, chatReady: false, vaultReady: true, teasers: [wallTeaser], priceMinor: 999,
+    } };
+    render(<StandaloneSalePreparationDialog asset={preparedAsset} reassign onClose={vi.fn()} onStarted={vi.fn()} />);
+
+    expect(screen.getByRole("button", { name: "Reassign" })).toBeDisabled();
+    expect(screen.getByText("Create, save, and accept a Chat teaser before reassigning.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Create Selective Teaser" }));
+    expect(screen.getByRole("dialog", { name: "Selective Blur Editor" })).toBeInTheDocument();
+    expect(stylesheetText).toMatch(/scroll-padding-block-end:\s*96px/);
+  });
+
+  it("exposes the compact destination reassignment action on prepared Image cards", async () => {
+    const preparedAsset = { ...asset, classification: "SINGLE_IMAGE", displayName: "Wall Single", standaloneSalePreparation: {
+      assetId: 42, status: "READY" as const, statusLabel: "Ready", intelligenceReady: true,
+      blurredTeaserReady: true, destinations: ["CONTENT_VAULT" as const], teaserStyle: "FULL_BLUR" as const,
+      foundationReady: true, chatReady: false, vaultReady: true, teasers: [], priceMinor: 1099,
+    } };
+    vi.spyOn(globalThis, "fetch").mockImplementation(() => response({
+      assets: [preparedAsset], total: 1, page: 1, pageSize: 18, totalPages: 1, classifications: ["SINGLE_IMAGE"],
+    }));
+    render(<AssetLibraryPage />);
+    await openAssetType("Images");
+
+    const card = (await screen.findByText("Wall Single")).closest("article")!;
+    fireEvent.click(within(card).getByRole("button", { name: "Reassign sales destination" }));
+
+    expect(screen.getByRole("dialog", { name: "Reassign Sales Destination" })).toBeInTheDocument();
+    expect(screen.getByText(/Current Destination:/)).toHaveTextContent("TG Wall");
   });
   it("returns a registered Single Image and refreshes it out of Asset Library", async () => {
     const registered = { ...asset, generationId: "generated-1", classification: "SINGLE_IMAGE" };
@@ -198,7 +299,7 @@ describe("AssetLibraryPage", () => {
 
   it("prepares a registered image for sale from the card", async () => {
     const prepared = { assetId: 42, status: "PREPARING", statusLabel: "Preparing...", intelligenceReady: true, blurredTeaserReady: true };
-    const fetch = vi.spyOn(globalThis, "fetch").mockImplementation((input, options) => {
+    vi.spyOn(globalThis, "fetch").mockImplementation((input, options) => {
       if (String(input) === "/api/v1/assets/42/sale-preparation" && options?.method === "POST") return response(prepared);
       return response({ assets: [{ ...asset, displayName: "Sunlit Kitchen Reveal", intelligenceStatus: "READY", standaloneSalePreparation: { ...prepared, status: "NOT_PREPARED", statusLabel: "Prepare for Sale", blurredTeaserReady: false } }], total: 1, page: 1, pageSize: 18, totalPages: 1, classifications: [] });
     });
@@ -300,7 +401,7 @@ describe("AssetLibraryPage", () => {
       vaultReady: destination === "CONTENT_VAULT", teasers: [], priceMinor, currency,
     });
     const assets = [
-      { ...asset, classification: "SINGLE_IMAGE", displayName: "Wall Image", standaloneSalePreparation: prepared("CONTENT_VAULT", 1799, "USD") },
+      { ...asset, classification: "SINGLE_IMAGE", displayName: "Wall Image", standaloneSalePreparation: prepared("CONTENT_VAULT", 1099, "USD") },
       { ...asset, assetId: 43, libraryItemId: "asset:43", classification: "SINGLE_IMAGE", displayName: "Chat Image", standaloneSalePreparation: prepared("CHAT", 799, "GBP") },
       { ...asset, assetId: 44, libraryItemId: "asset:44", classification: "SINGLE_IMAGE", displayName: "Unprepared Image", standaloneSalePreparation: { ...prepared("CHAT", 0, "USD"), status: "NOT_PREPARED", destinations: [] } },
       { ...asset, assetId: 45, libraryItemId: "asset:45", mediaType: "video", classification: "VIDEO", displayName: "Video Asset", standaloneSalePreparation: prepared("CHAT", 2500, "USD") },
@@ -311,9 +412,9 @@ describe("AssetLibraryPage", () => {
     await screen.findByText("Wall Image");
     const wallRows = within(card("Wall Image")).getAllByRole("term").map((node) => node.textContent);
     expect(wallRows).toEqual(["Type", "Intelligence", "Registered", "Price"]);
-    expect(within(card("Wall Image")).getByText("$17.99")).toBeInTheDocument();
+    expect(within(card("Wall Image")).getByText("$10.99")).toBeInTheDocument();
     expect(within(card("Chat Image")).getByText("£7.99")).toBeInTheDocument();
-    expect(within(card("Unprepared Image")).queryByText("Price")).not.toBeInTheDocument();
+    expect(within(card("Unprepared Image")).getByText("Not Priced")).toBeInTheDocument();
     expect(within(card("Unprepared Image")).queryByText("$0.00")).not.toBeInTheDocument();
     expect(within(card("Video Asset")).queryByText("Price")).not.toBeInTheDocument();
   });
@@ -424,6 +525,46 @@ describe("AssetLibraryPage", () => {
     expect(screen.getByRole("button", { name: "Edit Sale Preparation" })).toBeEnabled();
   });
 
+  it("reconciles the selected inspector as soon as a failed retry is accepted", async () => {
+    const failed = {
+      assetId: 42, status: "NEEDS_ATTENTION", statusLabel: "Needs Attention",
+      intelligenceReady: true, blurredTeaserReady: true,
+      destinations: ["CONTENT_VAULT"], teaserStyle: "FULL_BLUR",
+      priceMinor: 1399, currency: "USD", foundationReady: false,
+      error: "Fanvue request failed with HTTP 503.", teasers: [],
+    };
+    const preparing = {
+      ...failed, status: "PREPARING", statusLabel: "Preparing...",
+      error: null,
+    };
+    const item = {
+      ...asset, classification: "SINGLE_IMAGE", displayName: "Kitchen Seductive Glance",
+      standaloneSalePreparation: failed,
+    };
+    vi.spyOn(globalThis, "fetch").mockImplementation((input, options) => {
+      const url = String(input);
+      if (url === "/api/v1/assets/42") return response(item);
+      if (url === "/api/v1/assets/42/sale-preparation/retry" && options?.method === "POST") {
+        return response(preparing);
+      }
+      return response({ assets: [item], total: 1, page: 1, pageSize: 18,
+        totalPages: 1, classifications: ["SINGLE_IMAGE"] });
+    });
+    window.history.replaceState({}, "", "/library/assets?assetType=images");
+    render(<AssetLibraryPage />);
+    const card = (await screen.findByText("Kitchen Seductive Glance")).closest("article")!;
+    fireEvent.click(within(card).getByRole("button", { name: "Open Image" }));
+    const inspector = await screen.findByLabelText("Selected asset details");
+    expect(within(inspector).getByText("Fanvue request failed with HTTP 503.")).toBeInTheDocument();
+    fireEvent.click(within(inspector).getByRole("button", { name: "Retry Sale Preparation" }));
+    const dialog = await screen.findByRole("dialog", { name: "Retry Preparation" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Retry Preparation" }));
+
+    await waitFor(() => expect(within(inspector).getAllByText("Preparing")).toHaveLength(2));
+    expect(within(inspector).queryByText("Fanvue request failed with HTTP 503.")).not.toBeInTheDocument();
+    expect(within(inspector).queryByRole("button", { name: "Retry Sale Preparation" })).not.toBeInTheDocument();
+  });
+
   it("quietly polls only preparation state and keeps the PREPARING card mounted", async () => {
     let inspectionCount = 0;
     const fetch = vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
@@ -439,58 +580,69 @@ describe("AssetLibraryPage", () => {
     const title = await screen.findByText("Sunlit Kitchen Reveal");
     const card = title.closest("article");
     const gridRequestsBefore = fetch.mock.calls.filter(([input]) => String(input).startsWith("/api/v1/assets?")).length;
-    expect(within(card!).queryByText("Price")).not.toBeInTheDocument();
+    expect(within(card!).getByText("Price")).toBeInTheDocument();
 
     await waitFor(() => expect(screen.getByText("Ready")).toBeInTheDocument(), { timeout: 5500 });
 
     expect(screen.getByText("Sunlit Kitchen Reveal").closest("article")).toBe(card);
     expect(screen.queryByText("Loading assets...")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Selling and publishing destinations")).toHaveTextContent("Chat");
-    expect(within(card!).getByText("Price")).toBeInTheDocument();
     expect(within(card!).getByText("$14.99")).toBeInTheDocument();
     expect(inspectionCount).toBe(1);
     expect(fetch.mock.calls.filter(([input]) => String(input).startsWith("/api/v1/assets?")).length).toBe(gridRequestsBefore);
   }, 7000);
 
   it("keeps Photoshoot preparation in the viewer rather than the grid card", async () => {
+    let prepared = false;
     const photoshoot = { ...asset, libraryItemId: "photoshoot:set-1", itemKind: "photoshoot" as const, assetId: null, deliverableId: "set-1", generationId: null, fileName: "Sunlit Serenity", mediaType: "photoshoot", classification: null, status: "IN_ASSET_LIBRARY", shotCount: 6, sellingMode: "SESSION", bundleSalesChannel: null };
     const fetch = vi.spyOn(globalThis, "fetch").mockImplementation((input, options) => {
       if (String(input) === "/api/v1/photoshoot-gallery/set-1") return response({
         deliverableId: "set-1", name: "Sunlit Serenity", description: null,
         completedAt: "2026-01-02T00:00:00Z", shotCount: 6, imageUrl: "/cover",
-        registrationState: "IN_ASSET_LIBRARY", intelligence: {}, technical: {},
+        registrationState: "IN_ASSET_LIBRARY", sellingMode: "SESSION",
+        intelligence: {}, productionIntelligence: {}, technical: {},
+        sessionTeaser: { eligible: true, reason: null, sourceAssetId: 1, hasSessionTeaser: false },
         members: Array.from({ length: 6 }, (_, index) => ({ assetId: index + 1, shotOrder: index + 1, imageUrl: `/shot-${index + 1}` })),
       });
-      if (String(input).endsWith("/assets/photoshoots/set-1/sale-preparation")) return response({
+      if (String(input).endsWith("/assets/photoshoots/set-1/sale-preparation")) {
+        if (options?.method === "POST") prepared = true;
+        return response({
         deliverableId: "set-1", photoshootSessionId: "session-1", strategyVersion: "v1",
-        status: options?.method === "POST" ? "READY" : "NOT_PREPARED",
-        statusLabel: options?.method === "POST" ? "Ready for Session Selling" : "Not Prepared", paidStepCount: 1,
-        readyPaidStepCount: options?.method === "POST" ? 1 : 0, teaserReady: true, steps: [
+        status: prepared ? "READY" : "NOT_PREPARED",
+        statusLabel: prepared ? "Ready for Session Selling" : "Not Prepared", paidStepCount: 1,
+        readyPaidStepCount: prepared ? 1 : 0, teaserReady: true, steps: [
           { assetId: 1, shotOrder: 1, position: 1, role: "FREE_TEASER", access: "FREE", ready: true },
           { assetId: 2, shotOrder: 2, position: 2, role: "FIRST_UNLOCK", access: "PAID",
-            ready: options?.method === "POST", priceMinor: options?.method === "POST" ? 500 : null },
+            ready: prepared, priceMinor: prepared ? 500 : null },
         ],
-      });
+        });
+      }
       if (String(input).endsWith("/commercial-offerings/photoshoots/set-1/prepare")) return response({
         deliverableId: "set-1", title: "Sunlit Serenity", description: "A complete set.",
         heroAssetId: 2, coverAssetId: 3, supportedChannels: ["AI_CHAT", "TELEGRAM_WALL"],
         members: Array.from({ length: 6 }, (_, index) => ({ assetId: index + 1, shotOrder: index + 1, imageUrl: `/shot-${index + 1}` })),
       });
-      return response({ assets: [photoshoot], total: 1, page: 1, pageSize: 18, totalPages: 1, classifications: [] });
+      return response({ assets: [{ ...photoshoot,
+        sessionSelling: prepared ? { status: "READY", statusLabel: "Ready" } : undefined,
+        commercialPrice: prepared ? { status: "PRICED", amountMinor: 500, currency: "USD", kind: "SESSION_TOTAL" } : undefined,
+      }], total: 1, page: 1, pageSize: 18, totalPages: 1, classifications: [] });
     });
     render(<AssetLibraryPage />);
     await openAssetType("Photoshoots");
     expect(await screen.findByText("Sunlit Serenity")).toBeInTheDocument();
     expect(screen.getByText(/Photoshoot.*6 Images/)).toBeInTheDocument();
     expect(screen.getByText("Not Prepared")).toBeInTheDocument();
-    expect(screen.queryByText("SESSION")).not.toBeInTheDocument();
+    expect(screen.getByText("SESSION")).toBeInTheDocument();
     const card = screen.getByRole("button", { name: "Open Photoshoot cover" }).closest("article")!;
     expect(within(card).queryByRole("button", { name: "Prepare for Sale" })).not.toBeInTheDocument();
-    expect(within(card).getByRole("button", { name: "Delete" })).toBeInTheDocument();
-    expect(within(card).getAllByRole("button")).toHaveLength(3);
+    expect(within(card).getByRole("button", { name: "Reassign Photoshoot commerce" })).toBeInTheDocument();
+    expect(within(card).getByRole("button", { name: "Archive" })).toBeInTheDocument();
+    expect(within(card).getAllByRole("button")).toHaveLength(4);
     fireEvent.click(screen.getByRole("button", { name: "Open Photoshoot" }));
     expect(await screen.findByText("Shot 6")).toBeInTheDocument();
     expect(screen.getByLabelText("Photoshoot filmstrip")).toBeInTheDocument();
+    const selectedShot = screen.getByRole("heading", { name: "Selected Shot — Shot 1" }).closest("article")!;
+    expect(within(selectedShot).getByRole("button", { name: "Create Teaser" })).toBeEnabled();
     expect(document.querySelectorAll(".photoshoot-detail-shot__media")).toHaveLength(6);
     expect(screen.getAllByRole("button", { name: /Select shot/ }).map((button) => button.getAttribute("aria-label"))).toEqual([
       "Select shot 1", "Select shot 2", "Select shot 3", "Select shot 4", "Select shot 5", "Select shot 6",
@@ -509,7 +661,131 @@ describe("AssetLibraryPage", () => {
     expect(await screen.findByRole("heading", { name: "READY" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
     expect(await screen.findByText("Ready")).toBeInTheDocument();
-    expect(fetch.mock.calls.filter(([input]) => String(input).startsWith("/api/v1/assets?")).length).toBe(libraryRequestsBeforePreparation);
+    expect(await screen.findByText("$5.00 Total")).toBeInTheDocument();
+    expect(fetch.mock.calls.filter(([input]) => String(input).startsWith("/api/v1/assets?")).length).toBeGreaterThan(libraryRequestsBeforePreparation);
+  });
+
+  it("shows canonical Bundle and complete Session prices on Photoshoot cards", async () => {
+    const photoshoot = (id: string, name: string, sellingMode: "SESSION" | "BUNDLE", commercialPrice: AssetLibraryItem["commercialPrice"]) => ({
+      ...asset, libraryItemId: `photoshoot:${id}`, itemKind: "photoshoot" as const,
+      assetId: null, deliverableId: id, generationId: null, fileName: name,
+      mediaType: "photoshoot", classification: null, shotCount: 6, sellingMode,
+      bundleSalesChannel: sellingMode === "BUNDLE" ? "CONTENT_WALL" as const : null,
+      sessionSelling: { sellingMode, status: "READY", statusLabel: "Ready" }, commercialPrice,
+    });
+    const assets = [
+      photoshoot("session", "Priced Session", "SESSION", { status: "PRICED", amountMinor: 8395, currency: "USD", kind: "SESSION_TOTAL" }),
+      photoshoot("bundle", "Priced Bundle", "BUNDLE", { status: "PRICED", amountMinor: 2499, currency: "USD", kind: "BUNDLE" }),
+      photoshoot("waiting", "Waiting Session", "SESSION", { status: "NOT_PRICED", amountMinor: null, currency: "USD", kind: "SESSION_TOTAL" }),
+      photoshoot("incomplete", "Incomplete Session", "SESSION", { status: "INCOMPLETE", amountMinor: null, currency: "USD", kind: "SESSION_TOTAL" }),
+    ];
+    vi.spyOn(globalThis, "fetch").mockImplementation(() => response({ assets, total: 4, page: 1, pageSize: 18, totalPages: 1, classifications: [] }));
+    window.history.replaceState({}, "", "/library/assets?assetType=photoshoots");
+    render(<AssetLibraryPage />);
+
+    const card = (name: string) => screen.getByText(name).closest("article")!;
+    await screen.findByText("Priced Session");
+    expect(within(card("Priced Session")).getByText("$83.95 Total")).toBeInTheDocument();
+    expect(within(card("Priced Bundle")).getByText("$24.99")).toBeInTheDocument();
+    expect(within(card("Waiting Session")).getByText("Not Priced")).toBeInTheDocument();
+    expect(within(card("Incomplete Session")).getByText("Pricing Incomplete")).toBeInTheDocument();
+    for (const name of ["Priced Session", "Priced Bundle", "Waiting Session", "Incomplete Session"]) {
+      expect(card(name).querySelector(".asset-card__photoshoot-badges")).not.toHaveTextContent(/\$|priced|pricing/i);
+    }
+  });
+
+  it("reassigns a Photoshoot selling mode from its card and refreshes the canonical badge", async () => {
+    let sellingMode: "SESSION" | "BUNDLE" = "SESSION";
+    const photoshoot = () => ({ ...asset, libraryItemId: "photoshoot:set-mode", itemKind: "photoshoot" as const,
+      assetId: null, deliverableId: "set-mode", generationId: null, fileName: "Hardwood Tease",
+      mediaType: "photoshoot", classification: null, status: "IN_ASSET_LIBRARY", shotCount: 3,
+      sellingMode, bundleSalesChannel: null });
+    const fetch = vi.spyOn(globalThis, "fetch").mockImplementation((input, options) => {
+      if (String(input).endsWith("/photoshoots/set-mode/commerce-assignment") && options?.method === "PUT") {
+        sellingMode = (JSON.parse(String(options.body)) as { sellingMode: "SESSION" | "BUNDLE" }).sellingMode;
+        return response({ deliverableId: "set-mode", sellingMode, bundleSalesChannel: sellingMode === "BUNDLE" ? "CHAT" : null });
+      }
+      return response({ assets: [photoshoot()], total: 1, page: 1, pageSize: 18, totalPages: 1, classifications: [] });
+    });
+    render(<AssetLibraryPage />);
+    await openAssetType("Photoshoots");
+    const card = (await screen.findByText("Hardwood Tease")).closest("article")!;
+    expect(within(card).getByText("SESSION")).toBeInTheDocument();
+
+    fireEvent.click(within(card).getByRole("button", { name: "Reassign Photoshoot commerce" }));
+    const dialog = screen.getByRole("dialog", { name: "Reassign Photoshoot" });
+    expect(within(dialog).getByText(/Current selling mode:/)).toHaveTextContent("SESSION");
+    fireEvent.click(within(dialog).getByRole("radio", { name: /Bundle/ }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Reassign" }));
+
+    await waitFor(() => expect(within(card).getByText("BUNDLE")).toBeInTheDocument());
+    expect(screen.queryByRole("dialog", { name: "Reassign Photoshoot" })).not.toBeInTheDocument();
+    expect(fetch).toHaveBeenCalledWith(expect.stringContaining("/photoshoots/set-mode/commerce-assignment"), expect.objectContaining({
+      method: "PUT", body: JSON.stringify({ sellingMode: "BUNDLE", bundleSalesChannel: "CHAT" }),
+    }));
+  });
+
+  it("reassigns a Bundle from Chat to Wall using the canonical combined assignment", async () => {
+    let channel: "CHAT" | "CONTENT_WALL" = "CHAT";
+    const photoshoot = () => ({ ...asset, libraryItemId: "photoshoot:set-channel", itemKind: "photoshoot" as const,
+      assetId: null, deliverableId: "set-channel", generationId: null, fileName: "Counter Open-Leg Tease",
+      mediaType: "photoshoot", classification: null, status: "IN_ASSET_LIBRARY", shotCount: 3,
+      sellingMode: "BUNDLE" as const, bundleSalesChannel: channel,
+      sessionSelling: { sellingMode: "BUNDLE" as const, bundleSalesChannel: channel,
+        salesChannel: channel === "CONTENT_WALL" ? "WALL" as const : "CHAT" as const,
+        imageCount: 3, status: "READY" as const } });
+    vi.spyOn(globalThis, "fetch").mockImplementation((input, options) => {
+      if (String(input).endsWith("/photoshoots/set-channel/commerce-assignment") && options?.method === "PUT") {
+        channel = (JSON.parse(String(options.body)) as { bundleSalesChannel: typeof channel }).bundleSalesChannel;
+        return response({ deliverableId: "set-channel", sellingMode: "BUNDLE", bundleSalesChannel: channel });
+      }
+      return response({ assets: [photoshoot()], total: 1, page: 1, pageSize: 18, totalPages: 1, classifications: [] });
+    });
+    render(<AssetLibraryPage />);
+    await openAssetType("Photoshoots");
+    const card = (await screen.findByText("Counter Open-Leg Tease")).closest("article")!;
+    fireEvent.click(within(card).getByRole("button", { name: "Reassign Photoshoot commerce" }));
+    const dialog = screen.getByRole("dialog", { name: "Reassign Photoshoot" });
+    expect(within(dialog).getByRole("button", { name: "Reassign" })).toBeDisabled();
+    fireEvent.click(within(dialog).getByRole("radio", { name: /Wall/ }));
+    expect(within(dialog).getByRole("button", { name: "Reassign" })).toBeEnabled();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Reassign" }));
+    await waitFor(() => expect(within(card).getByText("WALL")).toBeInTheDocument());
+    expect(within(card).getByText("BUNDLE")).toBeInTheDocument();
+  });
+
+  it("opens an imported Photoshoot card through the canonical six-shot viewer", async () => {
+    let cardProjectionRequests = 0;
+    const imported = { ...asset, libraryItemId: "photoshoot:import-1", itemKind: "photoshoot" as const,
+      assetId: null, deliverableId: "import-1", generationId: null, fileName: "Imported Editorial",
+      mediaType: "photoshoot", classification: null, status: "IN_ASSET_LIBRARY", shotCount: 6,
+      sellingMode: "BUNDLE", bundleSalesChannel: null, sourceKind: "GENERATION_LIBRARY_IMPORT" };
+    const fetch = vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
+      if (String(input) === "/api/v1/photoshoot-gallery/import-1") return response({
+        deliverableId: "import-1", name: "Imported Editorial", description: null,
+        completedAt: "2026-08-12T00:00:00Z", shotCount: 6, heroAssetId: 104,
+        imageUrl: "/cover", registrationState: "IN_ASSET_LIBRARY", sellingMode: "BUNDLE",
+        bundleSalesChannel: null, sourceKind: "GENERATION_LIBRARY_IMPORT",
+        intelligence: {}, productionIntelligence: {}, technical: {},
+        members: Array.from({ length: 6 }, (_, index) => ({ assetId: 101 + index,
+          shotOrder: index + 1, isHero: index === 3, imageUrl: `/shot-${index + 1}`, intelligence: {} })),
+      });
+      if (String(input).startsWith("/api/v1/assets?")) cardProjectionRequests += 1;
+      return response({ assets: [imported], total: 1, page: 1, pageSize: 18, totalPages: 1, classifications: [] });
+    });
+    render(<AssetLibraryPage />);
+    await openAssetType("Photoshoots");
+    fireEvent.click(await screen.findByRole("button", { name: "Open Photoshoot" }));
+
+    expect(await screen.findByLabelText("Photoshoot filmstrip")).toBeInTheDocument();
+    expect(document.querySelectorAll(".photoshoot-detail-shot__media")).toHaveLength(6);
+    expect(screen.getByRole("button", { name: "Select shot 4" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "Create Video" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Sell this Photoshoot progressively/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Sell the complete Photoshoot/ })).toBeInTheDocument();
+    expect(fetch).toHaveBeenCalledWith("/api/v1/photoshoot-gallery/import-1", expect.objectContaining({ cache: "no-store" }));
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    await waitFor(() => expect(cardProjectionRequests).toBeGreaterThanOrEqual(2));
   });
 
   it("renders separate readiness and commercial badges and filters Photoshoots with search", async () => {
@@ -517,6 +793,7 @@ describe("AssetLibraryPage", () => {
       { ...asset, libraryItemId: "photoshoot:chat", itemKind: "photoshoot" as const, assetId: null, deliverableId: "chat", fileName: "Shower Bundle", mediaType: "photoshoot", classification: null, shotCount: 3, sellingMode: "BUNDLE", bundleSalesChannel: "CHAT", sessionSelling: { sellingMode: "BUNDLE", bundleSalesChannel: "CHAT", imageCount: 3, status: "READY", autonomousSales: { status: "READY" } } },
       { ...asset, libraryItemId: "photoshoot:chat-setup", itemKind: "photoshoot" as const, assetId: null, deliverableId: "chat-setup", fileName: "Evening Bundle", mediaType: "photoshoot", classification: null, shotCount: 2, sellingMode: "BUNDLE", bundleSalesChannel: "CHAT", sessionSelling: { sellingMode: "BUNDLE", bundleSalesChannel: "CHAT", imageCount: 2, status: "READY", autonomousSales: { status: "NEEDS_SETUP" } } },
       { ...asset, libraryItemId: "photoshoot:session", itemKind: "photoshoot" as const, assetId: null, deliverableId: "session", fileName: "Shower Session", mediaType: "photoshoot", classification: null, shotCount: 4, sellingMode: "SESSION", bundleSalesChannel: null, sessionSelling: { deliverableId: "session", photoshootSessionId: "session-runtime", sellingMode: "SESSION", strategyVersion: "photoshoot_session_sales_v1", status: "READY", statusLabel: "Ready for Session Selling", paidStepCount: 1, readyPaidStepCount: 1, teaserReady: true, steps: [{ assetId: 201, shotOrder: 1, position: 1, role: "FREE_TEASER", access: "FREE", ready: true }, { assetId: 202, shotOrder: 2, position: 2, role: "FIRST_UNLOCK", access: "PAID", ready: true, offeringId: "offering-session", offeringStatus: "READY", publicationStatus: "LIVE" }] } },
+      { ...asset, libraryItemId: "photoshoot:session-no-channel", itemKind: "photoshoot" as const, assetId: null, deliverableId: "session-no-channel", fileName: "Private Session", mediaType: "photoshoot", classification: null, shotCount: 4, sellingMode: "SESSION", bundleSalesChannel: null, sessionSelling: { deliverableId: "session-no-channel", photoshootSessionId: "session-runtime-2", sellingMode: "SESSION", strategyVersion: "photoshoot_session_sales_v1", status: "READY", statusLabel: "Ready for Session Selling", paidStepCount: 1, readyPaidStepCount: 1, teaserReady: true, steps: [{ assetId: 203, shotOrder: 2, position: 1, role: "FIRST_UNLOCK", access: "PAID", ready: true }] } },
       { ...asset, libraryItemId: "photoshoot:wall", itemKind: "photoshoot" as const, assetId: null, deliverableId: "wall", fileName: "Morning Wall", mediaType: "photoshoot", classification: null, shotCount: 5, sellingMode: "BUNDLE", bundleSalesChannel: "CONTENT_WALL", sessionSelling: { sellingMode: "BUNDLE", bundleSalesChannel: "CONTENT_WALL", imageCount: 5, status: "READY" } },
     ];
     vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
@@ -537,7 +814,7 @@ describe("AssetLibraryPage", () => {
     expect(within(screen.getByText("Evening Bundle").closest("article")!).getByText("Needs Setup")).toBeInTheDocument();
     expect(within(screen.getByText("Morning Wall").closest("article")!).getByText("Ready")).toBeInTheDocument();
     expect(screen.getAllByText("CHAT")).toHaveLength(3);
-    expect(screen.getByText("SESSION")).toBeInTheDocument();
+    expect(screen.getAllByText("SESSION")).toHaveLength(2);
     expect(screen.getByText("WALL")).toBeInTheDocument();
     expect(screen.getAllByText("BUNDLE")).toHaveLength(3);
     const badgeText = (name: string) => Array.from(
@@ -545,6 +822,7 @@ describe("AssetLibraryPage", () => {
     ).map((node) => node.textContent?.toUpperCase());
     expect(badgeText("Shower Bundle")).toEqual(["READY", "CHAT", "BUNDLE"]);
     expect(badgeText("Shower Session")).toEqual(["READY", "CHAT", "SESSION"]);
+    expect(badgeText("Private Session")).toEqual(["READY", "SESSION"]);
     expect(badgeText("Morning Wall")).toEqual(["READY", "WALL", "BUNDLE"]);
     expect(within(screen.getByText("Shower Session").closest("article")!).getByText("SESSION"))
       .toHaveClass("photoshoot-badge--session");
@@ -572,7 +850,7 @@ describe("AssetLibraryPage", () => {
 
     const actionGroup = screen.getByLabelText("Asset actions");
     expect(within(actionGroup).getByRole("button", { name: "Open Photoshoot" })).toBeInTheDocument();
-    expect(within(actionGroup).getByRole("button", { name: "Delete" })).toBeInTheDocument();
+    expect(within(actionGroup).getByRole("button", { name: "Archive" })).toBeInTheDocument();
     expect(within(actionGroup).queryByRole("button", { name: "Prepare for Sale" })).not.toBeInTheDocument();
     expect(sharedStylesheetText).toMatch(/\.library-action-group\s*\{[^}]*grid-auto-columns:\s*minmax\(0,1fr\)/);
   });
@@ -666,6 +944,53 @@ describe("AssetLibraryPage", () => {
   });
 
   it.each([
+    ["CONTENT_VAULT", "TG Wall", "Chat Selling"],
+    ["CHAT", "Chat", "Ava's Content Vault"],
+  ] as const)("exposes inspector destination reassignment for a prepared %s Single Image", async (destination, currentLabel, alternateLabel) => {
+    vi.spyOn(globalThis, "fetch").mockImplementation((input) => String(input) === "/api/v1/assets/42"
+      ? response({ ...asset, classification: "SINGLE_IMAGE", displayName: "Prepared Single",
+        standaloneSalePreparation: { assetId: 42, status: "READY", statusLabel: "Ready", intelligenceReady: true,
+          blurredTeaserReady: destination === "CONTENT_VAULT", destinations: [destination], foundationReady: true,
+          chatReady: destination === "CHAT", vaultReady: destination === "CONTENT_VAULT", teasers: [], priceMinor: 999 } })
+      : response({ assets: [asset], total: 1, page: 1, pageSize: 18, totalPages: 1, classifications: ["SINGLE_IMAGE"] }));
+    render(<AssetLibraryPage />);
+    await openAssetType("Images");
+    fireEvent.click(await screen.findByRole("button", { name: "Open Image" }));
+    await screen.findByRole("heading", { name: "Prepared Single" });
+    const detail = await screen.findByLabelText("Selected asset details");
+
+    fireEvent.click(within(detail).getByRole("button", { name: "Reassign Destination" }));
+    const dialog = screen.getByRole("dialog", { name: "Reassign Sales Destination" });
+    expect(within(dialog).getByText(/Current Destination:/)).toHaveTextContent(currentLabel);
+    expect(within(dialog).getByLabelText(alternateLabel)).toBeChecked();
+    expect(within(dialog).getByLabelText(destination === "CHAT" ? "Chat Selling" : "Ava's Content Vault")).toBeDisabled();
+  });
+
+  it("hides inspector reassignment for unprepared Singles and disables it for published Wall Singles", async () => {
+    let prepared = false;
+    vi.spyOn(globalThis, "fetch").mockImplementation((input) => String(input) === "/api/v1/assets/42"
+      ? response({ ...asset, classification: "SINGLE_IMAGE", displayName: prepared ? "Published Single" : "Unprepared Single",
+        ...(prepared ? { standaloneSalePreparation: { assetId: 42, status: "READY", statusLabel: "Ready", intelligenceReady: true,
+          blurredTeaserReady: true, destinations: ["CONTENT_VAULT"], foundationReady: true, chatReady: false, vaultReady: true,
+          teasers: [], priceMinor: 999, contentVaultPublication: { status: "PUBLISHED", canPublish: false, configured: true } } } : {}) })
+      : response({ assets: [asset], total: 1, page: 1, pageSize: 18, totalPages: 1, classifications: ["SINGLE_IMAGE"] }));
+    render(<AssetLibraryPage />);
+    await openAssetType("Images");
+    fireEvent.click(await screen.findByRole("button", { name: "Open Image" }));
+    await screen.findByRole("heading", { name: "Unprepared Single" });
+    let detail = await screen.findByLabelText("Selected asset details");
+    expect(within(detail).queryByRole("button", { name: "Reassign Destination" })).not.toBeInTheDocument();
+
+    prepared = true;
+    fireEvent.click(within(detail).getByRole("button", { name: "Close asset details" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open Image" }));
+    await screen.findByRole("heading", { name: "Published Single" });
+    detail = await screen.findByLabelText("Selected asset details");
+    expect(within(detail).getByRole("button", { name: "Reassign Destination" })).toBeDisabled();
+    expect(within(detail).getByRole("button", { name: "Reassign Destination" })).toHaveAttribute("title", expect.stringContaining("published"));
+  });
+
+  it.each([
     ["CHAT", "Chat Selling"],
     ["CONTENT_VAULT", "Content Vault"],
   ] as const)("shows and safely exposes the canonical Fanvue Media Link for %s", async (destination, destinationLabel) => {
@@ -751,11 +1076,11 @@ describe("AssetLibraryPage", () => {
     const card = previews[0]!.closest("article")!;
     expect(screen.getAllByRole("button", { name: "Register Asset" })).toHaveLength(2);
     expect(screen.getAllByRole("button", { name: "Move to Generation Library" })).toHaveLength(2);
-    expect(screen.getAllByRole("button", { name: "Delete" })).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: "Archive" })).toHaveLength(2);
     const register = within(card).getByRole("button", { name: "Register Asset" });
     expect(within(card).getByRole("button", { name: "Move to Generation Library" })).toHaveAttribute("title", "Move to Generation Library");
     expect(register).toHaveAttribute("title", "Register Asset");
-    expect(within(card).getByRole("button", { name: "Delete" })).toHaveAttribute("title", "Delete");
+    expect(within(card).getByRole("button", { name: "Archive" })).toHaveAttribute("title", "Archive");
     fireEvent.click(register);
     expect(await screen.findByText("Asset registered. Analysis is pending.")).toBeInTheDocument();
     await waitFor(() => expect(screen.getAllByRole("button", { name: "Register Asset" })).toHaveLength(1));
@@ -816,10 +1141,38 @@ describe("AssetLibraryPage", () => {
     });
     render(<AssetLibraryPage />);
     await openAssetType("Images");
-    fireEvent.click(await screen.findByRole("button", { name: "Delete" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Archive" }));
     expect(await screen.findByText("Asset archived.")).toBeInTheDocument();
     expect(await screen.findByText("No assets found.")).toBeInTheDocument();
     expect(fetch).toHaveBeenCalledWith("/api/v1/assets/staged/generated-1/archive", { method: "POST" });
+  });
+
+  it("archives a registered image by canonical Asset ID and reconciles the grid", async () => {
+    const registered = {
+      ...asset,
+      assetId: 203,
+      generationId: "regenerated_image_40fa88368c2351f7947298bb3872ea9e",
+      classification: "SINGLE_IMAGE",
+    };
+    let archived = false;
+    const fetch = vi.spyOn(globalThis, "fetch").mockImplementation((input, init) => {
+      const url = String(input);
+      if (url === "/api/v1/assets/203/archive" && init?.method === "POST") {
+        archived = true;
+        return response({ success: true, message: "Asset archived." });
+      }
+      if (url === "/api/v1/assets/counts") return response({ images: archived ? 0 : 1, photoshoots: 0, videos: 0, bundles: 0 });
+      return response({ assets: archived ? [] : [registered], total: archived ? 0 : 1, page: 1, pageSize: 18, totalPages: 1, classifications: ["SINGLE_IMAGE"] });
+    });
+    render(<AssetLibraryPage />);
+    await openAssetType("Images");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Archive" }));
+
+    expect(await screen.findByText("Asset archived.")).toBeInTheDocument();
+    expect(await screen.findByText("No assets found.")).toBeInTheDocument();
+    expect(fetch).toHaveBeenCalledWith("/api/v1/assets/203/archive", { method: "POST" });
+    expect(fetch.mock.calls.some(([input]) => String(input).includes("regenerated_image_40fa") && String(input).endsWith("/archive"))).toBe(false);
   });
 
   it("sends search and filter values and paginates", async () => {
@@ -840,20 +1193,47 @@ describe("AssetLibraryPage", () => {
     })).toBe(true));
   });
 
-  it("uses a responsive Asset Type dashboard with backend totals and same-route navigation", async () => {
+  it("uses a responsive three-category Asset Type dashboard with backend totals and same-route navigation", async () => {
     const fetch = vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
       const url = String(input);
-      if (url === "/api/v1/assets/counts") return response({ images: 8, photoshoots: 3, videos: 2, bundles: 4 });
+      if (url === "/api/v1/assets/counts") return response({
+        images: 8, photoshoots: 3, videos: 2, bundles: 4, teasers: 6,
+        destinationBreakdown: {
+          images: { chat: 5, wall: 2, unassigned: 1 },
+          photoshoots: { chat: 2, wall: 1, unassigned: 0 },
+          totals: { chat: 7, wall: 3 },
+          chatCommerceTypes: { single: 5, bundle: 1, session: 1 },
+        },
+      });
       return response({ assets: [], total: 0, page: 1, pageSize: 18, totalPages: 1, classifications: [] });
     });
     render(<AssetLibraryPage />);
 
-    expect(screen.getByRole("heading", { name: "Choose Asset Type" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Browse Inventory" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "ASSET TYPE" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "SALES" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "ENGAGEMENT" })).toBeInTheDocument();
     expect(await screen.findByRole("button", { name: /Images 8 Assets/ })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Photoshoots 3 Photoshoots/ })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Videos 2 Videos/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Photoshoots 3 Photoshoots/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Chat 7 Assets/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /TG Wall 3 Assets/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Teasers 6 Assets/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Images/ })).not.toHaveTextContent("Chat");
+    expect(screen.getByRole("button", { name: /Photoshoots/ })).not.toHaveTextContent("TG Wall");
     expect(screen.queryByText("Stories")).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Bundles 4 Bundles/ })).toHaveAttribute("href", "/library/bundles");
+    expect(screen.queryByText("Bundles")).not.toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /(?:Images|Videos|Photoshoots|Chat|TG Wall|Teasers)/ }).map((card) => card.textContent)).toEqual([
+      "Images8 Assets",
+      "Photoshoots3 Photoshoots",
+      "Videos2 Videos",
+      "Chat7 Assets",
+      "TG Wall3 Assets",
+      "Teasers6 Assets",
+    ]);
+    expect(stylesheetText).toMatch(/\.asset-type-grid\s*\{[^}]*grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\)/);
+    expect(stylesheetText).toMatch(/@media \(max-width: 900px\)[\s\S]*?\.asset-type-grid\s*\{[^}]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/);
+    expect(stylesheetText).toMatch(/@media \(max-width: 600px\)[\s\S]*?\.asset-type-grid\s*\{[^}]*grid-template-columns:\s*1fr/);
     expect(fetch).toHaveBeenCalledWith("/api/v1/assets/counts", expect.objectContaining({ cache: "no-store" }));
     expect(fetch.mock.calls.some(([input]) => String(input).includes("page_size=1"))).toBe(false);
     expect(screen.queryByLabelText("Media type")).not.toBeInTheDocument();
@@ -866,8 +1246,114 @@ describe("AssetLibraryPage", () => {
     expect(screen.getByLabelText("Destination")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Back to Asset Types" }));
-    expect(await screen.findByRole("heading", { name: "Choose Asset Type" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Browse Inventory" })).toBeInTheDocument();
     expect(window.location.search).toBe("");
+
+    fireEvent.click(screen.getByRole("button", { name: /Videos 2 Videos/ }));
+    expect(window.location.search).toBe("?assetType=videos");
+    fireEvent.click(screen.getByRole("button", { name: "Back to Asset Types" }));
+
+    fireEvent.click(await screen.findByRole("button", { name: /Photoshoots 3 Photoshoots/ }));
+    expect(window.location.search).toBe("?assetType=photoshoots");
+  });
+
+  it("loads canonical Teasers with repository filtering and hides commerce controls", async () => {
+    const teaser = { ...asset, classification: "SINGLE_IMAGE", displayName: "Reusable Teaser",
+      contentDestination: "TEASER", commercialPrice: { status: "PRICED", amountMinor: 999, currency: "USD", kind: "SINGLE" },
+      chatEnabled: true, timesSent: 3, lastSent: "2026-08-23T12:00:00Z",
+      standaloneSalePreparation: { assetId: 42, status: "NOT_PREPARED", statusLabel: "Prepare for Sale", destinations: [] } };
+    const fetch = vi.spyOn(globalThis, "fetch").mockImplementation((input, init) => {
+      const url = String(input);
+      if (url === "/api/v1/assets/counts") return response({ images: 1, photoshoots: 0, videos: 0, bundles: 0, teasers: 1 });
+      if (url.endsWith("/engagement-teaser/chat-control")) {
+        expect(init).toEqual(expect.objectContaining({ method: "PUT" }));
+        expect(JSON.parse(String(init?.body))).toEqual({ enabled: false });
+        return response({ assetId: 42, chatEnabled: false });
+      }
+      return response({ assets: [teaser], total: 1, page: 1, pageSize: 18, totalPages: 1, classifications: ["SINGLE_IMAGE"] });
+    });
+    window.history.replaceState({}, "", "/library/assets?assetType=teasers");
+    render(<AssetLibraryPage />);
+    expect(await screen.findByText("Reusable Teaser")).toBeInTheDocument();
+    expect(fetch.mock.calls.some(([input]) => String(input).includes("asset_purpose=TEASER"))).toBe(true);
+    const card = screen.getByText("Reusable Teaser").closest("article")!;
+    expect(within(card).getByText("TEASER")).toBeInTheDocument();
+    expect(within(card).queryByText("Not Prepared")).not.toBeInTheDocument();
+    expect(screen.queryByText("Price")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Prepare for Sale" })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Destination")).not.toBeInTheDocument();
+    expect(within(card).getByText("Times Sent").parentElement).toHaveTextContent("3");
+    expect(within(card).getByText("Last Sent").parentElement).not.toHaveTextContent("Never");
+    fireEvent.click(within(card).getByRole("button", { name: "Disable Reusable Teaser for Chat" }));
+    await waitFor(() => expect(fetch.mock.calls.some(([input]) => String(input).endsWith("/engagement-teaser/chat-control"))).toBe(true));
+  });
+
+  it("opens bookmarkable unified Sales views with commerce-type filters", async () => {
+    const fetch = vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
+      const url = String(input);
+      if (url === "/api/v1/assets/counts") return response({
+        images: 8, photoshoots: 3, videos: 0, bundles: 0,
+        destinationBreakdown: {
+          images: { chat: 5, wall: 2, unassigned: 1 },
+          photoshoots: { chat: 2, wall: 1, unassigned: 0 },
+          totals: { chat: 7, wall: 3 },
+          chatCommerceTypes: { single: 5, bundle: 1, session: 1 },
+        },
+      });
+      return response({ assets: [], total: 0, page: 1, pageSize: 18, totalPages: 1, classifications: [] });
+    });
+    render(<AssetLibraryPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Chat 7 Assets/ }));
+    expect(window.location.search).toBe("?sales=chat");
+    expect(screen.getByRole("heading", { name: "Chat" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "All · 7" })).toHaveClass("is-active");
+    expect(screen.getByRole("button", { name: "Single · 5" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Bundle · 1" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Session · 1" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Stories" })).not.toBeInTheDocument();
+    await waitFor(() => expect(fetch.mock.calls.some(([input]) => {
+      const url = String(input);
+      return url.includes("sales_destination=CHAT") && url.includes("sales_commerce_type=ALL");
+    })).toBe(true));
+
+    fireEvent.click(screen.getByRole("button", { name: "Single · 5" }));
+    expect(window.location.search).toBe("?sales=chat&salesType=single");
+    await waitFor(() => expect(fetch.mock.calls.some(([input]) => String(input).includes("sales_commerce_type=SINGLE"))).toBe(true));
+
+    fireEvent.click(screen.getByRole("button", { name: "Back to Asset Types" }));
+    fireEvent.click(await screen.findByRole("button", { name: /TG Wall 3 Assets/ }));
+    expect(window.location.search).toBe("?sales=wall");
+    expect(screen.getByRole("heading", { name: "TG Wall" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Session" })).not.toBeInTheDocument();
+  });
+
+  it("restores a Sales destination and type from the bookmarkable query", async () => {
+    window.history.replaceState({}, "", "/library/assets?sales=chat&salesType=session");
+    const fetch = vi.spyOn(globalThis, "fetch").mockImplementation((input) => String(input) === "/api/v1/assets/counts"
+      ? response({ images: 0, photoshoots: 0, videos: 0, bundles: 0, destinationBreakdown: { totals: { chat: 0, wall: 0 } } })
+      : response({ assets: [], total: 0, page: 1, pageSize: 18, totalPages: 1, classifications: [] }));
+    render(<AssetLibraryPage />);
+    expect(screen.getByRole("heading", { name: "Chat" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Session .* 0/ })).toHaveClass("is-active");
+    await waitFor(() => expect(fetch.mock.calls.some(([input]) => String(input).includes("sales_commerce_type=SESSION"))).toBe(true));
+  });
+
+  it("shows SINGLE only on standalone image cards in a Sales view", async () => {
+    window.history.replaceState({}, "", "/library/assets?sales=chat");
+    const single = {
+      ...asset, classification: "SINGLE_IMAGE", displayName: "Chat portrait",
+      standaloneSalePreparation: {
+        assetId: 42, status: "READY" as const, statusLabel: "Ready",
+        destinations: ["CHAT"], priceMinor: 1099, currency: "USD",
+      },
+    };
+    vi.spyOn(globalThis, "fetch").mockImplementation((input) => String(input) === "/api/v1/assets/counts"
+      ? response({ images: 1, photoshoots: 0, videos: 0, bundles: 0, destinationBreakdown: { totals: { chat: 1, wall: 0 } } })
+      : response({ assets: [single], total: 1, page: 1, pageSize: 18, totalPages: 1, classifications: [] }));
+    render(<AssetLibraryPage />);
+    const card = await screen.findByText("Chat portrait");
+    expect(within(card.closest("article")!).getByText("SINGLE")).toBeInTheDocument();
   });
 
   it("shows empty and error states", async () => {
@@ -913,17 +1399,20 @@ describe("AssetLibraryPage", () => {
     expect(within(dialog).getByRole("radio", { name: /Raunchy/i })).toHaveAttribute("aria-checked", "false");
     expect(within(dialog).getByText("Seductive & elevated")).toBeInTheDocument();
     expect(within(dialog).getByText("Direct & dirty")).toBeInTheDocument();
-    expect(within(dialog).queryByText("Write your own caption")).not.toBeInTheDocument();
-    expect(within(dialog).queryByLabelText("Custom Content Vault caption")).not.toBeInTheDocument();
-    expect(within(dialog).queryByRole("button", { name: "Use My Caption" })).not.toBeInTheDocument();
+    expect(within(dialog).getByLabelText("Your Content Vault caption")).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Use My Caption" })).toBeDisabled();
     expect(within(dialog).getByText("No generated options yet. Add optional guidance, then generate.")).toBeInTheDocument();
     expect(within(dialog).getByRole("button", { name: "Generate Caption with Grok" })).toBeInTheDocument();
     expect(within(dialog).getByRole("button", { name: "Use Selected Caption" })).toBeDisabled();
     fireEvent.change(within(dialog).getByLabelText("Caption generation guidance"), {
       target: { value: "she's spreading her pussy" },
     });
+    fireEvent.change(within(dialog).getByLabelText("Your Content Vault caption"), {
+      target: { value: "My unsaved manual draft" },
+    });
     fireEvent.click(within(dialog).getByRole("button", { name: "Generate Caption with Grok" }));
     expect(await within(dialog).findAllByText(/Caption choice/)).toHaveLength(5);
+    expect(within(dialog).getByLabelText("Your Content Vault caption")).toHaveValue("My unsaved manual draft");
     const generateCalls = fetch.mock.calls.filter(([url]) => String(url).endsWith("/content-vault/captions/generate"));
     expect(generateCalls).toHaveLength(1);
     expect(JSON.parse(String(generateCalls[0]![1]?.body))).toEqual({
@@ -959,6 +1448,42 @@ describe("AssetLibraryPage", () => {
     expect(fetch.mock.calls.some(([url]) => /vision|intelligence|fanvue|telegram/i.test(String(url)))).toBe(false);
   });
 
+  it("saves a manual WALL caption without AI and refreshes authoritative publish readiness", async () => {
+    let savedCaption: ContentVaultCaptionDraft | null = null;
+    let preparationReads = 0;
+    const fetch = vi.spyOn(globalThis, "fetch").mockImplementation((input, init) => {
+      const url = String(input);
+      const publication = { status: "NOT_PUBLISHED", canPublish: Boolean(savedCaption), configured: true };
+      const prepared = { assetId: 42, status: "READY", statusLabel: "Ready", intelligenceReady: true,
+        destinations: ["CONTENT_VAULT"], foundationReady: true, vaultReady: true, chatReady: false,
+        teasers: [], priceMinor: 1799, offeringId: "offering-1", publicationId: "publication-1",
+        deliveryUrl: "https://fanvue.example/media", contentVaultCaption: savedCaption,
+        contentVaultPublication: publication };
+      if (url.endsWith("/content-vault/caption") && init?.method === "PUT") {
+        const body = JSON.parse(String(init.body)) as { text: string; style: null; source: "MANUAL" };
+        savedCaption = { ...body, updatedAt: "2026-08-15T00:00:00Z", assetId: 42, offeringId: "offering-1" };
+        return response({ caption: savedCaption });
+      }
+      if (url.endsWith("/sale-preparation")) { preparationReads += 1; return response(prepared); }
+      if (url === "/api/v1/assets/42") return response({ ...asset, classification: "SINGLE_IMAGE", standaloneSalePreparation: prepared });
+      return response({ assets: [{ ...asset, classification: "SINGLE_IMAGE", standaloneSalePreparation: prepared }], total: 1, page: 1, pageSize: 18, totalPages: 1, classifications: ["SINGLE_IMAGE"] });
+    });
+    render(<AssetLibraryPage />); await openAssetType("Images");
+    fireEvent.click(await screen.findByRole("button", { name: "Open Image" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Choose Caption" }));
+    const dialog = screen.getByRole("dialog", { name: "Choose Content Vault Caption" });
+    const manual = within(dialog).getByLabelText("Your Content Vault caption");
+    fireEvent.change(manual, { target: { value: "   My own Unicode caption 🔥   " } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Use My Caption" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Choose Content Vault Caption" })).not.toBeInTheDocument());
+    expect(screen.getByText("My own Unicode caption 🔥")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Publish to Content Vault" })).toBeEnabled();
+    expect(preparationReads).toBe(1);
+    expect(fetch.mock.calls.filter(([url]) => String(url).endsWith("/content-vault/captions/generate"))).toHaveLength(0);
+    const saveCall = fetch.mock.calls.find(([url]) => String(url).endsWith("/content-vault/caption"));
+    expect(JSON.parse(String(saveCall?.[1]?.body))).toEqual({ text: "My own Unicode caption 🔥", style: null, source: "MANUAL" });
+  });
+
   it("cancels the chooser without replacing an existing saved caption", async () => {
     const savedCaption = { text: "Existing saved caption", style: null, source: "GROK" as const, updatedAt: "2026-08-08T00:00:00Z", assetId: 42, offeringId: "offering-1" };
     const fetch = vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
@@ -972,6 +1497,7 @@ describe("AssetLibraryPage", () => {
     expect(await screen.findByText("Existing saved caption")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Choose Another" }));
     const dialog = await screen.findByRole("dialog", { name: "Choose Content Vault Caption" });
+    expect(within(dialog).getByLabelText("Your Content Vault caption")).toHaveValue("Existing saved caption");
     fireEvent.change(within(dialog).getByLabelText("Caption generation guidance"), {
       target: { value: "temporary guidance" },
     });
@@ -997,7 +1523,8 @@ describe("AssetLibraryPage", () => {
       chatReady: false, teasers: [], priceMinor: 1799, currency: "USD",
       offeringId: "offering-1", deliveryUrl: "https://fanvue.example/media",
       contentVaultCaption: { text: "Saved exact caption", source: "GROK", updatedAt: "2026-08-08T00:00:00Z", assetId: 42, offeringId: "offering-1" },
-      contentVaultPublication: { status: "NOT_PUBLISHED", canPublish: true, configured: true },
+      contentVaultPublication: { status: "NOT_PUBLISHED", canPublish: true, configured: true,
+        previewUrl: "/api/v1/commerce-authoring/offering-1/telegram-content-vault/media" },
     };
     let published = false;
     const fetch = vi.spyOn(globalThis, "fetch").mockImplementation((input, init) => {
@@ -1022,6 +1549,9 @@ describe("AssetLibraryPage", () => {
     });
     const view = render(<AssetLibraryPage />); await openAssetType("Images");
     fireEvent.click(await screen.findByRole("button", { name: "Open Image" }));
+    expect(await screen.findByAltText("Content Vault publication preview")).toHaveAttribute(
+      "src", "/api/v1/commerce-authoring/offering-1/telegram-content-vault/media",
+    );
     fireEvent.click(await screen.findByRole("button", { name: "Publish to Content Vault" }));
     await screen.findByRole("button", { name: "Published to Content Vault" });
     expect(fetch).toHaveBeenCalledWith(
@@ -1117,7 +1647,8 @@ describe("AssetLibraryPage", () => {
     fireEvent.click((await screen.findAllByRole("button", { name: "Open Image" }))[0]!);
 
     const dialog = await screen.findByRole("dialog", { name: "Playful Seductive Gaze full-size preview" });
-    expect(within(dialog).getByRole("img", { name: "Playful Seductive Gaze full-size image" })).toHaveAttribute("src", "/api/v1/assets/42/media");
+    expect(within(dialog).getByRole("img", { name: "Playful Seductive Gaze preview" })).toHaveAttribute("src", "/api/v1/assets/42/preview");
+    expect(within(dialog).getByRole("link", { name: "View Full Resolution" })).toHaveAttribute("href", "/api/v1/assets/42/media");
     expect(await screen.findByRole("heading", { name: "Playful Seductive Gaze" })).toBeInTheDocument();
     expect(screen.getByLabelText("Search assets")).toHaveValue("gaze");
     expect(screen.getByLabelText("Destination")).toHaveValue("CONTENT_VAULT");
@@ -1125,7 +1656,7 @@ describe("AssetLibraryPage", () => {
 
     fireEvent.keyDown(window, { key: "ArrowRight" });
     const nextDialog = await screen.findByRole("dialog", { name: "Golden Hour Balcony Gaze full-size preview" });
-    expect(within(nextDialog).getByRole("img", { name: "Golden Hour Balcony Gaze full-size image" })).toHaveAttribute("src", "/api/v1/assets/43/media");
+    expect(within(nextDialog).getByRole("img", { name: "Golden Hour Balcony Gaze preview" })).toHaveAttribute("src", "/api/v1/assets/43/preview");
     fireEvent.keyDown(window, { key: "ArrowLeft" });
     const returnedDialog = await screen.findByRole("dialog", { name: "Playful Seductive Gaze full-size preview" });
     fireEvent.click(within(returnedDialog).getByRole("button", { name: "Close preview" }));

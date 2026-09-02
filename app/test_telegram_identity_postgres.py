@@ -63,20 +63,24 @@ class TelegramIdentityPostgresTests(unittest.TestCase):
             with connection.cursor() as cursor:
                 cursor.execute(
                     "TRUNCATE public.telegram_identity_map "
-                    "RESTART IDENTITY;"
+                    "RESTART IDENTITY CASCADE;"
                 )
 
     def create_first_mapping(self, telegram_user_id=700000001):
         user = self.users[0]
-        return self.service.create_mapping(
+        self.repository.observe(
             telegram_user_id=telegram_user_id,
             telegram_chat_id=telegram_user_id,
+        )
+        mapping, _ = self.repository.create_verified_mapping(
+            telegram_user_id=telegram_user_id,
             fanvue_account_id=user["fanvue_account_id"],
             local_fanvue_user_id=user["id"],
-            external_fanvue_user_uuid=str(
-                user["fanvue_user_uuid"]
-            ).upper(),
+            verification_method="POSTGRES_TEST",
+            operator_source="TEST_SUITE",
+            evidence={"synthetic": True},
         )
+        return mapping
 
     def test_schema_uses_native_database_types(self):
         with self.connection_factory() as connection:

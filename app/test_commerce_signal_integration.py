@@ -4,6 +4,7 @@ from uuid import UUID, uuid4
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+import pytest
 
 from app.api import commerce_signals as signal_api
 from app.models.purchase_intent import (
@@ -94,7 +95,7 @@ class Client:
         return {"data": [{
             "transactionOrderId": transaction_id, "gross": 999, "net": 800,
             "date": NOW.isoformat(), "source": "mediaLink",
-            "status": "succeeded",
+            "status": "succeeded", "currency": "USD",
         }]}
 
 
@@ -259,6 +260,31 @@ def test_verified_earnings_updates_customer_and_attributes_one_hard_match(monkey
     assert len(customers.calls) == 1
 
 
+def test_proven_telegram_acceptance_is_repaired_before_fail_closed_attribution(monkeypatch):
+    candidate = purchase_intent()
+    repairs = []
+    class DeliveryRecovery:
+        def recover_accepted(self, **filters):
+            repairs.append(filters)
+            return ["confirmed"]
+    integration, _, _, _, repository = service(monkeypatch, [candidate])
+    integration.telegram_deliveries = DeliveryRecovery()
+    result = integration._attribute(
+        creator_profile_id=2, fanvue_account_id=7, buyer_uuid=BUYER,
+        amount_minor=999, payment_timestamp=NOW,
+        transaction_id="accepted-crash-order", payment_id="payment-1",
+        event_id="event-1", media_link_purchase=True,
+        transaction_currency="USD",
+        customer_commerce_profile_id=uuid4(),
+    )
+    assert repairs == [{
+        "creator_profile_id": 2, "fanvue_account_id": 7,
+        "external_fanvue_user_uuid": BUYER,
+    }]
+    assert result["state"] == "ATTRIBUTED"
+    assert len(repository.purchased) == 1
+
+
 def test_multiple_hard_matches_are_unknown_without_guessing(monkeypatch):
     first, second = purchase_intent(), purchase_intent()
     integration, _, _, intents, repository = service(
@@ -269,6 +295,7 @@ def test_multiple_hard_matches_are_unknown_without_guessing(monkeypatch):
         amount_minor=999, payment_timestamp=NOW,
         transaction_id="order-1", payment_id="payment-1",
         event_id="event-1", media_link_purchase=True,
+        transaction_currency="USD",
         customer_commerce_profile_id=uuid4(),
     )
     assert result == {
@@ -279,6 +306,41 @@ def test_multiple_hard_matches_are_unknown_without_guessing(monkeypatch):
     assert len(intents.unknown) == 2
     assert repository.purchased == []
     assert integration.photoshoot_lifecycles.calls == []
+
+
+def test_same_amount_different_currency_keeps_only_exact_currency(monkeypatch):
+    usd = purchase_intent()
+    eur = replace(purchase_intent(), expected_currency="EUR")
+    integration, _, _, _, repository = service(monkeypatch, [usd, eur])
+    result = integration._attribute(
+        creator_profile_id=2, fanvue_account_id=7, buyer_uuid=BUYER,
+        amount_minor=999, transaction_currency="usd", payment_timestamp=NOW,
+        transaction_id="currency-order", payment_id="currency-payment",
+        event_id="currency-event", media_link_purchase=True,
+        customer_commerce_profile_id=uuid4(),
+    )
+    assert result["state"] == "ATTRIBUTED"
+    assert repository.purchased[0][0] == usd.purchase_intent_id
+
+
+@pytest.mark.parametrize("currency", ["EUR", None, "not-a-currency"])
+def test_currency_mismatch_or_missing_fails_closed(monkeypatch, currency):
+    candidate = purchase_intent()
+    integration, _, _, intents, repository = service(monkeypatch, [candidate])
+    result = integration._attribute(
+        creator_profile_id=2, fanvue_account_id=7, buyer_uuid=BUYER,
+        amount_minor=999, transaction_currency=currency, payment_timestamp=NOW,
+        transaction_id="wrong-currency", payment_id="currency-payment",
+        event_id="currency-event", media_link_purchase=True,
+        customer_commerce_profile_id=uuid4(),
+    )
+    assert result["state"] == "UNKNOWN"
+    assert result["reason"] in {
+        "NO_HARD_MATCHING_CANDIDATE", "MISSING_AUTHORITATIVE_CURRENCY"
+    }
+    assert repository.purchased == []
+    assert integration.photoshoot_lifecycles.calls == []
+    assert intents.references == []
 
 
 def test_retry_resynchronizes_already_attributed_purchase(monkeypatch):
@@ -294,6 +356,7 @@ def test_retry_resynchronizes_already_attributed_purchase(monkeypatch):
         amount_minor=999, payment_timestamp=NOW,
         transaction_id="order-1", payment_id="payment-1",
         event_id="event-1", media_link_purchase=True,
+        transaction_currency="USD",
         customer_commerce_profile_id=uuid4(),
     )
 
@@ -321,6 +384,7 @@ def attribute_at(integration, *, at, buyer=BUYER, resource="link-1",
         amount_minor=999, payment_timestamp=at,
         transaction_id=transaction, payment_id=f"payment-{transaction}",
         event_id=f"event-{transaction}", media_link_purchase=True,
+        transaction_currency="USD",
         provider_resource_id=resource,
         customer_commerce_profile_id=uuid4(),
     )
@@ -547,10 +611,16 @@ def test_telegram_intent_wraps_delivery_without_exposing_id():
     service = TelegramPurchaseIntentService(
         creator_profile_id=2, fanvue_account_id=7,
         identity_repository=Identities(), purchase_intent_service=intents,
+        unlock_gateway_service=type("Gateway", (), {
+            "issue": lambda _self, _intent: (
+                None, "https://creator.test/api/v1/commerce/unlock/token"
+            )
+        })(),
         clock=lambda: NOW,
     )
     result = type("Result", (), {
         "correlation_id": "telegram:22:5",
+        "delivery_payload": {"message_text": "Offer", "metadata": {}},
         "diagnostic_metadata": {
             "final_offer_authorized": True,
             "customer_sales_brain_evaluated": True,

@@ -12,6 +12,7 @@ from app.models.ownership_intelligence import (
     OwnershipCoverage as CanonicalOwnershipCoverage,
     SessionOwnershipCoverage,
 )
+from app.models.customer_commerce_memory import CustomerCommerceMemory
 
 
 class SellingStrategy(str, Enum):
@@ -45,6 +46,8 @@ class BundleEligibility(str, Enum):
 class StrategyConstraints:
     required_offering_types: tuple[str, ...] = ()
     excluded_offering_types: tuple[str, ...] = ()
+    required_selling_modes: tuple[str, ...] = ()
+    excluded_selling_modes: tuple[str, ...] = ()
     required_photoshoot_reference: str | None = None
     progression: str | None = None
     approved_commercial_roles: tuple[str, ...] = ()
@@ -52,6 +55,8 @@ class StrategyConstraints:
     requested_themes: tuple[str, ...] = ()
     complete_set_required: bool = False
     excluded_asset_ids: tuple[int, ...] = ()
+    excluded_offering_ids: tuple[UUID, ...] = ()
+    maximum_price_minor: int | None = None
     remaining_value_required: bool = False
     continuation_required: bool = False
     publication_ready_required: bool = True
@@ -99,6 +104,7 @@ class CommercialIntelligenceContext:
     canonical_bundle_coverage: CanonicalOwnershipCoverage | None = None
     canonical_session_coverage: SessionOwnershipCoverage | None = None
     canonical_ownership_answer: CanonicalOwnershipAnswer | None = None
+    customer_commerce_memory: CustomerCommerceMemory | None = None
     ownership: OwnershipCoverage = field(default_factory=OwnershipCoverage)
     lineage_evidence: Mapping[str, Any] = field(default_factory=dict)
     durable_evidence: Mapping[str, Any] = field(default_factory=dict)

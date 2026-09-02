@@ -38,6 +38,16 @@ class MonetizationEventNormalizerService:
             "amount": amount,
             "currency": data.get("currency", "USD"),
             "content_item_id": data.get("content_item_id"),
+            "commercial_offering_id": (
+                data.get("commercial_offering_id")
+                or data.get("commercialOfferingId")
+                or data.get("offering_id")
+            ),
+            "provider_resource_id": (
+                data.get("provider_resource_id")
+                or data.get("providerResourceId")
+                or data.get("external_product_id")
+            ),
             "content_tag": data.get("content_tag"),
             "fanvue_media_uuid": (
                 data.get("fanvue_media_uuid")

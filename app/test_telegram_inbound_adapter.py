@@ -1,6 +1,9 @@
 import ast
+import os
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
 from app.models.conversation_gateway import ConversationGatewayOutput
 from app.models.telegram_identity import TelegramMvpIdentityInput
@@ -56,6 +59,217 @@ def inbound_payload(**overrides):
 
 
 class TelegramInboundAdapterTests(unittest.TestCase):
+    def setUp(self):
+        self._feature_flags = patch.dict(os.environ, {
+            "PRIVATE_CHAT_FINGERPRINT_IDENTITY_BOOTSTRAP_ENABLED": "false",
+            "CONTROLLED_AUTONOMY_TEST_ENABLED": "false",
+        })
+        self._feature_flags.start()
+
+    def tearDown(self):
+        self._feature_flags.stop()
+
+    def test_purchase_acknowledgement_lookup_uses_supported_identity_contract(self):
+        calls = []
+
+        class Purchases:
+            def get_unacknowledged_purchase(
+                self, *, creator_profile_id, fanvue_account_id, telegram_user_id,
+            ):
+                calls.append((creator_profile_id, fanvue_account_id, telegram_user_id))
+                return None
+
+        observations = []
+        identities = SimpleNamespace(
+            observe=lambda **values: observations.append(values),
+            resolve_telegram_identity=lambda _user_id: None,
+        )
+        adapter = TelegramInboundAdapter(
+            identity_adapter=RecordingIdentityAdapter(),
+            conversation_gateway=RecordingConversationGateway(),
+            creator_profile_id=3, fanvue_account_id=2,
+            purchase_intent_service=Purchases(),
+            telegram_identity_service=identities,
+            unmapped_telegram_prospect_service=SimpleNamespace(
+                observe=lambda **_values: None,
+            ),
+        )
+
+        adapter.execute(inbound_payload())
+
+        self.assertEqual(calls, [(3, 2, 123456789)])
+        self.assertEqual(len(observations), 1)
+
+    def test_explicit_more_is_persisted_before_purchase_acknowledgement_reply(self):
+        intent_id = "00000000-0000-0000-0000-000000000123"
+        prospect_calls = []
+        prospects = SimpleNamespace(
+            observe=lambda **values: prospect_calls.append(("observe", values)),
+            record_deferred_continuation=lambda **values: prospect_calls.append(
+                ("defer", values)
+            ),
+        )
+        purchases = SimpleNamespace(
+            identities=SimpleNamespace(
+                get_by_telegram_user_id=lambda _user_id: None,
+            ),
+            get_unacknowledged_purchase=lambda **_values: SimpleNamespace(
+                purchase_intent_id=intent_id,
+            ),
+        )
+        adapter = TelegramInboundAdapter(
+            identity_adapter=RecordingIdentityAdapter(),
+            conversation_gateway=RecordingConversationGateway(),
+            creator_profile_id=3, fanvue_account_id=2,
+            purchase_intent_service=purchases,
+            unmapped_telegram_prospect_service=prospects,
+        )
+
+        adapter.execute(inbound_payload(
+            message_text="send another", message_id=77,
+        ))
+
+        deferred = [values for action, values in prospect_calls if action == "defer"]
+        self.assertEqual(len(deferred), 1)
+        self.assertEqual(deferred[0]["source_inbound_message_id"], 77)
+        self.assertEqual(deferred[0]["purchase_intent_id"], intent_id)
+        self.assertEqual(deferred[0]["continuation_type"], "DISCRETE_ITEM")
+        self.assertEqual(
+            deferred[0]["source_correlation_id"], "telegram:123456789:77",
+        )
+
+    def test_verified_mapping_uses_canonical_engine_identity_after_chat_metadata_changes(self):
+        gateway = RecordingConversationGateway()
+        observations = []
+        canonical = SimpleNamespace(
+            engine_user_id="2:9", fanvue_account_id=2, local_fanvue_user_id=9,
+            external_fanvue_user_uuid="00000000-0000-0000-0000-000000000009",
+        )
+        identities = SimpleNamespace(
+            observe=lambda **values: observations.append(values),
+            resolve_telegram_identity=lambda _user_id: canonical,
+        )
+        adapter = TelegramInboundAdapter(
+            identity_adapter=RecordingIdentityAdapter(), conversation_gateway=gateway,
+            telegram_identity_service=identities,
+        )
+
+        result = adapter.execute(inbound_payload(
+            telegram_chat_id=987654321, telegram_username="renamed_customer",
+            telegram_display_name="Renamed Customer",
+        ))
+
+        self.assertEqual(result.engine_user_id, "2:9")
+        self.assertEqual(gateway.calls[0].engine_user_id, "2:9")
+        self.assertEqual(observations[0]["telegram_user_id"], 123456789)
+        self.assertEqual(observations[0]["telegram_chat_id"], 987654321)
+
+    def test_unmapped_customer_can_chat_but_paid_offer_is_removed(self):
+        from app.services.telegram_identity_service import TelegramIdentityNotFoundError
+        gateway = RecordingConversationGateway(ConversationGatewayOutput(
+            correlation_id="paid", response_text="Buy this", offer_authorized=True,
+            offer_link="https://fanvue.com/offer", blocked=False, error_code=None,
+            delivery_requires_payment=True,
+            delivery_payload={"message_text": "Buy this", "media_link": "secret"},
+        ))
+        identities = SimpleNamespace(
+            observe=lambda **_values: None,
+            resolve_telegram_identity=lambda _user_id: (_ for _ in ()).throw(
+                TelegramIdentityNotFoundError("unmapped")
+            ),
+        )
+        adapter = TelegramInboundAdapter(
+            identity_adapter=RecordingIdentityAdapter(), conversation_gateway=gateway,
+            telegram_identity_service=identities,
+        )
+
+        result = adapter.execute(inbound_payload())
+
+        self.assertEqual(len(gateway.calls), 1)
+        self.assertFalse(result.offer_authorized)
+        self.assertIsNone(result.offer_link)
+        self.assertFalse(result.delivery_requires_payment)
+        self.assertNotIn("media_link", result.delivery_payload)
+        self.assertEqual(
+            result.diagnostic_metadata["paid_offer_blocked_reason"],
+            "TELEGRAM_IDENTITY_UNVERIFIED",
+        )
+
+    def test_canonical_transcript_survives_adapter_recreation_without_current_duplication(self):
+        thread = {"id": 77}
+        messages = {}
+        gateway_one = RecordingConversationGateway()
+        gateway_two = RecordingConversationGateway()
+        canonical_identity = SimpleNamespace(
+            fanvue_account_id=2, local_fanvue_user_id=9,
+            external_fanvue_user_uuid="00000000-0000-0000-0000-000000000009",
+        )
+        purchases = SimpleNamespace(
+            identities=SimpleNamespace(
+                get_by_telegram_user_id=lambda _user_id: canonical_identity
+            ),
+            get_unacknowledged_purchase=lambda **_kwargs: None,
+        )
+
+        def save(**values):
+            messages.setdefault(values["fanvue_message_uuid"], dict(values))
+
+        def history(**values):
+            excluded = values["exclude_message_uuid"]
+            rows = [row for key, row in messages.items() if key != excluded]
+            rows = rows[-values["limit"]:]
+            return [
+                {"role": "user" if row["sender_type"] == "user" else "assistant",
+                 "content": row["text"]}
+                for row in rows
+            ]
+
+        dependencies = dict(
+            identity_adapter=RecordingIdentityAdapter(), creator_profile_id=3,
+            fanvue_account_id=2, purchase_intent_service=purchases,
+            conversation_thread_resolver=lambda **_kwargs: thread,
+            conversation_message_saver=save, conversation_history_loader=history,
+        )
+        first = TelegramInboundAdapter(
+            conversation_gateway=gateway_one, **dependencies
+        )
+        first_result = first.execute(inbound_payload(
+            message_text="first message", message_id=1, chat_history=[]
+        ))
+        save(
+            fanvue_account_id=2, thread_id=77, fanvue_user_id=9,
+            direction="outbound", sender_type="bot", text="first reply",
+            fanvue_message_uuid="outbound-1", raw_payload={},
+        )
+
+        restarted = TelegramInboundAdapter(
+            conversation_gateway=gateway_two, **dependencies
+        )
+        second_payload = inbound_payload(
+            message_text="second message", message_id=2, chat_history=[]
+        )
+        second_result = restarted.execute(second_payload)
+        restarted.execute(second_payload)
+
+        self.assertEqual(first_result.diagnostic_metadata["conversation_thread_id"], 77)
+        self.assertEqual(second_result.diagnostic_metadata["conversation_thread_id"], 77)
+        self.assertEqual(gateway_one.calls[0].chat_history, [])
+        self.assertEqual(gateway_two.calls[0].chat_history, [
+            {"role": "user", "content": "first message"},
+            {"role": "assistant", "content": "first reply"},
+        ])
+        self.assertNotIn("second message", [
+            item["content"] for item in gateway_two.calls[0].chat_history
+        ])
+        inbound_rows = [
+            row for row in messages.values()
+            if row["direction"] == "inbound" and row["text"] == "second message"
+        ]
+        self.assertEqual(len(inbound_rows), 1)
+        self.assertEqual(
+            gateway_two.calls[0].brain_context.conversation_thread_id, 77
+        )
+
     def build_adapter(self, *, gateway_output=None):
         identity_adapter = RecordingIdentityAdapter()
         gateway = RecordingConversationGateway(gateway_output)
@@ -146,7 +360,11 @@ class TelegramInboundAdapterTests(unittest.TestCase):
         self.assertIsNone(result.error_code)
         self.assertEqual(
             result.diagnostic_metadata,
-            gateway_output.diagnostic_metadata,
+            {
+                **gateway_output.diagnostic_metadata,
+                "recentHistorySource": "NONE",
+                "recentHistoryTurnCount": 0,
+            },
         )
         self.assertIsNot(
             result.diagnostic_metadata,

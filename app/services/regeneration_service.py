@@ -172,6 +172,8 @@ class RegenerationService:
     def _build_request(self, operation, index, source, recipe, resolved):
         first, *rest = resolved
         first_ref, first_path = first
+        seed = next(((ref, path) for ref, path in rest if ref.role == "ORIGINAL_PHOTOSHOOT_SEED"), None)
+        previous = next(((ref, path) for ref, path in rest if ref.role in {"PREVIOUS_APPROVED_CONTINUITY", "PHOTOSHOOT_CONTINUITY"}), None)
         metadata = {
             "source": "REGENERATION_STUDIO", "workflow_type": "REGENERATION_STUDIO",
             "workflow_origin": "regeneration", "creative_mode": recipe.creative_mode,
@@ -187,9 +189,17 @@ class RegenerationService:
             "regeneration_seed_policy": "OMITTED_PROVIDER_RANDOM",
             "canonical_reference_image_url": first_path,
         }
-        if rest:
-            metadata.update({"photoshoot_continuity_reference_image_url": rest[0][1],
-                             "active_reference_image_id": rest[0][0].generated_image_id,
+        if seed:
+            metadata.update({
+                "original_photoshoot_seed_reference_image_url": seed[1],
+                "original_photoshoot_seed_image_id": seed[0].generated_image_id,
+            })
+        continuity = previous or seed or (rest[0] if rest else None)
+        if continuity:
+            metadata.update({"photoshoot_continuity_reference_image_url": continuity[1],
+                             "previous_approved_continuity_reference_image_url": continuity[1],
+                             "active_reference_image_id": continuity[0].generated_image_id,
+                             "previous_approved_continuity_reference_image_id": continuity[0].generated_image_id,
                              "require_frozen_photoshoot_identity": True})
         return GenerationRequest(
             request_id=self._request_id(operation.operation_id, index),
@@ -265,6 +275,43 @@ class RegenerationService:
             self.repository.promote_result(operation_id, result_id)
             promoted.append(record)
         return tuple(promoted)
+
+    def finalize_selection(self, operation_id, result_ids, *, creator_profile_id: int,
+                           account_id: int, operations=None, generation_library=None):
+        """Promote the selection, archive successful unselected results, and dismiss review."""
+        operations = operations or BackgroundOperationService()
+        _, _, rows, requested = self._owned_results(
+            operation_id, result_ids, creator_profile_id, account_id, operations,
+        )
+        selected = set(requested)
+        for result_id in requested:
+            item = rows[result_id]
+            if item.status != "SUCCEEDED":
+                raise ValueError("Only successful regeneration results can be promoted.")
+            if item.disposition not in {"PENDING_REVIEW", "ARCHIVED", "PROMOTED"}:
+                raise ValueError("Regeneration result is not pending review.")
+
+        to_promote = [result_id for result_id in requested
+                      if rows[result_id].disposition != "PROMOTED"]
+        promoted = self.promote(
+            operation_id, to_promote, creator_profile_id=creator_profile_id,
+            account_id=account_id, operations=operations,
+            generation_library=generation_library,
+        ) if to_promote else ()
+
+        refreshed = self.repository.results(operation_id)
+        to_archive = [str(item.regeneration_result_id) for item in refreshed
+                      if str(item.regeneration_result_id) not in selected
+                      and item.status == "SUCCEEDED"
+                      and item.disposition == "PENDING_REVIEW"]
+        archived = self.archive(
+            operation_id, to_archive, creator_profile_id=creator_profile_id,
+            account_id=account_id, operations=operations,
+        ) if to_archive else ()
+        run = self.repository.dismiss_workspace(
+            operation_id, creator_profile_id=creator_profile_id,
+        )
+        return tuple(promoted), tuple(archived), run
 
     def archive(self, operation_id, result_ids, *, creator_profile_id: int, account_id: int,
                 operations=None):

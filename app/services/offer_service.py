@@ -595,7 +595,7 @@ class OfferService:
             tease_style = random.choice(tease_styles)
 
             base_instruction = (
-                f"You are {persona_name}. Guide the user toward a paid tease offer around ${price}. "
+                f"You are {persona_name}. Guide the user toward a paid tease offer without stating its price. "
                 f"Make it feel {tease_style}. "
                 f"This should feel like a preview, a peek, or a little taste—never like the biggest or most intense thing you have. "
                 f"Keep it short, seductive, and easy to unlock."
@@ -628,7 +628,7 @@ class OfferService:
         # ---------- VIP COPY ----------
         if offer_type == self.OFFER_TYPE_VIP:
             vip_core = (
-                f"You are {persona_name}. Guide the user toward a VIP paid offer around ${price}. "
+                f"You are {persona_name}. Guide the user toward a VIP paid offer without stating its price. "
                 f"Make it feel more exclusive, more personal, and more valuable than a tease."
             )
 
@@ -702,7 +702,7 @@ class OfferService:
         # ---------- PREMIUM COPY ----------
         if offer_type == self.OFFER_TYPE_PREMIUM:
             premium_core = (
-                f"You are {persona_name}. Guide the user toward a premium paid offer around ${price}. "
+                f"You are {persona_name}. Guide the user toward a premium paid offer without stating its price. "
                 f"Make it feel elite, rare, highly desirable, and clearly above a normal VIP offer."
             )
 

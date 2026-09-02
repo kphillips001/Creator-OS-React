@@ -8,6 +8,15 @@ export type PlannerBatchItem = {
   jobId: string | null;
   error: string;
   failureStage?: "enhancement" | "planning" | "generation";
+  attempts?: Array<{
+    attemptNumber: number;
+    operationId: string | null;
+    generationJobId?: string | null;
+    status: "completed" | "failed";
+    error?: string | null;
+    failureStage?: "enhancement" | "planning" | "generation" | null;
+  }>;
+  retryCycleId?: string;
 };
 
 export function updatePlannerBatchItems(

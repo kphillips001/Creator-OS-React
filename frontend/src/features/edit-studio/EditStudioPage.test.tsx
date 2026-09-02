@@ -81,7 +81,7 @@ describe("EditStudioPage", () => {
   it("is registered in Studios at the required route", () => {
     const studios = navigationGroups.find((group) => group.label === "Studios");
     expect(studios?.items.map(({ label }) => label)).toEqual([
-      "Content Studio", "Regeneration Studio", "Photoshoot Studio", "Video Studio", "Edit Studio",
+      "Content Studio", "Photoshoot Studio", "Video Studio", "Edit Studio", "Regeneration Studio",
     ]);
     expect(studios?.items.find(({ label }) => label === "Edit Studio")?.path).toBe("/content/edit");
   });

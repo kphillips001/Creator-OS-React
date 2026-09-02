@@ -42,6 +42,19 @@ class AsyncRecordingAssetSender:
         return 778
 
 
+class VerifiedCommercialSender:
+    async def send_text(self, **kwargs):
+        return type("Receipt", (), {
+            "id": 779,
+            "final_text": kwargs["message_text"],
+            "actionable_destination_attached": True,
+            "provider_action_verified": True,
+            "provider_markup_included": True,
+            "provider_markup_verified": True,
+            "attachment_mode": "TELEGRAM_BUSINESS_INLINE_BUTTON",
+        })()
+
+
 class TelegramDeliveryExecutorTests(unittest.TestCase):
     def test_execute_defers_runtime_transport_for_normalized_payload(self):
         executor = TelegramDeliveryExecutor(global_safety_service=AllowingSafetyService())
@@ -127,7 +140,10 @@ class TelegramDeliveryExecutorTests(unittest.TestCase):
     def test_execute_async_sends_existing_text_capability(self):
         async def run():
             sender = AsyncRecordingTextSender()
-            executor = TelegramDeliveryExecutor(global_safety_service=AllowingSafetyService())
+            executor = TelegramDeliveryExecutor(
+                global_safety_service=AllowingSafetyService(),
+                business_commercial_transport=VerifiedCommercialSender(),
+            )
 
             result = await executor.execute_async(
                 TelegramDeliveryPayload(
@@ -170,6 +186,53 @@ class TelegramDeliveryExecutorTests(unittest.TestCase):
         self.assertEqual(result.metadata["telegram_message_id"], 778)
         self.assertEqual(sender.calls[0]["asset_path"], "C:/vault/teaser.jpg")
         self.assertEqual(sender.calls[0]["message_text"], "A little preview for you")
+
+    def test_execute_async_projects_provider_verified_commercial_action(self):
+        async def run():
+            executor = TelegramDeliveryExecutor(
+                global_safety_service=AllowingSafetyService(),
+                business_commercial_transport=VerifiedCommercialSender(),
+            )
+            return await executor.execute_async(
+                TelegramDeliveryPayload(
+                    message_text="Here it is - unlock this private one.",
+                    delivery_method="text",
+                    metadata={"private_chat_unlock_button": {
+                        "label": "🔓 Unlock",
+                        "url": "https://creator.example/unlock/opaque",
+                    }},
+                ),
+                context={"chat_id": 123456789, "transport": VerifiedCommercialSender()},
+            )
+
+        result = asyncio.run(run())
+        self.assertEqual(result.metadata["telegram_message_id"], 779)
+        self.assertTrue(result.metadata["actionable_destination_attached"])
+        self.assertTrue(result.metadata["provider_action_verified"])
+        self.assertTrue(result.metadata["provider_markup_included"])
+        self.assertTrue(result.metadata["provider_markup_verified"])
+        self.assertEqual(
+            result.metadata["attachment_mode"],
+            "TELEGRAM_BUSINESS_INLINE_BUTTON",
+        )
+        self.assertTrue(result.metadata["customer_facing_destination_valid"])
+        self.assertEqual(result.metadata["destination_scope"], "PUBLIC")
+
+    def test_commercial_localhost_destination_fails_before_transport(self):
+        sender = RecordingTextSender()
+        executor = TelegramDeliveryExecutor(global_safety_service=AllowingSafetyService())
+        result = executor.execute(
+            TelegramDeliveryPayload(
+                message_text="Here it is - unlock this private one.",
+                delivery_method="text",
+                metadata={"private_chat_unlock_button": {
+                    "label": "Unlock", "url": "http://127.0.0.1:8001/unlock/x",
+                }},
+            ),
+            context={"chat_id": 123456789, "text_sender": sender},
+        )
+        self.assertFalse(result.executed)
+        self.assertEqual(sender.calls, [])
 
     def test_execute_preserves_blocked_and_no_delivery_states(self):
         executor = TelegramDeliveryExecutor()

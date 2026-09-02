@@ -99,6 +99,12 @@ class GlobalAutomationSafetyService:
             "global_automation_enabled",
             False,
         ):
+            from app.services.controlled_autonomy_test_service import (
+                ControlledAutonomyTestService,
+            )
+            controlled = ControlledAutonomyTestService().active_decision()
+            if controlled.allowed:
+                return controlled.to_dict()
             return self._blocked("global_automation_disabled")
 
         if not self._config_enabled(

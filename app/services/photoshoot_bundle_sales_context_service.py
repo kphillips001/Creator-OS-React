@@ -94,6 +94,33 @@ class PhotoshootBundleSalesContextService:
             intelligence.get("commercial_title"), row.get("display_name"),
             "Photoshoot Bundle",
         )
+        intelligence_reader = getattr(
+            self.photoshoots, "latest_shot_intelligence", None,
+        )
+        member_rows = tuple(
+            intelligence_reader(str(row["photoshoot_session_id"])) or ()
+        ) if callable(intelligence_reader) else ()
+        member_profiles = [
+            dict(member.get("profile_data") or {})
+            for member in member_rows
+            if int(member.get("asset_id") or 0) in paid_ids
+        ]
+        aggregate_fields = (
+            "scene_environment", "emotional_tone", "sequence_role",
+            "wardrobe_state", "visual_focus",
+        )
+        aggregate = {
+            field: self._distinct(
+                profile.get(field) for profile in member_profiles
+            )
+            for field in aggregate_fields
+        }
+        aggregate = {key: value for key, value in aggregate.items() if value}
+        representative_profile = next((
+            dict(member.get("profile_data") or {})
+            for member in member_rows
+            if int(member.get("asset_id") or 0) == int(teaser.get("sourceAssetId") or 0)
+        ), {})
         context = {
             "schemaVersion": self.SCHEMA_VERSION,
             "sellingMode": "BUNDLE",
@@ -131,6 +158,31 @@ class PhotoshootBundleSalesContextService:
                 "mediaReference": teaser.get("previewUrl"),
                 "role": "BUNDLE_PROMOTIONAL_TEASER",
                 "presented": bool(teaser_presented),
+                "scope": (
+                    "This preview represents one source member only. Its specific visual "
+                    "details must not be attributed to every paid Bundle member."
+                ),
+            },
+            "bundlePresentationIntelligence": {
+                "scope": "WHOLE_BUNDLE",
+                "overallMood": self._first(
+                    intelligence.get("mood"),
+                    intelligence.get("emotional_journey"),
+                ),
+                "aggregateMemberSignals": aggregate,
+                "representativeSource": {
+                    "scope": "ONE_REPRESENTATIVE_MEMBER_ONLY",
+                    "summary": {
+                        key: representative_profile[key]
+                        for key in aggregate_fields
+                        if representative_profile.get(key) not in (None, "", [], {})
+                    },
+                },
+                "languageRules": [
+                    "Entice toward the Photoshoot experience as a whole, not one image.",
+                    "Use representative details only as preview evidence, never as facts about every member.",
+                    "Do not enumerate or invent members, counts, scenes, outfits, or future reveals.",
+                ],
             },
             "bundleOffer": {
                 "offeringId": paid.get("offeringId"),
@@ -181,3 +233,18 @@ class PhotoshootBundleSalesContextService:
     def _first(*values):
         return next((str(value).strip() for value in values
                      if value is not None and str(value).strip()), None)
+
+    @staticmethod
+    def _distinct(values, limit=6):
+        result = []
+        for value in values:
+            if value in (None, "", [], {}):
+                continue
+            candidates = value if isinstance(value, (list, tuple)) else (value,)
+            for candidate in candidates:
+                text = str(candidate).strip()
+                if text and text not in result:
+                    result.append(text)
+                if len(result) >= limit:
+                    return result
+        return result

@@ -93,6 +93,7 @@ def save_chat_message(
             raw_payload
         )
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), %s)
+        ON CONFLICT (fanvue_message_uuid) DO NOTHING
         RETURNING *;
     """
 
@@ -127,6 +128,13 @@ def save_chat_message(
                 ),
             )
             message = cur.fetchone()
+            if message is None and fanvue_message_uuid is not None:
+                cur.execute(
+                    """SELECT * FROM chat_messages
+                       WHERE fanvue_message_uuid=%s""",
+                    (fanvue_message_uuid,),
+                )
+                message = cur.fetchone()
 
             cur.execute(update_thread_query, (direction, direction, thread_id))
             return message
@@ -144,6 +152,8 @@ def get_messages_by_thread(
             cm.direction,
             cm.sender_type,
             cm.text,
+            cm.has_media,
+            cm.raw_payload,
             cm.sent_at
         FROM chat_messages cm
         JOIN chat_threads ct
@@ -197,7 +207,12 @@ def get_recent_messages(
     fanvue_account_id: int,
     thread_id: int,
     limit: int = 10,
+    exclude_message_uuid=None,
 ):
+    exclusion = (
+        "AND (cm.fanvue_message_uuid IS NULL OR cm.fanvue_message_uuid<>%s)"
+        if exclude_message_uuid is not None else ""
+    )
     query = """
         SELECT
             cm.id,
@@ -206,26 +221,26 @@ def get_recent_messages(
             cm.direction,
             cm.sender_type,
             cm.text,
+            cm.has_media,
+            cm.raw_payload,
             cm.sent_at
         FROM chat_messages cm
         JOIN chat_threads ct
             ON ct.id = cm.thread_id
         WHERE cm.thread_id = %s
           AND ct.fanvue_account_id = %s
+          {exclusion}
         ORDER BY cm.id DESC
         LIMIT %s;
     """
 
     with get_db_connection() as conn:
         with conn.cursor() as cur:
-            cur.execute(
-                query,
-                (
-                    thread_id,
-                    fanvue_account_id,
-                    limit,
-                ),
-            )
+            params = [thread_id, fanvue_account_id]
+            if exclude_message_uuid is not None:
+                params.append(exclude_message_uuid)
+            params.append(limit)
+            cur.execute(query.format(exclusion=exclusion), tuple(params))
 
             messages = cur.fetchall()
 
@@ -235,11 +250,13 @@ def get_recent_messages_for_gpt(
     fanvue_account_id: int,
     thread_id: int,
     limit: int = 10,
+    exclude_message_uuid=None,
 ):
     messages = get_recent_messages(
         fanvue_account_id=fanvue_account_id,
         thread_id=thread_id,
         limit=limit,
+        exclude_message_uuid=exclude_message_uuid,
     )
 
     formatted_messages = []
@@ -251,10 +268,16 @@ def get_recent_messages_for_gpt(
             else "assistant"
         )
 
+        content = msg["text"]
+        raw_payload = dict(msg.get("raw_payload") or {})
+        if raw_payload.get("delivery_kind") == "FREE_ENGAGEMENT_TEASER":
+            strategy = str(raw_payload.get("engagement_strategy") or "").replace("_", " ").lower()
+            purpose = f" for {strategy}" if strategy else ""
+            content = f"[Ava sent a free teaser image{purpose}. Caption: {content}]"
         formatted_messages.append(
             {
                 "role": role,
-                "content": msg["text"],
+                "content": content,
             }
         )
 

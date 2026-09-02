@@ -154,6 +154,39 @@ class StandaloneImageSalePreparationService:
             self.assets.update_media_metadata(asset_id, metadata)
             raise
 
+    def reassign_destination(self, asset_id: int, *, creator_profile_id: int,
+                             price_minor: int, destination: str,
+                             teaser_style: str | None = None):
+        """Re-run canonical preparation while changing only a standalone sale destination."""
+        asset = self._asset(asset_id, creator_profile_id)
+        if str(getattr(asset, "classification", None) or "") != "SINGLE_IMAGE":
+            raise ValueError("Sales destination reassignment supports standalone Single Images only.")
+        metadata = dict(asset.media_metadata or {})
+        prior = dict(metadata.get("standalone_sale_preparation") or {})
+        current = list(prior.get("destinations") or [])
+        requested = str(destination)
+        if requested not in {"CHAT", "CONTENT_VAULT"}:
+            raise ValueError("Select Chat or TG Wall as the sales destination.")
+        if len(current) != 1 or current[0] not in {"CHAT", "CONTENT_VAULT"}:
+            raise ValueError("Prepare this Single Image for sale before reassigning its destination.")
+        if current[0] == requested:
+            raise ValueError("Choose a different sales destination.")
+        try:
+            return self._stage(
+                asset, creator_profile_id=creator_profile_id,
+                price_minor=price_minor, destinations=[requested],
+                teaser_style=teaser_style,
+            )
+        except Exception:
+            # _stage owns the canonical transition. Restore its destination metadata if
+            # a later preparation operation fails, so projections never expose a move
+            # that did not complete.
+            refreshed = self.assets.get_by_id(asset.id) or asset
+            restored = dict(refreshed.media_metadata or {})
+            restored["standalone_sale_preparation"] = prior
+            self.assets.update_media_metadata(asset.id, restored)
+            raise
+
     def _stage(self, asset, *, creator_profile_id: int, price_minor: int,
                destinations=None, teaser_style=None):
         profile = self.intelligence.get_profile(asset.id)
@@ -226,6 +259,15 @@ class StandaloneImageSalePreparationService:
                 provider=CommercialPublicationProvider.FANVUE,
                 publication_metadata={"source_workflow": self.SOURCE_WORKFLOW,
                                       "asset_id": asset.id},
+            )
+        elif publication.status == CommercialPublicationStatus.FAILED:
+            # A newly accepted retry supersedes the active failure state. Keep
+            # retry_count as durable history, but clear last_error and expose a
+            # queued/preparing lifecycle while the canonical executor resumes.
+            publication = self.publication_service.update_status(
+                publication.publication_id,
+                creator_profile_id=creator_profile_id,
+                status=CommercialPublicationStatus.READY_TO_PUBLISH,
             )
         self._repair_commercial_title(
             asset=asset, profile=profile, offering=offering,

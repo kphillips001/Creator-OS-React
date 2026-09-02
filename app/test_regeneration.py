@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import inspect
+from datetime import datetime
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
@@ -11,6 +13,7 @@ import pytest
 from pydantic import ValidationError
 
 from app.api.regeneration import RegenerationPromoteRequest, RegenerationStartRequest
+import app.api.regeneration as regeneration_api
 from app.models.generation_engine import (
     GenerationJob, GenerationRequest, GenerationResult, GenerationStatus,
     ProviderPromptState,
@@ -26,6 +29,48 @@ from app.services.regeneration_eligibility_service import RegenerationEligibilit
 from app.services.regeneration_service import RegenerationIneligible, RegenerationService
 from app.services.generation_library_service import GenerationLibraryService
 from app.services.generation_engine_service import GenerationEngineService
+from app.repositories.regeneration_repository import RegenerationRepository
+
+
+def test_current_workspace_discovery_returns_canonical_source(monkeypatch):
+    run = RegenerationRun(uuid4(), 7, "source-1", uuid4(), 5, "RUNNING")
+    monkeypatch.setattr(regeneration_api, "_context", lambda: (7, 9))
+    monkeypatch.setattr(regeneration_api, "RegenerationRepository", lambda: SimpleNamespace(
+        discover_workspace=lambda **kwargs: run))
+    payload = regeneration_api.current_regeneration_workspace()
+    assert payload == {"success": True, "workspace": {
+        "operationId": str(run.operation_id), "sourceGeneratedImageId": "source-1"}}
+
+
+def test_workspace_discovery_uses_latest_dismissal_as_terminal_review_horizon():
+    source = inspect.getsource(RegenerationRepository.discover_workspace)
+    assert "MAX(dismissed.workspace_dismissed_at)" in source
+    assert "o.status IN ('QUEUED','RUNNING','WAITING_EXTERNAL','CANCEL_REQUESTED') OR (" in source
+
+
+def test_dismiss_rejects_active_workspace(monkeypatch):
+    operation_id = str(uuid4())
+    monkeypatch.setattr(regeneration_api, "_context", lambda: (7, 9))
+    monkeypatch.setattr(regeneration_api, "BackgroundOperationService", lambda: SimpleNamespace(
+        get=lambda *args, **kwargs: SimpleNamespace(status="RUNNING")))
+    monkeypatch.setattr(regeneration_api, "RegenerationRepository", lambda: SimpleNamespace(
+        get_run=lambda *args, **kwargs: object()))
+    response = regeneration_api.dismiss_regeneration_workspace(operation_id)
+    assert response.status_code == 409
+
+
+def test_dismissed_workspace_cannot_be_rehydrated_from_stale_url(monkeypatch):
+    operation_id = uuid4()
+    run = RegenerationRun(operation_id, 7, "source-1", uuid4(), 1, "SUCCEEDED",
+                          workspace_dismissed_at=datetime.now())
+    monkeypatch.setattr(regeneration_api, "_context", lambda: (7, 9))
+    monkeypatch.setattr(regeneration_api, "BackgroundOperationService", lambda: SimpleNamespace(
+        get=lambda *args, **kwargs: SimpleNamespace(status="SUCCEEDED")))
+    monkeypatch.setattr(regeneration_api, "RegenerationService", lambda: SimpleNamespace(
+        repository=SimpleNamespace(get_run=lambda *args, **kwargs: run)))
+    response = regeneration_api.get_regeneration(str(operation_id))
+    assert response.status_code == 410
+    assert b"WORKSPACE_DISMISSED" in response.body
 
 
 def recipe(**updates):
@@ -116,6 +161,18 @@ def test_valid_sfw_and_explicit_recipes_are_eligible(tmp_path):
     assert sfw.inspect("source-image").can_regenerate
     promoted, *_ = eligibility_fixture(tmp_path, source_workflow="REGENERATION_STUDIO")
     assert promoted.inspect("source-image").can_regenerate
+
+
+def test_inspect_many_matches_individual_result_without_reloading_records(tmp_path):
+    service, record, *_ = eligibility_fixture(tmp_path)
+    expected = service.inspect(record.image_id, creator_profile_id=7)
+    service.library.get_calls.clear()
+    service.recipes.prefetch = lambda _ids: service.recipes
+
+    actual = service.inspect_many((record,), creator_profile_id=7)
+
+    assert actual[record.image_id] == expected
+    assert service.library.get_calls == []
 
 
 def test_recipe_repository_insert_contract_includes_regeneration_lineage():
@@ -254,25 +311,32 @@ def test_untrusted_final_marker_cannot_bypass_rendering():
 
 def test_photoshoot_reference_order_is_preserved(tmp_path):
     identity = tmp_path / "identity.png"; identity.write_bytes(b"identity")
+    seed = tmp_path / "seed.png"; seed.write_bytes(b"seed")
     continuity = tmp_path / "continuity.png"; continuity.write_bytes(b"continuity")
     source_recipe = recipe(source_workflow="photoshoot", render_policy="PHOTOSHOOT_EXPLICIT")
     second = replace(source_recipe.references[0], recipe_reference_id=uuid4(), position=2,
-                     role="PHOTOSHOOT_CONTINUITY", source_type="GENERATED_IMAGE",
+                     role="ORIGINAL_PHOTOSHOOT_SEED", source_type="GENERATED_IMAGE",
+                     asset_id=None, generated_image_id="seed-image", source_id="seed-image")
+    third = replace(source_recipe.references[0], recipe_reference_id=uuid4(), position=3,
+                     role="PREVIOUS_APPROVED_CONTINUITY", source_type="GENERATED_IMAGE",
                      asset_id=None, generated_image_id="continuity-image", source_id="continuity-image")
-    source_recipe = replace(source_recipe, references=(source_recipe.references[0], second))
+    source_recipe = replace(source_recipe, references=(source_recipe.references[0], second, third))
     source = SimpleNamespace(image_id="source-image", generation_recipe_id=str(source_recipe.recipe_id),
                              creator_profile_id=7, output_reference=str(tmp_path / "source.png"))
+    seed_record = SimpleNamespace(image_id="seed-image", output_reference=str(seed))
     continuity_record = SimpleNamespace(image_id="continuity-image", output_reference=str(continuity))
     class Library:
-        def get(self, image_id): return source if image_id == "source-image" else continuity_record
+        def get(self, image_id):
+            return {"source-image": source, "seed-image": seed_record, "continuity-image": continuity_record}[image_id]
     recipes = MemoryRecipes(source_recipe)
     service = RegenerationEligibilityService(generation_library=Library(), recipes=recipes,
         references=ReferenceService(identity), provider_registry=ProviderRegistry())
     resolved = service.resolve_references(source_recipe, 7)
-    assert [item.role for item, _ in resolved] == ["CANONICAL_IDENTITY", "PHOTOSHOOT_CONTINUITY"]
+    assert [item.role for item, _ in resolved] == ["CANONICAL_IDENTITY", "ORIGINAL_PHOTOSHOOT_SEED", "PREVIOUS_APPROVED_CONTINUITY"]
     request = RegenerationService(eligibility=service, recipes=recipes, repository=SimpleNamespace())._build_request(
         SimpleNamespace(operation_id=uuid4()), 1, source, source_recipe, resolved)
     assert request.reference_asset_path == str(identity)
+    assert request.metadata["original_photoshoot_seed_reference_image_url"] == str(seed)
     assert request.metadata["photoshoot_continuity_reference_image_url"] == str(continuity)
 
 
@@ -284,6 +348,9 @@ class MemoryWorkspace:
         self.rows.setdefault(op, [RegenerationResult(uuid4(), op, i, "PENDING") for i in range(1, values["requested_count"] + 1)])
         return self.runs[op]
     def get_run(self, op, creator_profile_id=None): return self.runs.get(op)
+    def dismiss_workspace(self, op, *, creator_profile_id):
+        self.runs[op] = replace(self.runs[op], workspace_dismissed_at=datetime.now())
+        return self.runs[op]
     def results(self, op): return tuple(self.rows[op])
     def update_run_status(self, op, status): self.runs[op] = replace(self.runs[op], status=status); return self.runs[op]
     def start_result(self, op, i): return self._set(op, i, status="RUNNING")
@@ -474,6 +541,36 @@ def test_promotion_is_idempotent_library_registration_with_existing_recipe(tmp_p
     assert workspace.results(operation_id)[0].disposition == "PROMOTED"
     assert media.read_bytes() == b"existing pixels"
     assert recipes.get(new_recipe.recipe_id) is new_recipe
+
+
+def test_finalize_selection_preserves_promoted_results_archives_unselected_and_dismisses(tmp_path):
+    eligibility, source, source_recipe, recipes, _ = eligibility_fixture(tmp_path)
+    operation_id = uuid4(); selected_id = uuid4(); unselected_id = uuid4()
+    media = tmp_path / "variation.png"; media.write_bytes(b"pixels")
+    workspace = MemoryWorkspace()
+    workspace.runs[operation_id] = RegenerationRun(
+        operation_id, 7, source.image_id, source_recipe.recipe_id, 2, "SUCCEEDED")
+    workspace.rows[operation_id] = [
+        RegenerationResult(selected_id, operation_id, 1, "SUCCEEDED", "job-1", "result-1",
+                           "already-promoted", source_recipe.recipe_id, str(media), "PROMOTED"),
+        RegenerationResult(unselected_id, operation_id, 2, "SUCCEEDED", "job-2", "result-2",
+                           "archive-me", source_recipe.recipe_id, str(media), "PENDING_REVIEW"),
+    ]
+    operations = SimpleNamespace(get=lambda *args, **kwargs: SimpleNamespace(operation_id=operation_id))
+    service = RegenerationService(eligibility=eligibility, repository=workspace, recipes=recipes)
+
+    promoted, archived, run = service.finalize_selection(
+        operation_id, [str(selected_id)], creator_profile_id=7, account_id=9,
+        operations=operations,
+        generation_library=SimpleNamespace(promote_regeneration_result=lambda **_: pytest.fail(
+            "already-promoted result must not be registered again")),
+    )
+
+    assert promoted == ()
+    assert [item.regeneration_result_id for item in archived] == [unselected_id]
+    assert [item.disposition for item in workspace.results(operation_id)] == ["PROMOTED", "ARCHIVED"]
+    assert run.workspace_dismissed_at is not None
+    assert media.read_bytes() == b"pixels"
 
 
 def test_promoted_library_record_is_copied_once_and_becomes_regeneration_eligible(tmp_path):

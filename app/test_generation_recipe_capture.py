@@ -84,6 +84,27 @@ def test_final_prompt_payload_identity_build_once_order_and_no_mutation():
     assert submitted.generation_recipe_id == str(recipe.recipe_id)
 
 
+def test_photoshoot_recipe_captures_seed_and_previous_approved_roles():
+    repository = MemoryRecipeRepository()
+    item = provider(repository)
+    source = request()
+    source = replace(source, metadata={
+        **source.metadata,
+        "original_photoshoot_seed_reference_image_url": "https://refs.test/seed.png",
+        "original_photoshoot_seed_image_id": "seed-image",
+        "previous_approved_continuity_reference_image_id": "shot-3",
+    })
+
+    recipe = GenerationRecipeCaptureService(repository).capture(
+        request=source, provider=item, final_payload=item.build_payload(source),
+    )
+
+    assert [ref.role for ref in recipe.references] == [
+        "CANONICAL_IDENTITY", "ORIGINAL_PHOTOSHOOT_SEED", "PREVIOUS_APPROVED_CONTINUITY",
+    ]
+    assert [ref.generated_image_id for ref in recipe.references] == [None, "seed-image", "shot-3"]
+
+
 def test_sanitization_removes_secrets_and_signed_reference_urls():
     repository=MemoryRecipeRepository(); service=GenerationRecipeCaptureService(repository)
     item=provider(repository)

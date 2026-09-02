@@ -12,12 +12,14 @@ type XCaptionDraft = {
   ideaSeed: number;
 };
 
+type TelegramCta = "VAULT" | "CHAT" | "TIP";
+
 const emptyXDraft = (): XCaptionDraft => ({
   caption: "", captionResultId: null, selectedGeneratedCaption: "", themes: [], ideaSeed: 0,
 });
 
 export function PublishDialog({ record, onClose, onPublished }: {
-  record: GenerationRecord;
+  record: Pick<GenerationRecord, "image_id" | "image_url">;
   onClose: () => void;
   onPublished: (message: string) => void;
 }) {
@@ -29,9 +31,9 @@ export function PublishDialog({ record, onClose, onPublished }: {
   const [caption, setCaption] = useState("");
   const [ideaSeed, setIdeaSeed] = useState(0);
   const [ctaEnabled, setCtaEnabled] = useState(false);
-  const [ctaLabel, setCtaLabel] = useState("");
-  const [ctaUrl, setCtaUrl] = useState("");
+  const [selectedCtas, setSelectedCtas] = useState<TelegramCta[]>([]);
   const [selectedXAccounts, setSelectedXAccounts] = useState<string[]>([]);
+  const [xAutoRepliesEnabled, setXAutoRepliesEnabled] = useState(true);
   const [sameXCaption, setSameXCaption] = useState(true);
   const [xDrafts, setXDrafts] = useState<Record<string, XCaptionDraft>>({});
   const [pending, setPending] = useState<"load" | "captions" | "publish" | "">("load");
@@ -47,7 +49,7 @@ export function PublishDialog({ record, onClose, onPublished }: {
       })
       .then((result) => {
         setContext(result); setDestination(result.defaultDestination);
-        const accounts = result.xAccounts || [];
+        const accounts = (result.xAccounts || []).filter(({ accountName }) => accountName !== "AvaBlackthorneX");
         setSelectedXAccounts(accounts[0] ? [accounts[0].accountName] : []);
         setXDrafts(Object.fromEntries(accounts.map(({ accountName }) => [accountName, emptyXDraft()])));
         setPending("");
@@ -133,10 +135,13 @@ export function PublishDialog({ record, onClose, onPublished }: {
   const publish = async () => {
     if (!canPublish) return;
     setPending("publish"); setError("");
-    const endpoint = `/api/v1/generation-library/${encodeURIComponent(record.image_id)}/publish`;
-    const payload = {
+    const endpoint = destination === "instagram"
+      ? `/api/v1/generation-library/${encodeURIComponent(record.image_id)}/publish/instagram/handoff`
+      : `/api/v1/generation-library/${encodeURIComponent(record.image_id)}/publish`;
+    const payload = destination === "instagram" ? { caption } : {
       destination, caption, captionResultId, selectedGeneratedCaption,
-      ctaEnabled, ctaLabel, ctaUrl,
+      ctaEnabled, selectedCtas: ctaEnabled ? (["VAULT", "CHAT", "TIP"] as TelegramCta[]).filter((value) => selectedCtas.includes(value)) : [],
+      ...(destination === "x" ? { xAutoRepliesEnabled } : {}),
       ...(destination === "x" ? { xTargets: selectedXAccounts.map((accountName) => {
         const draft = separateXCaptions ? (xDrafts[accountName] || emptyXDraft()) : {
           caption, captionResultId, selectedGeneratedCaption,
@@ -201,7 +206,8 @@ export function PublishDialog({ record, onClose, onPublished }: {
             <section className="publish-dialog__destination"><h3>Destination</h3><div className="publish-dialog__radios">
               {context.destinations.filter((option) => option.value !== "telegram_chat").map((option) => <label key={option.value}><input checked={destination === option.value} disabled={busy} name="publish-destination" onChange={() => chooseDestination(option.value)} type="radio" /><span>{option.label}</span></label>)}
             </div>{destination === "x" && <div className="publish-dialog__x-accounts" aria-label="X accounts">
-              {(context.xAccounts || []).map((account) => <label key={account.accountName}><input checked={selectedXAccounts.includes(account.accountName)} disabled={busy} onChange={(event) => toggleXAccount(account.accountName, event.target.checked)} type="checkbox" /><span>{account.label}</span></label>)}
+              {(context.xAccounts || []).filter(({ accountName }) => accountName !== "AvaBlackthorneX").map((account) => <label key={account.accountName}><input checked={selectedXAccounts.includes(account.accountName)} disabled={busy} onChange={(event) => toggleXAccount(account.accountName, event.target.checked)} type="checkbox" /><span>{account.label}</span></label>)}
+              <label><input checked={xAutoRepliesEnabled} disabled={busy} onChange={(event) => setXAutoRepliesEnabled(event.target.checked)} type="checkbox" /><span>Enable X-AUTO replies</span></label>
             </div>}</section>
             {destination === "x" && selectedXAccounts.length === 2 && <section className="publish-dialog__telegram-options"><label><input checked={sameXCaption} disabled={busy} onChange={(event) => setSameXCaption(event.target.checked)} type="checkbox" /> Use same caption for both accounts</label></section>}
             {!separateXCaptions && <><section><h3>Caption controls</h3><p>Generate image-aware captions with Caption Studio, or enter your own caption below.</p><div className="publish-dialog__actions">
@@ -210,7 +216,7 @@ export function PublishDialog({ record, onClose, onPublished }: {
             </div>{pending === "captions" && <p className="publish-dialog__notice">Generating captions…</p>}
               {themes.length > 0 && <div className="publish-dialog__captions" aria-label="Generated captions">{themes.map((theme) => <div key={theme.theme}><h4>{theme.theme}</h4>{theme.captions.map((value, index) => <button aria-pressed={selectedGeneratedCaption === value} key={`${theme.theme}-${index}`} onClick={() => selectCaption(value)} type="button">{value}</button>)}</div>)}</div>}
             </section>
-            <section><label className="publish-dialog__editor"><span>Enter Your Own Caption</span><textarea disabled={busy} onChange={(event) => setCaption(event.target.value)} placeholder={`Type or paste your own ${destination === "x" ? "X" : "Telegram"} caption here.`} rows={5} value={caption} /></label>
+            <section><label className="publish-dialog__editor"><span>Enter Your Own Caption</span><textarea disabled={busy} onChange={(event) => setCaption(event.target.value)} placeholder={`Type or paste your own ${destination === "x" ? "X" : destination === "instagram" ? "Instagram" : "Telegram"} caption here.`} rows={5} value={caption} /></label>
               {selectedGeneratedCaption && caption !== selectedGeneratedCaption && <button className="publish-dialog__restore" disabled={busy} onClick={() => setCaption(selectedGeneratedCaption)} type="button">Restore Original</button>}
             </section></>}
             {separateXCaptions && selectedXAccounts.map((accountName) => {
@@ -222,13 +228,13 @@ export function PublishDialog({ record, onClose, onPublished }: {
                 <label className="publish-dialog__editor"><span>Caption</span><textarea aria-label={`Caption for ${xAccountLabel(accountName)}`} disabled={busy} onChange={(event) => updateXDraft(accountName, { caption: event.target.value })} rows={5} value={draft.caption} /></label>
               </section>;
             })}
-            {destination !== "x" && <section className="publish-dialog__telegram-options"><label><input checked={ctaEnabled} disabled={busy} onChange={(event) => setCtaEnabled(event.target.checked)} type="checkbox" /> Include CTA button</label>{ctaEnabled && <div><label><span>Button Text</span><input disabled={busy} onChange={(event) => setCtaLabel(event.target.value)} value={ctaLabel} /></label><label><span>Button URL</span><input disabled={busy} onChange={(event) => setCtaUrl(event.target.value)} value={ctaUrl} /></label></div>}</section>}
+            {destination === "telegram_wall" && <section className="publish-dialog__telegram-options"><label><input checked={ctaEnabled} disabled={busy} onChange={(event) => setCtaEnabled(event.target.checked)} type="checkbox" /> Include CTA buttons</label>{ctaEnabled && <div className="publish-dialog__cta-choices" aria-label="Telegram CTA buttons"><button aria-pressed={selectedCtas.includes("VAULT")} disabled={busy} onClick={() => setSelectedCtas((current) => current.includes("VAULT") ? current.filter((value) => value !== "VAULT") : [...current, "VAULT"])} type="button">🔒 Vault</button><button aria-pressed={selectedCtas.includes("CHAT")} disabled={busy} onClick={() => setSelectedCtas((current) => current.includes("CHAT") ? current.filter((value) => value !== "CHAT") : [...current, "CHAT"])} type="button">💬 Chat</button><button aria-pressed={selectedCtas.includes("TIP")} disabled={busy} onClick={() => setSelectedCtas((current) => current.includes("TIP") ? current.filter((value) => value !== "TIP") : [...current, "TIP"])} type="button">❤️ Tip</button></div>}</section>}
           </div>
         </div>
         <section className="publish-dialog__preview"><h3>Caption preview</h3><p>{caption || "Your caption preview will appear here."}</p></section>
       </>}
       {error && <div className="publish-dialog__error" role="alert">{error}</div>}
-      <footer><button disabled={busy} onClick={onClose} type="button">Cancel</button><button className="publish-dialog__publish" disabled={!canPublish} onClick={publish} type="button">{pending === "publish" ? "Publishing…" : `Publish to ${destinationLabel}`}</button></footer>
+      <footer><button disabled={busy} onClick={onClose} type="button">Cancel</button><button className="publish-dialog__publish" disabled={!canPublish} onClick={publish} type="button">{pending === "publish" ? (destination === "instagram" ? "Sending..." : "Publishing…") : destination === "instagram" ? "Send to Instagram" : `Publish to ${destinationLabel}`}</button></footer>
     </div>
   </div>;
 }

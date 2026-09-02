@@ -20,6 +20,10 @@ export type AssetLibraryItem = {
   provider?: string | null;
   intelligenceStatus?: string | null;
   intelligenceError?: string | null;
+  contentDestination?: string | null;
+  chatEnabled?: boolean;
+  timesSent?: number;
+  lastSent?: string | null;
   intelligenceDetails?: AssetIntelligenceDetails;
   standaloneSalePreparation?: StandaloneSalePreparation | null;
   commercialAssets?: CommercialAsset[];
@@ -29,6 +33,13 @@ export type AssetLibraryItem = {
   sessionSelling?: SalePreparationReadiness | null;
   sellingMode?: PhotoshootSellingMode;
   bundleSalesChannel?: BundleSalesChannel | null;
+  sourceKind?: "PHOTOSHOOT_STUDIO" | "GENERATION_LIBRARY_IMPORT" | string;
+  commercialPrice?: {
+    status: "PRICED" | "NOT_PRICED" | "INCOMPLETE";
+    amountMinor: number | null;
+    currency: string;
+    kind: "SINGLE" | "BUNDLE" | "SESSION_TOTAL";
+  } | null;
 };
 
 export type AssetIntelligenceDetails = {
@@ -94,6 +105,7 @@ export type ContentVaultPublicationState = {
   status: "NOT_PUBLISHED" | "PUBLISHING" | "PUBLISHED" | "FAILED" | "ARCHIVED" | null;
   publishedAt?: string | null;
   providerMessageId?: string | null;
+  previewUrl?: string | null;
   lastError?: string | null;
   canPublish: boolean;
   configured: boolean;
@@ -155,8 +167,16 @@ export type BundleSellingReadiness = {
   publicationStatus?: string | null; providerResourceStatus?: string | null;
   mediaLinkUuid?: string | null; deliveryUrl?: string | null;
   publishedAt?: string | null; updatedAt?: string | null; error?: string | null;
+  priceReplacement?: {
+    state: string; target_price_minor?: number; old_price_minor?: number;
+    old_uuid?: string; new_uuid?: string; last_error?: string;
+  } | null;
   promotionalTeaser?: BundleTeaserReadiness;
   contentVaultCaption?: ContentVaultCaptionDraft | null;
+  contentVaultCaptionCandidates?: {
+    captions: ContentVaultCaptionOption[]; profile: string; tone: ContentVaultCaptionTone;
+    generatedAt: string; photoshootDeliverableId: string; offeringId: string;
+  } | null;
   contentVaultPublication?: ContentVaultPublicationState | null;
   autonomousSales?: {
     status: "READY" | "NEEDS_SETUP" | "DISABLED";
@@ -170,6 +190,7 @@ export type BundleTeaserReadiness = {
   teaserAssetId: number | null; blurStrength: number; maskWidth: number | null;
   maskHeight: number | null; maskVersion: string; maskUrl: string | null;
   previewUrl: string | null; error: string | null;
+  teaserStyle?: "FULL_BLUR" | "SELECTIVE_BLUR" | null;
   candidates: { assetId: number; shotOrder: number; imageUrl: string }[];
 };
 

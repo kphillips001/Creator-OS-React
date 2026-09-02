@@ -270,6 +270,80 @@ class CustomerAffinityStrategy(RecommendationRankingStrategy):
         )
 
 
+class ProductTypeFitStrategy(RecommendationRankingStrategy):
+    """Explainable fit between canonical opportunity type and current intent."""
+
+    FULL_SET_TERMS = (
+        "full set", "complete set", "whole set", "entire set",
+        "all the photos", "all photos", "multiple images", "more photos",
+    )
+    SINGLE_TERMS = (
+        "one pic", "one photo", "one image", "single pic",
+        "single photo", "single image", "a pic", "a photo",
+    )
+    PRICE_TERMS = ("cheaper", "cheap", "affordable", "lower price", "less expensive")
+
+    def evaluate(self, candidate, context):
+        current_request = str(context.current_request or "").lower()
+        recent_request = " ".join(context.recent_conversation_requests[-3:]).lower()
+        request = current_request or recent_request
+        kind = self._kind(candidate)
+        reason = "SINGLE_IMAGE_LOW_FRICTION"
+        score = 0.75 if kind == "SINGLE_IMAGE" else 0.50 if kind == "BUNDLE" else 0.45
+
+        full_set = (
+            context.requested_media_type in {"PHOTOSET", "BUNDLE"}
+            or any(term in request for term in self.FULL_SET_TERMS)
+        )
+        single = (
+            context.requested_media_type == "SINGLE_IMAGE"
+            or any(term in request for term in self.SINGLE_TERMS)
+        )
+        price_sensitive = context.price_sensitive or any(
+            term in request for term in self.PRICE_TERMS
+        )
+        high_engagement = (
+            context.engagement_score >= 0.70
+            or context.buyer_stage in {"REPEAT_BUYER", "HIGH_VALUE_BUYER"}
+        )
+
+        if full_set:
+            score = 1.0 if kind == "BUNDLE" else 0.15 if kind == "SINGLE_IMAGE" else 0.30
+            reason = "EXPLICIT_BUNDLE_REQUEST" if kind == "BUNDLE" else "PRODUCT_TYPE_INTENT_MISMATCH"
+        elif single:
+            score = 1.0 if kind == "SINGLE_IMAGE" else 0.10 if kind == "BUNDLE" else 0.35
+            reason = "EXPLICIT_SINGLE_IMAGE_REQUEST" if kind == "SINGLE_IMAGE" else "PRODUCT_TYPE_INTENT_MISMATCH"
+        elif price_sensitive:
+            price_score = 1.0 if candidate.price_minor <= 1000 else 0.70 if candidate.price_minor <= 1500 else 0.20
+            type_bias = 0.15 if kind == "SINGLE_IMAGE" else 0.0
+            score = min(1.0, price_score + type_bias)
+            reason = "PRICE_FIT"
+        elif high_engagement and kind == "SESSION":
+            score, reason = 1.0, "SESSION_HIGH_ENGAGEMENT_MATCH"
+        elif high_engagement and kind == "BUNDLE":
+            score, reason = 0.75, "BUNDLE_MULTI_IMAGE_INTENT"
+
+        return RecommendationScoreComponent(
+            key="product_type_fit", raw_value=round(score, 8),
+            ordering_value=-score, contribution=0.0,
+            explanation=f"{kind} opportunity fit: {reason}.",
+            affected_ranking=True,
+            evidence={
+                "opportunityType": kind, "reasonCode": reason,
+                "fullSetIntent": full_set, "singleImageIntent": single,
+                "priceSensitive": price_sensitive,
+                "highEngagement": high_engagement,
+            },
+        )
+
+    @staticmethod
+    def _kind(candidate):
+        if candidate.offering_type == "BUNDLE":
+            return "BUNDLE"
+        if str(candidate.selling_mode or "").upper() == "SESSION":
+            return "SESSION"
+        return "SINGLE_IMAGE"
+
 class FreshnessStrategy(RecommendationRankingStrategy):
     POINTS = (
         (1.0, 1.00), (7.0, 0.90), (30.0, 0.70),
@@ -405,6 +479,7 @@ class CommerceRecommendationEngine:
         self.active_intent_strategy = ActivePurchaseIntentStrategy()
         self.strategies = tuple(strategies or (
             SemanticMatchStrategy(), CustomerAffinityStrategy(),
+            ProductTypeFitStrategy(),
             FreshnessStrategy(), DiversificationStrategy(),
             RecentOfferHistoryStrategy(),
         ))

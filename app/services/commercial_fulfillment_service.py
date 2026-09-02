@@ -77,6 +77,13 @@ class CommercialFulfillmentService:
             return "PROVIDER_RESOURCE_NOT_PRESENT"
         if not row.get("external_product_id") or not row.get("delivery_url"):
             return "DELIVERY_ARTIFACT_MISSING"
+        if (
+            row["offering_type"] == "SINGLE_IMAGE"
+            and row.get("source_photoshoot_deliverable_id") is None
+            and row.get("source_bundle_studio_bundle_id") is None
+            and row.get("standalone_sale_destination") != "CHAT"
+        ):
+            return "STANDALONE_DESTINATION_NOT_CHAT"
         expected = (
             "SINGLE_PPV" if row["offering_type"] in {"SINGLE_IMAGE", "VIDEO"}
             else "PHOTOSET" if row["offering_type"] == "PHOTOSET"

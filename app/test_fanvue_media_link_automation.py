@@ -23,7 +23,7 @@ from app.models.commercial_offering import (
 from app.models.commercial_publication import (
     CommercialPublication,
     CommercialPublicationProvider,
-    CommercialPublicationStatus,
+    CommercialPublicationStatus, ProviderResourceStatus,
 )
 
 
@@ -95,6 +95,32 @@ def test_429_honors_retry_after():
     assert sleeps == [7]
 
 
+def test_503_preserves_provider_context_without_replaying_ambiguous_post():
+    response_body = {"error": "service_unavailable", "requestId": "safe-request-id"}
+    session = Session([Response(503, response_body, headers={"Retry-After": "3"})])
+    client = FanvueOfficialClient(
+        1, oauth=OAuth(SCOPES), session=session, sleep=lambda _: None,
+    )
+
+    with pytest.raises(FanvueAPIError) as raised:
+        client.create_upload_session(
+            name="asset.png", filename="asset.png", media_type="image",
+            size_bytes=1234,
+        )
+
+    assert str(raised.value) == (
+        "Fanvue is temporarily unavailable (HTTP 503). "
+        "Retry Sale Preparation to resume safely."
+    )
+    assert raised.value.status_code == 503
+    assert raised.value.body == response_body
+    assert raised.value.retry_after == "3"
+    assert len(session.calls) == 1
+    assert session.calls[0][0:2] == (
+        "POST", "https://api.fanvue.com/media/uploads",
+    )
+
+
 def test_media_link_crud_and_exact_reconciliation():
     link = {"uuid": "link-1", "price": 900, "mediaUuids": ["b", "a"]}
     session = Session([
@@ -109,6 +135,98 @@ def test_media_link_crud_and_exact_reconciliation():
     assert [call[0] for call in session.calls] == ["GET", "POST", "DELETE"]
     with pytest.raises(ValueError):
         client.create_media_link(["a"], 299)
+
+
+class ReplacementClient:
+    def __init__(self, *, fail_create=False):
+        self.deleted, self.created, self.fail_create = [], [], fail_create
+    def require_media_link_scopes(self): pass
+    def get_current_user(self): return {"uuid": "creator-1"}
+    def list_media_links(self):
+        return {"data": [{"uuid": "old-link", "price": 1999,
+                           "mediaUuids": ["m11", "m12", "m13"]}]}
+    def delete_media_link(self, value): self.deleted.append(value)
+    def find_equivalent_media_link(self, media_uuids, price): return []
+    def create_media_link(self, media_uuids, price):
+        self.created.append((list(media_uuids), price))
+        if self.fail_create: raise RuntimeError("provider create failed")
+        return {"uuid": "new-link", "url": "https://fanvue.example/new",
+                "price": price, "mediaUuids": list(media_uuids)}
+
+
+class ReplacementPublications:
+    def __init__(self): self.metadata = None; self.deleted_state = None; self.finalized = None
+    def update_metadata(self, _id, *, metadata, **_): self.metadata = dict(metadata)
+    def mark_media_link_replacement_deleted(self, publication_id, *, metadata, error=None, **_):
+        self.deleted_state = (dict(metadata), error)
+        return replace(REPLACEMENT_PUBLICATION, status=(
+            CommercialPublicationStatus.FAILED if error else CommercialPublicationStatus.PUBLISHING
+        ), publication_metadata=metadata, external_product_id=None,
+            provider_resource_status=ProviderResourceStatus.MISSING)
+    def finalize_media_link_replacement(self, publication_id, **values):
+        self.finalized = values
+        return replace(REPLACEMENT_PUBLICATION, external_product_id=values["external_product_id"],
+                       publication_metadata=values["metadata"])
+
+
+REPLACEMENT_OFFERING = CommercialOffering(
+    uuid4(), 7, CommercialOfferingType.BUNDLE, "Bundle", None, 11,
+    PrimarySalesChannel.AI_CHAT, CommercialOfferingStatus.READY,
+    tuple(CommercialOfferingAsset(value, index, index == 1)
+          for index, value in enumerate((11, 12, 13), 1)),
+    datetime(2026, 8, 14, tzinfo=timezone.utc),
+    datetime(2026, 8, 14, tzinfo=timezone.utc), 1999, "USD", uuid4(),
+)
+REPLACEMENT_PUBLICATION = CommercialPublication(
+    uuid4(), REPLACEMENT_OFFERING.offering_id, CommercialPublicationProvider.FANVUE,
+    CommercialPublicationStatus.LIVE, "old-link", datetime(2026, 8, 14, tzinfo=timezone.utc),
+    datetime(2026, 8, 14, tzinfo=timezone.utc), datetime(2026, 8, 14, tzinfo=timezone.utc),
+    None, 0, {"media_link": {"uuid": "old-link", "url": "https://fanvue.example/old",
+                             "price_minor": 1999, "media_uuids": ["m11", "m12", "m13"]},
+              "media_link_replacement": {"state": "QUEUED", "target_price_minor": 2499,
+                                         "asset_ids": [11, 12, 13], "old_uuid": "old-link"}},
+    ProviderResourceStatus.PRESENT,
+)
+
+
+def replacement_executor(client):
+    publications = ReplacementPublications()
+    executor = FanvueMediaLinkPublicationExecutor(
+        publications=publications,
+        offerings=SimpleNamespace(get=lambda *_args, **_kwargs: REPLACEMENT_OFFERING),
+        assets=SimpleNamespace(), uploads=SimpleNamespace(),
+        publication_service=SimpleNamespace(), client_factory=lambda _: client,
+    )
+    executor._upload_asset = lambda _client, _publication, asset_id, *_: f"m{asset_id}"
+    return executor, publications
+
+
+def test_media_link_replacement_deletes_old_and_creates_same_media_at_new_price():
+    client = ReplacementClient()
+    executor, publications = replacement_executor(client)
+
+    result = executor._replace_claimed(REPLACEMENT_PUBLICATION, 7, 9)
+
+    assert client.deleted == ["old-link"]
+    assert client.created == [(["m11", "m12", "m13"], 2499)]
+    assert publications.finalized["price_minor"] == 2499
+    assert publications.finalized["external_product_id"] == "new-link"
+    assert publications.finalized["metadata"]["media_link"]["url"].endswith("/new")
+    assert result.external_product_id == "new-link"
+
+
+def test_media_link_replacement_failure_clears_stale_old_link_and_is_retryable():
+    client = ReplacementClient(fail_create=True)
+    executor, publications = replacement_executor(client)
+
+    with pytest.raises(RuntimeError, match="provider create failed"):
+        executor._replace_claimed(REPLACEMENT_PUBLICATION, 7, 9)
+
+    metadata, error = publications.deleted_state
+    assert client.deleted == ["old-link"]
+    assert "media_link" not in metadata
+    assert metadata["media_link_replacement"]["state"] == "REPLACEMENT_FAILED"
+    assert "old Fanvue Media Link was deleted" in error
 
 
 def test_missing_write_creator_scope_is_explicit():

@@ -51,8 +51,18 @@ class FakeTelethonClient:
     def add_event_handler(self, handler, event_builder):
         self.handlers.append((handler, event_builder))
 
-    async def send_message(self, chat_id, message_text):
+    async def is_bot(self):
+        return False
+
+    async def send_message(self, chat_id, message_text, **kwargs):
         self.sent.append((chat_id, message_text))
+        return type("Message", (), {"id": len(self.sent), "raw_text": message_text})()
+
+    async def get_messages(self, chat_id, ids):
+        text = self.sent[ids - 1][1]
+        return type(
+            "Message", (), {"id": ids, "raw_text": text, "buttons": []}
+        )()
 
     async def run_until_disconnected(self):
         return None
@@ -110,6 +120,25 @@ class TelethonUserTransportTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(received), 1)
         self.assertEqual(received[0].message_text, "hello")
         self.assertEqual(client.sent, [(123456789, "hello")])
+
+    async def test_user_session_commercial_send_uses_provider_verified_visible_url(self):
+        client = FakeTelethonClient()
+        transport = TelethonUserTransport(client=client)
+
+        receipt = await transport.send_text(
+            chat_id=123456789,
+            message_text="Here it is - unlock this private one.",
+            button_label="Unlock",
+            button_url="https://creator.example/unlock/opaque",
+        )
+
+        self.assertEqual(receipt.id, 1)
+        self.assertEqual(receipt.attachment_mode, "VISIBLE_URL")
+        self.assertTrue(receipt.actionable_destination_attached)
+        self.assertTrue(receipt.provider_action_verified)
+        self.assertFalse(receipt.provider_markup_included)
+        self.assertFalse(receipt.provider_markup_verified)
+        self.assertIn("Unlock: https://creator.example/unlock/opaque", receipt.final_text)
 
 
 if __name__ == "__main__":

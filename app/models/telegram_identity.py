@@ -32,6 +32,12 @@ class TelegramIdentityMapping:
     is_active: bool = True
     created_at: datetime | None = None
     updated_at: datetime | None = None
+    verification_status: str = "UNVERIFIED"
+    verification_method: str | None = None
+    verified_at: datetime | None = None
+    verified_by: str | None = None
+    last_observed_username: str | None = None
+    last_observed_display_name: str | None = None
 
     @property
     def engine_user_id(self) -> str:
@@ -59,6 +65,11 @@ class TelegramIdentityMapping:
             is_active=bool(row.get("is_active", True)),
             created_at=row.get("created_at"),
             updated_at=row.get("updated_at"),
+            verification_status=str(row.get("verification_status") or "UNVERIFIED"),
+            verification_method=row.get("verification_method"),
+            verified_at=row.get("verified_at"), verified_by=row.get("verified_by"),
+            last_observed_username=row.get("last_observed_username"),
+            last_observed_display_name=row.get("last_observed_display_name"),
         )
 
 

@@ -11,6 +11,7 @@ from app.models.generation_engine import utc_now
 
 class CaptionPlatform(str, Enum):
     X = "x"
+    INSTAGRAM = "instagram"
     TELEGRAM = "telegram"
     FANVUE = "fanvue"
     PRODUCT = "product"

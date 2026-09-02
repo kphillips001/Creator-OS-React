@@ -62,6 +62,8 @@ class AssetRegistrationService:
         *,
         creator_profile_id: int,
         progress: Callable[[str], None] | None = None,
+        classification: str = ProductType.SINGLE_IMAGE.value,
+        finalize_generation: bool = True,
     ) -> AssetRegistrationResult:
         if is_protected_generation_metadata(record.generation_metadata):
             return AssetRegistrationResult(success=False, message="Protected Reference assets cannot be registered.")
@@ -93,7 +95,8 @@ class AssetRegistrationService:
                         success=False, asset_id=int(existing_id), already_registered=True,
                         message="Asset registration is saved, but intelligence analysis failed.",
                     )
-            self.generation_library.mark_registered(record.image_id, int(existing_id))
+            if finalize_generation:
+                self.generation_library.mark_registered(record.image_id, int(existing_id))
             return AssetRegistrationResult(
                 success=True,
                 asset_id=int(existing_id),
@@ -112,7 +115,7 @@ class AssetRegistrationService:
             {
                 "file_path": str(source_path),
                 "file_name": source_path.name,
-                "classification": ProductType.SINGLE_IMAGE.value,
+                "classification": str(classification),
                 "confidence": None,
                 "detected_themes": [],
                 "suggested_tags": [],
@@ -189,7 +192,8 @@ class AssetRegistrationService:
                 asset_id=int(asset_id),
                 message="Asset registration is saved, but intelligence analysis failed.",
             )
-        self.generation_library.mark_registered(record.image_id, int(asset_id))
+        if finalize_generation:
+            self.generation_library.mark_registered(record.image_id, int(asset_id))
         if progress:
             progress("Completed")
         return AssetRegistrationResult(

@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
+from PIL import Image
 
 from app.api import asset_library as asset_api
 from app.models.commercial_offering import CommercialOfferingStatus, CommercialOfferingType
@@ -75,6 +76,27 @@ def test_bundle_context_builds_without_a_promotional_teaser():
     assert context["promotional_teaser"] == {}
 
 
+def test_bundle_context_uses_canonical_asset_intelligence_without_photoshoot_lineage():
+    assets = (10, 11, 12)
+    repository = SimpleNamespace(
+        intelligence_members=lambda _source: (),
+        latest_shot_intelligence=lambda _source: (),
+        content_intelligence_for_assets=lambda requested: tuple({
+            "asset_id": asset_id,
+            "content_intelligence_status": "READY",
+            "content_profile": {"summary": f"Canonical Asset {asset_id}"},
+        } for asset_id in requested),
+    )
+    context = ContentVaultBundleCaptionContextBuilder(photoshoots=repository).build(
+        title="Studio Bundle", paid_asset_ids=assets, price_minor=1499,
+        currency="USD", photoshoot_session_id="bundle-studio-1",
+        photoshoot_context={"source": "BUNDLE_STUDIO"},
+    )
+    assert context["paid_image_count"] == 3
+    assert [item["assetId"] for item in context["paid_members"]] == [10, 11, 12]
+    assert context["paid_members"][0]["contentIntelligence"]["summary"] == "Canonical Asset 10"
+
+
 def test_bundle_context_names_the_paid_asset_when_persisted_intelligence_is_missing():
     builder = ContentVaultBundleCaptionContextBuilder(photoshoots=SimpleNamespace(
         intelligence_members=lambda _session: ({"asset_id": 10, "shot_order": 1,
@@ -105,14 +127,79 @@ def test_bundle_caption_profile_enforces_multi_image_semantics_and_canonical_qua
         GrokCaptionService.validate_bundle_caption("Unlock this photo from my complete set.", 3)
 
 
+@pytest.mark.parametrize("invalid_index,expected_style", [
+    (0, "SHORT"), (1, "TEASING"), (2, "INVITATION"),
+    (3, "DIRECT"), (4, "SALES_HOOK"),
+])
+def test_bundle_caption_repairs_only_the_invalid_named_slot(
+        monkeypatch, invalid_index, expected_style):
+    monkeypatch.delenv("GROK_API_KEY", raising=False)
+    requests = []
+    initial = bundle_options(3)
+    failed = {"text": "Come closer 🔥 and see what I saved tonight 😈"}
+    initial[invalid_index] = failed
+    replacement = {"text": f"All 3 photos 🔥 are waiting in my {expected_style.lower()} full set 😈"}
+    responses = [initial, [replacement]]
+
+    def create(**kwargs):
+        requests.append(kwargs)
+        return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(
+            content=json.dumps({"captions": responses.pop(0)}),
+        ))])
+
+    service = GrokCaptionService(client=SimpleNamespace(
+        chat=SimpleNamespace(completions=SimpleNamespace(create=create)),
+    ))
+    result = service.generate(
+        profile=CaptionProfile.CONTENT_VAULT_PHOTOSHOOT_BUNDLE,
+        context={"paid_image_count": 3, "paid_members": [{}, {}, {}]},
+    )
+
+    assert len(result["captions"]) == 5
+    assert len(requests) == 2
+    retry_prompt = requests[1]["messages"][1]["content"]
+    assert "Bundle captions must clearly describe the multi-image product" in retry_prompt
+    assert json.dumps(failed, ensure_ascii=False) in retry_prompt
+    assert "exactly 3 photos" in retry_prompt
+    assert expected_style in retry_prompt
+    assert result["captions"][invalid_index] == {**replacement, "style": expected_style}
+    for index, value in enumerate(result["captions"]):
+        GrokCaptionService.validate_bundle_caption(value["text"], 3)
+        if index != invalid_index:
+            assert value["text"] == initial[index]["text"]
+
+
+def test_bundle_caption_slot_repair_is_bounded(monkeypatch):
+    monkeypatch.delenv("GROK_API_KEY", raising=False)
+    invalid = {"text": "Come closer 🔥 and see what I saved tonight 😈"}
+    responses = [[invalid, *bundle_options(3)[1:]], [invalid], [invalid]]
+    calls = []
+
+    def create(**kwargs):
+        calls.append(kwargs)
+        return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(
+            content=json.dumps({"captions": responses.pop(0)}),
+        ))])
+
+    service = GrokCaptionService(client=SimpleNamespace(
+        chat=SimpleNamespace(completions=SimpleNamespace(create=create)),
+    ))
+    with pytest.raises(ValueError, match="multi-image product"):
+        service.generate(
+            profile=CaptionProfile.CONTENT_VAULT_PHOTOSHOOT_BUNDLE,
+            context={"paid_image_count": 3, "paid_members": [{}, {}, {}]},
+        )
+    assert len(calls) == 1 + service._MAX_BUNDLE_SLOT_REPAIR_ATTEMPTS
+
+
 def test_bundle_caption_endpoint_uses_bundle_profile_and_authoritative_context(monkeypatch):
     captured = {}
     state = {"promotionalTeaser": {"status": "NOT_CONFIGURED", "teaserAssetId": None}}
     row = {"ai_name": "Fallback", "photoshoot_session_id": "session-1",
            "intelligence_profile": {"commercial_summary": "Complete set"}}
     members = ({"asset_id": 10}, {"asset_id": 11}, {"asset_id": 12})
-    offering = SimpleNamespace(title="Shower Set", price_minor=1799, currency="USD")
-    publication = SimpleNamespace()
+    offering = SimpleNamespace(offering_id=uuid4(), title="Shower Set", price_minor=1799, currency="USD")
+    publication = SimpleNamespace(publication_id=uuid4(), publication_metadata={})
     monkeypatch.setattr(asset_api, "_creator_profile", lambda: {"id": 7})
     monkeypatch.setattr(asset_api, "_bundle_content_vault_caption_state",
                         lambda *_args: (state, row, members, offering, publication))
@@ -127,8 +214,14 @@ def test_bundle_caption_endpoint_uses_bundle_profile_and_authoritative_context(m
             captured["generation"] = kwargs
             return {"profile": kwargs["profile"].value, "captions": bundle_options(3)}
 
+    class PublicationsRepository:
+        def update_metadata(self, _publication_id, *, metadata, **_kwargs):
+            captured["metadata"] = metadata
+            return SimpleNamespace(publication_metadata=metadata)
+
     monkeypatch.setattr(asset_api, "ContentVaultBundleCaptionContextBuilder", Builder)
     monkeypatch.setattr(asset_api, "GrokCaptionService", Captions)
+    monkeypatch.setattr(asset_api, "CommercialPublicationRepository", PublicationsRepository)
     result = asset_api.generate_bundle_content_vault_captions(
         "deliverable-1", asset_api.ContentVaultCaptionGenerateRequest(tone="RAUNCHY"),
     )
@@ -144,6 +237,36 @@ def test_bundle_caption_endpoint_uses_bundle_profile_and_authoritative_context(m
     assert captured["generation"]["context"]["product_type"] == "PHOTOSHOOT_BUNDLE"
     assert captured["generation"]["tone"] == "RAUNCHY"
     assert result["profile"] == "CONTENT_VAULT_PHOTOSHOOT_BUNDLE"
+    persisted = captured["metadata"]["content_vault_caption_candidates"]
+    assert persisted["captions"] == bundle_options(3)
+    assert persisted["profile"] == "CONTENT_VAULT_PHOTOSHOOT_BUNDLE"
+    assert persisted["photoshootDeliverableId"] == "deliverable-1"
+
+
+def test_bundle_caption_provider_validation_failure_is_not_reported_as_readiness_conflict(monkeypatch):
+    offering = SimpleNamespace(offering_id=uuid4(), title="Set", price_minor=1899, currency="USD")
+    publication = SimpleNamespace(publication_id=uuid4(), publication_metadata={})
+    monkeypatch.setattr(asset_api, "_creator_profile", lambda: {"id": 7})
+    monkeypatch.setattr(asset_api, "_bundle_content_vault_caption_state", lambda *_args: (
+        {"promotionalTeaser": {"status": "NOT_CONFIGURED"}},
+        {"photoshoot_session_id": "session-1", "intelligence_profile": {}},
+        ({"asset_id": 10}, {"asset_id": 11}, {"asset_id": 12}), offering, publication,
+    ))
+    monkeypatch.setattr(asset_api, "ContentVaultBundleCaptionContextBuilder", lambda: SimpleNamespace(
+        build=lambda **_kwargs: {"paid_image_count": 3, "paid_members": [{}, {}, {}]},
+    ))
+    monkeypatch.setattr(asset_api, "GrokCaptionService", lambda: SimpleNamespace(
+        generate=lambda **_kwargs: (_ for _ in ()).throw(
+            ValueError("Bundle captions must clearly describe the multi-image product.")),
+    ))
+
+    with pytest.raises(asset_api.HTTPException) as error:
+        asset_api.generate_bundle_content_vault_captions(
+            "deliverable-1", asset_api.ContentVaultCaptionGenerateRequest(),
+        )
+
+    assert error.value.status_code == 502
+    assert "Grok could not generate Bundle captions" in error.value.detail
 
 
 def test_bundle_caption_state_does_not_require_a_promotional_teaser(monkeypatch):
@@ -230,7 +353,7 @@ class BundlePreparation:
 
 
 def test_bundle_publishes_one_teaser_caption_and_fanvue_link(tmp_path: Path):
-    teaser = tmp_path / "bundle-teaser.jpg"; teaser.write_bytes(b"safe teaser")
+    teaser = tmp_path / "bundle-teaser.jpg"; Image.new("RGB", (832, 1248), "black").save(teaser)
     offering_id, publication_id = uuid4(), uuid4()
     offering = SimpleNamespace(
         offering_id=offering_id, offering_type=CommercialOfferingType.BUNDLE,
@@ -248,10 +371,12 @@ def test_bundle_publishes_one_teaser_caption_and_fanvue_link(tmp_path: Path):
         bundle_preparation=BundlePreparation(offering, fanvue),
     )
     service.publish(offering_id, creator_profile_id=7)
-    assert social.created["image_reference"] == str(teaser)
+    assert social.created["image_reference"].endswith("_telegram_presentation_v1.jpg")
     assert social.published[1]["telegram_cta_label"] == "🔓 Unlock · $17.99"
     assert social.published[1]["telegram_cta_url"] == "https://fanvue.example/media-link"
     assert social.published[1]["telegram_cta_enabled"] is True
+    assert social.published[1]["caption_text"].endswith("\n\n#Photoshoots")
+    assert social.published[1]["caption_text"].count("#Photoshoots") == 1
     assert social.published[1]["audit_metadata"]["paid_image_count"] == 3
     assert social.published[1]["audit_metadata"]["paid_asset_ids"] == [10, 11, 12]
 

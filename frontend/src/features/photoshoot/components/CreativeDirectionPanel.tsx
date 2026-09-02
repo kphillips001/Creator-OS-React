@@ -30,7 +30,7 @@ export function CreativeDirectionPanel(props: Props) {
   const [editDraft, setEditDraft] = useState("");
   const hasIdeas = props.ideas.length > 0;
   const isExplicit = String(props.creativeMode || "").toLowerCase() === "explicit";
-  const planning = props.planningStatus || { currentShot: 1, planningShot: 2, targetShotCount: 10, remainingShots: 9, editorialStage: "Beginning", explanation: "Continuing from the latest approved shot." };
+  const planning = props.planningStatus || { currentShot: 1, planningShot: 2, targetShotCount: 5, remainingShots: 4, editorialStage: "Beginning", explanation: "Continuing from the latest approved shot." };
   const effectiveDirection = (idea: string) => props.inspirationEdits?.[idea]?.trim() || idea;
   const beginEdit = (idea: string) => {
     if (props.disabled || props.directionApproved) return;

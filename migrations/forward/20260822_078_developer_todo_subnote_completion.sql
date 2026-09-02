@@ -1,0 +1,6 @@
+BEGIN;
+
+ALTER TABLE public.developer_todo_subnotes
+  ADD COLUMN IF NOT EXISTS is_completed BOOLEAN NOT NULL DEFAULT FALSE;
+
+COMMIT;

@@ -3,6 +3,7 @@ import type { BundleTeaserReadiness } from "./types";
 
 type MaskPoint = { x: number; y: number };
 type EditorTool = "blur" | "ellipse" | "erase";
+const CANONICAL_FULL_BLUR_STRENGTH = 40;
 type EllipseRegion = { id: number; x: number; y: number; width: number; height: number };
 type ResizeHandle = "n" | "ne" | "e" | "se" | "s" | "sw" | "w" | "nw";
 type EllipseInteraction = {
@@ -29,11 +30,12 @@ export type SelectiveBlurSavePayload = { sourceAssetId: number; maskData: string
 export function BundleTeaserEditor({ deliverableId, state, sourceAssetId, onClose, onSaved, saveRequest }: {
   deliverableId: string; state: BundleTeaserReadiness; sourceAssetId: number;
   onClose: () => void; onSaved: (value: BundleTeaserReadiness) => void;
-  saveRequest?: (payload: SelectiveBlurSavePayload) => Promise<void>;
+  saveRequest?: (payload: SelectiveBlurSavePayload) => Promise<BundleTeaserReadiness | void>;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const previewRef = useRef<HTMLCanvasElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
+  const fullBlurImageRef = useRef<HTMLImageElement>(null);
   const drawing = useRef(false);
   const interaction = useRef<EllipseInteraction | null>(null);
   const ellipsesRef = useRef<EllipseRegion[]>([]);
@@ -45,6 +47,14 @@ export function BundleTeaserEditor({ deliverableId, state, sourceAssetId, onClos
   const [maskSize, setMaskSize] = useState({ width: 1, height: 1 });
   const [brushSize, setBrushSize] = useState(40);
   const [blurStrength, setBlurStrength] = useState(state.sourceAssetId === sourceAssetId ? state.blurStrength : 24);
+  const [strongBlurActive, setStrongBlurActive] = useState(
+    state.sourceAssetId === sourceAssetId && state.teaserStyle === "FULL_BLUR",
+  );
+  const [fullBlurPreviewUrl, setFullBlurPreviewUrl] = useState(
+    state.sourceAssetId === sourceAssetId && state.teaserStyle === "FULL_BLUR"
+      ? `/api/v1/assets/photoshoots/${encodeURIComponent(deliverableId)}/bundle-teaser/full-blur-preview?sourceAssetId=${sourceAssetId}`
+      : "",
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const candidate = state.candidates.find((item) => item.assetId === sourceAssetId)!;
@@ -95,9 +105,14 @@ export function BundleTeaserEditor({ deliverableId, state, sourceAssetId, onClos
     context.drawImage(image, 0, 0, preview.width, preview.height);
     const blurred = canvas(preview.width, preview.height);
     const blurredContext = blurred.getContext("2d")!;
-    blurredContext.filter = `blur(${blurStrength}px)`;
-    blurredContext.drawImage(image, 0, 0, preview.width, preview.height);
-    blurredContext.filter = "none";
+    const canonical = fullBlurImageRef.current;
+    if (strongBlurActive && canonical?.complete && canonical.naturalWidth) {
+      blurredContext.drawImage(canonical, 0, 0, preview.width, preview.height);
+    } else {
+      blurredContext.filter = `blur(${blurStrength}px)`;
+      blurredContext.drawImage(image, 0, 0, preview.width, preview.height);
+      blurredContext.filter = "none";
+    }
     const masked = canvas(preview.width, preview.height);
     const maskedContext = masked.getContext("2d")!;
     maskedContext.drawImage(blurred, 0, 0);
@@ -126,7 +141,15 @@ export function BundleTeaserEditor({ deliverableId, state, sourceAssetId, onClos
     } else renderPreview();
   };
   useEffect(() => initialize(), [sourceAssetId]);
-  useEffect(() => renderPreview(), [ellipses, blurStrength, maskSize]);
+  useEffect(() => renderPreview(), [ellipses, blurStrength, maskSize, strongBlurActive]);
+  useEffect(() => () => {
+    for (const canvas of [canvasRef.current, previewRef.current]) {
+      if (!canvas) continue;
+      canvas.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
+      canvas.width = 0; canvas.height = 0;
+    }
+    imageRef.current?.removeAttribute("src");
+  }, []);
   const point = (event: React.PointerEvent<HTMLCanvasElement>) => {
     const canvas = event.currentTarget, rect = canvas.getBoundingClientRect();
     const x = (event.clientX - rect.left) * canvas.width / rect.width;
@@ -243,11 +266,26 @@ export function BundleTeaserEditor({ deliverableId, state, sourceAssetId, onClos
     if (value === "erase") flattenEllipses();
     setTool(value);
   };
+  const fullBlur = () => {
+    const maskCanvas = canvasRef.current!;
+    cancelDrawing();
+    replaceEllipses([]); selectEllipse(null);
+    const context = maskCanvas.getContext("2d")!;
+    context.globalCompositeOperation = "source-over";
+    context.fillStyle = "#fff";
+    context.fillRect(0, 0, maskCanvas.width, maskCanvas.height);
+    setBlurStrength(CANONICAL_FULL_BLUR_STRENGTH);
+    setStrongBlurActive(true);
+    setFullBlurPreviewUrl(
+      `/api/v1/assets/photoshoots/${encodeURIComponent(deliverableId)}/bundle-teaser/full-blur-preview?sourceAssetId=${sourceAssetId}`,
+    );
+    renderPreview();
+  };
   const reset = () => {
     const maskCanvas = canvasRef.current!;
     cancelDrawing();
     maskCanvas.getContext("2d")!.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
-    replaceEllipses([]); selectEllipse(null); renderPreview();
+    replaceEllipses([]); selectEllipse(null); setStrongBlurActive(false); setFullBlurPreviewUrl(""); renderPreview();
   };
   const save = async () => {
     const maskCanvas = composedMask();
@@ -256,7 +294,10 @@ export function BundleTeaserEditor({ deliverableId, state, sourceAssetId, onClos
     try {
       const payload = { sourceAssetId, maskData: maskCanvas.toDataURL("image/png"), maskWidth: maskCanvas.width,
         maskHeight: maskCanvas.height, blurStrength };
-      if (saveRequest) await saveRequest(payload);
+      if (saveRequest) {
+        const value = await saveRequest(payload);
+        if (value) onSaved(value);
+      }
       else {
         const value = await fetch(`/api/v1/assets/photoshoots/${encodeURIComponent(deliverableId)}/bundle-teaser`, {
           method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(payload),
@@ -270,11 +311,12 @@ export function BundleTeaserEditor({ deliverableId, state, sourceAssetId, onClos
   return <div className="sale-preparation-dialog bundle-teaser-editor" role="dialog" aria-modal="true" aria-labelledby="teaser-editor-title"><div>
     <header><div><small>Promotional Teaser</small><h2 id="teaser-editor-title">Selective Blur Editor</h2></div></header>
     {error && <p role="alert" className="sale-preparation-error">{error}</p>}
-    <div className="bundle-teaser-editor__stage"><img ref={imageRef} src={candidate.imageUrl} onLoad={initialize} alt={`Shot ${candidate.shotOrder} original`} /><canvas ref={previewRef} className="bundle-teaser-editor__preview" aria-label="Live selective blur preview" /><canvas ref={canvasRef} className="bundle-teaser-editor__mask-input" aria-label="Selective blur mask" onPointerDown={startDrawing} onPointerMove={continueDrawing} onPointerUp={finishDrawing} onPointerCancel={cancelDrawing} />{tool === "ellipse" && <svg className="bundle-teaser-editor__ellipse-selection" aria-label="Ellipse selection" viewBox={`0 0 ${maskSize.width} ${maskSize.height}`} width={maskSize.width} height={maskSize.height} preserveAspectRatio="none">{ellipses.map((ellipse) => <g key={ellipse.id} data-ellipse-id={ellipse.id} className={ellipse.id === activeEllipseId ? "is-active" : ""}><ellipse cx={ellipse.x + ellipse.width / 2} cy={ellipse.y + ellipse.height / 2} rx={ellipse.width / 2} ry={ellipse.height / 2} />{ellipse.id === activeEllipseId && Object.entries(handles(ellipse)).map(([name, value]) => <rect aria-label={`Resize ${name}`} key={name} x={value.x - 5} y={value.y - 5} width="10" height="10" />)}</g>)}</svg>}</div>
+    <div className="bundle-teaser-editor__stage"><img ref={imageRef} src={candidate.imageUrl.replace("/thumbnail", "/preview")} onLoad={initialize} alt={`Shot ${candidate.shotOrder} working preview`} />{fullBlurPreviewUrl && <img ref={fullBlurImageRef} src={fullBlurPreviewUrl} onLoad={renderPreview} alt="" hidden />}<canvas ref={previewRef} className="bundle-teaser-editor__preview" aria-label="Live selective blur preview" /><canvas ref={canvasRef} className="bundle-teaser-editor__mask-input" aria-label="Selective blur mask" onPointerDown={startDrawing} onPointerMove={continueDrawing} onPointerUp={finishDrawing} onPointerCancel={cancelDrawing} />{tool === "ellipse" && <svg className="bundle-teaser-editor__ellipse-selection" aria-label="Ellipse selection" viewBox={`0 0 ${maskSize.width} ${maskSize.height}`} width={maskSize.width} height={maskSize.height} preserveAspectRatio="none">{ellipses.map((ellipse) => <g key={ellipse.id} data-ellipse-id={ellipse.id} className={ellipse.id === activeEllipseId ? "is-active" : ""}><ellipse cx={ellipse.x + ellipse.width / 2} cy={ellipse.y + ellipse.height / 2} rx={ellipse.width / 2} ry={ellipse.height / 2} />{ellipse.id === activeEllipseId && Object.entries(handles(ellipse)).map(([name, value]) => <rect aria-label={`Resize ${name}`} key={name} x={value.x - 5} y={value.y - 5} width="10" height="10" />)}</g>)}</svg>}</div>
     <div className="bundle-teaser-editor__controls">
-      <div className="bundle-teaser-editor__tools" aria-label="Mask tools">
-        <button aria-pressed={tool === "blur"} onClick={() => selectTool("blur")} type="button">Blur Brush</button>
+      <div className="bundle-teaser-editor__tools" aria-label="Mask tools" role="toolbar">
+        <button aria-pressed="false" onClick={fullBlur} type="button">Full Blur</button>
         <button aria-pressed={tool === "ellipse"} onClick={() => selectTool("ellipse")} type="button">Ellipse Blur</button>
+        <button aria-pressed={tool === "blur"} onClick={() => selectTool("blur")} type="button">Blur Brush</button>
         <button aria-pressed={tool === "erase"} onClick={() => selectTool("erase")} type="button">Eraser / Restore</button>
       </div>
       {tool !== "ellipse" && <label>Brush Size <input aria-label="Brush Size" type="range" min="5" max="120" value={brushSize} onChange={(event) => setBrushSize(Number(event.target.value))} /></label>}
@@ -285,7 +327,7 @@ export function BundleTeaserEditor({ deliverableId, state, sourceAssetId, onClos
   </div></div>;
 }
 
-export function BundlePromotionalTeaser({ deliverableId, initial, onChanged }: { deliverableId: string; initial: BundleTeaserReadiness; onChanged?: (value: BundleTeaserReadiness) => void }) {
+export function BundlePromotionalTeaser({ deliverableId, initial, onChanged, saveRequest }: { deliverableId: string; initial: BundleTeaserReadiness; onChanged?: (value: BundleTeaserReadiness) => void; saveRequest?: (payload: SelectiveBlurSavePayload) => Promise<BundleTeaserReadiness> }) {
   const [state, setState] = useState(initial);
   const [selected, setSelected] = useState(initial.sourceAssetId || initial.candidates[0]?.assetId || null);
   const [editing, setEditing] = useState(false);
@@ -295,6 +337,6 @@ export function BundlePromotionalTeaser({ deliverableId, initial, onChanged }: {
     <div className="bundle-teaser-candidates" aria-label="Teaser source images">{state.candidates.map((item) => <button aria-pressed={selected === item.assetId} aria-label={`Select Shot ${item.shotOrder} as teaser source`} key={item.assetId} onClick={() => setSelected(item.assetId)} type="button"><img src={item.imageUrl} alt={`Shot ${item.shotOrder}`} /><span>Shot {item.shotOrder}</span></button>)}</div>
     {state.previewUrl && <div className="bundle-teaser-preview"><strong>Active teaser</strong><img src={`${state.previewUrl}?v=${Date.now()}`} alt="Promotional teaser preview" /></div>}
     <button disabled={!selected} onClick={() => setEditing(true)} type="button">{state.teaserAssetId && selected === state.sourceAssetId ? "Edit Teaser" : "Create Teaser"}</button>
-    {editing && selected && <BundleTeaserEditor deliverableId={deliverableId} state={state} sourceAssetId={selected} onClose={() => setEditing(false)} onSaved={(value) => { setState(value); onChanged?.(value); }} />}
+    {editing && selected && <BundleTeaserEditor deliverableId={deliverableId} state={state} sourceAssetId={selected} onClose={() => setEditing(false)} onSaved={(value) => { setState(value); onChanged?.(value); }} saveRequest={saveRequest} />}
   </section>;
 }

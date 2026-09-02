@@ -18,6 +18,8 @@ class ExplicitInspirationResult:
 
 
 class ExplicitInspirationService:
+    MAX_CONCEPT_COUNT = 12
+
     def __init__(
         self,
         *,
@@ -33,7 +35,7 @@ class ExplicitInspirationService:
         fanvue_account_id: int | str,
         count_per_tier: int = 5,
     ) -> ExplicitInspirationResult:
-        count = max(1, min(int(count_per_tier or 5), 12))
+        count = max(1, min(int(count_per_tier or 5), self.MAX_CONCEPT_COUNT))
         profile = self.profile_loader(str(fanvue_account_id))
         if not profile:
             raise LookupError("An active creator profile is required.")
@@ -61,6 +63,12 @@ class ExplicitInspirationService:
             avoid_overlap=avoid_overlap,
         )
         concepts = self._parse(self.text_generator(prompt))
+        if tier == "hardcore":
+            concepts = tuple(
+                cleaned
+                for concept in concepts
+                if (cleaned := self._strip_default_fluids(concept))
+            )
         if len(concepts) < count:
             raise ValueError(f"Explicit inspiration returned too few usable {tier} concepts.")
         return concepts[:count]
@@ -96,40 +104,55 @@ This lane sells paid NSFW PPV content (Fanvue / OnlyFans style).
 
 Create exactly {count} distinct HARDCORE visual concepts.
 These will become image prompts for hardcore creator porn the buyer pays to unlock.
+Default mode is commercial hardcore: sellable poses and sexual acts, not gore-graphic fluids.
 
 HARDCORE REQUIREMENTS (mandatory for every concept):
-- Write direct sexual language. Use anatomical words when relevant: pussy, clit, labia, nipples,
-  breasts, ass, asshole, cock-tease framing toward camera, fingers, etc.
+- Stay hardcore: clear sexual act or explicit sexual display, not soft lingerie tease.
+- Write direct sexual language when relevant: pussy, clit, nipples, breasts, ass, fingers,
+  touching, rubbing, masturbation, oral tease toward camera, etc.
 - Full or near-full nudity is the default. If any clothing remains, it must be actively pulled aside,
   around ankles, bunched at hips, or otherwise failing to cover genitals and/or breasts.
-- Every concept must include a clear sexual act or explicit sexual display, not just a sexy pose.
+- Optimize for sellable pose variety with face + body + sexual action readable together.
   Rotate across the set among acts such as:
-  * legs spread / pussy fully visible and presented to camera
-  * fingers spreading labia or rubbing clit
-  * fingering / masturbation (one or two fingers, grinding, circling clit)
-  * ass up / doggy presentation with pussy and/or asshole visible
-  * kneeling open-mouth oral tease toward camera
-  * riding / grinding a pillow, edge of bed, chair, or (only if natural) a realistic toy
-  * oil / lube / wet arousal on breasts, stomach, inner thighs, or pussy
-  * close-up genital-forward framing with face still readable when possible
-- Describe arousal concretely when it fits: hard nipples, flushed skin, wet pussy, swollen clit,
-  glistening juices, parted lips, heavy breathing body language.
+  * face + body self-touch / masturbation (medium or three-quarter framing)
+  * seated or reclined legs parted with hand between thighs, eye contact when possible
+  * ass up / doggy presentation with pussy visible, medium rear or three-quarter rear
+  * standing or kneeling oral tease toward camera (tongue out / open mouth), body still sexual
+  * grinding / riding pillow, bed edge, chair arm, or (only if natural) a realistic toy
+  * hands spreading or presenting without crotch-only macro framing
+- Describe arousal with body language, not fluids: hard nipples, flushed skin, parted lips,
+  heavy breathing posture, intense eye contact, tense thighs.
 - Keep photorealistic private-creator PPV energy: intimate, filthy, paid-for the viewer —
   not soft romance novel prose and not cartoon gonzo exaggeration.
 - Each concept is one complete scene sentence (or two short sentences max) covering:
-  environment, nudity/wardrobe failure state, exact sexual act or genital display, pose,
-  camera/framing intent, lighting, and erotic intent toward the buyer.
+  environment, nudity/wardrobe failure state, exact sexual act, pose, camera/framing intent,
+  lighting, and erotic intent toward the buyer.
+
+DEFAULT FLUID POLICY (hardcore Inspire Me is zero-thought / hands-off):
+- Do NOT invent fluids, juices, squirt, drip strings, creamy discharge, soaked genitals,
+  wet arousal trails, oil/lube pools, or shiny liquid running down thighs/ass.
+- Keep skin dry and photorealistic unless the operator separately asked for wetness.
+- Shower/bath settings may include normal environmental water on skin, but not sexual fluids.
+
+POSE / FRAMING PRIORITY:
+- Prefer medium, three-quarter, or intimate creator framing over medical crotch-macro close-ups.
+- Most concepts should keep face, bust, and sexual action in one readable frame.
+- At most about 1 in 4 concepts may be stronger genital-present framing; do not dominate the batch
+  with labia-macro / legs-over-camera shots.
 
 VARIATION:
 Vary location, sexual act, pose, lighting, and framing across the {count} concepts.
 Do not make every concept the same "recline and tease" softcore beat.
-At least half the concepts must show pussy clearly (spread, presented, or being touched).
-At least two concepts should emphasize ass/pussy from behind or three-quarter rear.
+At least one-third of concepts must clearly show explicit genital involvement (touching, presenting,
+  or being used in the act) without requiring macro close-up framing.
+At least two concepts should use rear or three-quarter rear body orientation.
 
 HARD BANS FOR THIS HARDCORE LIST:
 - No soft "blouse slipping off one shoulder" / "towel almost falling" as the peak of the concept
 - No pure clothed or lingerie-only teaser concepts
 - No softcore-only ideas in this list
+- No default dripping, squirting, juices, creamy fluids, or wet-arousal trails
+- No batch dominated by labia-spread macro / medical genital close-ups
 
 {diversity_section}
 
@@ -184,3 +207,10 @@ HARD BANS FOR THIS SOFTCORE LIST:
             if item not in cleaned:
                 cleaned.append(item)
         return tuple(cleaned)
+
+    @staticmethod
+    def _strip_default_fluids(value: str) -> str:
+        """Remove unsolicited sexual-fluid language from hardcore Inspire concepts."""
+        from app.services.explicit_prompt_service import strip_unsolicited_fluids
+
+        return strip_unsolicited_fluids(value)

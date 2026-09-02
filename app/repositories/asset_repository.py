@@ -246,6 +246,7 @@ class AssetRepository:
         media_type: str | None,
         classification: str | None,
         sale_destination: str | None,
+        asset_purpose: str | None = None,
         creator_profile_id: int,
         availability_predicate: str | None = None,
     ) -> tuple[str, list[Any]]:
@@ -255,10 +256,29 @@ class AssetRepository:
             "COALESCE(status, '') = 'approved'",
             "creator_profile_id = %s",
             "COALESCE(media_metadata->'reference_library'->>'is_reference', 'false') <> 'true'",
+            "NOT EXISTS (SELECT 1 FROM public.photoshoot_asset_memberships pam "
+            "WHERE pam.asset_id=content_items.id AND pam.approved=TRUE)",
+            "NOT EXISTS (SELECT 1 FROM public.generation_image_dispositions gid "
+            "WHERE gid.image_id=COALESCE("
+            "content_items.media_metadata->'asset_registration'->>'generated_image_id',"
+            "content_items.media_metadata->'asset_registration'->>'source_item_id',"
+            "content_items.media_metadata->'creator_approval'->>'source_item_id') "
+            "AND gid.owner='PHOTOSHOOT')",
         ]
         params: list[Any] = [int(creator_profile_id)]
         if availability_predicate:
             filters.append(str(availability_predicate))
+        if asset_purpose:
+            filters.append(
+                "EXISTS (SELECT 1 FROM public.asset_content_destinations acd "
+                "WHERE acd.asset_id=content_items.id AND acd.destination=%s)"
+            )
+            params.append(str(asset_purpose).strip().upper())
+        elif media_type == "image":
+            filters.append(
+                "NOT EXISTS (SELECT 1 FROM public.asset_content_destinations acd "
+                "WHERE acd.asset_id=content_items.id AND acd.destination='TEASER')"
+            )
         if search:
             filters.append(
                 "(file_name ILIKE %s OR file_path ILIKE %s OR EXISTS ("
@@ -306,6 +326,7 @@ class AssetRepository:
         media_type: str | None,
         classification: str | None,
         sale_destination: str | None = None,
+        asset_purpose: str | None = None,
         creator_profile_id: int,
         limit: int,
         availability_predicate: str | None = None,
@@ -316,6 +337,7 @@ class AssetRepository:
             media_type=media_type,
             classification=classification,
             sale_destination=sale_destination,
+            asset_purpose=asset_purpose,
             creator_profile_id=creator_profile_id,
             availability_predicate=availability_predicate,
         )
@@ -349,7 +371,7 @@ class AssetRepository:
             tuple(sorted(str(value) for value in (summary["classifications"] or ()))),
         )
 
-    def asset_library_counts(self, creator_profile_id: int) -> dict[str, int]:
+    def asset_library_counts(self, creator_profile_id: int) -> dict[str, Any]:
         """Count registered grid media without constructing Asset models."""
         base = (
             "COALESCE(is_active, TRUE)=TRUE AND COALESCE(is_test, FALSE)=FALSE "
@@ -363,7 +385,36 @@ class AssetRepository:
                       COUNT(*) FILTER (WHERE classification='SINGLE_IMAGE' AND (
                         LOWER(COALESCE(media_metadata->>'media_type',''))='image'
                         OR LOWER(COALESCE(file_path,'')) ~ '\\.(gif|jpe?g|png|webp)$'
-                      )) AS images,
+                      ) AND NOT EXISTS (SELECT 1 FROM public.asset_content_destinations acd
+                        WHERE acd.asset_id=content_items.id AND acd.destination='TEASER')) AS images,
+                      COUNT(*) FILTER (WHERE classification='SINGLE_IMAGE' AND (
+                        LOWER(COALESCE(media_metadata->>'media_type',''))='image'
+                        OR LOWER(COALESCE(file_path,'')) ~ '\\.(gif|jpe?g|png|webp)$'
+                      ) AND COALESCE(media_metadata->'standalone_sale_preparation'->'destinations','[]'::jsonb)='["CHAT"]'::jsonb
+                        AND NOT EXISTS (SELECT 1 FROM public.asset_content_destinations acd
+                          WHERE acd.asset_id=content_items.id AND acd.destination='TEASER')
+                        AND NOT EXISTS (SELECT 1 FROM public.photoshoot_asset_memberships pam
+                          WHERE pam.asset_id=content_items.id AND pam.approved=TRUE)
+                        AND NOT EXISTS (SELECT 1 FROM public.generation_image_dispositions gid
+                          WHERE gid.image_id=COALESCE(
+                            content_items.media_metadata->'asset_registration'->>'generated_image_id',
+                            content_items.media_metadata->'asset_registration'->>'source_item_id',
+                            content_items.media_metadata->'creator_approval'->>'source_item_id')
+                          AND gid.owner='PHOTOSHOOT')) AS image_chat,
+                      COUNT(*) FILTER (WHERE classification='SINGLE_IMAGE' AND (
+                        LOWER(COALESCE(media_metadata->>'media_type',''))='image'
+                        OR LOWER(COALESCE(file_path,'')) ~ '\\.(gif|jpe?g|png|webp)$'
+                      ) AND COALESCE(media_metadata->'standalone_sale_preparation'->'destinations','[]'::jsonb)='["CONTENT_VAULT"]'::jsonb
+                        AND NOT EXISTS (SELECT 1 FROM public.asset_content_destinations acd
+                          WHERE acd.asset_id=content_items.id AND acd.destination='TEASER')
+                        AND NOT EXISTS (SELECT 1 FROM public.photoshoot_asset_memberships pam
+                          WHERE pam.asset_id=content_items.id AND pam.approved=TRUE)
+                        AND NOT EXISTS (SELECT 1 FROM public.generation_image_dispositions gid
+                          WHERE gid.image_id=COALESCE(
+                            content_items.media_metadata->'asset_registration'->>'generated_image_id',
+                            content_items.media_metadata->'asset_registration'->>'source_item_id',
+                            content_items.media_metadata->'creator_approval'->>'source_item_id')
+                          AND gid.owner='PHOTOSHOOT')) AS image_wall,
                       COUNT(*) FILTER (WHERE (
                         LOWER(COALESCE(media_metadata->>'media_type',''))='video'
                         OR LOWER(COALESCE(file_path,'')) ~ '\\.(m4v|mov|mp4|webm)$'
@@ -377,15 +428,110 @@ class AssetRepository:
                        WHERE creator_profile_id=%s AND offering_type='BUNDLE' AND status<>'ARCHIVED') AS bundles,
                       (SELECT COUNT(*) FROM public.photoshoot_commerce_deliverables
                        WHERE creator_profile_id=%s AND registration_state='IN_ASSET_LIBRARY'
-                         AND is_archived=FALSE) AS photoshoots
-                """, (int(creator_profile_id), int(creator_profile_id)))
+                         AND is_archived=FALSE) AS photoshoots,
+                      (SELECT COUNT(*) FROM public.photoshoot_commerce_deliverables
+                       WHERE creator_profile_id=%s AND registration_state='IN_ASSET_LIBRARY'
+                         AND is_archived=FALSE AND (
+                           COALESCE(selling_mode,'SESSION')='SESSION'
+                           OR (selling_mode='BUNDLE' AND COALESCE(bundle_sales_channel,'CHAT')='CHAT')
+                         )) AS photoshoot_chat,
+                      (SELECT COUNT(*) FROM public.photoshoot_commerce_deliverables
+                       WHERE creator_profile_id=%s AND registration_state='IN_ASSET_LIBRARY'
+                         AND is_archived=FALSE AND selling_mode='BUNDLE'
+                         AND COALESCE(bundle_sales_channel,'CHAT')='CHAT') AS photoshoot_chat_bundle,
+                      (SELECT COUNT(*) FROM public.photoshoot_commerce_deliverables
+                       WHERE creator_profile_id=%s AND registration_state='IN_ASSET_LIBRARY'
+                         AND is_archived=FALSE
+                         AND COALESCE(selling_mode,'SESSION')='SESSION') AS photoshoot_chat_session,
+                      (SELECT COUNT(*) FROM public.photoshoot_commerce_deliverables
+                       WHERE creator_profile_id=%s AND registration_state='IN_ASSET_LIBRARY'
+                         AND is_archived=FALSE AND selling_mode='BUNDLE'
+                         AND bundle_sales_channel='CONTENT_WALL') AS photoshoot_wall
+                """, (int(creator_profile_id),) * 6)
                 related = cursor.fetchone() or {}
+                cursor.execute("""
+                    SELECT COUNT(*) AS teasers
+                    FROM public.content_items asset
+                    JOIN public.asset_content_destinations destination
+                      ON destination.asset_id=asset.id AND destination.destination='TEASER'
+                    WHERE asset.creator_profile_id=%s
+                      AND COALESCE(asset.is_active,TRUE)=TRUE
+                      AND COALESCE(asset.is_test,FALSE)=FALSE
+                      AND COALESCE(asset.status,'')='approved'
+                      AND (LOWER(COALESCE(asset.media_metadata->>'media_type',''))='image'
+                           OR LOWER(COALESCE(asset.file_path,'')) ~ '\\.(gif|jpe?g|png|webp)$')
+                """, (int(creator_profile_id),))
+                teaser_row = cursor.fetchone() or {}
+        images = int(row.get("images") or 0)
+        image_chat = int(row.get("image_chat") or 0)
+        image_wall = int(row.get("image_wall") or 0)
+        photoshoots = int(related.get("photoshoots") or 0)
+        photoshoot_chat = int(related.get("photoshoot_chat") or 0)
+        photoshoot_chat_bundle = int(related.get("photoshoot_chat_bundle") or 0)
+        photoshoot_chat_session = int(related.get("photoshoot_chat_session") or 0)
+        photoshoot_wall = int(related.get("photoshoot_wall") or 0)
         return {
-            "images": int(row.get("images") or 0),
+            "images": images,
             "videos": int(row.get("videos") or 0),
             "bundles": int(related.get("bundles") or 0),
-            "photoshoots": int(related.get("photoshoots") or 0),
+            "photoshoots": photoshoots,
+            "teasers": int(teaser_row.get("teasers") or 0),
+            "destination_breakdown": {
+                "images": {
+                    "chat": image_chat,
+                    "wall": image_wall,
+                    "unassigned": images - image_chat - image_wall,
+                },
+                "photoshoots": {
+                    "chat": photoshoot_chat,
+                    "wall": photoshoot_wall,
+                    "unassigned": photoshoots - photoshoot_chat - photoshoot_wall,
+                },
+                "chat_commerce_types": {
+                    "single": image_chat,
+                    "bundle": photoshoot_chat_bundle,
+                    "session": photoshoot_chat_session,
+                },
+            },
         }
+
+    def asset_library_sales_image_summary(
+        self, *, creator_profile_id: int, destination: str,
+        search: str | None, limit: int,
+    ) -> tuple[tuple[dict, ...], int, tuple[str, ...]]:
+        """Return the same standalone-image population used by Sales counts."""
+        filters = [
+            "COALESCE(is_active,TRUE)=TRUE", "COALESCE(is_test,FALSE)=FALSE",
+            "COALESCE(status,'')='approved'", "creator_profile_id=%s",
+            "COALESCE(media_metadata->'reference_library'->>'is_reference','false')<>'true'",
+            "classification='SINGLE_IMAGE'",
+            "(LOWER(COALESCE(media_metadata->>'media_type',''))='image' OR LOWER(COALESCE(file_path,'')) ~ '\\.(gif|jpe?g|png|webp)$')",
+            "COALESCE(media_metadata->'standalone_sale_preparation'->'destinations','[]'::jsonb)=%s::jsonb",
+            "NOT EXISTS (SELECT 1 FROM public.photoshoot_asset_memberships pam WHERE pam.asset_id=content_items.id AND pam.approved=TRUE)",
+            "NOT EXISTS (SELECT 1 FROM public.generation_image_dispositions gid WHERE gid.image_id=COALESCE(content_items.media_metadata->'asset_registration'->>'generated_image_id',content_items.media_metadata->'asset_registration'->>'source_item_id',content_items.media_metadata->'creator_approval'->>'source_item_id') AND gid.owner='PHOTOSHOOT')",
+        ]
+        params: list[Any] = [
+            int(creator_profile_id),
+            '["CHAT"]' if destination == "CHAT" else '["CONTENT_VAULT"]',
+        ]
+        if search:
+            filters.append("(file_name ILIKE %s OR file_path ILIKE %s)")
+            term = f"%{str(search).strip()}%"
+            params.extend((term, term))
+        where = " AND ".join(filters)
+        with self._connection_factory() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                f"SELECT id,created_at FROM public.content_items WHERE {where} "
+                "ORDER BY created_at DESC NULLS LAST,id DESC LIMIT %s",
+                (*params, max(0, int(limit))),
+            )
+            candidates = tuple(dict(row) for row in cursor.fetchall())
+            cursor.execute(
+                f"SELECT COUNT(*) total FROM public.content_items WHERE {where}",
+                tuple(params),
+            )
+            total = int((cursor.fetchone() or {}).get("total") or 0)
+        return candidates, total, ("SINGLE_IMAGE",) if total else ()
 
     def asset_library_card_summaries(
         self, asset_ids: Iterable[int], *, creator_profile_id: int,
@@ -413,7 +559,8 @@ class AssetRepository:
                            publication.publication_metadata,
                            upload.upload_status,upload.processing_status,
                            upload.last_error AS upload_error,
-                           teaser.chat_status,teaser.vault_status
+                           teaser.chat_status,teaser.vault_status,
+                           destination.destination AS content_destination
                     FROM public.content_items ci
                     LEFT JOIN public.asset_intelligence_profiles aip ON aip.asset_id=ci.id
                     LEFT JOIN LATERAL (
@@ -434,6 +581,8 @@ class AssetRepository:
                              MAX(status) FILTER (WHERE distribution_use='CONTENT_VAULT') AS vault_status
                       FROM public.commercial_teasers WHERE source_asset_id=ci.id
                     ) teaser ON TRUE
+                    LEFT JOIN public.asset_content_destinations destination
+                      ON destination.asset_id=ci.id
                     WHERE ci.id=ANY(%s) AND ci.creator_profile_id=%s
                 """, (int(creator_profile_id), list(ids), int(creator_profile_id)))
                 rows = {int(row["id"]): dict(row) for row in cursor.fetchall()}
@@ -790,18 +939,28 @@ class AssetRepository:
             with connection.cursor() as cursor:
                 cursor.execute("""
                     UPDATE public.content_items
-                    SET media_metadata = jsonb_set(
-                            COALESCE(media_metadata, '{}'::jsonb),
-                            '{asset_library_archive}',
-                            jsonb_build_object(
-                                'archived_at', now(),
-                                'previous_status', status,
-                                'previous_ready_for_rotation', ready_for_rotation
+                    SET media_metadata = CASE
+                            WHEN COALESCE(media_metadata, '{}'::jsonb) ? 'asset_library_archive'
+                                THEN COALESCE(media_metadata, '{}'::jsonb)
+                            ELSE jsonb_set(
+                                COALESCE(media_metadata, '{}'::jsonb),
+                                '{asset_library_archive}',
+                                jsonb_build_object(
+                                    'archived_at', now(),
+                                    'previous_status', status,
+                                    'previous_ready_for_rotation', ready_for_rotation
+                                )
                             )
-                        ),
+                        END,
                         status = 'archived', is_active = FALSE, ready_for_rotation = FALSE
                     WHERE id = %s AND creator_profile_id = %s
-                      AND COALESCE(is_active, TRUE) = TRUE
+                      AND (
+                        COALESCE(is_active, TRUE) = TRUE
+                        OR (
+                            status = 'archived'
+                            AND COALESCE(media_metadata, '{}'::jsonb) ? 'asset_library_archive'
+                        )
+                      )
                       AND COALESCE(media_metadata->'reference_library'->>'is_reference', 'false') <> 'true'
                     RETURNING id
                 """, (int(asset_id), int(creator_profile_id)))

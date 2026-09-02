@@ -12,6 +12,7 @@ import {
   getEditStudioReferences,
   returnEditStudioToLibrary,
   uploadEditStudioReference,
+  useAsPhotoshootTeaser,
 } from "../../infrastructure/api/editStudioApi";
 import { LibraryImage } from "../generation-library/LibraryImage";
 import type { GenerationRecord } from "../generation-library/types";
@@ -47,6 +48,8 @@ export function EditStudioPage() {
   const [candidate, setCandidate] = useState<GenerationRecord | null>(null);
   const [workingSource, setWorkingSource] = useState<GenerationRecord | null>(null);
   const sourceImageId = context?.status === "ready" ? context.pendingImage.image_id : "";
+  const teaserIntentId = context?.status === "ready" && context.pendingImage.generation_metadata.purpose === "PHOTOSHOOT_SESSION_TEASER"
+    ? String(context.pendingImage.generation_metadata.teaser_intent_id || "") : "";
   const lastSourceImageId = useRef("");
 
   useLayoutEffect(() => {
@@ -230,11 +233,22 @@ export function EditStudioPage() {
     }
   }
 
+  async function handleUseAsTeaser() {
+    if (!candidate || !teaserIntentId || busy) return;
+    setBusy(true); setActionError("");
+    try {
+      const result = await useAsPhotoshootTeaser(teaserIntentId, candidate.image_id);
+      navigate(`/library/assets?assetType=photoshoots&photoshoot=${encodeURIComponent(result.deliverableId)}&teaserAdded=1`);
+    } catch (useError) {
+      setActionError(useError instanceof Error ? useError.message : "Unable to add the Session teaser.");
+    } finally { setBusy(false); }
+  }
+
   return (
     <section className="edit-studio">
       <PageHeader
-        title="Edit Studio"
-        description="Quick image adjustments and AI-powered editing workflows."
+        title={teaserIntentId ? "Edit Studio · Session Teaser" : "Edit Studio"}
+        description={teaserIntentId ? "Create a safer opening image, then return it to the originating Photoshoot." : "Quick image adjustments and AI-powered editing workflows."}
       />
 
       {loading && <div className="edit-studio__state" role="status">Loading Edit Studio…</div>}
@@ -257,7 +271,7 @@ export function EditStudioPage() {
                 <div><h2>Edited Candidate</h2><div className="edit-studio__review-image"><LibraryImage priority record={candidate} /></div></div>
               </div>
               <div className="edit-studio__review-actions">
-                <button className="edit-studio__primary" disabled={busy} onClick={() => void handleReviewAction("approve")} type="button">Approve</button>
+                {teaserIntentId ? <button className="edit-studio__primary" disabled={busy} onClick={() => void handleUseAsTeaser()} type="button">Use as Photoshoot Teaser</button> : <button className="edit-studio__primary" disabled={busy} onClick={() => void handleReviewAction("approve")} type="button">Approve</button>}
                 <button className="edit-studio__secondary" disabled={busy} onClick={() => void handleReviewAction("edit_again")} type="button">Edit Again</button>
                 <button className="edit-studio__remove-reference" disabled={busy} onClick={() => void handleReviewAction("discard")} type="button">Discard</button>
               </div>

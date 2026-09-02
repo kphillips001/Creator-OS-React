@@ -11,5 +11,5 @@ export function PhotoshootImagePreview({ image, label, onClose }: { image: Gener
     return () => window.removeEventListener("keydown", close);
   }, [onClose]);
 
-  return <div aria-label={`${label} fullscreen preview`} aria-modal="true" className="photoshoot-image-preview" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }} role="dialog"><button aria-label="Close preview" className="photoshoot-image-preview__close" onClick={onClose} type="button"><X /></button><LibraryImage alt={`${label} full-size preview`} priority record={image} /></div>;
+  return <div aria-label={`${label} fullscreen preview`} aria-modal="true" className="photoshoot-image-preview" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }} role="dialog"><button aria-label="Close preview" className="photoshoot-image-preview__close" onClick={onClose} type="button"><X /></button><LibraryImage alt={`${label} preview`} priority src={image.image_url.replace(/\/media(?:\?.*)?$/, "/preview")} /></div>;
 }

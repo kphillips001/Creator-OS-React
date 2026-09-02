@@ -7,6 +7,8 @@ from app.repositories.delayed_message_queue_repository import claim_due_items, r
 from app.services.global_automation_safety_service import (
     GlobalAutomationSafetyService,
 )
+from app.models.customer_contact import ContactPolicyResult, ContactPurpose
+from app.services.customer_contact_authority_service import CustomerContactAuthorityService
 
 
 class DelayedMessageWorkerService:
@@ -43,6 +45,9 @@ class DelayedMessageWorkerService:
         self.global_safety_service = (
             GlobalAutomationSafetyService()
         )
+        from app.services.customer_interaction_safety_service import CustomerInteractionSafetyService
+        self.customer_safety_service = CustomerInteractionSafetyService()
+        self.contact_authority = CustomerContactAuthorityService()
 
     def process_due_messages(
         self,
@@ -102,6 +107,25 @@ class DelayedMessageWorkerService:
 
             try:
                 if not renew_claim(queue_id, worker_instance_id=self.worker_instance_id):
+                    continue
+
+                customer_safety = self.customer_safety_service.decide_for_customer(
+                    fanvue_account_id=int(row_account_id),
+                    fanvue_user_id=int(row["fanvue_user_id"]))
+                if not customer_safety.allowed:
+                    release_claim(queue_id, worker_instance_id=self.worker_instance_id)
+                    results.append({"queue_id": queue_id, "status": "blocked",
+                                    "reason": customer_safety.code})
+                    continue
+
+                contact = self.contact_authority.decide(
+                    purpose=ContactPurpose.DELAYED_FOLLOWUP, evidence=row,
+                )
+                if contact.result is not ContactPolicyResult.ALLOW:
+                    release_claim(queue_id, worker_instance_id=self.worker_instance_id)
+                    results.append({"queue_id": queue_id, "status": "blocked",
+                                    "reason": contact.reason,
+                                    "contact_policy": dict(contact.to_mapping())})
                     continue
 
                 safety_result = (

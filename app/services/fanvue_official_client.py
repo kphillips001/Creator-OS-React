@@ -62,8 +62,14 @@ class FanvueOfficialClient:
                 self.sleep(delay)
                 continue
             if response.status_code >= 400:
+                message = f"Fanvue request failed with HTTP {response.status_code}."
+                if response.status_code == 503:
+                    message = (
+                        "Fanvue is temporarily unavailable (HTTP 503). "
+                        "Retry Sale Preparation to resume safely."
+                    )
                 raise FanvueAPIError(
-                    f"Fanvue request failed with HTTP {response.status_code}.",
+                    message,
                     status_code=response.status_code, body=self._body(response),
                     retry_after=response.headers.get("Retry-After"),
                 )

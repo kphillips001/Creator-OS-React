@@ -226,10 +226,13 @@ class SystemHealthService:
         return HealthSection("Database", tuple(checks))
 
     def queue_health(self) -> tuple[QueueHealth, ...]:
+        from app.services.photoshoot_queue_service import PhotoshootQueueService
         return (
             QueueHealth("Publishing Queue", self._json_count(self.project_root / "data" / "social_publishing" / "social_queue.json")),
             QueueHealth("Conversation Queue", self._json_count(self.project_root / "data" / "social_publishing" / "social_publish_items.json")),
-            QueueHealth("Photoshoot Queue", self._json_count(self.project_root / "data" / "photoshoot_queue" / "photoshoot_requests.json")),
+            QueueHealth("Photoshoot Queue", len(PhotoshootQueueService(
+                storage_dir=self.project_root / "data" / "photoshoot_queue"
+            ).list_requests())),
             QueueHealth("Generation Queue", self._json_count(self.project_root / "data" / "generation_engine" / "generation_jobs.json")),
         )
 

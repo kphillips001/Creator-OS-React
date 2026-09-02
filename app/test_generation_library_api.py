@@ -6,6 +6,23 @@ import pytest
 
 from app.api import generation_library as api
 from app.services.generation_library_service import GenerationLibraryService
+from app.models.generation_library import GeneratedImageRecord, GenerationLibraryFilter, GenerationLibraryResult
+from uuid import uuid4
+
+
+def test_add_to_teasers_returns_canonical_asset_and_analysis_state(monkeypatch):
+    service = Mock()
+    service.add.return_value = SimpleNamespace(
+        asset_id=42, generation_id="image-1", already_registered=False,
+        analysis_status="NUDENET_PENDING",
+    )
+    monkeypatch.setattr(api, "_creator_profile_id", lambda: 7)
+    monkeypatch.setattr(api, "EngagementTeaserIntakeService", lambda: service)
+    result = api.add_generation_to_teasers("image-1")
+    service.add.assert_called_once_with("image-1", creator_profile_id=7)
+    assert result["asset_id"] == 42
+    assert result["status"] == "analyzing"
+    assert result["generation_id"] == "image-1"
 
 
 def _record(image_id: str, *, status: str = "active"):
@@ -19,6 +36,34 @@ def _record(image_id: str, *, status: str = "active"):
         generation_date="2026-01-01T00:00:00",
         generation_metadata={},
     )
+
+
+def test_assembled_photoshoot_import_returns_durable_operation(monkeypatch):
+    operation_id, intake_id = uuid4(), uuid4()
+    operation = SimpleNamespace(operation_id=operation_id, status="QUEUED")
+    service = Mock()
+    service.create.return_value = ({
+        "intake_id": intake_id, "deliverable_id": None,
+    }, operation, True)
+    monkeypatch.setattr(api, "_creator_profile_id", lambda: 7)
+    monkeypatch.setattr(api, "_current_account_id", lambda: 3)
+    monkeypatch.setattr(api, "AssembledPhotoshootIntakeService", lambda: service)
+
+    result = api.import_generation_library_photoshoot(api.AssembledPhotoshootImportRequest(
+        imageIds=["image-b", "image-a"],
+        heroImageId="image-a", idempotencyKey="request-1",
+    ))
+
+    service.create.assert_called_once_with(
+        creator_profile_id=7, account_id=3,
+        image_ids=["image-b", "image-a"], hero_image_id="image-a",
+        idempotency_key="request-1",
+    )
+    assert result == {
+        "intakeId": str(intake_id), "operationId": str(operation_id),
+        "operationStatus": "QUEUED", "created": True, "deliverableId": None,
+        "sourceKind": "GENERATION_LIBRARY_IMPORT",
+    }
 
 
 def test_edit_handoff_uses_generation_library_pending_workflow(monkeypatch):
@@ -103,7 +148,7 @@ def test_generation_thumbnail_uses_cache_and_media_keeps_original(monkeypatch, t
     thumbnail.write_bytes(b"thumbnail")
     record = _record("image-1")
     record.output_reference = str(source)
-    library = SimpleNamespace(get=lambda _image_id: record)
+    library = SimpleNamespace(projected_get=lambda _image_id: record)
     monkeypatch.setattr(api, "_creator_profile_id", lambda: 7)
     monkeypatch.setattr(api, "GenerationLibraryService", lambda: library)
     monkeypatch.setattr(
@@ -118,7 +163,251 @@ def test_generation_thumbnail_uses_cache_and_media_keeps_original(monkeypatch, t
 
     assert Path(response.path) == thumbnail
     assert response.media_type == "image/webp"
+    assert response.headers["cache-control"] == "private, max-age=31536000, immutable"
     assert Path(api.generation_library_media("image-1").path) == source
+
+
+def test_generation_browse_uses_lightweight_thumbnail_card_projection(monkeypatch):
+    record = GeneratedImageRecord(
+        image_id="image-1", generation_job_id="job-1",
+        generation_request_id="request-1", generation_result_id="result-1",
+        output_reference="C:/original.png", creator_profile_id=7,
+        provider_id="seedream", prompt_plan_id="plan-1",
+        prompt_text="x" * 20_000, creative_mode="premium",
+        reference_asset_id=93, generation_recipe_id=None,
+        provider_metadata={"large": "x" * 20_000},
+        prompt_metadata={"large": "x" * 20_000},
+        generation_metadata={"large": "x" * 20_000},
+        updated_at="2026-01-02T00:00:00Z",
+    )
+    library = Mock()
+    library.browse_page.return_value = ((record,), 1, ("seedream",), ("premium",))
+    monkeypatch.setattr(api, "_creator_profile_id", lambda: 7)
+    monkeypatch.setattr(api, "GenerationLibraryService", lambda: library)
+
+    result = api.browse_generation_library(page=1)
+
+    card = result["records"][0]
+    assert card["image_url"].startswith("/api/v1/generation-library/image-1/thumbnail")
+    assert card["media_url"].startswith("/api/v1/generation-library/image-1/media")
+    assert "prompt_text" not in card
+    assert "generation_metadata" not in card
+    assert "prompt_metadata" not in card
+    assert "provider_metadata" not in card
+
+
+def test_generation_browse_passes_typed_content_origin_without_changing_sort(monkeypatch):
+    library = Mock()
+    library.browse_page.return_value = ((), 0, (), (), 1)
+    monkeypatch.setattr(api, "_creator_profile_id", lambda: 7)
+    monkeypatch.setattr(api, "GenerationLibraryService", lambda: library)
+
+    api.browse_generation_library(search="portrait", contentOrigin="NSFW", page=2)
+
+    filters = library.browse_page.call_args.args[0]
+    assert filters.search == "portrait"
+    assert filters.content_origin == "NSFW"
+    assert filters.sort == "newest"
+    assert library.browse_page.call_args.kwargs == {"page": 2, "page_size": 24}
+
+    api.browse_generation_library(contentOrigin="UNCLASSIFIED", page=1)
+    assert library.browse_page.call_args.args[0].content_origin == "UNCLASSIFIED"
+
+
+def test_generation_detail_preserves_full_prompt_metadata_and_original_url(monkeypatch):
+    record = GeneratedImageRecord(
+        image_id="image-1", generation_job_id="job-1",
+        generation_request_id="request-1", generation_result_id="result-1",
+        output_reference="C:/original.png", creator_profile_id=7,
+        provider_id="seedream", prompt_plan_id="plan-1",
+        prompt_text="Full canonical prompt", creative_mode="premium",
+        reference_asset_id=93, generation_metadata={"model": "seedream-v5"},
+    )
+    monkeypatch.setattr(api, "_creator_profile_id", lambda: 7)
+    monkeypatch.setattr(api, "GenerationLibraryService", lambda: SimpleNamespace(get_with_effective_classification=lambda _: record))
+
+    result = api.generation_library_details("image-1")
+
+    assert result["prompt_text"] == "Full canonical prompt"
+    assert result["generation_metadata"] == {"model": "seedream-v5"}
+    assert "/media?" in result["image_url"]
+
+
+def test_manual_classification_route_persists_only_for_owned_record(monkeypatch):
+    record = _record("image-1")
+    library = Mock()
+    library.get.return_value = record
+    library.classify_content.return_value = {
+        "content_classification": "SFW", "classification_source": "MANUAL",
+    }
+    monkeypatch.setattr(api, "_creator_profile_id", lambda: 7)
+    monkeypatch.setattr(api, "GenerationLibraryService", lambda: library)
+
+    result = api.classify_generation_content(
+        "image-1", api.ContentClassificationRequest(classification="SFW"),
+    )
+
+    library.classify_content.assert_called_once_with(
+        "image-1", creator_profile_id=7, classification="SFW",
+    )
+    assert result["content_classification"] == "SFW"
+    assert result["classification_source"] == "MANUAL"
+
+
+def test_manual_classification_route_rejects_resolved_record(monkeypatch):
+    library = Mock()
+    library.get.return_value = _record("image-1")
+    library.classify_content.side_effect = ValueError(
+        "Only an Unclassified Generation Library image can be manually classified."
+    )
+    monkeypatch.setattr(api, "_creator_profile_id", lambda: 7)
+    monkeypatch.setattr(api, "GenerationLibraryService", lambda: library)
+
+    with pytest.raises(api.HTTPException) as raised:
+        api.classify_generation_content(
+            "image-1", api.ContentClassificationRequest(classification="NSFW"),
+        )
+    assert raised.value.status_code == 409
+
+
+@pytest.mark.parametrize("classification", ["SFW", "NSFW"])
+def test_bulk_classification_route_uses_one_atomic_service_call(monkeypatch, classification):
+    library = Mock()
+    library.bulk_classify_content.return_value = (
+        {"image_id": "image-1", "content_classification": classification, "classification_source": "MANUAL"},
+        {"image_id": "image-2", "content_classification": classification, "classification_source": "MANUAL"},
+    )
+    monkeypatch.setattr(api, "_creator_profile_id", lambda: 7)
+    monkeypatch.setattr(api, "GenerationLibraryService", lambda: library)
+
+    result = api.bulk_classify_generation_content(api.BulkContentClassificationRequest(
+        image_ids=["image-1", "image-2"], classification=classification,
+    ))
+
+    library.bulk_classify_content.assert_called_once_with(
+        ["image-1", "image-2"], creator_profile_id=7, classification=classification,
+    )
+    assert result == {
+        "image_ids": ["image-1", "image-2"], "content_classification": classification,
+        "classification_source": "MANUAL", "classified_count": 2,
+    }
+
+
+def test_bulk_classification_rejects_whole_batch_on_service_conflict(monkeypatch):
+    library = Mock()
+    library.bulk_classify_content.side_effect = ValueError(
+        "Every selected image must exist, belong to the active creator, and still be Unclassified."
+    )
+    monkeypatch.setattr(api, "_creator_profile_id", lambda: 7)
+    monkeypatch.setattr(api, "GenerationLibraryService", lambda: library)
+    with pytest.raises(api.HTTPException) as raised:
+        api.bulk_classify_generation_content(api.BulkContentClassificationRequest(
+            image_ids=["valid", "automatic"], classification="SFW",
+        ))
+    assert raised.value.status_code == 409
+
+
+def test_bulk_classification_request_rejects_empty_duplicate_and_invalid_values():
+    from pydantic import ValidationError
+    with pytest.raises(ValidationError):
+        api.BulkContentClassificationRequest(image_ids=[], classification="SFW")
+    with pytest.raises(ValidationError):
+        api.BulkContentClassificationRequest(image_ids=["same", "same"], classification="NSFW")
+    with pytest.raises(ValidationError):
+        api.BulkContentClassificationRequest(image_ids=["image-1"], classification="UNKNOWN")
+
+
+def test_bulk_archive_uses_one_canonical_service_call(monkeypatch):
+    library = Mock()
+    library.bulk_archive_unclassified.return_value = SimpleNamespace(
+        image_ids=("image-1", "image-2"), message="Content moved to Archive / Removed Content.",
+    )
+    monkeypatch.setattr(api, "_creator_profile_id", lambda: 7)
+    monkeypatch.setattr(api, "GenerationLibraryService", lambda: library)
+    result = api.bulk_archive_generation_content(api.BulkArchiveRequest(
+        image_ids=["image-1", "image-2"],
+    ))
+    library.bulk_archive_unclassified.assert_called_once_with(
+        ["image-1", "image-2"], creator_profile_id=7,
+    )
+    assert result["archived_count"] == 2
+    assert result["image_ids"] == ["image-1", "image-2"]
+
+
+def test_bulk_archive_rejects_invalid_batch_atomically(monkeypatch):
+    library = Mock()
+    library.bulk_archive_unclassified.side_effect = ValueError(
+        "Every selected image must belong to the active creator and still be an eligible Unclassified image."
+    )
+    monkeypatch.setattr(api, "_creator_profile_id", lambda: 7)
+    monkeypatch.setattr(api, "GenerationLibraryService", lambda: library)
+    with pytest.raises(api.HTTPException) as raised:
+        api.bulk_archive_generation_content(api.BulkArchiveRequest(
+            image_ids=["unclassified", "automatic-sfw"],
+        ))
+    assert raised.value.status_code == 409
+
+
+def test_bulk_archive_request_rejects_empty_duplicate_and_oversized_batches():
+    from pydantic import ValidationError
+    with pytest.raises(ValidationError):
+        api.BulkArchiveRequest(image_ids=[])
+    with pytest.raises(ValidationError):
+        api.BulkArchiveRequest(image_ids=["same", "same"])
+    with pytest.raises(ValidationError):
+        api.BulkArchiveRequest(image_ids=[f"image-{index}" for index in range(101)])
+
+
+def test_bulk_archive_service_validates_every_record_before_canonical_archive(tmp_path):
+    projection = Mock()
+    projection.eligible_unclassified_ids.return_value = {"image-1", "image-2"}
+    service = GenerationLibraryService(storage_dir=tmp_path, projection_repository=projection)
+    service.ensure_read_projection = Mock()
+    service.delete = Mock(return_value=SimpleNamespace(
+        success=True, image_ids=("image-1", "image-2"), errors=(),
+    ))
+    result = service.bulk_archive_unclassified(
+        ("image-1", "image-2"), creator_profile_id=7,
+    )
+    projection.eligible_unclassified_ids.assert_called_once_with(
+        ("image-1", "image-2"), creator_profile_id=7,
+    )
+    service.delete.assert_called_once_with(("image-1", "image-2"))
+    assert result.image_ids == ("image-1", "image-2")
+
+
+def test_bulk_archive_service_archives_zero_when_one_record_is_ineligible(tmp_path):
+    projection = Mock()
+    projection.eligible_unclassified_ids.return_value = {"image-1"}
+    service = GenerationLibraryService(storage_dir=tmp_path, projection_repository=projection)
+    service.ensure_read_projection = Mock()
+    service.delete = Mock()
+    with pytest.raises(ValueError, match="eligible Unclassified"):
+        service.bulk_archive_unclassified(
+            ("image-1", "automatic-nsfw"), creator_profile_id=7,
+        )
+    service.delete.assert_not_called()
+
+
+def test_posting_stage_route_uses_canonical_service_and_returns_metadata(monkeypatch):
+    record = GeneratedImageRecord(
+        image_id="image-1", generation_job_id="job-1", generation_request_id="request-1",
+        generation_result_id="result-1", output_reference="C:/original.png",
+        creator_profile_id=7, provider_id="seedream", prompt_plan_id="plan-1",
+        prompt_text="Prompt", creative_mode="premium", reference_asset_id=93,
+    )
+    updated = record.__class__(**{**record.__dict__, "is_staged": True, "staged_at": "2026-08-15T10:00:00Z"})
+    library = Mock()
+    library.get.return_value = record
+    library.set_posting_stage.return_value = updated
+    monkeypatch.setattr(api, "_creator_profile_id", lambda: 7)
+    monkeypatch.setattr(api, "GenerationLibraryService", lambda: library)
+
+    result = api.update_generation_posting_stage("image-1", api.PostingStageRequest(is_staged=True))
+
+    library.set_posting_stage.assert_called_once_with("image-1", staged=True)
+    assert result["is_staged"] is True
+    assert result["staged_at"] == "2026-08-15T10:00:00Z"
 
 
 def test_generation_library_edit_route_is_registered():

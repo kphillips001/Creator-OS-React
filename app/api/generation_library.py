@@ -6,10 +6,11 @@ import mimetypes
 import logging
 from dataclasses import asdict
 from pathlib import Path
+from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 
 from app.api.content_studio import _current_account_id
 from app.repositories.creator_profile_repository import get_active_creator_profile
@@ -19,7 +20,9 @@ from app.services.asset_library_return_service import AssetLibraryReturnService,
 from app.services.grid_thumbnail_service import GridThumbnailService
 from app.services.photoshoot_queue_service import PhotoshootQueueService
 from app.services.reference_library_service import ReferenceLibraryService
-from app.models.generation_library import GenerationLibraryFilter
+from app.models.generation_library import GENERATION_LIBRARY_PAGE_SIZE, GenerationLibraryFilter
+from app.services.assembled_photoshoot_intake_service import AssembledPhotoshootIntakeService
+from app.services.engagement_teaser_intake_service import EngagementTeaserIntakeService
 
 
 router = APIRouter(prefix="/api/v1/generation-library", tags=["generation-library"])
@@ -79,6 +82,43 @@ class PermanentDeleteRequest(BaseModel):
     confirmed: bool = False
 
 
+class PostingStageRequest(BaseModel):
+    is_staged: bool
+
+
+class ContentClassificationRequest(BaseModel):
+    classification: Literal["SFW", "NSFW"]
+
+
+class BulkContentClassificationRequest(BaseModel):
+    image_ids: list[str] = Field(min_length=1, max_length=100)
+    classification: Literal["SFW", "NSFW"]
+
+    @field_validator("image_ids")
+    @classmethod
+    def validate_image_ids(cls, values: list[str]) -> list[str]:
+        normalized = [str(value).strip() for value in values]
+        if any(not value for value in normalized):
+            raise ValueError("Image IDs must not be empty.")
+        if len(set(normalized)) != len(normalized):
+            raise ValueError("Duplicate image IDs are not allowed.")
+        return normalized
+
+
+class BulkArchiveRequest(BaseModel):
+    image_ids: list[str] = Field(min_length=1, max_length=100)
+
+    @field_validator("image_ids")
+    @classmethod
+    def validate_image_ids(cls, values: list[str]) -> list[str]:
+        normalized = [str(value).strip() for value in values]
+        if any(not value for value in normalized):
+            raise ValueError("Image IDs must not be empty.")
+        if len(set(normalized)) != len(normalized):
+            raise ValueError("Duplicate image IDs are not allowed.")
+        return normalized
+
+
 class AssetLibraryMoveResponse(BaseModel):
     success: bool
     generation_id: str
@@ -89,6 +129,37 @@ class AssetLibraryMoveResponse(BaseModel):
     analysis_status: str | None = None
 
 
+class AssembledPhotoshootImportRequest(BaseModel):
+    imageIds: list[str]
+    heroImageId: str | None = None
+    idempotencyKey: str | None = None
+
+
+@router.post("/photoshoots/import", status_code=202)
+def import_generation_library_photoshoot(request: AssembledPhotoshootImportRequest):
+    creator_profile_id = _creator_profile_id()
+    if not creator_profile_id:
+        raise HTTPException(status_code=400, detail="Creator Profile required before creating a Photoshoot.")
+    try:
+        intake, operation, created = AssembledPhotoshootIntakeService().create(
+            creator_profile_id=creator_profile_id,
+            account_id=_current_account_id(),
+            image_ids=request.imageIds,
+            hero_image_id=request.heroImageId,
+            idempotency_key=request.idempotencyKey,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    return {
+        "intakeId": str(intake["intake_id"]),
+        "operationId": str(operation.operation_id),
+        "operationStatus": operation.status,
+        "created": bool(created),
+        "deliverableId": str(intake["deliverable_id"]) if intake.get("deliverable_id") else None,
+        "sourceKind": "GENERATION_LIBRARY_IMPORT",
+    }
+
+
 def _record_payload(record, eligibility=None) -> dict:
     payload = asdict(record)
     payload["image_url"] = f"/api/v1/generation-library/{record.image_id}/media?v={record.updated_at or record.generation_date}"
@@ -97,6 +168,28 @@ def _record_payload(record, eligibility=None) -> dict:
         eligibility.reason if eligibility and not eligibility.can_regenerate else None
     )
     return payload
+
+
+def _card_payload(record, eligibility=None) -> dict:
+    version = record.updated_at or record.generation_date
+    return {
+        "image_id": record.image_id,
+        "image_url": f"/api/v1/generation-library/{record.image_id}/thumbnail?v={version}",
+        "media_url": f"/api/v1/generation-library/{record.image_id}/media?v={version}",
+        "provider_id": record.provider_id,
+        "creative_mode": record.creative_mode,
+        "generation_date": record.generation_date,
+        "status": record.status,
+        "is_staged": record.is_staged,
+        "staged_at": record.staged_at,
+        "content_classification": record.content_classification,
+        "classification_source": record.classification_source,
+        "creator_profile_id": record.creator_profile_id,
+        "canRegenerate": bool(eligibility and eligibility.can_regenerate),
+        "regenerationIneligibilityReason": (
+            eligibility.reason if eligibility and not eligibility.can_regenerate else None
+        ),
+    }
 
 
 def _removed_record(library: GenerationLibraryService, image_id: str):
@@ -114,25 +207,26 @@ def _removed_record(library: GenerationLibraryService, image_id: str):
 @router.get("")
 def browse_generation_library(
     search: str | None = None,
+    contentOrigin: Literal["SFW", "NSFW", "UNCLASSIFIED"] | None = None,
     provider: str | None = None,
     mode: str | None = None,
     sort: str = "newest",
     page: int = Query(1, ge=1),
 ):
     library = GenerationLibraryService()
-    result = library.browse(GenerationLibraryFilter(
+    filters = GenerationLibraryFilter(
         search=search,
+        content_origin=contentOrigin,
         provider_id=provider,
         creative_mode=mode,
         creator_profile_id=_creator_profile_id() or None,
         sort=sort,
-    ))
-    page_size = 20
-    total_pages = max(1, (result.total + page_size - 1) // page_size)
+    )
+    page_size = GENERATION_LIBRARY_PAGE_SIZE
+    browse_result = library.browse_page(filters, page=page, page_size=page_size)
+    page_records, total, providers, modes = browse_result[:4]
+    total_pages = browse_result[4] if len(browse_result) > 4 else max(1, (total + page_size - 1) // page_size)
     current_page = min(page, total_pages)
-    start = (current_page - 1) * page_size
-    all_records = result.records
-    page_records = all_records[start:start + page_size]
     from app.services.regeneration_eligibility_service import RegenerationEligibilityService
     eligibility_service = RegenerationEligibilityService(generation_library=library)
     recipe_records = tuple(record for record in page_records if record.generation_recipe_id)
@@ -140,21 +234,112 @@ def browse_generation_library(
         recipe_records, creator_profile_id=_creator_profile_id() or None,
     )
     return {
-        "records": [_record_payload(record, eligibility.get(record.image_id)) for record in page_records],
-        "total": result.total,
+        "records": [_card_payload(record, eligibility.get(record.image_id)) for record in page_records],
+        "total": total,
         "page": current_page,
         "pageSize": page_size,
         "totalPages": total_pages,
-        "providers": sorted({record.provider_id for record in all_records}),
-        "modes": sorted({record.creative_mode for record in all_records if record.creative_mode}),
+        "providers": list(providers),
+        "modes": list(modes),
     }
+
+
+@router.get("/{generated_image_id}")
+def generation_library_details(generated_image_id: str):
+    library = GenerationLibraryService()
+    try:
+        record = library.get_with_effective_classification(generated_image_id)
+    except KeyError as error:
+        raise HTTPException(status_code=404, detail="Generated image not found.") from error
+    creator_profile_id = _creator_profile_id()
+    if creator_profile_id and record.creator_profile_id != creator_profile_id:
+        raise HTTPException(status_code=404, detail="Generated image not found.")
+    return _record_payload(record)
+
+
+@router.patch("/{generated_image_id}/content-classification")
+def classify_generation_content(generated_image_id: str, request: ContentClassificationRequest):
+    library = GenerationLibraryService()
+    creator_profile_id = _creator_profile_id()
+    if not creator_profile_id:
+        raise HTTPException(status_code=400, detail="Creator Profile required before classifying an image.")
+    try:
+        record = library.get(generated_image_id)
+    except KeyError as error:
+        raise HTTPException(status_code=404, detail="Generated image not found.") from error
+    if record.creator_profile_id != creator_profile_id:
+        raise HTTPException(status_code=404, detail="Generated image not found.")
+    try:
+        result = library.classify_content(
+            generated_image_id, creator_profile_id=creator_profile_id,
+            classification=request.classification,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    return {"image_id": generated_image_id,
+            "content_classification": result["content_classification"],
+            "classification_source": result["classification_source"]}
+
+
+@router.patch("/content-classification/bulk")
+def bulk_classify_generation_content(request: BulkContentClassificationRequest):
+    creator_profile_id = _creator_profile_id()
+    if not creator_profile_id:
+        raise HTTPException(status_code=400, detail="Creator Profile required before classifying images.")
+    try:
+        rows = GenerationLibraryService().bulk_classify_content(
+            request.image_ids, creator_profile_id=creator_profile_id,
+            classification=request.classification,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    count = len(rows)
+    return {"image_ids": [row["image_id"] for row in rows],
+            "content_classification": request.classification,
+            "classification_source": "MANUAL", "classified_count": count}
+
+
+@router.post("/archive/bulk")
+def bulk_archive_generation_content(request: BulkArchiveRequest):
+    creator_profile_id = _creator_profile_id()
+    if not creator_profile_id:
+        raise HTTPException(status_code=400, detail="Creator Profile required before archiving images.")
+    try:
+        result = GenerationLibraryService().bulk_archive_unclassified(
+            request.image_ids, creator_profile_id=creator_profile_id,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    except RuntimeError as error:
+        raise HTTPException(status_code=500, detail=str(error)) from error
+    return {"image_ids": list(result.image_ids), "archived_count": len(result.image_ids),
+            "message": result.message}
+
+
+@router.put("/{generated_image_id}/posting-stage")
+def update_generation_posting_stage(generated_image_id: str, request: PostingStageRequest):
+    library = GenerationLibraryService()
+    creator_profile_id = _creator_profile_id()
+    if not creator_profile_id:
+        raise HTTPException(status_code=400, detail="Creator Profile required before staging an image.")
+    try:
+        record = library.get(generated_image_id)
+    except KeyError as error:
+        raise HTTPException(status_code=404, detail="Generated image not found.") from error
+    if record.creator_profile_id != creator_profile_id:
+        raise HTTPException(status_code=404, detail="Generated image not found.")
+    try:
+        updated = library.set_posting_stage(generated_image_id, staged=request.is_staged)
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    return _record_payload(updated)
 
 
 @router.get("/{generated_image_id}/media", response_class=FileResponse)
 def generation_library_media(generated_image_id: str):
     library = GenerationLibraryService()
     try:
-        record = library.get(generated_image_id)
+        record = library.projected_get(generated_image_id)
     except KeyError as error:
         raise HTTPException(status_code=404, detail="Generated image not found.") from error
     if _creator_profile_id() and record.creator_profile_id != _creator_profile_id():
@@ -169,7 +354,7 @@ def generation_library_media(generated_image_id: str):
 def generation_library_thumbnail(generated_image_id: str):
     library = GenerationLibraryService()
     try:
-        record = library.get(generated_image_id)
+        record = library.projected_get(generated_image_id)
     except KeyError as error:
         raise HTTPException(status_code=404, detail="Generated image not found.") from error
     creator_profile_id = _creator_profile_id()
@@ -193,8 +378,30 @@ def generation_library_thumbnail(generated_image_id: str):
     return FileResponse(
         path,
         media_type=media_type,
-        headers={"Cache-Control": "private, no-cache"},
+        headers={"Cache-Control": "private, max-age=31536000, immutable"},
     )
+
+
+@router.get("/{generated_image_id}/preview", response_class=FileResponse)
+def generation_library_preview(generated_image_id: str):
+    library = GenerationLibraryService()
+    try:
+        record = library.projected_get(generated_image_id)
+    except KeyError as error:
+        raise HTTPException(status_code=404, detail="Generated image not found.") from error
+    creator_profile_id = _creator_profile_id()
+    if creator_profile_id and record.creator_profile_id != creator_profile_id:
+        raise HTTPException(status_code=404, detail="Generated image not found.")
+    source = Path(record.output_reference).expanduser()
+    if not source.is_file():
+        raise HTTPException(status_code=404, detail="Generated image media is unavailable.")
+    try:
+        path = GridThumbnailService().get_or_create_preview(source, identity=f"generation-{generated_image_id}")
+    except Exception as error:
+        logger.exception("Generation Library preview failed for %s", generated_image_id)
+        raise HTTPException(status_code=422, detail="Generated image preview is unavailable.") from error
+    return FileResponse(path, media_type="image/webp",
+                        headers={"Cache-Control": "private, max-age=31536000, immutable"})
 
 
 @router.post("/{generated_image_id}/remove")
@@ -307,6 +514,36 @@ def move_generation_to_asset_library(generated_image_id: str):
         "asset_id": result.asset_id,
         "analysis_status": result.analysis_status,
         "message": result.message,
+    }
+
+
+@router.post("/{generated_image_id}/add-to-teasers", response_model=AssetLibraryMoveResponse)
+def add_generation_to_teasers(generated_image_id: str):
+    creator_profile_id = _creator_profile_id()
+    if not creator_profile_id:
+        raise HTTPException(status_code=400, detail="Creator Profile required before adding a Teaser.")
+    try:
+        result = EngagementTeaserIntakeService().add(
+            generated_image_id, creator_profile_id=creator_profile_id,
+        )
+    except KeyError as error:
+        raise HTTPException(status_code=404, detail="Generated image not found.") from error
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    except Exception as error:
+        logger.exception("Engagement Teaser intake failed")
+        raise HTTPException(
+            status_code=409,
+            detail="Teaser intake could not finish. Retry Add to Teasers.",
+        ) from error
+    return {
+        "success": True,
+        "generation_id": result.generation_id,
+        "already_moved": result.already_registered,
+        "status": "analyzing" if result.analysis_status != "READY" else "ready",
+        "asset_id": result.asset_id,
+        "analysis_status": result.analysis_status,
+        "message": "Added to Teasers. Asset Intelligence is ready." if result.analysis_status == "READY" else "Added to Teasers. Asset Intelligence is analyzing.",
     }
 
 

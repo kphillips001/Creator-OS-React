@@ -13,6 +13,7 @@ from app.services.background_operation_service import BackgroundOperationService
 from app.services.regeneration_eligibility_service import RegenerationEligibilityService
 from app.services.regeneration_service import RegenerationIneligible, RegenerationService
 from app.repositories.regeneration_repository import RegenerationRepository
+from app.services.grid_thumbnail_service import GridThumbnailService
 
 
 router = APIRouter(prefix="/api/v1/regeneration", tags=["regeneration"])
@@ -48,7 +49,7 @@ def _result_payload(item):
         "generationRecipeId": str(item.generation_recipe_id) if item.generation_recipe_id else None,
         "disposition": item.disposition,
         "mediaUrl": (
-            f"/api/v1/regeneration/{item.operation_id}/results/{item.regeneration_result_id}/media"
+            f"/api/v1/regeneration/{item.operation_id}/results/{item.regeneration_result_id}/preview"
             if item.status == "SUCCEEDED" and item.media_path else None
         ),
         "errorCode": item.error_code,
@@ -82,7 +83,7 @@ def regeneration_source(source_generated_image_id: str):
     recipe = service.recipes.get(record.generation_recipe_id) if record.generation_recipe_id else None
     payload["source"] = {
         "generatedImageId": record.image_id,
-        "mediaUrl": f"/api/v1/generation-library/{record.image_id}/media",
+        "mediaUrl": f"/api/v1/generation-library/{record.image_id}/preview",
         "providerDisplayName": str(record.provider_id or "").replace("_", " ").title(),
         "modelDisplayName": recipe.provider_model if recipe else None,
         "sourceWorkflow": recipe.source_workflow if recipe else None,
@@ -111,6 +112,30 @@ def start_regeneration(request: RegenerationStartRequest):
     })
 
 
+@router.get("/workspace/current")
+def current_regeneration_workspace():
+    creator_id, _ = _context()
+    run = RegenerationRepository().discover_workspace(creator_profile_id=creator_id)
+    return {"success": True, "workspace": ({
+        "operationId": str(run.operation_id),
+        "sourceGeneratedImageId": run.source_generated_image_id,
+    } if run else None)}
+
+
+@router.post("/{operation_id}/dismiss")
+def dismiss_regeneration_workspace(operation_id: str):
+    creator_id, account_id = _context()
+    operation = BackgroundOperationService().get(
+        operation_id, creator_profile_id=creator_id, account_id=account_id)
+    run = RegenerationRepository().get_run(operation_id, creator_profile_id=creator_id)
+    if operation is None or run is None:
+        return JSONResponse(status_code=404, content={"success": False, "error": "Regeneration operation not found."})
+    if operation.status in {"QUEUED", "RUNNING", "WAITING_EXTERNAL", "CANCEL_REQUESTED"}:
+        return JSONResponse(status_code=409, content={"success": False, "error": "Active regeneration cannot be reset."})
+    RegenerationRepository().dismiss_workspace(operation_id, creator_profile_id=creator_id)
+    return {"success": True}
+
+
 @router.get("/{operation_id}")
 def get_regeneration(operation_id: str):
     creator_id, account_id = _context()
@@ -120,6 +145,11 @@ def get_regeneration(operation_id: str):
     run = service.repository.get_run(operation_id, creator_profile_id=creator_id)
     if operation is None or run is None:
         return JSONResponse(status_code=404, content={"success": False, "error": "Regeneration operation not found."})
+    if run.workspace_dismissed_at is not None:
+        return JSONResponse(status_code=410, content={
+            "success": False, "code": "WORKSPACE_DISMISSED",
+            "error": "This Regeneration Studio workspace has been finalized.",
+        })
     return {
         "success": True,
         "operation": operations.payload(operation),
@@ -146,7 +176,7 @@ def get_regeneration_results(operation_id: str):
 def promote_regeneration_results(operation_id: str, request: RegenerationPromoteRequest):
     creator_id, account_id = _context()
     try:
-        records = RegenerationService().promote(
+        records, archived, _ = RegenerationService().finalize_selection(
             operation_id, request.result_ids,
             creator_profile_id=creator_id, account_id=account_id,
         )
@@ -159,6 +189,8 @@ def promote_regeneration_results(operation_id: str, request: RegenerationPromote
         "message": f"{len(records)} image{'s' if len(records) != 1 else ''} added to Generation Library",
         "promotedResultIds": request.result_ids,
         "generatedImageIds": [record.image_id for record in records],
+        "archivedResultIds": [str(item.regeneration_result_id) for item in archived],
+        "workspaceDismissed": True,
     }
 
 
@@ -201,7 +233,7 @@ def archived_regeneration_items(search: str | None = None, page: int = 1):
         "modelDisplayName":row.get("provider_model"),"sourceWorkflow":row.get("source_workflow"),
         "generatedAt":row["completed_at"].isoformat() if row.get("completed_at") else None,
         "archivedAt":row["updated_at"].isoformat() if row.get("updated_at") else None,
-        "mediaUrl":f"/api/v1/regeneration/{row['operation_id']}/results/{row['regeneration_result_id']}/media",
+        "mediaUrl":f"/api/v1/regeneration/{row['operation_id']}/results/{row['regeneration_result_id']}/preview",
     } for row in rows],"total":total,"page":page,"pageSize":page_size,"totalPages":max(1,(total+page_size-1)//page_size)}
 
 
@@ -218,3 +250,21 @@ def get_regeneration_result_media(operation_id: str, result_id: str):
     if not path.is_file():
         return JSONResponse(status_code=404, content={"success": False, "error": "Regenerated media is unavailable."})
     return FileResponse(path)
+
+
+@router.get("/{operation_id}/results/{result_id}/preview")
+def get_regeneration_result_preview(operation_id: str, result_id: str):
+    creator_id, _ = _context()
+    service = RegenerationService()
+    run = service.repository.get_run(operation_id, creator_profile_id=creator_id)
+    item = next((value for value in service.repository.results(operation_id)
+                 if str(value.regeneration_result_id) == result_id), None) if run else None
+    if item is None or item.status != "SUCCEEDED" or not item.media_path:
+        return JSONResponse(status_code=404, content={"success": False, "error": "Regenerated media not found."})
+    source = Path(item.media_path)
+    if not source.is_file():
+        return JSONResponse(status_code=404, content={"success": False, "error": "Regenerated media is unavailable."})
+    path = GridThumbnailService().get_or_create_preview(
+        source, identity=f"regeneration-{operation_id}-{result_id}")
+    return FileResponse(path, media_type="image/webp",
+                        headers={"Cache-Control": "private, max-age=31536000, immutable"})

@@ -62,22 +62,28 @@ class PhotoshootBundleSalePreparationService:
         ) if offering else None)
         error = self._shape_error(row, offering, asset_ids) if offering else None
         metadata = dict(publication.publication_metadata if publication else {})
+        replacement = dict(metadata.get("media_link_replacement") or {})
         link = dict(metadata.get("media_link") or {})
         url = str(link.get("url") or "").strip() or None
+        replacement_active = replacement.get("state") in {
+            "QUEUED", "DELETING_OLD_LINK", "OLD_LINK_DELETED",
+        }
+        replacement_failed = replacement.get("state") == "REPLACEMENT_FAILED"
         ready = bool(
             not error and offering and publication
             and publication.status == CommercialPublicationStatus.LIVE
             and publication.provider_resource_status.value == "PRESENT"
-            and url
+            and url and not replacement_active
         )
         preparing = bool(
-            publication and publication.status in {
+            replacement_active or (publication and publication.status in {
                 CommercialPublicationStatus.READY_TO_PUBLISH,
                 CommercialPublicationStatus.PUBLISHING,
-            }
+            })
         )
         needs_attention = bool(
-            error or (publication and publication.status == CommercialPublicationStatus.FAILED)
+            error or replacement_failed
+            or (publication and publication.status == CommercialPublicationStatus.FAILED)
             or (offering and publication is None)
             or (offering and not ready and not preparing and publication is not None)
         )
@@ -112,10 +118,18 @@ class PhotoshootBundleSalePreparationService:
             "deliveryUrl": url,
             "publishedAt": publication.published_at.isoformat() if publication and publication.published_at else None,
             "updatedAt": publication.updated_at.isoformat() if publication else None,
-            "error": error or (publication.last_error if publication else None),
+            "error": (
+                error or (publication.last_error if publication else None)
+                or replacement.get("last_error")
+            ),
+            "priceReplacement": replacement or None,
         }
         draft = metadata.get("content_vault_caption_draft")
         result["contentVaultCaption"] = dict(draft) if isinstance(draft, dict) else None
+        candidates = metadata.get("content_vault_caption_candidates")
+        result["contentVaultCaptionCandidates"] = (
+            dict(candidates) if isinstance(candidates, dict) else None
+        )
         try:
             result["promotionalTeaser"] = self.teasers.inspect(
                 deliverable_id, creator_profile_id=creator_profile_id,
@@ -149,6 +163,76 @@ class PhotoshootBundleSalePreparationService:
                     "configured": False, "readinessError": "Content Vault publishing status is unavailable.",
                 }
         return result
+
+    def stage_price_replacement(self, deliverable_id, *, creator_profile_id: int,
+                                fanvue_account_id: int, price_minor: int):
+        """Durably stage replacement of the existing Bundle Media Link."""
+        row, members = self._context(deliverable_id, creator_profile_id)
+        target_price = self._price(price_minor)
+        asset_ids = tuple(int(item["asset_id"]) for item in members)
+        offering = self._bundle_offering(row, asset_ids)
+        if offering is None:
+            raise ValueError("Prepare the Bundle before updating its price.")
+        shape_error = self._shape_error(row, offering, asset_ids)
+        if shape_error:
+            raise ValueError(shape_error)
+        publication = self.publications.get_by_offering_provider(
+            offering.offering_id, CommercialPublicationProvider.FANVUE)
+        if publication is None:
+            raise ValueError("The canonical Fanvue Media Link publication was not found.")
+        metadata = dict(publication.publication_metadata)
+        replacement = dict(metadata.get("media_link_replacement") or {})
+        if replacement.get("state") in {
+            "QUEUED", "DELETING_OLD_LINK", "OLD_LINK_DELETED",
+        }:
+            raise ValueError("Bundle Media Link price replacement is already in progress.")
+        if target_price == offering.price_minor and replacement.get("state") not in {
+            "OLD_LINK_DELETED", "REPLACEMENT_FAILED",
+        }:
+            return ()
+        if publication.status == CommercialPublicationStatus.LIVE:
+            link = dict(metadata.get("media_link") or {})
+            old_uuid = str(publication.external_product_id or link.get("uuid") or "").strip()
+            if (publication.provider_resource_status.value != "PRESENT"
+                    or not old_uuid or not str(link.get("url") or "").strip()):
+                raise ValueError("The existing canonical Fanvue Media Link is not replaceable.")
+            replacement = {
+                "state": "QUEUED", "target_price_minor": target_price,
+                "currency": offering.currency, "old_uuid": old_uuid,
+                "old_url": link.get("url"), "old_price_minor": offering.price_minor,
+                "asset_ids": list(asset_ids), "fanvue_account_id": int(fanvue_account_id),
+            }
+        elif not (
+            publication.status == CommercialPublicationStatus.FAILED
+            and replacement.get("state") == "REPLACEMENT_FAILED"
+        ):
+            raise ValueError("Bundle Media Link price cannot be updated from its current state.")
+        else:
+            if tuple(replacement.get("asset_ids") or ()) != asset_ids:
+                raise ValueError("Bundle membership changed during Media Link replacement.")
+            replacement.update({
+                "target_price_minor": target_price,
+                "fanvue_account_id": int(fanvue_account_id),
+            })
+        metadata["media_link_replacement"] = replacement
+        stage_replacement = getattr(self.publications, "stage_media_link_replacement", None)
+        staged = (stage_replacement(
+            publication.publication_id, creator_profile_id=creator_profile_id,
+            metadata=metadata,
+        ) if callable(stage_replacement) else self.publications.update_metadata(
+            publication.publication_id, creator_profile_id=creator_profile_id,
+            metadata=metadata,
+        ))
+        if staged is None:
+            raise ValueError("Bundle Media Link price replacement is already in progress.")
+        return (publication.publication_id,)
+
+    def execute_price_replacement(self, publication_ids, *, creator_profile_id: int,
+                                  fanvue_account_id: int):
+        for publication_id in tuple(publication_ids):
+            self.executor.replace_live_media_link(
+                UUID(str(publication_id)), creator_profile_id=creator_profile_id,
+                fanvue_account_id=fanvue_account_id)
 
     def content_vault_context(self, deliverable_id, *, creator_profile_id: int):
         """Resolve the one canonical paid Bundle and its Fanvue publication."""

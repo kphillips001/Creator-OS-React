@@ -29,6 +29,8 @@ describe("PostedContentPage", () => {
     expect(screen.getByRole("dialog", { name: "Posted content preview" })).toBeInTheDocument();
     expect(screen.getByText("Gold portrait")).toBeInTheDocument();
     expect(screen.getByText("D:/Posted/X/image-x.png")).toBeInTheDocument();
+    expect(document.querySelector(".generation-card--staged")).toBeNull();
+    expect(screen.queryByText("STAGED")).not.toBeInTheDocument();
   });
 
   it("supports search and platform filtering", async () => {

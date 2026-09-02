@@ -144,6 +144,80 @@ class CommercialPublicationRepository:
             (json.dumps(dict(metadata)), publication_id, creator_profile_id),
         )
 
+    def stage_media_link_replacement(self, publication_id: UUID, *, creator_profile_id: int, metadata):
+        """CAS boundary preventing two replacement requests from being staged."""
+        return self._one(
+            """UPDATE public.commercial_publications publication
+               SET publication_metadata=%s::jsonb,updated_at=now()
+               FROM public.commercial_offerings offering
+               WHERE publication.publication_id=%s
+                 AND offering.offering_id=publication.commercial_offering_id
+                 AND offering.creator_profile_id=%s
+                 AND COALESCE(publication.publication_metadata
+                     ->'media_link_replacement'->>'state','')
+                     NOT IN ('QUEUED','DELETING_OLD_LINK','OLD_LINK_DELETED')
+                 AND (publication.execution_lease_expires_at IS NULL
+                      OR publication.execution_lease_expires_at < now())
+               RETURNING publication.*""",
+            (json.dumps(dict(metadata)), publication_id, creator_profile_id),
+        )
+
+    def mark_media_link_replacement_deleted(
+        self, publication_id: UUID, *, creator_profile_id: int, metadata,
+        error: str | None = None,
+    ):
+        """Persist that the formerly canonical provider link no longer exists."""
+        return self._one(
+            """UPDATE public.commercial_publications publication
+               SET status=%s,external_product_id=NULL,publication_metadata=%s::jsonb,
+                   published_at=NULL,last_error=%s,updated_at=now(),
+                   provider_resource_status='MISSING',last_reconciled_at=now(),
+                   reconciliation_result='MEDIA_LINK_REPLACEMENT_REQUIRED'
+               FROM public.commercial_offerings offering
+               WHERE publication.publication_id=%s
+                 AND offering.offering_id=publication.commercial_offering_id
+                 AND offering.creator_profile_id=%s RETURNING publication.*""",
+            ('FAILED' if error else 'PUBLISHING', json.dumps(dict(metadata)), error,
+             publication_id, creator_profile_id),
+        )
+
+    def finalize_media_link_replacement(
+        self, publication_id: UUID, *, creator_profile_id: int,
+        price_minor: int, currency: str, external_product_id: str, metadata,
+    ):
+        """Atomically make the replacement link and its price canonical."""
+        with self._connection_factory() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """UPDATE public.commercial_offerings offering
+                       SET price_minor=%s,currency=%s,updated_at=now()
+                       FROM public.commercial_publications publication
+                       WHERE publication.publication_id=%s
+                         AND publication.commercial_offering_id=offering.offering_id
+                         AND offering.creator_profile_id=%s""",
+                    (price_minor, currency, publication_id, creator_profile_id),
+                )
+                if cursor.rowcount != 1:
+                    raise ValueError("Commercial Offering price replacement failed.")
+                cursor.execute(
+                    """UPDATE public.commercial_publications publication
+                       SET status='LIVE',external_product_id=%s,
+                           publication_metadata=%s::jsonb,published_at=now(),
+                           last_error=NULL,updated_at=now(),
+                           provider_resource_status='PRESENT',last_reconciled_at=now(),
+                           reconciliation_result='PROVIDER_RESOURCE_CONFIRMED'
+                       FROM public.commercial_offerings offering
+                       WHERE publication.publication_id=%s
+                         AND offering.offering_id=publication.commercial_offering_id
+                         AND offering.creator_profile_id=%s RETURNING publication.*""",
+                    (external_product_id, json.dumps(dict(metadata)),
+                     publication_id, creator_profile_id),
+                )
+                row = cursor.fetchone()
+                if row is None:
+                    raise ValueError("Commercial Publication replacement finalization failed.")
+        return self._from_row(row)
+
     def finalize_live(self, publication_id: UUID, *, creator_profile_id: int,
                       external_product_id: str, metadata, connection=None):
         return self._one(

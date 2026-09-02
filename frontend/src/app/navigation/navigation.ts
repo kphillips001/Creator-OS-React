@@ -27,6 +27,9 @@ import {
   UserRound,
   ListChecks,
   BrainCircuit,
+  GraduationCap,
+  ChartNoAxesCombined,
+  Instagram,
   ListFilter,
   type LucideIcon,
 } from "lucide-react";
@@ -88,8 +91,7 @@ export const navigationGroups: NavigationGroup[] = [
         label: "Generation Library",
         path: "/library/generations",
         icon: Image,
-        description:
-          "Review and organize generated creative outputs.",
+        description: "Review and organize generated creative outputs.",
       },
       {
         label: "Photoshoot Gallery",
@@ -125,25 +127,29 @@ export const navigationGroups: NavigationGroup[] = [
         label: "Overview",
         path: "/home",
         icon: CircleGauge,
-        description: "Operational priorities, opportunities, and evidence in one executive console.",
+        description:
+          "Operational priorities, opportunities, and evidence in one executive console.",
       },
       {
         label: "Commerce",
         path: "/commerce",
         icon: BadgeDollarSign,
-        description: "Author, manage, and publish AI Chat commercial offerings.",
+        description:
+          "Author, manage, and publish AI Chat commercial offerings.",
       },
       {
         label: "Customers",
         path: "/business/customers",
         icon: Users,
-        description: "Understand customer relationships, ownership, and buying history.",
+        description:
+          "Understand customer relationships, ownership, and buying history.",
       },
       {
         label: "Sales",
         path: "/business/sales",
         icon: BadgeDollarSign,
-        description: "Review sales activity, recommendations, and commercial outcomes.",
+        description:
+          "Review sales activity, recommendations, and commercial outcomes.",
       },
     ],
   },
@@ -154,13 +160,15 @@ export const navigationGroups: NavigationGroup[] = [
         label: "Operations",
         path: "/business/operations",
         icon: Activity,
-        description: "Monitor business workflows, fulfillment, and items needing attention.",
+        description:
+          "Monitor business workflows, fulfillment, and items needing attention.",
       },
       {
         label: "Commercial Administration",
         path: "/commercial-administration",
         icon: ShieldCheck,
-        description: "Operate the creator-scoped commercial platform from one supported workspace.",
+        description:
+          "Operate the creator-scoped commercial platform from one supported workspace.",
       },
     ],
   },
@@ -183,7 +191,8 @@ export const navigationGroups: NavigationGroup[] = [
         label: "Ava Coach",
         path: "/agents/ava-coach",
         icon: Sparkles,
-        description: "Evidence-based conversation coaching for operator review.",
+        description:
+          "Evidence-based conversation coaching for operator review.",
       },
       {
         label: "Creator Agent",
@@ -199,6 +208,13 @@ export const navigationGroups: NavigationGroup[] = [
         description:
           "Explore architecture and system behavior through a read-only agent.",
       },
+      {
+        label: "AI Training",
+        path: "/agents/ai-training",
+        icon: GraduationCap,
+        description:
+          "Control account-wide conversational guidance used by Creator_OS AI.",
+      },
     ],
   },
   {
@@ -208,13 +224,15 @@ export const navigationGroups: NavigationGroup[] = [
         label: "Test Chat",
         path: "/developer/test-chat",
         icon: MessagesSquare,
-        description: "Exercise the Sales Agent brain with a synthetic customer.",
+        description:
+          "Exercise the Sales Agent brain with a synthetic customer.",
       },
       {
         label: "Commerce Learning",
         path: "/developer/commerce-learning",
         icon: BrainCircuit,
-        description: "Inspect observed customer recommendation preferences and outcomes.",
+        description:
+          "Inspect observed customer recommendation preferences and outcomes.",
       },
       {
         label: "Recommendation Diagnostics",
@@ -226,13 +244,15 @@ export const navigationGroups: NavigationGroup[] = [
         label: "Commerce Sales Explorer",
         path: "/developer/commerce-sales",
         icon: ShoppingBasket,
-        description: "Inspect the fulfillable offerings currently available to AI Chat.",
+        description:
+          "Inspect the fulfillable offerings currently available to AI Chat.",
       },
       {
         label: "Fanvue API Explorer",
         path: "/developer/fanvue-api-explorer",
         icon: ScanSearch,
-        description: "Inspect official Fanvue API responses through the authenticated creator connection.",
+        description:
+          "Inspect official Fanvue API responses through the authenticated creator connection.",
       },
       {
         label: "Fanvue Webhook Monitor",
@@ -244,25 +264,29 @@ export const navigationGroups: NavigationGroup[] = [
         label: "Customer Commerce",
         path: "/developer/customer-commerce",
         icon: UserRoundSearch,
-        description: "Inspect read-only customer purchase aggregates and commerce identity state.",
+        description:
+          "Inspect read-only customer purchase aggregates and commerce identity state.",
       },
       {
         label: "Purchase Intents",
         path: "/developer/purchase-intents",
         icon: ListChecks,
-        description: "Inspect read-only offer presentation and payment-reference lifecycle state.",
+        description:
+          "Inspect read-only offer presentation and payment-reference lifecycle state.",
       },
       {
         label: "Customer Sales Brain",
         path: "/developer/customer-sales-brain",
         icon: BrainCircuit,
-        description: "Inspect deterministic customer commercial-action decisions.",
+        description:
+          "Inspect deterministic customer commercial-action decisions.",
       },
       {
         label: "Commercial Offering Selector",
         path: "/developer/offering-selector",
         icon: ListFilter,
-        description: "Inspect deterministic offering eligibility, exclusions, and selection.",
+        description:
+          "Inspect deterministic offering eligibility, exclusions, and selection.",
       },
     ],
   },
@@ -273,14 +297,14 @@ export const navigationGroups: NavigationGroup[] = [
         label: "Administration",
         path: "/administration",
         icon: ShieldCheck,
-        description: "Manage provider connections and operational configuration.",
+        description:
+          "Manage provider connections and operational configuration.",
       },
       {
         label: "Personality",
         path: "/creator/personality",
         icon: UserRound,
-        description:
-          "Review and edit the canonical creator personality.",
+        description: "Review and edit the canonical creator personality.",
       },
       {
         label: "Social Creative Direction",
@@ -307,7 +331,34 @@ export const navigationGroups: NavigationGroup[] = [
         label: "Developer Notes",
         path: "/administration/developer-notes",
         icon: BookOpen,
-        description: "Review architecture decisions, migrations, and technical debt.",
+        description:
+          "Review architecture decisions, migrations, and technical debt.",
+      },
+    ],
+  },
+  {
+    label: "Tools",
+    items: [
+      {
+        label: "AI Developer Notes",
+        path: "/tools/ai-training",
+        icon: GraduationCap,
+        description:
+          "Capture implementation notes and ideas for future Creator_OS AI improvements.",
+      },
+      {
+        label: "X Competitor Intelligence",
+        path: "/tools/x-intelligence",
+        icon: ChartNoAxesCombined,
+        description:
+          "Track competitors, audience growth, and X market intelligence over time.",
+      },
+      {
+        label: "IG Competitor Intelligence",
+        path: "/tools/ig-intelligence",
+        icon: Instagram,
+        description:
+          "Track Instagram competitors and build durable market intelligence over time.",
       },
     ],
   },

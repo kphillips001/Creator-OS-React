@@ -19,6 +19,16 @@ from app.models.commerce_execution import (
 from app.models.telegram_commerce import TelegramDeliveryPayload
 
 
+class TelegramCommercialDestinationError(ValueError):
+    def __init__(self, provider_reason: str):
+        super().__init__(provider_reason)
+        self.code = (
+            "PUBLIC_COMMERCE_ORIGIN_UNAVAILABLE"
+            if provider_reason == "PUBLIC_COMMERCE_ORIGIN_UNAVAILABLE"
+            else "INVALID_CUSTOMER_FACING_DESTINATION"
+        )
+
+
 @dataclass(frozen=True)
 class TelegramDeliveryExecutionResult:
     """Result of handing a normalized payload to the execution boundary."""
@@ -46,11 +56,23 @@ class TelegramDeliveryExecutor:
     Paid link/button behavior remains governed by the existing Commerce path.
     """
 
-    def __init__(self, *, global_safety_service: Any | None = None) -> None:
+    def __init__(self, *, global_safety_service: Any | None = None,
+                 customer_safety_service: Any | None = None,
+                 business_commercial_transport: Any | None = None) -> None:
         if global_safety_service is None:
             from app.services.global_automation_safety_service import GlobalAutomationSafetyService
             global_safety_service = GlobalAutomationSafetyService()
         self._global_safety_service = global_safety_service
+        if customer_safety_service is None:
+            from app.services.customer_interaction_safety_service import CustomerInteractionSafetyService
+            customer_safety_service = CustomerInteractionSafetyService()
+        self._customer_safety_service = customer_safety_service
+        if business_commercial_transport is None:
+            from app.services.telegram_business_commercial_transport import (
+                TelegramBusinessCommercialTransport,
+            )
+            business_commercial_transport = TelegramBusinessCommercialTransport()
+        self._business_commercial_transport = business_commercial_transport
 
     def execute(
         self,
@@ -63,6 +85,10 @@ class TelegramDeliveryExecutor:
         message_text = self._message_text(normalized, context)
         sender = self._sender(context)
         chat_id = self._chat_id(context)
+
+        customer_block = self._customer_block(context)
+        if customer_block is not None:
+            return self._customer_blocked_result(normalized, metadata, customer_block)
 
         if normalized.asset_path and sender is not None and chat_id is not None:
             safety = self._global_safety_service.check_global_safety()
@@ -100,6 +126,10 @@ class TelegramDeliveryExecutor:
         sender = self._sender(context)
         chat_id = self._chat_id(context)
 
+        customer_block = self._customer_block(context)
+        if customer_block is not None:
+            return self._customer_blocked_result(normalized, metadata, customer_block)
+
         if normalized.asset_path and sender is not None and chat_id is not None:
             safety = self._global_safety_service.check_global_safety()
             if not safety.get("allowed", False):
@@ -135,7 +165,13 @@ class TelegramDeliveryExecutor:
         raise_on_failure: bool,
     ) -> TelegramDeliveryExecutionResult:
         try:
-            sent = sender.send_text(chat_id=chat_id, message_text=message_text)
+            button = self._private_unlock_button(payload)
+            self._validate_commercial_destination(metadata, button)
+            if button:
+                sender = self._business_commercial_transport
+            sent = sender.send_text(
+                chat_id=chat_id, message_text=message_text, **button,
+            )
         except Exception as error:
             if raise_on_failure:
                 raise
@@ -150,6 +186,7 @@ class TelegramDeliveryExecutor:
         message_id = getattr(sent, "id", sent)
         if isinstance(message_id, int) and not isinstance(message_id, bool):
             metadata["telegram_message_id"] = message_id
+        self._apply_send_receipt(metadata, sent)
         return TelegramDeliveryExecutionResult(
             status="success",
             executed=True,
@@ -169,7 +206,13 @@ class TelegramDeliveryExecutor:
         raise_on_failure: bool,
     ) -> TelegramDeliveryExecutionResult:
         try:
-            result = sender.send_text(chat_id=chat_id, message_text=message_text)
+            button = self._private_unlock_button(payload)
+            self._validate_commercial_destination(metadata, button)
+            if button:
+                sender = self._business_commercial_transport
+            result = sender.send_text(
+                chat_id=chat_id, message_text=message_text, **button,
+            )
             if inspect.isawaitable(result):
                 result = await result
         except Exception as error:
@@ -186,6 +229,7 @@ class TelegramDeliveryExecutor:
         message_id = getattr(result, "id", result)
         if isinstance(message_id, int) and not isinstance(message_id, bool):
             metadata["telegram_message_id"] = message_id
+        self._apply_send_receipt(metadata, result)
         return TelegramDeliveryExecutionResult(
             status="success",
             executed=True,
@@ -225,6 +269,63 @@ class TelegramDeliveryExecutor:
             delivery_method=payload.delivery_method,
             metadata=metadata,
         )
+
+    @staticmethod
+    def _apply_send_receipt(metadata: dict[str, Any], receipt: Any) -> None:
+        """Copy only provider-confirmed commercial attachment facts."""
+        if getattr(receipt, "actionable_destination_attached", False) is True:
+            metadata["actionable_destination_attached"] = True
+        if getattr(receipt, "provider_action_verified", False) is True:
+            metadata["provider_action_verified"] = True
+        metadata["provider_markup_included"] = bool(
+            getattr(receipt, "provider_markup_included", False)
+        )
+        if getattr(receipt, "provider_markup_verified", False) is True:
+            metadata["provider_markup_verified"] = True
+        attachment_mode = getattr(receipt, "attachment_mode", None)
+        if attachment_mode:
+            metadata["attachment_mode"] = str(attachment_mode)
+        final_text = getattr(receipt, "final_text", None)
+        if isinstance(final_text, str) and final_text.strip():
+            metadata["final_customer_facing_text"] = final_text
+        business_connection_id = getattr(receipt, "business_connection_id", None)
+        if business_connection_id:
+            metadata["business_connection_id"] = str(business_connection_id)
+        sender_business_bot = getattr(receipt, "sender_business_bot", None)
+        if isinstance(sender_business_bot, Mapping):
+            metadata["sender_business_bot"] = dict(sender_business_bot)
+        provider_sender = getattr(receipt, "sender", None)
+        if isinstance(provider_sender, Mapping):
+            metadata["provider_sender"] = dict(provider_sender)
+
+    @staticmethod
+    def _validate_commercial_destination(metadata, button):
+        if not button:
+            return
+        from app.services.customer_facing_commerce_url_service import (
+            validate_customer_facing_commerce_url,
+        )
+        result = validate_customer_facing_commerce_url(button.get("button_url"))
+        metadata.update({
+            "customer_facing_destination_valid": result.valid,
+            "customer_facing_destination_failure_reason": result.failure_reason,
+            "customer_facing_destination_origin": result.origin,
+            "destination_scope": result.scope,
+        })
+        if not result.valid:
+            raise TelegramCommercialDestinationError(
+                result.failure_reason or "CUSTOMER_FACING_DESTINATION_INVALID"
+            )
+
+    @staticmethod
+    def _private_unlock_button(payload):
+        metadata = dict(payload.metadata or {})
+        button = dict(metadata.get("private_chat_unlock_button") or {})
+        label = str(button.get("label") or "").strip()
+        url = str(button.get("url") or "").strip()
+        if not label or not url:
+            return {}
+        return {"button_label": label, "button_url": url}
 
     def _execute_asset(
         self, sender: Any, *, chat_id: int, asset_path: str,
@@ -295,6 +396,9 @@ class TelegramDeliveryExecutor:
             {
                 "execution_state": "failed",
                 "error_type": type(error).__name__,
+                "failure_code": str(
+                    getattr(error, "code", "BUSINESS_SEND_REJECTED")
+                ),
             }
         )
         return TelegramDeliveryExecutionResult(
@@ -304,6 +408,27 @@ class TelegramDeliveryExecutor:
             blocking_reason=payload.blocking_reason,
             metadata=metadata,
         )
+
+    def _customer_block(self, context):
+        if not context:
+            return None
+        creator_id = context.get("creator_profile_id")
+        account_id = context.get("fanvue_account_id")
+        user_id = context.get("fanvue_user_id")
+        if not all((creator_id, account_id, user_id)):
+            return None
+        decision = self._customer_safety_service.decide(
+            creator_profile_id=int(creator_id), fanvue_account_id=int(account_id),
+            fanvue_user_id=int(user_id))
+        return decision if not decision.allowed else None
+
+    @staticmethod
+    def _customer_blocked_result(payload, metadata, decision):
+        metadata.update({"execution_state": "blocked",
+                         "customer_interaction_safety": decision.code})
+        return TelegramDeliveryExecutionResult(
+            status="blocked", executed=False, delivery_method=payload.delivery_method,
+            blocking_reason=decision.code, metadata=metadata)
 
     @staticmethod
     def _normalize_payload(
@@ -424,5 +549,6 @@ class TelegramDeliveryExecutor:
         return {
             str(key): value
             for key, value in context.items()
-            if key in {"correlation_id", "engine_user_id", "chat_id", "telegram_chat_id"}
+            if key in {"correlation_id", "engine_user_id", "chat_id", "telegram_chat_id",
+                       "creator_profile_id", "fanvue_account_id", "fanvue_user_id"}
         }

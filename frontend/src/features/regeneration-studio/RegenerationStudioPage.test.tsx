@@ -13,11 +13,28 @@ function CurrentLocation() { return <output data-testid="current-location">{useL
 const renderPage = (path: string) => render(<MemoryRouter initialEntries={[path]}><BackgroundOperationsProvider pollMilliseconds={60000}><CurrentLocation /><Routes><Route path="/studio/regeneration" element={<RegenerationStudioPage />} /><Route path="/library/generations" element={<div>Library destination</div>} /></Routes></BackgroundOperationsProvider></MemoryRouter>);
 
 describe("Regeneration Studio", () => {
-  it("shows the direct-navigation empty state", () => {
-    vi.spyOn(globalThis, "fetch").mockImplementation(() => response({ success: true, operations: [] }));
+  it("shows the direct-navigation empty state", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation((input) => String(input).includes("workspace/current")
+      ? response({ success: true, workspace: null }) : response({ success: true, operations: [] }));
     renderPage("/studio/regeneration");
-    expect(screen.getByText("Choose a Regenerate-eligible image")).toBeInTheDocument();
+    expect(screen.getByText("Restoring Regeneration Studio…")).toBeInTheDocument();
+    expect(await screen.findByText("Choose a Regenerate-eligible image")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Open Generation Library/ })).toBeInTheDocument();
+  });
+
+  it("discovers and restores the canonical workspace from the plain route", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
+      const url = String(input);
+      if (url.includes("workspace/current")) return response({ success: true, workspace: { operationId: "op-1", sourceGeneratedImageId: "source-1" } });
+      if (url.includes("/regeneration/source/")) return response(source);
+      if (url.endsWith("/regeneration/op-1")) return response(workspace);
+      if (url.includes("/background-operations")) return response({ success: true, operations: [] });
+      return response({ success: false }, 500);
+    });
+    renderPage("/studio/regeneration");
+    expect(await screen.findByRole("img", { name: "Regeneration source" })).toHaveAttribute("src", "/source.png");
+    expect(screen.getByRole("img", { name: "Regenerated variation 1" })).toBeInTheDocument();
+    expect(screen.getByTestId("current-location")).toHaveTextContent("operation=op-1");
   });
 
   it("loads a source, defaults to one, and submits only source and count", async () => {
@@ -37,16 +54,15 @@ describe("Regeneration Studio", () => {
     await waitFor(() => expect(fetch).toHaveBeenCalledWith("/api/v1/regeneration", expect.objectContaining({ method: "POST", body: JSON.stringify({ source_generated_image_id: "source-1", count: 5 }) })));
   });
 
-  it("reconnects, renders results, expands media, and promotes canonical result IDs", async () => {
-    let promoted = false;
+  it("promotes selected results and resets after backend finalizes unselected results", async () => {
     const second = { ...workspace.results[0], resultId: "result-2", variationIndex: 2, generatedImageId: "regen-2" };
     const partialWorkspace = { ...workspace, run: { ...workspace.run, requestedCount: 2 }, results: [workspace.results[0], second] };
     const fetch = vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
       const url = String(input);
       if (url.includes("/regeneration/source/")) return response(source);
       if (url.includes("/background-operations")) return response({ success: true, operations: [] });
-      if (url.endsWith("/regeneration/op-1/promote")) { promoted = true; return response({ success: true, message: "1 image added to Generation Library" }); }
-      if (url.endsWith("/regeneration/op-1")) return response(promoted ? { ...partialWorkspace, results: [{ ...workspace.results[0], disposition: "PROMOTED" }, second] } : partialWorkspace);
+      if (url.endsWith("/regeneration/op-1/promote")) return response({ success: true, message: "1 image added to Generation Library", workspaceDismissed: true });
+      if (url.endsWith("/regeneration/op-1")) return response(partialWorkspace);
       return response({ success: false }, 500);
     });
     renderPage("/studio/regeneration?source=source-1&operation=op-1");
@@ -57,9 +73,8 @@ describe("Regeneration Studio", () => {
     fireEvent.click(screen.getAllByRole("checkbox", { name: "Select" })[0]!);
     fireEvent.click(screen.getByRole("button", { name: /Send Selected/ }));
     await waitFor(() => expect(fetch).toHaveBeenCalledWith("/api/v1/regeneration/op-1/promote", expect.objectContaining({ body: JSON.stringify({ result_ids: ["result-1"] }) })));
-    expect(await screen.findByText("1 image added to Generation Library")).toBeInTheDocument();
-    expect(await screen.findByText("Sent to Generation Library")).toBeInTheDocument();
-    expect(screen.getByRole("img", { name: "Regenerated variation 2" })).toBeInTheDocument();
+    expect(await screen.findByText("Choose a Regenerate-eligible image")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId("current-location")).toBeEmptyDOMElement());
   });
 
   it("auto-resets through the canonical reset path after all pending results are promoted", async () => {
@@ -71,7 +86,7 @@ describe("Regeneration Studio", () => {
       const url = String(input);
       if (url.includes("/regeneration/source/")) return response(source);
       if (url.includes("/background-operations")) return response({ success: true, operations: [] });
-      if (url.endsWith("/regeneration/op-1/promote")) { promoted = true; return response({ success: true }); }
+      if (url.endsWith("/regeneration/op-1/promote")) { promoted = true; return response({ success: true, workspaceDismissed: true }); }
       if (url.endsWith("/regeneration/op-1")) return response(promoted ? after : before);
       return response({ success: false }, 500);
     });
@@ -79,6 +94,20 @@ describe("Regeneration Studio", () => {
     const checks = await screen.findAllByRole("checkbox", { name: "Select" });
     checks.forEach((check) => fireEvent.click(check));
     fireEvent.click(screen.getByRole("button", { name: /Send Selected/ }));
+    expect(await screen.findByText("Choose a Regenerate-eligible image")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId("current-location")).toBeEmptyDOMElement());
+  });
+
+  it("cleans a stale operation URL when the backend reports a dismissed workspace", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
+      const url = String(input);
+      if (url.includes("/regeneration/source/")) return response(source);
+      if (url.includes("/background-operations")) return response({ success: true, operations: [] });
+      if (url.endsWith("/regeneration/op-1")) return response({ success: false, code: "WORKSPACE_DISMISSED", error: "finalized" }, 410);
+      if (url.includes("workspace/current")) return response({ success: true, workspace: null });
+      return response({ success: false }, 500);
+    });
+    renderPage("/studio/regeneration?source=source-1&operation=op-1");
     expect(await screen.findByText("Choose a Regenerate-eligible image")).toBeInTheDocument();
     await waitFor(() => expect(screen.getByTestId("current-location")).toBeEmptyDOMElement());
   });
@@ -146,6 +175,7 @@ describe("Regeneration Studio", () => {
       if (url.includes("/regeneration/source/")) return response(source);
       if (url.includes("/background-operations")) return response({ success: true, operations: [] });
       if (url.endsWith("/regeneration/op-1/archive")) return response({ success: true });
+      if (url.endsWith("/regeneration/op-1/dismiss")) return response({ success: true });
       if (url.endsWith("/regeneration/op-1")) return response(workspace);
       return response({ success: false }, 500);
     });

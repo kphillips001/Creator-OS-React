@@ -1,0 +1,14 @@
+.ig-intelligence-page .x-intelligence-card__archived { display:inline-flex;align-items:center;gap:.4rem; }
+.ig-open-phone { display:inline-flex;min-height:36px;align-items:center;justify-content:center;gap:.4rem;padding:0 .8rem;border:1px solid var(--color-accent-border);border-radius:8px;background:var(--color-surface);color:var(--color-accent);font:inherit;cursor:pointer; }
+.ig-open-phone:hover:not(:disabled),.ig-open-phone:focus-visible:not(:disabled) { background:var(--color-accent-surface); }
+.ig-open-phone:disabled { cursor:not-allowed;opacity:.5; }
+.ig-intelligence-page .x-intelligence-competitor__button { color:var(--color-text-secondary); }
+.ig-followers-edit { display:inline-flex;align-items:center;gap:.35rem;padding:0;border:0;background:transparent;color:var(--color-text-secondary);font:inherit;cursor:pointer; }
+.ig-followers-edit:hover { color:var(--color-accent); }
+.ig-placeholder { color:var(--color-text-tertiary); }
+.ig-intelligence-page .x-intelligence-scrape:disabled { cursor:not-allowed;opacity:.45; }
+.ig-competitor-form { display:grid;gap:1rem; }
+.ig-competitor-form label { display:grid;gap:.4rem;color:var(--color-text-secondary);font-size:.72rem; }
+.ig-competitor-form input { min-height:40px;padding:.55rem .7rem;border:1px solid var(--color-border-strong);border-radius:8px;background:var(--color-surface);color:var(--color-text-primary); }
+.ig-competitor-form footer { display:flex;justify-content:flex-end;gap:.55rem; }
+.ig-competitor-form .ig-archive-action { margin-right:auto;color:#ffb4b4;border-color:rgb(229 92 92 / 45%); }

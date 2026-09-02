@@ -650,9 +650,12 @@ class RealtimeMonetizationEventService:
         unlock_row = log_content_unlock(
             fanvue_account_id=fanvue_account_id,
             fanvue_user_id=fanvue_user_id,
+            content_item_id=normalized.get("content_item_id"),
             content_tag=content_tag,
             fanvue_media_uuid=fanvue_media_uuid,
             purchase_amount=amount,
+            commercial_offering_id=normalized.get("commercial_offering_id"),
+            provider_resource_id=normalized.get("provider_resource_id"),
         )
 
         print("\n[CONTENT UNLOCK LOGGED]")

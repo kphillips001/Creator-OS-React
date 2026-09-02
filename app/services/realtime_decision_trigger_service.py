@@ -25,6 +25,8 @@ from app.services.commerce_execution_policy import (
 from app.services.customer_sales_brain_service import CustomerSalesBrainService
 from app.services.sales_session_service import SalesSessionService
 from uuid import UUID
+from app.models.customer_contact import ContactPolicyResult, ContactPurpose
+from app.services.customer_contact_authority_service import CustomerContactAuthorityService
 
 
 class RealtimeDecisionTriggerService:
@@ -65,6 +67,7 @@ class RealtimeDecisionTriggerService:
             telegram_identity_repository or TelegramIdentityRepository()
         )
         self.creator_profile_resolver = creator_profile_resolver
+        self.contact_authority = CustomerContactAuthorityService()
 
     def trigger_for_inbound_message(
         self,
@@ -159,18 +162,20 @@ class RealtimeDecisionTriggerService:
             ) or {}
             creator_profile_id = int(creator.get("id") or 0)
             if creator_profile_id:
-                session = self.sales_sessions.resolve_or_start_conversation(
+                identity = self.telegram_identities.get_by_external_fanvue_user_uuid(
+                    local_fanvue_account_id, UUID(str(fanvue_user_id))
+                )
+                session = self.sales_sessions.resolve_active_conversation(
                     creator_profile_id=creator_profile_id,
                     fanvue_account_id=local_fanvue_account_id,
                     fanvue_user_id=local_fanvue_user_id,
                     conversation_thread_id=local_thread_id,
-                    actor_type="AI",
-                    actor_identifier="RealtimeDecisionTriggerService",
-                    objective="Authorized conversational commerce",
-                    commercial_context={"providerThreadId": str(thread_id)},
+                    telegram_user_id=(
+                        identity.telegram_user_id if identity else None
+                    ),
                 )
-                identity = self.telegram_identities.get_by_external_fanvue_user_uuid(
-                    local_fanvue_account_id, UUID(str(fanvue_user_id))
+                session_id = (
+                    str(session.sales_session_id) if session is not None else None
                 )
                 canonical_decision = self.customer_sales_brain.evaluate_for_buyer(
                     creator_profile_id=creator_profile_id,
@@ -183,7 +188,7 @@ class RealtimeDecisionTriggerService:
                     conversation_context={
                         "latest_message": message_text,
                         "conversation_thread_id": local_thread_id,
-                        "sales_session_id": str(session.sales_session_id),
+                        "sales_session_id": session_id,
                     },
                 )
                 decisionengine_injection = {
@@ -193,7 +198,7 @@ class RealtimeDecisionTriggerService:
                     "commerce_decision": {
                         "decision": canonical_decision.decision.value,
                         "reason_code": canonical_decision.reason_code.value,
-                        "sales_session_id": str(session.sales_session_id),
+                        "sales_session_id": session_id,
                         "authorized_policy": derive_commerce_execution_policy(
                             canonical_decision
                         ).value,
@@ -296,6 +301,18 @@ class RealtimeDecisionTriggerService:
             else:
                 try:
                     print("\n[REALTIME FANVUE SEND START]")
+
+                    contact_policy = self.contact_authority.decide(
+                        purpose=ContactPurpose.REACTIVE_CONVERSATION,
+                        evidence={},
+                    )
+                    if contact_policy.result is not ContactPolicyResult.ALLOW:
+                        fanvue_send_result = {
+                            "success": False, "blocked": True,
+                            "reason": contact_policy.reason,
+                            "contact_policy": dict(contact_policy.to_mapping()),
+                        }
+                        return fanvue_send_result
 
                     fanvue_send_result = (
                         self.fanvue_api.send_chat_message(

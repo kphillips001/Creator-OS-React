@@ -39,6 +39,8 @@ class MassPPVWorkerService:
         self,
         limit: int = 25,
     ):
+        if not self.send_service.live_send_enabled():
+            return []
         global_result = self.send_service.global_safety.check_global_safety()
         if not global_result.get("allowed", False):
             return []
@@ -64,6 +66,8 @@ class MassPPVWorkerService:
         self,
         limit: int = 25,
     ):
+        if not self.send_service.live_send_enabled():
+            return []
         global_result = self.send_service.global_safety.check_global_safety()
         if not global_result.get("allowed", False):
             return []
@@ -260,7 +264,9 @@ class MassPPVWorkerService:
                     content_item=content_item,
                     caption=campaign["caption"],
                     price=float(campaign["price"]),
-                    dry_run=True,
+                    # Reaching this point requires the explicit launch gate.
+                    # The default-false gate keeps queued work untouched.
+                    dry_run=False,
                 )
             )
 

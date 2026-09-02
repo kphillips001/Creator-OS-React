@@ -73,13 +73,19 @@ class StagedAssetRegistrationService:
         record: GeneratedImageRecord,
         *,
         creator_profile_id: int,
+        registration_purpose: str = "SINGLE_IMAGE",
+        finalize_generation: bool = True,
     ) -> StagedAssetRegistrationResult:
         if int(record.creator_profile_id) != int(creator_profile_id):
             return StagedAssetRegistrationResult(
                 success=False,
                 message="Staged Asset belongs to another Creator Profile.",
             )
-        if record.status not in {"staged_asset_library", "business_asset_registered"}:
+        purpose = str(registration_purpose or "SINGLE_IMAGE").strip().upper()
+        allowed_statuses = {"staged_asset_library", "business_asset_registered"}
+        if purpose == "PHOTOSHOOT_MEMBER":
+            allowed_statuses.add("active")
+        if record.status not in allowed_statuses:
             return StagedAssetRegistrationResult(
                 success=False,
                 message="Only staged Asset Library items can be registered.",
@@ -88,6 +94,8 @@ class StagedAssetRegistrationService:
         asset_result = self.asset_registration.register_generated_image(
             record,
             creator_profile_id=int(creator_profile_id),
+            classification=("UNCLASSIFIED" if purpose == "PHOTOSHOOT_MEMBER" else "SINGLE_IMAGE"),
+            finalize_generation=finalize_generation,
         )
         if not asset_result.success or asset_result.asset_id is None:
             return StagedAssetRegistrationResult(
@@ -114,6 +122,7 @@ class StagedAssetRegistrationService:
                     record,
                     asset_id=asset_id,
                     creator_profile_id=int(creator_profile_id),
+                    registration_purpose=purpose,
                 )
             )
             already_registered = bool(asset_result.already_registered)
@@ -121,7 +130,8 @@ class StagedAssetRegistrationService:
         analysis_status = self._ensure_analysis(
             asset_id, creator_profile_id=int(creator_profile_id),
         )
-        self.generation_library.mark_business_registered(record.image_id, asset_id)
+        if finalize_generation:
+            self.generation_library.mark_business_registered(record.image_id, asset_id)
         return StagedAssetRegistrationResult(
             success=True,
             asset_id=asset_id,
@@ -164,6 +174,7 @@ class StagedAssetRegistrationService:
         *,
         asset_id: int,
         creator_profile_id: int,
+        registration_purpose: str = "SINGLE_IMAGE",
     ) -> BusinessAssetRecord:
         now = utc_now()
         source_metadata: dict[str, Any] = {
@@ -196,10 +207,14 @@ class StagedAssetRegistrationService:
             commerce_intelligence_refs={"asset_intelligence_status": "PENDING"},
             publishing_readiness={"status": "NOT_EVALUATED", "execution": "not_run"},
             fulfillment_readiness={"status": "NOT_EVALUATED", "execution": "not_run"},
-            relationship_provenance={"source": "staged_asset_registration"},
+            relationship_provenance={
+                "source": "staged_asset_registration",
+                "registration_purpose": registration_purpose,
+            },
             registration_provenance={
                 "source": "Asset Library",
                 "source_workflow": "staged_asset_library_registration",
+                "registration_purpose": registration_purpose,
                 "idempotency_key": f"staged-asset-registration:{record.image_id}",
                 "approval_identity": {
                     "source_workflow": "staged_asset_library_registration",

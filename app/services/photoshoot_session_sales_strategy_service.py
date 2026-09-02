@@ -64,10 +64,19 @@ class PhotoshootSessionSalesStrategyService:
         cross_validation = dict(canonical.get("cross_validation") or {})
         shots = tuple(self.photoshoots.shot_intelligence(session_id, intelligence_version))
         members = tuple(self.photoshoots.members(session_id))
-        if not production or not shots or len(shots) != len(members):
+        teaser_lookup = getattr(self.repository, "completed_session_teaser_asset_id", None)
+        authored_teaser_asset_id = teaser_lookup(deliverable["deliverable_id"]) if teaser_lookup else None
+        if not production or not shots:
             raise ValueError("Complete persisted Production and Shot Intelligence is required.")
 
         shots_by_asset = {int(row["asset_id"]): dict(row.get("profile_data") or {}) for row in shots}
+        member_ids = {int(member["asset_id"]) for member in members}
+        if authored_teaser_asset_id in member_ids and authored_teaser_asset_id not in shots_by_asset:
+            shots_by_asset[authored_teaser_asset_id] = {
+                "sequence_role": "authored_session_teaser",
+                "commercial_role": "FREE_TEASER",
+                "purpose": "PHOTOSHOOT_SESSION_TEASER",
+            }
         ordered_shots = tuple({
             "asset_id": int(member["asset_id"]),
             "shot_order": int(member["shot_order"]),
@@ -82,9 +91,10 @@ class PhotoshootSessionSalesStrategyService:
             "production_intelligence": production,
             "cross_validation": cross_validation,
             "ordered_shots": ordered_shots,
+            "authored_session_teaser_asset_id": authored_teaser_asset_id,
         }
         result = dict(self.strategy_runner(source) or {})
-        normalized = self._validate(result, ordered_shots)
+        normalized = self._validate(result, ordered_shots, authored_teaser_asset_id)
         generated_at = datetime.now(timezone.utc)
         model = os.getenv(
             "SESSION_SALES_STRATEGY_MODEL",
@@ -109,7 +119,8 @@ class PhotoshootSessionSalesStrategyService:
         return self.repository.latest(photoshoot_session_id)
 
     @classmethod
-    def _validate(cls, result: dict, ordered_shots: tuple[dict, ...]) -> dict:
+    def _validate(cls, result: dict, ordered_shots: tuple[dict, ...],
+                  authored_teaser_asset_id: int | None = None) -> dict:
         required = (
             "best_teaser_asset_id", "recommended_customer_entry_point",
             "suggested_sales_progression", "recommended_stopping_points",
@@ -170,6 +181,16 @@ class PhotoshootSessionSalesStrategyService:
                 "access_recommendation": access,
                 "suggested_next_asset_id": int(next_id) if next_id is not None else None,
             })
+        if authored_teaser_asset_id is not None:
+            authored = next(item for item in normalized_shots
+                            if item["asset_id"] == authored_teaser_asset_id)
+            if (authored["sales_role"] != "FREE_TEASER"
+                    or authored["access_recommendation"] != "FREE"
+                    or any(item["access_recommendation"] != "PAID"
+                           for item in normalized_shots if item is not authored)):
+                raise ValueError(
+                    "An authored Session teaser must be the only FREE strategy step."
+                )
         return {
             **{key: result[key] for key in required if key != "shots"},
             "best_teaser_asset_id": int(result["best_teaser_asset_id"]),
@@ -196,7 +217,9 @@ class PhotoshootSessionSalesStrategyService:
             "(FREE_TEASER, FIRST_UNLOCK, ESCALATION, PREMIUM, or FINALE), teaser_recommended boolean, "
             "access_recommendation (FREE or PAID), recommended_progression, suggested_next_asset_id or null, "
             "customer_journey_purpose, escalation_role, psychological_objective, and conversation_goal. "
-            "These are editable recommendations for the Session Sales Brain. Persisted input: "
+            "When authored_session_teaser_asset_id is present, that Asset must be the only FREE step and must use "
+            "FREE_TEASER; every other Asset must be PAID. These are editable recommendations for the Session Sales "
+            "Brain. Persisted input: "
             + json.dumps(source, default=str)
         )
         model = os.getenv(

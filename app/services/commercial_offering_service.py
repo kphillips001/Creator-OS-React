@@ -51,6 +51,7 @@ class CommercialOfferingService:
         currency: str = "USD",
         initial_status: CommercialOfferingStatus = CommercialOfferingStatus.DRAFT,
         source_photoshoot_deliverable_id: UUID | None = None,
+        source_bundle_studio_bundle_id: UUID | None = None,
         idempotency_key: str | None = None,
     ):
         normalized_type = self._type(offering_type)
@@ -95,6 +96,7 @@ class CommercialOfferingService:
             )
             if (
                 normalized_type == CommercialOfferingType.BUNDLE
+                and source_bundle_studio_bundle_id is None
                 and self.photoshoots.common_approved_photoshoot(ordered) is None
             ):
                 raise ValueError(
@@ -108,6 +110,8 @@ class CommercialOfferingService:
             )
             if source_photoshoot_deliverable_id is not None:
                 values["source_photoshoot_deliverable_id"] = source_photoshoot_deliverable_id
+            if source_bundle_studio_bundle_id is not None:
+                values["source_bundle_studio_bundle_id"] = source_bundle_studio_bundle_id
             if idempotency_key is not None:
                 values["idempotency_key"] = idempotency_key
             if connection is not None:

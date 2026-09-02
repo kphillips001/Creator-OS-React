@@ -5,6 +5,12 @@ import { useEffect, useState } from "react";
 import { PageHeader } from "../../shared/ui/PageHeader";
 import "./archive.css";
 
+const imageTitle = (item: { displayName?: string | null; fileName: string | null }) => {
+  const displayName = item.displayName?.trim();
+  const looksGenerated = !displayName || displayName === item.fileName || /^Asset #\d+$/i.test(displayName) || /(?:^|[_ -])[0-9a-f]{16,}(?:\.[a-z0-9]+)?$/i.test(displayName);
+  return looksGenerated ? "Archived Image" : displayName;
+};
+
 const destinations = [
   {
     title: "Regenerated Content",
@@ -44,7 +50,7 @@ const destinations = [
 ] as const;
 
 export function ArchivePage() {
-  type ArchivedItem = { libraryItemId: string; itemKind: "registered_asset" | "staged_generation" | "photoshoot"; assetId: number | null; generationId: string | null; deliverableId?: string | null; fileName: string | null; mediaType: string; imageUrl: string | null; shotCount?: number | null; archivedAt?: string | null };
+  type ArchivedItem = { libraryItemId: string; itemKind: "registered_asset" | "staged_generation" | "photoshoot"; assetId: number | null; displayName?: string | null; generationId: string | null; deliverableId?: string | null; fileName: string | null; mediaType: string; imageUrl: string | null; shotCount?: number | null; archivedAt?: string | null };
   const [items, setItems] = useState<ArchivedItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -88,11 +94,11 @@ export function ArchivePage() {
         <header><ArchiveRestore size={26} /><div><h2 id="asset-archive-title">Asset Library Archive</h2><p>Restore archived Assets without changing their identity or history.</p></div></header>
         {loading && <div className="asset-archive__state">Loading archived Assets…</div>}
         {error && <div className="asset-archive__state asset-archive__state--error" role="alert">{error}</div>}
-        {!loading && !error && sections.map((section) => <section className="asset-archive__section" key={section.title}>
-          <h3><section.icon size={19} />{section.title}</h3>
+        {!loading && !error && sections.map((section) => <section aria-labelledby={`asset-archive-${section.title.toLowerCase()}-title`} className="asset-archive__section" key={section.title}>
+          <h3 id={`asset-archive-${section.title.toLowerCase()}-title`}><section.icon aria-hidden="true" size={19} />{section.title}</h3>
           {!section.items.length ? <p className="asset-archive__empty">No archived {section.title.toLowerCase()}.</p> : <div className="asset-archive__grid">{section.items.map((item) => <article className="asset-archive__card" key={item.libraryItemId}>
             <div className="asset-archive__preview">{item.imageUrl ? <img alt={item.fileName || section.title} src={item.imageUrl} loading="lazy" /> : <Images />}</div>
-            <div className="asset-archive__body"><strong>{item.fileName || section.title}</strong>{item.mediaType === "photoshoot" && <span>{item.shotCount || 0} Images</span>}<time>Archived {item.archivedAt ? new Date(item.archivedAt).toLocaleDateString() : "date unavailable"}</time><button disabled={Boolean(restoring)} onClick={() => void restore(item)} type="button"><ArchiveRestore size={16} />{restoring === item.libraryItemId ? "Restoring…" : "Restore"}</button></div>
+            <div className="asset-archive__body"><strong>{item.mediaType === "image" ? imageTitle(item) : item.displayName || item.fileName || section.title}</strong>{item.mediaType === "photoshoot" && <span>{item.shotCount || 0} Images</span>}<time>Archived {item.archivedAt ? new Date(item.archivedAt).toLocaleDateString() : "date unavailable"}</time><button disabled={Boolean(restoring)} onClick={() => void restore(item)} type="button"><ArchiveRestore size={16} />{restoring === item.libraryItemId ? "Restoring…" : "Restore"}</button></div>
           </article>)}</div>}
         </section>)}
       </section>

@@ -167,6 +167,17 @@ def test_photoshoot_approval_is_one_concept_and_returns_complete_contract(
     assert "Progression stage: 2" in planner.request["creative_tags"]
     assert "Operator guidance: Increase emotional intensity." in planner.request["creative_tags"]
     assert "Required identity instructions: Preserve the same creator identity." in planner.request["creative_tags"]
+    # Weak one-word emotions like "Confident" are upgraded to concrete alluring face direction.
+    expression = str(planner.request["metadata"]["operator_expression"] or "")
+    assert expression
+    assert "preserve the latest approved expression" not in expression.lower()
+    if creative_mode == "safe":
+        assert "eye contact" in expression.lower() or "smile" in expression.lower()
+    else:
+        assert any(
+            token in expression.lower()
+            for token in ("teasing", "seductive", "alluring", "parted", "smirk", "naughty")
+        )
     for operational_value in (
         "workflow_stage",
         "recommendation_ready",

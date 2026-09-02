@@ -341,10 +341,24 @@ class SocialPublishingService:
         telegram_cta_enabled: bool = False,
         telegram_cta_label: str = "",
         telegram_cta_url: str = "",
+        telegram_cta_buttons: tuple[Mapping[str, Any], ...] | None = None,
         audit_metadata: Mapping[str, Any] | None = None,
     ) -> SocialQueueItem:
         audit = dict(audit_metadata or {})
         item = self.get_queue_item(queue_item_id)
+        if item.platform == SocialPlatform.X.value:
+            audit.setdefault("x_auto_replies_enabled", True)
+            audit.setdefault("x_auto_callback_status", "pending")
+        if (
+            item.platform == SocialPlatform.TELEGRAM.value
+            and str(telegram_post_to or "main").strip().lower() == "vault"
+            and str((item.generation_metadata or {}).get("source_type") or "")
+            != "commercial_offering"
+        ):
+            raise ValueError(
+                "Telegram Content Vault publishing requires the canonical "
+                "Commercial Offering publication flow."
+            )
         publish_item = self.create_publish_item(
             queue_item_id=item.queue_item_id,
             platform=item.platform,
@@ -373,7 +387,7 @@ class SocialPublishingService:
             return updated
         try:
             if item.platform == SocialPlatform.TELEGRAM.value:
-                result = self.telegram_provider.publish(
+                telegram_arguments = dict(
                     image_reference=item.output_reference or "",
                     caption=caption_text,
                     post_to=telegram_post_to,
@@ -381,6 +395,9 @@ class SocialPublishingService:
                     cta_label=telegram_cta_label,
                     cta_url=telegram_cta_url,
                 )
+                if telegram_cta_buttons is not None:
+                    telegram_arguments["cta_buttons"] = telegram_cta_buttons
+                result = self.telegram_provider.publish(**telegram_arguments)
             else:
                 result = self.x_provider.publish(
                     image_reference=item.output_reference or "",
@@ -475,6 +492,9 @@ class SocialPublishingService:
                         "account_name": getattr(result, "account_name", None),
                         "tweet_id": result.provider_post_id,
                         "published_at": published_at,
+                        "auto_replies_enabled": bool(
+                            audit.get("x_auto_replies_enabled", True)
+                        ),
                     }
                 )
             except Exception as exc:
@@ -486,23 +506,23 @@ class SocialPublishingService:
                 )
         return updated
 
-    @staticmethod
-    def _schedule_x_auto_callback(payload: Mapping[str, Any]) -> None:
+    def _schedule_x_auto_callback(self, payload: Mapping[str, Any]) -> None:
         """Run the post-publish handoff without delaying the React API response."""
+        self._mark_x_auto_callback_status(str(payload["tweet_id"]), "delivering")
         Thread(
-            target=SocialPublishingService._send_x_auto_callback,
+            target=self._send_x_auto_callback,
             args=(dict(payload),),
             name="x-auto-publish-callback",
             daemon=True,
         ).start()
 
-    @staticmethod
-    def _send_x_auto_callback(payload: Mapping[str, Any]) -> None:
+    def _send_x_auto_callback(self, payload: Mapping[str, Any]) -> None:
         """Send the callback and retry exactly once after five seconds."""
         callback_payload = {
             "platform": "x",
             "tweet_id": str(payload["tweet_id"]),
             "published_at": str(payload["published_at"]),
+            "auto_replies_enabled": bool(payload.get("auto_replies_enabled", True)),
         }
         if payload.get("account_name"):
             callback_payload["account_name"] = str(payload["account_name"])
@@ -526,6 +546,9 @@ class SocialPublishingService:
                     callback_payload["tweet_id"],
                     response.status_code,
                 )
+                self._mark_x_auto_callback_status(
+                    callback_payload["tweet_id"], "delivered"
+                )
                 return
             except Exception as exc:
                 logger.warning(
@@ -542,6 +565,52 @@ class SocialPublishingService:
                         callback_payload["tweet_id"],
                     )
                     sleep(5)
+                else:
+                    self._mark_x_auto_callback_status(
+                        callback_payload["tweet_id"], "pending", error=str(exc)
+                    )
+
+    def reconcile_x_auto_callbacks(self) -> int:
+        """Retry durable X-AUTO handoffs without repeating an X publication."""
+        pending: list[dict[str, Any]] = []
+        for item in self.list_publish_items():
+            metadata = dict(item.metadata or {})
+            if (
+                item.platform == SocialPlatform.X.value
+                and item.status == SocialPublishStatus.POSTED.value
+                and metadata.get("provider_post_id")
+                and metadata.get("x_auto_callback_status") == "pending"
+            ):
+                pending.append(
+                    {
+                        "platform": "x",
+                        "account_name": metadata.get("account_name"),
+                        "tweet_id": metadata["provider_post_id"],
+                        "published_at": item.created_at,
+                        "auto_replies_enabled": bool(
+                            metadata.get("x_auto_replies_enabled", True)
+                        ),
+                    }
+                )
+        for payload in pending:
+            self._schedule_x_auto_callback(payload)
+        return len(pending)
+
+    def _mark_x_auto_callback_status(
+        self, tweet_id: str, status: str, *, error: str | None = None
+    ) -> None:
+        for item in self.list_publish_items():
+            metadata = dict(item.metadata or {})
+            if str(metadata.get("provider_post_id") or "") != str(tweet_id):
+                continue
+            metadata["x_auto_callback_status"] = status
+            metadata["x_auto_callback_updated_at"] = datetime.now(UTC).isoformat()
+            if error:
+                metadata["x_auto_callback_error"] = error
+            else:
+                metadata.pop("x_auto_callback_error", None)
+            self._replace_publish_item(replace(item, metadata=metadata))
+            return
 
     def list_queue_items(
         self,

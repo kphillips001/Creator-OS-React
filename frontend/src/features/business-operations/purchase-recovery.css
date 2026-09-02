@@ -1,0 +1,10 @@
+.purchase-recovery__row { cursor: pointer; text-align: left; }
+.purchase-recovery__candidate { display: flex; gap: 12px; padding: 14px; margin: 10px 0; border: 1px solid #423820; border-radius: 10px; background: #17150f; cursor: pointer; }
+.purchase-recovery__candidate.is-selected { border-color: #c9a84e; box-shadow: 0 0 0 1px #c9a84e55; }
+.purchase-recovery__candidate > span { display: grid; gap: 5px; }
+.purchase-recovery__candidate em { color: #c9a84e; font-style: normal; font-size: 12px; }
+.purchase-recovery__candidate b { display: block; font-size: 12px; font-weight: 500; }
+.purchase-recovery__note { display: grid; gap: 7px; margin-top: 18px; color: #d4c99e; }
+.purchase-recovery__note textarea { min-height: 72px; resize: vertical; border: 1px solid #423820; border-radius: 8px; background: #11100c; color: #f0ead4; padding: 10px; }
+.purchase-recovery__attribute { margin-top: 14px; border: 1px solid #c9a84e; border-radius: 8px; background: #c9a84e; color: #11100c; font-weight: 700; padding: 10px 16px; }
+.purchase-recovery__attribute:disabled { cursor: not-allowed; opacity: .45; }

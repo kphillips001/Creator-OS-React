@@ -75,9 +75,11 @@ class WebhookEventRouterService:
             )
 
         elif event_type in ("purchase_new", "creator_payment_succeeded"):
+            result = self.commerce_signal_service.process_webhook(event)
             return {
                 "pipeline": "commerce_signal_pipeline",
-                "result": self.commerce_signal_service.process_webhook(event),
+                "result": result,
+                "outcome": "SUCCEEDED" if result.get("success") else "RETRYABLE",
             }
 
         #
@@ -86,7 +88,8 @@ class WebhookEventRouterService:
 
         else:
             print("[UNHANDLED EVENT TYPE]")
-            return "unhandled"
+            return {"pipeline": "ignored", "outcome": "IGNORED",
+                    "reason": f"known_or_unsupported_event:{event_type}"}
 
     #
     # ROUTES
@@ -104,6 +107,7 @@ class WebhookEventRouterService:
         return {
             "pipeline": "message_pipeline",
             "result": result,
+            "outcome": "SUCCEEDED" if result.get("success") else "RETRYABLE",
         }
 
     def _route_monetization_event(
@@ -126,4 +130,5 @@ class WebhookEventRouterService:
                 "monetization_event_pipeline"
             ),
             "result": result,
+            "outcome": "SUCCEEDED" if result.get("success") else "RETRYABLE",
         }

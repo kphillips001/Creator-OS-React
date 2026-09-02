@@ -23,6 +23,9 @@ class RecommendationContext:
     verified_affinity_offering_types: tuple[str, ...] = ()
     recent_offer_history: tuple["RecommendationHistoryEntry", ...] = ()
     commerce_learning_profile: Mapping[str, Any] = field(default_factory=dict)
+    buyer_stage: str | None = None
+    engagement_score: float = 0.0
+    price_sensitive: bool = False
 
 
 @dataclass(frozen=True)
@@ -55,6 +58,8 @@ class RecommendationCandidate:
     photoshoot_identifier: str | None = None
     intelligence: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
     blurred_teaser_path: str | None = None
+    selling_mode: str | None = None
+    member_count: int = 1
 
     def __post_init__(self) -> None:
         object.__setattr__(
@@ -95,6 +100,11 @@ class RecommendationCandidate:
                 str(value["blurred_teaser_path"])
                 if value.get("blurred_teaser_path") else None
             ),
+            selling_mode=(
+                str(value["photoshoot_selling_mode"])
+                if value.get("photoshoot_selling_mode") else None
+            ),
+            member_count=len(tuple(value.get("asset_ids") or ())),
         )
 
 
@@ -126,15 +136,17 @@ class RankedRecommendationCandidate:
 
 @dataclass(frozen=True)
 class RecommendationWeights:
-    semantic_match: float = 0.45
-    customer_affinity: float = 0.25
-    freshness: float = 0.15
+    semantic_match: float = 0.35
+    customer_affinity: float = 0.20
+    product_type_fit: float = 0.20
+    freshness: float = 0.10
     diversification: float = 0.10
     recent_offer_history: float = 0.05
 
     def __post_init__(self) -> None:
         values = (
-            self.semantic_match, self.customer_affinity, self.freshness,
+            self.semantic_match, self.customer_affinity,
+            self.product_type_fit, self.freshness,
             self.diversification, self.recent_offer_history,
         )
         if any(value < 0 or value > 1 for value in values):

@@ -1,5 +1,275 @@
 [
   {
+    "session_id": "edit_session_3e5ef741cb474cb0a0a8e4e669ff54db",
+    "creator_profile_id": 2,
+    "source_image_ids": [
+      "generated_image_b58e9d543ec0d8e81806976c"
+    ],
+    "edit_mode": "single_image",
+    "title": "Single Image Edit",
+    "status": "active",
+    "created_at": "2026-08-31T02:17:07.828529",
+    "updated_at": null,
+    "metadata": {
+      "owner": "Edit Studio",
+      "reference_image_id": null,
+      "reference_asset_id": null,
+      "references": []
+    }
+  },
+  {
+    "session_id": "edit_session_5e03df24a9ef4730bc51a408c6f50f29",
+    "creator_profile_id": 2,
+    "source_image_ids": [
+      "generated_image_1eca24cdb69112932ed9de5d"
+    ],
+    "edit_mode": "single_image",
+    "title": "Single Image Edit",
+    "status": "active",
+    "created_at": "2026-08-30T21:45:18.680088",
+    "updated_at": null,
+    "metadata": {
+      "owner": "Edit Studio",
+      "reference_image_id": null,
+      "reference_asset_id": null,
+      "references": []
+    }
+  },
+  {
+    "session_id": "edit_session_5e6538a615154f10b4f329a2ec888bf9",
+    "creator_profile_id": 2,
+    "source_image_ids": [
+      "generated_image_495ecd7363c74e7c0d567436"
+    ],
+    "edit_mode": "single_image",
+    "title": "Single Image Edit",
+    "status": "active",
+    "created_at": "2026-08-30T21:41:20.873484",
+    "updated_at": null,
+    "metadata": {
+      "owner": "Edit Studio",
+      "reference_image_id": null,
+      "reference_asset_id": null,
+      "references": []
+    }
+  },
+  {
+    "session_id": "edit_session_fb0cd663f170483f9fbe920ff8a6c655",
+    "creator_profile_id": 2,
+    "source_image_ids": [
+      "generated_image_f6296d427475940d1623d62d"
+    ],
+    "edit_mode": "single_image",
+    "title": "Single Image Edit",
+    "status": "active",
+    "created_at": "2026-08-30T21:36:30.759224",
+    "updated_at": null,
+    "metadata": {
+      "owner": "Edit Studio",
+      "reference_image_id": null,
+      "reference_asset_id": null,
+      "references": []
+    }
+  },
+  {
+    "session_id": "edit_session_6dc131d3772f4079a6ecde2f9f270476",
+    "creator_profile_id": 2,
+    "source_image_ids": [
+      "generated_image_f6296d427475940d1623d62d"
+    ],
+    "edit_mode": "single_image",
+    "title": "Single Image Edit",
+    "status": "active",
+    "created_at": "2026-08-30T21:35:10.674903",
+    "updated_at": null,
+    "metadata": {
+      "owner": "Edit Studio",
+      "reference_image_id": null,
+      "reference_asset_id": null,
+      "references": []
+    }
+  },
+  {
+    "session_id": "edit_session_77707d1392d649f0959e39a6f14332b6",
+    "creator_profile_id": 2,
+    "source_image_ids": [
+      "generated_image_74401b1628a1fdd0412eb78c"
+    ],
+    "edit_mode": "single_image",
+    "title": "Single Image Edit",
+    "status": "active",
+    "created_at": "2026-08-30T21:31:59.898756",
+    "updated_at": null,
+    "metadata": {
+      "owner": "Edit Studio",
+      "reference_image_id": null,
+      "reference_asset_id": null,
+      "references": []
+    }
+  },
+  {
+    "session_id": "edit_session_8f4dec2f18a84d76a60b1375fb54c463",
+    "creator_profile_id": 2,
+    "source_image_ids": [
+      "generated_image_a8af47f9e7f13316bbedc404"
+    ],
+    "edit_mode": "single_image",
+    "title": "Single Image Edit",
+    "status": "active",
+    "created_at": "2026-08-30T21:30:35.780703",
+    "updated_at": null,
+    "metadata": {
+      "owner": "Edit Studio",
+      "reference_image_id": null,
+      "reference_asset_id": null,
+      "references": []
+    }
+  },
+  {
+    "session_id": "edit_session_ce1625aa83e64e498c4921ade5e4932d",
+    "creator_profile_id": 2,
+    "source_image_ids": [
+      "generated_image_4b2e6939dd2f97a769a4f06b"
+    ],
+    "edit_mode": "single_image",
+    "title": "Single Image Edit",
+    "status": "active",
+    "created_at": "2026-08-30T21:26:34.419848",
+    "updated_at": null,
+    "metadata": {
+      "owner": "Edit Studio",
+      "reference_image_id": null,
+      "reference_asset_id": null,
+      "references": []
+    }
+  },
+  {
+    "session_id": "edit_session_9dc2dd0e0e7c49158e0db3485457d586",
+    "creator_profile_id": 2,
+    "source_image_ids": [
+      "generated_image_8ed6fc6854daa1e28b308ccd"
+    ],
+    "edit_mode": "single_image",
+    "title": "Single Image Edit",
+    "status": "active",
+    "created_at": "2026-08-30T21:21:57.742931",
+    "updated_at": null,
+    "metadata": {
+      "owner": "Edit Studio",
+      "reference_image_id": null,
+      "reference_asset_id": null,
+      "references": []
+    }
+  },
+  {
+    "session_id": "edit_session_39fbf218567148f880da047c56b6a150",
+    "creator_profile_id": 2,
+    "source_image_ids": [
+      "generated_image_28e45bd00fbc8142890315f2"
+    ],
+    "edit_mode": "single_image",
+    "title": "Single Image Edit",
+    "status": "active",
+    "created_at": "2026-08-26T00:39:51.111352",
+    "updated_at": null,
+    "metadata": {
+      "owner": "Edit Studio",
+      "reference_image_id": null,
+      "reference_asset_id": null,
+      "references": []
+    }
+  },
+  {
+    "session_id": "edit_session_8b62532b925a49a0b89f17663c0e2bbd",
+    "creator_profile_id": 2,
+    "source_image_ids": [
+      "edit-workspace-5f4b8ea858c4411d850a0e8cbad98190"
+    ],
+    "edit_mode": "single_image",
+    "title": "Single Image Edit",
+    "status": "active",
+    "created_at": "2026-08-21T21:57:29.084175",
+    "updated_at": null,
+    "metadata": {
+      "owner": "Edit Studio",
+      "reference_image_id": null,
+      "reference_asset_id": null,
+      "references": []
+    }
+  },
+  {
+    "session_id": "edit_session_f3b689cf1c0242828e24cb403f3c0baf",
+    "creator_profile_id": 2,
+    "source_image_ids": [
+      "edit-workspace-5f4b8ea858c4411d850a0e8cbad98190"
+    ],
+    "edit_mode": "single_image",
+    "title": "Single Image Edit",
+    "status": "active",
+    "created_at": "2026-08-21T21:56:40.226148",
+    "updated_at": null,
+    "metadata": {
+      "owner": "Edit Studio",
+      "reference_image_id": null,
+      "reference_asset_id": null,
+      "references": []
+    }
+  },
+  {
+    "session_id": "edit_session_29458d2ff91d42e89515ac7e06150125",
+    "creator_profile_id": 2,
+    "source_image_ids": [
+      "edit-workspace-5f4b8ea858c4411d850a0e8cbad98190"
+    ],
+    "edit_mode": "single_image",
+    "title": "Single Image Edit",
+    "status": "active",
+    "created_at": "2026-08-21T21:54:45.374259",
+    "updated_at": null,
+    "metadata": {
+      "owner": "Edit Studio",
+      "reference_image_id": null,
+      "reference_asset_id": null,
+      "references": []
+    }
+  },
+  {
+    "session_id": "edit_session_292011c305ec4741863fe64afefd5b88",
+    "creator_profile_id": 2,
+    "source_image_ids": [
+      "edit-workspace-86fece315c0940f9adcc237738c2e080"
+    ],
+    "edit_mode": "single_image",
+    "title": "Single Image Edit",
+    "status": "active",
+    "created_at": "2026-08-20T21:27:33.281064",
+    "updated_at": null,
+    "metadata": {
+      "owner": "Edit Studio",
+      "reference_image_id": null,
+      "reference_asset_id": null,
+      "references": []
+    }
+  },
+  {
+    "session_id": "edit_session_f7b5d5b558c34bf9ae27a75ae87138e9",
+    "creator_profile_id": 2,
+    "source_image_ids": [
+      "edit-workspace-2467c1f32205449a8b42f54fb7e7e8e2"
+    ],
+    "edit_mode": "single_image",
+    "title": "Single Image Edit",
+    "status": "active",
+    "created_at": "2026-08-20T00:49:08.796437",
+    "updated_at": null,
+    "metadata": {
+      "owner": "Edit Studio",
+      "reference_image_id": null,
+      "reference_asset_id": null,
+      "references": []
+    }
+  },
+  {
     "session_id": "edit_session_fe29755d54304c5bb3190a00bcb952b8",
     "creator_profile_id": 2,
     "source_image_ids": [

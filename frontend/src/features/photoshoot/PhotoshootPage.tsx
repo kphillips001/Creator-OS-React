@@ -6,6 +6,7 @@ import {
   approvePhotoshootSessionPlan,
   chooseAnotherPhotoshootIdea,
   editPhotoshootCandidatePrompt,
+  extendPhotoshoot,
   generatePhotoshootSessionPlan,
   generatePhotoshootShot,
   finishPhotoshoot,
@@ -23,6 +24,8 @@ import {
   replacePhotoshootShot,
   resumePhotoshootAutoRun,
   retryPhotoshootAutoRun,
+  retryPhotoshootFinalization,
+  retryPhotoshootPreparation,
   returnPhotoshootToLibrary,
   selectPhotoshootInspiration,
   setPhotoshootPlanningMode,
@@ -79,8 +82,8 @@ function ManualWorkspace({
   const [directionApproved, setDirectionApproved] = useState(false);
   const [planningMode, setPlanningMode] = useState<PlanningMode>("frame_by_frame");
   const [planFrameCount, setPlanFrameCount] = useState(8);
-  const [targetShotCount, setTargetShotCount] = useState(10);
-  const [planningStatus, setPlanningStatus] = useState({ currentShot: 1, planningShot: 2, targetShotCount: 10, remainingShots: 9, editorialStage: "Beginning", explanation: "Continuing from the latest approved shot." });
+  const [targetShotCount, setTargetShotCount] = useState(5);
+  const [planningStatus, setPlanningStatus] = useState({ currentShot: 1, planningShot: 2, targetShotCount: 5, remainingShots: 4, editorialStage: "Beginning", explanation: "Continuing from the latest approved shot." });
   const [sessionPlan, setSessionPlan] = useState<PlannedShot[]>([]);
   const [sessionPlanIndex, setSessionPlanIndex] = useState(0);
   const [sessionPlanApproved, setSessionPlanApproved] = useState(false);
@@ -110,16 +113,23 @@ function ManualWorkspace({
   const photoshootOperationId = photoshootOperation?.operationId;
   const photoshootOperationStatus = photoshootOperation?.status;
   const showPhotoshootOperationProgress = Boolean(
-    photoshootOperation && photoshootOperation.progressTotal > 1,
+    photoshootOperation && (photoshootOperation.progressTotal > 1 || photoshootOperation.status === "WAITING_EXTERNAL"),
   );
   const working =
     busy ||
     operationActive ||
     Boolean(autoRuntime?.spinner_active) ||
-    (!request?.failure &&
+    (!request?.failure && !request?.preparation_recovery_required && !request?.finalization_required &&
       (request?.status === "queued" || request?.status === "generating"));
 
+  const finalizationRequired = Boolean(request?.finalization_required || request?.status === "finalization_required");
+  const preparationRecoveryRequired = Boolean(request?.preparation_recovery_required || request?.status === "preparation_recovery_required");
+
   useEffect(() => {
+    // Candidate mutations update the same canonical Photoshoot state read by
+    // this poll. Abort the old read while approval/rejection commits, then
+    // refresh from the durable state when the mutation settles.
+    if (busy) return;
     const controller = new AbortController();
     let timer = 0;
     const poll = async () => {
@@ -130,8 +140,15 @@ function ManualWorkspace({
         );
         setStatus(next);
         if (next.request?.failure) {
-          setError(next.request.failure);
           setSelectedShotError(next.request.failure);
+        }
+        if (next.request?.finalization_required) {
+          setSelectedShotStage(4);
+          setSelectedShotError("");
+        }
+        if (next.request?.preparation_recovery_required) {
+          setSelectedShotStage(3);
+          setSelectedShotError("");
         }
         if (next.candidate) {
           setSelectedShotStage((current) => current === null ? null : 4);
@@ -156,7 +173,7 @@ function ManualWorkspace({
       controller.abort();
       window.clearTimeout(timer);
     };
-  }, [ready.session.sessionId, pollRevision]);
+  }, [ready.session.sessionId, pollRevision, busy]);
 
   useEffect(() => {
     if (!photoshootOperationId) return;
@@ -309,9 +326,34 @@ function ManualWorkspace({
       });
       setTargetShotCount(result.target_shot_count);
       const restored = await getCreativeDirectorContext(ready.session.sessionId);
+      setPlanningMode(restored.planningMode);
       setPlanningStatus({ currentShot: restored.currentShot, planningShot: restored.planningShot, targetShotCount: restored.targetShotCount, remainingShots: restored.remainingShots, editorialStage: restored.editorialStage, explanation: restored.plannerExplanation });
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Unable to update target photoshoot length.");
+    }
+  };
+
+  const extendSession = async () => {
+    setBusy(true); setError("");
+    try {
+      const result = await extendPhotoshoot({
+        session_id: ready.session.sessionId,
+        expected_target_shot_count: planningStatus.targetShotCount,
+      });
+      setTargetShotCount(result.target_shot_count);
+      const restored = await getCreativeDirectorContext(ready.session.sessionId);
+      setPlanningMode(restored.planningMode);
+      setPlanningStatus({
+        currentShot: restored.currentShot, planningShot: restored.planningShot,
+        targetShotCount: restored.targetShotCount, remainingShots: restored.remainingShots,
+        editorialStage: restored.editorialStage,
+        explanation: `Photoshoot extended to ${restored.targetShotCount} shots. Continue with Ask AI or Direct Shot.`,
+      });
+      await refresh();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Unable to extend this Photoshoot.");
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -414,6 +456,12 @@ function ManualWorkspace({
   };
 
   const submit = async (plannedPrompt = prompt, creativeHint = selectedIdea) => {
+    if (finalizationRequired || preparationRecoveryRequired) {
+      setError(finalizationRequired
+        ? "The generated image must be finalized before another shot can be generated."
+        : "Generation preparation must be recovered before another shot can be generated.");
+      return false;
+    }
     if (!plannedPrompt.trim()) {
       setError("Prompt is required.");
       return false;
@@ -455,7 +503,52 @@ function ManualWorkspace({
       const message = reason instanceof Error ? reason.message : "Generation failed. Please try again.";
       setError(message);
       setSelectedShotError(message);
+      try {
+        const recoveredState = await getPhotoshootStatus(ready.session.sessionId);
+        setStatus(recoveredState);
+        if (recoveredState.request?.preparation_recovery_required) {
+          setSelectedShotStage(3);
+          setSelectedShotError("");
+        }
+      } catch {
+        // Preserve the original generation error when canonical status is temporarily unavailable.
+      }
       return false;
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const retryFinalization = async () => {
+    if (!request?.request_id) return;
+    setBusy(true); setError(""); setSelectedShotError("");
+    try {
+      await retryPhotoshootFinalization({
+        session_id: ready.session.sessionId,
+        request_id: request.request_id,
+      });
+      setStatus(await getPhotoshootStatus(ready.session.sessionId));
+      setSelectedShotStage(4);
+      await backgroundOperations.refresh();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Unable to finalize the generated image.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const retryPreparation = async () => {
+    if (!request?.request_id) return;
+    setBusy(true); setError(""); setSelectedShotError("");
+    try {
+      await retryPhotoshootPreparation({
+        session_id: ready.session.sessionId,
+        request_id: request.request_id,
+      });
+      setPollRevision((current) => current + 1);
+      await backgroundOperations.refresh();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Unable to recover generation preparation.");
     } finally {
       setBusy(false);
     }
@@ -674,7 +767,20 @@ function ManualWorkspace({
     <div className="photoshoot-workflow">
       <SeedImageCard seed={ready.seedImage} onReturn={onReturn} />
       <PhotoshootTimeline busy={busy} items={ready.timeline} onReplace={(requestId) => { void replaceShot(requestId); }} />
-      <ActivePhotoshootActions busy={busy} onFinish={() => { void finishSession(); }} onStop={() => setConfirmStop(true)} />
+      {targetReached ? (
+        <section className="photoshoot-card photoshoot-target-complete" role="status">
+          <h2>Planned {planningStatus.targetShotCount}-shot Photoshoot complete</h2>
+          <p>{planningStatus.currentShot} of {planningStatus.targetShotCount} shots are approved. Extend by one shot or finish the Photoshoot.</p>
+          <div className="photoshoot-target-complete__actions">
+            <button className="photoshoot-button photoshoot-button--danger" disabled={busy} onClick={() => setConfirmStop(true)} type="button">Stop Photoshoot &amp; Return Seed</button>
+            <button className="photoshoot-button photoshoot-button--primary" disabled={working || Boolean(status.candidate)} onClick={() => { void extendSession(); }} type="button">Extend Photoshoot</button>
+            <button className="photoshoot-button photoshoot-button--secondary" disabled={busy} onClick={() => { void finishSession(); }} type="button">Finish Photoshoot</button>
+          </div>
+          {error && <div className="photoshoot-state photoshoot-state--error" role="alert">{error}</div>}
+        </section>
+      ) : (
+        <ActivePhotoshootActions busy={busy} onFinish={() => { void finishSession(); }} onStop={() => setConfirmStop(true)} />
+      )}
       {finishState === "finishing" && (
         <section className="photoshoot-card photoshoot-finish-status" aria-live="polite" role="status">
           <span className="photoshoot-finish-status__spinner" aria-hidden="true" />
@@ -690,7 +796,7 @@ function ManualWorkspace({
         providers={ready.providers}
         session={ready.session}
       />
-      {autoRuntime && sessionPlanApproved && (
+      {autoRuntime && sessionPlanApproved && planningMode === "full_plan" && (
         <PhotoshootAutoGenerationProgress
           busy={busy}
           onFinish={() => { void finishSession(); }}
@@ -720,12 +826,7 @@ function ManualWorkspace({
         sessionPlanApproved={sessionPlanApproved}
         sessionPlanIndex={sessionPlanIndex}
       />
-      {finishState === "finishing" ? null : planningMode === "frame_by_frame" && targetReached ? (
-        <section className="photoshoot-card photoshoot-target-complete" role="status">
-          <h2>Target Photoshoot Length Reached</h2>
-          <p>{planningStatus.currentShot} of {planningStatus.targetShotCount} shots are approved. Finish the Photoshoot when you are ready.</p>
-        </section>
-      ) : planningMode === "frame_by_frame" ? (
+      {finishState === "finishing" || targetReached ? null : planningMode === "frame_by_frame" ? (
         <>
           <CreativeDirectionPanel
             disabled={working || Boolean(status.candidate)}
@@ -752,10 +853,14 @@ function ManualWorkspace({
             onSelectIdea={(idea) => { void chooseIdea(idea); }}
             onDirectionEditSave={saveDirectionEdit}
           />
-          {selectedShotStage !== null && <SelectedShotProgress
-            activeStage={selectedShotStage}
+          {(selectedShotStage !== null || finalizationRequired || preparationRecoveryRequired) && <SelectedShotProgress
+            activeStage={selectedShotStage ?? 4}
             error={selectedShotError}
+            finalizationRequired={finalizationRequired}
+            preparationRecoveryRequired={preparationRecoveryRequired}
             onRetry={() => { void (selectedShotSource === "direct" ? directShot() : generateSelectedShot()); }}
+            onRetryFinalization={() => { void retryFinalization(); }}
+            onRetryPreparation={() => { void retryPreparation(); }}
             providerLabel={ready.providers.find((item) => item.value === provider)?.label || provider}
           />}
           {error && (
@@ -776,7 +881,7 @@ function ManualWorkspace({
             </section>
           )}
           <GenerationPanel
-            disabled={working || Boolean(status.candidate) || !prompt.trim()}
+            disabled={working || preparationRecoveryRequired || finalizationRequired || Boolean(status.candidate) || !prompt.trim()}
             onGenerate={() => {
               void submit();
             }}

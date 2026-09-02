@@ -270,11 +270,29 @@ export async function handoffExplicitInspiration(operationId: string, generation
   if (!result.success) throw new Error(result.error || "Explicit inspiration handoff could not be saved");
 }
 
+export async function getExplicitInspirationOperation(operationId: string): Promise<{
+  operationId: string; status: string; resultReference: string | null; metadata: Record<string, unknown>;
+}> {
+  const result = await readJsonResponse<{
+    success: boolean; error?: string;
+    operation?: { operationId: string; status: string; resultReference: string | null; metadata: Record<string, unknown> };
+  }>(await fetch(`${environment.apiBaseUrl}/background-operations/${operationId}`));
+  if (!result.success || !result.operation) throw new Error(result.error || "Explicit inspiration operation unavailable");
+  return result.operation;
+}
+
 export async function discardExplicitInspiration(operationId: string): Promise<void> {
   const result = await readJsonResponse<{ success: boolean; error?: string }>(await fetch(
     `${environment.apiBaseUrl}/content-studio/explicit/inspire/${operationId}/discard`, { method: "POST" },
   ));
   if (!result.success) throw new Error(result.error || "Explicit inspiration could not be discarded");
+}
+
+export async function dismissExplicitInspiration(operationId: string): Promise<void> {
+  const result = await readJsonResponse<{ success: boolean; error?: string }>(await fetch(
+    `${environment.apiBaseUrl}/content-studio/explicit/inspire/${operationId}/dismiss`, { method: "POST" },
+  ));
+  if (!result.success) throw new Error(result.error || "Explicit inspiration workspace could not be dismissed");
 }
 
 export async function startExplicitGenerationBatch(body: {
@@ -289,6 +307,13 @@ export async function startExplicitGenerationBatch(body: {
   return result.operationId;
 }
 
+export async function activateExplicitGenerationBatch(operationId: string): Promise<void> {
+  const result = await readJsonResponse<{ success: boolean; error?: string }>(await fetch(
+    `${environment.apiBaseUrl}/content-studio/explicit/batches/${operationId}/start`, { method: "POST" },
+  ));
+  if (!result.success) throw new Error(result.error || "Explicit batch could not start");
+}
+
 export async function updateExplicitGenerationBatch(operationId: string, body: {
   current: number; total: number; stage: string; message: string;
   metadata: Record<string, unknown>; terminalStatus?: "SUCCEEDED" | "PARTIAL" | "FAILED";
@@ -299,6 +324,31 @@ export async function updateExplicitGenerationBatch(operationId: string, body: {
     },
   ));
   if (!result.success) throw new Error(result.error || "Explicit batch progress could not be saved");
+}
+
+export async function getBackgroundOperation(operationId: string): Promise<{
+  operationId: string; status: string; metadata: Record<string, unknown>;
+}> {
+  const result = await readJsonResponse<{ success: boolean; error?: string; operation?: {
+    operationId: string; status: string; metadata: Record<string, unknown>;
+  } }>(await fetch(`${environment.apiBaseUrl}/background-operations/${operationId}`));
+  if (!result.success || !result.operation) throw new Error(result.error || "Background operation unavailable");
+  return result.operation;
+}
+
+export async function resetExplicitGenerationBatch(operationId: string): Promise<void> {
+  const result = await readJsonResponse<{ success: boolean; error?: string }>(await fetch(
+    `${environment.apiBaseUrl}/content-studio/explicit/batches/${operationId}/reset`, { method: "POST" },
+  ));
+  if (!result.success) throw new Error(result.error || "Content Studio could not be reset");
+}
+
+export async function retryFailedExplicitGenerationBatch(operationId: string): Promise<void> {
+  const result = await readJsonResponse<{ success: boolean; error?: string }>(await fetch(
+    `${environment.apiBaseUrl}/content-studio/explicit/batches/${operationId}/retry-failed`,
+    { method: "POST" },
+  ));
+  if (!result.success) throw new Error(result.error || "Failed Explicit items could not be retried");
 }
 
 export async function askPromptPlanner(question: string, image?: File | null): Promise<string> {

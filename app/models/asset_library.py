@@ -13,6 +13,7 @@ class AssetLibraryFilter:
     media_type: str | None = None
     classification: str | None = None
     sale_destination: str | None = None
+    asset_purpose: str | None = None
     eligible_only: bool = True
     limit: int = 500
     tags: tuple[str, ...] = ()

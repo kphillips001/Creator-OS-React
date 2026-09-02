@@ -20,6 +20,7 @@ class PurchaseIntentService:
         self, repository: PurchaseIntentRepository | None = None,
         learning_service=None, commercial_eligibility=None,
         photoshoot_lifecycle_service=None,
+        customer_safety_service=None, telegram_identity_repository=None,
         clock=lambda: datetime.now(timezone.utc),
     ) -> None:
         self.repository = repository or PurchaseIntentRepository()
@@ -28,6 +29,14 @@ class PurchaseIntentService:
         )
         self.clock = clock
         self.photoshoot_lifecycles = photoshoot_lifecycle_service
+        if customer_safety_service is None:
+            from app.services.customer_interaction_safety_service import CustomerInteractionSafetyService
+            customer_safety_service = CustomerInteractionSafetyService()
+        if telegram_identity_repository is None:
+            from app.repositories.telegram_identity_repository import TelegramIdentityRepository
+            telegram_identity_repository = TelegramIdentityRepository()
+        self.customer_safety = customer_safety_service
+        self.telegram_identities = telegram_identity_repository
         if learning_service is None:
             from app.services.commerce_learning_service import CommerceLearningService
             learning_service = CommerceLearningService()
@@ -35,6 +44,7 @@ class PurchaseIntentService:
 
     def create_before_presentation(self, **values: Any) -> PurchaseIntent:
         self._validate_create(values)
+        self._require_customer_interaction(values)
         self.commercial_eligibility.require_offering_id(
             values["commercial_offering_id"],
             creator_profile_id=values["creator_profile_id"],
@@ -53,6 +63,7 @@ class PurchaseIntentService:
 
     def replace_active_intent(self, **values: Any) -> PurchaseIntent:
         self._validate_create(values)
+        self._require_customer_interaction(values)
         self.commercial_eligibility.require_offering_id(
             values["commercial_offering_id"],
             creator_profile_id=values["creator_profile_id"],
@@ -110,11 +121,17 @@ class PurchaseIntentService:
         self, intent_id: UUID, *, clicked_at: datetime | None = None,
     ) -> PurchaseIntent:
         intent = self._require(intent_id)
+        if intent.status in {
+            PurchaseIntentStatus.CLICKED,
+            PurchaseIntentStatus.PURCHASED,
+        }:
+            return intent
         self._require_transition(intent.status, PurchaseIntentStatus.CLICKED)
         result = self.repository.mark_clicked(
             intent_id, at=clicked_at or self.clock(),
         )
-        self.observe(result, "OPENED")
+        if result.status is PurchaseIntentStatus.CLICKED:
+            self.observe(result, "OPENED")
         return result
 
     def expire_due(self) -> list[PurchaseIntent]:
@@ -217,6 +234,7 @@ class PurchaseIntentService:
                 PurchaseIntentStatus.ABANDONED,
                 PurchaseIntentStatus.UNKNOWN,
                 PurchaseIntentStatus.SUPERSEDED,
+                PurchaseIntentStatus.ADMIN_CLOSED,
             },
             PurchaseIntentStatus.PRESENTED: {
                 PurchaseIntentStatus.CLICKED,
@@ -225,6 +243,7 @@ class PurchaseIntentService:
                 PurchaseIntentStatus.ABANDONED,
                 PurchaseIntentStatus.UNKNOWN,
                 PurchaseIntentStatus.SUPERSEDED,
+                PurchaseIntentStatus.ADMIN_CLOSED,
             },
             PurchaseIntentStatus.CLICKED: {
                 PurchaseIntentStatus.PURCHASED,
@@ -237,13 +256,38 @@ class PurchaseIntentService:
         if target not in allowed.get(current, set()):
             raise ValueError(f"Invalid Purchase Intent transition: {current} -> {target}.")
 
+    def close_administratively(self, intent_id: UUID, *, reason_code: str) -> PurchaseIntent:
+        """Controlled operator-only retirement without customer-behavior semantics."""
+        from app.services.controlled_autonomy_test_service import ControlledAutonomyTestService
+        boundary = ControlledAutonomyTestService()
+        configured = boundary.configured_identity()
+        if configured is None:
+            raise PermissionError("Controlled administrative authorization is required.")
+        intent = self._require(intent_id)
+        decision = boundary.decide(
+            telegram_user_id=intent.telegram_user_id,
+            telegram_chat_id=intent.telegram_chat_id,
+        )
+        if not decision.allowed:
+            raise PermissionError(decision.reason)
+        if intent.status is not PurchaseIntentStatus.ADMIN_CLOSED:
+            self._require_transition(intent.status, PurchaseIntentStatus.ADMIN_CLOSED)
+        return self.repository.close_administratively(
+            intent_id, reason_code=reason_code,
+            expected_telegram_user_id=configured[0],
+            expected_telegram_chat_id=configured[1], at=self.clock(),
+        )
+
     def _validate_create(self, values: dict[str, Any]) -> None:
         required_positive = (
             "creator_profile_id", "fanvue_account_id",
-            "telegram_identity_mapping_id", "telegram_user_id",
+            "telegram_user_id",
         )
         if any(int(values.get(field, 0)) <= 0 for field in required_positive):
-            raise ValueError("Creator, account, identity, and Telegram user are required.")
+            raise ValueError("Creator, account, and Telegram user are required.")
+        mapping_id = values.get("telegram_identity_mapping_id")
+        if mapping_id is not None and int(mapping_id) <= 0:
+            raise ValueError("telegram_identity_mapping_id must be positive when present.")
         if int(values.get("telegram_chat_id", 0)) == 0:
             raise ValueError("telegram_chat_id cannot be zero.")
         if int(values.get("expected_price_minor", -1)) < 0:
@@ -260,3 +304,18 @@ class PurchaseIntentService:
         expires_at = values.get("expires_at")
         if not isinstance(expires_at, datetime) or expires_at <= self.clock():
             raise ValueError("expires_at must be in the future.")
+
+    def _require_customer_interaction(self, values):
+        reader = getattr(self.telegram_identities, "get_verified_by_telegram_user_id",
+                         self.telegram_identities.get_by_telegram_user_id)
+        identity = reader(int(values["telegram_user_id"]))
+        if identity is None:
+            return
+        decision = self.customer_safety.decide(
+            creator_profile_id=int(values["creator_profile_id"]),
+            fanvue_account_id=int(values["fanvue_account_id"]),
+            fanvue_user_id=int(identity.local_fanvue_user_id))
+        if not decision.allowed:
+            raise ValueError(
+                f"Purchase Intent blocked by customer safety: {decision.code}"
+            )

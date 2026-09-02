@@ -18,6 +18,7 @@ from app.services.local_vault_service import LocalVaultService
 from app.services.runtime_media_resolver import RuntimeMediaResolver
 from app.services.selective_blur_service import SelectiveBlurService
 from app.services.selective_blur_mask_validator import SelectiveBlurMaskValidator
+from app.services.blur_service import FULL_BLUR_STRENGTH
 
 
 class PhotoshootBundleTeaserService:
@@ -44,7 +45,7 @@ class PhotoshootBundleTeaserService:
                     "commercialRole": "BUNDLE_PROMOTIONAL_TEASER", "candidates": candidates,
                     "sourceAssetId": None, "teaserAssetId": None, "blurStrength": 24,
                     "maskWidth": None, "maskHeight": None, "maskVersion": self.MASK_VERSION,
-                    "maskUrl": None, "previewUrl": None, "error": None}
+                    "maskUrl": None, "previewUrl": None, "teaserStyle": None, "error": None}
         mask = Path(current["mask_path"])
         asset = self.assets.get_by_id(int(current["teaser_asset_id"]))
         member_ids = {int(item["asset_id"]) for item in members}
@@ -80,6 +81,8 @@ class PhotoshootBundleTeaserService:
             and Path(asset.local_vault_path or asset.file_path).is_file()
             and mask.is_file()
         )
+        asset_metadata = dict(getattr(asset, "media_metadata", None) or {}) if asset else {}
+        teaser_style = str(asset_metadata.get("teaser_style") or "SELECTIVE_BLUR")
         return {"status": "READY" if ready else "NEEDS_ATTENTION",
                 "statusLabel": "Promotional Teaser Ready" if ready else "Teaser Needs Attention",
                 "commercialRole": current["commercial_role"], "candidates": candidates,
@@ -88,6 +91,7 @@ class PhotoshootBundleTeaserService:
                 "blurStrength": int(current["blur_strength"]),
                 "maskWidth": int(current["mask_width"]), "maskHeight": int(current["mask_height"]),
                 "maskVersion": current["mask_version"],
+                "teaserStyle": teaser_style,
                 "maskUrl": f'/api/v1/assets/photoshoots/{row["deliverable_id"]}/bundle-teaser/mask',
                 "previewUrl": f'/api/v1/assets/{current["teaser_asset_id"]}/media',
                 "error": None if ready else (
@@ -116,6 +120,12 @@ class PhotoshootBundleTeaserService:
         if not 1 <= strength <= 80:
             raise ValueError("Blur strength must be between 1 and 80.")
         mask_bytes = self._decode_mask(mask_data, width, height)
+        teaser_style = (
+            "FULL_BLUR" if self.mask_validator.is_full_blur(mask_bytes)
+            else "SELECTIVE_BLUR"
+        )
+        if teaser_style == "FULL_BLUR":
+            strength = FULL_BLUR_STRENGTH
         root = self.vault.path(f"vault/bundle_teasers/{row['deliverable_id']}")
         root.mkdir(parents=True, exist_ok=True)
         mask_path = root / f"mask_source_{source_id}.png"
@@ -128,6 +138,7 @@ class PhotoshootBundleTeaserService:
                              output_path=output_path, blur_strength=strength)
         now = datetime.now(timezone.utc).isoformat()
         metadata = {"media_type": "image", "commercial_role": "BUNDLE_PROMOTIONAL_TEASER",
+                    "teaser_style": teaser_style,
                     "source_asset_id": source_id, "source_photoshoot_deliverable_id": str(row["deliverable_id"]),
                     "selective_blur": {"mask_path": str(mask_path), "mask_width": width,
                     "mask_height": height, "mask_version": self.MASK_VERSION,
@@ -156,6 +167,17 @@ class PhotoshootBundleTeaserService:
         path = Path(current["mask_path"]) if current else None
         if path is None or not path.is_file(): raise KeyError("Bundle teaser mask not found.")
         return path
+
+    def preview_source(self, deliverable_id, *, creator_profile_id: int, source_asset_id: int):
+        """Resolve an approved source for non-persistent teaser editing previews."""
+        _, members = self._context(deliverable_id, creator_profile_id)
+        source_id = int(source_asset_id)
+        if source_id not in {int(item["asset_id"]) for item in members}:
+            raise ValueError("Teaser source must be an approved original member of this Photoshoot.")
+        source = self.assets.get_by_id(source_id)
+        if source is None or int(source.creator_profile_id or 0) != int(creator_profile_id):
+            raise KeyError("Teaser source is unavailable for this creator.")
+        return source
 
     def _context(self, deliverable_id, creator_profile_id):
         row = self.photoshoots.get(str(deliverable_id))

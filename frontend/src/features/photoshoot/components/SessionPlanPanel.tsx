@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { PhotoshootAutoRunRuntime, PlannedShot, PlanningMode } from "../types";
 
 const FRAME_COUNTS = [4, 6, 8, 10, 12] as const;
@@ -25,7 +25,10 @@ type Props = {
 };
 
 export function SessionPlanPanel(props: Props) {
-  const [customTargetSelected, setCustomTargetSelected] = useState(![0, 5, 10, 15].includes(props.targetShotCount));
+  const [customTargetSelected, setCustomTargetSelected] = useState(![0, 5, 10].includes(props.targetShotCount));
+  useEffect(() => {
+    if (![0, 5, 10].includes(props.targetShotCount)) setCustomTargetSelected(true);
+  }, [props.targetShotCount]);
   const remaining = props.sessionPlan.length
     ? Math.max(0, props.sessionPlan.length - props.sessionPlanIndex)
     : 0;
@@ -84,7 +87,6 @@ export function SessionPlanPanel(props: Props) {
             <option value="0">Creative Freeflow (No progression)</option>
             <option value="5">Mini (5 shots)</option>
             <option value="10">Standard (10 shots)</option>
-            <option value="15">Extended (15 shots)</option>
             <option value="custom">Custom...</option>
           </select>
         </label>

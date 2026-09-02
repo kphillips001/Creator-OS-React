@@ -8,6 +8,8 @@ import logging
 import re
 import shutil
 import threading
+import time
+from uuid import uuid4
 from dataclasses import asdict, replace
 from pathlib import Path
 from typing import Any, Iterable, Mapping
@@ -15,6 +17,7 @@ from typing import Any, Iterable, Mapping
 from app.models.creative_director import PromptPlan
 from app.models.generation_engine import GenerationJob, GenerationMediaType, GenerationStatus, GenerationType, utc_now
 from app.models.generation_library import (
+    GENERATION_LIBRARY_PAGE_SIZE,
     GeneratedImageRecord,
     GenerationLibraryActionResult,
     GenerationLibraryFilter,
@@ -34,6 +37,7 @@ class GenerationLibraryService:
 
     DEFAULT_STORAGE_DIR = Path("data") / "generation_library"
     _version_restore_lock = threading.RLock()
+    _performance_logger = logging.getLogger("creator-os-performance")
 
     def __init__(
         self,
@@ -44,8 +48,14 @@ class GenerationLibraryService:
         asset_repository: AssetRepository | None = None,
         creative_intelligence: CreativeIntelligenceLearningService | None = None,
         recipe_capture_service=None,
+        projection_repository=None,
+        canonical_repository=None,
     ):
         self.storage_dir = Path(storage_dir or self.DEFAULT_STORAGE_DIR)
+        self._uses_default_storage = storage_dir is None
+        self._projection_repository = projection_repository
+        self._canonical_repository = canonical_repository
+        self._canonical_bootstrapped = False
         self.archive_service = archive_service or ContentArchiveService()
         self.creator_approval = creator_approval_service or CreatorApprovalService(
             storage_dir=self.storage_dir / "creator_approvals"
@@ -53,6 +63,140 @@ class GenerationLibraryService:
         self.assets = asset_repository or AssetRepository()
         self.creative_intelligence = creative_intelligence or CreativeIntelligenceLearningService()
         self.recipe_capture = recipe_capture_service
+
+    def _projection(self):
+        if not self._uses_default_storage and self._projection_repository is None:
+            return None
+        if self._projection_repository is None:
+            from app.repositories.generation_library_projection_repository import GenerationLibraryProjectionRepository
+            self._projection_repository = GenerationLibraryProjectionRepository()
+        return self._projection_repository
+
+    def _canonical(self):
+        if not self._uses_default_storage and self._canonical_repository is None:
+            return None
+        if self._canonical_repository is None:
+            from app.repositories.generation_library_record_repository import GenerationLibraryRecordRepository
+            self._canonical_repository = GenerationLibraryRecordRepository()
+        return self._canonical_repository
+
+    def _ensure_canonical(self) -> None:
+        canonical = self._canonical()
+        if canonical is None or self._canonical_bootstrapped:
+            return
+        count = canonical.count()
+        legacy_version = self._legacy_source_version()
+        if count == 0:
+            legacy = tuple(self._record_from_dict(item) for item in self._read_json(self.records_path, []))
+            canonical.replace_all(legacy, legacy_version=legacy_version, bootstrap=True)
+        self._canonical_bootstrapped = True
+
+    def _legacy_source_version(self) -> str:
+        try:
+            stat = self.records_path.stat()
+            return f"{stat.st_mtime_ns}:{stat.st_size}"
+        except OSError:
+            return "missing:0"
+
+    def _source_version(self) -> str:
+        canonical = self._canonical()
+        if canonical is not None:
+            self._ensure_canonical()
+            return f"db:{canonical.state()[0]}"
+        return self._legacy_source_version()
+
+    def ensure_read_projection(self) -> None:
+        projection = self._projection()
+        if projection is not None and projection.source_version() != self._source_version():
+            projection.synchronize(self.list_records(), source_version=self._source_version())
+
+    def browse_page(self, filters: GenerationLibraryFilter | None = None, *, page: int = 1,
+                    page_size: int = GENERATION_LIBRARY_PAGE_SIZE):
+        """Use the indexed production projection; retain file behavior for isolated stores."""
+        filters = filters or GenerationLibraryFilter()
+        projection = self._projection()
+        if projection is not None:
+            self.ensure_read_projection()
+            return projection.browse_page(filters, page=page, page_size=page_size)
+        result = self.browse(filters)
+        total_pages = max(1, (result.total + page_size - 1) // page_size)
+        current_page = min(max(1, page), total_pages)
+        start = (current_page - 1) * page_size
+        active = self.browse(GenerationLibraryFilter(creator_profile_id=filters.creator_profile_id))
+        return (result.records[start:start + page_size], result.total,
+                tuple(sorted({item.provider_id for item in active.records})),
+                tuple(sorted({item.creative_mode for item in active.records if item.creative_mode})))
+
+    def staged_records(self, *, creator_profile_id: int, search: str | None = None):
+        projection = self._projection()
+        if projection is not None:
+            self.ensure_read_projection()
+            return projection.staged(creator_profile_id=creator_profile_id, search=search)
+        return tuple(record for record in self.list_records()
+                     if record.creator_profile_id == int(creator_profile_id)
+                     and record.status == "staged_asset_library")
+
+    def staged_count(self, creator_profile_id: int) -> int:
+        projection = self._projection()
+        if projection is not None:
+            self.ensure_read_projection()
+            return projection.staged_count(creator_profile_id)
+        return len(self.staged_records(creator_profile_id=creator_profile_id))
+
+    def projected_get(self, image_id: str) -> GeneratedImageRecord:
+        projection = self._projection()
+        if projection is None:
+            return self.get(image_id)
+        self.ensure_read_projection()
+        record = projection.get(image_id)
+        if record is None:
+            raise KeyError(f"Generated image not found: {image_id}")
+        return record
+
+    def get_with_effective_classification(self, image_id: str) -> GeneratedImageRecord:
+        canonical = self.get(image_id)
+        projected = self.projected_get(image_id)
+        return replace(canonical, content_classification=projected.content_classification,
+                       classification_source=projected.classification_source)
+
+    def classify_content(self, image_id: str, *, creator_profile_id: int, classification: str) -> dict:
+        from app.repositories.generation_library_classification_repository import GenerationLibraryClassificationRepository
+        result = GenerationLibraryClassificationRepository().classify_unclassified(
+            image_id=image_id, creator_profile_id=creator_profile_id, classification=classification,
+        )
+        if result is None:
+            raise ValueError("Only an Unclassified Generation Library image can be manually classified.")
+        return result
+
+    def bulk_classify_content(self, image_ids: Iterable[str], *, creator_profile_id: int,
+                              classification: str) -> tuple[dict, ...]:
+        from app.repositories.generation_library_classification_repository import GenerationLibraryClassificationRepository
+        return GenerationLibraryClassificationRepository().bulk_classify_unclassified(
+            image_ids=tuple(image_ids), creator_profile_id=creator_profile_id,
+            classification=classification,
+        )
+
+    def bulk_archive_unclassified(self, image_ids: Iterable[str], *, creator_profile_id: int) -> GenerationLibraryActionResult:
+        ids = tuple(str(image_id).strip() for image_id in image_ids)
+        if not ids:
+            raise ValueError("At least one image is required.")
+        if len(ids) > 100:
+            raise ValueError("Bulk Archive supports at most 100 images.")
+        if len(set(ids)) != len(ids):
+            raise ValueError("Duplicate image IDs are not allowed.")
+        projection = self._projection()
+        if projection is None:
+            raise RuntimeError("Bulk Archive requires the canonical Generation Library repository.")
+        self.ensure_read_projection()
+        eligible = projection.eligible_unclassified_ids(ids, creator_profile_id=creator_profile_id)
+        if eligible != set(ids):
+            raise ValueError(
+                "Every selected image must belong to the active creator and still be an eligible Unclassified image."
+            )
+        result = self.delete(ids)
+        if not result.success or set(result.image_ids) != set(ids):
+            raise RuntimeError("Bulk Archive could not archive the complete selection.")
+        return result
 
     @property
     def records_path(self) -> Path:
@@ -83,19 +227,28 @@ class GenerationLibraryService:
             # until a later explicit promotion action. Global succeeded-job
             # synchronization must never make them visible prematurely.
             return ()
-        records = list(self.list_records())
-        existing_image_ids = {record.image_id for record in records}
-        existing_keys = {
-            (record.generation_job_id, reference)
-            for record in records
-            for reference in self._record_output_references(record)
-        }
+        prospective = tuple(
+            self._record_from_job(job, output_reference, output_index=index)
+            for index, output_reference in enumerate(job.result.output_references)
+        )
+        projection = self._projection()
+        if projection is not None and hasattr(projection, "existing_identities"):
+            self.ensure_read_projection()
+            existing_image_ids, existing_keys = projection.existing_identities(
+                generation_job_id=job.job_id,
+                output_references=job.result.output_references,
+                image_ids=(item.image_id for item in prospective),
+            )
+        else:
+            records = self.list_records()
+            existing_image_ids = {record.image_id for record in records}
+            existing_keys = {(record.generation_job_id, reference) for record in records for reference in self._record_output_references(record)}
         archived_output_references = self._archived_output_references()
         archived_image_ids = self._archived_image_ids()
         created = []
         for output_index, output_reference in enumerate(job.result.output_references):
             key = (job.job_id, output_reference)
-            record = self._record_from_job(job, output_reference, output_index=output_index)
+            record = prospective[output_index]
             if (
                 key in existing_keys
                 or output_reference in archived_output_references
@@ -115,11 +268,10 @@ class GenerationLibraryService:
                     output_index=0,
                     output_reference=record.output_reference,
                 )
-            records.append(record)
             existing_image_ids.add(record.image_id)
             created.append(record)
         if created:
-            self._write_records(records)
+            self._append_records(created)
         return tuple(created)
 
     def sync_jobs(self, jobs: Iterable[GenerationJob]) -> tuple[GeneratedImageRecord, ...]:
@@ -131,7 +283,10 @@ class GenerationLibraryService:
     def promote_regeneration_result(self, *, job: GenerationJob, media_path: str,
                                     generated_image_id: str, generation_recipe_id: str) -> tuple[GeneratedImageRecord, bool]:
         """Copy one reviewed regeneration output into the normal Generation Library."""
-        existing = next((item for item in self.list_records() if item.image_id == generated_image_id), None)
+        try:
+            existing = self.get(generated_image_id)
+        except KeyError:
+            existing = None
         if existing:
             if str(existing.generation_recipe_id or "") != str(generation_recipe_id):
                 raise ValueError("Existing Generation Library record has conflicting recipe lineage.")
@@ -166,9 +321,7 @@ class GenerationLibraryService:
             **dict(record.generation_metadata or {}),
             "regeneration_disposition": "PROMOTED",
         })
-        records = list(self.list_records())
-        records.append(record)
-        self._write_records(records)
+        self._append_records((record,))
         return record, True
 
     def browse(
@@ -218,7 +371,29 @@ class GenerationLibraryService:
             records.sort(key=lambda record: getattr(record, filters.sort if filters.sort != "provider" else "provider_id"))
         else:
             records.sort(key=lambda record: record.generation_date or record.created_at, reverse=reverse)
+        staged = sorted(
+            (record for record in records if record.is_staged),
+            key=lambda record: (record.staged_at or "", record.image_id),
+            reverse=True,
+        )
+        records = staged + [record for record in records if not record.is_staged]
         return GenerationLibraryResult(records=tuple(records), filters=filters, total=len(records))
+
+    def set_posting_stage(self, image_id: str, *, staged: bool) -> GeneratedImageRecord:
+        """Idempotently update lightweight posting-stage metadata."""
+        record = self.get(str(image_id))
+        if record.status != "active":
+            raise ValueError("Only active Generation Library images can be staged for posting.")
+        if record.is_staged == bool(staged):
+            return record
+        updated = replace(
+            record,
+            is_staged=bool(staged),
+            staged_at=utc_now() if staged else None,
+            updated_at=utc_now(),
+        )
+        self._upsert_records((updated,))
+        return updated
 
     def resolve_publishable_image_reference(self, image_id: str) -> str | None:
         """Return a currently publishable image reference for an active library item."""
@@ -233,13 +408,12 @@ class GenerationLibraryService:
 
     def select(self, image_ids: Iterable[str], *, selected: bool = True) -> GenerationLibraryActionResult:
         ids = tuple(str(image_id) for image_id in image_ids)
-        updated = []
-        for record in self.list_records():
-            if record.image_id in ids:
-                updated.append(replace(record, selected=selected, updated_at=utc_now()))
-            else:
-                updated.append(record)
-        self._write_records(updated)
+        changed = []
+        for image_id in ids:
+            try: record = self.get(image_id)
+            except KeyError: continue
+            changed.append(replace(record, selected=selected, updated_at=utc_now()))
+        self._upsert_records(changed)
         return GenerationLibraryActionResult(True, "Selection updated.", ids)
 
     def mark_registered(self, image_id: str, asset_id: int) -> GeneratedImageRecord:
@@ -420,23 +594,20 @@ class GenerationLibraryService:
         restored = []
         errors = []
         records = list(self.list_records())
-        existing_ids = {record.image_id for record in records}
+        existing_by_id = {record.image_id: record for record in records}
+        changed = []
         for image_id in ids:
-            if image_id in existing_ids:
-                records = [
-                    replace(record, status="active", review_state="restored", selected=False, updated_at=utc_now())
-                    if record.image_id == image_id else record
-                    for record in records
-                ]
+            if image_id in existing_by_id:
+                changed.append(replace(existing_by_id[image_id], status="active", review_state="restored", selected=False, updated_at=utc_now()))
                 restored.append(image_id)
                 continue
             try:
-                records.append(self.archive_service.restore_junk(image_id))
+                changed.append(self.archive_service.restore_junk(image_id))
                 restored.append(image_id)
             except Exception as exc:
                 errors.append(str(exc))
         if restored:
-            self._write_records(records)
+            self._upsert_records(changed)
         return GenerationLibraryActionResult(
             success=not errors,
             message="Generated image(s) restored.",
@@ -601,7 +772,6 @@ class GenerationLibraryService:
         updated_records = []
         for record in self.list_records():
             if record.image_id not in selected_ids:
-                updated_records.append(record)
                 continue
             try:
                 if record.imported_asset_id is not None:
@@ -635,11 +805,10 @@ class GenerationLibraryService:
                 )
             except Exception as exc:
                 errors.append(f"{record.image_id}: {exc}")
-                updated_records.append(record)
         missing = tuple(image_id for image_id in selected_ids if image_id not in records_by_id)
         errors.extend(f"Generated image not found: {image_id}" for image_id in missing)
         if approved_ids:
-            self._write_records(updated_records)
+            self._upsert_records(updated_records)
         return GenerationLibraryActionResult(
             success=not errors,
             message="Content approved into Creator OS." if not errors else "Some content could not be approved into Creator OS.",
@@ -685,8 +854,14 @@ class GenerationLibraryService:
     ) -> GenerationLibraryActionResult:
         try:
             record = self.get(image_id)
-            self.archive_service.archive_published(
+            posted_record = replace(
                 record,
+                is_staged=False,
+                staged_at=None,
+                updated_at=utc_now(),
+            )
+            self.archive_service.archive_published(
+                posted_record,
                 platform=platform,
                 caption=caption,
                 metadata=metadata,
@@ -834,11 +1009,8 @@ class GenerationLibraryService:
                     marked.append(record.image_id)
                 except Exception as exc:
                     errors.append(f"{record.image_id}: {exc}")
-                    updated.append(record)
-            else:
-                updated.append(record)
         if marked:
-            self._write_records(updated)
+            self._upsert_records(updated)
         return GenerationLibraryActionResult(
             success=not errors,
             message=(
@@ -929,7 +1101,6 @@ class GenerationLibraryService:
             gallery_dir.mkdir(parents=True, exist_ok=True)
         for record in self.list_records():
             if record.image_id not in ids:
-                updated_records.append(record)
                 continue
             try:
                 output_reference = self._reference_after_session_move(record.output_reference, active_dir, gallery_dir)
@@ -956,12 +1127,11 @@ class GenerationLibraryService:
                 completed.append(record.image_id)
             except Exception as exc:
                 errors.append(f"{record.image_id}: {exc}")
-                updated_records.append(record)
         missing = tuple(image_id for image_id in ids if image_id not in records_by_id)
         errors.extend(f"Generated image not found: {image_id}" for image_id in missing)
         if completed:
-            self._write_records(updated_records)
-            self._write_photoshoot_session_manifest(gallery_dir, session_id=session_id, records=updated_records)
+            self._upsert_records(updated_records)
+            self._write_photoshoot_session_manifest(gallery_dir, session_id=session_id, records=self.list_records())
         return GenerationLibraryActionResult(
             success=not errors,
             message=(
@@ -1006,7 +1176,6 @@ class GenerationLibraryService:
             junk_dir.mkdir(parents=True, exist_ok=True)
         for record in self.list_records():
             if record.image_id not in ids:
-                updated_records.append(record)
                 continue
             try:
                 output_reference = self._reference_after_session_move(record.output_reference, gallery_dir, junk_dir)
@@ -1034,12 +1203,11 @@ class GenerationLibraryService:
                 junked.append(record.image_id)
             except Exception as exc:
                 errors.append(f"{record.image_id}: {exc}")
-                updated_records.append(record)
         missing = tuple(image_id for image_id in ids if image_id not in records_by_id)
         errors.extend(f"Generated image not found: {image_id}" for image_id in missing)
         if junked:
-            self._write_records(updated_records)
-            self._write_photoshoot_session_manifest(junk_dir, session_id=session_id, records=updated_records)
+            self._upsert_records(updated_records)
+            self._write_photoshoot_session_manifest(junk_dir, session_id=session_id, records=self.list_records())
         return GenerationLibraryActionResult(
             success=not errors,
             message=(
@@ -1326,6 +1494,31 @@ class GenerationLibraryService:
             )
         return ordered[0]
 
+    def create_asset_edit_workspace_source(self, *, creator_profile_id: int, asset_id: int,
+                                           source_path: str, metadata: Mapping[str, Any]) -> GeneratedImageRecord:
+        """Create a durable Edit Studio workspace reference without moving/copying its Asset."""
+        image_id = f"edit-workspace-{uuid4().hex}"
+        now = utc_now()
+        record = GeneratedImageRecord(
+            image_id=image_id, generation_job_id=image_id, generation_request_id=image_id,
+            generation_result_id=image_id, output_reference=str(source_path),
+            creator_profile_id=int(creator_profile_id), provider_id="asset_library",
+            prompt_plan_id=image_id, prompt_text="", creative_mode="single_image",
+            reference_asset_id=None, imported_asset_id=int(asset_id), status="pending_edit",
+            review_state="pending_edit", generation_metadata={
+                **dict(metadata), "workspace_source_only": True,
+                "pending_edit_started_at": now, "output_reference": str(source_path),
+            }, created_at=now, updated_at=now,
+        )
+        self._upsert_records((record,))
+        return record
+
+    def remove_asset_edit_workspace_source(self, image_id: str) -> None:
+        record = self.get(image_id)
+        if not bool(dict(record.generation_metadata or {}).get("workspace_source_only")):
+            raise ValueError("Only an Edit Studio workspace reference can be removed this way.")
+        self._remove_records((image_id,))
+
     def _photoshoot_session_dir(
         self,
         bucket: str,
@@ -1377,12 +1570,18 @@ class GenerationLibraryService:
         source = str(record.output_reference or "").strip()
         suffix = Path(source).suffix or ".jpg"
         target = destination / f"{self._safe_storage_name(stem)}{suffix}"
-        if not replace_existing:
-            target = self._unique_path(target)
         source_path = Path(source).expanduser()
+        if not source_path.is_file() and target.is_file():
+            return target
+        if not source_path.is_file():
+            matches = sorted(destination.glob(f"{self._safe_storage_name(stem)}.*"))
+            if len(matches) == 1 and matches[0].is_file():
+                return matches[0]
         if source_path.exists() and source_path.is_file():
             if source_path.resolve() == target.resolve():
                 return target
+            if not replace_existing and target.exists():
+                target = self._unique_path(target)
             shutil.move(str(source_path), str(target))
             return target
         return Path(source or target)
@@ -1624,13 +1823,8 @@ class GenerationLibraryService:
                 generation_metadata=merged_generation_metadata,
                 updated_at=utc_now(),
             )
-            records = []
-            for record in self.list_records():
-                if record.image_id == source_record.image_id:
-                    records.append(updated_source)
-                elif record.image_id != edited_record.image_id:
-                    records.append(record)
-            self._write_records(records)
+            self._upsert_records((updated_source,))
+            self._remove_records((edited_record.image_id,))
             self._record_reviewed_edit_output(edited_record, action="approved")
             self.creative_intelligence.record_positive_safely(
                 creator_profile_id=updated_source.creator_profile_id,
@@ -1708,7 +1902,6 @@ class GenerationLibraryService:
                 ),
             )
             staged_path: Path | None = None
-            original_records = list(self.list_records())
             try:
                 staged_path = self.archive_service.copy_asset_version_to_generation_active(selected)
                 snapshot = dict(selected.generation_record or {})
@@ -1748,16 +1941,13 @@ class GenerationLibraryService:
                     generation_metadata=restored_generation_metadata,
                     updated_at=restore_timestamp,
                 )
-                self._write_records([
-                    restored if record.image_id == current.image_id else record
-                    for record in original_records
-                ])
+                self._upsert_records((restored,))
                 old_active = Path(current.output_reference).expanduser()
                 if old_active.resolve() != staged_path.resolve() and old_active.is_file():
                     old_active.unlink()
                 return restored
             except Exception:
-                self._write_records(original_records)
+                self._upsert_records((current,))
                 if staged_path is not None and staged_path.is_file():
                     staged_path.unlink()
                 if current_archive.archive_id not in archive_ids_before:
@@ -1808,12 +1998,23 @@ class GenerationLibraryService:
         )
 
     def get(self, image_id: str) -> GeneratedImageRecord:
+        canonical = self._canonical()
+        if canonical is not None:
+            self._ensure_canonical()
+            payload = canonical.get_payload(str(image_id))
+            if payload is not None:
+                return self._record_from_dict(payload)
+            raise KeyError(f"Generated image not found: {image_id}")
         for record in self.list_records():
             if record.image_id == image_id:
                 return record
         raise KeyError(f"Generated image not found: {image_id}")
 
     def list_records(self) -> tuple[GeneratedImageRecord, ...]:
+        canonical = self._canonical()
+        if canonical is not None:
+            self._ensure_canonical()
+            return tuple(self._record_from_dict(item) for item in canonical.list_payloads())
         return tuple(self._record_from_dict(item) for item in self._read_json(self.records_path, []))
 
     def _archived_output_references(self) -> set[str]:
@@ -1965,20 +2166,36 @@ class GenerationLibraryService:
     ) -> GenerationLibraryActionResult:
         ids = tuple(str(image_id) for image_id in image_ids)
         updated = []
-        for record in self.list_records():
-            if record.image_id in ids:
-                updated.append(replace(record, status=status, review_state=status, selected=False, updated_at=utc_now()))
-            else:
-                updated.append(record)
-        self._write_records(updated)
+        for image_id in ids:
+            try: record = self.get(image_id)
+            except KeyError: continue
+            updated.append(replace(record, status=status, review_state=status, selected=False, updated_at=utc_now()))
+        self._upsert_records(updated)
         return GenerationLibraryActionResult(True, message, ids)
 
     def _replace_record(self, updated: GeneratedImageRecord) -> None:
+        if self._canonical() is not None:
+            if self._canonical().get_payload(updated.image_id) is None:
+                raise KeyError(f"Generated image not found: {updated.image_id}")
+            self._upsert_records((updated,))
+            return
         records = [updated if record.image_id == updated.image_id else record for record in self.list_records()]
         self._write_records(records)
 
     def _remove_records(self, image_ids: Iterable[str]) -> None:
         ids = set(str(image_id) for image_id in image_ids)
+        canonical = self._canonical()
+        if canonical is not None:
+            started = time.perf_counter()
+            revision = canonical.delete(ids)
+            canonical_ms = (time.perf_counter() - started) * 1000
+            projection = self._projection()
+            projection_started = time.perf_counter()
+            if projection is not None:
+                projection.delete(ids, source_version=f"db:{revision}")
+            projection_ms = (time.perf_counter() - projection_started) * 1000
+            self._log_mutation("delete", len(ids), canonical_ms, projection_ms)
+            return
         self._write_records([record for record in self.list_records() if record.image_id not in ids])
 
     @staticmethod
@@ -2105,10 +2322,71 @@ class GenerationLibraryService:
             generation_metadata=data.get("generation_metadata") or {},
             created_at=data.get("created_at") or "",
             updated_at=data.get("updated_at"),
+            is_staged=bool(data.get("is_staged", False)),
+            staged_at=data.get("staged_at"),
         )
 
     def _write_records(self, records: list[GeneratedImageRecord]) -> None:
+        canonical = self._canonical()
+        if canonical is not None:
+            raise RuntimeError("Whole-library replacement is bootstrap-only; use targeted canonical mutation.")
         self._write_json(self.records_path, [asdict(record) for record in records])
+        projection = self._projection()
+        if projection is not None:
+            projection.synchronize(records, source_version=self._source_version())
+
+    def _append_records(self, records: Iterable[GeneratedImageRecord]) -> None:
+        records = tuple(records)
+        if not records:
+            return
+        if self._canonical() is not None:
+            self._upsert_records(records)
+            return
+        current = list(self.list_records())
+        current.extend(records)
+        self._write_records(current)
+
+    def _upsert_records(self, records: Iterable[GeneratedImageRecord]) -> None:
+        records = tuple(
+            replace(record, is_staged=False, staged_at=None)
+            if record.status != "active" and record.is_staged else record
+            for record in records
+        )
+        if not records:
+            return
+        canonical = self._canonical()
+        if canonical is None:
+            by_id = {record.image_id: record for record in self.list_records()}
+            by_id.update({record.image_id: record for record in records})
+            self._write_records(list(by_id.values()))
+            return
+        started = time.perf_counter()
+        revision = canonical.upsert(records)
+        canonical_ms = (time.perf_counter() - started) * 1000
+        projection = self._projection()
+        projection_started = time.perf_counter()
+        if projection is not None:
+            projection.upsert(records, source_version=f"db:{revision}")
+        projection_ms = (time.perf_counter() - projection_started) * 1000
+        self._log_mutation("upsert", len(records), canonical_ms, projection_ms)
+
+    def _log_mutation(self, action: str, count: int, canonical_ms: float, projection_ms: float) -> None:
+        total_ms = canonical_ms + projection_ms
+        self._performance_logger.info(
+            "component=generation_library_mutation action=%s records=%s canonical_ms=%.2f projection_ms=%.2f total_ms=%.2f",
+            action, count, canonical_ms, projection_ms, total_ms,
+        )
+        if total_ms >= 100:
+            self._performance_logger.warning(
+                "component=generation_library_mutation event=slow action=%s records=%s total_ms=%.2f threshold_ms=100",
+                action, count, total_ms,
+            )
+
+    def export_legacy_snapshot(self, path: str | Path | None = None) -> Path:
+        """Explicit compatibility/export snapshot; PostgreSQL remains canonical."""
+        target = Path(path) if path is not None else self.records_path
+        self._write_json(target, [asdict(record) for record in self.list_records()])
+        return target
 
     @staticmethod
     def _read_json(path: Path, default):

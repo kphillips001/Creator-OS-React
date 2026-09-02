@@ -42,7 +42,11 @@ from app.models.fulfillment_registration import (
     MediaLinkSubmission,
     MediaLinkVerificationState,
 )
-from app.models.generation_library import GeneratedImageRecord, GenerationLibraryFilter
+from app.models.generation_library import (
+    GENERATION_LIBRARY_PAGE_SIZE,
+    GeneratedImageRecord,
+    GenerationLibraryFilter,
+)
 from app.models.generation_engine import GenerationJob, GenerationResult
 from app.models.reference_library import ReferenceLibraryFilter
 from app.models.generation_engine import GenerationMediaType, GenerationStatus, GenerationType
@@ -4136,7 +4140,7 @@ def _render_telegram_publish_dialog(
             "Type or paste your own Telegram caption here, select an AI caption, or generate captions before publishing."
         )
 
-    post_to = st.selectbox("Post To", ("main", "vault"), key=post_to_key)
+    post_to = st.selectbox("Post To", ("main",), key=post_to_key)
     cta_enabled = st.checkbox("Include CTA button", key=cta_enabled_key)
     cta_label = ""
     cta_url = ""
@@ -4429,7 +4433,7 @@ def _render_generation_library(
         """,
         unsafe_allow_html=True,
     )
-    page_size = 18
+    page_size = GENERATION_LIBRARY_PAGE_SIZE
     total_pages = max(1, (result.total + page_size - 1) // page_size)
     current_page = int(st.session_state.get("generation_library_page", 1) or 1)
     current_page = max(1, min(current_page, total_pages))
@@ -4665,7 +4669,7 @@ def _render_social_publishing(
     creator_notes = f3.text_input("Creator Notes", key="social_publishing_creator_notes")
     x_accounts = social_publishing.x_account_options()
     x_account = st.selectbox("X Account", x_accounts or ("",), key="social_publishing_x_account")
-    telegram_post_to = st.selectbox("Telegram Post To", ("main", "vault"), key="social_publishing_telegram_post_to")
+    telegram_post_to = st.selectbox("Telegram Post To", ("main",), key="social_publishing_telegram_post_to")
     telegram_cta_enabled = st.checkbox("Telegram CTA", key="social_publishing_telegram_cta_enabled")
     telegram_cta_label = ""
     telegram_cta_url = ""

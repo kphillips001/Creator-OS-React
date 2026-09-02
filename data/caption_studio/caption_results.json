@@ -1,5 +1,1915 @@
 [
   {
+    "caption_result_id": "caption_result_e974169bc6604dffbffb3f454b89e18e",
+    "caption_request_id": "caption_request_12075d46065146e6ac9fd6124e08f7f4",
+    "session_id": "caption_session_31ebd7f1877d4af2b377d41d59339168",
+    "platform": "x",
+    "variations": [
+      "Morning light hit just right and suddenly I forgot what I was making \u2600\ufe0f be honest\u2026 would you stay for coffee or steal the first bite?",
+      "Quiet kitchen energy today \u2615 if you walked in right now, what\u2019s the first thing you\u2019d say to me?",
+      "Help me decide \ud83d\udc40 slow breakfast at the counter or sneak out for something sweeter?",
+      "This is my \u2018don\u2019t rush me\u2019 face \ud83d\ude0c finish the sentence: the best mornings always start with\u2026",
+      "Caught me mid-daydream by the window \ud83c\udf3f would you rather cook together or just keep me company while I pretend I know what I\u2019m doing?",
+      "Soft light, soft mood, zero plans \u2728 choose one: lazy pancakes or just lingering here a little longer?",
+      "I was only adjusting things and somehow the whole vibe shifted \ud83d\ude09 what\u2019s your move if you found me like this?",
+      "Domestic and a little dangerous \ud83d\udd25 tell me\u2026 are you more of a morning person or a \u2018distract me until noon\u2019 person?",
+      "Kitchen\u2019s too quiet without someone to tease \ud83d\ude0f hypothetical: you walk in, I look up like this\u2026 what happens next?",
+      "Sun\u2019s already doing the most \ud83c\udf24\ufe0f help a girl out \u2014 stay and chat or pretend you came over for something else?"
+    ],
+    "selected_text": null,
+    "formatter_metadata": {
+      "provider_neutral": true,
+      "formatter": "CaptionStudioService",
+      "workflow": "x_engagement_publish",
+      "vision_primary": true,
+      "vision_provider": "grok",
+      "vision": {
+        "setting": "bright modern kitchen interior",
+        "activity": "leaning against the counter while lightly adjusting the hem of her top",
+        "time_of_day": "morning",
+        "location": "indoor kitchen near a sunlit window and sink",
+        "wardrobe": "light blue fitted crop top",
+        "expression": "soft relaxed smile with slight head tilt",
+        "body_language": "comfortable lean, hands at waist, casual and at ease",
+        "lighting": "soft natural morning window light with gentle highlights",
+        "mood": "calm, intimate, domestic, candid",
+        "environment": "clean kitchen with blurred cabinets, counter, and open window view"
+      },
+      "themes": [
+        {
+          "theme": "Creator OS Engagement",
+          "persona": "creator_os_engagement",
+          "captions": [
+            "Morning light hit just right and suddenly I forgot what I was making \u2600\ufe0f be honest\u2026 would you stay for coffee or steal the first bite?",
+            "Quiet kitchen energy today \u2615 if you walked in right now, what\u2019s the first thing you\u2019d say to me?",
+            "Help me decide \ud83d\udc40 slow breakfast at the counter or sneak out for something sweeter?",
+            "This is my \u2018don\u2019t rush me\u2019 face \ud83d\ude0c finish the sentence: the best mornings always start with\u2026",
+            "Caught me mid-daydream by the window \ud83c\udf3f would you rather cook together or just keep me company while I pretend I know what I\u2019m doing?",
+            "Soft light, soft mood, zero plans \u2728 choose one: lazy pancakes or just lingering here a little longer?",
+            "I was only adjusting things and somehow the whole vibe shifted \ud83d\ude09 what\u2019s your move if you found me like this?",
+            "Domestic and a little dangerous \ud83d\udd25 tell me\u2026 are you more of a morning person or a \u2018distract me until noon\u2019 person?",
+            "Kitchen\u2019s too quiet without someone to tease \ud83d\ude0f hypothetical: you walk in, I look up like this\u2026 what happens next?",
+            "Sun\u2019s already doing the most \ud83c\udf24\ufe0f help a girl out \u2014 stay and chat or pretend you came over for something else?"
+          ]
+        }
+      ],
+      "personas": {
+        "creator_os_engagement": "Creator OS Engagement"
+      },
+      "engagement_goals": [
+        "replies",
+        "reposts",
+        "likes",
+        "profile visits",
+        "follows"
+      ]
+    },
+    "created_at": "2026-09-02T14:20:09.606077"
+  },
+  {
+    "caption_result_id": "caption_result_7835e536d423438eb2b1fc7a759703f5",
+    "caption_request_id": "caption_request_d44883a38b094f9594b2e89c51e4567e",
+    "session_id": "caption_session_3c065474dc664ba586fee6e0b8c2ea58",
+    "platform": "x",
+    "variations": [
+      "Caught me mid-exhale on this trail \ud83d\ude2e\u200d\ud83d\udca8 would you keep walking or stop and steal the view with me for a minute?",
+      "Ocean breeze hitting different after that climb \ud83c\udf0a be honest\u2026 are you more of a \u2018push through\u2019 or \u2018lean on the fence and reset\u2019 person?",
+      "If we paused right here together, what\u2019s the first thing you\u2019d say \ud83d\ude0c help me decide if I should keep going or soak this in longer.",
+      "This stretch always feels like a secret \u2728 finish this: the best coastal runs end with\u2026",
+      "Would you rather cool down right here by the fence \ud83c\udfdd\ufe0f or race me the rest of the way to the water?",
+      "Just needed 30 seconds of salt air \ud83d\udca8 hypothetical: you show up on this path unannounced\u2026 what\u2019s your move?",
+      "Feeling that good kind of tired \ud83d\ude0a poll time \u2014 morning trail energy or late-afternoon golden legs? Pick one.",
+      "Leaning here like the ocean owes me a favor \ud83c\udf0a tell me the truth, would you join for the next mile or just keep me company at this spot?",
+      "Little moments like this reset everything \ud83c\udf3f if you could bottle one feeling from a coastal trail, what would it be?",
+      "Caught between finishing strong and staying right here \ud83d\ude09 what would you do if you were walking this path with me?"
+    ],
+    "selected_text": null,
+    "formatter_metadata": {
+      "provider_neutral": true,
+      "formatter": "CaptionStudioService",
+      "workflow": "x_engagement_publish",
+      "vision_primary": true,
+      "vision_provider": "grok",
+      "vision": {
+        "setting": "coastal walking trail with wooden fence overlooking the ocean",
+        "activity": "pausing and leaning lightly against a fence after activity",
+        "time_of_day": "bright daytime with clear sky",
+        "location": "sandy beachside path near the water",
+        "wardrobe": "white cropped athletic tank and dark blue fitted shorts",
+        "expression": "soft relaxed gaze with a subtle almost-smile",
+        "body_language": "casual lean on fence, weight shifted, relaxed three-quarter stance",
+        "lighting": "bright natural sunlight highlighting skin sheen",
+        "mood": "candid post-effort calm with ocean breeze energy",
+        "environment": "open trail, wooden rail, distant waves, dunes and clear horizon"
+      },
+      "themes": [
+        {
+          "theme": "Creator OS Engagement",
+          "persona": "creator_os_engagement",
+          "captions": [
+            "Caught me mid-exhale on this trail \ud83d\ude2e\u200d\ud83d\udca8 would you keep walking or stop and steal the view with me for a minute?",
+            "Ocean breeze hitting different after that climb \ud83c\udf0a be honest\u2026 are you more of a \u2018push through\u2019 or \u2018lean on the fence and reset\u2019 person?",
+            "If we paused right here together, what\u2019s the first thing you\u2019d say \ud83d\ude0c help me decide if I should keep going or soak this in longer.",
+            "This stretch always feels like a secret \u2728 finish this: the best coastal runs end with\u2026",
+            "Would you rather cool down right here by the fence \ud83c\udfdd\ufe0f or race me the rest of the way to the water?",
+            "Just needed 30 seconds of salt air \ud83d\udca8 hypothetical: you show up on this path unannounced\u2026 what\u2019s your move?",
+            "Feeling that good kind of tired \ud83d\ude0a poll time \u2014 morning trail energy or late-afternoon golden legs? Pick one.",
+            "Leaning here like the ocean owes me a favor \ud83c\udf0a tell me the truth, would you join for the next mile or just keep me company at this spot?",
+            "Little moments like this reset everything \ud83c\udf3f if you could bottle one feeling from a coastal trail, what would it be?",
+            "Caught between finishing strong and staying right here \ud83d\ude09 what would you do if you were walking this path with me?"
+          ]
+        }
+      ],
+      "personas": {
+        "creator_os_engagement": "Creator OS Engagement"
+      },
+      "engagement_goals": [
+        "replies",
+        "reposts",
+        "likes",
+        "profile visits",
+        "follows"
+      ]
+    },
+    "created_at": "2026-09-02T14:19:09.626413"
+  },
+  {
+    "caption_result_id": "caption_result_19b5dac9847945adb0ac404a407e2b67",
+    "caption_request_id": "caption_request_f5d514b4aa6e479793bbbc6f628bc42a",
+    "session_id": "caption_session_99898dc4b5be44f294bc5cb6904ceb03",
+    "platform": "telegram",
+    "variations": [
+      "Caught me leaning here \ud83d\ude0c soft light on my skin just for you \u2728",
+      "This quiet moment \ud83e\udd0d turning back because I wanted you close \ud83d\udcab",
+      "Sunlight and slow glances \u2600\ufe0f feeling warm thinking of you \ud83e\udd70",
+      "Kneeling here in the glow \ud83d\ude0c saving this soft look only for us \ud83d\udc95",
+      "Something tender in the way I wait \u2728 holding this pose for you \ud83d\udd4a\ufe0f",
+      "Leaning over this table \ud83d\ude0f knowing exactly where your eyes go \ud83d\udc40",
+      "Tiny bikini and raised hips \ud83d\udd25 I felt you looking already \ud83d\ude08",
+      "Looking back like this on purpose \ud83e\udee6 come a little closer baby \u2728",
+      "All this arch just for the view \ud83c\udf51 you can keep staring \ud83d\ude0c",
+      "Caught in the act of teasing you \ud83d\ude0f soft sparkle and zero rush \ud83d\udcab"
+    ],
+    "selected_text": "Caught me leaning here \ud83d\ude0c soft light on my skin just for you \u2728",
+    "formatter_metadata": {
+      "provider_neutral": true,
+      "formatter": "CaptionStudioService",
+      "workflow": "telegram_publish",
+      "vision_primary": true,
+      "vision_provider": "grok",
+      "vision": {
+        "location": "indoor space near a wooden table with large bright windows in the background",
+        "wardrobe": "light beige/gray sparkly string bikini top and matching thong bottoms",
+        "expression": "soft direct look back over the shoulder with lips slightly parted and a calm seductive gaze",
+        "body_language": "kneeling on a black leather stool, torso leaning forward onto the wooden table, hips raised and angled toward the camera while looking back",
+        "lighting": "soft natural window light creating gentle highlights on skin and subtle shadows",
+        "mood": "intimate, confident, quietly seductive, private",
+        "environment": "warm-toned interior with wooden furniture, leather seating, and bright out-of-focus windows",
+        "activity": "posing bent forward over a table while looking back at the viewer"
+      },
+      "themes": [
+        {
+          "theme": "\ud83d\udc9b Romantic",
+          "persona": "romantic",
+          "captions": [
+            "Caught me leaning here \ud83d\ude0c soft light on my skin just for you \u2728",
+            "This quiet moment \ud83e\udd0d turning back because I wanted you close \ud83d\udcab",
+            "Sunlight and slow glances \u2600\ufe0f feeling warm thinking of you \ud83e\udd70",
+            "Kneeling here in the glow \ud83d\ude0c saving this soft look only for us \ud83d\udc95",
+            "Something tender in the way I wait \u2728 holding this pose for you \ud83d\udd4a\ufe0f"
+          ]
+        },
+        {
+          "theme": "\ud83d\ude08 Teasing / Naughty",
+          "persona": "teasing_naughty",
+          "captions": [
+            "Leaning over this table \ud83d\ude0f knowing exactly where your eyes go \ud83d\udc40",
+            "Tiny bikini and raised hips \ud83d\udd25 I felt you looking already \ud83d\ude08",
+            "Looking back like this on purpose \ud83e\udee6 come a little closer baby \u2728",
+            "All this arch just for the view \ud83c\udf51 you can keep staring \ud83d\ude0c",
+            "Caught in the act of teasing you \ud83d\ude0f soft sparkle and zero rush \ud83d\udcab"
+          ]
+        }
+      ],
+      "personas": {
+        "romantic": "\ud83d\udc9b Romantic",
+        "teasing_naughty": "\ud83d\ude08 Teasing / Naughty"
+      },
+      "engagement_goals": [
+        "creator selects preferred caption",
+        "telegram publishing"
+      ]
+    },
+    "created_at": "2026-09-01T16:39:00.575570"
+  },
+  {
+    "caption_result_id": "caption_result_d26dcaa7bba740719d55afe7a13ac9af",
+    "caption_request_id": "caption_request_176ef93982ce48cb8f64baef7df06ce8",
+    "session_id": "caption_session_12f36903977847a9a55e21f47e28f061",
+    "platform": "telegram",
+    "variations": [
+      "Caught me leaning into this soft \ud83c\udf24 light just for you",
+      "This quiet moment by the table feels \ud83d\udcab so close to you",
+      "Long hair falling as I glance back with \ud83e\udd0d all my warmth",
+      "Something about this soft glow makes me feel \u2728 yours",
+      "Holding this gentle pose and thinking of \ud83e\udd70 your eyes on me",
+      "Bent over this table and looking back \ud83d\udd25 just like this",
+      "These little straps barely holding me while I \ud83d\ude0f arch for you",
+      "Hips up, glance locked, and I know exactly \ud83d\udc40 what you\u2019re watching",
+      "Soft light on every curve as I lean in \ud83d\ude08 a little deeper",
+      "One look back like this and the rest of me \ud83c\udf51 does the talking"
+    ],
+    "selected_text": null,
+    "formatter_metadata": {
+      "provider_neutral": true,
+      "formatter": "CaptionStudioService",
+      "workflow": "telegram_publish",
+      "vision_primary": true,
+      "vision_provider": "grok",
+      "vision": {
+        "location": "indoor space with large bright windows",
+        "wardrobe": "light shimmering bikini top with thin straps and matching thong bottoms",
+        "expression": "soft seductive gaze over the shoulder with slightly parted lips and a subtle knowing look",
+        "body_language": "leaning forward on a wooden table, back arched, hips raised while looking back",
+        "lighting": "soft natural daylight from large windows creating gentle highlights on skin",
+        "mood": "intimate, confident, quietly seductive",
+        "environment": "wooden table, black leather seat, blurred wooden interior and bright window light",
+        "activity": "posing while leaning over the table and glancing back"
+      },
+      "themes": [
+        {
+          "theme": "\ud83d\udc9b Romantic",
+          "persona": "romantic",
+          "captions": [
+            "Caught me leaning into this soft \ud83c\udf24 light just for you",
+            "This quiet moment by the table feels \ud83d\udcab so close to you",
+            "Long hair falling as I glance back with \ud83e\udd0d all my warmth",
+            "Something about this soft glow makes me feel \u2728 yours",
+            "Holding this gentle pose and thinking of \ud83e\udd70 your eyes on me"
+          ]
+        },
+        {
+          "theme": "\ud83d\ude08 Teasing / Naughty",
+          "persona": "teasing_naughty",
+          "captions": [
+            "Bent over this table and looking back \ud83d\udd25 just like this",
+            "These little straps barely holding me while I \ud83d\ude0f arch for you",
+            "Hips up, glance locked, and I know exactly \ud83d\udc40 what you\u2019re watching",
+            "Soft light on every curve as I lean in \ud83d\ude08 a little deeper",
+            "One look back like this and the rest of me \ud83c\udf51 does the talking"
+          ]
+        }
+      ],
+      "personas": {
+        "romantic": "\ud83d\udc9b Romantic",
+        "teasing_naughty": "\ud83d\ude08 Teasing / Naughty"
+      },
+      "engagement_goals": [
+        "creator selects preferred caption",
+        "telegram publishing"
+      ]
+    },
+    "created_at": "2026-09-01T16:38:19.670086"
+  },
+  {
+    "caption_result_id": "caption_result_9808fe35ab24466a86ac701c3fa2f7db",
+    "caption_request_id": "caption_request_ea73b3d8316945a79ddb69526e8c6cd7",
+    "session_id": "caption_session_508662658b03460eae6fb8877e7af834",
+    "platform": "telegram",
+    "variations": [
+      "Caught me \ud83d\udcab lingering by the table just for you this morning \ud83d\ude0c\u2728",
+      "Soft light \u2600\ufe0f and this quiet moment with you on my mind \ud83e\udd0d",
+      "Leaning here \ud83e\ude91 feeling warm and close to you already \ud83d\ude18",
+      "That little look back \ud83d\udcad means I was thinking of us \ud83d\udc95",
+      "Simple morning glow \ud83e\ude9f and all my attention still on you \ud83d\ude0a",
+      "Bent over this table \ud83d\udd25 just long enough for you to notice \ud83d\ude09",
+      "This angle \ud83d\udc40 was absolutely on purpose baby \ud83d\ude08\u2728",
+      "Tiny shimmer \u2728 and a whole lot of curve waiting right here \ud83d\ude0c",
+      "Look back once \ud83d\ude0f and I already know where your eyes went \ud83d\udc8b",
+      "Kneeling pretty \ud83e\ude91 with nowhere else I\u2019d rather be \ud83d\udd25"
+    ],
+    "selected_text": null,
+    "formatter_metadata": {
+      "provider_neutral": true,
+      "formatter": "CaptionStudioService",
+      "workflow": "telegram_publish",
+      "vision_primary": true,
+      "vision_provider": "grok",
+      "vision": {
+        "location": "indoor loft-style space near large windows",
+        "wardrobe": "shimmery light beige metallic bikini with triangle top and thong bottoms",
+        "expression": "soft slight smile looking back over her shoulder toward the camera",
+        "body_language": "kneeling on a black leather seat, leaning forward on a wooden table, back arched with hips lifted while glancing back",
+        "lighting": "soft natural daylight from large windows with gentle highlights on skin",
+        "mood": "intimate, confident, quietly seductive",
+        "environment": "warm wood table and furniture, black leather seating, bright window backdrop",
+        "activity": "posing bent over the table edge while looking back at the viewer"
+      },
+      "themes": [
+        {
+          "theme": "\ud83d\udc9b Romantic",
+          "persona": "romantic",
+          "captions": [
+            "Caught me \ud83d\udcab lingering by the table just for you this morning \ud83d\ude0c\u2728",
+            "Soft light \u2600\ufe0f and this quiet moment with you on my mind \ud83e\udd0d",
+            "Leaning here \ud83e\ude91 feeling warm and close to you already \ud83d\ude18",
+            "That little look back \ud83d\udcad means I was thinking of us \ud83d\udc95",
+            "Simple morning glow \ud83e\ude9f and all my attention still on you \ud83d\ude0a"
+          ]
+        },
+        {
+          "theme": "\ud83d\ude08 Teasing / Naughty",
+          "persona": "teasing_naughty",
+          "captions": [
+            "Bent over this table \ud83d\udd25 just long enough for you to notice \ud83d\ude09",
+            "This angle \ud83d\udc40 was absolutely on purpose baby \ud83d\ude08\u2728",
+            "Tiny shimmer \u2728 and a whole lot of curve waiting right here \ud83d\ude0c",
+            "Look back once \ud83d\ude0f and I already know where your eyes went \ud83d\udc8b",
+            "Kneeling pretty \ud83e\ude91 with nowhere else I\u2019d rather be \ud83d\udd25"
+          ]
+        }
+      ],
+      "personas": {
+        "romantic": "\ud83d\udc9b Romantic",
+        "teasing_naughty": "\ud83d\ude08 Teasing / Naughty"
+      },
+      "engagement_goals": [
+        "creator selects preferred caption",
+        "telegram publishing"
+      ]
+    },
+    "created_at": "2026-09-01T16:37:06.383221"
+  },
+  {
+    "caption_result_id": "caption_result_9caaf938ff154f12b6dd4f2a9550eedf",
+    "caption_request_id": "caption_request_da05cf24b29546179151197a5d7bb000",
+    "session_id": "caption_session_842e718e155d4639af87d17804fb9b03",
+    "platform": "x",
+    "variations": [
+      "Caught me mid-laugh by the window \ud83d\ude0c would you sneak up behind me or just watch from the doorway first?",
+      "This cozy evening spot always makes me extra playful \u2728 be honest\u2026 would you stay for a drink or pretend you had somewhere else to be?",
+      "Help me decide \ud83d\ude0f stay in and keep this energy going all night, or drag you out into the city lights?",
+      "If you walked in right now and I looked back like this \ud83d\udc40 what\u2019s the very first thing you\u2019d say?",
+      "Finish this for me: the best way to ruin a quiet night in is ______ \ud83d\ude0c",
+      "Soft light, soft mood, and I\u2019m already smiling too hard \ud83e\udd2d would you rather steal the cushion next to me or the whole conversation?",
+      "Choose one for tonight \ud83c\udf19: slow playlist and deep talks\u2026 or me teasing you until you can\u2019t think straight?",
+      "I was just fixing my hair and suddenly felt eyes on me \ud83d\ude09 what would you do if it was you standing there?",
+      "Quiet nights by the window hit different when someone\u2019s actually fun to talk to \ud83d\udcad you free or already making excuses?",
+      "Tell me the truth\u2026 if I glanced back at you like this every evening \ud83d\ude0c how long before you\u2019d start showing up uninvited?"
+    ],
+    "selected_text": "This is what happens when I\u2019m told to \u2018act natural\u2019 \ud83d\ude02\ud83d\udc47",
+    "formatter_metadata": {
+      "provider_neutral": true,
+      "formatter": "CaptionStudioService",
+      "workflow": "x_engagement_publish",
+      "vision_primary": true,
+      "vision_provider": "grok",
+      "vision": {
+        "setting": "indoor window seat with sheer curtains and cushions",
+        "activity": "kneeling on cushion looking back over shoulder while touching hair",
+        "time_of_day": "evening",
+        "location": "cozy residential interior by a large window",
+        "wardrobe": "tight white short-sleeve crop top and blue low-rise shorts",
+        "expression": "wide joyful open-mouth smile",
+        "body_language": "twisted torso glancing back, one hand raised to hair, relaxed kneeling pose",
+        "lighting": "warm soft evening light with gentle side glow",
+        "mood": "playful intimate candid happy",
+        "environment": "sheer white curtains, soft cushions, quiet domestic window nook"
+      },
+      "themes": [
+        {
+          "theme": "Creator OS Engagement",
+          "persona": "creator_os_engagement",
+          "captions": [
+            "Caught me mid-laugh by the window \ud83d\ude0c would you sneak up behind me or just watch from the doorway first?",
+            "This cozy evening spot always makes me extra playful \u2728 be honest\u2026 would you stay for a drink or pretend you had somewhere else to be?",
+            "Help me decide \ud83d\ude0f stay in and keep this energy going all night, or drag you out into the city lights?",
+            "If you walked in right now and I looked back like this \ud83d\udc40 what\u2019s the very first thing you\u2019d say?",
+            "Finish this for me: the best way to ruin a quiet night in is ______ \ud83d\ude0c",
+            "Soft light, soft mood, and I\u2019m already smiling too hard \ud83e\udd2d would you rather steal the cushion next to me or the whole conversation?",
+            "Choose one for tonight \ud83c\udf19: slow playlist and deep talks\u2026 or me teasing you until you can\u2019t think straight?",
+            "I was just fixing my hair and suddenly felt eyes on me \ud83d\ude09 what would you do if it was you standing there?",
+            "Quiet nights by the window hit different when someone\u2019s actually fun to talk to \ud83d\udcad you free or already making excuses?",
+            "Tell me the truth\u2026 if I glanced back at you like this every evening \ud83d\ude0c how long before you\u2019d start showing up uninvited?"
+          ]
+        }
+      ],
+      "personas": {
+        "creator_os_engagement": "Creator OS Engagement"
+      },
+      "engagement_goals": [
+        "replies",
+        "reposts",
+        "likes",
+        "profile visits",
+        "follows"
+      ]
+    },
+    "created_at": "2026-08-31T00:51:13.271416"
+  },
+  {
+    "caption_result_id": "caption_result_5966a73fd6594da1ba6ece11c28c2ad1",
+    "caption_request_id": "caption_request_92e78ddee9ef4c36b17cc18d1a5d35e2",
+    "session_id": "caption_session_549c8f38e31243598968affdd49aa209",
+    "platform": "telegram",
+    "variations": [
+      "Caught this golden hour \u2728 by the cabin with the lake whispering behind us \ud83c\udf05 feeling so peaceful with you in mind",
+      "Sun-kissed skin and quiet water \ud83d\udca7 this lakeside moment feels like it was made just for us \ud83e\udd0d",
+      "Soft light on the porch edge \ud83c\udf24\ufe0f my hand in my hair thinking how sweet slow days like this can be",
+      "White bikini and warm lake breeze \ud83d\udcab standing here wishing you could feel this calm with me",
+      "That easy smile by the water \ud83d\ude0c golden hour making everything glow a little more for you",
+      "White bikini clinging just right \ud83d\ude0f lake behind me and this golden light doing all the work",
+      "Hand on my hip \ud83d\udd25 catching the last sun while the cabin watches\u2026 feel that heat yet?",
+      "Dripping sunlight and soft curves \u2728 this view from the water\u2019s edge is all yours tonight",
+      "Touching my hair like this \ud83d\udc40 low angle confidence against the still lake\u2026 take a longer look",
+      "Golden hour glow on every inch \ud83e\udd0d standing here knowing exactly what you\u2019re staring at"
+    ],
+    "selected_text": "Hand on my hip \ud83d\udd25 catching the last sun while the cabin watches\u2026 feel that heat yet?",
+    "formatter_metadata": {
+      "provider_neutral": true,
+      "formatter": "CaptionStudioService",
+      "workflow": "telegram_publish",
+      "vision_primary": true,
+      "vision_provider": "grok",
+      "vision": {
+        "location": "lakeside at the water's edge beside a wooden cabin porch",
+        "wardrobe": "white triangle bikini top and matching bottoms",
+        "expression": "soft relaxed smile with direct gentle eye contact",
+        "body_language": "one hand resting on hip, the other lightly touching hair near collarbone, body turned slightly toward camera",
+        "lighting": "warm golden late-afternoon sunlight with soft natural glow",
+        "mood": "candid intimate confident and serene",
+        "environment": "still lake water, wooden cabin with porch railing, distant trees and dock",
+        "activity": "standing posed at the shoreline after being near the water"
+      },
+      "themes": [
+        {
+          "theme": "\ud83d\udc9b Romantic",
+          "persona": "romantic",
+          "captions": [
+            "Caught this golden hour \u2728 by the cabin with the lake whispering behind us \ud83c\udf05 feeling so peaceful with you in mind",
+            "Sun-kissed skin and quiet water \ud83d\udca7 this lakeside moment feels like it was made just for us \ud83e\udd0d",
+            "Soft light on the porch edge \ud83c\udf24\ufe0f my hand in my hair thinking how sweet slow days like this can be",
+            "White bikini and warm lake breeze \ud83d\udcab standing here wishing you could feel this calm with me",
+            "That easy smile by the water \ud83d\ude0c golden hour making everything glow a little more for you"
+          ]
+        },
+        {
+          "theme": "\ud83d\ude08 Teasing / Naughty",
+          "persona": "teasing_naughty",
+          "captions": [
+            "White bikini clinging just right \ud83d\ude0f lake behind me and this golden light doing all the work",
+            "Hand on my hip \ud83d\udd25 catching the last sun while the cabin watches\u2026 feel that heat yet?",
+            "Dripping sunlight and soft curves \u2728 this view from the water\u2019s edge is all yours tonight",
+            "Touching my hair like this \ud83d\udc40 low angle confidence against the still lake\u2026 take a longer look",
+            "Golden hour glow on every inch \ud83e\udd0d standing here knowing exactly what you\u2019re staring at"
+          ]
+        }
+      ],
+      "personas": {
+        "romantic": "\ud83d\udc9b Romantic",
+        "teasing_naughty": "\ud83d\ude08 Teasing / Naughty"
+      },
+      "engagement_goals": [
+        "creator selects preferred caption",
+        "telegram publishing"
+      ]
+    },
+    "created_at": "2026-08-31T00:23:35.137445"
+  },
+  {
+    "caption_result_id": "caption_result_8fd23a10b6fa42aa8397453719833560",
+    "caption_request_id": "caption_request_8557d3fabc604478a4fc07f15237e6be",
+    "session_id": "caption_session_dd136de2493b44acb1cd435fd29f4fae",
+    "platform": "telegram",
+    "variations": [
+      "Midnight kitchen glow and this soft \ud83d\udcab moment just for us under the neon.",
+      "Leaning back on the cool counter with my eyes closed \ud83c\udf19 feeling completely yours.",
+      "That quiet hush after dark when the neon \ud83d\udc99 wraps around us like this.",
+      "Soft lights, bare skin against the counter, and my heart \u2764\ufe0f right here with you.",
+      "Nothing feels warmer than this neon-kissed \u2728 kitchen stillness shared with you.",
+      "Just the apron and this cool counter \ud83d\udd25 under neon\u2026 imagine the rest.",
+      "Head back, eyes closed, bare thighs on the edge \ud83d\ude08 midnight kitchen mood.",
+      "Open apron, neon glow, and me perched right here \ud83d\udc8b waiting in the quiet.",
+      "Cool countertop against me while the neon \ud83d\ude0f paints every curve tonight.",
+      "Only this little white apron between us and the midnight \ud83d\udd25 kitchen air."
+    ],
+    "selected_text": "Open apron, neon glow, and me perched right here \ud83d\udc8b waiting in the quiet.",
+    "formatter_metadata": {
+      "provider_neutral": true,
+      "formatter": "CaptionStudioService",
+      "workflow": "telegram_publish",
+      "vision_primary": true,
+      "vision_provider": "grok",
+      "vision": {
+        "location": "modern kitchen counter at night",
+        "wardrobe": "white halter-style chef's apron with deep plunging neckline, tied waist, short hem, bare shoulders arms and thighs",
+        "expression": "head tilted back, eyes closed, lips softly parted in a relaxed sensual look",
+        "body_language": "seated on the counter edge, leaning slightly back, one hand resting on the surface, thighs parted, chest forward",
+        "lighting": "vivid blue and pink neon glow casting cool highlights and soft shadows",
+        "mood": "intimate, quiet, midnight sensuality",
+        "environment": "sleek kitchen with neon strip lights, blurred cabinets and appliances in the background",
+        "activity": "posing seated on the cool countertop under neon light with head tilted back"
+      },
+      "themes": [
+        {
+          "theme": "\ud83d\udc9b Romantic",
+          "persona": "romantic",
+          "captions": [
+            "Midnight kitchen glow and this soft \ud83d\udcab moment just for us under the neon.",
+            "Leaning back on the cool counter with my eyes closed \ud83c\udf19 feeling completely yours.",
+            "That quiet hush after dark when the neon \ud83d\udc99 wraps around us like this.",
+            "Soft lights, bare skin against the counter, and my heart \u2764\ufe0f right here with you.",
+            "Nothing feels warmer than this neon-kissed \u2728 kitchen stillness shared with you."
+          ]
+        },
+        {
+          "theme": "\ud83d\ude08 Teasing / Naughty",
+          "persona": "teasing_naughty",
+          "captions": [
+            "Just the apron and this cool counter \ud83d\udd25 under neon\u2026 imagine the rest.",
+            "Head back, eyes closed, bare thighs on the edge \ud83d\ude08 midnight kitchen mood.",
+            "Open apron, neon glow, and me perched right here \ud83d\udc8b waiting in the quiet.",
+            "Cool countertop against me while the neon \ud83d\ude0f paints every curve tonight.",
+            "Only this little white apron between us and the midnight \ud83d\udd25 kitchen air."
+          ]
+        }
+      ],
+      "personas": {
+        "romantic": "\ud83d\udc9b Romantic",
+        "teasing_naughty": "\ud83d\ude08 Teasing / Naughty"
+      },
+      "engagement_goals": [
+        "creator selects preferred caption",
+        "telegram publishing"
+      ]
+    },
+    "created_at": "2026-08-30T01:57:08.285913"
+  },
+  {
+    "caption_result_id": "caption_result_5fad96bfccd34d8d8b3e00043a45f3e5",
+    "caption_request_id": "caption_request_270a94b5156f40c1800e9f4d062c0178",
+    "session_id": "caption_session_4889b5abf08d40db9bce0df5e2cabd1f",
+    "platform": "telegram",
+    "variations": [
+      "Just stepped out of the \ud83d\udca7 lake and the sun felt like a soft kiss on my skin \u2600\ufe0f",
+      "This quiet cabin moment with wet hair and warm light feels so peaceful \ud83c\udf32\u2764\ufe0f",
+      "Catching my breath on the dock, heart full from the still water and soft breeze \u2728",
+      "Sun-kissed and smiling after a slow swim, wishing you were right here \ud83d\udc9b",
+      "The pines, the cabin, and this gentle golden light make everything feel tender \ud83c\udf3f",
+      "Stepped out dripping in this little blue \ud83d\udc59 bikini and caught you looking already \ud83d\ude0f",
+      "Wet skin, clinging fabric, and that cabin porch waiting\u2026 pure lake-day trouble \ud83d\udd25",
+      "One hand in my hair, the rest of me still glistening for you on this dock \ud83d\udca6",
+      "This light blue string bikini doesn\u2019t hide much after a swim\u2026 just saying \ud83d\ude08",
+      "Paused mid-step so you could take it all in before I head to that porch \ud83d\udc40\u2728"
+    ],
+    "selected_text": "This light blue string bikini doesn\u2019t hide much after a swim\u2026 just saying \ud83d\ude08",
+    "formatter_metadata": {
+      "provider_neutral": true,
+      "formatter": "CaptionStudioService",
+      "workflow": "telegram_publish",
+      "vision_primary": true,
+      "vision_provider": "grok",
+      "vision": {
+        "location": "lakeside wooden dock with cabin among pines",
+        "wardrobe": "light blue string bikini top and bottoms",
+        "expression": "relaxed content gaze with slight confident smirk",
+        "body_language": "pausing mid-step, one hand brushing wet hair from face",
+        "lighting": "warm dappled sunlight from behind with natural highlights",
+        "mood": "candid intimate sunny and self-assured",
+        "environment": "clear lake water, wooden shore path, weathered cabin, pine forest",
+        "activity": "emerging from the lake onto the dock while brushing wet hair"
+      },
+      "themes": [
+        {
+          "theme": "\ud83d\udc9b Romantic",
+          "persona": "romantic",
+          "captions": [
+            "Just stepped out of the \ud83d\udca7 lake and the sun felt like a soft kiss on my skin \u2600\ufe0f",
+            "This quiet cabin moment with wet hair and warm light feels so peaceful \ud83c\udf32\u2764\ufe0f",
+            "Catching my breath on the dock, heart full from the still water and soft breeze \u2728",
+            "Sun-kissed and smiling after a slow swim, wishing you were right here \ud83d\udc9b",
+            "The pines, the cabin, and this gentle golden light make everything feel tender \ud83c\udf3f"
+          ]
+        },
+        {
+          "theme": "\ud83d\ude08 Teasing / Naughty",
+          "persona": "teasing_naughty",
+          "captions": [
+            "Stepped out dripping in this little blue \ud83d\udc59 bikini and caught you looking already \ud83d\ude0f",
+            "Wet skin, clinging fabric, and that cabin porch waiting\u2026 pure lake-day trouble \ud83d\udd25",
+            "One hand in my hair, the rest of me still glistening for you on this dock \ud83d\udca6",
+            "This light blue string bikini doesn\u2019t hide much after a swim\u2026 just saying \ud83d\ude08",
+            "Paused mid-step so you could take it all in before I head to that porch \ud83d\udc40\u2728"
+          ]
+        }
+      ],
+      "personas": {
+        "romantic": "\ud83d\udc9b Romantic",
+        "teasing_naughty": "\ud83d\ude08 Teasing / Naughty"
+      },
+      "engagement_goals": [
+        "creator selects preferred caption",
+        "telegram publishing"
+      ]
+    },
+    "created_at": "2026-08-27T14:45:09.352723"
+  },
+  {
+    "caption_result_id": "caption_result_ec88a2f107794e48b801ce00dc57dd71",
+    "caption_request_id": "caption_request_f3ec144d19894c1d9de89dfbc6556103",
+    "session_id": "caption_session_3d385462cdad49148180ad22c2931229",
+    "platform": "telegram",
+    "variations": [
+      "Caught in this warm evening glow \u2728 just thinking of you while I lean here \ud83e\udd0d",
+      "Soft light and quiet moments like this feel made for us \ud83c\udf19 my smile is all yours",
+      "Leaning against the wall in the low light \ud83d\udcab wishing you were right here with me",
+      "This gentle evening vibe has me feeling so close to you \ud83e\udd0d soft and warm",
+      "Just me in the quiet glow \u2728 saving this little smile especially for you",
+      "This tiny white set barely covers anything in the evening light \ud83d\ude08 can you tell?",
+      "Leaning here with almost nothing on \ud83d\udd25 daring you to look a little longer",
+      "Sheer enough to show everything that matters \ud83d\ude09 evening tease just for you",
+      "Hand on my shorts and this crop top doing the bare minimum \u2728 your move",
+      "Warm light, tiny outfit, and that look that knows exactly what it's doing \ud83d\ude0f"
+    ],
+    "selected_text": "Sheer enough to show everything that matters \ud83d\ude09 evening tease just for you",
+    "formatter_metadata": {
+      "provider_neutral": true,
+      "formatter": "CaptionStudioService",
+      "workflow": "telegram_publish",
+      "vision_primary": true,
+      "vision_provider": "grok",
+      "vision": {
+        "location": "indoor dimly lit room against a plain light wall",
+        "wardrobe": "sheer white micro crop top with thin straps barely covering breasts (nipples visible through fabric), matching white micro booty shorts, exposed midriff",
+        "expression": "soft closed-mouth smile, direct warm gaze toward camera, quietly confident and inviting",
+        "body_language": "leaning slightly back against the wall in three-quarter angle, chest forward, one hand resting near the hip/waistband of the shorts",
+        "lighting": "warm directional side light creating soft highlights and shadows on skin and wall, evening mood with darker background",
+        "mood": "intimate, sensual, private, cinematic, quietly seductive",
+        "environment": "simple indoor studio-like space, plain wall, dark undefined background to the left",
+        "activity": "posing intimately against the wall, looking at the viewer"
+      },
+      "themes": [
+        {
+          "theme": "\ud83d\udc9b Romantic",
+          "persona": "romantic",
+          "captions": [
+            "Caught in this warm evening glow \u2728 just thinking of you while I lean here \ud83e\udd0d",
+            "Soft light and quiet moments like this feel made for us \ud83c\udf19 my smile is all yours",
+            "Leaning against the wall in the low light \ud83d\udcab wishing you were right here with me",
+            "This gentle evening vibe has me feeling so close to you \ud83e\udd0d soft and warm",
+            "Just me in the quiet glow \u2728 saving this little smile especially for you"
+          ]
+        },
+        {
+          "theme": "\ud83d\ude08 Teasing / Naughty",
+          "persona": "teasing_naughty",
+          "captions": [
+            "This tiny white set barely covers anything in the evening light \ud83d\ude08 can you tell?",
+            "Leaning here with almost nothing on \ud83d\udd25 daring you to look a little longer",
+            "Sheer enough to show everything that matters \ud83d\ude09 evening tease just for you",
+            "Hand on my shorts and this crop top doing the bare minimum \u2728 your move",
+            "Warm light, tiny outfit, and that look that knows exactly what it's doing \ud83d\ude0f"
+          ]
+        }
+      ],
+      "personas": {
+        "romantic": "\ud83d\udc9b Romantic",
+        "teasing_naughty": "\ud83d\ude08 Teasing / Naughty"
+      },
+      "engagement_goals": [
+        "creator selects preferred caption",
+        "telegram publishing"
+      ]
+    },
+    "created_at": "2026-08-26T00:41:53.487581"
+  },
+  {
+    "caption_result_id": "caption_result_642b43176edc4abbad65f3e3ef344e39",
+    "caption_request_id": "caption_request_c643144f3882487bad46e2d6eef97bae",
+    "session_id": "caption_session_70d112dc43e543d491e30c188b5f5b9d",
+    "platform": "x",
+    "variations": [
+      "Late night and I'm still wide awake \ud83d\ude0c would you come keep me company or just stare from the doorway? \ud83d\udc40",
+      "Be honest... if you walked in on this mood \ud83c\udf19 would you stay quiet or say the first thing on your mind?",
+      "Help me decide \ud83d\ude0f stay right here against the wall all night or let you pull me somewhere softer?",
+      "This lighting always makes me feel a little dangerous \u2728 what would you do if you had the room to yourself with me?",
+      "Finish this sentence for me \ud83d\udcad \"I walked over and...\" go, I'm listening",
+      "Choose one: soft goodnight kiss \ud83d\ude18 or we pretend sleep isn't happening anytime soon?",
+      "Quiet evenings like this are my favorite \ud83d\udd6f\ufe0f tell me you'd actually know what to do next",
+      "Would you rather I keep looking at you like this \ud83d\udc40 or turn around so you can sneak up?",
+      "I'm not tired yet \ud83d\ude08 convince me why you should be the last person I talk to tonight",
+      "Hypothetical \ud83d\udd25 you have one free pass to interrupt this pose... what do you say first?"
+    ],
+    "selected_text": null,
+    "formatter_metadata": {
+      "provider_neutral": true,
+      "formatter": "CaptionStudioService",
+      "workflow": "x_engagement_publish",
+      "vision_primary": true,
+      "vision_provider": "grok",
+      "vision": {
+        "setting": "dim indoor space against a plain light wall",
+        "activity": "posing while leaning slightly against the wall",
+        "time_of_day": "evening",
+        "location": "indoor studio or private room",
+        "wardrobe": "sheer white micro crop top with thin straps barely covering the breasts and nipples visible through fabric, white micro booty shorts, exposed midriff",
+        "expression": "soft closed-mouth smile with direct teasing eye contact",
+        "body_language": "three-quarter lean against wall, one hand near hip/waistband, chest-forward relaxed sensual stance",
+        "lighting": "warm directional lamp glow creating highlights and soft shadows",
+        "mood": "intimate, teasing, quietly confident, private sensual energy",
+        "environment": "dark muted background with warm light on subject and wall"
+      },
+      "themes": [
+        {
+          "theme": "Creator OS Engagement",
+          "persona": "creator_os_engagement",
+          "captions": [
+            "Late night and I'm still wide awake \ud83d\ude0c would you come keep me company or just stare from the doorway? \ud83d\udc40",
+            "Be honest... if you walked in on this mood \ud83c\udf19 would you stay quiet or say the first thing on your mind?",
+            "Help me decide \ud83d\ude0f stay right here against the wall all night or let you pull me somewhere softer?",
+            "This lighting always makes me feel a little dangerous \u2728 what would you do if you had the room to yourself with me?",
+            "Finish this sentence for me \ud83d\udcad \"I walked over and...\" go, I'm listening",
+            "Choose one: soft goodnight kiss \ud83d\ude18 or we pretend sleep isn't happening anytime soon?",
+            "Quiet evenings like this are my favorite \ud83d\udd6f\ufe0f tell me you'd actually know what to do next",
+            "Would you rather I keep looking at you like this \ud83d\udc40 or turn around so you can sneak up?",
+            "I'm not tired yet \ud83d\ude08 convince me why you should be the last person I talk to tonight",
+            "Hypothetical \ud83d\udd25 you have one free pass to interrupt this pose... what do you say first?"
+          ]
+        }
+      ],
+      "personas": {
+        "creator_os_engagement": "Creator OS Engagement"
+      },
+      "engagement_goals": [
+        "replies",
+        "reposts",
+        "likes",
+        "profile visits",
+        "follows"
+      ]
+    },
+    "created_at": "2026-08-26T00:41:30.078388"
+  },
+  {
+    "caption_result_id": "caption_result_b18d6adb801a4ab6aee6320e76b42049",
+    "caption_request_id": "caption_request_b23affee4a8c479196c75d7f8de9c2f5",
+    "session_id": "caption_session_3d6a91c2c85649a287995196422752ce",
+    "platform": "telegram",
+    "variations": [
+      "Soft lamp light \ud83d\udd6f\ufe0f and this quiet moment with you on my mind \ud83d\udc95",
+      "Just settling in for the night \ud83c\udf19 feeling warm and close to you \u2728",
+      "Long hair down \ud83d\udcab and a little smile meant only for you tonight",
+      "This gentle bedroom glow \ud83d\udecf\ufe0f wraps around me like your arms would",
+      "Unhurried and soft \ud83d\ude0c saving this calm energy just for us \ud83d\udc97",
+      "Black lace catching the lamp light \ud83d\udd25 and my eyes locked on yours",
+      "These silk shorts sit so low \ud83d\ude0c midriff out and fully in the mood",
+      "One hand in my hair \u2728 the other inviting you closer on the bed",
+      "Tiny lace bralette doing all the talking tonight \ud83d\udda4 no rush at all",
+      "Quiet bedroom \ud83d\udd6f\ufe0f but nothing quiet about how this feels on me"
+    ],
+    "selected_text": "Black lace catching the lamp light \ud83d\udd25 and my eyes locked on yours",
+    "formatter_metadata": {
+      "provider_neutral": true,
+      "formatter": "CaptionStudioService",
+      "workflow": "telegram_publish",
+      "vision_primary": true,
+      "vision_provider": "grok",
+      "vision": {
+        "location": "bedroom",
+        "wardrobe": "tiny black lace bralette with deep plunge and delicate straps, paired with loose sheer black high-waisted silk shorts sitting low on the hips",
+        "expression": "soft relaxed smile with warm direct eye contact",
+        "body_language": "seated on the edge of the bed, one hand resting on the bedding, the other lightly brushing hair near her shoulder, relaxed unhurried posture",
+        "lighting": "warm soft glow from a bedside lamp with gentle natural shadows",
+        "mood": "intimate, calm, candid, softly inviting",
+        "environment": "quiet bedroom with rumpled white bedding, soft lamp light, and blurred background furniture",
+        "activity": "sitting quietly on the bed edge, lightly touching her hair"
+      },
+      "themes": [
+        {
+          "theme": "\ud83d\udc9b Romantic",
+          "persona": "romantic",
+          "captions": [
+            "Soft lamp light \ud83d\udd6f\ufe0f and this quiet moment with you on my mind \ud83d\udc95",
+            "Just settling in for the night \ud83c\udf19 feeling warm and close to you \u2728",
+            "Long hair down \ud83d\udcab and a little smile meant only for you tonight",
+            "This gentle bedroom glow \ud83d\udecf\ufe0f wraps around me like your arms would",
+            "Unhurried and soft \ud83d\ude0c saving this calm energy just for us \ud83d\udc97"
+          ]
+        },
+        {
+          "theme": "\ud83d\ude08 Teasing / Naughty",
+          "persona": "teasing_naughty",
+          "captions": [
+            "Black lace catching the lamp light \ud83d\udd25 and my eyes locked on yours",
+            "These silk shorts sit so low \ud83d\ude0c midriff out and fully in the mood",
+            "One hand in my hair \u2728 the other inviting you closer on the bed",
+            "Tiny lace bralette doing all the talking tonight \ud83d\udda4 no rush at all",
+            "Quiet bedroom \ud83d\udd6f\ufe0f but nothing quiet about how this feels on me"
+          ]
+        }
+      ],
+      "personas": {
+        "romantic": "\ud83d\udc9b Romantic",
+        "teasing_naughty": "\ud83d\ude08 Teasing / Naughty"
+      },
+      "engagement_goals": [
+        "creator selects preferred caption",
+        "telegram publishing"
+      ]
+    },
+    "created_at": "2026-08-24T00:54:22.553246"
+  },
+  {
+    "caption_result_id": "caption_result_fdaa2991a5684534a992b71a9362d98f",
+    "caption_request_id": "caption_request_98930fcf952e47eb8714a2efa37ee56b",
+    "session_id": "caption_session_a82f0113318747ffaf31e94bdb7fdca6",
+    "platform": "telegram",
+    "variations": [
+      "Caught myself smiling in the mirror \ud83d\ude0c this sheer black lace feels so soft against my skin tonight \ud83d\udda4",
+      "Just a quiet moment \u2728 adjusting the strap and feeling completely at ease in this little bathroom glow \ud83c\udf19",
+      "Warm light on my shoulders and this delicate mesh \ud83d\udda4 makes everything feel closer somehow \ud83d\ude0c",
+      "Long hair down, soft smile, and this bodysuit hugging me just right \ud83d\udcab simple and sweet \ud83d\udda4",
+      "Something about low light and lace \ud83d\ude0c makes me want to stay right here a little longer \u2728",
+      "This sheer mesh doesn\u2019t hide much \ud83d\ude0f and I\u2019m not even trying to cover up \ud83d\udda4",
+      "One little strap slip and the whole look changes \ud83d\udd25 catching my own eye in the mirror \ud83d\ude08",
+      "Floral embroidery over curves like this \ud83d\udda4 feels almost too pretty to keep private \ud83d\ude0c",
+      "Warm bathroom light, black sheer fabric, and me taking my time \ud83d\udd25 you already know \ud83d\ude0f",
+      "Adjusting the strap slowly on purpose \ud83d\ude08 this bodysuit was made for lingering looks \ud83d\udda4"
+    ],
+    "selected_text": "Caught myself smiling in the mirror \ud83d\ude0c this sheer black lace feels so soft against my skin tonight \ud83d\udda4",
+    "formatter_metadata": {
+      "provider_neutral": true,
+      "formatter": "CaptionStudioService",
+      "workflow": "telegram_publish",
+      "vision_primary": true,
+      "vision_provider": "grok",
+      "vision": {
+        "location": "bathroom in front of a mirror",
+        "wardrobe": "black sheer mesh bodysuit with subtle floral embroidery and thin straps",
+        "expression": "soft closed-mouth smile with direct, calm gaze",
+        "body_language": "relaxed posture, torso slightly turned, one hand lightly adjusting the thin strap at her shoulder",
+        "lighting": "warm low-key lighting with soft shadows across collarbone and fabric",
+        "mood": "intimate, unhurried, candid",
+        "environment": "bathroom interior with mirror reflection, glass shower door, hanging robe, and toilet paper visible",
+        "activity": "standing and lightly adjusting her bodysuit strap while looking toward the mirror"
+      },
+      "themes": [
+        {
+          "theme": "\ud83d\udc9b Romantic",
+          "persona": "romantic",
+          "captions": [
+            "Caught myself smiling in the mirror \ud83d\ude0c this sheer black lace feels so soft against my skin tonight \ud83d\udda4",
+            "Just a quiet moment \u2728 adjusting the strap and feeling completely at ease in this little bathroom glow \ud83c\udf19",
+            "Warm light on my shoulders and this delicate mesh \ud83d\udda4 makes everything feel closer somehow \ud83d\ude0c",
+            "Long hair down, soft smile, and this bodysuit hugging me just right \ud83d\udcab simple and sweet \ud83d\udda4",
+            "Something about low light and lace \ud83d\ude0c makes me want to stay right here a little longer \u2728"
+          ]
+        },
+        {
+          "theme": "\ud83d\ude08 Teasing / Naughty",
+          "persona": "teasing_naughty",
+          "captions": [
+            "This sheer mesh doesn\u2019t hide much \ud83d\ude0f and I\u2019m not even trying to cover up \ud83d\udda4",
+            "One little strap slip and the whole look changes \ud83d\udd25 catching my own eye in the mirror \ud83d\ude08",
+            "Floral embroidery over curves like this \ud83d\udda4 feels almost too pretty to keep private \ud83d\ude0c",
+            "Warm bathroom light, black sheer fabric, and me taking my time \ud83d\udd25 you already know \ud83d\ude0f",
+            "Adjusting the strap slowly on purpose \ud83d\ude08 this bodysuit was made for lingering looks \ud83d\udda4"
+          ]
+        }
+      ],
+      "personas": {
+        "romantic": "\ud83d\udc9b Romantic",
+        "teasing_naughty": "\ud83d\ude08 Teasing / Naughty"
+      },
+      "engagement_goals": [
+        "creator selects preferred caption",
+        "telegram publishing"
+      ]
+    },
+    "created_at": "2026-08-23T01:36:34.504000"
+  },
+  {
+    "caption_result_id": "caption_result_99677aa6bcf04a15a6eed23a96cf1c7e",
+    "caption_request_id": "caption_request_d1c4603cb60f4b4e9fa92879fe381e63",
+    "session_id": "caption_session_5130cef6497d41d58e63c5256f295ccf",
+    "platform": "telegram",
+    "variations": [
+      "Golden hour caught me \u2600\ufe0f stepping out of the surf with that soft smile just for you \ud83c\udf0a",
+      "Water still sparkling on my skin \u2728 as the late light wraps around us \ud83c\udf05",
+      "Quiet cove, teal bikini, and this easy feeling of being right here with you \ud83d\udc9a",
+      "Sun-kissed and smiling \ud83d\ude0a while the waves kiss my legs one last time \ud83c\udf0a",
+      "That warm glow on the sand \u2600\ufe0f makes everything feel a little more ours \ud83d\udcab",
+      "Caught me adjusting this teal strap \ud83d\ude0f still dripping from the surf \ud83d\udca7",
+      "Golden light hitting just right \u2600\ufe0f and this bikini barely containing the moment \ud83d\udd25",
+      "Stepping out wet and smiling \ud83d\ude08 like I know exactly what you\u2019re looking at \ud83d\udc40",
+      "Water droplets trailing down \ud83d\udca6 while I fix the strap\u2026 you\u2019re welcome \ud83d\ude09",
+      "Soft smile, full teal bikini, late-afternoon glow \ud83c\udf05 I see you noticing \ud83d\udc9a"
+    ],
+    "selected_text": "Soft smile, full teal bikini, late-afternoon glow \ud83c\udf05 I see you noticing \ud83d\udc9a",
+    "formatter_metadata": {
+      "provider_neutral": true,
+      "formatter": "CaptionStudioService",
+      "workflow": "telegram_publish",
+      "vision_primary": true,
+      "vision_provider": "grok",
+      "vision": {
+        "location": "shallow surf at a sandy coastal beach with dunes",
+        "wardrobe": "teal/green triangle bikini top and matching bottoms",
+        "expression": "easy knowing smile, gaze directed off to the side",
+        "body_language": "standing in water with weight shifted, one hand adjusting bikini strap, hips angled, wet skin with water droplets",
+        "lighting": "soft golden late-afternoon sunlight",
+        "mood": "candid, warm, intimate, sun-kissed",
+        "environment": "quiet beach cove, gentle waves, sand dunes in background, bright sky",
+        "activity": "stepping out of shallow surf while adjusting bikini strap"
+      },
+      "themes": [
+        {
+          "theme": "\ud83d\udc9b Romantic",
+          "persona": "romantic",
+          "captions": [
+            "Golden hour caught me \u2600\ufe0f stepping out of the surf with that soft smile just for you \ud83c\udf0a",
+            "Water still sparkling on my skin \u2728 as the late light wraps around us \ud83c\udf05",
+            "Quiet cove, teal bikini, and this easy feeling of being right here with you \ud83d\udc9a",
+            "Sun-kissed and smiling \ud83d\ude0a while the waves kiss my legs one last time \ud83c\udf0a",
+            "That warm glow on the sand \u2600\ufe0f makes everything feel a little more ours \ud83d\udcab"
+          ]
+        },
+        {
+          "theme": "\ud83d\ude08 Teasing / Naughty",
+          "persona": "teasing_naughty",
+          "captions": [
+            "Caught me adjusting this teal strap \ud83d\ude0f still dripping from the surf \ud83d\udca7",
+            "Golden light hitting just right \u2600\ufe0f and this bikini barely containing the moment \ud83d\udd25",
+            "Stepping out wet and smiling \ud83d\ude08 like I know exactly what you\u2019re looking at \ud83d\udc40",
+            "Water droplets trailing down \ud83d\udca6 while I fix the strap\u2026 you\u2019re welcome \ud83d\ude09",
+            "Soft smile, full teal bikini, late-afternoon glow \ud83c\udf05 I see you noticing \ud83d\udc9a"
+          ]
+        }
+      ],
+      "personas": {
+        "romantic": "\ud83d\udc9b Romantic",
+        "teasing_naughty": "\ud83d\ude08 Teasing / Naughty"
+      },
+      "engagement_goals": [
+        "creator selects preferred caption",
+        "telegram publishing"
+      ]
+    },
+    "created_at": "2026-08-22T16:33:16.890282"
+  },
+  {
+    "caption_result_id": "caption_result_be287e4fedff4eb9a9308acaf61fa2b7",
+    "caption_request_id": "caption_request_57d131321e6d48b6a589c18d4548d168",
+    "session_id": "caption_session_2b47de6e27c14aedbbf938bc7b467808",
+    "platform": "telegram",
+    "variations": [
+      "Letting the warm water \ud83d\udca7 trace every curve while the sun kisses my skin \u2600\ufe0f",
+      "Eyes closed, heart open\u2026 this midday shower feels like a soft secret \ud83e\udd0d",
+      "Sunlight and rainfall \u2728 wrapping around me in the quietest kind of bliss",
+      "Just me, the water, and that slow peaceful feeling melting through \ud83d\ude0c\ud83d\udca7",
+      "Drenched in golden light and soft drops\u2026 pure calm and warmth \u2600\ufe0f",
+      "This little white tank didn\u2019t stand a chance \ud83d\ude08 against the water",
+      "Head back, soaked through\u2026 watching every drop cling \ud83d\udca6",
+      "Thought a quick outdoor rinse would stay innocent\u2026 clearly not \ud83d\ude0f",
+      "Wet fabric, warm sun, and zero intention of covering up \ud83e\udd0d\u2728",
+      "Letting the shower do all the revealing while I just enjoy it \ud83d\udca7\ud83d\udd25"
+    ],
+    "selected_text": "Letting the shower do all the revealing while I just enjoy it \ud83d\udca7\ud83d\udd25",
+    "formatter_metadata": {
+      "provider_neutral": true,
+      "formatter": "CaptionStudioService",
+      "workflow": "telegram_publish",
+      "vision_primary": true,
+      "vision_provider": "grok",
+      "vision": {
+        "location": "outdoor courtyard shower area with tiled walls",
+        "wardrobe": "soaked sheer white tank top clinging transparently to her torso and nipples, paired with blue denim short-shorts",
+        "expression": "eyes closed, head tilted back, lips softly parted in quiet pleasure",
+        "body_language": "arching slightly with chest forward, one hand resting on her hip, face lifted into the water",
+        "lighting": "bright natural midday sunlight with water droplets catching the light",
+        "mood": "intimate, sensual, sun-warmed and quietly seductive",
+        "environment": "outdoor rainfall shower against light stone/tile walls with soft greenery visible beyond",
+        "activity": "standing beneath the shower stream letting water run down her wet hair, skin, and soaked top"
+      },
+      "themes": [
+        {
+          "theme": "\ud83d\udc9b Romantic",
+          "persona": "romantic",
+          "captions": [
+            "Letting the warm water \ud83d\udca7 trace every curve while the sun kisses my skin \u2600\ufe0f",
+            "Eyes closed, heart open\u2026 this midday shower feels like a soft secret \ud83e\udd0d",
+            "Sunlight and rainfall \u2728 wrapping around me in the quietest kind of bliss",
+            "Just me, the water, and that slow peaceful feeling melting through \ud83d\ude0c\ud83d\udca7",
+            "Drenched in golden light and soft drops\u2026 pure calm and warmth \u2600\ufe0f"
+          ]
+        },
+        {
+          "theme": "\ud83d\ude08 Teasing / Naughty",
+          "persona": "teasing_naughty",
+          "captions": [
+            "This little white tank didn\u2019t stand a chance \ud83d\ude08 against the water",
+            "Head back, soaked through\u2026 watching every drop cling \ud83d\udca6",
+            "Thought a quick outdoor rinse would stay innocent\u2026 clearly not \ud83d\ude0f",
+            "Wet fabric, warm sun, and zero intention of covering up \ud83e\udd0d\u2728",
+            "Letting the shower do all the revealing while I just enjoy it \ud83d\udca7\ud83d\udd25"
+          ]
+        }
+      ],
+      "personas": {
+        "romantic": "\ud83d\udc9b Romantic",
+        "teasing_naughty": "\ud83d\ude08 Teasing / Naughty"
+      },
+      "engagement_goals": [
+        "creator selects preferred caption",
+        "telegram publishing"
+      ]
+    },
+    "created_at": "2026-08-22T01:10:41.537190"
+  },
+  {
+    "caption_result_id": "caption_result_6749b1d5b1bd4640b2b3435254939408",
+    "caption_request_id": "caption_request_9bccf4e5c7474d4b988b5900fc1f0c65",
+    "session_id": "caption_session_bba75715e02e4d94bbe93c5fb774bc25",
+    "platform": "telegram",
+    "variations": [
+      "Caught in this sunny little pause \u2600\ufe0f hand on the chair and feeling so warm inside \ud83d\udda4",
+      "Soft light on my skin and this easy smile just for you \ud83d\ude0c summer feels closer already \u2728",
+      "Resting here in the sunroom glow \u2600\ufe0f loving how quiet and close this moment feels \ud83e\udef6",
+      "Long hair down and that gentle look \ud83d\udda4 the light makes everything feel softer with you \ud83c\udf24\ufe0f",
+      "Just breathing in the warm air \u2600\ufe0f this calm stretch turned into something sweeter \ud83d\udcab",
+      "Paused mid-stretch in this strappy black set \ud83d\udda4 sunlight kissing every curve just right \ud83d\ude0f",
+      "Hand on the chair and abs out \u2600\ufe0f this sports bra is doing the most today \ud83d\udd25",
+      "Catching my breath but still giving you the full view \ud83d\ude08 low shorts and all that sun \ud83d\udda4",
+      "Sunroom session got a little distracting \u2600\ufe0f feeling strong and a bit too confident right now \ud83d\udc40",
+      "Weight shifted and looking right at you \ud83d\udd25 black straps holding everything just tight enough \ud83d\ude0c"
+    ],
+    "selected_text": null,
+    "formatter_metadata": {
+      "provider_neutral": true,
+      "formatter": "CaptionStudioService",
+      "workflow": "telegram_publish",
+      "vision_primary": true,
+      "vision_provider": "grok",
+      "vision": {
+        "location": "bright indoor sunroom with large windows",
+        "wardrobe": "black strappy sports bra with visible cleavage and supportive fit, paired with tiny black high-cut athletic shorts sitting low on hips",
+        "expression": "soft relaxed smile with warm direct gaze toward camera",
+        "body_language": "one hand resting lightly on wooden chair back, weight shifted, torso angled naturally, midriff and toned abs exposed",
+        "lighting": "bright natural summer sunlight streaming through windows with soft shadows",
+        "mood": "candid intimate relaxed and warmly sensual",
+        "environment": "whitewashed walls, pale wood floors, wooden chair, open bright windows with outdoor greenery",
+        "activity": "pausing mid-stretch or after casual home workout, catching breath near the chair"
+      },
+      "themes": [
+        {
+          "theme": "\ud83d\udc9b Romantic",
+          "persona": "romantic",
+          "captions": [
+            "Caught in this sunny little pause \u2600\ufe0f hand on the chair and feeling so warm inside \ud83d\udda4",
+            "Soft light on my skin and this easy smile just for you \ud83d\ude0c summer feels closer already \u2728",
+            "Resting here in the sunroom glow \u2600\ufe0f loving how quiet and close this moment feels \ud83e\udef6",
+            "Long hair down and that gentle look \ud83d\udda4 the light makes everything feel softer with you \ud83c\udf24\ufe0f",
+            "Just breathing in the warm air \u2600\ufe0f this calm stretch turned into something sweeter \ud83d\udcab"
+          ]
+        },
+        {
+          "theme": "\ud83d\ude08 Teasing / Naughty",
+          "persona": "teasing_naughty",
+          "captions": [
+            "Paused mid-stretch in this strappy black set \ud83d\udda4 sunlight kissing every curve just right \ud83d\ude0f",
+            "Hand on the chair and abs out \u2600\ufe0f this sports bra is doing the most today \ud83d\udd25",
+            "Catching my breath but still giving you the full view \ud83d\ude08 low shorts and all that sun \ud83d\udda4",
+            "Sunroom session got a little distracting \u2600\ufe0f feeling strong and a bit too confident right now \ud83d\udc40",
+            "Weight shifted and looking right at you \ud83d\udd25 black straps holding everything just tight enough \ud83d\ude0c"
+          ]
+        }
+      ],
+      "personas": {
+        "romantic": "\ud83d\udc9b Romantic",
+        "teasing_naughty": "\ud83d\ude08 Teasing / Naughty"
+      },
+      "engagement_goals": [
+        "creator selects preferred caption",
+        "telegram publishing"
+      ]
+    },
+    "created_at": "2026-08-21T18:19:28.398845"
+  },
+  {
+    "caption_result_id": "caption_result_32c6eb41a78248d584dcbb31ecdf2f86",
+    "caption_request_id": "caption_request_0dfb683a71e54244b3f885508a774086",
+    "session_id": "caption_session_a887695542724adf85ed31f786efd3d2",
+    "platform": "x",
+    "variations": [
+      "Caught me mid-break in the sunroom \u2600\ufe0f be honest\u2026 would you actually join my workout or just sit there and distract me? \ud83d\ude0f",
+      "Summer light hits different after a few sets \u2728 help me decide: stretch more or call it and grab coffee instead?",
+      "One hand on the chair, still catching my breath \ud83d\ude0c what\u2019s the first thing you\u2019d say if you walked in right now?",
+      "Home workouts feel way better with an audience \ud83d\ude09 would you rather spot me\u2026 or just keep me company by the window?",
+      "This sunroom always ruins my focus \ud83c\udf24\ufe0f finish this: the second I look over at you, you\u2026",
+      "Quick poll while I cool down \ud83d\udda4 A) keep going with me or B) convince me we\u2019ve done enough for today?",
+      "I swear I only paused for a second \ud83d\ude24 if you were here, would you push me to finish the set or pull me toward the light?",
+      "Sun pouring in, heart still racing a little \ud83c\udf1e what would you do if this was your view every afternoon?",
+      "Tell me the truth \ud83d\udc40 does this count as a real workout vibe or am I just making excuses to stay in the sun longer?",
+      "Imagining you walking through that door right now \ud83d\udeaa would you tease me for stopping\u2026 or stretch with me?"
+    ],
+    "selected_text": null,
+    "formatter_metadata": {
+      "provider_neutral": true,
+      "formatter": "CaptionStudioService",
+      "workflow": "x_engagement_publish",
+      "vision_primary": true,
+      "vision_provider": "grok",
+      "vision": {
+        "setting": "bright indoor sunroom with white walls, large windows, and pale wood floors",
+        "activity": "pausing mid-stretch or resting during a casual home workout",
+        "time_of_day": "daytime with strong natural sunlight",
+        "location": "home interior sunroom",
+        "wardrobe": "black strappy sports bra and high-cut black athletic bottoms",
+        "expression": "soft relaxed half-smile looking toward the camera",
+        "body_language": "weight shifted, one hand resting lightly on a wooden chair back, torso angled slightly",
+        "lighting": "bright natural window light with soft shadows",
+        "mood": "candid, warm, intimate, relaxed",
+        "environment": "airy minimalist room with wooden chair and outdoor greenery visible through windows"
+      },
+      "themes": [
+        {
+          "theme": "Creator OS Engagement",
+          "persona": "creator_os_engagement",
+          "captions": [
+            "Caught me mid-break in the sunroom \u2600\ufe0f be honest\u2026 would you actually join my workout or just sit there and distract me? \ud83d\ude0f",
+            "Summer light hits different after a few sets \u2728 help me decide: stretch more or call it and grab coffee instead?",
+            "One hand on the chair, still catching my breath \ud83d\ude0c what\u2019s the first thing you\u2019d say if you walked in right now?",
+            "Home workouts feel way better with an audience \ud83d\ude09 would you rather spot me\u2026 or just keep me company by the window?",
+            "This sunroom always ruins my focus \ud83c\udf24\ufe0f finish this: the second I look over at you, you\u2026",
+            "Quick poll while I cool down \ud83d\udda4 A) keep going with me or B) convince me we\u2019ve done enough for today?",
+            "I swear I only paused for a second \ud83d\ude24 if you were here, would you push me to finish the set or pull me toward the light?",
+            "Sun pouring in, heart still racing a little \ud83c\udf1e what would you do if this was your view every afternoon?",
+            "Tell me the truth \ud83d\udc40 does this count as a real workout vibe or am I just making excuses to stay in the sun longer?",
+            "Imagining you walking through that door right now \ud83d\udeaa would you tease me for stopping\u2026 or stretch with me?"
+          ]
+        }
+      ],
+      "personas": {
+        "creator_os_engagement": "Creator OS Engagement"
+      },
+      "engagement_goals": [
+        "replies",
+        "reposts",
+        "likes",
+        "profile visits",
+        "follows"
+      ]
+    },
+    "created_at": "2026-08-21T18:19:03.305595"
+  },
+  {
+    "caption_result_id": "caption_result_ed15f64cd40842ae95f4b190eb27a761",
+    "caption_request_id": "caption_request_b06f983686554881947dbfed0fe473ce",
+    "session_id": "caption_session_56adde5e55cd424993e500467cf1614a",
+    "platform": "telegram",
+    "variations": [
+      "Caught me leaning over this old table \ud83e\udd0d just wanting you closer tonight",
+      "Soft light and this quiet look back \ud83c\udf19 all for you right now",
+      "Feeling warm and a little shy in this light \u2728 come stay near me",
+      "My hair falling and this soft smile \ud83d\udc95 thinking only of you",
+      "Simple wooden table and me turning just for you \ud83d\udd4a\ufe0f feels so close",
+      "Bent over this table and looking back \ud83d\udc40 just how you like it",
+      "These little ties and my curves \ud83d\udd25 don't keep me waiting long",
+      "Caught in the act leaning forward \ud83d\ude0c you know exactly what I'm thinking",
+      "Back arched over the wood \ud83d\udcab hope you're staring just as hard",
+      "Soft bikini and a longer look over my shoulder \ud83d\ude08 all yours tonight"
+    ],
+    "selected_text": "Back arched over the wood \ud83d\udcab hope you're staring just as hard",
+    "formatter_metadata": {
+      "provider_neutral": true,
+      "formatter": "CaptionStudioService",
+      "workflow": "telegram_publish",
+      "vision_primary": true,
+      "vision_provider": "grok",
+      "vision": {
+        "location": "indoor rustic room with wooden furniture and soft natural window light",
+        "wardrobe": "light taupe/gray string bikini with tie sides and back",
+        "expression": "soft direct gaze over the shoulder with a subtle knowing smile",
+        "body_language": "leaning forward over a wooden table, arched back, looking back toward the viewer",
+        "lighting": "soft natural daylight from a window, warm and even with gentle shadows",
+        "mood": "intimate, quietly confident, seductive, calm",
+        "environment": "simple unfinished room with textured walls, wooden table and chair, window in background",
+        "activity": "posing bent over a rustic wooden table while glancing back"
+      },
+      "themes": [
+        {
+          "theme": "\ud83d\udc9b Romantic",
+          "persona": "romantic",
+          "captions": [
+            "Caught me leaning over this old table \ud83e\udd0d just wanting you closer tonight",
+            "Soft light and this quiet look back \ud83c\udf19 all for you right now",
+            "Feeling warm and a little shy in this light \u2728 come stay near me",
+            "My hair falling and this soft smile \ud83d\udc95 thinking only of you",
+            "Simple wooden table and me turning just for you \ud83d\udd4a\ufe0f feels so close"
+          ]
+        },
+        {
+          "theme": "\ud83d\ude08 Teasing / Naughty",
+          "persona": "teasing_naughty",
+          "captions": [
+            "Bent over this table and looking back \ud83d\udc40 just how you like it",
+            "These little ties and my curves \ud83d\udd25 don't keep me waiting long",
+            "Caught in the act leaning forward \ud83d\ude0c you know exactly what I'm thinking",
+            "Back arched over the wood \ud83d\udcab hope you're staring just as hard",
+            "Soft bikini and a longer look over my shoulder \ud83d\ude08 all yours tonight"
+          ]
+        }
+      ],
+      "personas": {
+        "romantic": "\ud83d\udc9b Romantic",
+        "teasing_naughty": "\ud83d\ude08 Teasing / Naughty"
+      },
+      "engagement_goals": [
+        "creator selects preferred caption",
+        "telegram publishing"
+      ]
+    },
+    "created_at": "2026-08-21T02:17:43.780814"
+  },
+  {
+    "caption_result_id": "caption_result_4515a2fa01de410f94419470a73bc619",
+    "caption_request_id": "caption_request_7a843f4983254ac4940135d71e79daec",
+    "session_id": "caption_session_7919ca28e0ee461facdb49b0be5ea92e",
+    "platform": "telegram",
+    "variations": [
+      "Caught me lingering \ud83e\udd0d in the hallway light just for you \u2728",
+      "Soft afternoon glow and this quiet little smile \ud83d\ude0a meant only for us \ud83d\udcab",
+      "Hand on the doorframe \ud83e\ude9f thinking of you in the calm of this hallway \ud83d\udc95",
+      "White straps and sun-kissed skin \u2600\ufe0f feeling warm and close right now \ud83e\udd70",
+      "This peaceful moment \ud83e\udd0d feels like it belongs just between us \ud83c\udf38",
+      "White bikini and hallway light \ud83d\udd25 catching every curve just right \ud83d\ude09",
+      "Leaning in the doorway like this \ud83d\udcab knowing exactly what you're noticing \ud83d\ude0f",
+      "Soft smile \ud83e\udd0d but this top is doing all the talking today \u2728",
+      "Quiet hallway \ud83e\ude9f and me in barely there white\u2026 your favorite view? \ud83d\ude08",
+      "One hand on the frame \ud83d\udd25 the rest of me right here for you \ud83d\udc40"
+    ],
+    "selected_text": "One hand on the frame \ud83d\udd25 the rest of me right here for you \ud83d\udc40",
+    "formatter_metadata": {
+      "provider_neutral": true,
+      "formatter": "CaptionStudioService",
+      "workflow": "telegram_publish",
+      "vision_primary": true,
+      "vision_provider": "grok",
+      "vision": {
+        "location": "quiet indoor hallway near a doorway and window",
+        "wardrobe": "minimalist white triangle bikini top with thin straps",
+        "expression": "calm soft smile with warm direct gaze",
+        "body_language": "standing three-quarter turn, one hand lightly resting on the doorframe",
+        "lighting": "soft natural window light with gentle gradients and subtle shadows",
+        "mood": "intimate, candid, serene, private",
+        "environment": "pale walls, blurred hallway depth, window with soft daylight",
+        "activity": "pausing near the doorway, casually leaning into the frame"
+      },
+      "themes": [
+        {
+          "theme": "\ud83d\udc9b Romantic",
+          "persona": "romantic",
+          "captions": [
+            "Caught me lingering \ud83e\udd0d in the hallway light just for you \u2728",
+            "Soft afternoon glow and this quiet little smile \ud83d\ude0a meant only for us \ud83d\udcab",
+            "Hand on the doorframe \ud83e\ude9f thinking of you in the calm of this hallway \ud83d\udc95",
+            "White straps and sun-kissed skin \u2600\ufe0f feeling warm and close right now \ud83e\udd70",
+            "This peaceful moment \ud83e\udd0d feels like it belongs just between us \ud83c\udf38"
+          ]
+        },
+        {
+          "theme": "\ud83d\ude08 Teasing / Naughty",
+          "persona": "teasing_naughty",
+          "captions": [
+            "White bikini and hallway light \ud83d\udd25 catching every curve just right \ud83d\ude09",
+            "Leaning in the doorway like this \ud83d\udcab knowing exactly what you're noticing \ud83d\ude0f",
+            "Soft smile \ud83e\udd0d but this top is doing all the talking today \u2728",
+            "Quiet hallway \ud83e\ude9f and me in barely there white\u2026 your favorite view? \ud83d\ude08",
+            "One hand on the frame \ud83d\udd25 the rest of me right here for you \ud83d\udc40"
+          ]
+        }
+      ],
+      "personas": {
+        "romantic": "\ud83d\udc9b Romantic",
+        "teasing_naughty": "\ud83d\ude08 Teasing / Naughty"
+      },
+      "engagement_goals": [
+        "creator selects preferred caption",
+        "telegram publishing"
+      ]
+    },
+    "created_at": "2026-08-20T19:36:53.689884"
+  },
+  {
+    "caption_result_id": "caption_result_bfd430b9bfa14a5881ea36fbd43b58d5",
+    "caption_request_id": "caption_request_44f179a7aece490d863b9d4b59a146be",
+    "session_id": "caption_session_a205cc4d87a44622a33f4eb47bdd3e5a",
+    "platform": "telegram",
+    "variations": [
+      "Golden hour caught me \u2728 stepping out of the waves just for this quiet moment with you \ud83c\udf0a",
+      "Sun-kissed and salty \u2600\ufe0f still smiling at the thought of sharing this beach glow \ud83d\udc95",
+      "Water droplets and warm light \ud83c\udf05 feeling completely at peace right here with you",
+      "Soft waves behind me \ud83c\udf0a and this little smile meant only for you tonight \ud83d\udc9b",
+      "The ocean left its sparkle on my skin \u2728 and I saved this golden feeling for us \ud83c\udf0a",
+      "Caught me fixing these little ties \ud83d\ude0f still dripping from the surf \ud83c\udf0a",
+      "Golden hour looks better when I\u2019m a little wet \u2728 don\u2019t you think \ud83d\udc40",
+      "Just stepped out of the waves \ud83d\udca6 and this blue bikini is barely hanging on \ud83d\ude18",
+      "Hands busy with the strings \ud83d\ude08 salt water still sparkling all over me \u2728",
+      "Sun, surf, and this teasing little smile \ud83c\udf0a I know exactly what you\u2019re looking at \ud83d\udd25"
+    ],
+    "selected_text": "Golden hour looks better when I\u2019m a little wet \u2728 don\u2019t you think \ud83d\udc40",
+    "formatter_metadata": {
+      "provider_neutral": true,
+      "formatter": "CaptionStudioService",
+      "workflow": "telegram_publish",
+      "vision_primary": true,
+      "vision_provider": "grok",
+      "vision": {
+        "location": "coastal beach shoreline with ocean waves",
+        "wardrobe": "pale blue string bikini top and bottom with side ties",
+        "expression": "soft playful half-smile, direct warm gaze",
+        "body_language": "standing in shallow water, turning slightly toward camera, both hands adjusting bikini side ties",
+        "lighting": "warm golden hour sunlight with soft highlights and glow on wet skin",
+        "mood": "candid, intimate, sun-kissed, relaxed sensuality",
+        "environment": "ocean surf with rolling waves softly blurred, distant coastline hills, water droplets on skin",
+        "activity": "stepping out of gentle surf while adjusting bikini ties"
+      },
+      "themes": [
+        {
+          "theme": "\ud83d\udc9b Romantic",
+          "persona": "romantic",
+          "captions": [
+            "Golden hour caught me \u2728 stepping out of the waves just for this quiet moment with you \ud83c\udf0a",
+            "Sun-kissed and salty \u2600\ufe0f still smiling at the thought of sharing this beach glow \ud83d\udc95",
+            "Water droplets and warm light \ud83c\udf05 feeling completely at peace right here with you",
+            "Soft waves behind me \ud83c\udf0a and this little smile meant only for you tonight \ud83d\udc9b",
+            "The ocean left its sparkle on my skin \u2728 and I saved this golden feeling for us \ud83c\udf0a"
+          ]
+        },
+        {
+          "theme": "\ud83d\ude08 Teasing / Naughty",
+          "persona": "teasing_naughty",
+          "captions": [
+            "Caught me fixing these little ties \ud83d\ude0f still dripping from the surf \ud83c\udf0a",
+            "Golden hour looks better when I\u2019m a little wet \u2728 don\u2019t you think \ud83d\udc40",
+            "Just stepped out of the waves \ud83d\udca6 and this blue bikini is barely hanging on \ud83d\ude18",
+            "Hands busy with the strings \ud83d\ude08 salt water still sparkling all over me \u2728",
+            "Sun, surf, and this teasing little smile \ud83c\udf0a I know exactly what you\u2019re looking at \ud83d\udd25"
+          ]
+        }
+      ],
+      "personas": {
+        "romantic": "\ud83d\udc9b Romantic",
+        "teasing_naughty": "\ud83d\ude08 Teasing / Naughty"
+      },
+      "engagement_goals": [
+        "creator selects preferred caption",
+        "telegram publishing"
+      ]
+    },
+    "created_at": "2026-08-20T02:00:38.558010"
+  },
+  {
+    "caption_result_id": "caption_result_2467b75d7db047f1b7abcf1d15138219",
+    "caption_request_id": "caption_request_84e53eb1586449dd92361f6ffeca8dba",
+    "session_id": "caption_session_fae35df36d8f402b932ea77700a48865",
+    "platform": "x",
+    "variations": [
+      "Caught me mid-step near the window \u2600\ufe0f would you pretend you just walked in... or own it and say hi first? \ud83d\ude0f",
+      "Lazy summer afternoons hit different when the light's this good \u2728 be honest... stay and talk or keep walking past?",
+      "Help me decide \ud83e\udd14 cozy couch vibes or steal me for a walk outside before the sun moves?",
+      "If you walked into this living room right now, finish the sentence: first thing I'd do is... \ud83d\udcad",
+      "That little pause by the window feels dangerous \ud83d\ude0c what would you actually say if I turned around like this?",
+      "Choose one for the rest of the afternoon: \ud83d\udecb\ufe0f stay in and do nothing with me, or \ud83d\udeaa drag me somewhere spontaneous?",
+      "Soft light, quiet house, zero plans \u2600\ufe0f tell me you'd handle this energy better than I am rn...",
+      "I was just passing through and then the light got me \ud83d\ude09 would you notice first... or pretend not to?",
+      "Hypothetically... if this was your place and I looked over like this, what's the play? \ud83d\udc40",
+      "Be honest \ud83d\ude0c is this the kind of casual moment that makes you stay a little longer than planned?"
+    ],
+    "selected_text": null,
+    "formatter_metadata": {
+      "provider_neutral": true,
+      "formatter": "CaptionStudioService",
+      "workflow": "x_engagement_publish",
+      "vision_primary": true,
+      "vision_provider": "grok",
+      "vision": {
+        "setting": "bright indoor living room with large windows, gray sofa, coffee table, and natural outdoor greenery visible",
+        "activity": "pausing mid-step or pose while lightly holding the hem of her top",
+        "time_of_day": "daytime with bright natural sunlight",
+        "location": "modern apartment or home living room",
+        "wardrobe": "ultra-sheer black mesh crop tank top clinging tightly and revealing skin underneath, paired with tiny frayed cutoff denim shorts sitting low on hips",
+        "expression": "soft closed-mouth smile with direct confident eye contact",
+        "body_language": "relaxed unposed turn, body slightly angled, one hand brushing the tank hem, confident and at ease",
+        "lighting": "bright natural window light creating soft highlights and subtle shadows across skin and sheer fabric",
+        "mood": "candid, intimate, flirty, relaxed summer domestic vibe",
+        "environment": "airy open living space with sofa, pillows, coffee table, large windows, and soft daylight"
+      },
+      "themes": [
+        {
+          "theme": "Creator OS Engagement",
+          "persona": "creator_os_engagement",
+          "captions": [
+            "Caught me mid-step near the window \u2600\ufe0f would you pretend you just walked in... or own it and say hi first? \ud83d\ude0f",
+            "Lazy summer afternoons hit different when the light's this good \u2728 be honest... stay and talk or keep walking past?",
+            "Help me decide \ud83e\udd14 cozy couch vibes or steal me for a walk outside before the sun moves?",
+            "If you walked into this living room right now, finish the sentence: first thing I'd do is... \ud83d\udcad",
+            "That little pause by the window feels dangerous \ud83d\ude0c what would you actually say if I turned around like this?",
+            "Choose one for the rest of the afternoon: \ud83d\udecb\ufe0f stay in and do nothing with me, or \ud83d\udeaa drag me somewhere spontaneous?",
+            "Soft light, quiet house, zero plans \u2600\ufe0f tell me you'd handle this energy better than I am rn...",
+            "I was just passing through and then the light got me \ud83d\ude09 would you notice first... or pretend not to?",
+            "Hypothetically... if this was your place and I looked over like this, what's the play? \ud83d\udc40",
+            "Be honest \ud83d\ude0c is this the kind of casual moment that makes you stay a little longer than planned?"
+          ]
+        }
+      ],
+      "personas": {
+        "creator_os_engagement": "Creator OS Engagement"
+      },
+      "engagement_goals": [
+        "replies",
+        "reposts",
+        "likes",
+        "profile visits",
+        "follows"
+      ]
+    },
+    "created_at": "2026-08-19T16:27:26.949312"
+  },
+  {
+    "caption_result_id": "caption_result_925491cc9c1c457bb9f36139c2d64d04",
+    "caption_request_id": "caption_request_e10101f4daa64bce80479030e1ab6851",
+    "session_id": "caption_session_6c4dd123d8534b72a7dbc1b745b513f6",
+    "platform": "telegram",
+    "variations": [
+      "Soft morning light \u2600\ufe0f found me fixing my hair and thinking of you \ud83e\udd0d",
+      "Just me in this quiet bedroom \ud83c\udf3f feeling all warm and close to you",
+      "Sunlight on my skin \u2728 and this easy moment that feels like ours",
+      "Loose hair and linen shorts \ud83d\ude0c wishing you were right here with me",
+      "Catching this gentle glow \ud83c\udf24\ufe0f and holding a little space just for us",
+      "Caught me mid-hair fix \ud83d\ude09 in this tight little white top",
+      "Sunlit bedroom vibes \ud83d\udd25 and I left just enough skin showing",
+      "Hand in my hair \ud83d\ude0c while this crop top does all the talking",
+      "Linen shorts and soft light \u2728 feeling a little too comfortable",
+      "That look I give when I know you\u2019re watching \ud83d\ude0f from the window light"
+    ],
+    "selected_text": "Caught me mid-hair fix \ud83d\ude09 in this tight little white top",
+    "formatter_metadata": {
+      "provider_neutral": true,
+      "formatter": "CaptionStudioService",
+      "workflow": "telegram_publish",
+      "vision_primary": true,
+      "vision_provider": "grok",
+      "vision": {
+        "location": "sunlit bedroom near a large window",
+        "wardrobe": "fitted white crop top with thin straps and high-waisted beige linen shorts",
+        "expression": "soft direct gaze with slightly parted lips and calm confidence",
+        "body_language": "one hand raised naturally into long dark hair, relaxed shoulders, seated or perched posture",
+        "lighting": "soft natural daylight pouring in from the window",
+        "mood": "intimate, calm, casually sensual",
+        "environment": "bright airy bedroom with white bedding and neutral walls",
+        "activity": "reaching up to fix or run fingers through her loose dark hair"
+      },
+      "themes": [
+        {
+          "theme": "\ud83d\udc9b Romantic",
+          "persona": "romantic",
+          "captions": [
+            "Soft morning light \u2600\ufe0f found me fixing my hair and thinking of you \ud83e\udd0d",
+            "Just me in this quiet bedroom \ud83c\udf3f feeling all warm and close to you",
+            "Sunlight on my skin \u2728 and this easy moment that feels like ours",
+            "Loose hair and linen shorts \ud83d\ude0c wishing you were right here with me",
+            "Catching this gentle glow \ud83c\udf24\ufe0f and holding a little space just for us"
+          ]
+        },
+        {
+          "theme": "\ud83d\ude08 Teasing / Naughty",
+          "persona": "teasing_naughty",
+          "captions": [
+            "Caught me mid-hair fix \ud83d\ude09 in this tight little white top",
+            "Sunlit bedroom vibes \ud83d\udd25 and I left just enough skin showing",
+            "Hand in my hair \ud83d\ude0c while this crop top does all the talking",
+            "Linen shorts and soft light \u2728 feeling a little too comfortable",
+            "That look I give when I know you\u2019re watching \ud83d\ude0f from the window light"
+          ]
+        }
+      ],
+      "personas": {
+        "romantic": "\ud83d\udc9b Romantic",
+        "teasing_naughty": "\ud83d\ude08 Teasing / Naughty"
+      },
+      "engagement_goals": [
+        "creator selects preferred caption",
+        "telegram publishing"
+      ]
+    },
+    "created_at": "2026-08-19T01:25:18.916156"
+  },
+  {
+    "caption_result_id": "caption_result_a97bbceaafba4c66a2955af790973954",
+    "caption_request_id": "caption_request_21ae9649deac43679ccacc12e96b8b7e",
+    "session_id": "caption_session_f9782787c0b445f6bddfb23b7c108859",
+    "platform": "x",
+    "variations": [
+      "Sunday morning energy hitting different \u2600\ufe0f would you rather stay in bed all day or actually get ready and go somewhere fun?",
+      "Caught me mid-hair fix \u2728 be honest\u2026 do you ever just stand by the window and forget what you were doing?",
+      "Soft daylight + zero plans \ud83e\udd0d help me decide: coffee in bed or we pretend we have somewhere to be?",
+      "If you walked in right now I'd probably just smile and keep fixing my hair \ud83d\ude0c what would you say first?",
+      "That lazy-morning feeling where everything feels slower \ud83e\ude9f finish this: the perfect next hour would include\u2026",
+      "Not fully ready, not fully asleep either \ud83d\ude34 choose one: stay and talk or drag me outside into the sun?",
+      "I was supposed to be productive today\u2026 clearly that plan is failing \ud83d\ude07 anyone else winning at doing nothing?",
+      "Quiet room, open window, me overthinking my weekend \ud83d\udcad would you crash this vibe or make it better?",
+      "Casual Sunday mode activated \ud83c\udf3f tell me the truth: are you more of a stay-in person or a get-out-and-roam type?",
+      "If this was the view when you woke up \ud83d\ude0f what\u2019s the first thing you\u2019d tease me about?"
+    ],
+    "selected_text": null,
+    "formatter_metadata": {
+      "provider_neutral": true,
+      "formatter": "CaptionStudioService",
+      "workflow": "x_engagement_publish",
+      "vision_primary": true,
+      "vision_provider": "grok",
+      "vision": {
+        "setting": "bright indoor bedroom near a large window",
+        "activity": "standing and reaching up to fix or run fingers through long dark hair",
+        "time_of_day": "daytime with soft natural daylight",
+        "location": "bedroom interior",
+        "wardrobe": "fitted white crop top and high-waisted light beige linen shorts",
+        "expression": "soft direct gaze with slightly parted lips, calm and confident",
+        "body_language": "relaxed shoulders, one arm raised to hair, casual upright posture facing camera",
+        "lighting": "soft natural daylight from window creating gentle highlights and soft shadows",
+        "mood": "intimate, candid, calm, subtly alluring",
+        "environment": "minimal light-colored bedroom with white bedding visible and bright window light"
+      },
+      "themes": [
+        {
+          "theme": "Creator OS Engagement",
+          "persona": "creator_os_engagement",
+          "captions": [
+            "Sunday morning energy hitting different \u2600\ufe0f would you rather stay in bed all day or actually get ready and go somewhere fun?",
+            "Caught me mid-hair fix \u2728 be honest\u2026 do you ever just stand by the window and forget what you were doing?",
+            "Soft daylight + zero plans \ud83e\udd0d help me decide: coffee in bed or we pretend we have somewhere to be?",
+            "If you walked in right now I'd probably just smile and keep fixing my hair \ud83d\ude0c what would you say first?",
+            "That lazy-morning feeling where everything feels slower \ud83e\ude9f finish this: the perfect next hour would include\u2026",
+            "Not fully ready, not fully asleep either \ud83d\ude34 choose one: stay and talk or drag me outside into the sun?",
+            "I was supposed to be productive today\u2026 clearly that plan is failing \ud83d\ude07 anyone else winning at doing nothing?",
+            "Quiet room, open window, me overthinking my weekend \ud83d\udcad would you crash this vibe or make it better?",
+            "Casual Sunday mode activated \ud83c\udf3f tell me the truth: are you more of a stay-in person or a get-out-and-roam type?",
+            "If this was the view when you woke up \ud83d\ude0f what\u2019s the first thing you\u2019d tease me about?"
+          ]
+        }
+      ],
+      "personas": {
+        "creator_os_engagement": "Creator OS Engagement"
+      },
+      "engagement_goals": [
+        "replies",
+        "reposts",
+        "likes",
+        "profile visits",
+        "follows"
+      ]
+    },
+    "created_at": "2026-08-19T01:24:50.419802"
+  },
+  {
+    "caption_result_id": "caption_result_1371809313c842a99af3b9a87563409c",
+    "caption_request_id": "caption_request_ecaa1653864d4d82afb90aad88537296",
+    "session_id": "caption_session_93d062419e9e403a9e1bf32e961e773a",
+    "platform": "telegram",
+    "variations": [
+      "Caught in that golden light \ud83c\udf05 barefoot on the sand with you on my mind \u2728",
+      "Soft waves and this quiet smile \ud83d\ude0a just me and the shore feeling close to you \ud83d\udc9b",
+      "Sun-kissed skin and easy steps \u2600\ufe0f wishing you were right here beside me \ud83c\udf0a",
+      "This warm evening glow \ud83c\udf05 makes everything feel a little more tender with you \ud83e\udd0d",
+      "Walking the waterline feeling peaceful \ud83c\udf0a saving this soft moment for us \ud83d\ude0a",
+      "White bikini catching every bit of that golden light \ud83d\udd25 mid-stride and feeling bold \ud83d\udc40",
+      "Barefoot in the shallows \ud83c\udf0a this little smile knows exactly what it's doing \ud83d\ude0f",
+      "Fabric sitting just right in the warm sun \u2600\ufe0f letting the shoreline do the rest \ud83e\udd0d",
+      "Hips angled toward the water \ud83c\udf0a and eyes locked like I already spotted you \ud83d\udd25",
+      "Golden hour never looked this good on me \ud83c\udf05 come closer and see for yourself \ud83d\ude08"
+    ],
+    "selected_text": "White bikini catching every bit of that golden light \ud83d\udd25 mid-stride and feeling bold \ud83d\udc40",
+    "formatter_metadata": {
+      "provider_neutral": true,
+      "formatter": "CaptionStudioService",
+      "workflow": "telegram_publish",
+      "vision_primary": true,
+      "vision_provider": "grok",
+      "vision": {
+        "location": "beach shoreline with wet sand and shallow water",
+        "wardrobe": "white string bikini top and bottoms",
+        "expression": "soft natural smile looking toward the camera",
+        "body_language": "mid-stride walking pose, relaxed arms, hips angled slightly, confident posture",
+        "lighting": "warm golden-hour sidelight wrapping her figure with soft highlights",
+        "mood": "candid intimate warm and inviting",
+        "environment": "sunny beach with sand texture, gentle waves, blurred shoreline background",
+        "activity": "walking barefoot along the water's edge"
+      },
+      "themes": [
+        {
+          "theme": "\ud83d\udc9b Romantic",
+          "persona": "romantic",
+          "captions": [
+            "Caught in that golden light \ud83c\udf05 barefoot on the sand with you on my mind \u2728",
+            "Soft waves and this quiet smile \ud83d\ude0a just me and the shore feeling close to you \ud83d\udc9b",
+            "Sun-kissed skin and easy steps \u2600\ufe0f wishing you were right here beside me \ud83c\udf0a",
+            "This warm evening glow \ud83c\udf05 makes everything feel a little more tender with you \ud83e\udd0d",
+            "Walking the waterline feeling peaceful \ud83c\udf0a saving this soft moment for us \ud83d\ude0a"
+          ]
+        },
+        {
+          "theme": "\ud83d\ude08 Teasing / Naughty",
+          "persona": "teasing_naughty",
+          "captions": [
+            "White bikini catching every bit of that golden light \ud83d\udd25 mid-stride and feeling bold \ud83d\udc40",
+            "Barefoot in the shallows \ud83c\udf0a this little smile knows exactly what it's doing \ud83d\ude0f",
+            "Fabric sitting just right in the warm sun \u2600\ufe0f letting the shoreline do the rest \ud83e\udd0d",
+            "Hips angled toward the water \ud83c\udf0a and eyes locked like I already spotted you \ud83d\udd25",
+            "Golden hour never looked this good on me \ud83c\udf05 come closer and see for yourself \ud83d\ude08"
+          ]
+        }
+      ],
+      "personas": {
+        "romantic": "\ud83d\udc9b Romantic",
+        "teasing_naughty": "\ud83d\ude08 Teasing / Naughty"
+      },
+      "engagement_goals": [
+        "creator selects preferred caption",
+        "telegram publishing"
+      ]
+    },
+    "created_at": "2026-08-18T01:53:03.045417"
+  },
+  {
+    "caption_result_id": "caption_result_e1752c302e034daea9e0625eac7a8c32",
+    "caption_request_id": "caption_request_e0285963f551416c9cdd434ef938d8ed",
+    "session_id": "caption_session_75258dedde6d475581e7d318a31ef0c7",
+    "platform": "x",
+    "variations": [
+      "Caught me mid-reset on the park path \u2600\ufe0f be honest\u2026 would you keep walking or stop and join the cool-down? \ud83d\udc40",
+      "That late-summer heat hits different after a run \ud83d\udd25 help me decide: one more lap or we call it and grab water? \ud83d\udca6",
+      "I was just wiping the sweat and thinking\u2026 if you showed up right now, what would your first move be? \ud83d\ude0c",
+      "Finish this: the best part of catching your breath together in the park is ___ \ud83c\udf33",
+      "Soft smile, full effort, zero regrets \u2728 would you rather race me or just walk and talk it out?",
+      "Quick poll while I recover: more golden-hour runs like this \ud83c\udf05 or early morning quiet ones?",
+      "Imagine you round the corner and find me like this\u2026 what\u2019s the first thing you\u2019d say? \ud83d\udcac",
+      "Not gonna lie, I needed this pause \ud83d\ude05 are you more of a \u2018push through it\u2019 person or a \u2018catch your breath with me\u2019 type?",
+      "Park path, warm light, heart still racing a little \ud83d\udc93 choose one: you cheer me on or you match my pace?",
+      "Just me, the trees, and this little victory smile \ud83c\udf3f if you could teleport here for five minutes\u2026 what happens next?"
+    ],
+    "selected_text": null,
+    "formatter_metadata": {
+      "provider_neutral": true,
+      "formatter": "CaptionStudioService",
+      "workflow": "x_engagement_publish",
+      "vision_primary": true,
+      "vision_provider": "grok",
+      "vision": {
+        "setting": "Outdoor city park path with grass, trees, and a paved walkway",
+        "activity": "Pausing mid-run or workout to wipe brow and catch breath",
+        "time_of_day": "Late afternoon with warm golden sunlight",
+        "location": "Quiet urban park trail",
+        "wardrobe": "White scoop-neck crop top and black athletic shorts",
+        "expression": "Soft recovering smile, looking toward the camera",
+        "body_language": "Weight shifted, one hand wiping forehead, relaxed side angle posture",
+        "lighting": "Warm natural sunlight highlighting skin sheen and creating soft shadows",
+        "mood": "Candid, intimate, post-effort glow",
+        "environment": "Green park with trees, grass, benches, and a quiet path"
+      },
+      "themes": [
+        {
+          "theme": "Creator OS Engagement",
+          "persona": "creator_os_engagement",
+          "captions": [
+            "Caught me mid-reset on the park path \u2600\ufe0f be honest\u2026 would you keep walking or stop and join the cool-down? \ud83d\udc40",
+            "That late-summer heat hits different after a run \ud83d\udd25 help me decide: one more lap or we call it and grab water? \ud83d\udca6",
+            "I was just wiping the sweat and thinking\u2026 if you showed up right now, what would your first move be? \ud83d\ude0c",
+            "Finish this: the best part of catching your breath together in the park is ___ \ud83c\udf33",
+            "Soft smile, full effort, zero regrets \u2728 would you rather race me or just walk and talk it out?",
+            "Quick poll while I recover: more golden-hour runs like this \ud83c\udf05 or early morning quiet ones?",
+            "Imagine you round the corner and find me like this\u2026 what\u2019s the first thing you\u2019d say? \ud83d\udcac",
+            "Not gonna lie, I needed this pause \ud83d\ude05 are you more of a \u2018push through it\u2019 person or a \u2018catch your breath with me\u2019 type?",
+            "Park path, warm light, heart still racing a little \ud83d\udc93 choose one: you cheer me on or you match my pace?",
+            "Just me, the trees, and this little victory smile \ud83c\udf3f if you could teleport here for five minutes\u2026 what happens next?"
+          ]
+        }
+      ],
+      "personas": {
+        "creator_os_engagement": "Creator OS Engagement"
+      },
+      "engagement_goals": [
+        "replies",
+        "reposts",
+        "likes",
+        "profile visits",
+        "follows"
+      ]
+    },
+    "created_at": "2026-08-15T15:56:08.701387"
+  },
+  {
+    "caption_result_id": "caption_result_fa8c2907d06b4211b7cdda9ecbc9dd15",
+    "caption_request_id": "caption_request_ff8fff078f77455196330f4d88e0bb1d",
+    "session_id": "caption_session_0fffdf43594345bf98bb407b113d54ca",
+    "platform": "x",
+    "variations": [
+      "Caught me mid-adjust on the couch \ud83d\ude0c... stay and help or pretend you saw nothing? \ud83d\udc40",
+      "Quiet house, pink mood, and way too much free time \ud83d\udc95 be honest \u2014 what's your first move if you walked in right now?",
+      "I was supposed to be productive today... instead I'm stuck in this exact pose \u2728 would you rescue me or join the chaos?",
+      "Living room energy only \ud83d\udecb finish the sentence: the second you sit next to me...",
+      "Help me decide \ud83e\udd14 afternoon movie marathon or we keep the playful vibe going instead?",
+      "That little smirk means trouble and you know it \ud83d\ude09 what's the first thing you'd tease me about?",
+      "If you had one hour alone in this room with me... clock starts now \u23f3 what are we doing?",
+      "Choose carefully: A) soft cuddles on the couch B) zero chill flirting C) surprise me \ud83d\ude0f",
+      "I glanced back and instantly regretted how obvious I was being \ud83d\ude33... or did I?",
+      "Real talk \u2014 would you rather steal the remote or steal this whole moment with me? \ud83d\udc98"
+    ],
+    "selected_text": "Okay, I picked the bikini\u2026 you pick where I\u2019m wearing it \ud83d\ude0c\ud83d\udc47",
+    "formatter_metadata": {
+      "provider_neutral": true,
+      "formatter": "CaptionStudioService",
+      "workflow": "x_engagement_publish",
+      "vision_primary": true,
+      "vision_provider": "grok",
+      "vision": {
+        "setting": "cozy modern living room with light sectional sofa and tall bright windows",
+        "activity": "perched on the edge of the couch, glancing back over her shoulder while adjusting the hip tie",
+        "time_of_day": "daytime with soft diffused daylight",
+        "location": "indoors, living room",
+        "wardrobe": "soft pink halter string bikini",
+        "expression": "playful soft smirk with direct eye contact",
+        "body_language": "seated sideways on couch edge, one hand on hip tie, other arm relaxed behind, shoulders open, looking back",
+        "lighting": "soft ambient natural window light with gentle highlights on skin",
+        "mood": "candid, intimate, teasing, relaxed",
+        "environment": "bright airy living space, wooden floors, neutral furniture, clean modern interior"
+      },
+      "themes": [
+        {
+          "theme": "Creator OS Engagement",
+          "persona": "creator_os_engagement",
+          "captions": [
+            "Caught me mid-adjust on the couch \ud83d\ude0c... stay and help or pretend you saw nothing? \ud83d\udc40",
+            "Quiet house, pink mood, and way too much free time \ud83d\udc95 be honest \u2014 what's your first move if you walked in right now?",
+            "I was supposed to be productive today... instead I'm stuck in this exact pose \u2728 would you rescue me or join the chaos?",
+            "Living room energy only \ud83d\udecb finish the sentence: the second you sit next to me...",
+            "Help me decide \ud83e\udd14 afternoon movie marathon or we keep the playful vibe going instead?",
+            "That little smirk means trouble and you know it \ud83d\ude09 what's the first thing you'd tease me about?",
+            "If you had one hour alone in this room with me... clock starts now \u23f3 what are we doing?",
+            "Choose carefully: A) soft cuddles on the couch B) zero chill flirting C) surprise me \ud83d\ude0f",
+            "I glanced back and instantly regretted how obvious I was being \ud83d\ude33... or did I?",
+            "Real talk \u2014 would you rather steal the remote or steal this whole moment with me? \ud83d\udc98"
+          ]
+        }
+      ],
+      "personas": {
+        "creator_os_engagement": "Creator OS Engagement"
+      },
+      "engagement_goals": [
+        "replies",
+        "reposts",
+        "likes",
+        "profile visits",
+        "follows"
+      ]
+    },
+    "created_at": "2026-08-14T15:37:33.619981"
+  },
+  {
+    "caption_result_id": "caption_result_ec2005e78d8a4429b4843f517572e8e4",
+    "caption_request_id": "caption_request_a6395e5fd4034d98aaf371d72be39331",
+    "session_id": "caption_session_afe7337456c948a293be5d15d8b504fd",
+    "platform": "x",
+    "variations": [
+      "Caught me staring at the skyline\u2026 or were you hoping I\u2019d turn around \ud83d\ude0f city nights like this always feel a little dangerous, right?",
+      "Be honest\u2026 if we had this rooftop all to ourselves at dusk \ud83c\udf06 would you actually watch the view or keep distracting me?",
+      "Help me decide: stay up here chasing that golden breeze \u2728 or sneak downstairs for something quieter\u2026 what\u2019s your vote?",
+      "Finish this\u2026 \u201cThe second she looked back like that I\u2026\u201d \ud83d\udc40 no filter, I dare you.",
+      "Rooftop rule: you only get one song while the city lights wake up \ud83c\udfb6 what are we playing first?",
+      "Would you rather steal the last 20 minutes of this sunset with me \ud83c\udf07 or claim the entire night after? Choose carefully.",
+      "I keep getting that \u201ccome closer\u201d feeling up here \ud83d\ude0c tell me I\u2019m not the only one who feels it when the wind hits like this.",
+      "Hypothetical: I hand you the camera and say \u201cone candid shot before it gets dark\u201d \ud83d\udcf8 what\u2019s the first thing you\u2019d whisper?",
+      "Okay but seriously\u2026 rooftop flirting or proper dinner plans first? \ud83e\udee3 I need a tie-breaker from you.",
+      "If this was our little secret spot above the city \ud83c\udfd9\ufe0f would you keep it quiet\u2026 or brag just a little?"
+    ],
+    "selected_text": "Finish this\u2026 \u201cThe second she looked back like that I\u2026\u201d \ud83d\udc40 no filter, I dare you.",
+    "formatter_metadata": {
+      "provider_neutral": true,
+      "formatter": "CaptionStudioService",
+      "workflow": "x_engagement_publish",
+      "vision_primary": true,
+      "vision_provider": "grok",
+      "vision": {
+        "setting": "urban rooftop with city skyline in the background",
+        "activity": "leaning against a railing and glancing back over her shoulder",
+        "time_of_day": "dusk",
+        "location": "city rooftop overlooking high-rises",
+        "wardrobe": "fitted terracotta tank top and light-wash denim shorts",
+        "expression": "teasing, seductive locked eye contact with a soft playful half-smile",
+        "body_language": "torso twisted toward camera, one arm resting on the railing, confident and inviting posture",
+        "lighting": "soft natural dusk light with warm subtle shadows",
+        "mood": "candid, intimate, flirty city energy",
+        "environment": "breezy rooftop with blurred skyscrapers and open sky"
+      },
+      "themes": [
+        {
+          "theme": "Creator OS Engagement",
+          "persona": "creator_os_engagement",
+          "captions": [
+            "Caught me staring at the skyline\u2026 or were you hoping I\u2019d turn around \ud83d\ude0f city nights like this always feel a little dangerous, right?",
+            "Be honest\u2026 if we had this rooftop all to ourselves at dusk \ud83c\udf06 would you actually watch the view or keep distracting me?",
+            "Help me decide: stay up here chasing that golden breeze \u2728 or sneak downstairs for something quieter\u2026 what\u2019s your vote?",
+            "Finish this\u2026 \u201cThe second she looked back like that I\u2026\u201d \ud83d\udc40 no filter, I dare you.",
+            "Rooftop rule: you only get one song while the city lights wake up \ud83c\udfb6 what are we playing first?",
+            "Would you rather steal the last 20 minutes of this sunset with me \ud83c\udf07 or claim the entire night after? Choose carefully.",
+            "I keep getting that \u201ccome closer\u201d feeling up here \ud83d\ude0c tell me I\u2019m not the only one who feels it when the wind hits like this.",
+            "Hypothetical: I hand you the camera and say \u201cone candid shot before it gets dark\u201d \ud83d\udcf8 what\u2019s the first thing you\u2019d whisper?",
+            "Okay but seriously\u2026 rooftop flirting or proper dinner plans first? \ud83e\udee3 I need a tie-breaker from you.",
+            "If this was our little secret spot above the city \ud83c\udfd9\ufe0f would you keep it quiet\u2026 or brag just a little?"
+          ]
+        }
+      ],
+      "personas": {
+        "creator_os_engagement": "Creator OS Engagement"
+      },
+      "engagement_goals": [
+        "replies",
+        "reposts",
+        "likes",
+        "profile visits",
+        "follows"
+      ]
+    },
+    "created_at": "2026-08-13T16:19:03.149817"
+  },
+  {
+    "caption_result_id": "caption_result_026aec7441e940269d18fa245241373a",
+    "caption_request_id": "caption_request_34e8bfee911e4893a43c36439af5a084",
+    "session_id": "caption_session_b73d7da04d754d15accee7de1c94ab30",
+    "platform": "x",
+    "variations": [
+      "Caught me mid-wave \ud83c\udf0a... would you wade out here with me or stay safely on the sand? \ud83d\ude0f",
+      "Saltwater hair and zero plans \u2600\ufe0f Be honest... what's the first thing you'd say if you walked up right now?",
+      "I keep ending up in the shallow end \ud83d\ude48 Help me decide: another dip or we grab drinks and watch the sunset?",
+      "This exact moment feels like the start of a really good story \u2728 Finish it: we meet at the waterline and then...",
+      "Ocean air hits different when you're already wet \ud83d\udca7 Would you rather float out further or just sit here letting the waves do their thing?",
+      "Quiet little smile for no reason \ud83d\ude0c Tell me your version of the perfect late-afternoon beach escape.",
+      "If I dared you to join me in three seconds \u23f1\ufe0f are you running in or making excuses from shore?",
+      "Warm water swirling around us and nowhere else to be \ud83c\udf34 Choose one: long walk along the edge or stay right here trading secrets?",
+      "I think the sea is flirting with me today \ud83c\udf0a Should I flirt back... or let someone else handle that job?",
+      "Low tide, good lighting, and a mood I can't quite name \u2600\ufe0f What would you do if you had this whole stretch of beach to yourself with me?"
+    ],
+    "selected_text": "This exact moment feels like the start of a really good story \u2728 Finish it: we meet at the waterline and then...",
+    "formatter_metadata": {
+      "provider_neutral": true,
+      "formatter": "CaptionStudioService",
+      "workflow": "x_engagement_publish",
+      "vision_primary": true,
+      "vision_provider": "grok",
+      "vision": {
+        "setting": "shallow ocean surf at a sandy beach shoreline",
+        "activity": "leaning forward in the water while brushing hair from her face",
+        "time_of_day": "late afternoon or early evening with warm sunlight",
+        "location": "beach edge with open water and distant shoreline",
+        "wardrobe": "olive/gray bikini top and bottoms",
+        "expression": "soft genuine smile with warm eye contact",
+        "body_language": "relaxed forward lean, one hand raised to hair, open and inviting posture",
+        "lighting": "warm natural sunlight with soft highlights on wet skin and hair",
+        "mood": "candid, intimate, relaxed, sun-kissed warmth",
+        "environment": "calm shallow waves, water droplets, wet sand, bright sky, distant greenery"
+      },
+      "themes": [
+        {
+          "theme": "Creator OS Engagement",
+          "persona": "creator_os_engagement",
+          "captions": [
+            "Caught me mid-wave \ud83c\udf0a... would you wade out here with me or stay safely on the sand? \ud83d\ude0f",
+            "Saltwater hair and zero plans \u2600\ufe0f Be honest... what's the first thing you'd say if you walked up right now?",
+            "I keep ending up in the shallow end \ud83d\ude48 Help me decide: another dip or we grab drinks and watch the sunset?",
+            "This exact moment feels like the start of a really good story \u2728 Finish it: we meet at the waterline and then...",
+            "Ocean air hits different when you're already wet \ud83d\udca7 Would you rather float out further or just sit here letting the waves do their thing?",
+            "Quiet little smile for no reason \ud83d\ude0c Tell me your version of the perfect late-afternoon beach escape.",
+            "If I dared you to join me in three seconds \u23f1\ufe0f are you running in or making excuses from shore?",
+            "Warm water swirling around us and nowhere else to be \ud83c\udf34 Choose one: long walk along the edge or stay right here trading secrets?",
+            "I think the sea is flirting with me today \ud83c\udf0a Should I flirt back... or let someone else handle that job?",
+            "Low tide, good lighting, and a mood I can't quite name \u2600\ufe0f What would you do if you had this whole stretch of beach to yourself with me?"
+          ]
+        }
+      ],
+      "personas": {
+        "creator_os_engagement": "Creator OS Engagement"
+      },
+      "engagement_goals": [
+        "replies",
+        "reposts",
+        "likes",
+        "profile visits",
+        "follows"
+      ]
+    },
+    "created_at": "2026-08-12T15:39:03.537117"
+  },
+  {
     "caption_result_id": "caption_result_4d4568500a9441078bdacc7ff6062c91",
     "caption_request_id": "caption_request_ee4250cb2ba24c8bad5f9011e5bb4bc8",
     "session_id": "caption_session_6118a3a25dfb41debc0bc79a91095878",

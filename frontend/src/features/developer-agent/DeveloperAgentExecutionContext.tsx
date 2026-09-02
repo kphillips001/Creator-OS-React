@@ -206,12 +206,27 @@ export function DeveloperAgentExecutionProvider({ children }: { children: React.
     void refreshNotifications();
     void refreshExecutions();
     void refreshResolutions();
-    const timer = window.setInterval(() => {
+    const notificationsTimer = window.setInterval(() => {
+      if (document.visibilityState === "visible") void refreshNotifications();
+    }, 15_000);
+    const historyTimer = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        void refreshExecutions();
+        void refreshResolutions();
+      }
+    }, 60_000);
+    const refreshVisible = () => {
+      if (document.visibilityState !== "visible") return;
       void refreshNotifications();
       void refreshExecutions();
       void refreshResolutions();
-    }, 3000);
-    return () => window.clearInterval(timer);
+    };
+    document.addEventListener("visibilitychange", refreshVisible);
+    return () => {
+      window.clearInterval(notificationsTimer);
+      window.clearInterval(historyTimer);
+      document.removeEventListener("visibilitychange", refreshVisible);
+    };
   }, [recheck, refreshExecutions, refreshNotifications, refreshResolutions]);
 
   const value = useMemo<ExecutionContextValue>(() => ({

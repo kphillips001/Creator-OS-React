@@ -1,3 +1,4 @@
+import os
 import uuid
 
 from app.services.mass_ppv_targeting_service import (
@@ -21,12 +22,14 @@ from app.services.global_send_execution_guard_service import (
 from app.repositories.content_usage_repository import (
     log_content_usage,
 )
+from app.models.customer_contact import ContactPolicyResult, ContactPurpose
+from app.services.customer_contact_authority_service import CustomerContactAuthorityService
 
 
 class MassPPVSendService:
     def __init__(
         self,
-        fanvue_account_id: int,
+        fanvue_account_id: int | None = None,
     ):
         self.fanvue_account_id = fanvue_account_id
 
@@ -34,8 +37,9 @@ class MassPPVSendService:
 
         self.payload_builder = PayloadBuilderService()
 
-        self.fanvue_api = FanvueAPIService(
-            fanvue_account_id=self.fanvue_account_id,
+        self.fanvue_api = (
+            FanvueAPIService(fanvue_account_id=self.fanvue_account_id)
+            if self.fanvue_account_id is not None else None
         )
 
         self.content_guard = ContentDeliveryGuardService()
@@ -43,6 +47,11 @@ class MassPPVSendService:
         self.global_safety = GlobalAutomationSafetyService()
 
         self.execution_guard = GlobalSendExecutionGuardService()
+        self.contact_authority = CustomerContactAuthorityService()
+
+    @staticmethod
+    def live_send_enabled() -> bool:
+        return os.getenv("MASS_PPV_LIVE_SEND_ENABLED", "false").strip().lower() == "true"
 
     def send_mass_ppv_campaign(
         self,
@@ -68,7 +77,7 @@ class MassPPVSendService:
         → Usage Logging
         """
 
-        if fanvue_account_id != self.fanvue_account_id:
+        if self.fanvue_account_id is not None and fanvue_account_id != self.fanvue_account_id:
             return {
                 "success": False,
                 "status": "blocked",
@@ -78,6 +87,16 @@ class MassPPVSendService:
             }
 
         campaign_id = str(uuid.uuid4())
+
+        if not dry_run and not self.live_send_enabled():
+            return {
+                "success": False, "blocked": True, "status": "blocked",
+                "reason": "mass_ppv_live_send_shelved",
+                "campaign_id": campaign_id, "target_count": len(targets),
+                "sent_count": 0, "dry_run_count": 0,
+                "skipped_count": len(targets), "failed_count": 0,
+                "results": [],
+            }
 
         print("\n[MASS PPV CAMPAIGN START]")
         print(f"campaign_id={campaign_id}")
@@ -162,6 +181,31 @@ class MassPPVSendService:
                     "success": False,
                     "status": "skipped",
                     "reason": reason,
+                })
+                continue
+
+            contact_policy = self.contact_authority.decide(
+                purpose=ContactPurpose.MASS_PPV,
+                evidence={
+                    "active_offer": bool(memory.get("active_purchase_intent") or memory.get("active_offer")),
+                    "active_session": bool(memory.get("active_session") or memory.get("sales_session_id")),
+                    "back_off": bool(memory.get("back_off")) or str(memory.get("sales_progression_phase") or "").upper() == "BACK_OFF",
+                    "attention_mode": memory.get("effort_mode") or memory.get("attention_tier"),
+                    "buyer_value_tier": memory.get("value_tier") or memory.get("user_value_tier"),
+                    "recent_purchase": bool(memory.get("recent_purchase_active") or memory.get("post_purchase_cooldown")),
+                    "pending_delivery": bool(memory.get("pending_delivery")),
+                    "uncertain_delivery": bool(memory.get("send_uncertain")),
+                    "active_conversation": bool(memory.get("active_conversation")),
+                    "cooldown_active": bool(memory.get("mass_ppv_cooldown_active")),
+                },
+            )
+            if contact_policy.result is not ContactPolicyResult.ALLOW:
+                skipped_count += 1
+                results.append({
+                    "user_id": user_id, "username": username,
+                    "success": False, "status": "skipped",
+                    "reason": contact_policy.reason,
+                    "contact_policy": dict(contact_policy.to_mapping()),
                 })
                 continue
 
@@ -261,12 +305,48 @@ class MassPPVSendService:
                 })
                 continue
 
-            send_result = self.fanvue_api.send_chat_message(
+            contact_policy, contact_reservation = self.contact_authority.authorize_proactive(
+                purpose=ContactPurpose.MASS_PPV,
+                fanvue_account_id=int(fanvue_account_id),
+                customer_scope=f"fanvue:{int(user_id)}",
+                owner_id=f"mass-ppv:{campaign_id}:{user_id}",
+                correlation_id=f"mass-ppv:{campaign_id}:{user_id}",
+                evidence={
+                    "active_offer": bool(memory.get("active_purchase_intent") or memory.get("active_offer")),
+                    "active_session": bool(memory.get("active_session") or memory.get("sales_session_id")),
+                    "back_off": bool(memory.get("back_off")),
+                    "attention_mode": memory.get("effort_mode") or memory.get("attention_tier"),
+                    "recent_purchase": bool(memory.get("recent_purchase_active") or memory.get("post_purchase_cooldown")),
+                    "pending_delivery": bool(memory.get("pending_delivery")),
+                    "uncertain_delivery": bool(memory.get("send_uncertain")),
+                    "active_conversation": bool(memory.get("active_conversation")),
+                    "cooldown_active": bool(memory.get("mass_ppv_cooldown_active")),
+                },
+            )
+            if contact_reservation is None:
+                skipped_count += 1
+                results.append({
+                    "user_id": user_id, "username": username,
+                    "success": False, "status": "skipped",
+                    "reason": contact_policy.reason,
+                    "contact_policy": dict(contact_policy.to_mapping()),
+                })
+                continue
+
+            api = self.fanvue_api or FanvueAPIService(
+                fanvue_account_id=int(fanvue_account_id))
+            send_result = api.send_chat_message(
                 user_uuid=fanvue_user_uuid,
                 payload=payload,
             )
 
             if not send_result.get("success"):
+                self.contact_authority.finalize_reservation(
+                    contact_reservation, outcome=(
+                        "SEND_UNCERTAIN" if send_result.get("ambiguous") or send_result.get("unknown")
+                        else "FAILED"
+                    ), error=send_result.get("reason") or "fanvue_send_failed",
+                )
                 print("[MASS PPV SEND FAILED]")
 
                 failed_count += 1
@@ -284,6 +364,11 @@ class MassPPVSendService:
                     "safety_result": safety_result,
                 })
                 continue
+
+            self.contact_authority.finalize_reservation(
+                contact_reservation, outcome="CONFIRMED",
+                delivery_reference=str(send_result.get("message_uuid") or "") or None,
+            )
 
             print("[MASS PPV SEND SUCCESS]")
 

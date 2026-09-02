@@ -35,13 +35,36 @@ def complete_claim(webhook_event_id: int, *, worker_instance_id: str) -> dict:
     )
 
 
+def ignore_claim(webhook_event_id: int, *, worker_instance_id: str,
+                 reason: str) -> dict:
+    return _claims._owned_update(
+        webhook_event_id, worker_instance_id=worker_instance_id,
+        assignments=("status='ignored',processed_at=NOW(),last_error=%s,next_retry_at=NULL," 
+                     "worker_instance_id=NULL,claimed_at=NULL,lease_expires_at=NULL"),
+        params=(reason[:1000],),
+    )
+
+
+def quarantine_claim(webhook_event_id: int, *, worker_instance_id: str,
+                     reason: str) -> dict:
+    return _claims._owned_update(
+        webhook_event_id, worker_instance_id=worker_instance_id,
+        assignments=("status='quarantined',last_error=%s,next_retry_at=NULL," 
+                     "worker_instance_id=NULL,claimed_at=NULL,lease_expires_at=NULL"),
+        params=(reason[:1000],),
+    )
+
+
 def fail_claim(webhook_event_id: int, *, worker_instance_id: str, error_message: str,
-               retry_delay_minutes: int = 5) -> dict:
+               retry_delay_minutes: int = 5, max_attempts: int = 8) -> dict:
     return _claims.fail_claim(
         webhook_event_id, worker_instance_id=worker_instance_id,
-        assignments=("status = 'failed', retry_count = retry_count + 1, last_error = %s, "
-                     "failed_at = NOW(), next_retry_at = NOW() + (%s * INTERVAL '1 minute')"),
-        params=(error_message, max(1, int(retry_delay_minutes))),
+        assignments=("status=CASE WHEN retry_count+1 >= %s THEN 'quarantined' ELSE 'failed' END, "
+                     "retry_count=retry_count+1,last_error=%s,failed_at=NOW(),"
+                     "next_retry_at=CASE WHEN retry_count+1 >= %s THEN NULL "
+                     "ELSE NOW()+(%s*INTERVAL '1 minute') END"),
+        params=(max(1,int(max_attempts)),error_message,max(1,int(max_attempts)),
+                max(1, int(retry_delay_minutes))),
     )
 
 

@@ -145,14 +145,57 @@ def test_reply_context_uses_real_metadata_and_omits_internal_terminology():
     )
     result = service.recommend(context(service, "Can I buy one image?"))
     reply = service.compose_reply("I found something for you.", result)
-    assert "Private Beach Photo" in reply
-    assert "USD 9.99" in reply
-    assert "https://fanvue.com/fvml-active" in reply
+    assert reply == "I found something for you."
+    assert "USD 9.99" not in reply
+    assert "https://fanvue.com/fvml-active" not in reply
     for forbidden in (
         "Commercial Offering", "Commercial Publication",
         "Media Link UUID", "Provider resource", "Fulfillment",
     ):
         assert forbidden not in reply
+
+
+def test_unmapped_reply_preserves_provider_copy_without_commerce_metadata_leakage():
+    item = offering()
+    item.title = "CONTROLLED SMOKE TEST — $3 SINGLE"
+    item.description = "Operator-controlled test offering. Do not use in production."
+    decision = SimpleNamespace(offering=item, product_context={})
+    provider_copy = "I saved a private one I think you'll love. Ready to unlock?"
+
+    reply = ChatCommerceService.compose_reply(
+        provider_copy, decision, price_neutral=True,
+    )
+
+    assert reply == provider_copy
+    assert "USD 9.99" not in reply
+    assert item.delivery_url not in reply
+    assert item.title not in reply
+    assert item.description not in reply
+
+
+def test_bundle_reply_keeps_price_and_destination_out_of_ava_prose():
+    item = offering("BUNDLE")
+    decision = SimpleNamespace(
+        offering=item,
+        product_context={"bundleOffer": {"paidMemberCount": 3}},
+    )
+    reply = ChatCommerceService.compose_reply("I picked this for you.", decision)
+    assert reply == "I picked this for you."
+    assert "USD 9.99" not in reply
+    assert item.delivery_url not in reply
+
+
+def test_session_reply_does_not_add_generic_progression_language():
+    item = offering("SINGLE_IMAGE")
+    decision = SimpleNamespace(
+        offering=item, product_context={"sellingMode": "SESSION"},
+    )
+    reply = ChatCommerceService.compose_reply("Ready for the next part?", decision)
+    assert reply == "Ready for the next part?"
+    assert "USD 9.99" not in reply
+    assert item.delivery_url not in reply
+    assert "Your next unlock" not in reply
+    assert "complete" not in reply.lower()
 
 
 def test_adapter_has_no_direct_provider_or_publication_dependencies():

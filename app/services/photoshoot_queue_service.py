@@ -3,6 +3,14 @@
 from __future__ import annotations
 
 import json
+import logging
+import os
+import random
+import sys
+import tempfile
+import time
+from contextlib import contextmanager
+from threading import RLock
 from dataclasses import asdict, replace
 from pathlib import Path
 from typing import Any, Iterable, Mapping
@@ -24,10 +32,18 @@ from app.services.generation_engine_service import GenerationEngineService
 from app.services.generation_result_ingestion_service import GenerationResultIngestionService
 
 
+class PhotoshootPreparationRequired(RuntimeError):
+    def __init__(self, message: str, *, request_id: str, generation_job_id: str):
+        super().__init__(message)
+        self.request_id = request_id
+        self.generation_job_id = generation_job_id
+
+
 class PhotoshootQueueService:
     """Owns creative sequencing and review-gated photoshoot progress."""
 
     DEFAULT_STORAGE_DIR = Path("data") / "photoshoot_queue"
+    _extension_lock = RLock()
 
     def __init__(
         self,
@@ -36,7 +52,7 @@ class PhotoshootQueueService:
         generation_ingestion_service: GenerationResultIngestionService | None = None,
         asset_repository=None,
     ):
-        self.storage_dir = Path(storage_dir or self.DEFAULT_STORAGE_DIR)
+        self.storage_dir = Path(storage_dir or self.DEFAULT_STORAGE_DIR).resolve()
         self.generation_ingestion = generation_ingestion_service or GenerationResultIngestionService()
         self.asset_repository = asset_repository
 
@@ -64,7 +80,7 @@ class PhotoshootQueueService:
         reference_asset_id: int | None = None,
         creator_notes: str | None = None,
         creative_continuity: Mapping[str, Any] | None = None,
-        target_shot_count: int = 10,
+        target_shot_count: int = 5,
     ) -> PhotoshootSession:
         plans = tuple(prompt_plans)
         if not plans:
@@ -113,12 +129,11 @@ class PhotoshootQueueService:
             },
             request_ids=tuple(request.request_id for request in requests),
         )
-        sessions = list(self.list_sessions())
-        sessions.insert(0, session)
-        existing_requests = list(self.list_requests())
-        existing_requests.extend(requests)
-        self._write_sessions(sessions)
-        self._write_requests(existing_requests)
+        self._mutate_json(self.sessions_path, lambda items: [asdict(session), *items])
+        self._mutate_json(
+            self.requests_path,
+            lambda items: [*items, *(asdict(request) for request in requests)],
+        )
         return session
 
     def queue_next_prompt(
@@ -143,6 +158,12 @@ class PhotoshootQueueService:
         plan = self._prompt_plan_from_request(next_request, session.creator_profile_id)
         frozen_identity = dict((session.creative_continuity or {}).get("canonical_identity_reference") or {})
         frozen_identity_path = str(frozen_identity.get("path") or "").strip()
+        seed_image_id = str(dict(session.creative_continuity or {}).get("seed_image_id") or "").strip()
+        seed_output_reference = str(dict(session.creative_continuity or {}).get("seed_output_reference") or "").strip()
+        previous_image_id = str(dict(next_request.metadata or {}).get("active_reference_image_id") or seed_image_id).strip()
+        previous_output_reference = str(
+            dict(next_request.metadata or {}).get("active_reference_output_reference") or seed_output_reference
+        ).strip()
         if (session.creative_continuity or {}).get("canonical_identity_reference_frozen") and not frozen_identity_path:
             raise ValueError("The frozen canonical identity reference is unavailable for this Photoshoot.")
         job = generation_engine.queue_prompt_plan(
@@ -167,8 +188,7 @@ class PhotoshootQueueService:
                 "photoshoot_request_id": next_request.request_id,
                 "photoshoot_sequence_index": next_request.sequence_index,
                 "active_reference_image_id": (
-                    dict(next_request.metadata or {}).get("active_reference_image_id")
-                    or dict(session.creative_continuity or {}).get("seed_image_id")
+                    previous_image_id
                 ),
                 "creative_continuity": dict(session.creative_continuity or {}),
                 **({
@@ -179,15 +199,16 @@ class PhotoshootQueueService:
                 } if frozen_identity_path else {}),
                 **(
                     {
-                        "reference_image_url": dict(next_request.metadata or {}).get("active_reference_output_reference")
-                        or dict(session.creative_continuity or {}).get("seed_output_reference"),
-                        "photoshoot_continuity_reference_image_url": dict(next_request.metadata or {}).get("active_reference_output_reference")
-                        or dict(session.creative_continuity or {}).get("seed_output_reference"),
+                        "reference_image_url": previous_output_reference,
+                        "photoshoot_continuity_reference_image_url": previous_output_reference,
+                        "previous_approved_continuity_reference_image_id": previous_image_id,
+                        "previous_approved_continuity_reference_image_url": previous_output_reference,
+                        **({
+                            "original_photoshoot_seed_image_id": seed_image_id,
+                            "original_photoshoot_seed_reference_image_url": seed_output_reference,
+                        } if seed_output_reference else {}),
                     }
-                    if (
-                        dict(next_request.metadata or {}).get("active_reference_output_reference")
-                        or dict(session.creative_continuity or {}).get("seed_output_reference")
-                    )
+                    if previous_output_reference
                     else {}
                 ),
             },
@@ -212,8 +233,22 @@ class PhotoshootQueueService:
             },
             updated_at=utc_now(),
         )
-        self._replace_request(updated_request)
-        self._replace_session(updated_session)
+        try:
+            self._replace_request(updated_request)
+            self._replace_session(updated_session)
+        except Exception as error:
+            try:
+                self.mark_preparation_required(
+                    next_request.request_id, generation_job_id=job.job_id, reason=str(error),
+                )
+            except Exception:
+                logging.getLogger("creator_os.photoshoot.queue").exception(
+                    "preparation_recovery_marker_failed request_id=%s job_id=%s",
+                    next_request.request_id, job.job_id,
+                )
+            raise PhotoshootPreparationRequired(
+                str(error), request_id=next_request.request_id, generation_job_id=job.job_id,
+            ) from error
         return job
 
     def mark_generation_complete(
@@ -228,11 +263,15 @@ class PhotoshootQueueService:
             return None
         asset_ids = tuple(int(asset_id) for asset_id in imported_asset_ids if asset_id is not None)
         generated_ids = tuple(str(image_id) for image_id in generated_image_ids if str(image_id))
+        completed_metadata = dict(request.metadata or {})
+        completed_metadata.pop("last_generation_failure", None)
+        completed_metadata.pop("finalization_required", None)
+        completed_metadata.pop("finalization_error", None)
         updated = replace(
             request,
             status="awaiting_review",
             imported_asset_ids=asset_ids,
-            metadata={**dict(request.metadata or {}), "generated_image_ids": generated_ids},
+            metadata={**completed_metadata, "generated_image_ids": generated_ids},
             updated_at=utc_now(),
         )
         self._replace_request(updated)
@@ -646,9 +685,7 @@ class PhotoshootQueueService:
                 else "",
             },
         )
-        all_requests = list(self.list_requests())
-        all_requests.append(request)
-        self._write_requests(all_requests)
+        self._mutate_json(self.requests_path, lambda items: [*items, asdict(request)])
         self._replace_session(
             replace(
                 session,
@@ -761,6 +798,83 @@ class PhotoshootQueueService:
             updated_at=utc_now(),
         )
         self._replace_request(updated)
+        return updated
+
+    def mark_finalization_required(
+        self, generation_job_id: str, *, generated_image_ids: Iterable[str], reason: str,
+    ) -> PhotoshootRequest | None:
+        """Preserve a successful render whose local review transition needs retrying."""
+        request = self.request_for_generation_job(generation_job_id)
+        if request is None:
+            return None
+        generated_ids = tuple(str(image_id) for image_id in generated_image_ids if str(image_id))
+        updated = replace(
+            request,
+            status="finalization_required",
+            metadata={
+                **dict(request.metadata or {}),
+                "generated_image_ids": generated_ids,
+                "finalization_required": True,
+                "finalization_error": str(reason or "Local Photoshoot finalization failed.").strip(),
+            },
+            updated_at=utc_now(),
+        )
+        self._replace_request(updated)
+        session = self.get_session(updated.session_id)
+        self._replace_session(replace(
+            session,
+            current_request_id=updated.request_id,
+            creative_continuity={
+                **dict(session.creative_continuity or {}),
+                "workflow_stage": "finalization_required",
+            },
+            updated_at=utc_now(),
+        ))
+        return updated
+
+    def mark_preparation_required(
+        self, request_id: str, *, generation_job_id: str, reason: str,
+    ) -> PhotoshootRequest:
+        request = self.get_request(request_id)
+        updated = replace(
+            request,
+            status="preparation_recovery_required",
+            generation_job_id=generation_job_id,
+            metadata={
+                **dict(request.metadata or {}),
+                "preparation_recovery_required": True,
+                "preparation_error": str(reason or "Local generation preparation failed.").strip(),
+            },
+            updated_at=utc_now(),
+        )
+        self._replace_request(updated)
+        session = self.get_session(updated.session_id)
+        self._replace_session(replace(
+            session,
+            current_request_id=updated.request_id,
+            creative_continuity={
+                **dict(session.creative_continuity or {}),
+                "workflow_stage": "preparation_recovery_required",
+            },
+            updated_at=utc_now(),
+        ))
+        return updated
+
+    def resume_prepared_request(self, request_id: str) -> PhotoshootRequest:
+        request = self.get_request(request_id)
+        if request.status != "preparation_recovery_required" or not request.generation_job_id:
+            raise ValueError("This Photoshoot request does not require preparation recovery.")
+        metadata = dict(request.metadata or {})
+        metadata.pop("preparation_recovery_required", None)
+        metadata.pop("preparation_error", None)
+        updated = replace(request, status="generating", metadata=metadata, updated_at=utc_now())
+        self._replace_request(updated)
+        session = self.get_session(updated.session_id)
+        self._replace_session(replace(
+            session, current_request_id=updated.request_id,
+            creative_continuity={**dict(session.creative_continuity or {}), "workflow_stage": "generating"},
+            updated_at=utc_now(),
+        ))
         return updated
 
     def record_continuity_assessment(self, request_id: str, assessment: Mapping[str, Any]) -> PhotoshootRequest:
@@ -1303,6 +1417,53 @@ class PhotoshootQueueService:
         self._replace_session(updated)
         return updated
 
+    def extend_target_one_shot(self, session_id: str, *, expected_target_shot_count: int) -> tuple[PhotoshootSession, bool]:
+        """Atomically grant one additional planned shot to an eligible active session.
+
+        The expected-target compare-and-set makes an HTTP retry idempotent: once
+        target 5 has become 6, another request expecting 5 observes 6 and does
+        not extend it again.
+        """
+        with self._extension_lock:
+            session = self.get_session(session_id)
+            expected = normalize_target_shot_count(expected_target_shot_count)
+            if session.target_shot_count == 0:
+                raise ValueError("Creative Freeflow Photoshoots are already open-ended.")
+            if session.status in {"completed", "cancelled"}:
+                raise ValueError("Only an active Photoshoot can be extended.")
+            if session.target_shot_count != expected:
+                if session.target_shot_count == expected + 1:
+                    return session, False
+                raise ValueError("The Photoshoot target changed. Refresh before extending again.")
+            if session.target_shot_count >= 100:
+                raise ValueError("The maximum supported Photoshoot length is 100 shots.")
+            requests = tuple(self.requests_for_session(session_id))
+            if any(request.status in {"queued", "generating", "awaiting_review"} for request in requests):
+                raise ValueError("Finish the current shot before extending this Photoshoot.")
+            from app.services.photoshoot_context_service import PhotoshootContextService
+            approved = PhotoshootContextService.approved_display_count(requests)
+            if approved < session.target_shot_count:
+                raise ValueError("The current Photoshoot target has not been reached.")
+            continuity = dict(session.creative_continuity or {})
+            new_target = session.target_shot_count + 1
+            continuity.update({
+                "target_shot_count": new_target,
+                # A completed full plan has no authored beat beyond its endpoint.
+                # Preserve that plan as history, then return to the canonical
+                # frame-by-frame Ask AI / Direct Shot workflow for the extension.
+                "planning_mode": "frame_by_frame",
+                "workflow_stage": "ready_for_next_shot",
+                "last_extension_from": session.target_shot_count,
+                "last_extension_to": new_target,
+                "last_extension_at": utc_now(),
+            })
+            updated = replace(
+                session, target_shot_count=new_target,
+                creative_continuity=continuity, updated_at=utc_now(),
+            )
+            self._replace_session(updated)
+            return updated, True
+
     def record_freeflow_idea_set(
         self, session_id: str, *, idea_set_id: str, ideas: Iterable[str],
         recommended_idea: str, planning_shot: int,
@@ -1463,12 +1624,22 @@ class PhotoshootQueueService:
         )
 
     def _replace_session(self, updated: PhotoshootSession) -> None:
-        sessions = [updated if session.session_id == updated.session_id else session for session in self.list_sessions()]
-        self._write_sessions(sessions)
+        self._mutate_json(
+            self.sessions_path,
+            lambda items: [
+                asdict(updated) if str(item.get("session_id")) == updated.session_id else item
+                for item in items
+            ],
+        )
 
     def _replace_request(self, updated: PhotoshootRequest) -> None:
-        requests = [updated if request.request_id == updated.request_id else request for request in self.list_requests()]
-        self._write_requests(requests)
+        self._mutate_json(
+            self.requests_path,
+            lambda items: [
+                asdict(updated) if str(item.get("request_id")) == updated.request_id else item
+                for item in items
+            ],
+        )
 
     def _write_sessions(self, sessions: list[PhotoshootSession]) -> None:
         self._write_json(self.sessions_path, [asdict(session) for session in sessions])
@@ -1516,18 +1687,162 @@ class PhotoshootQueueService:
             updated_at=data.get("updated_at"),
         )
 
-    @staticmethod
-    def _read_json(path: Path, default):
+    @classmethod
+    def _read_json(cls, path: Path, default):
+        path = path.resolve()
+        with cls._file_lock(path, operation="read"):
+            return cls._read_json_unlocked(path, default)
+
+    @classmethod
+    def _read_json_unlocked(cls, path: Path, default):
         try:
             if not path.exists():
-                return default
+                return cls._read_recovery_json(path, default)
+            canonical_mtime = path.stat().st_mtime_ns
+            recovered = cls._read_recovery_json(path, None, newer_than=canonical_mtime)
+            if recovered is not None:
+                return recovered
             with open(path, "r", encoding="utf-8") as file:
                 return json.load(file)
         except (OSError, json.JSONDecodeError):
-            return default
+            return cls._read_recovery_json(path, default)
 
     @staticmethod
-    def _write_json(path: Path, data) -> None:
+    def _read_recovery_json(path: Path, default, *, newer_than: int | None = None):
+        candidates = sorted(
+            path.parent.glob(f".{path.name}.*.recovery"),
+            key=lambda item: item.stat().st_mtime_ns,
+            reverse=True,
+        )
+        for candidate in candidates:
+            try:
+                if newer_than is not None and candidate.stat().st_mtime_ns <= newer_than:
+                    continue
+                with open(candidate, "r", encoding="utf-8") as file:
+                    return json.load(file)
+            except (OSError, json.JSONDecodeError):
+                continue
+        return default
+
+    @classmethod
+    def _mutate_json(cls, path: Path, mutation) -> None:
+        path = path.resolve()
+        with cls._file_lock(path, operation="mutate"):
+            current = cls._read_json_unlocked(path, [])
+            cls._write_json_unlocked(path, mutation(current))
+
+    @classmethod
+    def _write_json(cls, path: Path, data) -> None:
+        path = path.resolve()
+        with cls._file_lock(path, operation="write"):
+            cls._write_json_unlocked(path, data)
+
+    @staticmethod
+    @contextmanager
+    def _file_lock(path: Path, *, operation: str = "unknown"):
+        """Serialize a complete queue-file mutation across Creator_OS processes."""
         path.parent.mkdir(parents=True, exist_ok=True)
-        with open(path, "w", encoding="utf-8") as file:
-            json.dump(data, file, indent=2, default=str)
+        lock_path = path.with_name(f".{path.name}.lock")
+        started = time.monotonic()
+        role = " ".join(sys.argv[:3])
+        with open(lock_path, "a+b") as lock_file:
+            lock_file.seek(0, os.SEEK_END)
+            if lock_file.tell() == 0:
+                lock_file.write(b"0")
+                lock_file.flush()
+            lock_file.seek(0)
+            if os.name == "nt":
+                import msvcrt
+                msvcrt.locking(lock_file.fileno(), msvcrt.LK_LOCK, 1)
+                acquired = time.monotonic()
+                logging.getLogger("creator_os.photoshoot.queue").debug(
+                    "queue_lock_acquired pid=%s role=%s operation=%s target=%s lock=%s wait_ms=%.2f",
+                    os.getpid(), role, operation, path, lock_path, (acquired - started) * 1000,
+                )
+                try:
+                    yield
+                finally:
+                    lock_file.seek(0)
+                    msvcrt.locking(lock_file.fileno(), msvcrt.LK_UNLCK, 1)
+                    logging.getLogger("creator_os.photoshoot.queue").debug(
+                        "queue_lock_released pid=%s role=%s operation=%s target=%s lock=%s held_ms=%.2f",
+                        os.getpid(), role, operation, path, lock_path,
+                        (time.monotonic() - acquired) * 1000,
+                    )
+            else:
+                import fcntl
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+                acquired = time.monotonic()
+                try:
+                    yield
+                finally:
+                    fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+
+    @classmethod
+    def _write_json_unlocked(cls, path: Path, data) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        started_at = time.monotonic()
+        temporary_path: Path | None = None
+        replaced = False
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                encoding="utf-8",
+                dir=path.parent,
+                prefix=f".{path.name}.",
+                suffix=".tmp",
+                delete=False,
+            ) as file:
+                temporary_path = Path(file.name)
+                json.dump(data, file, indent=2, default=str)
+                file.flush()
+                os.fsync(file.fileno())
+            delays = (0.05, 0.1, 0.2, 0.4, 0.75)
+            for attempt in range(len(delays) + 1):
+                try:
+                    os.replace(temporary_path, path)
+                    replaced = True
+                    break
+                except OSError as error:
+                    winerror = getattr(error, "winerror", None)
+                    writable = os.access(path.parent, os.W_OK) and (not path.exists() or os.access(path, os.W_OK))
+                    transient = winerror in {32, 33} or (winerror == 5 and writable)
+                    if not transient or attempt >= len(delays):
+                        stat = path.stat() if path.exists() else None
+                        logging.getLogger("creator_os.photoshoot.queue").error(
+                            "queue_replace_exhausted pid=%s role=%s destination=%s temporary=%s "
+                            "lock=%s attempt=%s winerror=%s elapsed_ms=%.2f canonical_size=%s "
+                            "canonical_mtime_ns=%s writable=%s",
+                            os.getpid(), " ".join(sys.argv[:3]), path, temporary_path,
+                            path.with_name(f".{path.name}.lock"), attempt + 1, winerror,
+                            (time.monotonic() - started_at) * 1000,
+                            getattr(stat, "st_size", None), getattr(stat, "st_mtime_ns", None), writable,
+                        )
+                        raise
+                    logging.getLogger("creator_os.photoshoot.queue").warning(
+                        "queue_replace_retry pid=%s role=%s destination=%s temporary=%s lock=%s "
+                        "attempt=%s winerror=%s elapsed_ms=%.2f",
+                        os.getpid(), " ".join(sys.argv[:3]), path, temporary_path,
+                        path.with_name(f".{path.name}.lock"), attempt + 1, winerror,
+                        (time.monotonic() - started_at) * 1000,
+                    )
+                    time.sleep(delays[attempt] + random.uniform(0, min(0.025, delays[attempt] / 4)))
+        finally:
+            if temporary_path is not None and temporary_path.exists():
+                if replaced:
+                    temporary_path.unlink()
+                else:
+                    recovery_path = path.with_name(
+                        f".{path.name}.{time.time_ns()}.recovery"
+                    )
+                    try:
+                        os.replace(temporary_path, recovery_path)
+                        logging.getLogger("creator_os.photoshoot.queue").error(
+                            "queue_recovery_preserved pid=%s destination=%s recovery=%s",
+                            os.getpid(), path, recovery_path,
+                        )
+                    except OSError:
+                        logging.getLogger("creator_os.photoshoot.queue").exception(
+                            "queue_recovery_preserve_failed path=%s temporary_path=%s",
+                            path, temporary_path,
+                        )

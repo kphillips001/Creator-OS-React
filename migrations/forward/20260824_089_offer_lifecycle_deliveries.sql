@@ -1,0 +1,4 @@
+BEGIN;
+ALTER TABLE public.telegram_sales_delivery_operations DROP CONSTRAINT IF EXISTS telegram_sales_delivery_operations_purchase_intent_id_key;
+CREATE INDEX IF NOT EXISTS idx_telegram_sales_delivery_purchase_intent ON public.telegram_sales_delivery_operations (purchase_intent_id, created_at);
+COMMIT;

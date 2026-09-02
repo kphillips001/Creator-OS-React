@@ -18,6 +18,23 @@ export type GenerationRecord = {
   creator_profile_id?: number;
   canRegenerate?: boolean;
   regenerationIneligibilityReason?: string | null;
+  is_staged?: boolean;
+  staged_at?: string | null;
+  content_classification?: "SFW" | "NSFW" | null;
+  classification_source?: "MANUAL" | "WORKFLOW" | null;
+};
+
+export type GenerationLibraryCard = Pick<GenerationRecord,
+  "image_id" | "image_url" | "provider_id" | "creative_mode" |
+  "generation_date" | "status" | "canRegenerate" |
+  "regenerationIneligibilityReason"
+> & {
+  media_url: string;
+  creator_profile_id?: number;
+  is_staged?: boolean;
+  staged_at?: string | null;
+  content_classification?: "SFW" | "NSFW" | null;
+  classification_source?: "MANUAL" | "WORKFLOW" | null;
 };
 
 export type GenerationCardAction =
@@ -26,6 +43,7 @@ export type GenerationCardAction =
   | "photoshoot"
   | "video"
   | "move-to-asset-library"
+  | "add-to-teasers"
   | "remove";
 
 export type GenerationActionResponse = {
@@ -47,7 +65,7 @@ export type GenerationActionResponse = {
 };
 
 export type GenerationLibraryResponse = {
-  records: GenerationRecord[];
+  records: GenerationLibraryCard[];
   total: number;
   page: number;
   pageSize: number;
@@ -57,7 +75,17 @@ export type GenerationLibraryResponse = {
   error?: string;
 };
 
-export type PublishDestination = "x" | "telegram_wall" | "telegram_chat";
+export type AssembledPhotoshootImportResponse = {
+  intakeId: string;
+  operationId: string;
+  operationStatus: string;
+  created: boolean;
+  deliverableId: string | null;
+  sourceKind: "GENERATION_LIBRARY_IMPORT";
+  detail?: string;
+};
+
+export type PublishDestination = "x" | "telegram_wall" | "telegram_chat" | "instagram";
 
 export type PublishContext = {
   success: boolean;

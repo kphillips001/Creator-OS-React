@@ -98,6 +98,14 @@ function mockContext(
           status: 200,
         });
       }
+      if (url.includes("/explicit/batches/") && url.endsWith("/start")) {
+        return Promise.resolve({
+          headers: new Headers({ "content-type": "application/json" }),
+          json: () => Promise.resolve({ success: true }),
+          ok: true,
+          status: 200,
+        });
+      }
       const body = JSON.parse(String(options.body)) as { explicit?: boolean; tags?: string };
       if (url.endsWith("/explicit/inspire")) {
         responseValue = {
@@ -355,6 +363,20 @@ describe("ContentStudioPage", () => {
     expect(JSON.parse(String(inspireCall?.[1]?.body))).toEqual({ tierMode: "both", count: 10 });
   });
 
+  it("clears Explicit selection without dismissing the displayed concept set", async () => {
+    render(<ContentStudioPage />);
+    await screen.findByRole("region", { name: "Inspire Me Workspace" });
+    fireEvent.click(document.querySelector(".explicit-content-accordion > summary") as HTMLElement);
+    const explicit = screen.getByRole("region", { name: "Explicit Content" });
+    fireEvent.click(within(explicit).getByRole("button", { name: "Inspire Me" }));
+    await within(explicit).findByText("hardcore scene 1");
+    fireEvent.click(within(explicit).getByRole("checkbox", { name: /hardcore scene 1/i }));
+    fireEvent.click(within(explicit).getByRole("button", { name: "Clear Selection" }));
+    expect(within(explicit).getByText("hardcore scene 1")).toBeInTheDocument();
+    expect(within(explicit).getByRole("button", { name: /Enhance & Generate \(0\)/ })).toBeDisabled();
+    expect(within(explicit).getByRole("button", { name: "Start Over" })).toBeInTheDocument();
+  });
+
   it("submits the selected Explicit inspiration tier and total idea count", async () => {
     render(<ContentStudioPage />);
     await screen.findByRole("region", { name: "Inspire Me Workspace" });
@@ -368,7 +390,7 @@ describe("ContentStudioPage", () => {
     expect(JSON.parse(String(inspireCall?.[1]?.body))).toEqual({ tierMode: "softcore", count: 5 });
   });
 
-  it("plans, submits, and displays each selected Explicit concept before preparing the next", async () => {
+  it("plans and durably submits each selected Explicit concept before consuming the completed workspace", async () => {
     render(<ContentStudioPage />);
     await screen.findByRole("region", { name: "Inspire Me Workspace" });
     fireEvent.click(screen.getByText("🔞 Explicit Content").closest("summary") as HTMLElement);
@@ -384,9 +406,9 @@ describe("ContentStudioPage", () => {
         String(url).endsWith("/generations") && options?.method === "POST"
       )),
     ).toHaveLength(2), { timeout: 3000 });
-    await waitFor(() => expect(
-      within(explicit).getAllByRole("img", { name: /Generated image/ }),
-    ).toHaveLength(2));
+    await waitFor(() => expect(within(explicit).queryByText("hardcore scene 1")).not.toBeInTheDocument());
+    expect(within(explicit).getByRole("button", { name: "Inspire Me" })).toBeInTheDocument();
+    expect(within(explicit).queryByRole("img", { name: /Generated image/ })).not.toBeInTheDocument();
 
     const workflowCalls = vi.mocked(fetch).mock.calls.filter(([url, options]) => (
       String(url).endsWith("/creative-tags/enhance")

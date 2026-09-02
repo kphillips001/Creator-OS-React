@@ -37,6 +37,7 @@ class HostedAssetReferenceService:
         self.http_client = http_client or requests
         self.sleep = sleep
         self.verification_ttl = timedelta(seconds=max(0, _number("HOSTED_REFERENCE_VERIFY_TTL_SECONDS", 86400)))
+        self.maximum_age = timedelta(seconds=max(0, _number("HOSTED_REFERENCE_MAX_AGE_SECONDS", 518400)))
         self.verify_timeout = max(1, _number("HOSTED_REFERENCE_VERIFY_TIMEOUT_SECONDS", 15))
         self.retry_delays = self._retry_delays()
 
@@ -70,6 +71,13 @@ class HostedAssetReferenceService:
         current = self.repository.find_current(
             asset_id=asset_id, host_name=host_name, source_checksum=checksum,
         )
+        if current and self._expired(getattr(current, "created_at", None)):
+            self.repository.mark_stale(
+                current.reference_id,
+                error_code="hosted_reference_expiring",
+                error_message="The provider-hosted reference reached its safe refresh age.",
+            )
+            current = None
         if current and self._recently_verified(current.verified_at):
             self.repository.touch_used(current.reference_id)
             self._log("canonical_reference_resolution", host_name, asset_id, 1, 0, "cache_hit")
@@ -105,7 +113,11 @@ class HostedAssetReferenceService:
         current = self.repository.find_current(
             asset_id=asset_id, host_name=host_name, source_checksum=self.checksum(path),
         )
-        if not current or not self._recently_verified(current.verified_at):
+        if (
+            not current
+            or self._expired(getattr(current, "created_at", None))
+            or not self._recently_verified(current.verified_at)
+        ):
             return None
         self.repository.touch_used(current.reference_id)
         return current.hosted_url
@@ -123,6 +135,14 @@ class HostedAssetReferenceService:
                 )
                 status = int(response.status_code)
                 if status in {200, 206}:
+                    content_type = str(getattr(response, "headers", {}).get("Content-Type") or "").lower()
+                    content_length = str(getattr(response, "headers", {}).get("Content-Length") or "").strip()
+                    if content_type and not content_type.startswith("image/"):
+                        raise HostedAssetReferenceError(
+                            f"Hosted canonical reference returned non-image content ({content_type})."
+                        )
+                    if content_length.isdigit() and int(content_length) <= 0:
+                        raise HostedAssetReferenceError("Hosted canonical reference returned an empty image payload.")
                     self._log("canonical_reference_verify", urlparse(hosted_url).netloc, asset_id,
                               attempt, time.perf_counter() - started, "success", status=status)
                     return
@@ -149,6 +169,13 @@ class HostedAssetReferenceService:
         if value.tzinfo is None:
             value = value.replace(tzinfo=timezone.utc)
         return datetime.now(timezone.utc) - value <= self.verification_ttl
+
+    def _expired(self, value: datetime | None) -> bool:
+        if value is None or self.maximum_age <= timedelta(0):
+            return False
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        return datetime.now(timezone.utc) - value >= self.maximum_age
 
     @staticmethod
     def _retryable_status(status: int) -> bool:

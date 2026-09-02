@@ -27,6 +27,8 @@ from app.services.reaction_buyer_session_protection_service import (
 from app.services.fanvue_outbound_reaction_service import (
     FanvueOutboundReactionService,
 )
+from app.models.customer_contact import ContactPolicyResult, ContactPurpose
+from app.services.customer_contact_authority_service import CustomerContactAuthorityService
 
 
 class AutomatedReactionSenderService:
@@ -76,6 +78,9 @@ class AutomatedReactionSenderService:
         self.outbound_reaction_service = (
             FanvueOutboundReactionService()
         )
+        from app.services.customer_interaction_safety_service import CustomerInteractionSafetyService
+        self.customer_safety_service = CustomerInteractionSafetyService()
+        self.contact_authority = CustomerContactAuthorityService()
 
     def prepare_reaction_send(
         self,
@@ -111,6 +116,21 @@ class AutomatedReactionSenderService:
             return self._blocked(
                 "missing_local_user_mapping"
             )
+
+        account_id = monetization_event.get("fanvue_account_id")
+        if account_id:
+            customer_safety = self.customer_safety_service.decide_for_customer(
+                fanvue_account_id=int(account_id), fanvue_user_id=int(local_user_id))
+            if not customer_safety.allowed:
+                return self._blocked(customer_safety.code)
+
+        contact = self.contact_authority.decide(
+            purpose=ContactPurpose.PURCHASE_ACKNOWLEDGEMENT,
+            evidence={**dict(runtime_state or {}), "recent_purchase": True},
+        )
+        if contact.result is not ContactPolicyResult.ALLOW:
+            return self._blocked(contact.reason, {
+                "contact_policy": dict(contact.to_mapping())})
 
         global_safety = (
             self.global_safety_service

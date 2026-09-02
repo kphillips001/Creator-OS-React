@@ -1,11 +1,14 @@
 """Minimal private-chat, plain-text Telegram Bot API sender."""
 
 import logging
+from dataclasses import dataclass
 from pathlib import Path
 from collections.abc import Mapping
 from typing import Any
 
 import requests
+
+from app.services.telegram_image_normalization_service import TelegramImageNormalizationService
 
 
 TELEGRAM_TEXT_LIMIT = 4096
@@ -13,6 +16,35 @@ TELEGRAM_TEXT_LIMIT = 4096
 
 class TelegramOutboundSendError(RuntimeError):
     """A sanitized Telegram outbound delivery failure."""
+
+    code = "BUSINESS_SEND_REJECTED"
+
+
+class TelegramOutboundSendAmbiguousError(ConnectionError):
+    code = "BUSINESS_SEND_AMBIGUOUS"
+
+
+class TelegramBusinessPeerUsageMissingError(RuntimeError):
+    code = "BUSINESS_PEER_USAGE_MISSING"
+
+
+class TelegramBusinessProviderVerificationError(RuntimeError):
+    code = "BUSINESS_PROVIDER_VERIFICATION_FAILED"
+
+
+@dataclass(frozen=True)
+class TelegramBotSendReceipt:
+    id: int
+    final_text: str
+    actionable_destination_attached: bool
+    provider_action_verified: bool
+    provider_markup_included: bool
+    provider_markup_verified: bool
+    attachment_mode: str
+    business_connection_id: str | None = None
+    sender_business_bot: dict[str, Any] | None = None
+    sender: dict[str, Any] | None = None
+    provider_payload: dict[str, Any] | None = None
 
 
 class TelegramBotApiSender:
@@ -25,6 +57,7 @@ class TelegramBotApiSender:
         session: requests.Session | None = None,
         timeout_seconds: int = 15,
         logger: logging.Logger | None = None,
+        image_normalizer: TelegramImageNormalizationService | None = None,
     ) -> None:
         if not isinstance(bot_token, str) or not bot_token.strip():
             raise ValueError("bot_token is required")
@@ -41,8 +74,15 @@ class TelegramBotApiSender:
         self._session = session or requests.Session()
         self._timeout_seconds = timeout_seconds
         self._logger = logger or logging.getLogger("telegram-bot-api-sender")
+        self._image_normalizer = image_normalizer or TelegramImageNormalizationService()
 
-    def send_text(self, *, chat_id: int, message_text: str) -> None:
+    def send_text(
+        self, *, chat_id: int, message_text: str,
+        button_label: str | None = None, button_url: str | None = None,
+        business_connection_id: str | None = None,
+        expected_business_owner_user_id: int | None = None,
+        expected_business_bot_id: int | None = None,
+    ) -> int | TelegramBotSendReceipt:
         self._validate_private_chat_id(chat_id)
         self._validate_message_text(message_text)
 
@@ -52,18 +92,26 @@ class TelegramBotApiSender:
             len(message_text),
         )
 
+        request_payload = {
+            "chat_id": chat_id, "text": message_text,
+            **({"business_connection_id": business_connection_id}
+               if business_connection_id else {}),
+            **({"reply_markup": {"inline_keyboard": [[{
+                "text": button_label, "url": button_url,
+            }]]}} if button_label and button_url else {}),
+        }
         try:
             response = self._session.post(
                 self._endpoint,
-                json={"chat_id": chat_id, "text": message_text},
+                json=request_payload,
                 timeout=self._timeout_seconds,
             )
         except Exception:
             self._logger.error(
                 "[TELEGRAM API RESPONSE] status=request_failed"
             )
-            raise TelegramOutboundSendError(
-                "Telegram sendMessage request failed."
+            raise TelegramOutboundSendAmbiguousError(
+                "Telegram sendMessage acceptance is unknown."
             ) from None
 
         try:
@@ -78,17 +126,63 @@ class TelegramBotApiSender:
             api_ok,
         )
 
-        try:
-            response.raise_for_status()
-        except Exception:
-            raise TelegramOutboundSendError(
-                "Telegram sendMessage request failed."
-            ) from None
-
         if not api_ok:
+            description = str(
+                payload.get("description") if isinstance(payload, Mapping) else ""
+            )
+            if "BUSINESS_PEER_USAGE_MISSING" in description:
+                raise TelegramBusinessPeerUsageMissingError(
+                    "Telegram Business peer is not currently reply-eligible."
+                )
             raise TelegramOutboundSendError(
                 "Telegram rejected the sendMessage request."
             )
+        result = payload.get("result")
+        if not isinstance(result, Mapping):
+            raise TelegramBusinessProviderVerificationError(
+                "Telegram acceptance lacked a provider message object."
+            )
+        message_id = result.get("message_id")
+        if not isinstance(message_id, int) or isinstance(message_id, bool):
+            raise TelegramBusinessProviderVerificationError(
+                "Telegram acceptance lacked a provider message ID."
+            )
+        if not business_connection_id:
+            return message_id
+        keyboard = ((result.get("reply_markup") or {}).get("inline_keyboard") or [])
+        provider_button = (
+            keyboard[0][0]
+            if keyboard and isinstance(keyboard[0], list) and keyboard[0]
+            else {}
+        )
+        sender = dict(result.get("from") or {})
+        sender_bot = dict(result.get("sender_business_bot") or {})
+        verified = all((
+            result.get("business_connection_id") == business_connection_id,
+            (result.get("chat") or {}).get("id") == chat_id,
+            result.get("text") == message_text,
+            provider_button.get("text") == button_label,
+            provider_button.get("url") == button_url,
+            expected_business_owner_user_id is None
+            or sender.get("id") == expected_business_owner_user_id,
+            expected_business_bot_id is None
+            or sender_bot.get("id") == expected_business_bot_id,
+        ))
+        if not verified:
+            raise TelegramBusinessProviderVerificationError(
+                "Telegram Business message failed provider verification."
+            )
+        return TelegramBotSendReceipt(
+            id=message_id, final_text=message_text,
+            actionable_destination_attached=True,
+            provider_action_verified=True,
+            provider_markup_included=True,
+            provider_markup_verified=True,
+            attachment_mode="TELEGRAM_BUSINESS_INLINE_BUTTON",
+            business_connection_id=business_connection_id,
+            sender_business_bot=sender_bot, sender=sender,
+            provider_payload=dict(result),
+        )
 
     def send_asset(
         self, *, chat_id: int, asset_path: str, message_text: str = "",
@@ -98,12 +192,17 @@ class TelegramBotApiSender:
         if not path.is_file():
             raise ValueError("asset_path must reference an existing file")
         endpoint = self._endpoint.replace("/sendMessage", "/sendPhoto")
+        upload_path = (
+            self._image_normalizer.normalize(path).path
+            if self._image_normalizer.is_supported_image(path)
+            else path
+        )
         try:
-            with path.open("rb") as media:
+            with upload_path.open("rb") as media:
                 response = self._session.post(
                     endpoint,
                     data={"chat_id": chat_id, "caption": message_text.strip()},
-                    files={"photo": (path.name, media)},
+                    files={"photo": (upload_path.name, media)},
                     timeout=self._timeout_seconds,
                 )
             payload = response.json()

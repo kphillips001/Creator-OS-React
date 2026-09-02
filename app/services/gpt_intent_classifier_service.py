@@ -208,8 +208,18 @@ READY TO BUY:
 - "how much?"
 - "send me the video"
 - "can I see it?"
+- "okay show me"
+- "show me what you've got" when the recent conversation is about Ava's private content
+- "let me see it"
+- "what do I get?"
 - "drop the link"
 - "I'll buy it"
+
+A clear request to see, receive, or learn what is included in the private
+content is content/offer-seeking intent even when the sentence is playful or
+sexual. Do not require the customer to also say "buy" or "unlock". Generic
+flirting, sexual compliments, "maybe", and "lol prove it" remain insufficient
+without a content/access request.
 
 CONVERTED:
 - "I bought it"

@@ -26,7 +26,33 @@ class OwnershipIntelligenceRepository:
                 evidence.extend(self._offering_evidence(cursor, identity))
                 evidence.extend(self._entitlement_evidence(cursor, identity))
                 evidence.extend(self._legacy_evidence(cursor, identity))
+                evidence.extend(self._provider_resource_evidence(cursor, identity))
         return tuple(evidence)
+
+    def _provider_resource_evidence(self, cursor, identity):
+        if identity.external_fanvue_user_uuid is None:
+            return ()
+        cursor.execute("""SELECT ownership_id,provider_transaction_id,
+                provider_resource_id,content_item_id,purchase_timestamp
+            FROM provider_purchase_asset_ownership
+            WHERE creator_profile_id=%s AND fanvue_account_id=%s
+              AND external_fanvue_user_uuid=%s
+            ORDER BY purchase_timestamp,ownership_id""",
+            (identity.creator_profile_id, identity.fanvue_account_id,
+             identity.external_fanvue_user_uuid))
+        return tuple(OwnershipEvidence(
+            source=OwnershipSource.PROVIDER_RESOURCE_PURCHASE,
+            lifecycle=OwnershipLifecycle.PURCHASED,
+            identity_path="external_fanvue_user_uuid",
+            supporting_record_id=str(row["ownership_id"]),
+            creator_profile_id=identity.creator_profile_id,
+            fanvue_account_id=identity.fanvue_account_id,
+            asset_ids=(int(row["content_item_id"]),), proves_ownership=True,
+            details=immutable_details({
+                "providerTransactionId": row["provider_transaction_id"],
+                "providerResourceId": row["provider_resource_id"],
+            }),
+        ) for row in cursor.fetchall())
 
     def offering_assets(self, offering_id, *, creator_profile_id: int) -> tuple[int, ...]:
         return self._composition(

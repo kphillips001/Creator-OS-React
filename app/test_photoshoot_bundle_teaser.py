@@ -3,12 +3,13 @@ from io import BytesIO
 from pathlib import Path
 from types import SimpleNamespace
 
-from PIL import Image
+from PIL import Image, ImageChops
 import pytest
 
 from app.models.asset_lineage import DerivationKind
 from app.services.photoshoot_bundle_teaser_service import PhotoshootBundleTeaserService
 from app.services.selective_blur_service import SelectiveBlurService
+from app.services.blur_service import render_full_blur
 
 
 def png_data(image):
@@ -40,11 +41,11 @@ class Repository:
     def create_asset(self, *, creator_profile_id, path, metadata, **_):
         value = self.next_id; self.next_id += 1
         self.assets[value] = SimpleNamespace(id=value, creator_profile_id=creator_profile_id,
-            file_path=str(path), local_vault_path=str(path))
+            file_path=str(path), local_vault_path=str(path), media_metadata=metadata)
         return value
     def update_asset(self, asset_id, *, path, metadata):
         self.assets[asset_id] = SimpleNamespace(id=asset_id, creator_profile_id=7,
-            file_path=str(path), local_vault_path=str(path)); return True
+            file_path=str(path), local_vault_path=str(path), media_metadata=metadata); return True
     def upsert(self, **values):
         self.current = {**values, "commercial_role": "BUNDLE_PROMOTIONAL_TEASER",
             "mask_version": "selective_blur_mask_v1", "created_at": None, "updated_at": None}
@@ -88,7 +89,45 @@ def setup(tmp_path, *, mode="BUNDLE", protected=False):
     return service, repository, lineage, photoshoots
 
 
-def mask(): return png_data(Image.new("L", (20, 20), 255))
+def mask():
+    value = Image.new("L", (20, 20), 0)
+    for x in range(5, 15):
+        for y in range(5, 15): value.putpixel((x, y), 255)
+    return png_data(value)
+
+
+def full_mask(): return png_data(Image.new("L", (20, 20), 255))
+
+
+def test_final_mask_classifies_full_blur_and_uses_canonical_strength(tmp_path):
+    service, _, _, _ = setup(tmp_path)
+    result = service.save("set-1", creator_profile_id=7, source_asset_id=1,
+        mask_data=full_mask(), mask_width=20, mask_height=20, blur_strength=12)
+    assert result["teaserStyle"] == "FULL_BLUR"
+    assert result["blurStrength"] == 40
+
+
+def test_saved_full_blur_pixels_match_canonical_single_image_processing(tmp_path):
+    service, repository, _, _ = setup(tmp_path)
+    service.renderer = SelectiveBlurService()
+    result = service.save("set-1", creator_profile_id=7, source_asset_id=1,
+        mask_data=full_mask(), mask_width=20, mask_height=20, blur_strength=12)
+    saved = Image.open(repository.assets[result["teaserAssetId"]].file_path).convert("RGB")
+    canonical = render_full_blur(repository.assets[1], blur_strength=40)
+    try:
+        assert ImageChops.difference(saved, canonical).getbbox() is None
+    finally:
+        saved.close(); canonical.close()
+
+
+def test_full_blur_with_restored_pixels_classifies_selective(tmp_path):
+    value = Image.new("L", (20, 20), 255)
+    value.putpixel((10, 10), 0)
+    service, _, _, _ = setup(tmp_path)
+    result = service.save("set-1", creator_profile_id=7, source_asset_id=1,
+        mask_data=png_data(value), mask_width=20, mask_height=20, blur_strength=40)
+    assert result["teaserStyle"] == "SELECTIVE_BLUR"
+    assert result["blurStrength"] == 40
 
 
 def test_any_member_creates_canonical_derivative_lineage_and_persisted_edit_state(tmp_path):

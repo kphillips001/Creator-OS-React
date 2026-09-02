@@ -18,6 +18,14 @@ class ContentIntelligenceProfileStatus(str, Enum):
     REANALYSIS_REQUIRED = "REANALYSIS_REQUIRED"
 
 
+def is_content_intelligence_complete(
+    status: ContentIntelligenceProfileStatus | str | None,
+) -> bool:
+    """Return whether a persisted Content Intelligence status is complete."""
+    value = status.value if isinstance(status, ContentIntelligenceProfileStatus) else status
+    return str(value or "").upper() == ContentIntelligenceProfileStatus.COMPLETE.value
+
+
 CONTENT_INTELLIGENCE_SCHEMA_VERSION = "phase_3_10_2_content_intelligence_profile_v1"
 CONTENT_INTELLIGENCE_ANALYSIS_VERSION = "content_intelligence_registration_v1"
 
@@ -51,7 +59,7 @@ class ContentIntelligenceProfile:
 
     @property
     def ready(self) -> bool:
-        return self.status == ContentIntelligenceProfileStatus.COMPLETE
+        return is_content_intelligence_complete(self.status)
 
     def to_context(self) -> dict[str, Any]:
         return {

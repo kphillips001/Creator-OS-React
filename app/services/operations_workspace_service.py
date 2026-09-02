@@ -134,6 +134,7 @@ class OperationsWorkspaceService:
             launch = launcher_state.get(name, {})
             heartbeat = heartbeats.get(heartbeat_name) if heartbeat_name else None
             heartbeat_data = self._plain(heartbeat) if heartbeat else {}
+            heartbeat_metadata = dict(heartbeat_data.get("metadata") or {})
             persisted_threshold = int(heartbeat_data.get("metadata", {}).get("stale_threshold_seconds") or threshold or 60)
             classification = WorkerHeartbeatService.classify(heartbeat, stale_threshold_seconds=persisted_threshold, now=self.now()).value if heartbeat_name else "unknown"
             items.append({"name": name, "startupType": startup, "launcherManaged": launcher,
@@ -146,6 +147,18 @@ class OperationsWorkspaceService:
                 "lastObservedActivity": activity, "activityEvidence": source,
                 "heartbeatAvailable": heartbeat is not None, "heartbeatStatus": classification if heartbeat else "untracked",
                 "instanceId": heartbeat_data.get("worker_instance_id"), "processId": heartbeat_data.get("process_id"),
+                "supervisorProcessId": launch.get("supervisorPid"),
+                "accountScope": heartbeat_metadata.get("account_scope") or (
+                    "AVA_TELETHON_PRIVATE" if name == "Telegram" else None
+                ),
+                "authorized": heartbeat_metadata.get("authorized") if name == "Telegram" else None,
+                "databaseHealthy": heartbeat_metadata.get("database_healthy") if name == "Telegram" else None,
+                "connectionState": (
+                    heartbeat_data.get("status")
+                    if name == "Telegram" and heartbeat_data.get("status") in {"STOPPING", "STOPPED", "FAILED"}
+                    else heartbeat_metadata.get("lifecycle_state") if name == "Telegram" else None
+                ),
+                "processRunning": classification in {"healthy", "idle"} if heartbeat_name else None,
                 "host": heartbeat_data.get("host_name"), "persistedStatus": heartbeat_data.get("status"),
                 "startedAt": heartbeat_data.get("started_at"), "lastHeartbeatAt": heartbeat_data.get("last_heartbeat_at"),
                 "lastPollAt": heartbeat_data.get("last_poll_at"), "lastSuccessAt": heartbeat_data.get("last_success_at"),

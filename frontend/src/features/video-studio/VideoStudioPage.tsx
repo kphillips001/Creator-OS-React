@@ -42,7 +42,7 @@ export function VideoStudioPage() {
   useEffect(() => {
     const id = params.get("session");
     if (!id) return;
-    void videoStudioApi.session(id).then((value) => { setSession(value); setSettings({ ...defaultSettings, ...value.settings, aspect_ratio: value.settings.aspect_ratio || "9:16" }); setSource({ type: value.source_type as VideoSource["type"], id: value.source_id, previewUrl: value.source_asset_id ? `/api/v1/assets/${value.source_asset_id}/media` : undefined, label: "Reopened session" }); }).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "Unable to reopen session."));
+    void videoStudioApi.session(id).then((value) => { setSession(value); setSettings({ ...defaultSettings, ...value.settings, aspect_ratio: value.settings.aspect_ratio || "9:16" }); setSource({ type: value.source_type as VideoSource["type"], id: value.source_id, previewUrl: value.source_asset_id ? `/api/v1/assets/${value.source_asset_id}/preview` : undefined, label: "Reopened session" }); }).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "Unable to reopen session."));
   }, [params]);
   useEffect(() => {
     const parentId = params.get("alternateFrom");
@@ -120,7 +120,7 @@ export function VideoStudioPage() {
   const completed = Boolean(session?.final_generated_media_id);
   const generating = Boolean(operation && ["QUEUED", "RUNNING", "WAITING_EXTERNAL"].includes(operation.status));
   const selected = session?.selected_concept;
-  const sourcePreview = source?.previewUrl || (session?.source_asset_id ? `/api/v1/assets/${session.source_asset_id}/media` : "");
+  const sourcePreview = source?.previewUrl?.replace(/\/media(?:\?.*)?$/, "/preview") || (session?.source_asset_id ? `/api/v1/assets/${session.source_asset_id}/preview` : "");
 
   return <section className="video-studio">
     <PageHeader title="Video Studio" description="Create a complete cinematic experience with your AI Film Director." />

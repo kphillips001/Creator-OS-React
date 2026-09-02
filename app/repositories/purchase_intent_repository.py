@@ -15,6 +15,29 @@ from app.models.purchase_intent import (
     PurchaseIntentStatistics,
     PurchaseIntentStatus,
 )
+from app.repositories.advisory_lock_key import deterministic_bigint_advisory_lock_key
+
+
+_PURCHASE_INTENT_LOCK_DOMAIN = "creator-os:purchase-intent:replace-active:v1"
+
+
+def purchase_intent_advisory_lock_key(
+    *, fanvue_account_id: int, telegram_user_id: int,
+) -> int:
+    """Return a stable signed BIGINT key for one active-intent buyer scope.
+
+    PostgreSQL's two-key advisory-lock overload accepts two signed 32-bit
+    integers, which cannot represent Telegram's 64-bit numeric identities.
+    Interpret the first eight SHA-256 bytes as a signed two's-complement value
+    so every process derives a value accepted by the one-key BIGINT overload.
+    """
+    return deterministic_bigint_advisory_lock_key(
+        domain=_PURCHASE_INTENT_LOCK_DOMAIN,
+        components=(
+            ("fanvue_account_id", fanvue_account_id),
+            ("telegram_user_id", telegram_user_id),
+        ),
+    )
 
 
 class PurchaseIntentRepository:
@@ -24,6 +47,8 @@ class PurchaseIntentRepository:
         "provider_payment_id", "provider_event_id", "attribution_result",
         "attribution_reason",
         "purchase_acknowledged_at",
+        "telegram_identity_mapping_id", "external_fanvue_user_uuid",
+        "actual_charged_price_minor", "identity_bootstrap_mode",
     })
 
     def __init__(self, connection_factory: Callable = get_db_connection) -> None:
@@ -37,6 +62,14 @@ class PurchaseIntentRepository:
     def replace_active(self, **values: Any) -> PurchaseIntent:
         with self.connection_factory() as connection:
             with connection.cursor() as cursor:
+                lock_key = purchase_intent_advisory_lock_key(
+                    fanvue_account_id=int(values["fanvue_account_id"]),
+                    telegram_user_id=int(values["telegram_user_id"]),
+                )
+                cursor.execute(
+                    "SELECT pg_advisory_xact_lock(%s::bigint)",
+                    (lock_key,),
+                )
                 cursor.execute(
                     """SELECT purchase_intent_id
                        FROM public.purchase_intents
@@ -74,6 +107,12 @@ class PurchaseIntentRepository:
             tuple(params),
         )
 
+    def get_by_correlation(self, correlation_id: UUID) -> PurchaseIntent | None:
+        return self._one(
+            "SELECT * FROM public.purchase_intents WHERE correlation_id=%s",
+            (correlation_id,),
+        )
+
     def update(self, intent_id: UUID, **changes: Any) -> PurchaseIntent:
         invalid = set(changes) - self._UPDATE_FIELDS
         if not changes or invalid:
@@ -97,8 +136,22 @@ class PurchaseIntentRepository:
                            presented_at=at, telegram_message_id=telegram_message_id)
 
     def mark_clicked(self, intent_id: UUID, *, at: datetime) -> PurchaseIntent:
-        return self.update(intent_id, status=PurchaseIntentStatus.CLICKED,
-                           clicked_at=at)
+        result = self._one(
+            """UPDATE public.purchase_intents SET
+                   status=CASE WHEN status='PRESENTED' THEN 'CLICKED' ELSE status END,
+                   clicked_at=CASE
+                       WHEN status='PRESENTED' THEN COALESCE(clicked_at,%s)
+                       ELSE clicked_at
+                   END,
+                   updated_at=CASE WHEN status='PRESENTED' THEN NOW() ELSE updated_at END
+               WHERE purchase_intent_id=%s
+                 AND status IN ('PRESENTED','CLICKED','PURCHASED')
+               RETURNING *""",
+            (at, intent_id),
+        )
+        if result is None:
+            raise ValueError("Purchase Intent is not eligible for click recording.")
+        return result
 
     def mark_expired(self, intent_id: UUID) -> PurchaseIntent:
         return self.update(intent_id, status=PurchaseIntentStatus.EXPIRED)
@@ -115,6 +168,73 @@ class PurchaseIntentRepository:
             attribution_reason=attribution_reason,
         )
 
+    def clear_unsettled_actual_charged_price(
+        self, intent_id: UUID, *, expected_telegram_user_id: int,
+    ) -> PurchaseIntent:
+        """Clear a legacy pre-purchase target-price write, fail closed.
+
+        This is intentionally narrower than ``update``: it succeeds only for a
+        clicked, wholly unsettled fingerprint-bootstrap intent whose active
+        reservation and provisional Session still contain no purchase evidence.
+        Provider-confirmed settlement remains the only normal writer of the
+        actual charged amount.
+        """
+        result = self._one(
+            """UPDATE public.purchase_intents intent
+               SET actual_charged_price_minor=NULL,updated_at=NOW()
+               WHERE intent.purchase_intent_id=%s
+                 AND intent.telegram_user_id=%s
+                 AND intent.status='CLICKED'
+                 AND intent.actual_charged_price_minor IS NOT NULL
+                 AND intent.purchased_at IS NULL
+                 AND intent.provider_transaction_order_id IS NULL
+                 AND intent.provider_payment_id IS NULL
+                 AND intent.provider_event_id IS NULL
+                 AND intent.purchase_acknowledged_at IS NULL
+                 AND intent.attribution_result='PENDING'
+                 AND intent.external_fanvue_user_uuid IS NULL
+                 AND EXISTS (
+                     SELECT 1
+                     FROM public.fanvue_fingerprint_reservations reservation
+                     WHERE reservation.purchase_intent_id=intent.purchase_intent_id
+                       AND reservation.state='ACTIVE'
+                       AND reservation.purchased_at IS NULL
+                       AND reservation.provider_transaction_reference IS NULL
+                 )
+                 AND EXISTS (
+                     SELECT 1
+                     FROM public.fanvue_runtime_media_links runtime
+                     WHERE runtime.purchase_intent_id=intent.purchase_intent_id
+                       AND runtime.state='ACTIVE'
+                       AND runtime.provider_media_link_uuid IS NOT NULL
+                 )
+                 AND EXISTS (
+                     SELECT 1
+                     FROM public.telegram_provisional_sales_sessions session
+                     WHERE session.first_purchase_intent_id=intent.purchase_intent_id
+                       AND session.state='AWAITING_PAYMENT'
+                       AND session.actual_fingerprint_price_minor IS NULL
+                       AND session.first_purchase_recorded_at IS NULL
+                       AND session.mapped_sales_session_id IS NULL
+                 )
+                 AND NOT EXISTS (
+                     SELECT 1
+                     FROM public.commerce_signal_reconciliations reconciliation
+                     WHERE reconciliation.attributed_purchase_intent_id=
+                           intent.purchase_intent_id
+                 )
+               RETURNING intent.*""",
+            (intent_id, expected_telegram_user_id),
+        )
+        if result is None:
+            current = self.get(intent_id)
+            if current is not None and current.actual_charged_price_minor is None:
+                return current
+            raise ValueError(
+                "Purchase Intent is not eligible for pre-purchase price reconciliation."
+            )
+        return result
+
     def mark_unknown(self, intent_id: UUID, *, reason: str) -> PurchaseIntent:
         return self.update(
             intent_id, status=PurchaseIntentStatus.UNKNOWN,
@@ -124,6 +244,104 @@ class PurchaseIntentRepository:
 
     def mark_superseded(self, intent_id: UUID) -> PurchaseIntent:
         return self.update(intent_id, status=PurchaseIntentStatus.SUPERSEDED)
+
+    def close_administratively(
+        self, intent_id: UUID, *, reason_code: str,
+        expected_telegram_user_id: int, expected_telegram_chat_id: int,
+        at: datetime,
+    ) -> PurchaseIntent:
+        """Atomically retire one controlled offer and revoke its Unlock grant."""
+        reason = str(reason_code or "").strip()
+        if not reason:
+            raise ValueError("An administrative close reason is required.")
+        with self.connection_factory() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "SELECT * FROM public.purchase_intents "
+                    "WHERE purchase_intent_id=%s FOR UPDATE", (intent_id,),
+                )
+                row = cursor.fetchone()
+                if row is None:
+                    raise LookupError("Purchase Intent was not found.")
+                if (
+                    int(row["telegram_user_id"]) != int(expected_telegram_user_id)
+                    or int(row["telegram_chat_id"]) != int(expected_telegram_chat_id)
+                ):
+                    raise PermissionError("Administrative close identity mismatch.")
+                status = str(row["status"])
+                cursor.execute(
+                    "SELECT * FROM public.telegram_unlock_grants "
+                    "WHERE purchase_intent_id=%s FOR UPDATE", (intent_id,),
+                )
+                grant = cursor.fetchone()
+                if status == PurchaseIntentStatus.ADMIN_CLOSED.value:
+                    if row.get("administrative_close_reason") != reason:
+                        raise ValueError("Purchase Intent has another administrative disposition.")
+                    if grant is not None and grant["state"] != "REVOKED":
+                        raise RuntimeError("Administrative close is incomplete.")
+                    return self._intent(row)
+                if status not in {
+                    PurchaseIntentStatus.CREATED.value,
+                    PurchaseIntentStatus.PRESENTED.value,
+                }:
+                    raise ValueError(
+                        f"Invalid Purchase Intent transition: {status} -> ADMIN_CLOSED."
+                    )
+                settlement_fields = (
+                    "purchased_at", "purchase_acknowledged_at",
+                    "provider_transaction_order_id", "provider_payment_id",
+                    "provider_event_id",
+                )
+                if any(row.get(field) is not None for field in settlement_fields):
+                    raise ValueError("Purchase or settlement evidence blocks administrative close.")
+                if str(row.get("attribution_result") or "") != "PENDING":
+                    raise ValueError("Attribution state blocks administrative close.")
+                cursor.execute(
+                    """SELECT count(*) AS n FROM public.fanvue_fingerprint_reservations
+                       WHERE purchase_intent_id=%s AND (
+                         state IN ('PURCHASED','UNCERTAIN') OR purchased_at IS NOT NULL
+                         OR provider_transaction_reference IS NOT NULL)""", (intent_id,),
+                )
+                if int(cursor.fetchone()["n"]):
+                    raise ValueError("Fingerprint purchase or uncertainty blocks administrative close.")
+                cursor.execute(
+                    """SELECT count(*) AS n FROM public.commerce_signal_reconciliations
+                       WHERE attributed_purchase_intent_id=%s""", (intent_id,),
+                )
+                if int(cursor.fetchone()["n"]):
+                    raise ValueError("Commerce reconciliation blocks administrative close.")
+                if grant is not None and grant["state"] not in {"ACTIVE", "REVOKED"}:
+                    raise ValueError("Unlock grant state blocks administrative close.")
+                cursor.execute(
+                    """UPDATE public.purchase_intents
+                       SET status='ADMIN_CLOSED',admin_closed_at=%s,
+                           administrative_close_reason=%s,updated_at=NOW()
+                       WHERE purchase_intent_id=%s RETURNING *""",
+                    (at, reason, intent_id),
+                )
+                closed = cursor.fetchone()
+                cursor.execute(
+                    """UPDATE public.telegram_provisional_sales_sessions
+                       SET state='ADMIN_CLOSED',administratively_closed_at=%s,
+                           administrative_close_reason=%s,updated_at=NOW()
+                       WHERE first_purchase_intent_id=%s
+                         AND state IN ('ACTIVE','OFFERING','AWAITING_PAYMENT')""",
+                    (at, reason, intent_id),
+                )
+                if grant is not None and grant["state"] == "ACTIVE":
+                    cursor.execute(
+                        """UPDATE public.telegram_unlock_grants
+                           SET state='REVOKED',revoked_at=%s,
+                               audit_metadata=audit_metadata || jsonb_build_object(
+                                 'administrativeCloseReason',%s::text,
+                                 'administrativelyClosedAt',%s::text)
+                           WHERE unlock_grant_id=%s AND state='ACTIVE'
+                           RETURNING unlock_grant_id""",
+                        (at, reason, at, grant["unlock_grant_id"]),
+                    )
+                    if cursor.fetchone() is None:
+                        raise RuntimeError("Unlock grant revocation failed.")
+                return self._intent(closed)
 
     def get_active_for_buyer(
         self, *, creator_profile_id: int, fanvue_account_id: int,
@@ -149,6 +367,53 @@ class PurchaseIntentRepository:
                ORDER BY created_at DESC LIMIT 1""",
             (creator_profile_id, fanvue_account_id, telegram_user_id),
         )
+
+    def get_customer_opportunity_evidence(
+        self, *, creator_profile_id: int, fanvue_account_id: int,
+        telegram_user_id: int,
+    ) -> dict[str, Any]:
+        """Project customer-visible paid opportunities from durable lifecycle truth.
+
+        ``presented_at`` is written only after confirmed commercial delivery, so
+        CREATED-only intents and internal offer considerations are excluded.
+        """
+        with self.connection_factory() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """SELECT
+                    COUNT(*) FILTER (WHERE presented_at IS NOT NULL)::INTEGER
+                        AS presented_opportunity_count,
+                    COUNT(*) FILTER (WHERE presented_at IS NOT NULL AND status IN
+                        ('EXPIRED','ABANDONED','SUPERSEDED','ADMIN_CLOSED'))::INTEGER
+                        AS failed_nonconverted_opportunity_count,
+                    COUNT(*) FILTER (WHERE presented_at IS NOT NULL
+                        AND status='PURCHASED')::INTEGER
+                        AS converted_opportunity_count,
+                    BOOL_OR(presented_at IS NOT NULL AND status IN
+                        ('PRESENTED','CLICKED','UNKNOWN'))
+                        AS active_unresolved_opportunity
+                   FROM public.purchase_intents
+                   WHERE creator_profile_id=%s AND fanvue_account_id=%s
+                     AND telegram_user_id=%s""",
+                (creator_profile_id, fanvue_account_id, telegram_user_id),
+            )
+            row = dict(cursor.fetchone() or {})
+        return {
+            "commercial_opportunity_evidence_source": (
+                "PURCHASE_INTENT_PRESENTATION_LIFECYCLE"
+            ),
+            "presented_opportunity_count": int(
+                row.get("presented_opportunity_count") or 0
+            ),
+            "failed_nonconverted_opportunity_count": int(
+                row.get("failed_nonconverted_opportunity_count") or 0
+            ),
+            "converted_opportunity_count": int(
+                row.get("converted_opportunity_count") or 0
+            ),
+            "active_unresolved_opportunity": bool(
+                row.get("active_unresolved_opportunity")
+            ),
+        }
 
     def get_unacknowledged_purchase(
         self, *, creator_profile_id: int, fanvue_account_id: int,
@@ -411,6 +676,46 @@ class PurchaseIntentRepository:
 
     def _insert(self, cursor, values: dict[str, Any]) -> PurchaseIntent:
         intent_id = values.get("purchase_intent_id", uuid4())
+        if values.get("telegram_identity_mapping_id") is None:
+            cursor.execute(
+                """INSERT INTO public.purchase_intents (
+                       purchase_intent_id,creator_profile_id,fanvue_account_id,
+                       telegram_identity_mapping_id,telegram_user_id,telegram_chat_id,
+                       external_fanvue_user_uuid,commercial_offering_id,
+                       commercial_publication_id,provider,provider_resource_id,
+                       delivery_url,conversation_id,correlation_id,
+                       expected_price_minor,expected_currency,expires_at,created_metadata,
+                       configured_base_price_minor,identity_bootstrap_mode
+                   ) SELECT %s,%s,%s,NULL,%s,%s,NULL,
+                       offering.offering_id,publication.publication_id,%s,%s,%s,
+                       %s,%s,%s,%s,%s,%s::jsonb,%s,'PRIVATE_CHAT_FINGERPRINT'
+                   FROM public.commercial_offerings offering
+                   JOIN public.commercial_publications publication
+                     ON publication.publication_id=%s
+                    AND publication.commercial_offering_id=offering.offering_id
+                    AND publication.provider=%s
+                   WHERE offering.offering_id=%s
+                     AND offering.creator_profile_id=%s
+                   RETURNING *""",
+                (
+                    intent_id, values["creator_profile_id"], values["fanvue_account_id"],
+                    values["telegram_user_id"], values["telegram_chat_id"],
+                    values["provider"], values["provider_resource_id"],
+                    values["delivery_url"], values.get("conversation_id"),
+                    values["correlation_id"], values["expected_price_minor"],
+                    values["expected_currency"], values["expires_at"],
+                    json.dumps(values.get("created_metadata", {})),
+                    values["expected_price_minor"],
+                    values["commercial_publication_id"], values["provider"],
+                    values["commercial_offering_id"], values["creator_profile_id"],
+                ),
+            )
+            row = cursor.fetchone()
+            if row is None:
+                raise ValueError(
+                    "Purchase Intent offering or publication is inconsistent."
+                )
+            return self._intent(row)
         cursor.execute(
             """INSERT INTO public.purchase_intents (
                    purchase_intent_id,creator_profile_id,fanvue_account_id,
@@ -418,10 +723,11 @@ class PurchaseIntentRepository:
                    external_fanvue_user_uuid,commercial_offering_id,
                    commercial_publication_id,provider,provider_resource_id,
                    delivery_url,conversation_id,correlation_id,
-                   expected_price_minor,expected_currency,expires_at,created_metadata
+                   expected_price_minor,expected_currency,expires_at,created_metadata,
+                   configured_base_price_minor,identity_bootstrap_mode
                ) SELECT %s,%s,%s,tim.id,tim.telegram_user_id,tim.telegram_chat_id,
                    %s,offering.offering_id,publication.publication_id,%s,%s,%s,
-                   %s,%s,%s,%s,%s,%s::jsonb
+                   %s,%s,%s,%s,%s,%s::jsonb,%s,'NONE'
                FROM public.telegram_identity_map tim
                JOIN public.commercial_offerings offering
                  ON offering.offering_id=%s AND offering.creator_profile_id=%s
@@ -441,6 +747,7 @@ class PurchaseIntentRepository:
                 values.get("conversation_id"), values["correlation_id"],
                 values["expected_price_minor"], values["expected_currency"],
                 values["expires_at"], json.dumps(values.get("created_metadata", {})),
+                values["expected_price_minor"],
                 values["commercial_offering_id"], values["creator_profile_id"],
                 values["commercial_publication_id"], values["provider"],
                 values["telegram_identity_mapping_id"], values["fanvue_account_id"],

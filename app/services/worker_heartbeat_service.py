@@ -45,9 +45,11 @@ class WorkerHeartbeatService:
         return self.repository.record_heartbeat(self.worker_instance_id, status=WorkerHeartbeatStatus.IDLE if idle else WorkerHeartbeatStatus.RUNNING, at=self.now(), metadata=metadata)
     def record_poll(self): return self.repository.record_poll(self.worker_instance_id, at=self.now())
     def record_success(self, *, idle: bool = False): return self.repository.record_success(self.worker_instance_id, at=self.now(), idle=idle)
-    def record_failure(self, error: Any): return self.repository.record_failure(self.worker_instance_id, at=self.now(), error=str(error or "unknown_failure")[:self.MAX_ERROR_LENGTH])
-    def record_stopping(self): return self.repository.record_shutdown(self.worker_instance_id, at=self.now(), status=WorkerHeartbeatStatus.STOPPING)
-    def record_shutdown(self): return self.repository.record_shutdown(self.worker_instance_id, at=self.now(), status=WorkerHeartbeatStatus.STOPPED)
+    def record_failure(self, error: Any, *, metadata: Mapping[str, Any] | None = None): return self.repository.record_failure(self.worker_instance_id, at=self.now(), error=str(error or "unknown_failure")[:self.MAX_ERROR_LENGTH], metadata=metadata)
+    def record_terminal_failure(self, error: Any, *, metadata: Mapping[str, Any] | None = None):
+        return self.repository.record_terminal_failure(self.worker_instance_id, at=self.now(), error=str(error or "unknown_failure")[:self.MAX_ERROR_LENGTH], metadata=metadata)
+    def record_stopping(self): return self.repository.record_shutdown(self.worker_instance_id, at=self.now(), status=WorkerHeartbeatStatus.STOPPING, metadata={"lifecycle_state": "STOPPING"})
+    def record_shutdown(self): return self.repository.record_shutdown(self.worker_instance_id, at=self.now(), status=WorkerHeartbeatStatus.STOPPED, metadata={"lifecycle_state": "STOPPED"})
     def get_current(self): return self.repository.get_by_instance(self.worker_instance_id)
     def list_latest(self, *, creator_profile_id: str | None = None, account_id: int | None = None): return self.repository.list_latest_per_worker(creator_profile_id=creator_profile_id, account_id=account_id)
 

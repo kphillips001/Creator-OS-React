@@ -169,3 +169,46 @@ def test_engine_exception_preserves_developer_traceback(monkeypatch):
         assert error.diagnostics["exception_message"] == "composition failed"
         assert error.diagnostics["file"].endswith("test_test_chat.py")
         assert "RuntimeError: composition failed" in error.diagnostics["stack_trace"]
+
+
+def test_scenario_api_is_a_thin_runner_wrapper(monkeypatch):
+    class Runner:
+        def prepare(self, scenario_id): return {"prepared": scenario_id}
+        def turn(self, message, *, language_mode): return {
+            "customer": message, "telegramSent": False,
+            "languageMode": language_mode,
+        }
+        def retry_previous_turn(self, reason): return {"retried": True, "reason": reason}
+        def restart_scenario(self, scenario_id, reason):
+            return {"restarted": True, "scenario": scenario_id, "reason": reason}
+        def snapshot(self, scenario_id): return {"snapshotted": scenario_id}
+        def reset(self, scenario_id): return {"reset": scenario_id}
+        def operator_snapshot(self): return {"mode": "SESSION_5_SCENARIO_LAB"}
+        def full_attempt_analysis(self, scenario_id=None): return {
+            "mode": "SESSION_5_FULL_SCENARIO_ANALYSIS", "scenarioId": scenario_id,
+        }
+    runner = Runner()
+    monkeypatch.setattr(api, "_scenario_runner", lambda: runner)
+
+    prepared = api.prepare_scenario(api.ScenarioPrepareRequest(scenario_id="C01"))
+    turned = api.scenario_turn(api.ScenarioTurnRequest(customer_message="I bought it"))
+    retried = api.scenario_retry_previous_turn(api.ScenarioRecoveryRequest(reason="repair"))
+    restarted = api.scenario_restart(api.ScenarioRestartRequest(
+        scenario_id="C05", reason="contaminated",
+    ))
+    full = api.scenario_lab_full_analysis("C02")
+    snapshotted = api.scenario_snapshot(api.ScenarioTargetRequest(scenario_id="C05"))
+    reset = api.scenario_reset(api.ScenarioTargetRequest(scenario_id="C05"))
+
+    assert prepared == {"result": {"prepared": "C01"}, "snapshot": {"mode": "SESSION_5_SCENARIO_LAB"}}
+    assert turned["result"] == {
+        "customer": "I bought it", "telegramSent": False,
+        "languageMode": "REAL_AVA_LANGUAGE",
+    }
+    assert retried["result"] == {"retried": True, "reason": "repair"}
+    assert restarted["result"] == {
+        "restarted": True, "scenario": "C05", "reason": "contaminated",
+    }
+    assert full == {"mode": "SESSION_5_FULL_SCENARIO_ANALYSIS", "scenarioId": "C02"}
+    assert snapshotted["result"] == {"snapshotted": "C05"}
+    assert reset["result"] == {"reset": "C05"}

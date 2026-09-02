@@ -24,6 +24,18 @@ class ContentVaultBundleCaptionContextBuilder:
             for item in self.photoshoots.intelligence_members(str(photoshoot_session_id))
             if int(item["asset_id"]) in asset_ids
         }
+        # Bundle Studio members have canonical Asset intelligence but no
+        # Photoshoot membership. Fill only missing members from that shared
+        # per-Asset source; Photoshoot evidence remains unchanged when present.
+        if len(member_rows) != len(asset_ids) and hasattr(
+            self.photoshoots, "content_intelligence_for_assets"
+        ):
+            member_rows.update({
+                int(item["asset_id"]): item
+                for item in self.photoshoots.content_intelligence_for_assets(asset_ids)
+                if int(item["asset_id"]) in asset_ids
+                and int(item["asset_id"]) not in member_rows
+            })
         shot_rows = {
             int(item["asset_id"]): item
             for item in self.photoshoots.latest_shot_intelligence(str(photoshoot_session_id))

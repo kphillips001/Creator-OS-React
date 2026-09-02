@@ -1,13 +1,14 @@
 from pathlib import Path
 from typing import Any
 
-from PIL import Image, ImageFilter
+from PIL import Image, ImageFilter, ImageOps
 
 from app.services.local_vault_service import LocalVaultService
 from app.services.runtime_media_resolver import RuntimeMediaResolver
 
 
 _RUNTIME_MEDIA_RESOLVER = RuntimeMediaResolver()
+FULL_BLUR_STRENGTH = 40
 
 
 def _resolve_original_path(original_media: Any) -> Path | None:
@@ -25,7 +26,7 @@ def _resolve_original_path(original_media: Any) -> Path | None:
 
 def generate_blurred_preview(
     original_path: Any,
-    blur_strength: int = 40,
+    blur_strength: int = FULL_BLUR_STRENGTH,
     overwrite: bool = False,
     output_dir: str | Path | None = None,
 ) -> str:
@@ -65,12 +66,23 @@ def generate_blurred_preview(
 
     print(f"[BLUR START] Processing: {original_path}")
 
-    # Open and blur image
-    with Image.open(original) as img:
-        img = img.convert("RGB")  # 🧠 ensures compatibility
-        blurred = img.filter(ImageFilter.GaussianBlur(radius=blur_strength))
+    # Open and blur image through the same renderer used by stateless previews.
+    blurred = render_full_blur(original, blur_strength=blur_strength)
+    try:
         blurred.save(blurred_path, quality=95)
+    finally:
+        blurred.close()
 
     print(f"[BLUR COMPLETE] Saved to: {blurred_path}")
 
     return str(blurred_path)
+
+
+def render_full_blur(original_path: Any, *, blur_strength: int = FULL_BLUR_STRENGTH) -> Image.Image:
+    """Return the canonical original-resolution FULL_BLUR image without persisting it."""
+    original = _resolve_original_path(original_path)
+    if not original:
+        raise FileNotFoundError(f"Original file not found: {original_path}")
+    with Image.open(original) as opened:
+        normalized = ImageOps.exif_transpose(opened).convert("RGB")
+    return normalized.filter(ImageFilter.GaussianBlur(radius=int(blur_strength)))

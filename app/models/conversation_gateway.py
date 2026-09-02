@@ -14,12 +14,16 @@ class ConversationBrainContext:
     primary_sales_channel: str = "AI_CHAT"
     developer_mode: bool = False
     telegram_user_id: int | None = None
+    telegram_chat_id: int | None = None
     fanvue_account_id: int | None = None
     external_fanvue_buyer_uuid: str | None = None
     fanvue_user_id: int | None = None
     conversation_thread_id: int | None = None
     purchase_acknowledgement_pending: bool = False
     purchase_acknowledgement_intent_id: str | None = None
+    conversational_memory: dict[str, Any] = field(default_factory=dict)
+    sleep_context: dict[str, Any] = field(default_factory=dict)
+    customer_behavior_evidence: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

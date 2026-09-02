@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from html import escape
 from pathlib import Path
+import re
 from threading import Lock
 from uuid import UUID
 
@@ -19,6 +20,9 @@ from app.services.commercial_offering_service import CommercialOfferingService
 from app.services.commercial_publication_service import CommercialPublicationService
 from app.services.social_publishing_service import SocialPublishingService
 from app.repositories.commercial_teaser_repository import CommercialTeaserRepository
+from app.services.content_vault_teaser_normalization_service import (
+    ContentVaultTeaserNormalizationService,
+)
 
 
 class CommerceTelegramVaultError(ValueError):
@@ -33,6 +37,36 @@ class CommerceTelegramVaultService:
     _claims_guard = Lock()
     _claims: set[str] = set()
     TELEGRAM_PHOTO_CAPTION_LIMIT = 1024
+    CONTROLLED_CONTENT_HASHTAGS = ("#Photos", "#Videos", "#Photoshoots")
+
+    @classmethod
+    def unlock_cta_label(cls, price_minor: int, currency: str) -> str:
+        return f"🔓 Unlock · {cls._money(price_minor, currency)}"
+
+    @classmethod
+    def content_type_hashtag(cls, offering) -> str:
+        offering_type = cls._offering_type(offering)
+        if offering_type == "SINGLE_IMAGE":
+            return "#Photos"
+        if offering_type == "VIDEO":
+            return "#Videos"
+        if offering_type == "PHOTOSET":
+            return "#Photoshoots"
+        if offering_type == "BUNDLE" and getattr(offering, "source_photoshoot_deliverable_id", None):
+            return "#Photoshoots"
+        raise CommerceTelegramVaultError(
+            "INVALID_CONTENT_TYPE", "Content Vault publication has no supported canonical content type."
+        )
+
+    @classmethod
+    def caption_with_content_type_hashtag(cls, caption: str, hashtag: str) -> str:
+        if hashtag not in cls.CONTROLLED_CONTENT_HASHTAGS:
+            raise CommerceTelegramVaultError("INVALID_CONTENT_TYPE", "Unsupported Content Vault hashtag.")
+        controlled_line = re.compile(
+            r"(?im)^[ \t]*#(?:Photos|Videos|Photoshoots)[ \t]*(?:\r?\n|$)"
+        )
+        preserved = controlled_line.sub("", str(caption or "")).strip()
+        return f"{preserved}\n\n{hashtag}" if preserved else hashtag
 
     def __init__(
         self,
@@ -43,6 +77,7 @@ class CommerceTelegramVaultService:
         social=None,
         teasers=None,
         bundle_preparation=None,
+        presentation=None,
     ) -> None:
         self.offerings = offerings or CommercialOfferingService()
         self.publications = publications or CommercialPublicationService(
@@ -52,6 +87,7 @@ class CommerceTelegramVaultService:
         self.social = social or SocialPublishingService()
         self.teasers = teasers or CommercialTeaserRepository()
         self.bundle_preparation = bundle_preparation
+        self.presentation = presentation or ContentVaultTeaserNormalizationService()
 
     def publish(
         self,
@@ -82,16 +118,26 @@ class CommerceTelegramVaultService:
                 # Telegram's canonical provider uses HTML parse mode. Escape only
                 # at the transport boundary so the customer sees the persisted
                 # caption verbatim while the audit snapshot retains its exact text.
-                caption = escape(package["caption"])
-                preview = package["teaser_path"]
+                caption = escape(self.caption_with_content_type_hashtag(
+                    package["caption"], self.content_type_hashtag(offering)
+                ))
+                if len(caption) > self.TELEGRAM_PHOTO_CAPTION_LIMIT:
+                    raise CommerceTelegramVaultError(
+                        "CAPTION_TOO_LONG",
+                        f"Content Vault caption with navigation hashtag exceeds Telegram's {self.TELEGRAM_PHOTO_CAPTION_LIMIT}-character photo caption limit.",
+                    )
+                preview = package["publication_teaser_path"]
                 delivery_url = package["delivery_url"]
-                cta_label = f"🔓 Unlock · {self._money(package['price_minor'], package['currency'])}"
+                cta_label = self.unlock_cta_label(package["price_minor"], package["currency"])
                 audit = {key: value for key, value in package.items()
-                         if key not in {"teaser_path", "delivery_url"}}
+                         if key not in {"teaser_path", "publication_teaser_path", "delivery_url"}}
             else:
                 delivery_url = self._delivery_url(offering, creator_profile_id)
                 preview = self._preview(offering, creator_profile_id)
-                caption = self._caption(offering.title, offering.description, marketing_text)
+                caption = self.caption_with_content_type_hashtag(
+                    self._caption(offering.title, offering.description, marketing_text),
+                    self.content_type_hashtag(offering),
+                )
                 cta_label = "Unlock Now"
                 audit = {"offering_id": str(offering.offering_id),
                          "asset_id": int(offering.hero_asset_id),
@@ -122,28 +168,41 @@ class CommerceTelegramVaultService:
             return {"status": None, "publishedAt": None, "lastError": None,
                     "providerMessageId": None, "canPublish": False, "configured": False}
         configured = self._telegram_configured()
+        source_id = f"commercial-offering:{offering.offering_id}"
+        item = self.social.find_queue_item(source_id, platform="telegram")
+        history = ([entry for entry in self.social.list_history()
+                    if entry.queue_item_id == item.queue_item_id] if item else [])
+        posted = next((entry for entry in history if entry.status == "posted"), None)
+        if item and item.status == SocialPublishStatus.POSTED.value:
+            return {
+                "status": "PUBLISHED", "publishedAt": item.updated_at,
+                "lastError": None,
+                "providerMessageId": ((posted.metadata or {}).get("provider_post_id") if posted else None),
+                "canPublish": False, "configured": configured, "readinessError": None,
+                "previewUrl": (self._preview_url(offering)
+                               if self._persisted_presentation_exists(offering, creator_profile_id) else None),
+            }
         readiness_error = None
         ready = configured
+        package = None
         if self._offering_type(offering) in {"SINGLE_IMAGE", "BUNDLE"}:
             try:
                 self._validate_offering(offering)
-                self._content_vault_package(offering, creator_profile_id)
+                package = self._content_vault_package(offering, creator_profile_id)
             except CommerceTelegramVaultError as error:
                 ready, readiness_error = False, str(error)
-        source_id = f"commercial-offering:{offering.offering_id}"
-        item = self.social.find_queue_item(source_id, platform="telegram")
+                try:
+                    package = self._presentation_without_caption(offering, creator_profile_id)
+                except (CommerceTelegramVaultError, KeyError, ValueError, FileNotFoundError):
+                    package = None
         if item is None:
             return {"status": "NOT_PUBLISHED", "publishedAt": None, "lastError": None,
                     "providerMessageId": None, "canPublish": ready,
-                    "configured": configured, "readinessError": readiness_error}
-        history = [
-            entry for entry in self.social.list_history()
-            if entry.queue_item_id == item.queue_item_id
-        ]
+                    "configured": configured, "readinessError": readiness_error,
+                    "previewUrl": self._preview_url(offering) if package else None}
         failed = next(
             (entry.message for entry in history if entry.status == "failed"), None
         )
-        posted = next((entry for entry in history if entry.status == "posted"), None)
         return {
             "status": {
                 "queued": "PUBLISHING",
@@ -157,7 +216,37 @@ class CommerceTelegramVaultService:
             "providerMessageId": ((posted.metadata or {}).get("provider_post_id") if posted else None),
             "canPublish": ready and item.status == SocialPublishStatus.FAILED.value,
             "configured": configured, "readinessError": readiness_error,
+            "previewUrl": self._preview_url(offering) if package else None,
         }
+
+    def publication_media(self, offering_id, *, creator_profile_id: int) -> Path:
+        offering = self._offering(offering_id, creator_profile_id)
+        source_id = f"commercial-offering:{offering.offering_id}"
+        item = self.social.find_queue_item(source_id, platform="telegram")
+        if (item and item.status == SocialPublishStatus.POSTED.value
+                and not self._persisted_presentation_exists(offering, creator_profile_id)):
+            raise CommerceTelegramVaultError(
+                "PREVIEW_NOT_FOUND", "Historical publication media is not regenerated after posting."
+            )
+        self._validate_offering(offering)
+        package = self._content_vault_package(offering, creator_profile_id)
+        return Path(package["publication_teaser_path"])
+
+    def _persisted_presentation_exists(self, offering, creator_profile_id):
+        publications = self.publications.list_publications(
+            creator_profile_id=creator_profile_id,
+            commercial_offering_id=offering.offering_id,
+        )
+        publication = next((item for item in publications
+            if item.provider == CommercialPublicationProvider.FANVUE), None)
+        metadata = dict(getattr(publication, "publication_metadata", None) or {})
+        presentation = dict(metadata.get("content_vault_presentation") or {})
+        return bool(presentation.get("version") == self.presentation.VERSION
+                    and Path(str(presentation.get("path") or "")).is_file())
+
+    @staticmethod
+    def _preview_url(offering) -> str:
+        return f"/api/v1/commerce-authoring/{offering.offering_id}/telegram-content-vault/media"
 
     @classmethod
     def _acquire_claim(cls, key: str) -> bool:
@@ -213,7 +302,7 @@ class CommerceTelegramVaultService:
         currency = str(getattr(offering, "currency", None) or "").strip().upper()
         if price_minor is None or int(price_minor) <= 0 or not currency:
             raise CommerceTelegramVaultError("PRICE_REQUIRED", "A valid canonical sale price is required.")
-        return {
+        package = {
             "caption": caption, "caption_source": draft.get("source"),
             "caption_updated_at": draft.get("updatedAt"), "asset_id": int(asset.id),
             "offering_id": str(offering.offering_id), "teaser_id": str(teaser.get("teaser_id")),
@@ -222,6 +311,7 @@ class CommerceTelegramVaultService:
             "fanvue_publication_id": str(publication.publication_id),
             "delivery_url": delivery_url, "telegram_destination": "vault",
         }
+        return self._with_presentation(package, publication, creator_profile_id)
 
     def _content_vault_package(self, offering, creator_profile_id: int) -> dict:
         if self._offering_type(offering) == "SINGLE_IMAGE":
@@ -234,14 +324,20 @@ class CommerceTelegramVaultService:
 
     def _bundle_package(self, offering, creator_profile_id: int) -> dict:
         deliverable_id = getattr(offering, "source_photoshoot_deliverable_id", None)
-        if not deliverable_id:
-            raise CommerceTelegramVaultError("INVALID_BUNDLE", "Bundle Photoshoot attribution is required.")
+        bundle_studio_id = getattr(offering, "source_bundle_studio_bundle_id", None)
+        source_id = deliverable_id or bundle_studio_id
+        if not source_id:
+            raise CommerceTelegramVaultError("INVALID_BUNDLE", "Canonical Bundle source attribution is required.")
         if self.bundle_preparation is None:
-            from app.services.photoshoot_bundle_sale_preparation_service import PhotoshootBundleSalePreparationService
-            self.bundle_preparation = PhotoshootBundleSalePreparationService()
+            if bundle_studio_id:
+                from app.services.bundle_studio_sale_preparation_service import BundleStudioSalePreparationService
+                self.bundle_preparation = BundleStudioSalePreparationService()
+            else:
+                from app.services.photoshoot_bundle_sale_preparation_service import PhotoshootBundleSalePreparationService
+                self.bundle_preparation = PhotoshootBundleSalePreparationService()
         try:
             row, members, canonical, publication = self.bundle_preparation.content_vault_context(
-                deliverable_id, creator_profile_id=creator_profile_id,
+                source_id, creator_profile_id=creator_profile_id,
             )
         except (KeyError, ValueError) as error:
             raise CommerceTelegramVaultError("INVALID_DESTINATION", str(error)) from error
@@ -267,7 +363,7 @@ class CommerceTelegramVaultService:
         if len(caption) > self.TELEGRAM_PHOTO_CAPTION_LIMIT:
             raise CommerceTelegramVaultError("CAPTION_TOO_LONG", f"Content Vault caption exceeds Telegram's {self.TELEGRAM_PHOTO_CAPTION_LIMIT}-character photo caption limit.")
         teaser = self.bundle_preparation.teasers.inspect(
-            deliverable_id, creator_profile_id=creator_profile_id,
+            source_id, creator_profile_id=creator_profile_id,
         )
         if teaser.get("status") != "READY" or not teaser.get("teaserAssetId"):
             raise CommerceTelegramVaultError("PREVIEW_NOT_FOUND", "Authoritative Bundle promotional teaser is not READY.")
@@ -277,17 +373,67 @@ class CommerceTelegramVaultService:
             raise CommerceTelegramVaultError("PREVIEW_NOT_FOUND", "Authoritative Bundle promotional teaser file is unavailable.")
         if offering.price_minor is None or int(offering.price_minor) <= 0 or not str(offering.currency or "").strip():
             raise CommerceTelegramVaultError("PRICE_REQUIRED", "A valid canonical Bundle price is required.")
-        return {
+        package = {
             "caption": caption, "caption_source": draft.get("source"),
             "caption_updated_at": draft.get("updatedAt"),
             "offering_id": str(offering.offering_id),
-            "photoshoot_deliverable_id": str(row["deliverable_id"]),
+            "bundle_source_id": str(source_id),
             "paid_asset_ids": list(paid_ids), "paid_image_count": len(paid_ids),
             "teaser_asset_id": int(teaser["teaserAssetId"]), "teaser_path": teaser_path,
             "price_minor": int(offering.price_minor), "currency": str(offering.currency).upper(),
             "fanvue_publication_id": str(publication.publication_id),
             "delivery_url": delivery_url, "telegram_destination": "vault",
         }
+        return self._with_presentation(package, publication, creator_profile_id)
+
+    def _with_presentation(self, package, publication, creator_profile_id):
+        metadata = dict(publication.publication_metadata or {})
+        result = self.presentation.normalize(
+            package["teaser_path"],
+            prior_metadata=metadata.get("content_vault_presentation"),
+        )
+        if metadata.get("content_vault_presentation") != result.metadata:
+            metadata["content_vault_presentation"] = result.metadata
+            updated = self.publications.repository.update_metadata(
+                publication.publication_id,
+                creator_profile_id=creator_profile_id,
+                metadata=metadata,
+            )
+            if updated is None:
+                raise CommerceTelegramVaultError(
+                    "PREVIEW_NOT_FOUND", "Content Vault publication presentation could not be persisted."
+                )
+        return {**package, "publication_teaser_path": str(result.path),
+                "content_vault_presentation": dict(result.metadata)}
+
+    def _presentation_without_caption(self, offering, creator_profile_id):
+        publication, _ = self._fanvue_delivery(offering, creator_profile_id)
+        if self._offering_type(offering) == "SINGLE_IMAGE":
+            asset = self.assets.get_by_id(offering.hero_asset_id)
+            teaser = self.teasers.get(asset.id, "CONTENT_VAULT") if asset else None
+            path = str((teaser or {}).get("derivative_path") or "")
+            if not teaser or teaser.get("status") != "READY" or not Path(path).is_file():
+                raise CommerceTelegramVaultError("PREVIEW_NOT_FOUND", "Authoritative Content Vault teaser is not READY.")
+        elif self._offering_type(offering) == "BUNDLE":
+            if self.bundle_preparation is None:
+                if getattr(offering, "source_bundle_studio_bundle_id", None):
+                    from app.services.bundle_studio_sale_preparation_service import BundleStudioSalePreparationService
+                    self.bundle_preparation = BundleStudioSalePreparationService()
+                else:
+                    from app.services.photoshoot_bundle_sale_preparation_service import PhotoshootBundleSalePreparationService
+                    self.bundle_preparation = PhotoshootBundleSalePreparationService()
+            source_id = (getattr(offering, "source_photoshoot_deliverable_id", None)
+                         or getattr(offering, "source_bundle_studio_bundle_id", None))
+            teaser = self.bundle_preparation.teasers.inspect(
+                source_id, creator_profile_id=creator_profile_id)
+            teaser_asset = self.assets.get_by_id(int(teaser.get("teaserAssetId") or 0))
+            path = str(getattr(teaser_asset, "local_vault_path", None)
+                       or getattr(teaser_asset, "file_path", None) or "")
+            if teaser.get("status") != "READY" or not Path(path).is_file():
+                raise CommerceTelegramVaultError("PREVIEW_NOT_FOUND", "Authoritative Bundle promotional teaser is not READY.")
+        else:
+            raise CommerceTelegramVaultError("INVALID_OFFERING_TYPE", "Unsupported Content Vault offering.")
+        return self._with_presentation({"teaser_path": path}, publication, creator_profile_id)
 
     def _fanvue_delivery(self, offering, creator_profile_id: int):
         publications = self.publications.list_publications(

@@ -20,6 +20,7 @@ from app.services.generation_engine_service import GenerationEngineService
 from app.services.generation_library_service import GenerationLibraryService
 from app.services.reference_library_service import ReferenceLibraryService
 from app.services.quick_edit_service import CropBox, QuickEditService
+from app.services.photoshoot_session_teaser_service import PhotoshootSessionTeaserService
 
 
 router = APIRouter(prefix="/api/v1/edit-studio", tags=["edit-studio"])
@@ -110,6 +111,10 @@ class EditGenerationStatusResponse(BaseModel):
 
 class EditCandidateActionRequest(BaseModel):
     candidate_image_id: str
+
+
+class UsePhotoshootTeaserRequest(EditCandidateActionRequest):
+    intent_id: str
 
 
 class EditAgainResponse(EditStudioActionResponse):
@@ -265,6 +270,12 @@ def edit_studio_return_to_library():
     source = library.pending_edit_record(creator_profile_id=creator_profile_id)
     if source is None:
         raise HTTPException(status_code=404, detail="Pending Edit Studio source not found.")
+    if dict(source.generation_metadata or {}).get("purpose") == PhotoshootSessionTeaserService.PURPOSE:
+        try:
+            return PhotoshootSessionTeaserService(library=library).cancel_active(
+                creator_profile_id=creator_profile_id)
+        except ValueError as error:
+            raise HTTPException(status_code=409, detail=str(error)) from error
     candidates = tuple(
         record
         for record in library.list_records()
@@ -414,6 +425,18 @@ def edit_studio_approve(request: EditCandidateActionRequest):
             image_url=f"/api/generation-library/media/{updated.image_id}?v={version}",
         ),
     }
+
+
+@router.post("/use-as-photoshoot-teaser")
+def use_as_photoshoot_teaser(request: UsePhotoshootTeaserRequest):
+    try:
+        return PhotoshootSessionTeaserService().use_candidate(
+            request.intent_id, request.candidate_image_id,
+            creator_profile_id=int(_creator_profile().get("id") or 0))
+    except KeyError as error:
+        raise HTTPException(status_code=404, detail="Edit candidate not found.") from error
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
 
 
 @router.post("/edit-again", response_model=EditAgainResponse)

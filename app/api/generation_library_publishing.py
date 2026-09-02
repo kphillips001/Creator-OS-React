@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
@@ -11,9 +13,12 @@ from app.repositories.creator_profile_repository import get_active_creator_profi
 from app.services.generation_library_publishing_service import (
     GenerationLibraryPublishingService,
 )
+from app.api.android_device import android_device_service
+from app.services.instagram_handoff_service import InstagramHandoffService
 
 
 router = APIRouter(prefix="/api/v1/generation-library", tags=["generation-library"])
+instagram_handoff_service = InstagramHandoffService(android_device=android_device_service)
 
 
 class CaptionGenerationRequest(BaseModel):
@@ -36,7 +41,13 @@ class PublishRequest(BaseModel):
     ctaEnabled: bool = False
     ctaLabel: str = ""
     ctaUrl: str = ""
+    selectedCtas: list[str] | None = None
     xTargets: list[XPublishTarget] | None = None
+    xAutoRepliesEnabled: bool = True
+
+
+class InstagramHandoffRequest(BaseModel):
+    caption: str = Field(min_length=1)
 
 
 def _creator_profile() -> dict:
@@ -102,11 +113,35 @@ def publish(generated_image_id: str, request: PublishRequest):
             cta_enabled=request.ctaEnabled,
             cta_label=request.ctaLabel,
             cta_url=request.ctaUrl,
+            selected_ctas=(tuple(request.selectedCtas) if request.selectedCtas is not None else None),
             x_targets=(
                 tuple(target.model_dump() for target in request.xTargets)
                 if request.xTargets is not None
                 else None
             ),
+            x_auto_replies_enabled=request.xAutoRepliesEnabled,
+        )
+        return {"success": True, **result}
+    except (KeyError, ValueError, RuntimeError) as error:
+        return _error_response(error)
+    except Exception as error:
+        return JSONResponse(
+            status_code=500,
+            content={
+                "success": False,
+                "error": str(error),
+                "exceptionType": error.__class__.__name__,
+            },
+        )
+
+
+@router.post("/{generated_image_id}/publish/instagram/handoff")
+async def handoff_to_instagram(generated_image_id: str, request: InstagramHandoffRequest):
+    try:
+        result = await asyncio.to_thread(
+            instagram_handoff_service.handoff,
+            generated_image_id=generated_image_id,
+            caption=request.caption,
         )
         return {"success": True, **result}
     except (KeyError, ValueError, RuntimeError) as error:

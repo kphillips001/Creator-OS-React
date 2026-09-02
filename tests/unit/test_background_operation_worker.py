@@ -1,6 +1,8 @@
 from types import SimpleNamespace
 from uuid import uuid4
+import inspect
 
+from app.repositories.background_operation_repository import BackgroundOperationRepository
 from app.services.background_operation_worker_service import BackgroundOperationWorkerService
 
 
@@ -46,3 +48,8 @@ def test_unknown_executor_fails_without_dispatch():
         worker_instance_id="worker-1", operations=operations, executors={}).process_one()
     assert result["status"] == "FAILED"
     assert operations.failures[0][2]["code"] == "EXECUTOR_NOT_FOUND"
+
+
+def test_worker_claim_query_excludes_browser_managed_explicit_batches():
+    source = inspect.getsource(BackgroundOperationRepository.claim_next)
+    assert "executor_key<>'content_studio_explicit_batch_client'" in source

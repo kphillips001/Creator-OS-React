@@ -791,8 +791,8 @@ def test_all_modes_request_ten_ideas_with_summary_original_direction_and_guidanc
         assert call["session_context"]["timeline_image_count"] == 2
         assert call["session_context"]["current_shot"] == 2
         assert call["session_context"]["planning_shot"] == 3
-        assert call["session_context"]["remaining_shots"] == 8
-        assert call["session_context"]["editorial_stage"] == "Beginning"
+        assert call["session_context"]["remaining_shots"] == 3
+        assert call["session_context"]["editorial_stage"] == "Middle"
         settings_call = queue.update_session_settings.call_args_list[-1]
         assert settings_call.args[0] == "session-1"
         assert settings_call.kwargs["selected_inspiration"] == expected_selected

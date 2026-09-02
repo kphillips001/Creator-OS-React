@@ -75,6 +75,138 @@ class FanvueMediaLinkPublicationExecutor:
         finally:
             self.publications.release_execution(publication.publication_id, claim)
 
+    def replace_live_media_link(self, publication_id, *, creator_profile_id: int,
+                                fanvue_account_id: int):
+        """Replace one claimed LIVE media link without re-uploading offering media."""
+        publication = self.publication_service.get_publication(
+            publication_id, creator_profile_id=creator_profile_id)
+        if publication is None:
+            raise ValueError("Commercial Publication not found.")
+        claim = self.publications.claim_execution(
+            publication.publication_id, creator_profile_id=creator_profile_id)
+        if claim is None:
+            raise ValueError("Commercial Publication execution is already in progress.")
+        try:
+            return self._replace_claimed(
+                publication, creator_profile_id, fanvue_account_id)
+        except Exception as error:
+            current = self.publication_service.get_publication(
+                publication.publication_id, creator_profile_id=creator_profile_id)
+            current_metadata = dict(current.publication_metadata if current else {})
+            replacement = dict(current_metadata.get("media_link_replacement") or {})
+            if (current and current.status == CommercialPublicationStatus.LIVE
+                    and replacement.get("state") not in {
+                        "OLD_LINK_DELETED", "REPLACEMENT_FAILED",
+                    }):
+                replacement.update({
+                    "state": "PREFLIGHT_FAILED", "last_error": str(error),
+                    "last_attempt_at": self._now(),
+                })
+                current_metadata["media_link_replacement"] = replacement
+                self.publications.update_metadata(
+                    current.publication_id, creator_profile_id=creator_profile_id,
+                    metadata=current_metadata)
+            raise
+        finally:
+            self.publications.release_execution(publication.publication_id, claim)
+
+    def _replace_claimed(self, publication, creator_profile_id, account_id):
+        offering = self.offerings.get(
+            publication.commercial_offering_id, creator_profile_id=creator_profile_id)
+        metadata = dict(publication.publication_metadata)
+        replacement = dict(metadata.get("media_link_replacement") or {})
+        target_price = int(replacement.get("target_price_minor") or 0)
+        if not 300 <= target_price <= 50000:
+            raise ValueError("A valid replacement price is required.")
+        if offering is None or not offering.assets:
+            raise ValueError("Commercial Offering is unavailable.")
+        expected_assets = [member.asset_id for member in offering.assets]
+        if replacement.get("asset_ids") != expected_assets:
+            raise ValueError("Bundle membership changed during Media Link replacement.")
+        client = self.client_factory(account_id)
+        client.require_media_link_scopes()
+        client.get_current_user()
+        old_link = dict(metadata.get("media_link") or {})
+        old_uuid = str(replacement.get("old_uuid") or publication.external_product_id or "").strip()
+        deleted = replacement.get("state") in {"OLD_LINK_DELETED", "REPLACEMENT_FAILED"}
+        if not deleted:
+            matches = [item for item in client.list_media_links().get("data", [])
+                       if str(item.get("uuid") or "") == old_uuid]
+            if not matches and replacement.get("state") == "DELETING_OLD_LINK":
+                # Recovery after an ambiguous/crashed DELETE: absence at the
+                # provider proves the old resource is already gone.
+                deleted = True
+            elif len(matches) != 1:
+                raise ValueError("The existing canonical Fanvue Media Link could not be verified.")
+            if not deleted:
+                provider_link = matches[0]
+                if (tuple(sorted(provider_link.get("mediaUuids") or ()))
+                        != tuple(sorted(old_link.get("media_uuids") or old_link.get("mediaUuids") or ()))
+                        or int(provider_link.get("price", -1)) != int(offering.price_minor)):
+                    raise ValueError("The existing Fanvue Media Link does not match canonical Bundle state.")
+                replacement.update({"state": "DELETING_OLD_LINK", "last_attempt_at": self._now()})
+                metadata["media_link_replacement"] = replacement
+                self.publications.update_metadata(
+                    publication.publication_id, creator_profile_id=creator_profile_id, metadata=metadata)
+                client.delete_media_link(old_uuid)
+            replacement["state"] = "OLD_LINK_DELETED"
+            metadata["media_link_replacement"] = replacement
+            metadata.pop("media_link", None)
+            publication = self.publications.mark_media_link_replacement_deleted(
+                publication.publication_id, creator_profile_id=creator_profile_id,
+                metadata=metadata)
+        try:
+            media_uuids = [self._upload_asset(
+                client, publication.publication_id, member.asset_id,
+                creator_profile_id, account_id) for member in offering.assets]
+            matches = client.find_equivalent_media_link(media_uuids, target_price)
+            if len(matches) > 1:
+                raise RuntimeError("Multiple equivalent Fanvue Media Links require reconciliation.")
+            link = matches[0] if matches else client.create_media_link(media_uuids, target_price)
+            metadata["media_link"] = {
+                "uuid": link["uuid"], "url": link.get("url"),
+                "price_minor": link["price"], "media_uuids": link["mediaUuids"],
+                "created_at": link.get("createdAt"), "clicks": link.get("clicks"),
+                "unlocks": link.get("unlocks"), "earnings": link.get("earnings"),
+            }
+            snapshot = dict(self._snapshot(offering))
+            snapshot["price_minor"] = target_price
+            snapshot_raw = json.dumps({
+                "offering_id": str(offering.offering_id),
+                "asset_ids": snapshot["asset_ids"],
+                "price_minor": target_price,
+            }, separators=(",", ":"), sort_keys=True)
+            snapshot["composition_hash"] = hashlib.sha256(snapshot_raw.encode()).hexdigest()
+            metadata.update({
+                "price_minor": target_price, "currency": offering.currency,
+                "offering_snapshot": snapshot,
+                "composition_hash": snapshot["composition_hash"],
+                "ordered_asset_ids": snapshot["asset_ids"],
+            })
+            metadata["media_link_replacement"] = {
+                **replacement, "state": "COMPLETE", "completed_at": self._now(),
+                "new_uuid": link["uuid"],
+            }
+            return self.publications.finalize_media_link_replacement(
+                publication.publication_id, creator_profile_id=creator_profile_id,
+                price_minor=target_price, currency=offering.currency,
+                external_product_id=link["uuid"], metadata=metadata)
+        except Exception as error:
+            replacement.update({
+                "state": "REPLACEMENT_FAILED", "last_error": str(error),
+                "last_attempt_at": self._now(),
+            })
+            metadata["media_link_replacement"] = replacement
+            metadata.pop("media_link", None)
+            self.publications.mark_media_link_replacement_deleted(
+                publication.publication_id, creator_profile_id=creator_profile_id,
+                metadata=metadata, error=(
+                    "The old Fanvue Media Link was deleted, but replacement creation failed. "
+                    f"Retry the price update. {error}"
+                ),
+            )
+            raise
+
     def _execute_claimed(self, publication, creator_profile_id, account_id):
         offering = self.offerings.get(
             publication.commercial_offering_id, creator_profile_id=creator_profile_id)

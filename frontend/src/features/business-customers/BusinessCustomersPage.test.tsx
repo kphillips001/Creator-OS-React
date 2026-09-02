@@ -59,4 +59,22 @@ describe("BusinessCustomersPage", () => {
     render(<BusinessCustomersPage />);
     expect(await screen.findByRole("alert")).toHaveTextContent("Customer service unavailable.");
   });
+
+  it("requires confirmation and reason to block and deliberately restore one customer", async () => {
+    const normal = { ...customer, interactionSafety: { safetyStatus: "NORMAL", decision: "ALLOWED", policyEnabled: true, reason: null, effectiveAt: null, history: [] } };
+    const blocked = { ...customer, interactionSafety: { safetyStatus: "UNDERAGE_BLOCKED", decision: "BLOCKED_UNDERAGE", policyEnabled: true, reason: "Operator verified concern", effectiveAt: "2026-08-24T00:00:00Z", history: [{ previous_status: "NORMAL", new_status: "UNDERAGE_BLOCKED" }] } };
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation((input, init) => {
+      if (init?.method === "PUT") return response(blocked);
+      return String(input).includes("7%3A42") ? response(normal) : response(listing);
+    });
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    render(<BusinessCustomersPage />); await screen.findByText("Avery");
+    fireEvent.click(screen.getByRole("button", { name: "View details" }));
+    await screen.findByRole("heading", { name: "Interaction Safety" });
+    fireEvent.change(screen.getByLabelText("Safety change reason"), { target: { value: "Operator verified concern" } });
+    fireEvent.click(screen.getByRole("button", { name: "Mark UNDERAGE — BLOCKED" }));
+    expect(await screen.findByText("UNDERAGE — CHAT BLOCKED")).toBeInTheDocument();
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === "PUT" && String(init.body).includes("UNDERAGE_BLOCKED"))).toBe(true);
+    expect(screen.getByRole("button", { name: "Restore NORMAL" })).toBeInTheDocument();
+  });
 });

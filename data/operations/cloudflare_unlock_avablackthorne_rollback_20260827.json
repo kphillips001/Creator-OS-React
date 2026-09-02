@@ -1,0 +1,43 @@
+{
+  "captured_at_utc": "2026-08-27T16:06:29.3871896Z",
+  "purpose": "Rollback snapshot before unlock.avablackthorne.net deployment",
+  "secrets_included": false,
+  "tunnel": {
+    "name": "creator-os-webhook",
+    "configuration_version": 1,
+    "source": "cloudflare",
+    "config": {
+      "ingress": [
+        {
+          "service": "http://127.0.0.1:8001",
+          "hostname": "hooks.fanterix.com"
+        },
+        {
+          "service": "http_status:404"
+        }
+      ],
+      "originRequest": null
+    }
+  },
+  "unlock_dns_records": [],
+  "relevant_zone_rulesets": [],
+  "existing_zone_ruleset_phases": [
+    "http_request_sanitize",
+    "http_request_firewall_managed",
+    "ddos_l7",
+    "http_request_dynamic_redirect"
+  ],
+  "external_before_state": {
+    "https://avablackthorne.net/": {
+      "status": 302,
+      "location": "https://www.fanvue.com/avablackthorne"
+    },
+    "http://avablackthorne.net/": {
+      "status": 302,
+      "location": "https://www.fanvue.com/avablackthorne"
+    },
+    "https://hooks.fanterix.com/": {
+      "status": 404
+    }
+  }
+}

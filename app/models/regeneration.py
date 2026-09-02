@@ -14,6 +14,7 @@ class RegenerationRun:
     source_recipe_id: UUID
     requested_count: int
     status: str
+    workspace_dismissed_at: datetime | None = None
     created_at: datetime | None = None
     started_at: datetime | None = None
     completed_at: datetime | None = None
@@ -47,4 +48,3 @@ class RegenerationEligibility:
     reason: str | None = None
     source_generated_image_id: str | None = None
     source_recipe_id: UUID | None = None
-

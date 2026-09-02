@@ -39,7 +39,7 @@ class Processes:
 class Heartbeats:
     def __init__(self, processes, clock): self.processes = processes; self.clock = clock; self.rows = []; self.auto_register = True
     def list_latest_per_worker(self, **_):
-        if self.auto_register and self.processes.started:
+        if self.auto_register and self.processes.started and self.processes.running:
             command = self.processes.started[-1]
             definition = next(item for item in WORKERS if item.module in command)
             pid = max(self.processes.running)
@@ -80,10 +80,37 @@ def test_authoritative_entry_points_and_defaults_are_safe(tmp_path):
                                "ready_asset_chat_registration": "app.workers.ready_asset_chat_registration",
                                    "fanvue_commercial_publications": "app.workers.fanvue_commercial_publications",
                                        "commerce_reconciliation": "app.workers.commerce_reconciliation",
-                                       "background_operations": "app.workers.background_operations"}
+                                           "background_operations": "app.workers.background_operations",
+                                           "x_competitor_refresh": "app.workers.x_competitor_refresh"}
     assert "app.outreach_worker" not in modules.values()
     value.start_enabled()
     assert processes.started == []
+
+
+def test_commerce_gate_and_supervisor_restart_contract(tmp_path):
+    definition = next(item for item in WORKERS if item.key == "commerce_reconciliation")
+    disabled, disabled_processes, _, _ = service(tmp_path)
+    result = disabled.start_worker(definition)
+    assert result["lastLauncherAction"] == "disabled"
+    assert disabled_processes.started == []
+
+    enabled, processes, heartbeats, _ = service(
+        tmp_path, {definition.environment_switch: "true"}
+    )
+    first = enabled.start_worker(definition)
+    assert first["lastLauncherAction"] == "started"
+    first_pid = first["pid"]
+    processes.running.discard(first_pid)
+    heartbeats.auto_register = True
+    restarted = enabled.start_worker(definition)
+    assert restarted["lastLauncherAction"] == "started"
+    assert restarted["pid"] != first_pid
+
+    enabled.environment = {}
+    processes.running.discard(restarted["pid"])
+    blocked = enabled.start_worker(definition)
+    assert blocked["lastLauncherAction"] == "disabled"
+    assert len(processes.started) == 2
 
 
 def test_enabled_worker_requires_healthy_heartbeat(tmp_path):
@@ -229,3 +256,97 @@ def test_pid_ownership_validation_does_not_spawn_nested_powershell():
     assert "Get-CimInstance" not in source
     assert '"powershell.exe"' not in source
     assert "os.kill(pid, signal.CTRL_BREAK_EVENT)" not in source
+
+
+def test_development_watch_tracks_only_python_application_source(tmp_path):
+    value, _, _, _ = service(tmp_path, {
+        "CREATOR_OS_DEV_AUTO_RELOAD": "true",
+    })
+    (tmp_path / "app" / "services").mkdir(parents=True)
+    (tmp_path / "app" / "services" / "example.py").write_text("value = 1\n")
+    (tmp_path / "app" / "services" / "ignored.txt").write_text("not python\n")
+    (tmp_path / "app" / "__pycache__").mkdir()
+    (tmp_path / "app" / "__pycache__" / "cached.py").write_text("cached = 1\n")
+    (tmp_path / "logs").mkdir()
+    (tmp_path / "logs" / "runtime.py").write_text("noise = 1\n")
+
+    assert set(value._source_snapshot()) == {"app/services/example.py"}
+
+
+def test_production_default_does_not_watch_or_reload(tmp_path):
+    value, _, _, _ = service(tmp_path)
+    (tmp_path / "app").mkdir()
+    (tmp_path / "app" / "changed.py").write_text("value = 1\n")
+
+    assert value.poll_development_reload() is None
+    assert value._reload_snapshot is None
+
+
+def test_rapid_python_changes_are_debounced_into_one_reload(tmp_path):
+    value, _, _, clock = service(tmp_path, {
+        "CREATOR_OS_DEV_AUTO_RELOAD": "true",
+    })
+    (tmp_path / "app").mkdir()
+    first = tmp_path / "app" / "first.py"
+    second = tmp_path / "app" / "second.py"
+    first.write_text("value = 1\n")
+    assert value.poll_development_reload() is None
+
+    calls = []
+    value.reload_enabled_workers = lambda files: calls.append(files) or {
+        "status": "reloaded", "files": files,
+    }
+    first.write_text("value = 22\n")
+    assert value.poll_development_reload()["status"] == "debouncing"
+    second.write_text("value = 3\n")
+    assert value.poll_development_reload()["status"] == "debouncing"
+    clock.value += timedelta(seconds=2)
+
+    result = value.poll_development_reload()
+    assert result["status"] == "reloaded"
+    assert calls == [["app/first.py", "app/second.py"]]
+
+
+def test_reload_stops_all_enabled_workers_before_any_replacement(tmp_path):
+    definitions = (WORKERS[0], next(item for item in WORKERS
+                                   if item.key == "commerce_reconciliation"))
+    environment = {item.environment_switch: "true" for item in definitions}
+    environment.update({"CREATOR_OS_DEV_AUTO_RELOAD": "true"})
+    value, _, _, _ = service(tmp_path, environment)
+    state = {}
+    for index, definition in enumerate(definitions, start=1):
+        state[definition.key] = {"pid": 50 + index}
+    value._load_state = lambda: state
+    events = []
+    value.stop_worker = lambda definition, pid: events.append(
+        ("stop", definition.key, pid)) or {"lastLauncherAction": "stopped"}
+    value.start_worker = lambda definition: events.append(
+        ("start", definition.key, None)) or {
+            "lastLauncherAction": "started", "pid": 100 + len(events),
+        }
+
+    result = value.reload_enabled_workers(["app/services/example.py"])
+
+    first_start = next(index for index, event in enumerate(events)
+                       if event[0] == "start")
+    assert all(event[0] == "stop" for event in events[:first_start])
+    assert len([event for event in events if event[0] == "start"]) == 2
+    assert result["oldPids"] == {"telegram": 51, "commerce_reconciliation": 52}
+
+
+def test_local_launcher_enables_uvicorn_reload_only_behind_development_switch():
+    launcher = (Path(__file__).resolve().parents[1] / "tools" / "launcher" /
+                "launch_creator_os.ps1").read_text(encoding="utf-8")
+    assert 'CREATOR_OS_DEV_AUTO_RELOAD' in launcher
+    assert '$DevAutoReloadEnabled' in launcher
+    assert '"--reload", "--reload-dir"' in launcher
+
+
+def test_local_launcher_preserves_guarded_session5_certification_environment():
+    launcher = Path("tools/launcher/launch_creator_os.ps1").read_text(encoding="utf-8")
+    assert '.env.session5.local' in launcher
+    assert 'CREATOR_OS_CERTIFICATION_TEST_DATABASE_NAME' in launcher
+    assert 'must be explicitly test-scoped' in launcher
+    assert 'must differ from the production database' in launcher
+    assert 'SetEnvironmentVariable("CREATOR_OS_CERTIFICATION_SCENARIO_MODE", "true", "Process")' in launcher
+    assert 'SetEnvironmentVariable("TEST_DATABASE_URL", $testDatabaseUrl, "Process")' in launcher

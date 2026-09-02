@@ -9,6 +9,7 @@ bot/
 
 # Env files (IMPORTANT - never commit secrets)
 .env
+.env.session5.local
 
 # Telegram user-account authorization sessions
 tg_sessions/
@@ -17,6 +18,10 @@ tg_sessions/
 
 # Playwright browser profiles
 data/playwright/
+
+# Runtime Photoshoot queue lock/recovery artifacts
+data/photoshoot_queue/.*.lock
+data/photoshoot_queue/.*.recovery
 
 # VS Code
 .vscode/

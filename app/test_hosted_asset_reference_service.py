@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+from dataclasses import replace
 from types import SimpleNamespace
 
 import pytest
@@ -26,7 +27,8 @@ class FakeRepository:
 
 
 class Response:
-    def __init__(self, status=200, body=None): self.status_code = status; self._body = body or {}
+    def __init__(self, status=200, body=None, headers=None):
+        self.status_code = status; self._body = body or {}; self.headers = headers or {}
     def json(self): return self._body
     def raise_for_status(self):
         if self.status_code >= 400: raise requests.HTTPError(str(self.status_code))
@@ -81,9 +83,51 @@ def test_three_verification_resets_produce_clear_retryable_failure():
     assert "ConnectionError" not in str(caught.value)
 
 
+def test_expiring_provider_reference_is_replaced_before_submission(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOSTED_REFERENCE_MAX_AGE_SECONDS", "518400")
+    source = tmp_path / "canonical.png"; source.write_bytes(b"canonical")
+    current = SimpleNamespace(
+        reference_id="old", hosted_url="https://cdn.test/old.png",
+        created_at=datetime.now(timezone.utc) - timedelta(days=6, seconds=1),
+        verified_at=datetime.now(timezone.utc),
+    )
+    repository = FakeRepository(current)
+    http = SequencedHttp(gets=[Response(200, headers={"Content-Type": "image/png", "Content-Length": "9"})])
+    service = HostedAssetReferenceService(repository=repository, http_client=http, sleep=lambda _: None)
+    resolved = service.resolve(
+        asset_id=93, source_path=str(source), host_name="wavespeed_media",
+        uploader=lambda _: "https://cdn.test/fresh.png",
+    )
+    assert resolved == "https://cdn.test/fresh.png"
+    assert repository.stale[0][1]["error_code"] == "hosted_reference_expiring"
+
+
+def test_non_image_provider_reference_is_rejected():
+    http = SequencedHttp(gets=[Response(200, headers={"Content-Type": "text/html"})])
+    service = HostedAssetReferenceService(repository=FakeRepository(), http_client=http, sleep=lambda _: None)
+    with pytest.raises(HostedAssetReferenceError, match="non-image content"):
+        service.verify("https://cdn.test/not-an-image", asset_id=93)
+
+
+def test_reference_preparation_failure_prevents_provider_submission(tmp_path):
+    source = tmp_path / "canonical.png"; source.write_bytes(b"canonical")
+    request = _request()
+    request = replace(request, reference_asset_path=str(source), metadata={})
+    http = SequencedHttp()
+    hosted = SimpleNamespace(resolve=lambda **_: (_ for _ in ()).throw(
+        HostedAssetReferenceError("Provider input preparation failed before submission.")
+    ))
+    provider = Seedream50ProProvider(
+        api_key="test", http_client=http, hosted_reference_service=hosted, sleep=lambda _: None,
+    )
+    result = provider.execute(request)
+    assert result.failure_reason == "Provider input preparation failed before submission."
+    assert http.calls == []
+
+
 def _request():
     return GenerationRequest(
-        request_id="request-1", creator_profile_id=2, prompt_plan_id="plan-1", prompt_text="Portrait",
+        request_id=f"request-{datetime.now(timezone.utc).timestamp()}", creator_profile_id=2, prompt_plan_id="plan-1", prompt_text="Portrait",
         reference_asset_id=93, reference_asset_path="https://cdn.test/reference.png",
         provider_id="seedream_5_0_pro", generation_type="image_to_image", media_type="image", image_count=1,
         metadata={"reference_image_url": "https://cdn.test/reference.png"},
@@ -125,25 +169,25 @@ def test_three_poll_resets_are_mapped_without_raw_python_tuple():
         provider.poll_status_once(SimpleNamespace(provider_request_id="prediction-1"))
 
 
-def test_canonical_upload_retries_two_resets_then_returns_hosted_url(tmp_path, monkeypatch):
-    monkeypatch.setenv("IMGBB_API_KEY", "test")
+def test_canonical_upload_uses_wavespeed_media_endpoint(tmp_path):
     source = tmp_path / "canonical.png"; source.write_bytes(b"not-an-image")
     http = SequencedHttp(posts=[
         requests.ConnectionError("reset"), requests.ConnectionError("reset"),
-        Response(200, {"data": {"image": {"url": "https://i.ibb.test/canonical.jpg"}}}),
+        Response(200, {"data": {"download_url": "https://cdn.wavespeed.ai/uploads/canonical.png"}}),
     ])
     provider = Seedream50ProProvider(api_key="test", http_client=http, sleep=lambda _: None)
-    assert provider._upload_reference_image(source, asset_id=93) == "https://i.ibb.test/canonical.jpg"
+    assert provider._upload_reference_image(source, asset_id=93) == "https://cdn.wavespeed.ai/uploads/canonical.png"
     assert len(http.calls) == 3
+    assert all(call[1] == provider.media_upload_endpoint for call in http.calls)
+    assert "file" in http.calls[-1][2]["files"]
 
 
-def test_three_canonical_upload_resets_surface_clear_retry_message(tmp_path, monkeypatch):
-    monkeypatch.setenv("IMGBB_API_KEY", "test")
+def test_three_canonical_upload_resets_surface_clear_retry_message(tmp_path):
     source = tmp_path / "canonical.png"; source.write_bytes(b"not-an-image")
     http = SequencedHttp(posts=[requests.ConnectionError("reset")] * 3)
     provider = Seedream50ProProvider(api_key="test", http_client=http, sleep=lambda _: None)
     service = HostedAssetReferenceService(repository=FakeRepository(), http_client=http, sleep=lambda _: None)
     with pytest.raises(HostedAssetReferenceError, match="Could not host the canonical reference after 3 attempts") as caught:
-        service.resolve(asset_id=93, source_path=str(source), host_name="imgbb",
+        service.resolve(asset_id=93, source_path=str(source), host_name="wavespeed_media",
                         uploader=lambda path: provider._upload_reference_image(path, asset_id=93))
     assert "ConnectionResetError" not in str(caught.value)

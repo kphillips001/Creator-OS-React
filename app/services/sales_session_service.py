@@ -110,6 +110,7 @@ class SalesSessionService:
         purchase_intent_repository=None, photoshoot_repository=None,
         customer_fetcher=None, creator_profile_resolver=None,
         compatibility=None,
+        customer_safety_service=None,
     ) -> None:
         self.repository = repository or SalesSessionRepository()
         self.identities = identity_repository or TelegramIdentityRepository()
@@ -126,6 +127,10 @@ class SalesSessionService:
         self.compatibility = (
             compatibility or SalesSessionCompatibilityAdapter()
         )
+        if customer_safety_service is None:
+            from app.services.customer_interaction_safety_service import CustomerInteractionSafetyService
+            customer_safety_service = CustomerInteractionSafetyService()
+        self.customer_safety = customer_safety_service
 
     def start(
         self, *, creator_profile_id: int, fanvue_account_id: int,
@@ -137,6 +142,11 @@ class SalesSessionService:
         commercial_foundation_type=SalesSessionFoundationType.PHOTOSHOOT,
     ):
         actor = self._actor(actor_type, allow_system=False)
+        decision = self.customer_safety.decide(
+            creator_profile_id=int(creator_profile_id), fanvue_account_id=int(fanvue_account_id),
+            fanvue_user_id=int(fanvue_user_id))
+        if not decision.allowed:
+            raise SalesSessionError("Sales Session blocked by customer safety: BLOCKED_UNDERAGE")
         customer = self.customer_fetcher(
             int(fanvue_account_id), int(fanvue_user_id)
         )
@@ -233,6 +243,49 @@ class SalesSessionService:
             actor_identifier=actor_identifier,
         )
 
+    def resolve_active_conversation(
+        self, *, creator_profile_id: int, fanvue_account_id: int,
+        fanvue_user_id: int, conversation_thread_id: int,
+        telegram_user_id: int | None = None,
+    ):
+        """Resolve an existing Session without implicitly entering Session Selling.
+
+        Ordinary conversation and Single/Bundle commerce use this read boundary.
+        Explicit Session authorities continue to use ``start`` or
+        ``resolve_or_start_conversation`` and retain their strict identity checks.
+        """
+        session = self.repository.get_active_for_customer(
+            creator_profile_id=int(creator_profile_id),
+            fanvue_account_id=int(fanvue_account_id),
+            fanvue_user_id=int(fanvue_user_id),
+        )
+        if session is None:
+            return None
+        if (
+            session.conversation_thread_id is not None
+            and int(session.conversation_thread_id) != int(conversation_thread_id)
+        ):
+            raise SalesSessionError(
+                "Active Sales Session does not match the canonical Conversation."
+            )
+        if telegram_user_id is not None:
+            identity = self.identities.get_by_telegram_user_id(
+                int(telegram_user_id)
+            )
+            if (
+                identity is None
+                or identity.fanvue_account_id != int(fanvue_account_id)
+                or identity.local_fanvue_user_id != int(fanvue_user_id)
+                or (
+                    session.telegram_identity_mapping_id is not None
+                    and identity.id != session.telegram_identity_mapping_id
+                )
+            ):
+                raise SalesSessionError(
+                    "Telegram identity does not match the active Sales Session."
+                )
+        return session
+
     def get(self, *, session_id, creator_profile_id: int):
         session = self.repository.get(
             self._uuid(session_id), creator_profile_id=int(creator_profile_id)
@@ -263,6 +316,7 @@ class SalesSessionService:
         session = self.get(
             session_id=session_id, creator_profile_id=creator_profile_id
         )
+        self._require_safe_session(session)
         target = self._state(state)
         if target not in self.TRANSITIONS.get(session.state, set()):
             raise SalesSessionError(
@@ -288,6 +342,7 @@ class SalesSessionService:
         session = self.get(
             session_id=session_id, creator_profile_id=creator_profile_id
         )
+        self._require_safe_session(session)
         if session.state not in ACTIVE_SALES_SESSION_STATES:
             raise SalesSessionError(
                 "A terminal Sales Session cannot change progression."
@@ -313,6 +368,7 @@ class SalesSessionService:
         session = self.get(
             session_id=session_id, creator_profile_id=creator_profile_id
         )
+        self._require_safe_session(session)
         if session.state not in ACTIVE_SALES_SESSION_STATES:
             raise SalesSessionError(
                 "A Purchase Intent cannot join a terminal Sales Session."
@@ -426,6 +482,25 @@ class SalesSessionService:
                 creator_profile_id=session.creator_profile_id,
             ),
         }
+
+    def record_conversational_progression(
+        self, *, session_id, creator_profile_id: int, progression: Mapping,
+    ):
+        session = self.get(session_id=session_id, creator_profile_id=creator_profile_id)
+        self._require_safe_session(session)
+        return self.repository.merge_commercial_context(
+            session_id=self._uuid(session_id),
+            creator_profile_id=int(creator_profile_id),
+            values={"salesProgression": dict(progression)},
+        )
+
+    def _require_safe_session(self, session):
+        decision = self.customer_safety.decide(
+            creator_profile_id=int(session.creator_profile_id),
+            fanvue_account_id=int(session.fanvue_account_id),
+            fanvue_user_id=int(session.fanvue_user_id))
+        if not decision.allowed:
+            raise SalesSessionError("Sales Session interaction blocked: BLOCKED_UNDERAGE")
 
     def commercial_guidance(self, *, session) -> dict:
         if (

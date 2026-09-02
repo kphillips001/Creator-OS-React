@@ -7,6 +7,17 @@ export type DeveloperTodo = {
   completed: boolean;
   completedAt: string | null;
   note: string | null;
+  subnotes: DeveloperTodoSubnote[];
+};
+
+export type DeveloperTodoSubnote = {
+  id: string;
+  todoId: string;
+  title: string;
+  content: string;
+  completed: boolean;
+  createdAt: string;
+  updatedAt: string;
 };
 
 const base = `${environment.apiBaseUrl}/developer-notes`;
@@ -23,10 +34,20 @@ export const developerNotesApi = {
   create: (title: string, note: string) => request<DeveloperTodo>("/todos", {
     method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ title, note }),
   }),
-  update: (id: string, changes: { completed?: boolean; note?: string | null }) => request<DeveloperTodo>(`/todos/${encodeURIComponent(id)}`, {
+  update: (id: string, changes: { title?: string; completed?: boolean; note?: string | null }) => request<DeveloperTodo>(`/todos/${encodeURIComponent(id)}`, {
     method: "PATCH",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(changes),
   }),
   delete: (id: string) => request<void>(`/todos/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  createSubnote: (todoId: string, title: string, content: string) => request<DeveloperTodoSubnote>(`/todos/${encodeURIComponent(todoId)}/subnotes`, {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ title, content }),
+  }),
+  updateSubnote: (todoId: string, subnoteId: string, title: string, content: string) => request<DeveloperTodoSubnote>(`/todos/${encodeURIComponent(todoId)}/subnotes/${encodeURIComponent(subnoteId)}`, {
+    method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ title, content }),
+  }),
+  updateSubnoteCompletion: (todoId: string, subnoteId: string, completed: boolean) => request<DeveloperTodoSubnote>(`/todos/${encodeURIComponent(todoId)}/subnotes/${encodeURIComponent(subnoteId)}/completion`, {
+    method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ completed }),
+  }),
+  deleteSubnote: (todoId: string, subnoteId: string) => request<void>(`/todos/${encodeURIComponent(todoId)}/subnotes/${encodeURIComponent(subnoteId)}`, { method: "DELETE" }),
 };

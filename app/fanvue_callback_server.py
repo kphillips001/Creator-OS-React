@@ -2,6 +2,7 @@ import json
 import asyncio
 import logging
 import os
+import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
@@ -75,7 +76,17 @@ from app.api.developer_agent_execution import (
 from app.api.video_studio import router as video_studio_router
 from app.api.video_gallery import router as video_gallery_router
 from app.api.developer_notes import router as developer_notes_router
+from app.api.ai_training import router as ai_training_router
+from app.api.ai_training_controls import router as ai_training_controls_router
 from app.api.regeneration import router as regeneration_router
+from app.api.x_competitor_intelligence import router as x_competitor_intelligence_router
+from app.api.ig_competitor_intelligence import router as ig_competitor_intelligence_router
+from app.api.android_device import router as android_device_router
+from app.api.private_chat_unlock import (
+    router as private_chat_unlock_router,
+    public_alias_router as private_chat_unlock_alias_router,
+)
+from app.api.bundle_studio import router as bundle_studio_router
 from app.services.fanvue_oauth_service import FanvueOAuthService
 from app.services.fanvue_webhook_monitor_service import fanvue_webhook_monitor
 from app.services.worker_heartbeat_instrumentation import record_heartbeat_safely
@@ -84,9 +95,12 @@ from app.services.canonical_reference_service import recover_all_active_creator_
 from app.services.developer_agent_execution_service import (
     DeveloperAgentExecutionService,
 )
+from app.services.unlock_token_log_filter import install_unlock_token_log_redaction
 
 
 _heartbeat_logger = logging.getLogger("fastapi-worker-heartbeat")
+_performance_logger = logging.getLogger("creator-os-performance")
+install_unlock_token_log_redaction()
 
 
 def _begin_webhook_monitor(**kwargs):
@@ -137,14 +151,37 @@ async def _application_lifespan(application: FastAPI):
             pass
         await asyncio.to_thread(record_heartbeat_safely, _heartbeat_logger, "stopping", service.record_stopping)
         await asyncio.to_thread(record_heartbeat_safely, _heartbeat_logger, "shutdown", service.record_shutdown)
+        from app.database import close_database_pool
+        await asyncio.to_thread(close_database_pool)
 
 
 app = FastAPI(lifespan=_application_lifespan)
+
+
+@app.middleware("http")
+async def request_performance_summary(request: Request, call_next):
+    """Low-cardinality request timing without logging payloads or content metadata."""
+    started = time.perf_counter()
+    response = await call_next(request)
+    duration_ms = (time.perf_counter() - started) * 1000
+    response.headers["Server-Timing"] = f"app;dur={duration_ms:.2f}"
+    if request.url.path.startswith((
+        "/api/v1/generation-library", "/api/v1/assets",
+        "/api/v1/photoshoot-gallery", "/api/v1/background-operations",
+    )) and not request.url.path.endswith(("/media", "/thumbnail")):
+        _performance_logger.info(
+            "method=%s route=%s status=%s duration_ms=%.2f response_bytes=%s",
+            request.method, request.url.path, response.status_code, duration_ms,
+            response.headers.get("content-length", "streamed"),
+        )
+    return response
+
 app.include_router(content_studio_router)
 app.include_router(background_operations_router)
 app.include_router(generation_library_publishing_router)
 app.include_router(edit_studio_router)
 app.include_router(generation_library_router)
+app.include_router(bundle_studio_router)
 app.include_router(posted_content_router)
 app.include_router(photoshoot_router)
 app.include_router(reference_library_router)
@@ -187,7 +224,14 @@ app.include_router(developer_agent_execution_router)
 app.include_router(video_studio_router)
 app.include_router(video_gallery_router)
 app.include_router(developer_notes_router)
+app.include_router(ai_training_router)
+app.include_router(ai_training_controls_router)
 app.include_router(regeneration_router)
+app.include_router(x_competitor_intelligence_router)
+app.include_router(ig_competitor_intelligence_router)
+app.include_router(android_device_router)
+app.include_router(private_chat_unlock_router)
+app.include_router(private_chat_unlock_alias_router)
 
 
 @app.get("/callback")

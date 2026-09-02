@@ -35,9 +35,25 @@ class CommercialIntelligenceContextService:
         lineage_asset_ids=(), lineage_evidence=None,
     ) -> CommercialIntelligenceContext:
         conversation = dict(conversation_context or {})
-        answer = None
+        memory = conversation.get("_customer_commerce_memory")
+        answer = getattr(memory, "ownership", None)
         try:
-            if self.ownership is not None:
+            if answer is not None:
+                coverage = {
+                    "owned_offering_ids": answer.owned_offering_ids,
+                    "owned_asset_ids": answer.owned_asset_ids,
+                    "purchase_asset_ids": tuple(sorted({
+                        asset_id for item in answer.evidence
+                        if item.offering_id is not None and item.proves_ownership
+                        for asset_id in item.asset_ids
+                    })),
+                    "evidence_sources": tuple(dict.fromkeys(
+                        item.source.value for item in answer.evidence if item.proves_ownership
+                    )),
+                    "incomplete": bool(answer.insufficiencies),
+                    "conflicts": answer.conflicts,
+                }
+            elif self.ownership is not None:
                 coverage = self.ownership.get(
                     creator_profile_id=creator_profile_id,
                     fanvue_account_id=fanvue_account_id,
@@ -190,6 +206,7 @@ class CommercialIntelligenceContextService:
             canonical_bundle_coverage=canonical_bundle_coverage,
             canonical_session_coverage=canonical_session_coverage,
             canonical_ownership_answer=answer,
+            customer_commerce_memory=memory,
             ownership=OwnershipCoverage(
                 owned_offering_ids=tuple(coverage.get("owned_offering_ids") or ()),
                 owned_asset_ids=tuple(coverage.get("owned_asset_ids") or ()),
@@ -206,6 +223,9 @@ class CommercialIntelligenceContextService:
                 "activeSalesSession": bool(active_sales_session),
                 "sessionAttributedPurchaseCount": len(purchased),
                 "ownershipEvidenceAvailable": not bool(coverage.get("incomplete")),
+                "customerCommerceMemory": conversation.get(
+                    "customer_commerce_memory_summary", {}
+                ),
             }),
             conversation_evidence=immutable_mapping({
                 "latestMessage": conversation.get("latest_message"),
@@ -216,7 +236,10 @@ class CommercialIntelligenceContextService:
             }),
             provenance=immutable_mapping({
                 "salesSession": ("SalesSessionRepository",),
-                "purchaseHistory": ("PurchaseIntentRepository",),
+                "purchaseHistory": (
+                    ("CustomerCommerceMemoryService",)
+                    if memory is not None else ("PurchaseIntentRepository",)
+                ),
                 "ownership": tuple(coverage.get("evidence_sources") or ()),
                 "customerRequest": ("ConversationGateway",),
                 "commercialInventory": ("CommercialOfferingSelectorRepository",),

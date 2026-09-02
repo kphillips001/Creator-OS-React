@@ -15,6 +15,7 @@ class PurchaseIntentStatus(str, Enum):
     ABANDONED = "ABANDONED"
     UNKNOWN = "UNKNOWN"
     SUPERSEDED = "SUPERSEDED"
+    ADMIN_CLOSED = "ADMIN_CLOSED"
 
 
 class AttributionResult(str, Enum):
@@ -35,7 +36,7 @@ class PurchaseIntent:
     purchase_intent_id: UUID
     creator_profile_id: int
     fanvue_account_id: int
-    telegram_identity_mapping_id: int
+    telegram_identity_mapping_id: int | None
     telegram_user_id: int
     telegram_chat_id: int
     external_fanvue_user_uuid: UUID | None
@@ -64,6 +65,11 @@ class PurchaseIntent:
     created_metadata: dict[str, Any]
     updated_at: datetime
     purchase_acknowledged_at: datetime | None = None
+    configured_base_price_minor: int | None = None
+    actual_charged_price_minor: int | None = None
+    identity_bootstrap_mode: str = "NONE"
+    admin_closed_at: datetime | None = None
+    administrative_close_reason: str | None = None
 
 
 @dataclass(frozen=True)

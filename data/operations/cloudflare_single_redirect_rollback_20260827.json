@@ -1,0 +1,42 @@
+{
+  "captured_at_utc": "2026-08-27T16:23:28.3936412Z",
+  "purpose": "Rollback snapshot before excluding unlock.avablackthorne.net from the Ava Fanvue redirect",
+  "secrets_included": false,
+  "ruleset": {
+    "id": "a5595f3f73284d14a5c72163f5ab0bc6",
+    "name": "default",
+    "kind": "zone",
+    "phase": "http_request_dynamic_redirect",
+    "version": "1",
+    "rules": [
+      {
+        "position": 1,
+        "id": "dcfaa565769e4989830e38f0012eeafb",
+        "ref": "dcfaa565769e4989830e38f0012eeafb",
+        "enabled": true,
+        "description": "Main Redirect",
+        "action": "redirect",
+        "expression": "true",
+        "action_parameters": {
+          "from_value": {
+            "preserve_query_string": false,
+            "status_code": 302,
+            "target_url": {
+              "value": "https://www.fanvue.com/avablackthorne"
+            }
+          }
+        }
+      }
+    ]
+  },
+  "external_before_state": {
+    "https://avablackthorne.net/": {
+      "status": 302,
+      "location": "https://www.fanvue.com/avablackthorne"
+    },
+    "https://www.avablackthorne.net/": {
+      "status": 302,
+      "location": "https://www.fanvue.com/avablackthorne"
+    }
+  }
+}

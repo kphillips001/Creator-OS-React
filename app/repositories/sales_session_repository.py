@@ -70,7 +70,24 @@ class SalesSessionRepository:
                     purchase_intent_id=None, actor_type=actor_type,
                     actor_identifier=actor_identifier, reason=objective,
                 )
-        return self._session(row)
+            return self._session(row)
+
+    def merge_commercial_context(
+        self, *, session_id: UUID, creator_profile_id: int, values: Mapping,
+    ) -> SalesSession | None:
+        with self._connection_factory() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """UPDATE public.sales_sessions
+                       SET commercial_context=COALESCE(commercial_context,'{}'::jsonb) || %s::jsonb,
+                           last_activity_at=NOW(),updated_at=NOW()
+                       WHERE sales_session_id=%s AND creator_profile_id=%s
+                       RETURNING *""",
+                    (json.dumps(dict(values), default=str), session_id, creator_profile_id),
+                )
+                row = cursor.fetchone()
+            connection.commit()
+        return self._session(row) if row else None
 
     def get(
         self, session_id: UUID, *, creator_profile_id: int,

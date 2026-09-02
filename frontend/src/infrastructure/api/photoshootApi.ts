@@ -130,7 +130,7 @@ export async function stopPhotoshootAndReturnSeed(): Promise<{ redirect: string;
 }
 
 export type PhotoshootStatus = {
-  request: null | { request_id: string; status: "queued" | "generating" | "awaiting_review"; prompt: string; provider_id: string; generation_job_id: string | null; failure: string | null };
+  request: null | { request_id: string; status: "queued" | "preparation_recovery_required" | "generating" | "finalization_required" | "awaiting_review"; prompt: string; provider_id: string; generation_job_id: string | null; failure: string | null; preparation_recovery_required?: boolean; preparation_error?: string | null; finalization_required?: boolean; finalization_error?: string | null };
   candidate: GenerationRecord | null;
   continuity_assessment?: { status?: "pending" | "completed" | "unavailable"; identity?: string; wardrobe?: string; location?: string; lighting?: string; composition?: string; overall_continuity?: string; reason?: string; warning?: boolean; warning_message?: string };
 };
@@ -185,7 +185,7 @@ export async function getCreativeDirectorContext(sessionId: string, signal?: Abo
     directionApproved: Boolean(result.recommendation_state?.direction_approved),
     planningMode: result.planning_mode === "full_plan" ? "full_plan" : "frame_by_frame",
     planFrameCount: Math.max(4, Math.min(12, Number(result.plan_frame_count || 8))),
-    targetShotCount: Number(result.target_shot_count) === 0 ? 0 : Math.max(2, Math.min(100, Number(result.target_shot_count || 10))),
+    targetShotCount: Number(result.target_shot_count) === 0 ? 0 : Math.max(2, Math.min(100, Number(result.target_shot_count || 5))),
     currentShot: Math.max(1, Number(result.current_shot || 1)),
     planningShot: Math.max(2, Number(result.planning_shot || 2)),
     remainingShots: Math.max(0, Number(result.remaining_shots ?? 9)),
@@ -215,12 +215,18 @@ export const approvePhotoshootRecommendation = (body: unknown) => photoshootMuta
 export const chooseAnotherPhotoshootIdea = (body: unknown) => photoshootMutation<{ workflow_stage: string; selected_inspiration: string }>("/creative-director/choose-another", body);
 export const setPhotoshootPlanningMode = (body: unknown) => photoshootMutation<{ planning_mode: PlanningMode; plan_frame_count: number; session_plan: PlannedShot[]; session_plan_approved: boolean }>("/creative-director/planning-mode", body);
 export const setPhotoshootTargetShotCount = (body: unknown) => photoshootMutation<{ target_shot_count: number }>("/creative-director/target-shot-count", body);
+export const extendPhotoshoot = (body: unknown) => photoshootMutation<{
+  target_shot_count: number; extended: boolean; current_shot: number; planning_shot: number;
+  remaining_shots: number; editorial_stage: string; workflow_stage: string;
+}>("/creative-director/extend", body);
 export const generatePhotoshootSessionPlan = (body: unknown) => photoshootMutation<{ planning_mode: PlanningMode; plan_frame_count: number; session_plan: PlannedShot[]; session_plan_index: number; session_plan_approved: boolean }>("/creative-director/session-plan", body);
 export const approvePhotoshootSessionPlan = (body: unknown) => photoshootMutation<{ session_plan: PlannedShot[]; session_plan_index: number; session_plan_approved: boolean; workflow_stage: string }>("/creative-director/session-plan/approve", body);
 export const developPhotoshootPlannedShot = (body: unknown) => photoshootMutation<CreativeDirectorRecommendation>("/creative-director/session-plan/develop", body);
 export const advancePhotoshootSessionPlan = (body: unknown) => photoshootMutation<{ session_plan: PlannedShot[]; session_plan_index: number; session_plan_complete: boolean; next_planned_shot: PlannedShot | null; workflow_stage: string }>("/creative-director/session-plan/advance", body);
 
 export const generatePhotoshootShot = (body: unknown) => photoshootMutation<{ request_id: string; generation_job_id: string; operation_id: string; status: string }>("/generate", body);
+export const retryPhotoshootFinalization = (body: unknown) => photoshootMutation<{ request_id: string; job_id: string; image_ids: string[]; status: "succeeded" }>("/candidate/retry-finalization", body);
+export const retryPhotoshootPreparation = (body: unknown) => photoshootMutation<{ request_id: string; generation_job_id: string; operation_id: string; status: "queued" }>("/candidate/retry-preparation", body);
 export const approvePhotoshootCandidate = (body: unknown) => photoshootMutation<{
   success: true;
   request: { request_id: string; status: "approved"; imported_asset_ids: number[] };

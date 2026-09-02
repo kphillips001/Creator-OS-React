@@ -160,6 +160,7 @@ class DecisionEngineIntimacyIntegrationService:
         self,
         user_memory: dict | None = None,
         runtime_state: dict | None = None,
+        canonical_buyer_memory: dict | None = None,
         **kwargs,
     ):
         """
@@ -171,6 +172,15 @@ class DecisionEngineIntimacyIntegrationService:
 
         user_memory = user_memory or {}
         runtime_state = runtime_state or {}
+        canonical_buyer_memory = canonical_buyer_memory or {}
+
+        canonical_authority = (
+            canonical_buyer_memory.get("customer_value_authority")
+            == "COMMERCE_BACKED_AUTHORITATIVE_VALUE"
+        )
+        buyer_truth = (
+            canonical_buyer_memory if canonical_authority else user_memory
+        )
 
         premium_sexting_allowed = bool(
             runtime_state.get("premium_sexting_allowed")
@@ -183,7 +193,7 @@ class DecisionEngineIntimacyIntegrationService:
         )
 
         buyer_tier = (
-            user_memory.get("buyer_tier")
+            buyer_truth.get("buyer_tier")
             or runtime_state.get("buyer_tier")
             or "NON_BUYER"
         )
@@ -195,7 +205,7 @@ class DecisionEngineIntimacyIntegrationService:
         # --------------------------------------------------
 
         last_monetization_at = (
-            user_memory.get("last_purchase_at")
+            buyer_truth.get("last_purchase_at")
             or runtime_state.get("last_purchase_at")
             or user_memory.get("last_tip_at")
             or runtime_state.get("last_tip_at")
@@ -246,11 +256,64 @@ class DecisionEngineIntimacyIntegrationService:
             else "NONE"
         )
 
-        if normalized_buyer_tier in [
-            "ACTIVE_BUYER",
-            "HIGH_VALUE",
-            "WHALE",
-        ]:
+        purchase_count = int(buyer_truth.get("purchase_count") or 0)
+        buyer_stage = str(
+            buyer_truth.get("buyer_stage") or "PROSPECT"
+        ).upper()
+        relationship_investment = str(
+            buyer_truth.get("relationship_investment") or "STANDARD"
+        ).upper()
+        current_commercial_momentum = str(
+            runtime_state.get("current_commercial_momentum")
+            or buyer_truth.get("current_commercial_momentum")
+            or "INACTIVE"
+        ).upper()
+        active_buying_window = bool(
+            runtime_state.get("active_buying_window")
+            or buyer_truth.get("active_buying_window")
+        )
+
+        # This is a per-turn relationship projection, not a new persisted value
+        # tier. Canonical purchase count/tier establishes the durable floor;
+        # current verified buying momentum may raise current investment by one
+        # bounded step without fabricating a permanent customer tier.
+        if purchase_count <= 0:
+            intimacy_entitlement = "GATED"
+            entitlement_reason = "NO_PROVIDER_VERIFIED_PURCHASE"
+        elif normalized_buyer_tier == "WHALE":
+            intimacy_entitlement = "VIP"
+            entitlement_reason = "CANONICAL_WHALE_VALUE"
+        elif normalized_buyer_tier == "HIGH_VALUE":
+            intimacy_entitlement = "PREMIUM"
+            entitlement_reason = "CANONICAL_HIGH_VALUE_BUYER"
+        elif purchase_count >= 2:
+            intimacy_entitlement = "ELEVATED"
+            entitlement_reason = "CANONICAL_REPEAT_BUYER"
+        else:
+            intimacy_entitlement = "LIMITED"
+            entitlement_reason = "CANONICAL_FIRST_TIME_BUYER"
+
+        momentum_elevated = False
+        if active_buying_window and current_commercial_momentum == "HOT":
+            if intimacy_entitlement == "LIMITED":
+                intimacy_entitlement = "ELEVATED"
+                momentum_elevated = True
+            elif intimacy_entitlement == "ELEVATED":
+                intimacy_entitlement = "PREMIUM"
+                momentum_elevated = True
+            if momentum_elevated:
+                entitlement_reason += "_WITH_ACTIVE_BUYING_MOMENTUM"
+
+        investment_by_entitlement = {
+            "GATED": "BOUNDED_FLIRTATION_WITH_PREMIUM_BOUNDARY",
+            "LIMITED": "BOUNDED_INTIMATE_TASTE",
+            "ELEVATED": "SUSTAINED_BUT_BOUNDED_INTIMACY",
+            "PREMIUM": "STRONG_PREMIUM_INTIMACY",
+            "VIP": "HIGHEST_APPROPRIATE_INTIMACY",
+        }
+        intimacy_investment = investment_by_entitlement[intimacy_entitlement]
+
+        if purchase_count > 0:
             if monetization_freshness_days is None:
                 premium_freshness_state = (
                     "UNKNOWN_PREMIUM_STATE"
@@ -292,16 +355,7 @@ class DecisionEngineIntimacyIntegrationService:
         adult_generation_allowed = (
             premium_sexting_allowed
             and explicit_allowed
-            and normalized_buyer_tier in (
-                "ACTIVE_BUYER",
-                "HIGH_VALUE",
-                "WHALE",
-            )
-            and premium_freshness_state
-            in (
-                "ACTIVE_PREMIUM",
-                "WARM_PREMIUM",
-            )
+            and intimacy_entitlement in ("PREMIUM", "VIP")
         )
 
         runtime_mode = (
@@ -311,9 +365,7 @@ class DecisionEngineIntimacyIntegrationService:
         )
 
         intimacy_tier = (
-            "premium"
-            if adult_generation_allowed
-            else "none"
+            intimacy_entitlement.lower()
         )
 
         print(
@@ -338,6 +390,22 @@ class DecisionEngineIntimacyIntegrationService:
             "runtime_mode": runtime_mode,
             "intimacy_tier": intimacy_tier,
             "buyer_tier": buyer_tier,
+            "buyer_stage": buyer_stage,
+            "purchase_count": purchase_count,
+            "intimacy_entitlement": intimacy_entitlement,
+            "intimacy_entitlement_reason": entitlement_reason,
+            "intimacy_investment": intimacy_investment,
+            "intimacy_investment_inputs": {
+                "buyerStage": buyer_stage,
+                "valueTier": normalized_buyer_tier,
+                "purchaseCount": purchase_count,
+                "relationshipInvestment": relationship_investment,
+                "currentCommercialMomentum": current_commercial_momentum,
+                "activeBuyingWindow": active_buying_window,
+                "momentumElevatedCurrentInvestment": momentum_elevated,
+            },
+            "canonical_buyer_authority_used": canonical_authority,
+            "legacy_buyer_memory_authority_used": not canonical_authority,
             "premium_freshness_state": (
                 premium_freshness_state
             ),

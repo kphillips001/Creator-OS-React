@@ -1,6 +1,7 @@
 """SDK-free contracts for normalized Telegram-like inbound messages."""
 
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any
 
 
@@ -12,6 +13,11 @@ class TelegramInboundPayload:
     message_id: int
     chat_history: list[Any] = field(default_factory=list)
     correlation_id: str | None = None
+    telegram_username: str | None = None
+    telegram_display_name: str | None = None
+    reply_to_message_id: int | None = None
+    received_at: datetime | None = None
+    sleep_context: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

@@ -117,6 +117,10 @@ def test_all_ownership_sources_deduplicate_assets_and_retain_provenance():
                      "content_tag": "legacy-only",
                      "usage_type": "content_unlocked"},
                 ]
+            elif "provider_purchase_asset_ownership" in sql:
+                self.rows = []
+            else:
+                self.rows = []
 
     cursor = CombinedCursor()
 

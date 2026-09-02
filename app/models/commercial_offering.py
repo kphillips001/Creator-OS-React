@@ -49,3 +49,4 @@ class CommercialOffering:
     price_minor: int | None = None
     currency: str = "USD"
     source_photoshoot_deliverable_id: UUID | None = None
+    source_bundle_studio_bundle_id: UUID | None = None

@@ -1,0 +1,2328 @@
+[
+  {
+    "repair_id": "telegram_media_repair_47611d6db5834ae3b33290a1cd4a6b42",
+    "event_type": "HISTORICAL_MEDIA_NORMALIZATION",
+    "repair_timestamp": "2026-08-23T01:59:20.602288+00:00",
+    "publish_request_id": "social_publish_item_30cd69fa4caa4fb08401c16f70a45087",
+    "queue_item_id": "social_queue_item_84d5997d99384996a550d6c80c2f40d6",
+    "channel": "main",
+    "chat_id": "-1002507455539",
+    "message_id": 97,
+    "existing_width": 832,
+    "existing_height": 1248,
+    "source_asset_id": "generated_image_f22c6726c6e34de5b9c34429",
+    "source_path": "D:\\Ava_CMS\\Content\\Posted\\Telegram\\Main\\generated_image_f22c6726c6e34de5b9c34429.png",
+    "derivative_path": "D:\\Ava_CMS\\Content\\Posted\\Telegram\\Main\\generated_image_f22c6726c6e34de5b9c34429_telegram_presentation_v1.jpg",
+    "expected_width": 960,
+    "expected_height": 1280,
+    "editable": true,
+    "caption_available": true,
+    "keyboard_available": true,
+    "status": "SAFE",
+    "reason": "ready",
+    "repair_status": "REPAIRED",
+    "message_id_retained": true,
+    "caption_retained": true,
+    "caption_entities_retained": true,
+    "keyboard_retained": true,
+    "error": null,
+    "telegram_response": {
+      "ok": true,
+      "status_code": 200,
+      "message_id": 97,
+      "response": {
+        "ok": true,
+        "result": {
+          "message_id": 97,
+          "sender_chat": {
+            "id": -1002507455539,
+            "title": "Ava Blackthorne",
+            "type": "channel"
+          },
+          "chat": {
+            "id": -1002507455539,
+            "title": "Ava Blackthorne",
+            "type": "channel"
+          },
+          "date": 1787449027,
+          "edit_date": 1787450360,
+          "photo": [
+            {
+              "file_id": "AgACAgEAAyEGAASVdLwzAANhaopT-GTuLLj43pX8Zyl8jgUFrtQAAjkMaxu7P1lEHxiNoXhgx7ABAAMCAANzAAM9BA",
+              "file_unique_id": "AQADOQxrG7s_WUR4",
+              "file_size": 1232,
+              "width": 67,
+              "height": 90
+            },
+            {
+              "file_id": "AgACAgEAAyEGAASVdLwzAANhaopT-GTuLLj43pX8Zyl8jgUFrtQAAjkMaxu7P1lEHxiNoXhgx7ABAAMCAANtAAM9BA",
+              "file_unique_id": "AQADOQxrG7s_WURy",
+              "file_size": 12456,
+              "width": 240,
+              "height": 320
+            },
+            {
+              "file_id": "AgACAgEAAyEGAASVdLwzAANhaopT-GTuLLj43pX8Zyl8jgUFrtQAAjkMaxu7P1lEHxiNoXhgx7ABAAMCAAN4AAM9BA",
+              "file_unique_id": "AQADOQxrG7s_WUR9",
+              "file_size": 56594,
+              "width": 600,
+              "height": 800
+            },
+            {
+              "file_id": "AgACAgEAAyEGAASVdLwzAANhaopT-GTuLLj43pX8Zyl8jgUFrtQAAjkMaxu7P1lEHxiNoXhgx7ABAAMCAAN5AAM9BA",
+              "file_unique_id": "AQADOQxrG7s_WUR-",
+              "file_size": 170655,
+              "width": 960,
+              "height": 1280
+            }
+          ],
+          "caption": "Caught myself smiling in the mirror 😌 this sheer black lace feels so soft against my skin tonight 🖤",
+          "reply_markup": {
+            "inline_keyboard": [
+              [
+                {
+                  "text": "🔒 Vault",
+                  "url": "https://t.me/+VFiypKs_xVlhYzQx"
+                },
+                {
+                  "text": "❤️ Tip",
+                  "url": "https://cash.app/$AvaBlackthorne"
+                }
+              ]
+            ]
+          }
+        }
+      }
+    },
+    "replacement_width": 960,
+    "replacement_height": 1280
+  },
+  {
+    "repair_id": "telegram_media_repair_5c16758b5c6d4214a998466d6d645e77",
+    "event_type": "HISTORICAL_MEDIA_NORMALIZATION",
+    "repair_timestamp": "2026-08-23T01:59:26.522494+00:00",
+    "publish_request_id": "social_publish_item_b1dd5f2a6d2c4d1c8c06c0c0ca7e51ab",
+    "queue_item_id": "social_queue_item_99c8b0c4a4c646369c37ab3bdf1b9bd3",
+    "channel": "main",
+    "chat_id": "-1002507455539",
+    "message_id": 96,
+    "existing_width": 864,
+    "existing_height": 1152,
+    "source_asset_id": "generated_image_365458ad4852afeb7848bb8e",
+    "source_path": "D:\\Ava_CMS\\Content\\Posted\\Telegram\\Main\\generated_image_365458ad4852afeb7848bb8e.png",
+    "derivative_path": "D:\\Ava_CMS\\Content\\Posted\\Telegram\\Main\\generated_image_365458ad4852afeb7848bb8e_telegram_presentation_v1.jpg",
+    "expected_width": 960,
+    "expected_height": 1280,
+    "editable": true,
+    "caption_available": true,
+    "keyboard_available": true,
+    "status": "SAFE",
+    "reason": "ready",
+    "repair_status": "REPAIRED",
+    "message_id_retained": true,
+    "caption_retained": true,
+    "caption_entities_retained": true,
+    "keyboard_retained": true,
+    "error": null,
+    "telegram_response": {
+      "ok": true,
+      "status_code": 200,
+      "message_id": 96,
+      "response": {
+        "ok": true,
+        "result": {
+          "message_id": 96,
+          "sender_chat": {
+            "id": -1002507455539,
+            "title": "Ava Blackthorne",
+            "type": "channel"
+          },
+          "chat": {
+            "id": -1002507455539,
+            "title": "Ava Blackthorne",
+            "type": "channel"
+          },
+          "date": 1787416422,
+          "edit_date": 1787450366,
+          "photo": [
+            {
+              "file_id": "AgACAgEAAyEGAASVdLwzAANgaopT_qvezFmC239EsiiQYL4yGFMAAjoMaxu7P1lEZfdsFe4BYNQBAAMCAANzAAM9BA",
+              "file_unique_id": "AQADOgxrG7s_WUR4",
+              "file_size": 1489,
+              "width": 67,
+              "height": 90
+            },
+            {
+              "file_id": "AgACAgEAAyEGAASVdLwzAANgaopT_qvezFmC239EsiiQYL4yGFMAAjoMaxu7P1lEZfdsFe4BYNQBAAMCAANtAAM9BA",
+              "file_unique_id": "AQADOgxrG7s_WURy",
+              "file_size": 17448,
+              "width": 240,
+              "height": 320
+            },
+            {
+              "file_id": "AgACAgEAAyEGAASVdLwzAANgaopT_qvezFmC239EsiiQYL4yGFMAAjoMaxu7P1lEZfdsFe4BYNQBAAMCAAN4AAM9BA",
+              "file_unique_id": "AQADOgxrG7s_WUR9",
+              "file_size": 77391,
+              "width": 600,
+              "height": 800
+            },
+            {
+              "file_id": "AgACAgEAAyEGAASVdLwzAANgaopT_qvezFmC239EsiiQYL4yGFMAAjoMaxu7P1lEZfdsFe4BYNQBAAMCAAN5AAM9BA",
+              "file_unique_id": "AQADOgxrG7s_WUR-",
+              "file_size": 204595,
+              "width": 960,
+              "height": 1280
+            }
+          ],
+          "caption": "Soft smile, full teal bikini, late-afternoon glow 🌅 I see you noticing 💚"
+        }
+      }
+    },
+    "replacement_width": 960,
+    "replacement_height": 1280
+  },
+  {
+    "repair_id": "telegram_media_repair_0b359cb949074cd98ccd8f48d01a61d4",
+    "event_type": "HISTORICAL_MEDIA_NORMALIZATION",
+    "repair_timestamp": "2026-08-23T01:59:33.424968+00:00",
+    "publish_request_id": "social_publish_item_1a8993f960f849dda797c3e4c06fabca",
+    "queue_item_id": "social_queue_item_5dc7307e3995422e8d68a41a1c489c42",
+    "channel": "main",
+    "chat_id": "-1002507455539",
+    "message_id": 95,
+    "existing_width": 832,
+    "existing_height": 1248,
+    "source_asset_id": "generated_image_70df53548896c7327ba60567",
+    "source_path": "D:\\Ava_CMS\\Content\\Posted\\Telegram\\Main\\generated_image_70df53548896c7327ba60567.png",
+    "derivative_path": "D:\\Ava_CMS\\Content\\Posted\\Telegram\\Main\\generated_image_70df53548896c7327ba60567_telegram_presentation_v1.jpg",
+    "expected_width": 960,
+    "expected_height": 1280,
+    "editable": true,
+    "caption_available": true,
+    "keyboard_available": true,
+    "status": "SAFE",
+    "reason": "ready",
+    "repair_status": "REPAIRED",
+    "message_id_retained": true,
+    "caption_retained": true,
+    "caption_entities_retained": true,
+    "keyboard_retained": true,
+    "error": null,
+    "telegram_response": {
+      "ok": true,
+      "status_code": 200,
+      "message_id": 95,
+      "response": {
+        "ok": true,
+        "result": {
+          "message_id": 95,
+          "sender_chat": {
+            "id": -1002507455539,
+            "title": "Ava Blackthorne",
+            "type": "channel"
+          },
+          "chat": {
+            "id": -1002507455539,
+            "title": "Ava Blackthorne",
+            "type": "channel"
+          },
+          "date": 1787361074,
+          "edit_date": 1787450373,
+          "photo": [
+            {
+              "file_id": "AgACAgEAAyEGAASVdLwzAANfaopUBbtw3J1hLrZ8ljCdqmYpcL4AAjsMaxu7P1lE6-k2cGYcXmEBAAMCAANzAAM9BA",
+              "file_unique_id": "AQADOwxrG7s_WUR4",
+              "file_size": 1434,
+              "width": 67,
+              "height": 90
+            },
+            {
+              "file_id": "AgACAgEAAyEGAASVdLwzAANfaopUBbtw3J1hLrZ8ljCdqmYpcL4AAjsMaxu7P1lE6-k2cGYcXmEBAAMCAANtAAM9BA",
+              "file_unique_id": "AQADOwxrG7s_WURy",
+              "file_size": 21084,
+              "width": 240,
+              "height": 320
+            },
+            {
+              "file_id": "AgACAgEAAyEGAASVdLwzAANfaopUBbtw3J1hLrZ8ljCdqmYpcL4AAjsMaxu7P1lE6-k2cGYcXmEBAAMCAAN4AAM9BA",
+              "file_unique_id": "AQADOwxrG7s_WUR9",
+              "file_size": 102026,
+              "width": 600,
+              "height": 800
+            },
+            {
+              "file_id": "AgACAgEAAyEGAASVdLwzAANfaopUBbtw3J1hLrZ8ljCdqmYpcL4AAjsMaxu7P1lE6-k2cGYcXmEBAAMCAAN5AAM9BA",
+              "file_unique_id": "AQADOwxrG7s_WUR-",
+              "file_size": 255087,
+              "width": 960,
+              "height": 1280
+            }
+          ],
+          "caption": "Letting the shower do all the revealing while I just enjoy it 💧🔥",
+          "reply_markup": {
+            "inline_keyboard": [
+              [
+                {
+                  "text": "🔒 Vault",
+                  "url": "https://t.me/+VFiypKs_xVlhYzQx"
+                },
+                {
+                  "text": "❤️ Tip",
+                  "url": "https://cash.app/$AvaBlackthorne"
+                }
+              ]
+            ]
+          }
+        }
+      }
+    },
+    "replacement_width": 960,
+    "replacement_height": 1280
+  },
+  {
+    "repair_id": "telegram_media_repair_2c9596e647b14a36bf5f4e16e390c759",
+    "event_type": "HISTORICAL_MEDIA_NORMALIZATION",
+    "repair_timestamp": "2026-08-23T01:59:39.996821+00:00",
+    "publish_request_id": "social_publish_item_3da4b7fc05d74858b00f1f8c43e44c78",
+    "queue_item_id": "social_queue_item_8aba971e576c4414951c3a6ebbacf83a",
+    "channel": "main",
+    "chat_id": "-1002507455539",
+    "message_id": 94,
+    "existing_width": 832,
+    "existing_height": 1248,
+    "source_asset_id": "generated_image_d5de7ef33e38843e6e368163",
+    "source_path": "D:\\Ava_CMS\\Content\\Posted\\Telegram\\Main\\generated_image_d5de7ef33e38843e6e368163.png",
+    "derivative_path": "D:\\Ava_CMS\\Content\\Posted\\Telegram\\Main\\generated_image_d5de7ef33e38843e6e368163_telegram_presentation_v1.jpg",
+    "expected_width": 960,
+    "expected_height": 1280,
+    "editable": true,
+    "caption_available": true,
+    "keyboard_available": true,
+    "status": "SAFE",
+    "reason": "ready",
+    "repair_status": "REPAIRED",
+    "message_id_retained": true,
+    "caption_retained": true,
+    "caption_entities_retained": true,
+    "keyboard_retained": true,
+    "error": null,
+    "telegram_response": {
+      "ok": true,
+      "status_code": 200,
+      "message_id": 94,
+      "response": {
+        "ok": true,
+        "result": {
+          "message_id": 94,
+          "sender_chat": {
+            "id": -1002507455539,
+            "title": "Ava Blackthorne",
+            "type": "channel"
+          },
+          "chat": {
+            "id": -1002507455539,
+            "title": "Ava Blackthorne",
+            "type": "channel"
+          },
+          "date": 1787336473,
+          "edit_date": 1787450379,
+          "photo": [
+            {
+              "file_id": "AgACAgEAAyEGAASVdLwzAANeaopUC3SkVgRea5AWhYqNC5Qh-VYAAjwMaxu7P1lE7UhofuoqJhsBAAMCAANzAAM9BA",
+              "file_unique_id": "AQADPAxrG7s_WUR4",
+              "file_size": 1461,
+              "width": 67,
+              "height": 90
+            },
+            {
+              "file_id": "AgACAgEAAyEGAASVdLwzAANeaopUC3SkVgRea5AWhYqNC5Qh-VYAAjwMaxu7P1lE7UhofuoqJhsBAAMCAANtAAM9BA",
+              "file_unique_id": "AQADPAxrG7s_WURy",
+              "file_size": 19025,
+              "width": 240,
+              "height": 320
+            },
+            {
+              "file_id": "AgACAgEAAyEGAASVdLwzAANeaopUC3SkVgRea5AWhYqNC5Qh-VYAAjwMaxu7P1lE7UhofuoqJhsBAAMCAAN4AAM9BA",
+              "file_unique_id": "AQADPAxrG7s_WUR9",
+              "file_size": 85475,
+              "width": 600,
+              "height": 800
+            },
+            {
+              "file_id": "AgACAgEAAyEGAASVdLwzAANeaopUC3SkVgRea5AWhYqNC5Qh-VYAAjwMaxu7P1lE7UhofuoqJhsBAAMCAAN5AAM9BA",
+              "file_unique_id": "AQADPAxrG7s_WUR-",
+              "file_size": 221403,
+              "width": 960,
+              "height": 1280
+            }
+          ],
+          "caption": "Salt on my skin, sun in my hair, and that look I probably shouldn’t be giving you 😏💋🌊",
+          "reply_markup": {
+            "inline_keyboard": [
+              [
+                {
+                  "text": "🔒 Vault",
+                  "url": "https://t.me/+VFiypKs_xVlhYzQx"
+                },
+                {
+                  "text": "❤️ Tip",
+                  "url": "https://cash.app/$AvaBlackthorne"
+                }
+              ]
+            ]
+          }
+        }
+      }
+    },
+    "replacement_width": 960,
+    "replacement_height": 1280
+  },
+  {
+    "repair_id": "telegram_media_repair_4d528832146d4663a0e489a8e33e6709",
+    "event_type": "HISTORICAL_MEDIA_NORMALIZATION",
+    "repair_timestamp": "2026-08-23T01:59:45.835027+00:00",
+    "publish_request_id": "social_publish_item_1e3434046d644f1f965838239e6e70a0",
+    "queue_item_id": "social_queue_item_a850bb8e486c4db18aeb601b57a7ed77",
+    "channel": "main",
+    "chat_id": "-1002507455539",
+    "message_id": 93,
+    "existing_width": 944,
+    "existing_height": 1184,
+    "source_asset_id": "generated_image_6ec619286e23cabec79c6168",
+    "source_path": "D:\\Ava_CMS\\Content\\Posted\\Telegram\\Main\\generated_image_6ec619286e23cabec79c6168.png",
+    "derivative_path": "D:\\Ava_CMS\\Content\\Posted\\Telegram\\Main\\generated_image_6ec619286e23cabec79c6168_telegram_presentation_v1.jpg",
+    "expected_width": 960,
+    "expected_height": 1280,
+    "editable": true,
+    "caption_available": true,
+    "keyboard_available": true,
+    "status": "SAFE",
+    "reason": "ready",
+    "repair_status": "REPAIRED",
+    "message_id_retained": true,
+    "caption_retained": true,
+    "caption_entities_retained": true,
+    "keyboard_retained": true,
+    "error": null,
+    "telegram_response": {
+      "ok": true,
+      "status_code": 200,
+      "message_id": 93,
+      "response": {
+        "ok": true,
+        "result": {
+          "message_id": 93,
+          "sender_chat": {
+            "id": -1002507455539,
+            "title": "Ava Blackthorne",
+            "type": "channel"
+          },
+          "chat": {
+            "id": -1002507455539,
+            "title": "Ava Blackthorne",
+            "type": "channel"
+          },
+          "date": 1787278694,
+          "edit_date": 1787450385,
+          "photo": [
+            {
+              "file_id": "AgACAgEAAyEGAASVdLwzAANdaopUEfFsqCXKrqJwnJFUaxR4nLEAAj0Maxu7P1lESjnzBqfv62ABAAMCAANzAAM9BA",
+              "file_unique_id": "AQADPQxrG7s_WUR4",
+              "file_size": 1433,
+              "width": 67,
+              "height": 90
+            },
+            {
+              "file_id": "AgACAgEAAyEGAASVdLwzAANdaopUEfFsqCXKrqJwnJFUaxR4nLEAAj0Maxu7P1lESjnzBqfv62ABAAMCAANtAAM9BA",
+              "file_unique_id": "AQADPQxrG7s_WURy",
+              "file_size": 16093,
+              "width": 240,
+              "height": 320
+            },
+            {
+              "file_id": "AgACAgEAAyEGAASVdLwzAANdaopUEfFsqCXKrqJwnJFUaxR4nLEAAj0Maxu7P1lESjnzBqfv62ABAAMCAAN4AAM9BA",
+              "file_unique_id": "AQADPQxrG7s_WUR9",
+              "file_size": 74833,
+              "width": 600,
+              "height": 800
+            },
+            {
+              "file_id": "AgACAgEAAyEGAASVdLwzAANdaopUEfFsqCXKrqJwnJFUaxR4nLEAAj0Maxu7P1lESjnzBqfv62ABAAMCAAN5AAM9BA",
+              "file_unique_id": "AQADPQxrG7s_WUR-",
+              "file_size": 209095,
+              "width": 960,
+              "height": 1280
+            }
+          ],
+          "caption": "Back arched over the wood 💫 hope you're staring just as hard"
+        }
+      }
+    },
+    "replacement_width": 960,
+    "replacement_height": 1280
+  },
+  {
+    "repair_id": "telegram_media_repair_92c0d164e7f8484789047fb2bbfc77bf",
+    "event_type": "HISTORICAL_MEDIA_NORMALIZATION",
+    "repair_timestamp": "2026-08-23T01:59:52.387424+00:00",
+    "publish_request_id": "social_publish_item_33fa5696986341cc83d06a8f4b85268d",
+    "queue_item_id": "social_queue_item_06399fd284cd4e59a14ed4749ff0915e",
+    "channel": "main",
+    "chat_id": "-1002507455539",
+    "message_id": 92,
+    "existing_width": 864,
+    "existing_height": 1152,
+    "source_asset_id": "generated_image_1489e6a561564871f97fbb6e",
+    "source_path": "D:\\Ava_CMS\\Content\\Posted\\Telegram\\Main\\generated_image_1489e6a561564871f97fbb6e.png",
+    "derivative_path": "D:\\Ava_CMS\\Content\\Posted\\Telegram\\Main\\generated_image_1489e6a561564871f97fbb6e_telegram_presentation_v1.jpg",
+    "expected_width": 960,
+    "expected_height": 1280,
+    "editable": true,
+    "caption_available": true,
+    "keyboard_available": true,
+    "status": "SAFE",
+    "reason": "ready",
+    "repair_status": "REPAIRED",
+    "message_id_retained": true,
+    "caption_retained": true,
+    "caption_entities_retained": true,
+    "keyboard_retained": true,
+    "error": null,
+    "telegram_response": {
+      "ok": true,
+      "status_code": 200,
+      "message_id": 92,
+      "response": {
+        "ok": true,
+        "result": {
+          "message_id": 92,
+          "sender_chat": {
+            "id": -1002507455539,
+            "title": "Ava Blackthorne",
+            "type": "channel"
+          },
+          "chat": {
+            "id": -1002507455539,
+            "title": "Ava Blackthorne",
+            "type": "channel"
+          },
+          "date": 1787254639,
+          "edit_date": 1787450392,
+          "photo": [
+            {
+              "file_id": "AgACAgEAAyEGAASVdLwzAANcaopUGCMLxVRLCFqmMd_MjEv6iQMAAj4Maxu7P1lE1BKAPb2ZOPsBAAMCAANzAAM9BA",
+              "file_unique_id": "AQADPgxrG7s_WUR4",
+              "file_size": 1484,
+              "width": 67,
+              "height": 90
+            },
+            {
+              "file_id": "AgACAgEAAyEGAASVdLwzAANcaopUGCMLxVRLCFqmMd_MjEv6iQMAAj4Maxu7P1lE1BKAPb2ZOPsBAAMCAANtAAM9BA",
+              "file_unique_id": "AQADPgxrG7s_WURy",
+              "file_size": 15256,
+              "width": 240,
+              "height": 320
+            },
+            {
+              "file_id": "AgACAgEAAyEGAASVdLwzAANcaopUGCMLxVRLCFqmMd_MjEv6iQMAAj4Maxu7P1lE1BKAPb2ZOPsBAAMCAAN4AAM9BA",
+              "file_unique_id": "AQADPgxrG7s_WUR9",
+              "file_size": 68419,
+              "width": 600,
+              "height": 800
+            },
+            {
+              "file_id": "AgACAgEAAyEGAASVdLwzAANcaopUGCMLxVRLCFqmMd_MjEv6iQMAAj4Maxu7P1lE1BKAPb2ZOPsBAAMCAAN5AAM9BA",
+              "file_unique_id": "AQADPgxrG7s_WUR-",
+              "file_size": 194568,
+              "width": 960,
+              "height": 1280
+            }
+          ],
+          "caption": "One hand on the frame 🔥 the rest of me right here for you 👀"
+        }
+      }
+    },
+    "replacement_width": 960,
+    "replacement_height": 1280
+  },
+  {
+    "repair_id": "telegram_media_repair_c2b6554256c74ae4a8e76e0d79dcc03f",
+    "event_type": "HISTORICAL_MEDIA_NORMALIZATION",
+    "repair_timestamp": "2026-08-23T01:59:58.911668+00:00",
+    "publish_request_id": "social_publish_item_21a636d9b0a941388d78eff3923ab780",
+    "queue_item_id": "social_queue_item_da32af2fa80b4d4b8884fe1fba54d31c",
+    "channel": "main",
+    "chat_id": "-1002507455539",
+    "message_id": 91,
+    "existing_width": 832,
+    "existing_height": 1248,
+    "source_asset_id": "generated_image_3cfbab4f80c7409dc1941b46",
+    "source_path": "D:\\Ava_CMS\\Content\\Posted\\Telegram\\Main\\generated_image_3cfbab4f80c7409dc1941b46.png",
+    "derivative_path": "D:\\Ava_CMS\\Content\\Posted\\Telegram\\Main\\generated_image_3cfbab4f80c7409dc1941b46_telegram_presentation_v1.jpg",
+    "expected_width": 960,
+    "expected_height": 1280,
+    "editable": true,
+    "caption_available": true,
+    "keyboard_available": true,
+    "status": "SAFE",
+    "reason": "ready",
+    "repair_status": "REPAIRED",
+    "message_id_retained": true,
+    "caption_retained": true,
+    "caption_entities_retained": true,
+    "keyboard_retained": true,
+    "error": null,
+    "telegram_response": {
+      "ok": true,
+      "status_code": 200,
+      "message_id": 91,
+      "response": {
+        "ok": true,
+        "result": {
+          "message_id": 91,
+          "sender_chat": {
+            "id": -1002507455539,
+            "title": "Ava Blackthorne",
+            "type": "channel"
+          },
+          "chat": {
+            "id": -1002507455539,
+            "title": "Ava Blackthorne",
+            "type": "channel"
+          },
+          "date": 1787191261,
+          "edit_date": 1787450398,
+          "photo": [
+            {
+              "file_id": "AgACAgEAAyEGAASVdLwzAANbaopUHqb4pkJoAAG9uCYIaOWrl1_lAAI_DGsbuz9ZRLhahPdHRzgEAQADAgADcwADPQQ",
+              "file_unique_id": "AQADPwxrG7s_WUR4",
+              "file_size": 1549,
+              "width": 67,
+              "height": 90
+            },
+            {
+              "file_id": "AgACAgEAAyEGAASVdLwzAANbaopUHqb4pkJoAAG9uCYIaOWrl1_lAAI_DGsbuz9ZRLhahPdHRzgEAQADAgADbQADPQQ",
+              "file_unique_id": "AQADPwxrG7s_WURy",
+              "file_size": 17970,
+              "width": 240,
+              "height": 320
+            },
+            {
+              "file_id": "AgACAgEAAyEGAASVdLwzAANbaopUHqb4pkJoAAG9uCYIaOWrl1_lAAI_DGsbuz9ZRLhahPdHRzgEAQADAgADeAADPQQ",
+              "file_unique_id": "AQADPwxrG7s_WUR9",
+              "file_size": 79929,
+              "width": 600,
+              "height": 800
+            },
+            {
+              "file_id": "AgACAgEAAyEGAASVdLwzAANbaopUHqb4pkJoAAG9uCYIaOWrl1_lAAI_DGsbuz9ZRLhahPdHRzgEAQADAgADeQADPQQ",
+              "file_unique_id": "AQADPwxrG7s_WUR-",
+              "file_size": 208217,
+              "width": 960,
+              "height": 1280
+            }
+          ],
+          "caption": "Golden hour looks better when I’m a little wet ✨ don’t you think 👀",
+          "reply_markup": {
+            "inline_keyboard": [
+              [
+                {
+                  "text": "🔒 Content Vault",
+                  "url": "https://t.me/+VFiypKs_xVlhYzQx"
+                },
+                {
+                  "text": "❤️ Tip Ava",
+                  "url": "https://cash.app/$AvaBlackthorne"
+                }
+              ]
+            ]
+          }
+        }
+      }
+    },
+    "replacement_width": 960,
+    "replacement_height": 1280
+  },
+  {
+    "repair_id": "telegram_media_repair_3511159ff38045e984f528d732cd11df",
+    "event_type": "HISTORICAL_MEDIA_NORMALIZATION",
+    "repair_timestamp": "2026-08-23T02:00:04.549221+00:00",
+    "publish_request_id": "social_publish_item_6b21f662bc9c458fb914e8b8ac3c3bed",
+    "queue_item_id": "social_queue_item_f8859ff2aceb4cb1870674694cee225f",
+    "channel": "main",
+    "chat_id": "-1002507455539",
+    "message_id": 90,
+    "existing_width": 864,
+    "existing_height": 1152,
+    "source_asset_id": "generated_image_48ddc8212c9d10026c206fff",
+    "source_path": "D:\\Ava_CMS\\Content\\Posted\\Telegram\\Main\\generated_image_48ddc8212c9d10026c206fff.png",
+    "derivative_path": "D:\\Ava_CMS\\Content\\Posted\\Telegram\\Main\\generated_image_48ddc8212c9d10026c206fff_telegram_presentation_v1.jpg",
+    "expected_width": 960,
+    "expected_height": 1280,
+    "editable": true,
+    "caption_available": true,
+    "keyboard_available": true,
+    "status": "SAFE",
+    "reason": "ready",
+    "repair_status": "REPAIRED",
+    "message_id_retained": true,
+    "caption_retained": true,
+    "caption_entities_retained": true,
+    "keyboard_retained": true,
+    "error": null,
+    "telegram_response": {
+      "ok": true,
+      "status_code": 200,
+      "message_id": 90,
+      "response": {
+        "ok": true,
+        "result": {
+          "message_id": 90,
+          "sender_chat": {
+            "id": -1002507455539,
+            "title": "Ava Blackthorne",
+            "type": "channel"
+          },
+          "chat": {
+            "id": -1002507455539,
+            "title": "Ava Blackthorne",
+            "type": "channel"
+          },
+          "date": 1787102748,
+          "edit_date": 1787450404,
+          "photo": [
+            {
+              "file_id": "AgACAgEAAyEGAASVdLwzAANaaopUJKk0IwGPq6tlLb4SvLc8NwkAAkAMaxu7P1lEsBh76uNKiI4BAAMCAANzAAM9BA",
+              "file_unique_id": "AQADQAxrG7s_WUR4",
+              "file_size": 1536,
+              "width": 67,
+              "height": 90
+            },
+            {
+              "file_id": "AgACAgEAAyEGAASVdLwzAANaaopUJKk0IwGPq6tlLb4SvLc8NwkAAkAMaxu7P1lEsBh76uNKiI4BAAMCAANtAAM9BA",
+              "file_unique_id": "AQADQAxrG7s_WURy",
+              "file_size": 16678,
+              "width": 240,
+              "height": 320
+            },
+            {
+              "file_id": "AgACAgEAAyEGAASVdLwzAANaaopUJKk0IwGPq6tlLb4SvLc8NwkAAkAMaxu7P1lEsBh76uNKiI4BAAMCAAN4AAM9BA",
+              "file_unique_id": "AQADQAxrG7s_WUR9",
+              "file_size": 76098,
+              "width": 600,
+              "height": 800
+            },
+            {
+              "file_id": "AgACAgEAAyEGAASVdLwzAANaaopUJKk0IwGPq6tlLb4SvLc8NwkAAkAMaxu7P1lEsBh76uNKiI4BAAMCAAN5AAM9BA",
+              "file_unique_id": "AQADQAxrG7s_WUR-",
+              "file_size": 210828,
+              "width": 960,
+              "height": 1280
+            }
+          ],
+          "caption": "Caught me mid-hair fix 😉 in this tight little white top",
+          "reply_markup": {
+            "inline_keyboard": [
+              [
+                {
+                  "text": "🔒 Private Content Vault",
+                  "url": "https://t.me/+VFiypKs_xVlhYzQx"
+                }
+              ]
+            ]
+          }
+        }
+      }
+    },
+    "replacement_width": 960,
+    "replacement_height": 1280
+  },
+  {
+    "repair_id": "telegram_media_repair_3f79f03d90bc49db8a809f0658eb0546",
+    "event_type": "HISTORICAL_MEDIA_NORMALIZATION",
+    "repair_timestamp": "2026-08-23T02:00:11.194738+00:00",
+    "publish_request_id": "social_publish_item_d67a887a0c9640819ce9dd5bc4f46e5f",
+    "queue_item_id": "social_queue_item_484bd13fe860430fbe4e24e95b4db838",
+    "channel": "main",
+    "chat_id": "-1002507455539",
+    "message_id": 89,
+    "existing_width": 864,
+    "existing_height": 1152,
+    "source_asset_id": "generated_image_48ab10f16ba4969aa8400287",
+    "source_path": "D:\\Ava_CMS\\Content\\Posted\\Telegram\\Main\\generated_image_48ab10f16ba4969aa8400287.png",
+    "derivative_path": "D:\\Ava_CMS\\Content\\Posted\\Telegram\\Main\\generated_image_48ab10f16ba4969aa8400287_telegram_presentation_v1.jpg",
+    "expected_width": 960,
+    "expected_height": 1280,
+    "editable": true,
+    "caption_available": true,
+    "keyboard_available": true,
+    "status": "SAFE",
+    "reason": "ready",
+    "repair_status": "REPAIRED",
+    "message_id_retained": true,
+    "caption_retained": true,
+    "caption_entities_retained": true,
+    "keyboard_retained": true,
+    "error": null,
+    "telegram_response": {
+      "ok": true,
+      "status_code": 200,
+      "message_id": 89,
+      "response": {
+        "ok": true,
+        "result": {
+          "message_id": 89,
+          "sender_chat": {
+            "id": -1002507455539,
+            "title": "Ava Blackthorne",
+            "type": "channel"
+          },
+          "chat": {
+            "id": -1002507455539,
+            "title": "Ava Blackthorne",
+            "type": "channel"
+          },
+          "date": 1787017996,
+          "edit_date": 1787450411,
+          "photo": [
+            {
+              "file_id": "AgACAgEAAyEGAASVdLwzAANZaopUKoiUyWKcMqXT8TKOwUfl12IAAkEMaxu7P1lEJY10fhtHDJEBAAMCAANzAAM9BA",
+              "file_unique_id": "AQADQQxrG7s_WUR4",
+              "file_size": 1359,
+              "width": 67,
+              "height": 90
+            },
+            {
+              "file_id": "AgACAgEAAyEGAASVdLwzAANZaopUKoiUyWKcMqXT8TKOwUfl12IAAkEMaxu7P1lEJY10fhtHDJEBAAMCAANtAAM9BA",
+              "file_unique_id": "AQADQQxrG7s_WURy",
+              "file_size": 15971,
+              "width": 240,
+              "height": 320
+            },
+            {
+              "file_id": "AgACAgEAAyEGAASVdLwzAANZaopUKoiUyWKcMqXT8TKOwUfl12IAAkEMaxu7P1lEJY10fhtHDJEBAAMCAAN4AAM9BA",
+              "file_unique_id": "AQADQQxrG7s_WUR9",
+              "file_size": 70371,
+              "width": 600,
+              "height": 800
+            },
+            {
+              "file_id": "AgACAgEAAyEGAASVdLwzAANZaopUKoiUyWKcMqXT8TKOwUfl12IAAkEMaxu7P1lEJY10fhtHDJEBAAMCAAN5AAM9BA",
+              "file_unique_id": "AQADQQxrG7s_WUR-",
+              "file_size": 193090,
+              "width": 960,
+              "height": 1280
+            }
+          ],
+          "caption": "White bikini catching every bit of that golden light 🔥 mid-stride and feeling bold 👀"
+        }
+      }
+    },
+    "replacement_width": 960,
+    "replacement_height": 1280
+  },
+  {
+    "repair_id": "telegram_media_repair_a069d18c8dc94a138609017228a5ace5",
+    "event_type": "HISTORICAL_MEDIA_NORMALIZATION",
+    "repair_timestamp": "2026-08-23T02:00:12.468649+00:00",
+    "publish_request_id": "social_publish_item_9abdd650957e469e8f27ea1b808cc906",
+    "queue_item_id": "social_queue_item_ecedcc25962745cb952a3fdc5e97b10b",
+    "channel": "vault",
+    "chat_id": "-1003937188399",
+    "message_id": 26,
+    "existing_width": 832,
+    "existing_height": 1248,
+    "source_asset_id": "commercial-offering:8b28078a-a7dd-4c8d-b949-7e3c350100b3",
+    "source_path": "D:\\Ava_CMS\\vault\\bundle_teasers\\b44c5791-ece7-52a5-a9d3-d1b599fbb2f2\\promotional_teaser_source_225.png",
+    "derivative_path": "D:\\Ava_CMS\\vault\\bundle_teasers\\b44c5791-ece7-52a5-a9d3-d1b599fbb2f2\\promotional_teaser_source_225_telegram_presentation_v1.jpg",
+    "expected_width": 960,
+    "expected_height": 1280,
+    "editable": true,
+    "caption_available": true,
+    "keyboard_available": true,
+    "status": "SAFE",
+    "reason": "ready",
+    "repair_status": "REPAIRED",
+    "message_id_retained": true,
+    "caption_retained": true,
+    "caption_entities_retained": true,
+    "keyboard_retained": true,
+    "error": null,
+    "telegram_response": {
+      "ok": true,
+      "status_code": 200,
+      "message_id": 26,
+      "response": {
+        "ok": true,
+        "result": {
+          "message_id": 26,
+          "sender_chat": {
+            "id": -1003937188399,
+            "title": "Ava's Content Vault 💋",
+            "type": "channel"
+          },
+          "chat": {
+            "id": -1003937188399,
+            "title": "Ava's Content Vault 💋",
+            "type": "channel"
+          },
+          "date": 1786656456,
+          "edit_date": 1787450412,
+          "photo": [
+            {
+              "file_id": "AgACAgEAAyEGAATqrLovAAMaaopULEfDAclk8F6cLJIa1lyjnqQAAtANaxtp4VBEzEz8bOEUvJsBAAMCAANzAAM9BA",
+              "file_unique_id": "AQAD0A1rG2nhUER4",
+              "file_size": 1232,
+              "width": 67,
+              "height": 90
+            },
+            {
+              "file_id": "AgACAgEAAyEGAATqrLovAAMaaopULEfDAclk8F6cLJIa1lyjnqQAAtANaxtp4VBEzEz8bOEUvJsBAAMCAANtAAM9BA",
+              "file_unique_id": "AQAD0A1rG2nhUERy",
+              "file_size": 12144,
+              "width": 240,
+              "height": 320
+            },
+            {
+              "file_id": "AgACAgEAAyEGAATqrLovAAMaaopULEfDAclk8F6cLJIa1lyjnqQAAtANaxtp4VBEzEz8bOEUvJsBAAMCAAN4AAM9BA",
+              "file_unique_id": "AQAD0A1rG2nhUER9",
+              "file_size": 53144,
+              "width": 600,
+              "height": 800
+            },
+            {
+              "file_id": "AgACAgEAAyEGAATqrLovAAMaaopULEfDAclk8F6cLJIa1lyjnqQAAtANaxtp4VBEzEz8bOEUvJsBAAMCAAN5AAM9BA",
+              "file_unique_id": "AQAD0A1rG2nhUER-",
+              "file_size": 141700,
+              "width": 960,
+              "height": 1280
+            }
+          ],
+          "caption": "This intimate self-touch captured across four refined frames 👁️ my eyes and body open only for you, unlock the entire set right now ❤️",
+          "reply_markup": {
+            "inline_keyboard": [
+              [
+                {
+                  "text": "🔓 Unlock · $24.99",
+                  "url": "https://www.fanvue.com/avablackthorne/media/fvml-42"
+                }
+              ]
+            ]
+          }
+        }
+      }
+    },
+    "replacement_width": 960,
+    "replacement_height": 1280
+  },
+  {
+    "repair_id": "telegram_media_repair_fad5adfd29574ba283e70ff8f8fb1480",
+    "event_type": "HISTORICAL_MEDIA_NORMALIZATION",
+    "repair_timestamp": "2026-08-23T02:00:13.542262+00:00",
+    "publish_request_id": "social_publish_item_208f46d8082c4a96bffbfe7486e84a94",
+    "queue_item_id": "social_queue_item_59fcd3f0b3dc44be91cdd30b33f95948",
+    "channel": "vault",
+    "chat_id": "-1003937188399",
+    "message_id": 25,
+    "existing_width": 832,
+    "existing_height": 1248,
+    "source_asset_id": "commercial-offering:13b1574b-9f67-420c-9155-03bd7c89cb22",
+    "source_path": "D:\\Ava_CMS\\vault\\blurred\\207_blurred.png",
+    "derivative_path": "D:\\Ava_CMS\\vault\\blurred\\207_blurred_telegram_presentation_v1.jpg",
+    "expected_width": 960,
+    "expected_height": 1280,
+    "editable": true,
+    "caption_available": true,
+    "keyboard_available": true,
+    "status": "SAFE",
+    "reason": "ready",
+    "repair_status": "REPAIRED",
+    "message_id_retained": true,
+    "caption_retained": true,
+    "caption_entities_retained": true,
+    "keyboard_retained": true,
+    "error": null,
+    "telegram_response": {
+      "ok": true,
+      "status_code": 200,
+      "message_id": 25,
+      "response": {
+        "ok": true,
+        "result": {
+          "message_id": 25,
+          "sender_chat": {
+            "id": -1003937188399,
+            "title": "Ava's Content Vault 💋",
+            "type": "channel"
+          },
+          "chat": {
+            "id": -1003937188399,
+            "title": "Ava's Content Vault 💋",
+            "type": "channel"
+          },
+          "date": 1786585275,
+          "edit_date": 1787450413,
+          "photo": [
+            {
+              "file_id": "AgACAgEAAyEGAATqrLovAAMZaopULZ71ad_71wAB6ONfibNGlCJlAALRDWsbaeFQRPoENeePuP1nAQADAgADcwADPQQ",
+              "file_unique_id": "AQAD0Q1rG2nhUER4",
+              "file_size": 732,
+              "width": 67,
+              "height": 90
+            },
+            {
+              "file_id": "AgACAgEAAyEGAATqrLovAAMZaopULZ71ad_71wAB6ONfibNGlCJlAALRDWsbaeFQRPoENeePuP1nAQADAgADbQADPQQ",
+              "file_unique_id": "AQAD0Q1rG2nhUERy",
+              "file_size": 4602,
+              "width": 240,
+              "height": 320
+            },
+            {
+              "file_id": "AgACAgEAAyEGAATqrLovAAMZaopULZ71ad_71wAB6ONfibNGlCJlAALRDWsbaeFQRPoENeePuP1nAQADAgADeAADPQQ",
+              "file_unique_id": "AQAD0Q1rG2nhUER9",
+              "file_size": 16517,
+              "width": 600,
+              "height": 800
+            },
+            {
+              "file_id": "AgACAgEAAyEGAATqrLovAAMZaopULZ71ad_71wAB6ONfibNGlCJlAALRDWsbaeFQRPoENeePuP1nAQADAgADeQADPQQ",
+              "file_unique_id": "AQAD0Q1rG2nhUER-",
+              "file_size": 39812,
+              "width": 960,
+              "height": 1280
+            }
+          ],
+          "caption": "Legs spread wide 😈 so you see my pussy and tits fully exposed 👀 unlock before I close them 🔥",
+          "reply_markup": {
+            "inline_keyboard": [
+              [
+                {
+                  "text": "🔓 Unlock · $9.99",
+                  "url": "https://www.fanvue.com/avablackthorne/media/fvml-38"
+                }
+              ]
+            ]
+          }
+        }
+      }
+    },
+    "replacement_width": 960,
+    "replacement_height": 1280
+  },
+  {
+    "repair_id": "telegram_media_repair_7627fc1ed9cf4121a65d2b9af157336a",
+    "event_type": "HISTORICAL_MEDIA_NORMALIZATION",
+    "repair_timestamp": "2026-08-23T02:00:14.877313+00:00",
+    "publish_request_id": "social_publish_item_e46c63fb13024da5bb1b891f31be295b",
+    "queue_item_id": "social_queue_item_c32cfa5ded28477daa27bbd141713568",
+    "channel": "vault",
+    "chat_id": "-1003937188399",
+    "message_id": 24,
+    "existing_width": 864,
+    "existing_height": 1152,
+    "source_asset_id": "commercial-offering:84a93ae2-20b1-4032-b7d8-f2918181df77",
+    "source_path": "D:\\Ava_CMS\\vault\\bundle_teasers\\ecf707ae-c584-5e83-b1d4-3665cd53b933\\promotional_teaser_source_200.png",
+    "derivative_path": "D:\\Ava_CMS\\vault\\bundle_teasers\\ecf707ae-c584-5e83-b1d4-3665cd53b933\\promotional_teaser_source_200_telegram_presentation_v1.jpg",
+    "expected_width": 960,
+    "expected_height": 1280,
+    "editable": true,
+    "caption_available": true,
+    "keyboard_available": true,
+    "status": "SAFE",
+    "reason": "ready",
+    "repair_status": "REPAIRED",
+    "message_id_retained": true,
+    "caption_retained": true,
+    "caption_entities_retained": true,
+    "keyboard_retained": true,
+    "error": null,
+    "telegram_response": {
+      "ok": true,
+      "status_code": 200,
+      "message_id": 24,
+      "response": {
+        "ok": true,
+        "result": {
+          "message_id": 24,
+          "sender_chat": {
+            "id": -1003937188399,
+            "title": "Ava's Content Vault 💋",
+            "type": "channel"
+          },
+          "chat": {
+            "id": -1003937188399,
+            "title": "Ava's Content Vault 💋",
+            "type": "channel"
+          },
+          "date": 1786579214,
+          "edit_date": 1787450414,
+          "photo": [
+            {
+              "file_id": "AgACAgEAAyEGAATqrLovAAMYaopULurkC7QnJT7kc42jKOCMwn8AAtINaxtp4VBEOub6hD61n1oBAAMCAANzAAM9BA",
+              "file_unique_id": "AQAD0g1rG2nhUER4",
+              "file_size": 1457,
+              "width": 67,
+              "height": 90
+            },
+            {
+              "file_id": "AgACAgEAAyEGAATqrLovAAMYaopULurkC7QnJT7kc42jKOCMwn8AAtINaxtp4VBEOub6hD61n1oBAAMCAANtAAM9BA",
+              "file_unique_id": "AQAD0g1rG2nhUERy",
+              "file_size": 16112,
+              "width": 240,
+              "height": 320
+            },
+            {
+              "file_id": "AgACAgEAAyEGAATqrLovAAMYaopULurkC7QnJT7kc42jKOCMwn8AAtINaxtp4VBEOub6hD61n1oBAAMCAAN4AAM9BA",
+              "file_unique_id": "AQAD0g1rG2nhUER9",
+              "file_size": 73872,
+              "width": 600,
+              "height": 800
+            },
+            {
+              "file_id": "AgACAgEAAyEGAATqrLovAAMYaopULurkC7QnJT7kc42jKOCMwn8AAtINaxtp4VBEOub6hD61n1oBAAMCAAN5AAM9BA",
+              "file_unique_id": "AQAD0g1rG2nhUER-",
+              "file_size": 195754,
+              "width": 960,
+              "height": 1280
+            }
+          ],
+          "caption": "Leaning into the rain-streaked glass, my open shirt slips further to reveal every curve of my topless form 😌 — claim the complete bundle and hold all three moments 💎",
+          "reply_markup": {
+            "inline_keyboard": [
+              [
+                {
+                  "text": "🔓 Unlock · $14.99",
+                  "url": "https://www.fanvue.com/avablackthorne/media/fvml-37"
+                }
+              ]
+            ]
+          }
+        }
+      }
+    },
+    "replacement_width": 960,
+    "replacement_height": 1280
+  },
+  {
+    "repair_id": "telegram_media_repair_560775a726b44157802c8472e02325d2",
+    "event_type": "HISTORICAL_MEDIA_NORMALIZATION",
+    "repair_timestamp": "2026-08-23T02:00:16.243668+00:00",
+    "publish_request_id": "social_publish_item_758a171a8fd7411aae20c84a7082eb1e",
+    "queue_item_id": "social_queue_item_4fb54bc8abfd4f24a16c08e4a4f8c54e",
+    "channel": "vault",
+    "chat_id": "-1003937188399",
+    "message_id": 21,
+    "existing_width": 832,
+    "existing_height": 1248,
+    "source_asset_id": "commercial-offering:838910ad-90fd-4270-9a80-297c00c71f7f",
+    "source_path": "D:\\Ava_CMS\\vault\\commercial_teasers\\194\\content_vault_selective.png",
+    "derivative_path": "D:\\Ava_CMS\\vault\\commercial_teasers\\194\\content_vault_selective_telegram_presentation_v1.jpg",
+    "expected_width": 960,
+    "expected_height": 1280,
+    "editable": true,
+    "caption_available": true,
+    "keyboard_available": true,
+    "status": "SAFE",
+    "reason": "ready",
+    "repair_status": "REPAIRED",
+    "message_id_retained": true,
+    "caption_retained": true,
+    "caption_entities_retained": true,
+    "keyboard_retained": true,
+    "error": null,
+    "telegram_response": {
+      "ok": true,
+      "status_code": 200,
+      "message_id": 21,
+      "response": {
+        "ok": true,
+        "result": {
+          "message_id": 21,
+          "sender_chat": {
+            "id": -1003937188399,
+            "title": "Ava's Content Vault 💋",
+            "type": "channel"
+          },
+          "chat": {
+            "id": -1003937188399,
+            "title": "Ava's Content Vault 💋",
+            "type": "channel"
+          },
+          "date": 1786483738,
+          "edit_date": 1787450416,
+          "photo": [
+            {
+              "file_id": "AgACAgEAAyEGAATqrLovAAMVaopUMGUOai1RJAJ9usnYMECyRZ4AAtMNaxtp4VBEMqlKCoBvOaIBAAMCAANzAAM9BA",
+              "file_unique_id": "AQAD0w1rG2nhUER4",
+              "file_size": 1310,
+              "width": 67,
+              "height": 90
+            },
+            {
+              "file_id": "AgACAgEAAyEGAATqrLovAAMVaopUMGUOai1RJAJ9usnYMECyRZ4AAtMNaxtp4VBEMqlKCoBvOaIBAAMCAANtAAM9BA",
+              "file_unique_id": "AQAD0w1rG2nhUERy",
+              "file_size": 17658,
+              "width": 240,
+              "height": 320
+            },
+            {
+              "file_id": "AgACAgEAAyEGAATqrLovAAMVaopUMGUOai1RJAJ9usnYMECyRZ4AAtMNaxtp4VBEMqlKCoBvOaIBAAMCAAN4AAM9BA",
+              "file_unique_id": "AQAD0w1rG2nhUER9",
+              "file_size": 81112,
+              "width": 600,
+              "height": 800
+            },
+            {
+              "file_id": "AgACAgEAAyEGAATqrLovAAMVaopUMGUOai1RJAJ9usnYMECyRZ4AAtMNaxtp4VBEMqlKCoBvOaIBAAMCAAN5AAM9BA",
+              "file_unique_id": "AQAD0w1rG2nhUER-",
+              "file_size": 207161,
+              "width": 960,
+              "height": 1280
+            }
+          ],
+          "caption": "A calm invitation lingers 👀 as my open shirt frames my breasts and the warmth between my legs just for you 😏",
+          "reply_markup": {
+            "inline_keyboard": [
+              [
+                {
+                  "text": "Unlock Now · $12.99",
+                  "url": "https://www.fanvue.com/avablackthorne/media/fvml-36"
+                }
+              ]
+            ]
+          }
+        }
+      }
+    },
+    "replacement_width": 960,
+    "replacement_height": 1280
+  },
+  {
+    "repair_id": "telegram_media_repair_40b3e18a765d4d17b227cd55d939a5a7",
+    "event_type": "HISTORICAL_MEDIA_NORMALIZATION",
+    "repair_timestamp": "2026-08-23T02:00:17.906454+00:00",
+    "publish_request_id": "social_publish_item_2079ba46ce384452b3e20b9001c79f79",
+    "queue_item_id": "social_queue_item_5596d6d8e0de447bb8c4dc20d9d8b924",
+    "channel": "vault",
+    "chat_id": "-1003937188399",
+    "message_id": 20,
+    "existing_width": 864,
+    "existing_height": 1152,
+    "source_asset_id": "commercial-offering:a2c63f8e-dfe0-43d3-8859-cde6eab748f2",
+    "source_path": "D:\\Ava_CMS\\vault\\bundle_teasers\\0f58b126-155d-54be-8904-d1fe252e709a\\promotional_teaser_source_192.png",
+    "derivative_path": "D:\\Ava_CMS\\vault\\bundle_teasers\\0f58b126-155d-54be-8904-d1fe252e709a\\promotional_teaser_source_192_telegram_presentation_v1.jpg",
+    "expected_width": 960,
+    "expected_height": 1280,
+    "editable": true,
+    "caption_available": true,
+    "keyboard_available": true,
+    "status": "SAFE",
+    "reason": "ready",
+    "repair_status": "REPAIRED",
+    "message_id_retained": true,
+    "caption_retained": true,
+    "caption_entities_retained": true,
+    "keyboard_retained": true,
+    "error": null,
+    "telegram_response": {
+      "ok": true,
+      "status_code": 200,
+      "message_id": 20,
+      "response": {
+        "ok": true,
+        "result": {
+          "message_id": 20,
+          "sender_chat": {
+            "id": -1003937188399,
+            "title": "Ava's Content Vault 💋",
+            "type": "channel"
+          },
+          "chat": {
+            "id": -1003937188399,
+            "title": "Ava's Content Vault 💋",
+            "type": "channel"
+          },
+          "date": 1786482623,
+          "edit_date": 1787450417,
+          "photo": [
+            {
+              "file_id": "AgACAgEAAyEGAATqrLovAAMUaopUMfu2mdlDh1RGfKSiAAFWgHfOAALUDWsbaeFQRBlhoZ8sY0ScAQADAgADcwADPQQ",
+              "file_unique_id": "AQAD1A1rG2nhUER4",
+              "file_size": 1272,
+              "width": 67,
+              "height": 90
+            },
+            {
+              "file_id": "AgACAgEAAyEGAATqrLovAAMUaopUMfu2mdlDh1RGfKSiAAFWgHfOAALUDWsbaeFQRBlhoZ8sY0ScAQADAgADbQADPQQ",
+              "file_unique_id": "AQAD1A1rG2nhUERy",
+              "file_size": 13937,
+              "width": 240,
+              "height": 320
+            },
+            {
+              "file_id": "AgACAgEAAyEGAATqrLovAAMUaopUMfu2mdlDh1RGfKSiAAFWgHfOAALUDWsbaeFQRBlhoZ8sY0ScAQADAgADeAADPQQ",
+              "file_unique_id": "AQAD1A1rG2nhUER9",
+              "file_size": 64548,
+              "width": 600,
+              "height": 800
+            },
+            {
+              "file_id": "AgACAgEAAyEGAATqrLovAAMUaopUMfu2mdlDh1RGfKSiAAFWgHfOAALUDWsbaeFQRBlhoZ8sY0ScAQADAgADeQADPQQ",
+              "file_unique_id": "AQAD1A1rG2nhUER-",
+              "file_size": 169887,
+              "width": 960,
+              "height": 1280
+            }
+          ],
+          "caption": "Golden hour on the rooftop… 🌅 and this lace just wouldn’t stay closed 🔥💋 3 exclusive shots 📸 soft light… bare skin… every teasing angle ✨😈 Unlock the full set and let the evening undress me 🖤🔥",
+          "reply_markup": {
+            "inline_keyboard": [
+              [
+                {
+                  "text": "Unlock Now · $18.99",
+                  "url": "https://www.fanvue.com/avablackthorne/media/fvml-35"
+                }
+              ]
+            ]
+          }
+        }
+      }
+    },
+    "replacement_width": 960,
+    "replacement_height": 1280
+  },
+  {
+    "repair_id": "telegram_media_repair_55bdac3910c14402be36d4c6d5a34bd8",
+    "event_type": "HISTORICAL_MEDIA_NORMALIZATION",
+    "repair_timestamp": "2026-08-23T02:00:19.183942+00:00",
+    "publish_request_id": "social_publish_item_9787810499b84e0a90c95ca29a9a21cc",
+    "queue_item_id": "social_queue_item_ca4ffb36c26841bb9daaeed47d16d94e",
+    "channel": "vault",
+    "chat_id": "-1003937188399",
+    "message_id": 19,
+    "existing_width": 832,
+    "existing_height": 1248,
+    "source_asset_id": "commercial-offering:0186d66b-791b-45d4-8afc-5de558923b40",
+    "source_path": "D:\\Ava_CMS\\vault\\bundle_teasers\\c9a75a6c-bdd8-5f76-ac22-1113e881296b\\promotional_teaser_source_177.png",
+    "derivative_path": "D:\\Ava_CMS\\vault\\bundle_teasers\\c9a75a6c-bdd8-5f76-ac22-1113e881296b\\promotional_teaser_source_177_telegram_presentation_v1.jpg",
+    "expected_width": 960,
+    "expected_height": 1280,
+    "editable": true,
+    "caption_available": true,
+    "keyboard_available": true,
+    "status": "SAFE",
+    "reason": "ready",
+    "repair_status": "REPAIRED",
+    "message_id_retained": true,
+    "caption_retained": true,
+    "caption_entities_retained": true,
+    "keyboard_retained": true,
+    "error": null,
+    "telegram_response": {
+      "ok": true,
+      "status_code": 200,
+      "message_id": 19,
+      "response": {
+        "ok": true,
+        "result": {
+          "message_id": 19,
+          "sender_chat": {
+            "id": -1003937188399,
+            "title": "Ava's Content Vault 💋",
+            "type": "channel"
+          },
+          "chat": {
+            "id": -1003937188399,
+            "title": "Ava's Content Vault 💋",
+            "type": "channel"
+          },
+          "date": 1786394397,
+          "edit_date": 1787450419,
+          "photo": [
+            {
+              "file_id": "AgACAgEAAyEGAATqrLovAAMTaopUMlYdSNHXgxHj7GSgDaASnLUAAtUNaxtp4VBEzcmqyDOKFQwBAAMCAANzAAM9BA",
+              "file_unique_id": "AQAD1Q1rG2nhUER4",
+              "file_size": 1291,
+              "width": 67,
+              "height": 90
+            },
+            {
+              "file_id": "AgACAgEAAyEGAATqrLovAAMTaopUMlYdSNHXgxHj7GSgDaASnLUAAtUNaxtp4VBEzcmqyDOKFQwBAAMCAANtAAM9BA",
+              "file_unique_id": "AQAD1Q1rG2nhUERy",
+              "file_size": 13678,
+              "width": 240,
+              "height": 320
+            },
+            {
+              "file_id": "AgACAgEAAyEGAATqrLovAAMTaopUMlYdSNHXgxHj7GSgDaASnLUAAtUNaxtp4VBEzcmqyDOKFQwBAAMCAAN4AAM9BA",
+              "file_unique_id": "AQAD1Q1rG2nhUER9",
+              "file_size": 60537,
+              "width": 600,
+              "height": 800
+            },
+            {
+              "file_id": "AgACAgEAAyEGAATqrLovAAMTaopUMlYdSNHXgxHj7GSgDaASnLUAAtUNaxtp4VBEzcmqyDOKFQwBAAMCAAN5AAM9BA",
+              "file_unique_id": "AQAD1Q1rG2nhUER-",
+              "file_size": 172433,
+              "width": 960,
+              "height": 1280
+            }
+          ],
+          "caption": "My eyes 👀 linger on yours from the railing while this silk shirt falls open at dusk — unlock the full three-image set to hold every moment 🔥",
+          "reply_markup": {
+            "inline_keyboard": [
+              [
+                {
+                  "text": "Unlock Now · $14.99",
+                  "url": "https://www.fanvue.com/avablackthorne/media/fvml-27"
+                }
+              ]
+            ]
+          }
+        }
+      }
+    },
+    "replacement_width": 960,
+    "replacement_height": 1280
+  },
+  {
+    "repair_id": "telegram_media_repair_8ff5e2b33735477d8805484a8c074d9d",
+    "event_type": "HISTORICAL_MEDIA_NORMALIZATION",
+    "repair_timestamp": "2026-08-23T02:00:20.591101+00:00",
+    "publish_request_id": "social_publish_item_68b982a91e2247be971b3f1b24922b5f",
+    "queue_item_id": "social_queue_item_bca9c90b814f4d01ae4aa11089f4e2cd",
+    "channel": "main",
+    "chat_id": "-1002507455539",
+    "message_id": 88,
+    "existing_width": 832,
+    "existing_height": 1248,
+    "source_asset_id": "generated_image_e41306495d2cb9df3fa9a974",
+    "source_path": "D:\\Ava_CMS\\Content\\Posted\\Telegram\\Main\\generated_image_e41306495d2cb9df3fa9a974.png",
+    "derivative_path": "D:\\Ava_CMS\\Content\\Posted\\Telegram\\Main\\generated_image_e41306495d2cb9df3fa9a974_telegram_presentation_v1.jpg",
+    "expected_width": 960,
+    "expected_height": 1280,
+    "editable": true,
+    "caption_available": true,
+    "keyboard_available": true,
+    "status": "SAFE",
+    "reason": "ready",
+    "repair_status": "REPAIRED",
+    "message_id_retained": true,
+    "caption_retained": true,
+    "caption_entities_retained": true,
+    "keyboard_retained": true,
+    "error": null,
+    "telegram_response": {
+      "ok": true,
+      "status_code": 200,
+      "message_id": 88,
+      "response": {
+        "ok": true,
+        "result": {
+          "message_id": 88,
+          "sender_chat": {
+            "id": -1002507455539,
+            "title": "Ava Blackthorne",
+            "type": "channel"
+          },
+          "chat": {
+            "id": -1002507455539,
+            "title": "Ava Blackthorne",
+            "type": "channel"
+          },
+          "date": 1786377570,
+          "edit_date": 1787450420,
+          "photo": [
+            {
+              "file_id": "AgACAgEAAyEGAASVdLwzAANYaopUNFuFnOxVHRTa9pXPYN-rvUwAAkIMaxu7P1lEngVtI6F_ldMBAAMCAANzAAM9BA",
+              "file_unique_id": "AQADQgxrG7s_WUR4",
+              "file_size": 1597,
+              "width": 67,
+              "height": 90
+            },
+            {
+              "file_id": "AgACAgEAAyEGAASVdLwzAANYaopUNFuFnOxVHRTa9pXPYN-rvUwAAkIMaxu7P1lEngVtI6F_ldMBAAMCAANtAAM9BA",
+              "file_unique_id": "AQADQgxrG7s_WURy",
+              "file_size": 19452,
+              "width": 240,
+              "height": 320
+            },
+            {
+              "file_id": "AgACAgEAAyEGAASVdLwzAANYaopUNFuFnOxVHRTa9pXPYN-rvUwAAkIMaxu7P1lEngVtI6F_ldMBAAMCAAN4AAM9BA",
+              "file_unique_id": "AQADQgxrG7s_WUR9",
+              "file_size": 89452,
+              "width": 600,
+              "height": 800
+            },
+            {
+              "file_id": "AgACAgEAAyEGAASVdLwzAANYaopUNFuFnOxVHRTa9pXPYN-rvUwAAkIMaxu7P1lEngVtI6F_ldMBAAMCAAN5AAM9BA",
+              "file_unique_id": "AQADQgxrG7s_WUR-",
+              "file_size": 240981,
+              "width": 960,
+              "height": 1280
+            }
+          ],
+          "caption": "A little wet, a little tempting… exactly how I planned it 😏🖤"
+        }
+      }
+    },
+    "replacement_width": 960,
+    "replacement_height": 1280
+  },
+  {
+    "repair_id": "telegram_media_repair_c3903fc6bf5e405da865f60b44b042f4",
+    "event_type": "HISTORICAL_MEDIA_NORMALIZATION",
+    "repair_timestamp": "2026-08-23T02:00:21.931716+00:00",
+    "publish_request_id": "social_publish_item_34dbc717278b494facc6a092a5599086",
+    "queue_item_id": "social_queue_item_7db26dd48b654e15973d4b973b4f1f9a",
+    "channel": "vault",
+    "chat_id": "-1003937188399",
+    "message_id": 18,
+    "existing_width": 832,
+    "existing_height": 1248,
+    "source_asset_id": "commercial-offering:09df17b3-b045-4eab-8f14-10f5e845511c",
+    "source_path": "D:\\Ava_CMS\\vault\\commercial_teasers\\158\\content_vault_selective.png",
+    "derivative_path": "D:\\Ava_CMS\\vault\\commercial_teasers\\158\\content_vault_selective_telegram_presentation_v1.jpg",
+    "expected_width": 960,
+    "expected_height": 1280,
+    "editable": true,
+    "caption_available": true,
+    "keyboard_available": true,
+    "status": "SAFE",
+    "reason": "ready",
+    "repair_status": "REPAIRED",
+    "message_id_retained": true,
+    "caption_retained": true,
+    "caption_entities_retained": true,
+    "keyboard_retained": true,
+    "error": null,
+    "telegram_response": {
+      "ok": true,
+      "status_code": 200,
+      "message_id": 18,
+      "response": {
+        "ok": true,
+        "result": {
+          "message_id": 18,
+          "sender_chat": {
+            "id": -1003937188399,
+            "title": "Ava's Content Vault 💋",
+            "type": "channel"
+          },
+          "chat": {
+            "id": -1003937188399,
+            "title": "Ava's Content Vault 💋",
+            "type": "channel"
+          },
+          "date": 1786310617,
+          "edit_date": 1787450421,
+          "photo": [
+            {
+              "file_id": "AgACAgEAAyEGAATqrLovAAMSaopUNYDPQX5ZCrJjl9pQ3LoHQfAAAtYNaxtp4VBEJk0rs7-z818BAAMCAANzAAM9BA",
+              "file_unique_id": "AQAD1g1rG2nhUER4",
+              "file_size": 1290,
+              "width": 67,
+              "height": 90
+            },
+            {
+              "file_id": "AgACAgEAAyEGAATqrLovAAMSaopUNYDPQX5ZCrJjl9pQ3LoHQfAAAtYNaxtp4VBEJk0rs7-z818BAAMCAANtAAM9BA",
+              "file_unique_id": "AQAD1g1rG2nhUERy",
+              "file_size": 13554,
+              "width": 240,
+              "height": 320
+            },
+            {
+              "file_id": "AgACAgEAAyEGAATqrLovAAMSaopUNYDPQX5ZCrJjl9pQ3LoHQfAAAtYNaxtp4VBEJk0rs7-z818BAAMCAAN4AAM9BA",
+              "file_unique_id": "AQAD1g1rG2nhUER9",
+              "file_size": 62306,
+              "width": 600,
+              "height": 800
+            },
+            {
+              "file_id": "AgACAgEAAyEGAATqrLovAAMSaopUNYDPQX5ZCrJjl9pQ3LoHQfAAAtYNaxtp4VBEJk0rs7-z818BAAMCAAN5AAM9BA",
+              "file_unique_id": "AQAD1g1rG2nhUER-",
+              "file_size": 168412,
+              "width": 960,
+              "height": 1280
+            }
+          ],
+          "caption": "Tongue 👅 stretched out staring at you while my fingers circle my clit and that arousal drips down my thighs 🔥😈",
+          "reply_markup": {
+            "inline_keyboard": [
+              [
+                {
+                  "text": "Unlock Now · $19.99",
+                  "url": "https://www.fanvue.com/avablackthorne/media/fvml-23"
+                }
+              ]
+            ]
+          }
+        }
+      }
+    },
+    "replacement_width": 960,
+    "replacement_height": 1280
+  },
+  {
+    "repair_id": "telegram_media_repair_cb33f00bd525479e8b4a7af793d3b853",
+    "event_type": "HISTORICAL_MEDIA_NORMALIZATION",
+    "repair_timestamp": "2026-08-23T02:00:23.369945+00:00",
+    "publish_request_id": "social_publish_item_bd7687bde87a4a52a74647d07a80a43e",
+    "queue_item_id": "social_queue_item_1dcfaa4cb99b41f9b6c93a9ad0da9eff",
+    "channel": "vault",
+    "chat_id": "-1003937188399",
+    "message_id": 17,
+    "existing_width": 832,
+    "existing_height": 1248,
+    "source_asset_id": "commercial-offering:4ced393d-8b4b-4b93-a084-c185e02b186a",
+    "source_path": "D:\\Ava_CMS\\vault\\commercial_teasers\\156\\content_vault_selective.png",
+    "derivative_path": "D:\\Ava_CMS\\vault\\commercial_teasers\\156\\content_vault_selective_telegram_presentation_v1.jpg",
+    "expected_width": 960,
+    "expected_height": 1280,
+    "editable": true,
+    "caption_available": true,
+    "keyboard_available": true,
+    "status": "SAFE",
+    "reason": "ready",
+    "repair_status": "REPAIRED",
+    "message_id_retained": true,
+    "caption_retained": true,
+    "caption_entities_retained": true,
+    "keyboard_retained": true,
+    "error": null,
+    "telegram_response": {
+      "ok": true,
+      "status_code": 200,
+      "message_id": 17,
+      "response": {
+        "ok": true,
+        "result": {
+          "message_id": 17,
+          "sender_chat": {
+            "id": -1003937188399,
+            "title": "Ava's Content Vault 💋",
+            "type": "channel"
+          },
+          "chat": {
+            "id": -1003937188399,
+            "title": "Ava's Content Vault 💋",
+            "type": "channel"
+          },
+          "date": 1786296564,
+          "edit_date": 1787450423,
+          "photo": [
+            {
+              "file_id": "AgACAgEAAyEGAATqrLovAAMRaopUN6d_XLYR5uOgrewCtotk91UAAtcNaxtp4VBEPByHKuyTUioBAAMCAANzAAM9BA",
+              "file_unique_id": "AQAD1w1rG2nhUER4",
+              "file_size": 1541,
+              "width": 67,
+              "height": 90
+            },
+            {
+              "file_id": "AgACAgEAAyEGAATqrLovAAMRaopUN6d_XLYR5uOgrewCtotk91UAAtcNaxtp4VBEPByHKuyTUioBAAMCAANtAAM9BA",
+              "file_unique_id": "AQAD1w1rG2nhUERy",
+              "file_size": 16822,
+              "width": 240,
+              "height": 320
+            },
+            {
+              "file_id": "AgACAgEAAyEGAATqrLovAAMRaopUN6d_XLYR5uOgrewCtotk91UAAtcNaxtp4VBEPByHKuyTUioBAAMCAAN4AAM9BA",
+              "file_unique_id": "AQAD1w1rG2nhUER9",
+              "file_size": 70276,
+              "width": 600,
+              "height": 800
+            },
+            {
+              "file_id": "AgACAgEAAyEGAATqrLovAAMRaopUN6d_XLYR5uOgrewCtotk91UAAtcNaxtp4VBEPByHKuyTUioBAAMCAAN5AAM9BA",
+              "file_unique_id": "AQAD1w1rG2nhUER-",
+              "file_size": 179096,
+              "width": 960,
+              "height": 1280
+            }
+          ],
+          "caption": "The robe teases at my shoulders 👑 leaving my body exposed on these sheets just for you 🔥",
+          "reply_markup": {
+            "inline_keyboard": [
+              [
+                {
+                  "text": "Unlock Now · $9.99",
+                  "url": "https://www.fanvue.com/avablackthorne/media/fvml-22"
+                }
+              ]
+            ]
+          }
+        }
+      }
+    },
+    "replacement_width": 960,
+    "replacement_height": 1280
+  },
+  {
+    "repair_id": "telegram_media_repair_ddf08ed200144c018c4f2568b9fceb50",
+    "event_type": "HISTORICAL_MEDIA_NORMALIZATION",
+    "repair_timestamp": "2026-08-23T02:00:24.778214+00:00",
+    "publish_request_id": "social_publish_item_9073ffa0a3dc4f749ec43589f180bf7a",
+    "queue_item_id": "social_queue_item_89f8ee018e6b44c3a3bf64f2af7d0cb9",
+    "channel": "vault",
+    "chat_id": "-1003937188399",
+    "message_id": 16,
+    "existing_width": 832,
+    "existing_height": 1229,
+    "source_asset_id": "commercial-offering:3abbed0b-5221-4a43-a151-13bdff730bdf",
+    "source_path": "D:\\Ava_CMS\\vault\\commercial_teasers\\154\\content_vault_selective.png",
+    "derivative_path": "D:\\Ava_CMS\\vault\\commercial_teasers\\154\\content_vault_selective_telegram_presentation_v1.jpg",
+    "expected_width": 960,
+    "expected_height": 1280,
+    "editable": true,
+    "caption_available": true,
+    "keyboard_available": true,
+    "status": "SAFE",
+    "reason": "ready",
+    "repair_status": "REPAIRED",
+    "message_id_retained": true,
+    "caption_retained": true,
+    "caption_entities_retained": true,
+    "keyboard_retained": true,
+    "error": null,
+    "telegram_response": {
+      "ok": true,
+      "status_code": 200,
+      "message_id": 16,
+      "response": {
+        "ok": true,
+        "result": {
+          "message_id": 16,
+          "sender_chat": {
+            "id": -1003937188399,
+            "title": "Ava's Content Vault 💋",
+            "type": "channel"
+          },
+          "chat": {
+            "id": -1003937188399,
+            "title": "Ava's Content Vault 💋",
+            "type": "channel"
+          },
+          "date": 1786241386,
+          "edit_date": 1787450424,
+          "photo": [
+            {
+              "file_id": "AgACAgEAAyEGAATqrLovAAMQaopUOPLzrbeWLp6Eh0Sqeg2Or5MAAtgNaxtp4VBEeDzSGbzkHRcBAAMCAANzAAM9BA",
+              "file_unique_id": "AQAD2A1rG2nhUER4",
+              "file_size": 1297,
+              "width": 67,
+              "height": 90
+            },
+            {
+              "file_id": "AgACAgEAAyEGAATqrLovAAMQaopUOPLzrbeWLp6Eh0Sqeg2Or5MAAtgNaxtp4VBEeDzSGbzkHRcBAAMCAANtAAM9BA",
+              "file_unique_id": "AQAD2A1rG2nhUERy",
+              "file_size": 13788,
+              "width": 240,
+              "height": 320
+            },
+            {
+              "file_id": "AgACAgEAAyEGAATqrLovAAMQaopUOPLzrbeWLp6Eh0Sqeg2Or5MAAtgNaxtp4VBEeDzSGbzkHRcBAAMCAAN4AAM9BA",
+              "file_unique_id": "AQAD2A1rG2nhUER9",
+              "file_size": 64400,
+              "width": 600,
+              "height": 800
+            },
+            {
+              "file_id": "AgACAgEAAyEGAATqrLovAAMQaopUOPLzrbeWLp6Eh0Sqeg2Or5MAAtgNaxtp4VBEeDzSGbzkHRcBAAMCAAN5AAM9BA",
+              "file_unique_id": "AQAD2A1rG2nhUER-",
+              "file_size": 180410,
+              "width": 960,
+              "height": 1280
+            }
+          ],
+          "caption": "Tongue 👅 out and completely bare as I part my lips between my legs 😈",
+          "reply_markup": {
+            "inline_keyboard": [
+              [
+                {
+                  "text": "Unlock Now · $17.99",
+                  "url": "https://www.fanvue.com/avablackthorne/media/fvml-21"
+                }
+              ]
+            ]
+          }
+        }
+      }
+    },
+    "replacement_width": 960,
+    "replacement_height": 1280
+  },
+  {
+    "repair_id": "telegram_media_repair_b5d2f9fad17c442aac6b56d133adf7e2",
+    "event_type": "HISTORICAL_MEDIA_NORMALIZATION",
+    "repair_timestamp": "2026-08-23T02:00:26.177356+00:00",
+    "publish_request_id": "social_publish_item_3b2eaff3bd8d486a816161c7babe773d",
+    "queue_item_id": "social_queue_item_5001eeb2b852409092adcd8273f33424",
+    "channel": "main",
+    "chat_id": "-1002507455539",
+    "message_id": 87,
+    "existing_width": 864,
+    "existing_height": 1152,
+    "source_asset_id": "generated_image_f7ae8ba6222c43ae0613a69a",
+    "source_path": "D:\\Ava_CMS\\Content\\Posted\\Telegram\\Main\\generated_image_f7ae8ba6222c43ae0613a69a.png",
+    "derivative_path": "D:\\Ava_CMS\\Content\\Posted\\Telegram\\Main\\generated_image_f7ae8ba6222c43ae0613a69a_telegram_presentation_v1.jpg",
+    "expected_width": 960,
+    "expected_height": 1280,
+    "editable": true,
+    "caption_available": true,
+    "keyboard_available": true,
+    "status": "SAFE",
+    "reason": "ready",
+    "repair_status": "REPAIRED",
+    "message_id_retained": true,
+    "caption_retained": true,
+    "caption_entities_retained": true,
+    "keyboard_retained": true,
+    "error": null,
+    "telegram_response": {
+      "ok": true,
+      "status_code": 200,
+      "message_id": 87,
+      "response": {
+        "ok": true,
+        "result": {
+          "message_id": 87,
+          "sender_chat": {
+            "id": -1002507455539,
+            "title": "Ava Blackthorne",
+            "type": "channel"
+          },
+          "chat": {
+            "id": -1002507455539,
+            "title": "Ava Blackthorne",
+            "type": "channel"
+          },
+          "date": 1785339610,
+          "edit_date": 1787450425,
+          "photo": [
+            {
+              "file_id": "AgACAgEAAyEGAASVdLwzAANXaopUOWYjwThZ1kTi-s9W_HExv54AAkMMaxu7P1lEh-hVZTFnuT8BAAMCAANzAAM9BA",
+              "file_unique_id": "AQADQwxrG7s_WUR4",
+              "file_size": 1489,
+              "width": 67,
+              "height": 90
+            },
+            {
+              "file_id": "AgACAgEAAyEGAASVdLwzAANXaopUOWYjwThZ1kTi-s9W_HExv54AAkMMaxu7P1lEh-hVZTFnuT8BAAMCAANtAAM9BA",
+              "file_unique_id": "AQADQwxrG7s_WURy",
+              "file_size": 18473,
+              "width": 240,
+              "height": 320
+            },
+            {
+              "file_id": "AgACAgEAAyEGAASVdLwzAANXaopUOWYjwThZ1kTi-s9W_HExv54AAkMMaxu7P1lEh-hVZTFnuT8BAAMCAAN4AAM9BA",
+              "file_unique_id": "AQADQwxrG7s_WUR9",
+              "file_size": 80721,
+              "width": 600,
+              "height": 800
+            },
+            {
+              "file_id": "AgACAgEAAyEGAASVdLwzAANXaopUOWYjwThZ1kTi-s9W_HExv54AAkMMaxu7P1lEh-hVZTFnuT8BAAMCAAN5AAM9BA",
+              "file_unique_id": "AQADQwxrG7s_WUR-",
+              "file_size": 210364,
+              "width": 960,
+              "height": 1280
+            }
+          ],
+          "caption": "Caught me dripping in the moonlight 😈 this little bikini barely keeping up"
+        }
+      }
+    },
+    "replacement_width": 960,
+    "replacement_height": 1280
+  },
+  {
+    "repair_id": "telegram_media_repair_db121d78f0fb40bc8524e751582cd2e7",
+    "event_type": "HISTORICAL_MEDIA_NORMALIZATION",
+    "repair_timestamp": "2026-08-23T02:00:32.037998+00:00",
+    "publish_request_id": "social_publish_item_d290fc1e4cff40f387653b760b959fb2",
+    "queue_item_id": "social_queue_item_bb23ea82e3614b6298f7e7efda6ccfb7",
+    "channel": "main",
+    "chat_id": "-1002507455539",
+    "message_id": 86,
+    "existing_width": 864,
+    "existing_height": 1152,
+    "source_asset_id": "generated_image_2cd6611c4d162a0c0b1daba5",
+    "source_path": "D:\\Ava_CMS\\Content\\Posted\\Telegram\\Main\\generated_image_2cd6611c4d162a0c0b1daba5.png",
+    "derivative_path": "D:\\Ava_CMS\\Content\\Posted\\Telegram\\Main\\generated_image_2cd6611c4d162a0c0b1daba5_telegram_presentation_v1.jpg",
+    "expected_width": 960,
+    "expected_height": 1280,
+    "editable": true,
+    "caption_available": true,
+    "keyboard_available": true,
+    "status": "SAFE",
+    "reason": "ready",
+    "repair_status": "REPAIRED",
+    "message_id_retained": true,
+    "caption_retained": true,
+    "caption_entities_retained": true,
+    "keyboard_retained": true,
+    "error": null,
+    "telegram_response": {
+      "ok": true,
+      "status_code": 200,
+      "message_id": 86,
+      "response": {
+        "ok": true,
+        "result": {
+          "message_id": 86,
+          "sender_chat": {
+            "id": -1002507455539,
+            "title": "Ava Blackthorne",
+            "type": "channel"
+          },
+          "chat": {
+            "id": -1002507455539,
+            "title": "Ava Blackthorne",
+            "type": "channel"
+          },
+          "date": 1784505883,
+          "edit_date": 1787450431,
+          "photo": [
+            {
+              "file_id": "AgACAgEAAyEGAASVdLwzAANWaopUP3LlNVuhvcbkmuqTH8FCokEAAkQMaxu7P1lE3DJawP-ZULEBAAMCAANzAAM9BA",
+              "file_unique_id": "AQADRAxrG7s_WUR4",
+              "file_size": 1515,
+              "width": 67,
+              "height": 90
+            },
+            {
+              "file_id": "AgACAgEAAyEGAASVdLwzAANWaopUP3LlNVuhvcbkmuqTH8FCokEAAkQMaxu7P1lE3DJawP-ZULEBAAMCAANtAAM9BA",
+              "file_unique_id": "AQADRAxrG7s_WURy",
+              "file_size": 16888,
+              "width": 240,
+              "height": 320
+            },
+            {
+              "file_id": "AgACAgEAAyEGAASVdLwzAANWaopUP3LlNVuhvcbkmuqTH8FCokEAAkQMaxu7P1lE3DJawP-ZULEBAAMCAAN4AAM9BA",
+              "file_unique_id": "AQADRAxrG7s_WUR9",
+              "file_size": 76699,
+              "width": 600,
+              "height": 800
+            },
+            {
+              "file_id": "AgACAgEAAyEGAASVdLwzAANWaopUP3LlNVuhvcbkmuqTH8FCokEAAkQMaxu7P1lE3DJawP-ZULEBAAMCAAN5AAM9BA",
+              "file_unique_id": "AQADRAxrG7s_WUR-",
+              "file_size": 205408,
+              "width": 960,
+              "height": 1280
+            }
+          ],
+          "caption": "Caught me leaning like this on purpose 😏 these little shorts barely cover a thing"
+        }
+      }
+    },
+    "replacement_width": 960,
+    "replacement_height": 1280
+  },
+  {
+    "repair_id": "telegram_media_repair_9e3ca0d22f1c407e954c92991d723629",
+    "event_type": "HISTORICAL_MEDIA_NORMALIZATION",
+    "repair_timestamp": "2026-08-23T02:00:37.586129+00:00",
+    "publish_request_id": "social_publish_item_86256b3874384c8fb9f7c24b220e8d17",
+    "queue_item_id": "social_queue_item_ac8df87aa6c04bd8b1a8333e523dc5d3",
+    "channel": "main",
+    "chat_id": "-1002507455539",
+    "message_id": 85,
+    "existing_width": 864,
+    "existing_height": 1152,
+    "source_asset_id": "generated_image_71070132f5d32191cddc903b",
+    "source_path": "D:\\Ava_CMS\\Content\\Posted\\Telegram\\Main\\generated_image_71070132f5d32191cddc903b.png",
+    "derivative_path": "D:\\Ava_CMS\\Content\\Posted\\Telegram\\Main\\generated_image_71070132f5d32191cddc903b_telegram_presentation_v1.jpg",
+    "expected_width": 960,
+    "expected_height": 1280,
+    "editable": true,
+    "caption_available": true,
+    "keyboard_available": true,
+    "status": "SAFE",
+    "reason": "ready",
+    "repair_status": "REPAIRED",
+    "message_id_retained": true,
+    "caption_retained": true,
+    "caption_entities_retained": true,
+    "keyboard_retained": true,
+    "error": null,
+    "telegram_response": {
+      "ok": true,
+      "status_code": 200,
+      "message_id": 85,
+      "response": {
+        "ok": true,
+        "result": {
+          "message_id": 85,
+          "sender_chat": {
+            "id": -1002507455539,
+            "title": "Ava Blackthorne",
+            "type": "channel"
+          },
+          "chat": {
+            "id": -1002507455539,
+            "title": "Ava Blackthorne",
+            "type": "channel"
+          },
+          "date": 1784320996,
+          "edit_date": 1787450437,
+          "photo": [
+            {
+              "file_id": "AgACAgEAAyEGAASVdLwzAANVaopURbZSjYGjH65sLQABSjZnPSIrAAJFDGsbuz9ZRGrtOaKpBhCsAQADAgADcwADPQQ",
+              "file_unique_id": "AQADRQxrG7s_WUR4",
+              "file_size": 1626,
+              "width": 67,
+              "height": 90
+            },
+            {
+              "file_id": "AgACAgEAAyEGAASVdLwzAANVaopURbZSjYGjH65sLQABSjZnPSIrAAJFDGsbuz9ZRGrtOaKpBhCsAQADAgADbQADPQQ",
+              "file_unique_id": "AQADRQxrG7s_WURy",
+              "file_size": 17295,
+              "width": 240,
+              "height": 320
+            },
+            {
+              "file_id": "AgACAgEAAyEGAASVdLwzAANVaopURbZSjYGjH65sLQABSjZnPSIrAAJFDGsbuz9ZRGrtOaKpBhCsAQADAgADeAADPQQ",
+              "file_unique_id": "AQADRQxrG7s_WUR9",
+              "file_size": 74191,
+              "width": 600,
+              "height": 800
+            },
+            {
+              "file_id": "AgACAgEAAyEGAASVdLwzAANVaopURbZSjYGjH65sLQABSjZnPSIrAAJFDGsbuz9ZRGrtOaKpBhCsAQADAgADeQADPQQ",
+              "file_unique_id": "AQADRQxrG7s_WUR-",
+              "file_size": 200055,
+              "width": 960,
+              "height": 1280
+            }
+          ],
+          "caption": "One tug and this whole look changes 😈 still watching?"
+        }
+      }
+    },
+    "replacement_width": 960,
+    "replacement_height": 1280
+  },
+  {
+    "repair_id": "telegram_media_repair_96301962098f4430845b31d851987826",
+    "event_type": "HISTORICAL_MEDIA_NORMALIZATION",
+    "repair_timestamp": "2026-08-23T02:00:38.534565+00:00",
+    "publish_request_id": "social_publish_item_b2f61d2e4f0040f3b0dc4a946e4be3a4",
+    "queue_item_id": "social_queue_item_3f5573a0e4be4985ad1a687a7c1c2068",
+    "channel": "vault",
+    "chat_id": "-1003937188399",
+    "message_id": 15,
+    "existing_width": 832,
+    "existing_height": 1248,
+    "source_asset_id": "generated_image_1b777e700d4a6549caa14bb0",
+    "source_path": "D:\\Ava_CMS\\Content\\Posted\\Telegram\\Vault\\generated_image_1b777e700d4a6549caa14bb0.png",
+    "derivative_path": "D:\\Ava_CMS\\Content\\Posted\\Telegram\\Vault\\generated_image_1b777e700d4a6549caa14bb0_telegram_presentation_v1.jpg",
+    "expected_width": 960,
+    "expected_height": 1280,
+    "editable": true,
+    "caption_available": true,
+    "keyboard_available": true,
+    "status": "SAFE",
+    "reason": "ready",
+    "repair_status": "FAILED",
+    "message_id_retained": false,
+    "caption_retained": false,
+    "caption_entities_retained": true,
+    "keyboard_retained": true,
+    "error": "{\"ok\":false,\"error_code\":400,\"description\":\"Bad Request: message to edit not found\"}",
+    "telegram_response": {
+      "ok": false,
+      "status_code": 400,
+      "error": "{\"ok\":false,\"error_code\":400,\"description\":\"Bad Request: message to edit not found\"}"
+    },
+    "replacement_width": 960,
+    "replacement_height": 1280
+  },
+  {
+    "repair_id": "telegram_media_repair_b91ffe87d2324ab79ef6d46f83515726",
+    "event_type": "HISTORICAL_MEDIA_NORMALIZATION",
+    "repair_timestamp": "2026-08-23T02:00:39.478451+00:00",
+    "publish_request_id": "social_publish_item_5995324062df414798ffc58849f556b0",
+    "queue_item_id": "social_queue_item_d168b21ea1d04db9b324cc4b2b12853f",
+    "channel": "main",
+    "chat_id": "-1002507455539",
+    "message_id": 84,
+    "existing_width": 832,
+    "existing_height": 1248,
+    "source_asset_id": "generated_image_c859f607723d22ed2e24e4c3",
+    "source_path": "D:\\Ava_CMS\\Content\\Posted\\Telegram\\Main\\generated_image_c859f607723d22ed2e24e4c3.png",
+    "derivative_path": "D:\\Ava_CMS\\Content\\Posted\\Telegram\\Main\\generated_image_c859f607723d22ed2e24e4c3_telegram_presentation_v1.jpg",
+    "expected_width": 960,
+    "expected_height": 1280,
+    "editable": true,
+    "caption_available": true,
+    "keyboard_available": true,
+    "status": "SAFE",
+    "reason": "ready",
+    "repair_status": "FAILED",
+    "message_id_retained": false,
+    "caption_retained": false,
+    "caption_entities_retained": true,
+    "keyboard_retained": true,
+    "error": "{\"ok\":false,\"error_code\":400,\"description\":\"Bad Request: message to edit not found\"}",
+    "telegram_response": {
+      "ok": false,
+      "status_code": 400,
+      "error": "{\"ok\":false,\"error_code\":400,\"description\":\"Bad Request: message to edit not found\"}"
+    },
+    "replacement_width": 960,
+    "replacement_height": 1280
+  },
+  {
+    "repair_id": "telegram_media_repair_13fbdc9fcf2844c4ab7dfe8d21b6606c",
+    "event_type": "HISTORICAL_MEDIA_NORMALIZATION",
+    "repair_timestamp": "2026-08-23T02:00:44.019984+00:00",
+    "publish_request_id": "social_publish_item_2eb808ca9fe74d8b8867101d18e97793",
+    "queue_item_id": "social_queue_item_99cb2342e4964e8d9a5f0c849db8d608",
+    "channel": "main",
+    "chat_id": "-1002507455539",
+    "message_id": 83,
+    "existing_width": 864,
+    "existing_height": 1152,
+    "source_asset_id": "generated_image_2ba1875797a86522974ccefd",
+    "source_path": "D:\\Ava_CMS\\Content\\Posted\\Telegram\\Main\\generated_image_2ba1875797a86522974ccefd.png",
+    "derivative_path": "D:\\Ava_CMS\\Content\\Posted\\Telegram\\Main\\generated_image_2ba1875797a86522974ccefd_telegram_presentation_v1.jpg",
+    "expected_width": 960,
+    "expected_height": 1280,
+    "editable": true,
+    "caption_available": true,
+    "keyboard_available": true,
+    "status": "SAFE",
+    "reason": "ready",
+    "repair_status": "REPAIRED",
+    "message_id_retained": true,
+    "caption_retained": true,
+    "caption_entities_retained": true,
+    "keyboard_retained": true,
+    "error": null,
+    "telegram_response": {
+      "ok": true,
+      "status_code": 200,
+      "message_id": 83,
+      "response": {
+        "ok": true,
+        "result": {
+          "message_id": 83,
+          "sender_chat": {
+            "id": -1002507455539,
+            "title": "Ava Blackthorne",
+            "type": "channel"
+          },
+          "chat": {
+            "id": -1002507455539,
+            "title": "Ava Blackthorne",
+            "type": "channel"
+          },
+          "date": 1784041909,
+          "edit_date": 1787450443,
+          "photo": [
+            {
+              "file_id": "AgACAgEAAyEGAASVdLwzAANTaopUS-ab_frQGpkWMK5NVZuIXe4AAkYMaxu7P1lEaQKSnj5KryoBAAMCAANzAAM9BA",
+              "file_unique_id": "AQADRgxrG7s_WUR4",
+              "file_size": 1558,
+              "width": 67,
+              "height": 90
+            },
+            {
+              "file_id": "AgACAgEAAyEGAASVdLwzAANTaopUS-ab_frQGpkWMK5NVZuIXe4AAkYMaxu7P1lEaQKSnj5KryoBAAMCAANtAAM9BA",
+              "file_unique_id": "AQADRgxrG7s_WURy",
+              "file_size": 16723,
+              "width": 240,
+              "height": 320
+            },
+            {
+              "file_id": "AgACAgEAAyEGAASVdLwzAANTaopUS-ab_frQGpkWMK5NVZuIXe4AAkYMaxu7P1lEaQKSnj5KryoBAAMCAAN4AAM9BA",
+              "file_unique_id": "AQADRgxrG7s_WUR9",
+              "file_size": 76080,
+              "width": 600,
+              "height": 800
+            },
+            {
+              "file_id": "AgACAgEAAyEGAASVdLwzAANTaopUS-ab_frQGpkWMK5NVZuIXe4AAkYMaxu7P1lEaQKSnj5KryoBAAMCAAN5AAM9BA",
+              "file_unique_id": "AQADRgxrG7s_WUR-",
+              "file_size": 219998,
+              "width": 960,
+              "height": 1280
+            }
+          ],
+          "caption": "Soft sheets, warm lamp light, and me giving you this look 😈 you know exactly what it means"
+        }
+      }
+    },
+    "replacement_width": 960,
+    "replacement_height": 1280
+  },
+  {
+    "repair_id": "telegram_media_repair_2dac529ca18a4a6c8db4fc3c00dad607",
+    "event_type": "HISTORICAL_MEDIA_NORMALIZATION",
+    "repair_timestamp": "2026-08-23T02:00:49.528567+00:00",
+    "publish_request_id": "social_publish_item_d2939d9cac464eaca08157e62d7f24aa",
+    "queue_item_id": "social_queue_item_4c1c64f504d448de96baa66db6f435c5",
+    "channel": "main",
+    "chat_id": "-1002507455539",
+    "message_id": 81,
+    "existing_width": 832,
+    "existing_height": 1248,
+    "source_asset_id": "generated_image_5dc0f59e7bc0c072bdc74c69",
+    "source_path": "D:\\Ava_CMS\\Content\\Posted\\Telegram\\Main\\generated_image_5dc0f59e7bc0c072bdc74c69.png",
+    "derivative_path": "D:\\Ava_CMS\\Content\\Posted\\Telegram\\Main\\generated_image_5dc0f59e7bc0c072bdc74c69_telegram_presentation_v1.jpg",
+    "expected_width": 960,
+    "expected_height": 1280,
+    "editable": true,
+    "caption_available": true,
+    "keyboard_available": true,
+    "status": "SAFE",
+    "reason": "ready",
+    "repair_status": "REPAIRED",
+    "message_id_retained": true,
+    "caption_retained": true,
+    "caption_entities_retained": true,
+    "keyboard_retained": true,
+    "error": null,
+    "telegram_response": {
+      "ok": true,
+      "status_code": 200,
+      "message_id": 81,
+      "response": {
+        "ok": true,
+        "result": {
+          "message_id": 81,
+          "sender_chat": {
+            "id": -1002507455539,
+            "title": "Ava Blackthorne",
+            "type": "channel"
+          },
+          "chat": {
+            "id": -1002507455539,
+            "title": "Ava Blackthorne",
+            "type": "channel"
+          },
+          "date": 1783631158,
+          "edit_date": 1787450449,
+          "photo": [
+            {
+              "file_id": "AgACAgEAAyEGAASVdLwzAANRaopUUZaUI_U9Z5AFd5Z_A28o6igAAkcMaxu7P1lEJd0gwjd4ZWEBAAMCAANzAAM9BA",
+              "file_unique_id": "AQADRwxrG7s_WUR4",
+              "file_size": 1575,
+              "width": 67,
+              "height": 90
+            },
+            {
+              "file_id": "AgACAgEAAyEGAASVdLwzAANRaopUUZaUI_U9Z5AFd5Z_A28o6igAAkcMaxu7P1lEJd0gwjd4ZWEBAAMCAANtAAM9BA",
+              "file_unique_id": "AQADRwxrG7s_WURy",
+              "file_size": 18392,
+              "width": 240,
+              "height": 320
+            },
+            {
+              "file_id": "AgACAgEAAyEGAASVdLwzAANRaopUUZaUI_U9Z5AFd5Z_A28o6igAAkcMaxu7P1lEJd0gwjd4ZWEBAAMCAAN4AAM9BA",
+              "file_unique_id": "AQADRwxrG7s_WUR9",
+              "file_size": 83273,
+              "width": 600,
+              "height": 800
+            },
+            {
+              "file_id": "AgACAgEAAyEGAASVdLwzAANRaopUUZaUI_U9Z5AFd5Z_A28o6igAAkcMaxu7P1lEJd0gwjd4ZWEBAAMCAAN5AAM9BA",
+              "file_unique_id": "AQADRwxrG7s_WUR-",
+              "file_size": 218049,
+              "width": 960,
+              "height": 1280
+            }
+          ],
+          "caption": "This top doesn’t leave much to the imagination… and I like it that way 😏🤍"
+        }
+      }
+    },
+    "replacement_width": 960,
+    "replacement_height": 1280
+  },
+  {
+    "repair_id": "telegram_media_repair_9d180d655c8c4877b4624737cf87eee3",
+    "event_type": "HISTORICAL_MEDIA_NORMALIZATION",
+    "repair_timestamp": "2026-08-23T02:00:56.012570+00:00",
+    "publish_request_id": "social_publish_item_698c75bd39a940e7a52461b85afa19ef",
+    "queue_item_id": "social_queue_item_d53a205869a34201879bc97b9f14074c",
+    "channel": "main",
+    "chat_id": "-1002507455539",
+    "message_id": 80,
+    "existing_width": 1888,
+    "existing_height": 2368,
+    "source_asset_id": "generated_image_13dc3567c294b4875e146af1",
+    "source_path": "D:\\Ava_CMS\\Content\\Posted\\Telegram\\Main\\generated_image_13dc3567c294b4875e146af1.jpeg",
+    "derivative_path": "D:\\Ava_CMS\\Content\\Posted\\Telegram\\Main\\generated_image_13dc3567c294b4875e146af1_telegram_presentation_v1.jpg",
+    "expected_width": 960,
+    "expected_height": 1280,
+    "editable": true,
+    "caption_available": true,
+    "keyboard_available": true,
+    "status": "SAFE",
+    "reason": "ready",
+    "repair_status": "REPAIRED",
+    "message_id_retained": true,
+    "caption_retained": true,
+    "caption_entities_retained": true,
+    "keyboard_retained": true,
+    "error": null,
+    "telegram_response": {
+      "ok": true,
+      "status_code": 200,
+      "message_id": 80,
+      "response": {
+        "ok": true,
+        "result": {
+          "message_id": 80,
+          "sender_chat": {
+            "id": -1002507455539,
+            "title": "Ava Blackthorne",
+            "type": "channel"
+          },
+          "chat": {
+            "id": -1002507455539,
+            "title": "Ava Blackthorne",
+            "type": "channel"
+          },
+          "date": 1783556548,
+          "edit_date": 1787450455,
+          "photo": [
+            {
+              "file_id": "AgACAgEAAyEGAASVdLwzAANQaopUVwGZwI7Ao1hxGwABXenmJH8yAAJIDGsbuz9ZRBmXceywiIC_AQADAgADcwADPQQ",
+              "file_unique_id": "AQADSAxrG7s_WUR4",
+              "file_size": 1650,
+              "width": 67,
+              "height": 90
+            },
+            {
+              "file_id": "AgACAgEAAyEGAASVdLwzAANQaopUVwGZwI7Ao1hxGwABXenmJH8yAAJIDGsbuz9ZRBmXceywiIC_AQADAgADbQADPQQ",
+              "file_unique_id": "AQADSAxrG7s_WURy",
+              "file_size": 17983,
+              "width": 240,
+              "height": 320
+            },
+            {
+              "file_id": "AgACAgEAAyEGAASVdLwzAANQaopUVwGZwI7Ao1hxGwABXenmJH8yAAJIDGsbuz9ZRBmXceywiIC_AQADAgADeAADPQQ",
+              "file_unique_id": "AQADSAxrG7s_WUR9",
+              "file_size": 69184,
+              "width": 600,
+              "height": 800
+            },
+            {
+              "file_id": "AgACAgEAAyEGAASVdLwzAANQaopUVwGZwI7Ao1hxGwABXenmJH8yAAJIDGsbuz9ZRBmXceywiIC_AQADAgADeQADPQQ",
+              "file_unique_id": "AQADSAxrG7s_WUR-",
+              "file_size": 150086,
+              "width": 960,
+              "height": 1280
+            }
+          ],
+          "caption": "Leaning over this counter in nothing but an open shirt 😏 sunlight does all the talking"
+        }
+      }
+    },
+    "replacement_width": 960,
+    "replacement_height": 1280
+  }
+]

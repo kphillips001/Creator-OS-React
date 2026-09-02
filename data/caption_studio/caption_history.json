@@ -1,5 +1,603 @@
 [
   {
+    "history_id": "caption_history_ac17001790704b8ab131d4c27a3b3d37",
+    "session_id": "caption_session_31ebd7f1877d4af2b377d41d59339168",
+    "caption_request_id": "caption_request_12075d46065146e6ac9fd6124e08f7f4",
+    "caption_result_id": "caption_result_e974169bc6604dffbffb3f454b89e18e",
+    "platform": "x",
+    "selected_text": null,
+    "created_at": "2026-09-02T14:20:09.615084",
+    "metadata": {
+      "source_generated_image_id": "generated_image_168b965c9cf049b6b219b329",
+      "social_queue_item_id": null
+    }
+  },
+  {
+    "history_id": "caption_history_25194d2f31ff4f88af0d991fc7ee7596",
+    "session_id": "caption_session_3c065474dc664ba586fee6e0b8c2ea58",
+    "caption_request_id": "caption_request_d44883a38b094f9594b2e89c51e4567e",
+    "caption_result_id": "caption_result_7835e536d423438eb2b1fc7a759703f5",
+    "platform": "x",
+    "selected_text": null,
+    "created_at": "2026-09-02T14:19:09.636061",
+    "metadata": {
+      "source_generated_image_id": "generated_image_ffc8089fc5664b38fed02d02",
+      "social_queue_item_id": null
+    }
+  },
+  {
+    "history_id": "caption_history_4fd017e78e064a1ab338e60ae1f3cc56",
+    "session_id": "caption_session_99898dc4b5be44f294bc5cb6904ceb03",
+    "caption_request_id": "caption_request_f5d514b4aa6e479793bbbc6f628bc42a",
+    "caption_result_id": "caption_result_19b5dac9847945adb0ac404a407e2b67",
+    "platform": "telegram",
+    "selected_text": "Caught me leaning here \ud83d\ude0c soft light on my skin just for you \u2728",
+    "created_at": "2026-09-01T16:39:35.256801",
+    "metadata": {
+      "source_generated_image_id": "regenerated_image_0a0807deb80d54ed969519cd187d422a",
+      "social_queue_item_id": null
+    }
+  },
+  {
+    "history_id": "caption_history_55453212c2ca406cbebf6e6ccd02e06c",
+    "session_id": "caption_session_99898dc4b5be44f294bc5cb6904ceb03",
+    "caption_request_id": "caption_request_f5d514b4aa6e479793bbbc6f628bc42a",
+    "caption_result_id": "caption_result_19b5dac9847945adb0ac404a407e2b67",
+    "platform": "telegram",
+    "selected_text": null,
+    "created_at": "2026-09-01T16:39:00.584572",
+    "metadata": {
+      "source_generated_image_id": "regenerated_image_0a0807deb80d54ed969519cd187d422a",
+      "social_queue_item_id": null
+    }
+  },
+  {
+    "history_id": "caption_history_74b58ac2b58e4a7383ac8219118bb094",
+    "session_id": "caption_session_12f36903977847a9a55e21f47e28f061",
+    "caption_request_id": "caption_request_176ef93982ce48cb8f64baef7df06ce8",
+    "caption_result_id": "caption_result_d26dcaa7bba740719d55afe7a13ac9af",
+    "platform": "telegram",
+    "selected_text": null,
+    "created_at": "2026-09-01T16:38:19.678615",
+    "metadata": {
+      "source_generated_image_id": "regenerated_image_0a0807deb80d54ed969519cd187d422a",
+      "social_queue_item_id": null
+    }
+  },
+  {
+    "history_id": "caption_history_3bd30fc2a8654a3c87ada5fefba17d91",
+    "session_id": "caption_session_508662658b03460eae6fb8877e7af834",
+    "caption_request_id": "caption_request_ea73b3d8316945a79ddb69526e8c6cd7",
+    "caption_result_id": "caption_result_9808fe35ab24466a86ac701c3fa2f7db",
+    "platform": "telegram",
+    "selected_text": null,
+    "created_at": "2026-09-01T16:37:06.393466",
+    "metadata": {
+      "source_generated_image_id": "regenerated_image_0a0807deb80d54ed969519cd187d422a",
+      "social_queue_item_id": null
+    }
+  },
+  {
+    "history_id": "caption_history_b2aa9622e3e34b5d827ca154c423a661",
+    "session_id": "caption_session_842e718e155d4639af87d17804fb9b03",
+    "caption_request_id": "caption_request_da05cf24b29546179151197a5d7bb000",
+    "caption_result_id": "caption_result_9caaf938ff154f12b6dd4f2a9550eedf",
+    "platform": "x",
+    "selected_text": "This is what happens when I\u2019m told to \u2018act natural\u2019 \ud83d\ude02\ud83d\udc47",
+    "created_at": "2026-08-31T00:51:51.364061",
+    "metadata": {
+      "source_generated_image_id": "generated_image_55377e0c9e55ea6721e1b516",
+      "social_queue_item_id": null
+    }
+  },
+  {
+    "history_id": "caption_history_3916a57729194a2f919e1292d1ae6754",
+    "session_id": "caption_session_842e718e155d4639af87d17804fb9b03",
+    "caption_request_id": "caption_request_da05cf24b29546179151197a5d7bb000",
+    "caption_result_id": "caption_result_9caaf938ff154f12b6dd4f2a9550eedf",
+    "platform": "x",
+    "selected_text": null,
+    "created_at": "2026-08-31T00:51:13.279914",
+    "metadata": {
+      "source_generated_image_id": "generated_image_55377e0c9e55ea6721e1b516",
+      "social_queue_item_id": null
+    }
+  },
+  {
+    "history_id": "caption_history_7c607dad97c249e3ad466414bba6f0cc",
+    "session_id": "caption_session_549c8f38e31243598968affdd49aa209",
+    "caption_request_id": "caption_request_92e78ddee9ef4c36b17cc18d1a5d35e2",
+    "caption_result_id": "caption_result_5966a73fd6594da1ba6ece11c28c2ad1",
+    "platform": "telegram",
+    "selected_text": "Hand on my hip \ud83d\udd25 catching the last sun while the cabin watches\u2026 feel that heat yet?",
+    "created_at": "2026-08-31T00:24:06.798213",
+    "metadata": {
+      "source_generated_image_id": "generated_image_af7934651ebe67c6409f9e3b",
+      "social_queue_item_id": null
+    }
+  },
+  {
+    "history_id": "caption_history_d451ed48db78491a92f2a9c5b62e1226",
+    "session_id": "caption_session_549c8f38e31243598968affdd49aa209",
+    "caption_request_id": "caption_request_92e78ddee9ef4c36b17cc18d1a5d35e2",
+    "caption_result_id": "caption_result_5966a73fd6594da1ba6ece11c28c2ad1",
+    "platform": "telegram",
+    "selected_text": null,
+    "created_at": "2026-08-31T00:23:35.146367",
+    "metadata": {
+      "source_generated_image_id": "generated_image_af7934651ebe67c6409f9e3b",
+      "social_queue_item_id": null
+    }
+  },
+  {
+    "history_id": "caption_history_3c858390b7a44773be3a30ef800ffce8",
+    "session_id": "caption_session_dd136de2493b44acb1cd435fd29f4fae",
+    "caption_request_id": "caption_request_8557d3fabc604478a4fc07f15237e6be",
+    "caption_result_id": "caption_result_8fd23a10b6fa42aa8397453719833560",
+    "platform": "telegram",
+    "selected_text": "Open apron, neon glow, and me perched right here \ud83d\udc8b waiting in the quiet.",
+    "created_at": "2026-08-30T01:57:26.678129",
+    "metadata": {
+      "source_generated_image_id": "generated_image_0074531a948d3e1a6368f17a",
+      "social_queue_item_id": null
+    }
+  },
+  {
+    "history_id": "caption_history_38abe21c7a294fbbafb3cca06321ed6c",
+    "session_id": "caption_session_dd136de2493b44acb1cd435fd29f4fae",
+    "caption_request_id": "caption_request_8557d3fabc604478a4fc07f15237e6be",
+    "caption_result_id": "caption_result_8fd23a10b6fa42aa8397453719833560",
+    "platform": "telegram",
+    "selected_text": null,
+    "created_at": "2026-08-30T01:57:08.295490",
+    "metadata": {
+      "source_generated_image_id": "generated_image_0074531a948d3e1a6368f17a",
+      "social_queue_item_id": null
+    }
+  },
+  {
+    "history_id": "caption_history_15618453b42347b3abc656a59da8219a",
+    "session_id": "caption_session_4889b5abf08d40db9bce0df5e2cabd1f",
+    "caption_request_id": "caption_request_270a94b5156f40c1800e9f4d062c0178",
+    "caption_result_id": "caption_result_5fad96bfccd34d8d8b3e00043a45f3e5",
+    "platform": "telegram",
+    "selected_text": "This light blue string bikini doesn\u2019t hide much after a swim\u2026 just saying \ud83d\ude08",
+    "created_at": "2026-08-27T14:46:09.619335",
+    "metadata": {
+      "source_generated_image_id": "regenerated_image_f8f1f29325885208aec1968edbb9d75a",
+      "social_queue_item_id": null
+    }
+  },
+  {
+    "history_id": "caption_history_bb269191cdbb49fc890921a891450694",
+    "session_id": "caption_session_4889b5abf08d40db9bce0df5e2cabd1f",
+    "caption_request_id": "caption_request_270a94b5156f40c1800e9f4d062c0178",
+    "caption_result_id": "caption_result_5fad96bfccd34d8d8b3e00043a45f3e5",
+    "platform": "telegram",
+    "selected_text": null,
+    "created_at": "2026-08-27T14:45:09.361490",
+    "metadata": {
+      "source_generated_image_id": "regenerated_image_f8f1f29325885208aec1968edbb9d75a",
+      "social_queue_item_id": null
+    }
+  },
+  {
+    "history_id": "caption_history_c2fc6c9a432e40aa80da1e30408996c9",
+    "session_id": "caption_session_3d385462cdad49148180ad22c2931229",
+    "caption_request_id": "caption_request_f3ec144d19894c1d9de89dfbc6556103",
+    "caption_result_id": "caption_result_ec88a2f107794e48b801ce00dc57dd71",
+    "platform": "telegram",
+    "selected_text": "Sheer enough to show everything that matters \ud83d\ude09 evening tease just for you",
+    "created_at": "2026-08-26T00:42:21.032823",
+    "metadata": {
+      "source_generated_image_id": "generated_image_28e45bd00fbc8142890315f2",
+      "social_queue_item_id": null
+    }
+  },
+  {
+    "history_id": "caption_history_105881f749784464a37182b90f079b0c",
+    "session_id": "caption_session_3d385462cdad49148180ad22c2931229",
+    "caption_request_id": "caption_request_f3ec144d19894c1d9de89dfbc6556103",
+    "caption_result_id": "caption_result_ec88a2f107794e48b801ce00dc57dd71",
+    "platform": "telegram",
+    "selected_text": null,
+    "created_at": "2026-08-26T00:41:53.496105",
+    "metadata": {
+      "source_generated_image_id": "generated_image_28e45bd00fbc8142890315f2",
+      "social_queue_item_id": null
+    }
+  },
+  {
+    "history_id": "caption_history_5dde566634ae46668503b88c9555e38c",
+    "session_id": "caption_session_70d112dc43e543d491e30c188b5f5b9d",
+    "caption_request_id": "caption_request_c643144f3882487bad46e2d6eef97bae",
+    "caption_result_id": "caption_result_642b43176edc4abbad65f3e3ef344e39",
+    "platform": "x",
+    "selected_text": null,
+    "created_at": "2026-08-26T00:41:30.088365",
+    "metadata": {
+      "source_generated_image_id": "generated_image_28e45bd00fbc8142890315f2",
+      "social_queue_item_id": null
+    }
+  },
+  {
+    "history_id": "caption_history_6c5e1b2de366401699ce238adc7d0cb6",
+    "session_id": "caption_session_3d6a91c2c85649a287995196422752ce",
+    "caption_request_id": "caption_request_b23affee4a8c479196c75d7f8de9c2f5",
+    "caption_result_id": "caption_result_b18d6adb801a4ab6aee6320e76b42049",
+    "platform": "telegram",
+    "selected_text": "Black lace catching the lamp light \ud83d\udd25 and my eyes locked on yours",
+    "created_at": "2026-08-24T00:55:16.743279",
+    "metadata": {
+      "source_generated_image_id": "generated_image_44eaebeaa548d3cc9e49e401",
+      "social_queue_item_id": null
+    }
+  },
+  {
+    "history_id": "caption_history_10b200b6d89a42278cc7d48172f3ad45",
+    "session_id": "caption_session_3d6a91c2c85649a287995196422752ce",
+    "caption_request_id": "caption_request_b23affee4a8c479196c75d7f8de9c2f5",
+    "caption_result_id": "caption_result_b18d6adb801a4ab6aee6320e76b42049",
+    "platform": "telegram",
+    "selected_text": null,
+    "created_at": "2026-08-24T00:54:22.560855",
+    "metadata": {
+      "source_generated_image_id": "generated_image_44eaebeaa548d3cc9e49e401",
+      "social_queue_item_id": null
+    }
+  },
+  {
+    "history_id": "caption_history_f4fb66d185024050bd71cadfccf70181",
+    "session_id": "caption_session_a82f0113318747ffaf31e94bdb7fdca6",
+    "caption_request_id": "caption_request_98930fcf952e47eb8714a2efa37ee56b",
+    "caption_result_id": "caption_result_fdaa2991a5684534a992b71a9362d98f",
+    "platform": "telegram",
+    "selected_text": "Caught myself smiling in the mirror \ud83d\ude0c this sheer black lace feels so soft against my skin tonight \ud83d\udda4",
+    "created_at": "2026-08-23T01:37:05.540446",
+    "metadata": {
+      "source_generated_image_id": "generated_image_f22c6726c6e34de5b9c34429",
+      "social_queue_item_id": null
+    }
+  },
+  {
+    "history_id": "caption_history_1979ec12064b4f969d222fcd012c467a",
+    "session_id": "caption_session_a82f0113318747ffaf31e94bdb7fdca6",
+    "caption_request_id": "caption_request_98930fcf952e47eb8714a2efa37ee56b",
+    "caption_result_id": "caption_result_fdaa2991a5684534a992b71a9362d98f",
+    "platform": "telegram",
+    "selected_text": null,
+    "created_at": "2026-08-23T01:36:34.511579",
+    "metadata": {
+      "source_generated_image_id": "generated_image_f22c6726c6e34de5b9c34429",
+      "social_queue_item_id": null
+    }
+  },
+  {
+    "history_id": "caption_history_f60a49c21f1e4b95a46d61b11360767c",
+    "session_id": "caption_session_5130cef6497d41d58e63c5256f295ccf",
+    "caption_request_id": "caption_request_d1c4603cb60f4b4e9fa92879fe381e63",
+    "caption_result_id": "caption_result_99677aa6bcf04a15a6eed23a96cf1c7e",
+    "platform": "telegram",
+    "selected_text": "Soft smile, full teal bikini, late-afternoon glow \ud83c\udf05 I see you noticing \ud83d\udc9a",
+    "created_at": "2026-08-22T16:33:40.555482",
+    "metadata": {
+      "source_generated_image_id": "generated_image_365458ad4852afeb7848bb8e",
+      "social_queue_item_id": null
+    }
+  },
+  {
+    "history_id": "caption_history_b41edae654074dcbba8c169daf7301ba",
+    "session_id": "caption_session_5130cef6497d41d58e63c5256f295ccf",
+    "caption_request_id": "caption_request_d1c4603cb60f4b4e9fa92879fe381e63",
+    "caption_result_id": "caption_result_99677aa6bcf04a15a6eed23a96cf1c7e",
+    "platform": "telegram",
+    "selected_text": null,
+    "created_at": "2026-08-22T16:33:16.899281",
+    "metadata": {
+      "source_generated_image_id": "generated_image_365458ad4852afeb7848bb8e",
+      "social_queue_item_id": null
+    }
+  },
+  {
+    "history_id": "caption_history_8e4f3c604fef49b092e7c71166b66d2e",
+    "session_id": "caption_session_2b47de6e27c14aedbbf938bc7b467808",
+    "caption_request_id": "caption_request_57d131321e6d48b6a589c18d4548d168",
+    "caption_result_id": "caption_result_be287e4fedff4eb9a9308acaf61fa2b7",
+    "platform": "telegram",
+    "selected_text": "Letting the shower do all the revealing while I just enjoy it \ud83d\udca7\ud83d\udd25",
+    "created_at": "2026-08-22T01:11:12.358486",
+    "metadata": {
+      "source_generated_image_id": "generated_image_70df53548896c7327ba60567",
+      "social_queue_item_id": null
+    }
+  },
+  {
+    "history_id": "caption_history_511060feae1149cca8acf32916a64b4a",
+    "session_id": "caption_session_2b47de6e27c14aedbbf938bc7b467808",
+    "caption_request_id": "caption_request_57d131321e6d48b6a589c18d4548d168",
+    "caption_result_id": "caption_result_be287e4fedff4eb9a9308acaf61fa2b7",
+    "platform": "telegram",
+    "selected_text": null,
+    "created_at": "2026-08-22T01:10:41.544192",
+    "metadata": {
+      "source_generated_image_id": "generated_image_70df53548896c7327ba60567",
+      "social_queue_item_id": null
+    }
+  },
+  {
+    "history_id": "caption_history_08f55fafd74d48c4a5ff7d1633d8400f",
+    "session_id": "caption_session_bba75715e02e4d94bbe93c5fb774bc25",
+    "caption_request_id": "caption_request_9bccf4e5c7474d4b988b5900fc1f0c65",
+    "caption_result_id": "caption_result_6749b1d5b1bd4640b2b3435254939408",
+    "platform": "telegram",
+    "selected_text": null,
+    "created_at": "2026-08-21T18:19:28.406850",
+    "metadata": {
+      "source_generated_image_id": "generated_image_63cfe18743dde0f7c83e97e3",
+      "social_queue_item_id": null
+    }
+  },
+  {
+    "history_id": "caption_history_0ceffdf12e2b495eab35f119a98a614a",
+    "session_id": "caption_session_a887695542724adf85ed31f786efd3d2",
+    "caption_request_id": "caption_request_0dfb683a71e54244b3f885508a774086",
+    "caption_result_id": "caption_result_32c6eb41a78248d584dcbb31ecdf2f86",
+    "platform": "x",
+    "selected_text": null,
+    "created_at": "2026-08-21T18:19:03.313717",
+    "metadata": {
+      "source_generated_image_id": "generated_image_63cfe18743dde0f7c83e97e3",
+      "social_queue_item_id": null
+    }
+  },
+  {
+    "history_id": "caption_history_e0b10259b5ad4e71b546510309232ba4",
+    "session_id": "caption_session_56adde5e55cd424993e500467cf1614a",
+    "caption_request_id": "caption_request_b06f983686554881947dbfed0fe473ce",
+    "caption_result_id": "caption_result_ed15f64cd40842ae95f4b190eb27a761",
+    "platform": "telegram",
+    "selected_text": "Back arched over the wood \ud83d\udcab hope you're staring just as hard",
+    "created_at": "2026-08-21T02:18:13.176989",
+    "metadata": {
+      "source_generated_image_id": "generated_image_6ec619286e23cabec79c6168",
+      "social_queue_item_id": null
+    }
+  },
+  {
+    "history_id": "caption_history_db7c7b43fdba4286b819f3a68f916b8b",
+    "session_id": "caption_session_56adde5e55cd424993e500467cf1614a",
+    "caption_request_id": "caption_request_b06f983686554881947dbfed0fe473ce",
+    "caption_result_id": "caption_result_ed15f64cd40842ae95f4b190eb27a761",
+    "platform": "telegram",
+    "selected_text": null,
+    "created_at": "2026-08-21T02:17:43.788125",
+    "metadata": {
+      "source_generated_image_id": "generated_image_6ec619286e23cabec79c6168",
+      "social_queue_item_id": null
+    }
+  },
+  {
+    "history_id": "caption_history_3945a4bcdc3d46419cce86054538b9e3",
+    "session_id": "caption_session_7919ca28e0ee461facdb49b0be5ea92e",
+    "caption_request_id": "caption_request_7a843f4983254ac4940135d71e79daec",
+    "caption_result_id": "caption_result_4515a2fa01de410f94419470a73bc619",
+    "platform": "telegram",
+    "selected_text": "One hand on the frame \ud83d\udd25 the rest of me right here for you \ud83d\udc40",
+    "created_at": "2026-08-20T19:37:17.436378",
+    "metadata": {
+      "source_generated_image_id": "generated_image_1489e6a561564871f97fbb6e",
+      "social_queue_item_id": null
+    }
+  },
+  {
+    "history_id": "caption_history_9d74f52faeff4420bdefc24f978d28df",
+    "session_id": "caption_session_7919ca28e0ee461facdb49b0be5ea92e",
+    "caption_request_id": "caption_request_7a843f4983254ac4940135d71e79daec",
+    "caption_result_id": "caption_result_4515a2fa01de410f94419470a73bc619",
+    "platform": "telegram",
+    "selected_text": null,
+    "created_at": "2026-08-20T19:36:53.697475",
+    "metadata": {
+      "source_generated_image_id": "generated_image_1489e6a561564871f97fbb6e",
+      "social_queue_item_id": null
+    }
+  },
+  {
+    "history_id": "caption_history_065b3e0ada784030a932c6ce823f97d6",
+    "session_id": "caption_session_a205cc4d87a44622a33f4eb47bdd3e5a",
+    "caption_request_id": "caption_request_44f179a7aece490d863b9d4b59a146be",
+    "caption_result_id": "caption_result_bfd430b9bfa14a5881ea36fbd43b58d5",
+    "platform": "telegram",
+    "selected_text": "Golden hour looks better when I\u2019m a little wet \u2728 don\u2019t you think \ud83d\udc40",
+    "created_at": "2026-08-20T02:00:59.661807",
+    "metadata": {
+      "source_generated_image_id": "generated_image_3cfbab4f80c7409dc1941b46",
+      "social_queue_item_id": null
+    }
+  },
+  {
+    "history_id": "caption_history_7ac17f7696ae47689f8aad44a261fbdf",
+    "session_id": "caption_session_a205cc4d87a44622a33f4eb47bdd3e5a",
+    "caption_request_id": "caption_request_44f179a7aece490d863b9d4b59a146be",
+    "caption_result_id": "caption_result_bfd430b9bfa14a5881ea36fbd43b58d5",
+    "platform": "telegram",
+    "selected_text": null,
+    "created_at": "2026-08-20T02:00:38.564011",
+    "metadata": {
+      "source_generated_image_id": "generated_image_3cfbab4f80c7409dc1941b46",
+      "social_queue_item_id": null
+    }
+  },
+  {
+    "history_id": "caption_history_7a896406db394d4da4b870d8b0f4f0d7",
+    "session_id": "caption_session_fae35df36d8f402b932ea77700a48865",
+    "caption_request_id": "caption_request_84e53eb1586449dd92361f6ffeca8dba",
+    "caption_result_id": "caption_result_2467b75d7db047f1b7abcf1d15138219",
+    "platform": "x",
+    "selected_text": null,
+    "created_at": "2026-08-19T16:27:26.957382",
+    "metadata": {
+      "source_generated_image_id": "generated_image_719e9d504e45f11b774cd276",
+      "social_queue_item_id": null
+    }
+  },
+  {
+    "history_id": "caption_history_b7749eba247a4484b44d12eb2484fc3b",
+    "session_id": "caption_session_6c4dd123d8534b72a7dbc1b745b513f6",
+    "caption_request_id": "caption_request_e10101f4daa64bce80479030e1ab6851",
+    "caption_result_id": "caption_result_925491cc9c1c457bb9f36139c2d64d04",
+    "platform": "telegram",
+    "selected_text": "Caught me mid-hair fix \ud83d\ude09 in this tight little white top",
+    "created_at": "2026-08-19T01:25:46.767980",
+    "metadata": {
+      "source_generated_image_id": "generated_image_48ddc8212c9d10026c206fff",
+      "social_queue_item_id": null
+    }
+  },
+  {
+    "history_id": "caption_history_26c9c112c5474e11bf36ee51a438fdbe",
+    "session_id": "caption_session_6c4dd123d8534b72a7dbc1b745b513f6",
+    "caption_request_id": "caption_request_e10101f4daa64bce80479030e1ab6851",
+    "caption_result_id": "caption_result_925491cc9c1c457bb9f36139c2d64d04",
+    "platform": "telegram",
+    "selected_text": null,
+    "created_at": "2026-08-19T01:25:18.922158",
+    "metadata": {
+      "source_generated_image_id": "generated_image_48ddc8212c9d10026c206fff",
+      "social_queue_item_id": null
+    }
+  },
+  {
+    "history_id": "caption_history_167445eca264499a9382ea062746ca5a",
+    "session_id": "caption_session_f9782787c0b445f6bddfb23b7c108859",
+    "caption_request_id": "caption_request_21ae9649deac43679ccacc12e96b8b7e",
+    "caption_result_id": "caption_result_a97bbceaafba4c66a2955af790973954",
+    "platform": "x",
+    "selected_text": null,
+    "created_at": "2026-08-19T01:24:50.425803",
+    "metadata": {
+      "source_generated_image_id": "generated_image_48ddc8212c9d10026c206fff",
+      "social_queue_item_id": null
+    }
+  },
+  {
+    "history_id": "caption_history_1526a9e87ee94d5194211a273399c23a",
+    "session_id": "caption_session_93d062419e9e403a9e1bf32e961e773a",
+    "caption_request_id": "caption_request_ecaa1653864d4d82afb90aad88537296",
+    "caption_result_id": "caption_result_1371809313c842a99af3b9a87563409c",
+    "platform": "telegram",
+    "selected_text": "White bikini catching every bit of that golden light \ud83d\udd25 mid-stride and feeling bold \ud83d\udc40",
+    "created_at": "2026-08-18T01:53:15.102931",
+    "metadata": {
+      "source_generated_image_id": "generated_image_48ab10f16ba4969aa8400287",
+      "social_queue_item_id": null
+    }
+  },
+  {
+    "history_id": "caption_history_d98b516e90d24118bbdaae5d2c0146f0",
+    "session_id": "caption_session_93d062419e9e403a9e1bf32e961e773a",
+    "caption_request_id": "caption_request_ecaa1653864d4d82afb90aad88537296",
+    "caption_result_id": "caption_result_1371809313c842a99af3b9a87563409c",
+    "platform": "telegram",
+    "selected_text": null,
+    "created_at": "2026-08-18T01:53:03.051989",
+    "metadata": {
+      "source_generated_image_id": "generated_image_48ab10f16ba4969aa8400287",
+      "social_queue_item_id": null
+    }
+  },
+  {
+    "history_id": "caption_history_b5bf195f66024eefbe941b17b69bc10e",
+    "session_id": "caption_session_75258dedde6d475581e7d318a31ef0c7",
+    "caption_request_id": "caption_request_e0285963f551416c9cdd434ef938d8ed",
+    "caption_result_id": "caption_result_e1752c302e034daea9e0625eac7a8c32",
+    "platform": "x",
+    "selected_text": null,
+    "created_at": "2026-08-15T15:56:08.710397",
+    "metadata": {
+      "source_generated_image_id": "generated_image_49caa7be107eb21d4b91ef7c",
+      "social_queue_item_id": null
+    }
+  },
+  {
+    "history_id": "caption_history_8b85e79914ea4623918a8fce0df21e6c",
+    "session_id": "caption_session_0fffdf43594345bf98bb407b113d54ca",
+    "caption_request_id": "caption_request_ff8fff078f77455196330f4d88e0bb1d",
+    "caption_result_id": "caption_result_fa8c2907d06b4211b7cdda9ecbc9dd15",
+    "platform": "x",
+    "selected_text": "Okay, I picked the bikini\u2026 you pick where I\u2019m wearing it \ud83d\ude0c\ud83d\udc47",
+    "created_at": "2026-08-14T15:45:39.154266",
+    "metadata": {
+      "source_generated_image_id": "generated_image_db67f5d83b8ef6e3a8226f26",
+      "social_queue_item_id": null
+    }
+  },
+  {
+    "history_id": "caption_history_345ca694714b4710a4c0273517bca8a4",
+    "session_id": "caption_session_0fffdf43594345bf98bb407b113d54ca",
+    "caption_request_id": "caption_request_ff8fff078f77455196330f4d88e0bb1d",
+    "caption_result_id": "caption_result_fa8c2907d06b4211b7cdda9ecbc9dd15",
+    "platform": "x",
+    "selected_text": null,
+    "created_at": "2026-08-14T15:37:33.628131",
+    "metadata": {
+      "source_generated_image_id": "generated_image_db67f5d83b8ef6e3a8226f26",
+      "social_queue_item_id": null
+    }
+  },
+  {
+    "history_id": "caption_history_cd32fa5ec4034ef6b1cd45f2c6dc52dc",
+    "session_id": "caption_session_afe7337456c948a293be5d15d8b504fd",
+    "caption_request_id": "caption_request_a6395e5fd4034d98aaf371d72be39331",
+    "caption_result_id": "caption_result_ec2005e78d8a4429b4843f517572e8e4",
+    "platform": "x",
+    "selected_text": "Finish this\u2026 \u201cThe second she looked back like that I\u2026\u201d \ud83d\udc40 no filter, I dare you.",
+    "created_at": "2026-08-13T16:20:43.615186",
+    "metadata": {
+      "source_generated_image_id": "regenerated_image_d55118bd91ee56cc8e4068c4ad7c805a",
+      "social_queue_item_id": null
+    }
+  },
+  {
+    "history_id": "caption_history_d99832e9fd1b47a9a5023c41c414a98b",
+    "session_id": "caption_session_afe7337456c948a293be5d15d8b504fd",
+    "caption_request_id": "caption_request_a6395e5fd4034d98aaf371d72be39331",
+    "caption_result_id": "caption_result_ec2005e78d8a4429b4843f517572e8e4",
+    "platform": "x",
+    "selected_text": null,
+    "created_at": "2026-08-13T16:19:03.156816",
+    "metadata": {
+      "source_generated_image_id": "regenerated_image_d55118bd91ee56cc8e4068c4ad7c805a",
+      "social_queue_item_id": null
+    }
+  },
+  {
+    "history_id": "caption_history_77a8b0ab6a5a4d36b3cbbcd5c689fe73",
+    "session_id": "caption_session_b73d7da04d754d15accee7de1c94ab30",
+    "caption_request_id": "caption_request_34e8bfee911e4893a43c36439af5a084",
+    "caption_result_id": "caption_result_026aec7441e940269d18fa245241373a",
+    "platform": "x",
+    "selected_text": "This exact moment feels like the start of a really good story \u2728 Finish it: we meet at the waterline and then...",
+    "created_at": "2026-08-12T15:39:50.003033",
+    "metadata": {
+      "source_generated_image_id": "generated_image_9028168f766b122f50b3d0b3",
+      "social_queue_item_id": null
+    }
+  },
+  {
+    "history_id": "caption_history_14cdc94c164d4ab98eac89ee0e004400",
+    "session_id": "caption_session_b73d7da04d754d15accee7de1c94ab30",
+    "caption_request_id": "caption_request_34e8bfee911e4893a43c36439af5a084",
+    "caption_result_id": "caption_result_026aec7441e940269d18fa245241373a",
+    "platform": "x",
+    "selected_text": null,
+    "created_at": "2026-08-12T15:39:03.543607",
+    "metadata": {
+      "source_generated_image_id": "generated_image_9028168f766b122f50b3d0b3",
+      "social_queue_item_id": null
+    }
+  },
+  {
     "history_id": "caption_history_4c16e097daf8435d9889c0b426091e2b",
     "session_id": "caption_session_6118a3a25dfb41debc0bc79a91095878",
     "caption_request_id": "caption_request_ee4250cb2ba24c8bad5f9011e5bb4bc8",

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import shutil
 from dataclasses import asdict, replace
 from pathlib import Path
@@ -16,6 +17,9 @@ from app.config import settings
 from app.models.content_archive import ContentArchiveRecord
 from app.models.generation_engine import new_generation_id, utc_now
 from app.models.generation_library import GeneratedImageRecord
+
+
+logger = logging.getLogger(__name__)
 
 
 class ContentArchiveService:
@@ -53,6 +57,7 @@ class ContentArchiveService:
             "edited_originals": root / "Edited" / "Originals",
             "edited_approved": root / "Edited" / "Approved",
             "posted_x_main": root / "Posted" / "X" / "Main",
+            "posted_x_slaves_staged": root / "Posted" / "X" / "Slaves" / "Staged",
             "posted_telegram_main": root / "Posted" / "Telegram" / "Main",
             "posted_telegram_vault": root / "Posted" / "Telegram" / "Vault",
             "posted_fanvue_free": root / "Posted" / "Fanvue" / "Free",
@@ -155,7 +160,7 @@ class ContentArchiveService:
             destination_key = "posted_x_main"
             archive_type = "published_x"
             platform_label = "X"
-        return self.archive_record(
+        archived = self.archive_record(
             record,
             archive_type=archive_type,
             destination=self.content_paths()[destination_key],
@@ -166,6 +171,58 @@ class ContentArchiveService:
                 **dict(metadata or {}),
             },
         )
+        if normalized_platform == "x" and self._includes_main_x_account(metadata):
+            try:
+                staged_path = self._stage_main_x_publish_for_slaves(
+                    Path(archived.current_file_path)
+                )
+                logger.info(
+                    "X slave staging copy ready | image_id=%s source=%s staged=%s",
+                    record.image_id,
+                    archived.current_file_path,
+                    staged_path,
+                )
+            except Exception:
+                logger.exception(
+                    "X publish succeeded but slave staging copy failed | "
+                    "image_id=%s source=%s destination=%s",
+                    record.image_id,
+                    archived.current_file_path,
+                    self.content_paths()["posted_x_slaves_staged"],
+                )
+        return archived
+
+    @staticmethod
+    def _includes_main_x_account(metadata: Mapping[str, Any] | None) -> bool:
+        values = dict(metadata or {})
+        account_names = values.get("account_names") or ()
+        return values.get("account_name") == "AvaBlackthorne" or "AvaBlackthorne" in account_names
+
+    def _stage_main_x_publish_for_slaves(self, published_path: Path) -> Path:
+        """Idempotently copy an X Main publication without transforming its bytes."""
+        source = published_path.expanduser()
+        if not source.is_file():
+            raise FileNotFoundError(f"Published X image is unavailable: {source}")
+        destination = self.content_paths()["posted_x_slaves_staged"]
+        destination.mkdir(parents=True, exist_ok=True)
+        target = destination / source.name
+        source_digest = self._file_digest(source)
+        if target.is_file():
+            if self._file_digest(target) == source_digest:
+                return target
+            target = destination / f"{source.stem}_{source_digest[:12]}{source.suffix}"
+            if target.is_file() and self._file_digest(target) == source_digest:
+                return target
+        shutil.copy2(source, target)
+        return target
+
+    @staticmethod
+    def _file_digest(path: Path) -> str:
+        digest = hashlib.sha256()
+        with path.open("rb") as file_handle:
+            for chunk in iter(lambda: file_handle.read(1024 * 1024), b""):
+                digest.update(chunk)
+        return digest.hexdigest()
 
     def archive_edited(
         self,

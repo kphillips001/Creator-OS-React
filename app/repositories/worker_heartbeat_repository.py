@@ -54,11 +54,16 @@ class WorkerHeartbeatRepository:
     def record_success(self, instance_id: str, *, at: datetime, idle: bool) -> WorkerHeartbeat | None:
         return self._update(instance_id, "status=%s, last_success_at=%s, last_heartbeat_at=%s, last_error=NULL, updated_at=NOW()", (WorkerHeartbeatStatus.IDLE.value if idle else WorkerHeartbeatStatus.RUNNING.value, at, at))
 
-    def record_failure(self, instance_id: str, *, at: datetime, error: str) -> WorkerHeartbeat | None:
-        return self._update(instance_id, "status='DEGRADED', last_failure_at=%s, last_heartbeat_at=%s, last_error=%s, updated_at=NOW()", (at, at, error))
+    def record_failure(self, instance_id: str, *, at: datetime, error: str,
+                       metadata: Mapping[str, Any] | None = None) -> WorkerHeartbeat | None:
+        return self._update(instance_id, "status='DEGRADED', last_failure_at=%s, last_heartbeat_at=%s, last_error=%s, metadata=metadata || %s, updated_at=NOW()", (at, at, error, Jsonb(dict(metadata or {}))))
 
-    def record_shutdown(self, instance_id: str, *, at: datetime, status: WorkerHeartbeatStatus) -> WorkerHeartbeat | None:
-        return self._update(instance_id, "status=%s, last_heartbeat_at=%s, shutdown_at=%s, updated_at=NOW()", (status.value, at, at if status == WorkerHeartbeatStatus.STOPPED else None))
+    def record_terminal_failure(self, instance_id: str, *, at: datetime, error: str, metadata: Mapping[str, Any] | None = None) -> WorkerHeartbeat | None:
+        return self._update(instance_id, "status='FAILED', last_failure_at=%s, last_heartbeat_at=%s, last_error=%s, metadata=metadata || %s, updated_at=NOW()", (at, at, error, Jsonb(dict(metadata or {}))))
+
+    def record_shutdown(self, instance_id: str, *, at: datetime, status: WorkerHeartbeatStatus,
+                        metadata: Mapping[str, Any] | None = None) -> WorkerHeartbeat | None:
+        return self._update(instance_id, "status=%s, last_heartbeat_at=%s, shutdown_at=%s, metadata=metadata || %s, updated_at=NOW()", (status.value, at, at if status == WorkerHeartbeatStatus.STOPPED else None, Jsonb(dict(metadata or {}))))
 
     def get_by_instance(self, instance_id: str) -> WorkerHeartbeat | None:
         rows = self._select("WHERE worker_instance_id=%s", (instance_id,))

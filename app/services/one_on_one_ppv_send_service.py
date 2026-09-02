@@ -23,6 +23,8 @@ from app.services.payload_builder_service import PayloadBuilderService
 from app.services.ppv_caption_service import PPVCaptionService
 from app.services.purchase_intent_service import PurchaseIntentService
 from app.services.sales_session_service import SalesSessionService
+from app.models.customer_contact import ContactPolicyResult, ContactPurpose
+from app.services.customer_contact_authority_service import CustomerContactAuthorityService
 
 
 class OneOnOnePPVSendService:
@@ -59,6 +61,7 @@ class OneOnOnePPVSendService:
             FanvueAPIService(fanvue_account_id=fanvue_account_id)
             if fanvue_account_id is not None else None
         )
+        self.contact_authority = CustomerContactAuthorityService()
 
     def send_ppv_to_user(
         self, fanvue_account_id: int, fanvue_user_uuid: int,
@@ -102,17 +105,14 @@ class OneOnOnePPVSendService:
         if identity is None:
             return self._blocked("canonical_identity_unresolved")
 
-        session = self.sales_sessions.resolve_or_start_conversation(
+        session = self.sales_sessions.resolve_active_conversation(
             creator_profile_id=creator_profile_id,
             fanvue_account_id=int(fanvue_account_id),
             fanvue_user_id=int(fanvue_user_uuid),
             telegram_user_id=identity.telegram_user_id,
             conversation_thread_id=conversation_thread_id,
-            objective="Authorized one-on-one PPV",
-            commercial_context={"providerThreadId": str(thread_id)},
-            actor_type="AI",
-            actor_identifier="OneOnOnePPVSendService",
         )
+        session_id = str(session.sales_session_id) if session is not None else None
         decision = self.customer_sales_brain.evaluate_for_buyer(
             creator_profile_id=creator_profile_id,
             fanvue_account_id=int(fanvue_account_id),
@@ -121,7 +121,7 @@ class OneOnOnePPVSendService:
             identity_resolved=True,
             conversation_context={
                 "conversation_thread_id": conversation_thread_id,
-                "sales_session_id": str(session.sales_session_id),
+                "sales_session_id": session_id,
                 "latest_message": "one-on-one PPV request",
             },
         )
@@ -129,9 +129,18 @@ class OneOnOnePPVSendService:
             return {
                 "success": True, "status": "skipped", "blocked": False,
                 "reason": decision.reason_code.value,
-                "sales_session_id": str(session.sales_session_id),
+                "sales_session_id": session_id,
                 "customer_sales_decision": decision.decision.value,
             }
+        contact_policy = self.contact_authority.decide(
+            purpose=ContactPurpose.REACTIVE_COMMERCIAL,
+            evidence={"active_session": session is not None},
+        )
+        if contact_policy.result is not ContactPolicyResult.ALLOW:
+            return self._blocked(
+                contact_policy.reason,
+                contact_policy=dict(contact_policy.to_mapping()),
+            )
 
         offering_id = self._value(content_item, "commercial_offering_id", "commercialOfferingId")
         if str(offering_id or "") != str(decision.recommended_offering_id):
@@ -169,7 +178,7 @@ class OneOnOnePPVSendService:
             return {
                 "success": True, "status": "dry_run", "blocked": False,
                 "payload": payload, "purchase_intent_planned": True,
-                "sales_session_id": str(session.sales_session_id),
+                "sales_session_id": session_id,
                 "execution_guard_result": execution,
                 "content_guard_result": guard, "safety_result": safety,
             }
@@ -195,18 +204,19 @@ class OneOnOnePPVSendService:
             expires_at=now + config.offer_expiration,
             created_metadata={
                 "source": "ONE_ON_ONE_PPV",
-                "sales_session_id": str(session.sales_session_id),
+                "sales_session_id": session_id,
                 "customer_sales_decision_id": str(decision.decision_id),
             },
         )
-        self.sales_sessions.associate_purchase_intent(
-            session_id=session.sales_session_id,
-            creator_profile_id=creator_profile_id,
-            purchase_intent_id=intent.purchase_intent_id,
-            actor_type="AI",
-            actor_identifier="OneOnOnePPVSendService",
-            reason="Customer Sales Brain authorized one-on-one PPV.",
-        )
+        if session is not None:
+            self.sales_sessions.associate_purchase_intent(
+                session_id=session.sales_session_id,
+                creator_profile_id=creator_profile_id,
+                purchase_intent_id=intent.purchase_intent_id,
+                actor_type="AI",
+                actor_identifier="OneOnOnePPVSendService",
+                reason="Customer Sales Brain authorized one-on-one PPV.",
+            )
         api = self.fanvue_api or FanvueAPIService(
             fanvue_account_id=int(fanvue_account_id)
         )
@@ -215,7 +225,7 @@ class OneOnOnePPVSendService:
         )
         return {
             **result, "purchase_intent_id": str(intent.purchase_intent_id),
-            "sales_session_id": str(session.sales_session_id),
+            "sales_session_id": session_id,
         }
 
     @staticmethod

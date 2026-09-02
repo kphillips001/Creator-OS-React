@@ -14,7 +14,7 @@
       "delivery_id": "delivery-101",
       "event_id": "63f8f292-80d4-594f-b127-7918fcc7dfbf",
       "event_state": "PURCHASED",
-      "event_timestamp": "2026-08-08T01:12:39Z",
+      "event_timestamp": "2026-09-01T17:54:00Z",
       "experience_id": "experience-1",
       "fulfillment_registration_id": null,
       "outcome_metadata": {
@@ -55,7 +55,7 @@
       "delivery_id": "delivery-101",
       "event_id": "a1bcc3d7-a716-5e10-9673-7248614331ee",
       "event_state": "REFUNDED",
-      "event_timestamp": "2026-08-08T01:12:39Z",
+      "event_timestamp": "2026-09-01T17:54:00Z",
       "experience_id": "experience-1",
       "fulfillment_registration_id": null,
       "outcome_metadata": {
@@ -96,7 +96,7 @@
       "delivery_id": "delivery-202",
       "event_id": "5ac9cf27-e411-5ca3-8f16-bf0edbb64cf5",
       "event_state": "PURCHASED",
-      "event_timestamp": "2026-08-08T01:12:39Z",
+      "event_timestamp": "2026-09-01T17:54:00Z",
       "experience_id": "experience-2",
       "fulfillment_registration_id": null,
       "outcome_metadata": {
@@ -137,7 +137,7 @@
       "delivery_id": "delivery-101",
       "event_id": "532052e8-e47d-582c-b93f-d9a8473f895a",
       "event_state": "PURCHASED",
-      "event_timestamp": "2026-08-08T01:12:39Z",
+      "event_timestamp": "2026-09-01T17:54:00Z",
       "experience_id": "experience-1",
       "fulfillment_registration_id": null,
       "outcome_metadata": {
@@ -178,7 +178,7 @@
       "delivery_id": null,
       "event_id": "73d86061-6215-5438-9716-6037ccf344ff",
       "event_state": "UNMATCHED",
-      "event_timestamp": "2026-08-08T01:12:39Z",
+      "event_timestamp": "2026-09-01T17:54:00Z",
       "experience_id": null,
       "fulfillment_registration_id": null,
       "outcome_metadata": {
@@ -314,7 +314,7 @@
       "asset_id": 101,
       "business_learning_context_reference": null,
       "business_registration_id": null,
-      "chat_registration_id": "fc61692c-8ae1-4a4e-b3d9-3be5fe53ef76",
+      "chat_registration_id": "4a7d58cb-d53e-4d4b-a513-bdca0bfce5c8",
       "content_intelligence_reference": null,
       "conversation_context_reference": null,
       "conversation_id": null,
@@ -323,7 +323,7 @@
       "delivery_id": null,
       "event_id": "c85f60c5-87ec-5db3-b7ea-c5d0ffdcde1f",
       "event_state": "GENERATED",
-      "event_timestamp": "2026-08-07T16:43:09.836095+00:00",
+      "event_timestamp": "2026-09-01T17:54:09.481437+00:00",
       "experience_id": null,
       "fulfillment_registration_id": null,
       "outcome_metadata": {
@@ -382,7 +382,7 @@
           "signal": "business_learning_asset_score",
           "value": {
             "confidence": 0.7,
-            "evidence_freshness": "2026-08-07T16:43:09.825505+00:00",
+            "evidence_freshness": "2026-09-01T17:54:09.470977+00:00",
             "sample_size": 7,
             "score": 5.833333333333332
           },
@@ -398,7 +398,7 @@
       "asset_id": 101,
       "business_learning_context_reference": null,
       "business_registration_id": null,
-      "chat_registration_id": "71149c54-5589-4ab1-b818-2ecc5c7fabf5",
+      "chat_registration_id": "a637a5e3-547b-439c-a539-6fab92425a64",
       "content_intelligence_reference": null,
       "conversation_context_reference": null,
       "conversation_id": null,
@@ -407,7 +407,7 @@
       "delivery_id": null,
       "event_id": "f3f3b341-a438-581c-b038-f281c3b8afc6",
       "event_state": "SELECTED",
-      "event_timestamp": "2026-08-07T16:43:09.825505+00:00",
+      "event_timestamp": "2026-09-01T17:54:09.470977+00:00",
       "experience_id": null,
       "fulfillment_registration_id": null,
       "outcome_metadata": {
@@ -466,7 +466,7 @@
           "signal": "business_learning_asset_score",
           "value": {
             "confidence": 0.7,
-            "evidence_freshness": "2026-08-07T16:43:04Z",
+            "evidence_freshness": "2026-09-01T17:54:00Z",
             "sample_size": 7,
             "score": 25
           },
@@ -482,7 +482,7 @@
       "asset_id": 202,
       "business_learning_context_reference": null,
       "business_registration_id": null,
-      "chat_registration_id": "be8ae44d-36a4-4d23-b0eb-68ed6ca40220",
+      "chat_registration_id": "a2bebdcd-dacf-4d1e-b56d-5c887fb3bd04",
       "content_intelligence_reference": null,
       "conversation_context_reference": null,
       "conversation_id": null,
@@ -491,7 +491,7 @@
       "delivery_id": null,
       "event_id": "7ec85e68-c632-5719-b900-796b55a87e4e",
       "event_state": "GENERATED",
-      "event_timestamp": "2026-08-07T16:43:09.864692+00:00",
+      "event_timestamp": "2026-09-01T17:54:09.509512+00:00",
       "experience_id": null,
       "fulfillment_registration_id": null,
       "outcome_metadata": {
@@ -550,7 +550,7 @@
           "signal": "business_learning_asset_score",
           "value": {
             "confidence": 0.4,
-            "evidence_freshness": "2026-08-07T16:43:09.858695+00:00",
+            "evidence_freshness": "2026-09-01T17:54:09.503046+00:00",
             "sample_size": 4,
             "score": 2.1333333333333333
           },
@@ -566,7 +566,7 @@
       "asset_id": 202,
       "business_learning_context_reference": null,
       "business_registration_id": null,
-      "chat_registration_id": "be8ae44d-36a4-4d23-b0eb-68ed6ca40220",
+      "chat_registration_id": "a2bebdcd-dacf-4d1e-b56d-5c887fb3bd04",
       "content_intelligence_reference": null,
       "conversation_context_reference": null,
       "conversation_id": null,
@@ -575,7 +575,7 @@
       "delivery_id": null,
       "event_id": "7fe8f218-a721-5995-842f-a739ba7ddcf5",
       "event_state": "SELECTED",
-      "event_timestamp": "2026-08-07T16:43:09.867693+00:00",
+      "event_timestamp": "2026-09-01T17:54:09.512394+00:00",
       "experience_id": null,
       "fulfillment_registration_id": null,
       "outcome_metadata": {
@@ -634,7 +634,7 @@
           "signal": "business_learning_asset_score",
           "value": {
             "confidence": 0.4,
-            "evidence_freshness": "2026-08-07T16:43:09.858695+00:00",
+            "evidence_freshness": "2026-09-01T17:54:09.503046+00:00",
             "sample_size": 4,
             "score": 2.1333333333333333
           },
@@ -650,7 +650,7 @@
       "asset_id": 202,
       "business_learning_context_reference": null,
       "business_registration_id": null,
-      "chat_registration_id": "2b333708-96f0-47ce-94d1-d8ad163c9eab",
+      "chat_registration_id": "a95384e4-1d80-403f-8dc1-9ab617970d44",
       "content_intelligence_reference": null,
       "conversation_context_reference": null,
       "conversation_id": null,
@@ -659,7 +659,7 @@
       "delivery_id": null,
       "event_id": "d3796f9f-0907-5aad-842c-a8d8abadef56",
       "event_state": "GENERATED",
-      "event_timestamp": "2026-08-07T16:43:09.840691+00:00",
+      "event_timestamp": "2026-09-01T17:54:09.485847+00:00",
       "experience_id": null,
       "fulfillment_registration_id": null,
       "outcome_metadata": {
@@ -729,7 +729,7 @@
           "signal": "business_learning_asset_score",
           "value": {
             "confidence": 0.4,
-            "evidence_freshness": "2026-08-07T16:43:09.834042+00:00",
+            "evidence_freshness": "2026-09-01T17:54:09.478932+00:00",
             "sample_size": 4,
             "score": 2.1333333333333333
           },
@@ -745,7 +745,7 @@
       "asset_id": 202,
       "business_learning_context_reference": null,
       "business_registration_id": null,
-      "chat_registration_id": "2b333708-96f0-47ce-94d1-d8ad163c9eab",
+      "chat_registration_id": "a95384e4-1d80-403f-8dc1-9ab617970d44",
       "content_intelligence_reference": null,
       "conversation_context_reference": null,
       "conversation_id": null,
@@ -754,7 +754,7 @@
       "delivery_id": null,
       "event_id": "4889e0fa-36eb-5df2-9469-e3f5feaedeb6",
       "event_state": "SELECTED",
-      "event_timestamp": "2026-08-07T16:43:09.843688+00:00",
+      "event_timestamp": "2026-09-01T17:54:09.487843+00:00",
       "experience_id": null,
       "fulfillment_registration_id": null,
       "outcome_metadata": {
@@ -824,7 +824,7 @@
           "signal": "business_learning_asset_score",
           "value": {
             "confidence": 0.4,
-            "evidence_freshness": "2026-08-07T16:43:09.834042+00:00",
+            "evidence_freshness": "2026-09-01T17:54:09.478932+00:00",
             "sample_size": 4,
             "score": 2.1333333333333333
           },
@@ -840,7 +840,7 @@
       "asset_id": 101,
       "business_learning_context_reference": null,
       "business_registration_id": null,
-      "chat_registration_id": "9b12aab1-3ae2-4ad3-bf1d-8ade537edad0",
+      "chat_registration_id": "c9ac67fa-6a43-40f0-8358-ee340a2ad29f",
       "content_intelligence_reference": null,
       "conversation_context_reference": null,
       "conversation_id": null,
@@ -849,7 +849,7 @@
       "delivery_id": null,
       "event_id": "fcce1ade-6bea-5ba4-b08d-b041b1829de0",
       "event_state": "SUPPRESSED",
-      "event_timestamp": "2026-08-07T16:43:09.869693+00:00",
+      "event_timestamp": "2026-09-01T17:54:09.514406+00:00",
       "experience_id": null,
       "fulfillment_registration_id": null,
       "outcome_metadata": {
@@ -910,7 +910,7 @@
           "signal": "business_learning_asset_score",
           "value": {
             "confidence": 0.7,
-            "evidence_freshness": "2026-08-07T16:43:09.860694+00:00",
+            "evidence_freshness": "2026-09-01T17:54:09.506077+00:00",
             "sample_size": 7,
             "score": 5.833333333333332
           },
@@ -928,7 +928,7 @@
       "asset_id": 202,
       "business_learning_context_reference": null,
       "business_registration_id": null,
-      "chat_registration_id": "9d847378-1770-4de1-a39f-5c348be651fe",
+      "chat_registration_id": "5c439426-5912-4d9a-b837-0d90ef1e0276",
       "content_intelligence_reference": null,
       "conversation_context_reference": null,
       "conversation_id": null,
@@ -937,7 +937,7 @@
       "delivery_id": null,
       "event_id": "75e1d7cf-0d34-520d-9306-bc9a0e658ab8",
       "event_state": "GENERATED",
-      "event_timestamp": "2026-08-07T16:43:09.855192+00:00",
+      "event_timestamp": "2026-09-01T17:54:09.501045+00:00",
       "experience_id": null,
       "fulfillment_registration_id": null,
       "outcome_metadata": {
@@ -1007,7 +1007,7 @@
           "signal": "business_learning_asset_score",
           "value": {
             "confidence": 0.4,
-            "evidence_freshness": "2026-08-07T16:43:09.843688+00:00",
+            "evidence_freshness": "2026-09-01T17:54:09.487843+00:00",
             "sample_size": 4,
             "score": 2.1333333333333333
           },
@@ -1023,7 +1023,7 @@
       "asset_id": 202,
       "business_learning_context_reference": null,
       "business_registration_id": null,
-      "chat_registration_id": "9d847378-1770-4de1-a39f-5c348be651fe",
+      "chat_registration_id": "5c439426-5912-4d9a-b837-0d90ef1e0276",
       "content_intelligence_reference": null,
       "conversation_context_reference": null,
       "conversation_id": null,
@@ -1032,7 +1032,7 @@
       "delivery_id": null,
       "event_id": "8dad0850-738a-5dd7-9cbe-c01b1d0b0b60",
       "event_state": "SELECTED",
-      "event_timestamp": "2026-08-07T16:43:09.858695+00:00",
+      "event_timestamp": "2026-09-01T17:54:09.503046+00:00",
       "experience_id": null,
       "fulfillment_registration_id": null,
       "outcome_metadata": {
@@ -1102,7 +1102,7 @@
           "signal": "business_learning_asset_score",
           "value": {
             "confidence": 0.4,
-            "evidence_freshness": "2026-08-07T16:43:09.843688+00:00",
+            "evidence_freshness": "2026-09-01T17:54:09.487843+00:00",
             "sample_size": 4,
             "score": 2.1333333333333333
           },
@@ -1118,7 +1118,7 @@
       "asset_id": 101,
       "business_learning_context_reference": null,
       "business_registration_id": null,
-      "chat_registration_id": "0c1de0ed-f152-4914-9c56-44df052dcfb6",
+      "chat_registration_id": "e3d20c16-4215-4bda-a5f9-72d9aa3516fa",
       "content_intelligence_reference": null,
       "conversation_context_reference": null,
       "conversation_id": null,
@@ -1127,7 +1127,7 @@
       "delivery_id": null,
       "event_id": "218476e4-99f4-5e71-b0fd-61ff86e65655",
       "event_state": "GENERATED",
-      "event_timestamp": "2026-08-07T16:43:09.860694+00:00",
+      "event_timestamp": "2026-09-01T17:54:09.506077+00:00",
       "experience_id": null,
       "fulfillment_registration_id": null,
       "outcome_metadata": {
@@ -1186,7 +1186,7 @@
           "signal": "business_learning_asset_score",
           "value": {
             "confidence": 0.7,
-            "evidence_freshness": "2026-08-07T16:43:09.852191+00:00",
+            "evidence_freshness": "2026-09-01T17:54:09.497031+00:00",
             "sample_size": 7,
             "score": 5.833333333333332
           },
@@ -1202,7 +1202,7 @@
       "asset_id": 101,
       "business_learning_context_reference": null,
       "business_registration_id": null,
-      "chat_registration_id": "0c3eb1c0-64b8-4bd6-951d-bef04cf1a59c",
+      "chat_registration_id": "88e09a7e-e4da-42fe-a89c-916872b23c4c",
       "content_intelligence_reference": null,
       "conversation_context_reference": null,
       "conversation_id": "conversation-1",
@@ -1211,9 +1211,9 @@
       "delivery_id": "281202a9-dfbe-5831-af1a-85e0515c37fe",
       "event_id": "70c6bb39-77be-5a3a-993d-23413eab93a4",
       "event_state": "DELIVERY_PREPARED",
-      "event_timestamp": "2026-08-08T01:59:27.137154+00:00",
+      "event_timestamp": "2026-09-01T17:54:00.187216+00:00",
       "experience_id": "experience-1",
-      "fulfillment_registration_id": "63318880-3a1b-43d3-890f-ea9efe94e615",
+      "fulfillment_registration_id": "87aaa9df-1e42-4403-a180-c9380aa0dba6",
       "outcome_metadata": {
         "failure_reason": null,
         "retry_of_delivery_id": null,
@@ -1259,7 +1259,7 @@
       "delivery_id": "281202a9-dfbe-5831-af1a-85e0515c37fe",
       "event_id": "d63d9eff-3999-5c79-bb1b-c3dfa4385a8e",
       "event_state": "DELIVERY_BLOCKED",
-      "event_timestamp": "2026-08-08T01:59:27.152655+00:00",
+      "event_timestamp": "2026-09-01T17:54:00.203156+00:00",
       "experience_id": null,
       "fulfillment_registration_id": null,
       "outcome_metadata": {
@@ -1309,14 +1309,14 @@
       "delivery_id": "281202a9-dfbe-5831-af1a-85e0515c37fe",
       "event_id": "7a50cac5-7206-5fc4-a08c-cb89bf4e9566",
       "event_state": "DELIVERED",
-      "event_timestamp": "2026-08-08T01:59:27.139657+00:00",
+      "event_timestamp": "2026-09-01T17:54:00.190217+00:00",
       "experience_id": "experience-1",
       "fulfillment_registration_id": null,
       "outcome_metadata": {
         "payload": {
           "asset_id": 101,
           "blocking_reason": null,
-          "chat_registration_id": "0c3eb1c0-64b8-4bd6-951d-bef04cf1a59c",
+          "chat_registration_id": "88e09a7e-e4da-42fe-a89c-916872b23c4c",
           "conversation_id": "conversation-1",
           "customer_id": "customer-1",
           "delivery_id": "281202a9-dfbe-5831-af1a-85e0515c37fe",
@@ -1330,7 +1330,7 @@
             "experience-1"
           ],
           "fanvue_media_link": "https://fanvue.example/media/101",
-          "fulfillment_id": "63318880-3a1b-43d3-890f-ea9efe94e615",
+          "fulfillment_id": "87aaa9df-1e42-4403-a180-c9380aa0dba6",
           "media_link": "https://fanvue.example/media/101",
           "metadata": {
             "delivery_owner": "ChatCommerceDeliveryService",
@@ -1386,14 +1386,14 @@
       "delivery_id": "281202a9-dfbe-5831-af1a-85e0515c37fe",
       "event_id": "34adc706-c6ea-5b9a-b447-ed34c3595a5c",
       "event_state": "DELIVERY_FAILED",
-      "event_timestamp": "2026-08-08T01:59:27.141655+00:00",
+      "event_timestamp": "2026-09-01T17:54:00.192248+00:00",
       "experience_id": "experience-1",
       "fulfillment_registration_id": null,
       "outcome_metadata": {
         "payload": {
           "asset_id": 101,
           "blocking_reason": "provider_unavailable",
-          "chat_registration_id": "0c3eb1c0-64b8-4bd6-951d-bef04cf1a59c",
+          "chat_registration_id": "88e09a7e-e4da-42fe-a89c-916872b23c4c",
           "conversation_id": "conversation-1",
           "customer_id": "customer-1",
           "delivery_id": "281202a9-dfbe-5831-af1a-85e0515c37fe",
@@ -1407,7 +1407,7 @@
             "experience-1"
           ],
           "fanvue_media_link": "https://fanvue.example/media/101",
-          "fulfillment_id": "63318880-3a1b-43d3-890f-ea9efe94e615",
+          "fulfillment_id": "87aaa9df-1e42-4403-a180-c9380aa0dba6",
           "media_link": "https://fanvue.example/media/101",
           "metadata": {
             "delivery_owner": "ChatCommerceDeliveryService",
@@ -1454,7 +1454,7 @@
       "asset_id": 101,
       "business_learning_context_reference": null,
       "business_registration_id": null,
-      "chat_registration_id": "0c3eb1c0-64b8-4bd6-951d-bef04cf1a59c",
+      "chat_registration_id": "88e09a7e-e4da-42fe-a89c-916872b23c4c",
       "content_intelligence_reference": null,
       "conversation_context_reference": null,
       "conversation_id": "conversation-1",
@@ -1463,9 +1463,9 @@
       "delivery_id": "f86708c9-1d8c-5bd0-b5b1-2ecb3ea884f8",
       "event_id": "defa658a-6293-5bea-b910-90ffbe5aad0b",
       "event_state": "DELIVERY_PREPARED",
-      "event_timestamp": "2026-08-08T01:59:27.146655+00:00",
+      "event_timestamp": "2026-09-01T17:54:00.197119+00:00",
       "experience_id": "experience-1",
-      "fulfillment_registration_id": "63318880-3a1b-43d3-890f-ea9efe94e615",
+      "fulfillment_registration_id": "87aaa9df-1e42-4403-a180-c9380aa0dba6",
       "outcome_metadata": {
         "failure_reason": null,
         "retry_of_delivery_id": "old",
@@ -1511,7 +1511,7 @@
       "delivery_id": "f86708c9-1d8c-5bd0-b5b1-2ecb3ea884f8",
       "event_id": "8486a3a7-fcbc-5d57-9ede-cd262ecd61d8",
       "event_state": "RETRIED",
-      "event_timestamp": "2026-08-08T01:59:27.146655+00:00",
+      "event_timestamp": "2026-09-01T17:54:00.197119+00:00",
       "experience_id": null,
       "fulfillment_registration_id": null,
       "outcome_metadata": {
@@ -1528,6 +1528,134 @@
       "score_breakdown": {},
       "supporting_evidence": [],
       "suppression_reasons": []
+    }
+  },
+  {
+    "event_type": "business_outcome",
+    "payload": {
+      "compatibility_metadata": {
+        "read_only": true,
+        "source": "business_learning"
+      },
+      "customer_id": "customer-1",
+      "customer_reference": "customer-1",
+      "evidence_metadata": {},
+      "experience_id": null,
+      "experience_reference": null,
+      "metadata": {
+        "canonical_business_outcome": true,
+        "source": "business_learning"
+      },
+      "occurred_at": null,
+      "outcome_id": null,
+      "outcome_type": "PRODUCT_PURCHASED",
+      "product_id": "product-1",
+      "product_reference": "product-1",
+      "provider_metadata": {},
+      "recommendation_id": null,
+      "signals": {},
+      "status": null,
+      "strategy_source": null,
+      "subject_id": null,
+      "subject_type": null,
+      "timestamp": null,
+      "value_cents": 0
+    }
+  },
+  {
+    "event_type": "business_outcome",
+    "payload": {
+      "compatibility_metadata": {
+        "read_only": true,
+        "source": "business_learning"
+      },
+      "customer_id": "customer-1",
+      "customer_reference": "customer-1",
+      "evidence_metadata": {},
+      "experience_id": "experience-1",
+      "experience_reference": "experience-1",
+      "metadata": {
+        "canonical_business_outcome": true,
+        "source": "business_learning"
+      },
+      "occurred_at": null,
+      "outcome_id": null,
+      "outcome_type": "EXPERIENCE_COMPLETED",
+      "product_id": null,
+      "product_reference": null,
+      "provider_metadata": {},
+      "recommendation_id": null,
+      "signals": {},
+      "status": null,
+      "strategy_source": null,
+      "subject_id": null,
+      "subject_type": null,
+      "timestamp": null,
+      "value_cents": 0
+    }
+  },
+  {
+    "event_type": "business_outcome",
+    "payload": {
+      "compatibility_metadata": {
+        "read_only": true,
+        "source": "business_learning"
+      },
+      "customer_id": "customer-1",
+      "customer_reference": "customer-1",
+      "evidence_metadata": {},
+      "experience_id": null,
+      "experience_reference": null,
+      "metadata": {
+        "canonical_business_outcome": true,
+        "source": "business_learning"
+      },
+      "occurred_at": null,
+      "outcome_id": null,
+      "outcome_type": "PRODUCT_PURCHASED",
+      "product_id": "product-1",
+      "product_reference": "product-1",
+      "provider_metadata": {},
+      "recommendation_id": null,
+      "signals": {},
+      "status": null,
+      "strategy_source": null,
+      "subject_id": null,
+      "subject_type": null,
+      "timestamp": null,
+      "value_cents": 0
+    }
+  },
+  {
+    "event_type": "business_outcome",
+    "payload": {
+      "compatibility_metadata": {
+        "read_only": true,
+        "source": "business_learning"
+      },
+      "customer_id": "customer-1",
+      "customer_reference": "customer-1",
+      "evidence_metadata": {},
+      "experience_id": "experience-1",
+      "experience_reference": "experience-1",
+      "metadata": {
+        "canonical_business_outcome": true,
+        "source": "business_learning"
+      },
+      "occurred_at": null,
+      "outcome_id": null,
+      "outcome_type": "EXPERIENCE_COMPLETED",
+      "product_id": null,
+      "product_reference": null,
+      "provider_metadata": {},
+      "recommendation_id": null,
+      "signals": {},
+      "status": null,
+      "strategy_source": null,
+      "subject_id": null,
+      "subject_type": null,
+      "timestamp": null,
+      "value_cents": 0
     }
   },
   {

@@ -240,10 +240,15 @@
 .live-progress progress { width: 100%; height: 10px; accent-color: currentColor; }
 .live-progress__bar-row > strong { min-width: 3rem; color: currentColor; font-size: .78rem; text-align: right; }
 .live-progress__status { display: flex; align-items: center; gap: var(--space-2); }
-.live-progress__status span:last-child { display: grid; gap: 2px; }
+.live-progress__status-copy { display: grid; flex: 1 1 16rem; gap: 2px; min-width: 0; }
+.live-progress__status-action { display: flex; flex: 0 0 auto; margin-left: auto; }
 .live-progress__status small { color: var(--color-text-muted); font-size: .66rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
 .live-progress__status strong { color: currentColor; font-size: .82rem; }
 .live-progress__actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+@media (max-width: 560px) {
+  .live-progress__status { flex-wrap: wrap; }
+  .live-progress__status-action { flex-basis: 100%; justify-content: flex-end; }
+}
 .live-progress--active { color: var(--color-accent); }
 .live-progress--waiting { color: var(--color-warning-text); }
 .live-progress--paused { color: var(--color-text-muted); }

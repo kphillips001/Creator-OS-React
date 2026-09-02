@@ -23,6 +23,25 @@ class TelethonLoginError(RuntimeError):
 class TelethonLogin:
     """Create an authorized user-account session without logging secrets."""
 
+    DELIVERY_LABELS = {
+        "SentCodeTypeApp": "Telegram app",
+        "SentCodeTypeSms": "SMS",
+        "SentCodeTypeCall": "phone call",
+        "SentCodeTypeFlashCall": "flash call",
+        "SentCodeTypeMissedCall": "missed call",
+        "SentCodeTypeEmailCode": "email",
+        "SentCodeTypeFirebaseSms": "Firebase SMS",
+        "SentCodeTypeFragmentSms": "Fragment SMS",
+        "SentCodeTypeSmsPhrase": "SMS phrase",
+        "SentCodeTypeSmsWord": "SMS word",
+        "SentCodeTypeSetUpEmailRequired": "email setup required",
+        "CodeTypeSms": "SMS",
+        "CodeTypeCall": "phone call",
+        "CodeTypeFlashCall": "flash call",
+        "CodeTypeMissedCall": "missed call",
+        "CodeTypeFragmentSms": "Fragment SMS",
+    }
+
     def __init__(
         self,
         *,
@@ -72,7 +91,8 @@ class TelethonLogin:
             if not phone:
                 raise TelethonLoginError("A phone number is required.")
 
-            await client.send_code_request(phone)
+            sent_code = await client.send_code_request(phone)
+            self._report_delivery_metadata(sent_code)
             code = self._secret_input("Telegram login code: ").strip()
             if not code:
                 raise TelethonLoginError("A Telegram login code is required.")
@@ -98,6 +118,29 @@ class TelethonLogin:
             raise TelethonLoginError("Telethon authorization failed.") from None
         finally:
             await client.disconnect()
+
+    def _report_delivery_metadata(self, sent_code: Any) -> None:
+        delivery_type = getattr(sent_code, "type", None)
+        next_type = getattr(sent_code, "next_type", None)
+        timeout = getattr(sent_code, "timeout", None)
+        self._logger.info(
+            "Code delivery: %s",
+            self._delivery_label(delivery_type),
+        )
+        self._logger.info(
+            "Next delivery option: %s",
+            self._delivery_label(next_type) if next_type is not None else "none reported",
+        )
+        self._logger.info(
+            "Retry available in: %s",
+            f"{int(timeout)} seconds" if isinstance(timeout, int) else "not reported",
+        )
+
+    @classmethod
+    def _delivery_label(cls, value: Any) -> str:
+        if value is None:
+            return "not reported"
+        return cls.DELIVERY_LABELS.get(type(value).__name__, "other Telegram mechanism")
 
 
 def _positive_api_id(value: str) -> int:

@@ -33,6 +33,28 @@ class BackgroundOperationService:
             if isinstance(item, datetime): value[key] = item.isoformat()
         return {self._camel(key): item for key, item in value.items()}
 
+    def summary_payload(self, operation) -> dict[str, Any]:
+        """Small global-poll contract; workflow detail remains on GET /{id}."""
+        full = self.payload(operation)
+        keys = (
+            "operationId", "operationType", "originatingWorkspace", "subjectType", "subjectId",
+            "status", "progressCurrent", "progressTotal", "progressPercent", "currentStage",
+            "stageMessage", "createdAt", "startedAt", "completedAt", "updatedAt",
+            "resultLocation", "resultReference", "errorCode", "errorMessage",
+            "cancellationSupported",
+        )
+        metadata = dict(full.get("metadata") or {})
+        summary_metadata = {
+            key: metadata[key] for key in (
+                "phase", "shotNumber", "targetShotCount", "completedCount", "failedCount",
+                "completedIdeas", "failedIdeas", "retryingIdeas", "retryCycle",
+                "tierMode", "requestedCount", "tierErrors",
+                "workspaceDismissed",
+                "image_count",
+            ) if key in metadata
+        }
+        return {**{key: full.get(key) for key in keys}, "metadata": summary_metadata}
+
     def progress(self, operation_id, **values):
         return self.repository.update_progress(operation_id, **values)
 
@@ -46,6 +68,11 @@ class BackgroundOperationService:
             operation_id, "PARTIAL" if partial else "SUCCEEDED", stage="COMPLETE",
             message=message or ("Completed with partial success" if partial else "Completed"),
             result_reference=result_reference, metadata=metadata)
+
+    def complete_explicit_batch(self, operation_id, *, message, metadata=None):
+        return self.repository.complete_explicit_batch_and_consume_workspace(
+            operation_id, message=message, metadata=metadata,
+        )
 
     def fail(self, operation_id, error, *, code="EXECUTION_FAILED", metadata=None):
         return self.repository.transition(

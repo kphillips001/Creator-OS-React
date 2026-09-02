@@ -1,0 +1,1 @@
+DROP TABLE IF EXISTS x_intelligence.competitor_post_metric_snapshots;

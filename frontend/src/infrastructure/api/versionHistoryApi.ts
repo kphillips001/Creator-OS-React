@@ -1,4 +1,4 @@
-import type { GenerationLibraryResponse, GenerationRecord } from "../../features/generation-library/types";
+import type { GenerationLibraryCard, GenerationLibraryResponse } from "../../features/generation-library/types";
 import type { AssetVersion, AssetVersionHistory } from "../../features/version-history/types";
 
 type VersionResponse = {
@@ -35,7 +35,7 @@ const mapVersion = (version: VersionResponse["versions"][number]): AssetVersion 
   imageUrl: version.image_url,
 });
 
-async function readCurrentGenerationRecords(signal?: AbortSignal): Promise<GenerationRecord[]> {
+async function readCurrentGenerationRecords(signal?: AbortSignal): Promise<GenerationLibraryCard[]> {
   const first = await fetch("/api/generation-library?page=1&sort=newest", { signal, cache: "no-store" });
   const firstResult = await first.json() as GenerationLibraryResponse;
   if (!first.ok || firstResult.error) throw new Error(firstResult.error || "Generation Library could not be loaded.");

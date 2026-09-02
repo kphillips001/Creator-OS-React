@@ -94,9 +94,10 @@ const operatorStepError = (step: SessionSellingReadiness["steps"][number]) => {
   return detail || "Publication failed.";
 };
 
-export function SessionSellingPanel({ deliverableId, initialDialog = null, onReadinessChange }: {
+export function SessionSellingPanel({ deliverableId, initialDialog = null, onReadinessChange, deferStrategyGeneration = false }: {
   deliverableId: string; initialDialog?: "prepare" | "retry" | null;
   onReadinessChange?: (value: SessionSellingReadiness) => void;
+  deferStrategyGeneration?: boolean;
 }) {
   const [readiness, setReadiness] = useState<SessionSellingReadiness | null>(null);
   const [loading, setLoading] = useState(true);
@@ -106,6 +107,7 @@ export function SessionSellingPanel({ deliverableId, initialDialog = null, onRea
   const [published, setPublished] = useState(false);
   const readinessRef = useRef<SessionSellingReadiness | null>(null);
   const ensuringStrategy = useRef(false);
+  const pollingReadiness = useRef(false);
   const updateReadiness = useCallback((value: SessionSellingReadiness) => {
     readinessRef.current = value;
     setReadiness(value);
@@ -136,20 +138,21 @@ export function SessionSellingPanel({ deliverableId, initialDialog = null, onRea
     } finally { ensuringStrategy.current = false; }
   }, [deliverableId, updateReadiness]);
   useEffect(() => {
-    if (readiness?.status !== "STRATEGY_REQUIRED" || readiness.strategyOperation) return;
+    if (deferStrategyGeneration || readiness?.status !== "STRATEGY_REQUIRED" || readiness.strategyOperation) return;
     void ensureStrategy();
-  }, [ensureStrategy, readiness?.status, readiness?.strategyOperation]);
-  useEffect(() => {
-    if (readiness?.status !== "PREPARING") return;
-    const timer = window.setInterval(() => void load(), 2500);
-    return () => window.clearInterval(timer);
-  }, [readiness?.status, load]);
+  }, [deferStrategyGeneration, ensureStrategy, readiness?.status, readiness?.strategyOperation]);
   const strategyOperationStatus = readiness?.strategyOperation?.status;
   useEffect(() => {
-    if (!strategyOperationStatus || !["QUEUED", "RUNNING", "WAITING_EXTERNAL", "CANCEL_REQUESTED"].includes(strategyOperationStatus)) return;
-    const timer = window.setInterval(() => void load(), 1500);
-    return () => window.clearInterval(timer);
-  }, [strategyOperationStatus, load]);
+    const strategyActive = Boolean(strategyOperationStatus && ["QUEUED", "RUNNING", "WAITING_EXTERNAL", "CANCEL_REQUESTED"].includes(strategyOperationStatus));
+    if (readiness?.status !== "PREPARING" && !strategyActive) return;
+    const poll = async () => {
+      if (pollingReadiness.current) return;
+      pollingReadiness.current = true;
+      try { await load(); } finally { pollingReadiness.current = false; }
+    };
+    const timer = window.setInterval(() => void poll(), strategyActive ? 1500 : 2500);
+    return () => { window.clearInterval(timer); pollingReadiness.current = false; };
+  }, [readiness?.status, strategyOperationStatus, load]);
   useEffect(() => {
     const refreshOnFocus = () => {
       if (readiness?.status === "NEEDS_ATTENTION") void load();
@@ -171,14 +174,16 @@ export function SessionSellingPanel({ deliverableId, initialDialog = null, onRea
     }
   };
   const strategyFailed = strategyOperationStatus === "FAILED" || strategyOperationStatus === "CANCELLED" || Boolean(strategyActionError);
-  const strategyPreparing = readiness?.status === "STRATEGY_REQUIRED" && !strategyFailed;
+  const teaserAuthoringRequired = deferStrategyGeneration && readiness?.status === "STRATEGY_REQUIRED";
+  const strategyPreparing = readiness?.status === "STRATEGY_REQUIRED" && !strategyFailed && !teaserAuthoringRequired;
   const pricingRequired = readiness?.status === "NOT_PREPARED";
   const paidImageNoun = readiness?.paidStepCount === 1 ? "paid image" : "paid images";
   const priceNoun = readiness?.paidStepCount === 1 ? "a price" : "prices";
-  const heading = loading && !readiness ? "Loading…" : strategyFailed ? "Strategy Needs Attention" : strategyPreparing ? "Preparing Strategy..." : error && !readiness ? "Session Selling Unavailable" : pricingRequired ? "Pricing Required" : readiness?.status === "PREPARING" ? "Preparing..." : readiness?.status === "READY" ? "READY" : readiness?.statusLabel || "Session Selling";
+  const heading = loading && !readiness ? "Loading…" : teaserAuthoringRequired ? "Create Teaser First" : strategyFailed ? "Strategy Needs Attention" : strategyPreparing ? "Preparing Strategy..." : error && !readiness ? "Session Selling Unavailable" : pricingRequired ? "Pricing Required" : readiness?.status === "PREPARING" ? "Preparing..." : readiness?.status === "READY" ? "READY" : readiness?.statusLabel || "Session Selling";
   return <section className="session-selling-panel"><header><div><small>Session Selling</small><h2>{heading}</h2></div>{readiness && readiness.status !== "STRATEGY_REQUIRED" && <span className={`session-selling-badge session-selling-badge--${readiness.status.toLowerCase()}`}>{pricingRequired ? "Pricing Required" : readinessBadge(readiness)}</span>}</header>
     {error && <p role="alert">{error}</p>}
     {strategyActionError && <p className="sale-preparation-error" role="alert">{strategyActionError}</p>}
+    {!loading && teaserAuthoringRequired && <div className="session-selling-strategy-required" role="status"><p>Create the Session teaser before preparing the sales strategy.</p></div>}
     {!loading && strategyPreparing && <div className="session-selling-strategy-required" role="status"><p>Analyzing the completed Photoshoot for sequential selling.</p></div>}
     {!loading && strategyFailed && <div className="session-selling-strategy-required">
       <p>We couldn&apos;t prepare the Session sales strategy.</p>
@@ -229,6 +234,13 @@ function BundleContentVaultPublishing({ deliverableId, readiness, refresh }: {
   const [editingCaption, setEditingCaption] = useState(false);
   const [captionDraft, setCaptionDraft] = useState("");
   const endpoint = `/api/v1/assets/photoshoots/${encodeURIComponent(deliverableId)}/content-vault`;
+  useEffect(() => {
+    const persisted = readiness.contentVaultCaptionCandidates?.captions || [];
+    if (options.length === 0 && persisted.length === 5) {
+      setOptions(persisted);
+      setOpen(true);
+    }
+  }, [options.length, readiness.contentVaultCaptionCandidates]);
   const generate = async () => {
     setBusy(true); setError(""); setCustomError(""); setOpen(false); setOptions([]); setSelected(null);
     try {
@@ -283,7 +295,7 @@ function BundleContentVaultPublishing({ deliverableId, readiness, refresh }: {
   return <section className="content-vault-publishing" aria-labelledby="bundle-vault-publishing-title">
     <h3 id="bundle-vault-publishing-title">Content Vault Publishing</h3>
     <p><strong>{readiness.imageCount} Photos</strong> · ${bundlePrice(readiness.priceMinor)}</p>
-    {readiness.promotionalTeaser?.previewUrl && <img className="bundle-content-vault-teaser" src={readiness.promotionalTeaser.previewUrl} alt="Bundle promotional teaser" />}
+    {publication?.previewUrl && <img className="bundle-content-vault-teaser" src={publication.previewUrl} alt="Bundle Content Vault publication preview" />}
     <dl className="content-vault-publishing__preview"><div><dt>Teaser</dt><dd>{readiness.promotionalTeaser?.status || "NOT CONFIGURED"}</dd></div><div><dt>Fanvue Media Link</dt><dd>{readiness.deliveryUrl ? "READY" : "NEEDS ATTENTION"}</dd></div></dl>
     {editingCaption ? <div className="bundle-caption-editor"><label><span>Content Wall caption</span><textarea aria-label="Content Wall caption" maxLength={1024} rows={4} value={captionDraft} onChange={(event) => setCaptionDraft(event.target.value)} /></label><div className="content-vault-publishing__actions"><button disabled={busy || !captionDraft.trim()} onClick={() => void persistCaption(captionDraft.trim(), "MANUAL")} type="button">Save Caption</button><button disabled={busy} onClick={() => { setEditingCaption(false); setCaptionDraft(""); setError(""); }} type="button">Cancel</button></div></div> : <>
       {readiness.contentVaultCaption ? <blockquote>{readiness.contentVaultCaption.text}</blockquote> : <p className="content-vault-publishing__empty">No caption selected.</p>}
@@ -305,15 +317,46 @@ export function BundleSellingPanel({ deliverableId, salesChannel = "CHAT", onRea
   const [price, setPrice] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [editingPrice, setEditingPrice] = useState(false);
+  const [priceUpdated, setPriceUpdated] = useState(false);
+  const replacementTarget = useRef<number | null>(null);
+  const editingPriceRef = useRef(false);
+  const pollingReadiness = useRef(false);
   const load = useCallback(() => request<BundleSellingReadiness>(`/api/v1/assets/photoshoots/${encodeURIComponent(deliverableId)}/sale-preparation`).then((value) => {
     if (value.sellingMode !== "BUNDLE") throw new Error("Bundle readiness is unavailable.");
-    setReadiness(value); onReadinessChange?.(value); setPrice((current) => current || bundlePrice(value.priceMinor)); setError("");
+    setReadiness(value); onReadinessChange?.(value);
+    if (!editingPriceRef.current) setPrice(bundlePrice(value.priceMinor));
+    setError("");
   }).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "Unable to load Bundle readiness.")), [deliverableId, onReadinessChange]);
   useEffect(() => { void load(); }, [load]);
   useEffect(() => {
+    const target = replacementTarget.current;
+    if (target == null) return;
+    const replacementFailed = readiness?.status === "NEEDS_ATTENTION"
+      || readiness?.priceReplacement?.state === "PREFLIGHT_FAILED"
+      || readiness?.priceReplacement?.state === "REPLACEMENT_FAILED";
+    if (replacementFailed) {
+      replacementTarget.current = null; setSaving(false);
+      setError(readiness?.error || "Unable to replace the Fanvue Media Link. Retry the price update.");
+      return;
+    }
+    if (readiness?.status !== "READY" || readiness.priceMinor !== target) return;
+    replacementTarget.current = null;
+    editingPriceRef.current = false;
+    setEditingPrice(false); setSaving(false); setPrice(bundlePrice(readiness.priceMinor));
+    setPriceUpdated(true);
+    const timer = window.setTimeout(() => setPriceUpdated(false), 4500);
+    return () => window.clearTimeout(timer);
+  }, [readiness?.priceMinor, readiness?.status]);
+  useEffect(() => {
     if (readiness?.status !== "PREPARING") return;
-    const timer = window.setInterval(() => void load(), 2500);
-    return () => window.clearInterval(timer);
+    const poll = async () => {
+      if (pollingReadiness.current) return;
+      pollingReadiness.current = true;
+      try { await load(); } finally { pollingReadiness.current = false; }
+    };
+    const timer = window.setInterval(() => void poll(), 2500);
+    return () => { window.clearInterval(timer); pollingReadiness.current = false; };
   }, [readiness?.status, load]);
   const priceMinor = (() => {
     if (!/^\d+(?:\.\d{1,2})?$/.test(price.trim())) return null;
@@ -335,6 +378,31 @@ export function BundleSellingPanel({ deliverableId, salesChannel = "CHAT", onRea
       setSaving(false);
     }
   };
+  const beginPriceUpdate = () => {
+    setPrice(bundlePrice(readiness?.priceMinor)); setError("");
+    editingPriceRef.current = true; setEditingPrice(true);
+  };
+  const cancelPriceUpdate = () => {
+    setPrice(bundlePrice(readiness?.priceMinor)); setError("");
+    editingPriceRef.current = false; setEditingPrice(false);
+  };
+  const submitPriceUpdate = async () => {
+    if (!readiness || saving || priceMinor == null) {
+      setError("Bundle price must be between $3.00 and $500.00."); return;
+    }
+    if (priceMinor === readiness.priceMinor) { cancelPriceUpdate(); return; }
+    setSaving(true); setError(""); replacementTarget.current = priceMinor;
+    try {
+      const value = await request<BundleSellingReadiness>(`/api/v1/assets/photoshoots/${encodeURIComponent(deliverableId)}/bundle-price`, {
+        method: "PUT", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ priceMinor }),
+      });
+      setReadiness(value); onReadinessChange?.(value);
+    } catch (reason) {
+      replacementTarget.current = null; setSaving(false);
+      setError(reason instanceof Error ? reason.message : "Unable to update Bundle price.");
+    }
+  };
   return <section className="session-selling-panel bundle-selling-panel"><header><div><small>Bundle Selling · Paid Bundle</small><h2>{readiness?.statusLabel || "Loading..."}</h2></div>{readiness && <span className={`session-selling-badge session-selling-badge--${readiness.status.toLowerCase()}`}>{readiness.status === "READY" ? "Ready" : readinessBadge(readiness)}</span>}</header>
     {error && <p className="sale-preparation-error" role="alert">{error}</p>}
     {readiness && <>
@@ -347,7 +415,8 @@ export function BundleSellingPanel({ deliverableId, salesChannel = "CHAT", onRea
           <p><strong>Chat Sales</strong><br />Disabled — designated for Ava&apos;s Content Wall</p>
           <p><strong>Content Wall Publishing</strong><br />Uses the prepared Bundle package below.</p>
         </div>}
-      <label className="bundle-selling-price" htmlFor="bundle-price"><span>Bundle Price</span><span><b>$</b><input id="bundle-price" aria-label="Bundle Price" disabled={readiness.status === "READY" || saving} inputMode="decimal" min="3" max="500" step=".01" type="number" value={price} onChange={(event) => setPrice(event.target.value)} /></span></label>
+      <div className="bundle-selling-price-row"><label className="bundle-selling-price" htmlFor="bundle-price"><span>Bundle Price</span><span><b>$</b><input id="bundle-price" aria-label="Bundle Price" disabled={(readiness.status === "READY" && !editingPrice) || saving} inputMode="decimal" min="3" max="500" step=".01" type="number" value={price} onChange={(event) => setPrice(event.target.value)} /></span></label>{readiness.status === "READY" && !editingPrice && <button onClick={beginPriceUpdate} type="button">Update</button>}{editingPrice && <div className="bundle-selling-price-actions"><button disabled={saving || priceMinor == null} onClick={() => void submitPriceUpdate()} type="button">{saving ? "Updating..." : "Submit"}</button><button disabled={saving} onClick={cancelPriceUpdate} type="button">Cancel</button></div>}</div>
+      {priceUpdated && <div className="asset-library-toast" role="status">Price and Fanvue Media Link updated.</div>}
       {readiness.status === "PREPARING" && <div className="session-selling-progress" role="status"><strong>Preparing Bundle...</strong><progress aria-label="Bundle preparation progress" /></div>}
       {readiness.error && <p className="sale-preparation-error" role="alert">{readiness.error}</p>}
       <div className="session-selling-actions">

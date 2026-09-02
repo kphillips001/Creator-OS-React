@@ -1,5 +1,380 @@
 [
   {
+    "edit_request_id": "edit_request_2a142467f61549099f94057826d4164d",
+    "session_id": "edit_session_3e5ef741cb474cb0a0a8e4e669ff54db",
+    "creator_profile_id": 2,
+    "source_image_ids": [
+      "generated_image_b58e9d543ec0d8e81806976c"
+    ],
+    "edit_mode": "single_image",
+    "edit_prompt": "Move her top up just a little bit to not expose her nipples",
+    "provider_id": "seedream_5_0_pro",
+    "reference_image_id": null,
+    "reference_asset_id": null,
+    "batch_size": 1,
+    "status": "submitted",
+    "generation_job_id": "generation_job_5d908880dd844c3b9f05bb0ab160069c",
+    "created_at": "2026-08-31T02:17:07.829530",
+    "updated_at": "2026-08-31T02:17:08.749212",
+    "metadata": {
+      "source_output_references": [
+        "D:\\Ava_CMS\\Content\\Pending_Edit\\generated_image_b58e9d543ec0d8e81806976c.png"
+      ],
+      "reference_output_reference": null,
+      "references": []
+    }
+  },
+  {
+    "edit_request_id": "edit_request_8caa6f64d90245c398c2f910af4c476e",
+    "session_id": "edit_session_5e03df24a9ef4730bc51a408c6f50f29",
+    "creator_profile_id": 2,
+    "source_image_ids": [
+      "generated_image_1eca24cdb69112932ed9de5d"
+    ],
+    "edit_mode": "single_image",
+    "edit_prompt": "Have her laying on the bed. Same outfit",
+    "provider_id": "seedream_5_0_pro",
+    "reference_image_id": null,
+    "reference_asset_id": null,
+    "batch_size": 1,
+    "status": "submitted",
+    "generation_job_id": "generation_job_f753dde961c043fca1938be7c7545e4c",
+    "created_at": "2026-08-30T21:45:18.681087",
+    "updated_at": "2026-08-30T21:45:19.575402",
+    "metadata": {
+      "source_output_references": [
+        "D:\\Ava_CMS\\Content\\Pending_Edit\\generated_image_1eca24cdb69112932ed9de5d.png"
+      ],
+      "reference_output_reference": null,
+      "references": []
+    }
+  },
+  {
+    "edit_request_id": "edit_request_bf4f922f19ad45efb04a97d6ee56893a",
+    "session_id": "edit_session_5e6538a615154f10b4f329a2ec888bf9",
+    "creator_profile_id": 2,
+    "source_image_ids": [
+      "generated_image_495ecd7363c74e7c0d567436"
+    ],
+    "edit_mode": "single_image",
+    "edit_prompt": "Ensure her shirt fully covers her breasts. The shirt stops right under her breasts to show underboob.",
+    "provider_id": "seedream_5_0_pro",
+    "reference_image_id": null,
+    "reference_asset_id": null,
+    "batch_size": 1,
+    "status": "submitted",
+    "generation_job_id": "generation_job_dfb98dcee7064d4f9c3aa9654b3e2bfb",
+    "created_at": "2026-08-30T21:41:20.874485",
+    "updated_at": "2026-08-30T21:41:21.763725",
+    "metadata": {
+      "source_output_references": [
+        "D:\\Ava_CMS\\Content\\Pending_Edit\\generated_image_495ecd7363c74e7c0d567436.png"
+      ],
+      "reference_output_reference": null,
+      "references": []
+    }
+  },
+  {
+    "edit_request_id": "edit_request_0d6a12cdde6a4505893858765927f0cb",
+    "session_id": "edit_session_fb0cd663f170483f9fbe920ff8a6c655",
+    "creator_profile_id": 2,
+    "source_image_ids": [
+      "generated_image_f6296d427475940d1623d62d"
+    ],
+    "edit_mode": "single_image",
+    "edit_prompt": "Same outfit, but reclining on a leather sofa in a dimly lit room. Same facial gesture.",
+    "provider_id": "seedream_5_0_pro",
+    "reference_image_id": null,
+    "reference_asset_id": null,
+    "batch_size": 1,
+    "status": "submitted",
+    "generation_job_id": "generation_job_534a8859b5264b9d8458032c9ecffa00",
+    "created_at": "2026-08-30T21:36:30.760224",
+    "updated_at": "2026-08-30T21:36:31.737752",
+    "metadata": {
+      "source_output_references": [
+        "D:\\Ava_CMS\\Content\\Pending_Edit\\generated_image_f6296d427475940d1623d62d.png"
+      ],
+      "reference_output_reference": null,
+      "references": []
+    }
+  },
+  {
+    "edit_request_id": "edit_request_296d9896752d44bf843c0eacae753c8a",
+    "session_id": "edit_session_6dc131d3772f4079a6ecde2f9f270476",
+    "creator_profile_id": 2,
+    "source_image_ids": [
+      "generated_image_f6296d427475940d1623d62d"
+    ],
+    "edit_mode": "single_image",
+    "edit_prompt": "Same outfit, but reclining on a leather sofa in a dimly lit room. Same facial gesture.",
+    "provider_id": "seedream_5_0_pro",
+    "reference_image_id": null,
+    "reference_asset_id": null,
+    "batch_size": 1,
+    "status": "submitted",
+    "generation_job_id": "generation_job_e74afd9bdcc94246bf6e607de53dabcd",
+    "created_at": "2026-08-30T21:35:10.675903",
+    "updated_at": "2026-08-30T21:35:11.546279",
+    "metadata": {
+      "source_output_references": [
+        "D:\\Ava_CMS\\Content\\Pending_Edit\\generated_image_f6296d427475940d1623d62d.png"
+      ],
+      "reference_output_reference": null,
+      "references": []
+    }
+  },
+  {
+    "edit_request_id": "edit_request_3ac104f5a76148e8937839766dad6065",
+    "session_id": "edit_session_77707d1392d649f0959e39a6f14332b6",
+    "creator_profile_id": 2,
+    "source_image_ids": [
+      "generated_image_74401b1628a1fdd0412eb78c"
+    ],
+    "edit_mode": "single_image",
+    "edit_prompt": "She needs to be smiling.",
+    "provider_id": "seedream_5_0_pro",
+    "reference_image_id": null,
+    "reference_asset_id": null,
+    "batch_size": 1,
+    "status": "submitted",
+    "generation_job_id": "generation_job_ed17628be9d243fb8bfa6b5348be7be2",
+    "created_at": "2026-08-30T21:31:59.899755",
+    "updated_at": "2026-08-30T21:32:00.843517",
+    "metadata": {
+      "source_output_references": [
+        "D:\\Ava_CMS\\Content\\Generation\\Active\\generated_image_74401b1628a1fdd0412eb78c.png"
+      ],
+      "reference_output_reference": null,
+      "references": []
+    }
+  },
+  {
+    "edit_request_id": "edit_request_424784b02e8749c98afe8246bbf56163",
+    "session_id": "edit_session_8f4dec2f18a84d76a60b1375fb54c463",
+    "creator_profile_id": 2,
+    "source_image_ids": [
+      "generated_image_a8af47f9e7f13316bbedc404"
+    ],
+    "edit_mode": "single_image",
+    "edit_prompt": "Have her laying on a leather couch and out of this scene. She is no longer wet and has a teasing grin on her face.",
+    "provider_id": "seedream_5_0_pro",
+    "reference_image_id": null,
+    "reference_asset_id": null,
+    "batch_size": 1,
+    "status": "submitted",
+    "generation_job_id": "generation_job_9f0f11f83afc4f69b61226eeb38d032c",
+    "created_at": "2026-08-30T21:30:35.780703",
+    "updated_at": "2026-08-30T21:30:36.714433",
+    "metadata": {
+      "source_output_references": [
+        "D:\\Ava_CMS\\Content\\Pending_Edit\\generated_image_a8af47f9e7f13316bbedc404.png"
+      ],
+      "reference_output_reference": null,
+      "references": []
+    }
+  },
+  {
+    "edit_request_id": "edit_request_b02716b3ad4f4820968ece2e01925d08",
+    "session_id": "edit_session_ce1625aa83e64e498c4921ade5e4932d",
+    "creator_profile_id": 2,
+    "source_image_ids": [
+      "generated_image_4b2e6939dd2f97a769a4f06b"
+    ],
+    "edit_mode": "single_image",
+    "edit_prompt": "Take out all candles. Put a tight pink bra on her to cover her breasts. Teasing smile",
+    "provider_id": "seedream_5_0_pro",
+    "reference_image_id": null,
+    "reference_asset_id": null,
+    "batch_size": 1,
+    "status": "submitted",
+    "generation_job_id": "generation_job_b3ff4ec33e504de7a88a5f8449b7881a",
+    "created_at": "2026-08-30T21:26:34.420849",
+    "updated_at": "2026-08-30T21:26:35.382879",
+    "metadata": {
+      "source_output_references": [
+        "D:\\Ava_CMS\\Content\\Pending_Edit\\generated_image_4b2e6939dd2f97a769a4f06b.png"
+      ],
+      "reference_output_reference": null,
+      "references": []
+    }
+  },
+  {
+    "edit_request_id": "edit_request_4351c99e291c449d98a0f603eeb6600f",
+    "session_id": "edit_session_9dc2dd0e0e7c49158e0db3485457d586",
+    "creator_profile_id": 2,
+    "source_image_ids": [
+      "generated_image_8ed6fc6854daa1e28b308ccd"
+    ],
+    "edit_mode": "single_image",
+    "edit_prompt": "Button up her shirt to cover her nipples. Only her cleavage shall be shown.",
+    "provider_id": "seedream_5_0_pro",
+    "reference_image_id": null,
+    "reference_asset_id": null,
+    "batch_size": 1,
+    "status": "submitted",
+    "generation_job_id": "generation_job_48b65107ce69463b9eafe4ad7afab3ac",
+    "created_at": "2026-08-30T21:21:57.743932",
+    "updated_at": "2026-08-30T21:21:58.798806",
+    "metadata": {
+      "source_output_references": [
+        "D:\\Ava_CMS\\Content\\Pending_Edit\\generated_image_8ed6fc6854daa1e28b308ccd.png"
+      ],
+      "reference_output_reference": null,
+      "references": []
+    }
+  },
+  {
+    "edit_request_id": "edit_request_b704371aa21c4aacbc2e5370ba2fbf1f",
+    "session_id": "edit_session_39fbf218567148f880da047c56b6a150",
+    "creator_profile_id": 2,
+    "source_image_ids": [
+      "generated_image_28e45bd00fbc8142890315f2"
+    ],
+    "edit_mode": "single_image",
+    "edit_prompt": "Change the color of her top to pink",
+    "provider_id": "seedream_5_0_pro",
+    "reference_image_id": null,
+    "reference_asset_id": null,
+    "batch_size": 1,
+    "status": "submitted",
+    "generation_job_id": "generation_job_c8a84687ca994c8b8a21a1c493c94d44",
+    "created_at": "2026-08-26T00:39:51.112586",
+    "updated_at": "2026-08-26T00:39:52.032475",
+    "metadata": {
+      "source_output_references": [
+        "D:\\Ava_CMS\\Content\\Pending_Edit\\generated_image_28e45bd00fbc8142890315f2.png"
+      ],
+      "reference_output_reference": null,
+      "references": []
+    }
+  },
+  {
+    "edit_request_id": "edit_request_724802a6b39d43b8970193820500d07f",
+    "session_id": "edit_session_8b62532b925a49a0b89f17663c0e2bbd",
+    "creator_profile_id": 2,
+    "source_image_ids": [
+      "edit-workspace-5f4b8ea858c4411d850a0e8cbad98190"
+    ],
+    "edit_mode": "single_image",
+    "edit_prompt": "Make sure her white shirt is buttoned while allowing cleavage. She has a sultry teasing smile on her face",
+    "provider_id": "seedream_5_0_pro",
+    "reference_image_id": null,
+    "reference_asset_id": null,
+    "batch_size": 1,
+    "status": "submitted",
+    "generation_job_id": "generation_job_5dbca78013bd4a7e8d648037f50448b8",
+    "created_at": "2026-08-21T21:57:29.084680",
+    "updated_at": "2026-08-21T21:57:29.995921",
+    "metadata": {
+      "source_output_references": [
+        "D:\\Ava_CMS\\vault\\originals\\images\\397.png"
+      ],
+      "reference_output_reference": null,
+      "references": []
+    }
+  },
+  {
+    "edit_request_id": "edit_request_2aaad95a50b74272850e63d789a58a79",
+    "session_id": "edit_session_f3b689cf1c0242828e24cb403f3c0baf",
+    "creator_profile_id": 2,
+    "source_image_ids": [
+      "edit-workspace-5f4b8ea858c4411d850a0e8cbad98190"
+    ],
+    "edit_mode": "single_image",
+    "edit_prompt": "Make sure her white shirt is buttoned while allowing cleavage. She has a sultry teasing smile on her face",
+    "provider_id": "seedream_5_0_pro",
+    "reference_image_id": null,
+    "reference_asset_id": null,
+    "batch_size": 1,
+    "status": "submitted",
+    "generation_job_id": "generation_job_b1cf5ad06fb54d1780a8e561f69f42fc",
+    "created_at": "2026-08-21T21:56:40.226148",
+    "updated_at": "2026-08-21T21:56:41.083458",
+    "metadata": {
+      "source_output_references": [
+        "D:\\Ava_CMS\\vault\\originals\\images\\397.png"
+      ],
+      "reference_output_reference": null,
+      "references": []
+    }
+  },
+  {
+    "edit_request_id": "edit_request_2b5fa68d2ba74a3b8ed1af4003f51412",
+    "session_id": "edit_session_29458d2ff91d42e89515ac7e06150125",
+    "creator_profile_id": 2,
+    "source_image_ids": [
+      "edit-workspace-5f4b8ea858c4411d850a0e8cbad98190"
+    ],
+    "edit_mode": "single_image",
+    "edit_prompt": "Make sure her white shirt is buttoned while allowing cleavage. She has a teasing grin.",
+    "provider_id": "seedream_5_0_pro",
+    "reference_image_id": null,
+    "reference_asset_id": null,
+    "batch_size": 1,
+    "status": "submitted",
+    "generation_job_id": "generation_job_ec95c7139d8942d4a15e0c1084f35254",
+    "created_at": "2026-08-21T21:54:45.375256",
+    "updated_at": "2026-08-21T21:54:46.223922",
+    "metadata": {
+      "source_output_references": [
+        "D:\\Ava_CMS\\vault\\originals\\images\\397.png"
+      ],
+      "reference_output_reference": null,
+      "references": []
+    }
+  },
+  {
+    "edit_request_id": "edit_request_a8cb8e3ddf5a439aa53ac2fd43b0f73f",
+    "session_id": "edit_session_292011c305ec4741863fe64afefd5b88",
+    "creator_profile_id": 2,
+    "source_image_ids": [
+      "edit-workspace-86fece315c0940f9adcc237738c2e080"
+    ],
+    "edit_mode": "single_image",
+    "edit_prompt": "Have her fully wrapped in the towel and change her grin to a teasing one.",
+    "provider_id": "seedream_5_0_pro",
+    "reference_image_id": null,
+    "reference_asset_id": null,
+    "batch_size": 1,
+    "status": "submitted",
+    "generation_job_id": "generation_job_fd7baee4271443b1aa2738c0c961bc6f",
+    "created_at": "2026-08-20T21:27:33.282061",
+    "updated_at": "2026-08-20T21:27:34.138418",
+    "metadata": {
+      "source_output_references": [
+        "D:\\Ava_CMS\\vault\\originals\\images\\357.png"
+      ],
+      "reference_output_reference": null,
+      "references": []
+    }
+  },
+  {
+    "edit_request_id": "edit_request_bbb9dbce3f044aeda059125a57b71d89",
+    "session_id": "edit_session_f7b5d5b558c34bf9ae27a75ae87138e9",
+    "creator_profile_id": 2,
+    "source_image_ids": [
+      "edit-workspace-2467c1f32205449a8b42f54fb7e7e8e2"
+    ],
+    "edit_mode": "single_image",
+    "edit_prompt": "Close the existing black sheer robe fully across her chest and torso so she is completely covered, with no breasts or nipples visible. Keep the same black robe, same seated pose, same body position, same hairstyle, same bedroom environment, same warm lighting, same camera angle, and same composition. Preserve her exact facial identity and facial structure. Change only her facial expression to a warm, playful closed-mouth smile with slightly raised eyebrows and an inviting, teasing look toward the camera. Keep the result photorealistic and naturally consistent with the original image.",
+    "provider_id": "seedream_5_0_pro",
+    "reference_image_id": null,
+    "reference_asset_id": null,
+    "batch_size": 1,
+    "status": "submitted",
+    "generation_job_id": "generation_job_6ab54783cccf436a87c81ba0fcae8bb2",
+    "created_at": "2026-08-20T00:49:08.797438",
+    "updated_at": "2026-08-20T00:49:09.628231",
+    "metadata": {
+      "source_output_references": [
+        "D:\\Ava_CMS\\vault\\originals\\images\\335.png"
+      ],
+      "reference_output_reference": null,
+      "references": []
+    }
+  },
+  {
     "edit_request_id": "edit_request_46f5b9b045064008a6f01f50652894ee",
     "session_id": "edit_session_fe29755d54304c5bb3190a00bcb952b8",
     "creator_profile_id": 2,

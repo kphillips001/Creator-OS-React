@@ -168,14 +168,65 @@ For general masturbation, touching, or spreading prompts (without mentioning a t
 - Do NOT add any dildo or toy
 
 General rules:
-- Natural wetness and arousal: glistening fluids or creamy juices ONLY if the user specifically mentions "wet", "dripping", "creamy", "soaked", or similar
-- Natural anatomy: detailed but realistic pussy, swollen clit, natural labia
+- Sexual fluids are opt-in only. Do NOT invent dripping, squirting, juices, creamy discharge,
+  soaked genitals, wet-arousal trails, oil/lube pools, or shiny liquid running down the body.
+- Include glistening fluids / wet arousal ONLY if the operator explicitly requested wetness with
+  words such as wet, dripping, creamy, soaked, squirt, juices, lube, or oil.
+- If wetness was not requested, keep skin dry and photorealistic (normal shower water is allowed
+  only when the scene is actually a shower/bath environment).
+- Prefer sellable hardcore poses with face + body + sexual action readable together.
+  Avoid escalating into medical crotch-macro framing unless the concept already requires it.
+- Natural anatomy: photorealistic proportions; avoid deformed or diagram-like genitals
 - When the user/inspiration already names pussy, clit, labia, fingering, spreading, ass up,
   oral tease, masturbation, or similar sexual acts, keep that sexual act and those anatomical
   words — do not rewrite them into vague "sensual pose" or "state of undress" language
 - Keep poses natural and intimate like private paid-for creator photos for the viewer
 - Focus on realistic intimate sexual posing rather than cartoon gonzo exaggeration
 """
+
+# Sexual-fluid language is opt-in only (operator-prompted). Inspire Me must not invent it.
+_FLUID_OPT_IN_RE = re.compile(
+    r"\b(?:wet|dripping|drips|drip|creamy|soaked|sopping|drenched|squirt(?:ing|ed|s)?|"
+    r"juices?|fluids?|lube|lubricant|slick)\b",
+    re.IGNORECASE,
+)
+_FLUID_STRIP_PATTERNS = (
+    r"\b(?:glistening|shiny|slick|creamy|thick)?\s*(?:juices?|fluids?|discharge)\b",
+    r"\b(?:squirting|squirted|squirts)\b",
+    r"\b(?:dripping|drips|drip|drooling)\b",
+    r"\b(?:soaked|sopping|drenched)\b",
+    r"\bwet\s+(?:arousal|pussy|cunt|slit|lips|thighs|ass|asshole)\b",
+    r"\b(?:trail|string|strings|stream|streams)\s+of\s+(?:slick|wetness|juices?|fluids?)\b",
+    r"\b(?:oil|lube|lubricant)\s+(?:on|across|down|pooling|pools?)\b",
+    r"\b(?:arousal|pussy|cunt)\s+(?:juices?|fluids?|slick)\b",
+    r"\b(?:running|runs|run)\s+down\s+(?:her\s+)?(?:thighs?|legs?|ass|asshole|pussy)\b",
+    r"\bleaving\s+a\s+visible\s+trail\s+of\s+slick\b",
+)
+
+
+def operator_requested_fluids(*parts: str | None) -> bool:
+    blob = " ".join(str(part or "") for part in parts)
+    return bool(_FLUID_OPT_IN_RE.search(blob))
+
+
+def strip_unsolicited_fluids(text: str) -> str:
+    raw = str(text or "")
+    if not raw.strip():
+        return ""
+    # Preserve newlines/structure used by SCENE / provider sections.
+    # Only remove fluid phrases; do not strip legitimate punctuation.
+    lines = []
+    for line in raw.splitlines():
+        cleaned = line
+        for pattern in _FLUID_STRIP_PATTERNS:
+            cleaned = re.sub(pattern, " ", cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(r"[ \t]{2,}", " ", cleaned)
+        cleaned = re.sub(r" +([,.;:])", r"\1", cleaned)
+        cleaned = re.sub(r"([,.;:]){2,}", r"\1", cleaned)
+        cleaned = re.sub(r"[ \t]+$", "", cleaned)
+        cleaned = re.sub(r"^[ \t]+", "", cleaned)
+        lines.append(cleaned)
+    return "\n".join(lines).strip()
 
 IDENTITY_LOCK_RULES = """
 REFERENCE IDENTITY LOCK
@@ -1442,6 +1493,7 @@ def generate_explicit_prompts(
     original_source: str | None = None,
     concept_tier: str | None = None,
     operator_expression: str | None = None,
+    freeflow_expression: bool = False,
 ) -> list[str]:
     if not enhanced_explicit_tags or not enhanced_explicit_tags.strip():
         raise ValueError("Enhanced Explicit Tags are required.")
@@ -1468,6 +1520,7 @@ def generate_explicit_prompts(
     expression_profile = ExplicitExpressionProfileService.build(
         concept_tier=concept_tier,
         operator_expression=operator_expression,
+        freeflow_expression=freeflow_expression,
     )
     instruction = build_explicit_prompt_instruction(
         enhanced_explicit_tags=enhanced_explicit_tags,
@@ -1490,11 +1543,18 @@ def generate_explicit_prompts(
         optional_setting=optional_setting,
     )
 
+    # Fluids are opt-in only. Keep them when the operator typed wetness terms in
+    # Optional Setting or in the original concept/tags. Inspire Me hardcore strips
+    # unsolicited fluids before handoff so AI concepts do not count as opt-in.
+    allow_fluids = operator_requested_fluids(optional_setting, original_source)
+
     normalized_prompts = []
     for index, prompt in enumerate(prompts):
         if not prompt.strip():
             continue
         concept = original_lines[min(index, len(original_lines) - 1)]
+        if not allow_fluids:
+            concept = strip_unsolicited_fluids(concept)
         editorial_direction = editorial_directions[
             min(index, len(editorial_directions) - 1)
         ]
@@ -1504,6 +1564,9 @@ def generate_explicit_prompts(
             editorial_direction,
             expression_profile,
         )
+        if not allow_fluids:
+            prompt = strip_unsolicited_fluids(prompt)
+
         if force_topless_visibility:
             prompt = (
                 normalize_topless_visibility(prompt)

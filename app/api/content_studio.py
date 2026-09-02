@@ -1097,6 +1097,29 @@ def discard_explicit_inspiration(operation_id: str):
     return {"success": True, "operation": service.payload(updated)}
 
 
+@router.post("/explicit/inspire/{operation_id}/dismiss")
+def dismiss_explicit_inspiration_workspace(operation_id: str):
+    """Dismiss reusable concepts without deleting or rewriting their history."""
+    from app.services.background_operation_service import BackgroundOperationService
+    account_id = _current_account_id()
+    creator = get_active_creator_profile(str(account_id)) if account_id is not None else {}
+    service = BackgroundOperationService()
+    operation = service.get(operation_id, creator_profile_id=int(creator.get("id") or 0), account_id=account_id)
+    if operation is None or operation.operation_type != "content_studio_explicit_inspiration":
+        return JSONResponse(status_code=404, content={"success": False, "error": "Explicit inspiration operation not found."})
+    if operation.status != "SUCCEEDED" or str((operation.metadata or {}).get("phase") or "") != "HANDED_OFF":
+        return JSONResponse(status_code=409, content={"success": False, "error": "Only handed-off Explicit concepts can be dismissed."})
+    if bool((operation.metadata or {}).get("workspaceDismissed")):
+        return {"success": True, "operation": service.payload(operation)}
+    updated = service.progress(
+        operation_id, current=operation.progress_current, total=operation.progress_total,
+        percent=float(operation.progress_percent), stage=operation.current_stage,
+        message="Explicit inspiration workspace dismissed by operator.",
+        metadata={"workspaceDismissed": True},
+    )
+    return {"success": True, "operation": service.payload(updated)}
+
+
 @router.post("/explicit/batches")
 def start_explicit_batch(request: ExplicitBatchStartRequest):
     from app.services.background_operation_service import BackgroundOperationService
@@ -1115,17 +1138,41 @@ def start_explicit_batch(request: ExplicitBatchStartRequest):
         idempotency_key=f"content-studio-explicit-batch:{request.batchId}",
         executor_key="content_studio_explicit_batch_client", progress_total=total,
         current_stage="PREPARING", stage_message=f"Preparing idea 1 of {total}...",
-        result_location="/studio/content", cancellation_supported=False,
+        result_location="/studio/content", cancellation_supported=True,
+        exclusive_active_type=True,
         metadata={"batchId": request.batchId, "provider": request.provider,
                   "concepts": request.concepts, "items": [], "completedIdeas": 0,
                   "failedIdeas": 0, "currentIdeaIndex": 1, "phase": "preparing"},
     )
-    if created:
-        operation = service.repository.transition(
-            operation.operation_id, "RUNNING", stage="PREPARING",
-            message=f"Preparing idea 1 of {total}...",
-        )
+    requested_key = f"content-studio-explicit-batch:{request.batchId}"
+    if not created and operation.idempotency_key != requested_key:
+        return JSONResponse(status_code=409, content={
+            "success": False,
+            "error": "An Explicit generation batch is already active.",
+            "operationId": str(operation.operation_id),
+        })
     return {"success": True, "operationId": str(operation.operation_id), "reused": not created}
+
+
+@router.post("/explicit/batches/{operation_id}/start")
+def activate_explicit_batch(operation_id: str):
+    from app.services.background_operation_service import BackgroundOperationService
+    account_id = _current_account_id()
+    creator = get_active_creator_profile(str(account_id)) if account_id is not None else {}
+    service = BackgroundOperationService()
+    operation = service.get(operation_id, creator_profile_id=int(creator.get("id") or 0), account_id=account_id)
+    if operation is None or operation.operation_type != "content_studio_explicit_batch":
+        return JSONResponse(status_code=404, content={"success": False, "error": "Explicit batch not found."})
+    if operation.status == "RUNNING":
+        return {"success": True, "operation": service.payload(operation)}
+    if operation.status != "QUEUED":
+        return JSONResponse(status_code=409, content={"success": False, "error": "Explicit batch cannot be started from its current state."})
+    updated = service.repository.transition(
+        operation.operation_id, "RUNNING", stage="PREPARING",
+        message=operation.stage_message or "Preparing explicit generation...",
+        metadata={"clientExecutionStarted": True},
+    )
+    return {"success": True, "operation": service.payload(updated)}
 
 
 @router.post("/explicit/batches/{operation_id}/progress")
@@ -1137,9 +1184,20 @@ def update_explicit_batch(operation_id: str, request: ExplicitBatchProgressReque
     operation = service.get(operation_id, creator_profile_id=int(creator.get("id") or 0), account_id=account_id)
     if operation is None or operation.operation_type != "content_studio_explicit_batch":
         return JSONResponse(status_code=404, content={"success": False, "error": "Explicit batch not found."})
+    if operation.status in {"CANCEL_REQUESTED", "CANCELLED"}:
+        if operation.status == "CANCEL_REQUESTED":
+            operation = service.cancel(
+                operation.operation_id,
+                "Generation stopped by operator. Completed images were preserved.",
+            )
+        return {"success": True, "operation": service.payload(operation)}
     terminal = str(request.terminalStatus or "").upper()
-    if terminal in {"SUCCEEDED", "PARTIAL"}:
-        updated = service.succeed(operation_id, partial=terminal == "PARTIAL",
+    if terminal == "SUCCEEDED":
+        updated = service.complete_explicit_batch(
+            operation_id, message=request.message, metadata=request.metadata,
+        )
+    elif terminal == "PARTIAL":
+        updated = service.succeed(operation_id, partial=True,
                                   message=request.message, metadata=request.metadata)
     elif terminal == "FAILED":
         updated = service.fail(operation_id, request.message, metadata=request.metadata)
@@ -1150,6 +1208,53 @@ def update_explicit_batch(operation_id: str, request: ExplicitBatchProgressReque
             stage=request.stage, message=request.message, metadata=request.metadata,
         )
     return {"success": True, "operation": service.payload(updated)}
+
+
+@router.post("/explicit/batches/{operation_id}/reset")
+def reset_explicit_batch_workspace(operation_id: str):
+    """Dismiss terminal workspace state without deleting generation records."""
+    from app.services.background_operation_service import BackgroundOperationService
+    account_id = _current_account_id()
+    creator = get_active_creator_profile(str(account_id)) if account_id is not None else {}
+    service = BackgroundOperationService()
+    operation = service.get(
+        operation_id, creator_profile_id=int(creator.get("id") or 0),
+        account_id=account_id,
+    )
+    if operation is None or operation.operation_type != "content_studio_explicit_batch":
+        return JSONResponse(status_code=404, content={"success": False, "error": "Explicit batch not found."})
+    if not operation.terminal:
+        return JSONResponse(status_code=409, content={"success": False, "error": "Stop or finish the generation before resetting Content Studio."})
+    if not bool((operation.metadata or {}).get("workspaceDismissed")):
+        operation = service.progress(
+            operation.operation_id, current=operation.progress_current,
+            total=operation.progress_total, percent=float(operation.progress_percent),
+            stage=operation.current_stage, message="Content Studio workspace reset by operator.",
+            metadata={"workspaceDismissed": True},
+        )
+    return {"success": True, "operation": service.payload(operation)}
+
+
+@router.post("/explicit/batches/{operation_id}/retry-failed")
+def retry_failed_explicit_batch_items(operation_id: str):
+    """Queue one idempotent retry cycle derived from canonical failed item state."""
+    from app.services.background_operation_service import BackgroundOperationService
+
+    account_id = _current_account_id()
+    creator = get_active_creator_profile(str(account_id)) if account_id is not None else {}
+    service = BackgroundOperationService()
+    operation = service.get(
+        operation_id, creator_profile_id=int(creator.get("id") or 0), account_id=account_id,
+    )
+    if operation is None or operation.operation_type != "content_studio_explicit_batch":
+        return JSONResponse(status_code=404, content={"success": False, "error": "Explicit batch not found."})
+    try:
+        updated, created = service.repository.begin_explicit_failed_retry(
+            operation.operation_id, creator_profile_id=int(creator.get("id") or 0),
+        )
+    except ValueError as error:
+        return JSONResponse(status_code=409, content={"success": False, "error": str(error)})
+    return {"success": True, "operation": service.payload(updated), "reused": not created}
 
 
 @router.post("/prompt-planner/ask")

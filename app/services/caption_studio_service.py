@@ -380,6 +380,85 @@ class CaptionStudioService:
         self._append_history(item, result)
         return result
 
+    def generate_instagram_vision_themes(
+        self,
+        *,
+        generated_image_id: str,
+        image_reference: str,
+        creator_profile_id: int,
+        creator_profile: Mapping[str, Any] | None = None,
+        creative_mode: str | None = None,
+        prompt_text: str | None = None,
+        prompt_metadata: Mapping[str, Any] | None = None,
+        generation_metadata: Mapping[str, Any] | None = None,
+        idea_seed: int = 0,
+    ) -> CaptionResult:
+        """Create image-aware Instagram caption choices for a phone handoff."""
+        grok_response = self._generate_grok_vision_x_captions(
+            image_reference=image_reference,
+            creator_profile=creator_profile,
+            creative_mode=creative_mode,
+            prompt_text=prompt_text,
+            prompt_metadata=prompt_metadata,
+            generation_metadata=generation_metadata,
+            idea_seed=idea_seed,
+        )
+        vision = dict(grok_response.get("image_analysis") or {})
+        themes = ({
+            "theme": "Instagram Captions",
+            "persona": "instagram_handoff",
+            "captions": tuple(grok_response["captions"]),
+        },)
+        variations = tuple(themes[0]["captions"])
+        creator_name = str((creator_profile or {}).get("name") or (creator_profile or {}).get("display_name") or "")
+        source_text = " | ".join(value for value in (
+            str(vision.get("summary") or ""), creator_name,
+            str(creative_mode or ""), str(prompt_text or ""),
+        ) if value)
+        item = self.create_caption_request(
+            creator_profile_id=creator_profile_id,
+            platform=CaptionPlatform.INSTAGRAM.value,
+            style=CaptionStyle.PLAYFUL.value,
+            tone="creator os instagram handoff",
+            source_text=source_text or "Grok Vision Instagram caption set",
+            variation_count=len(variations),
+            source_generated_image_id=generated_image_id,
+            metadata={
+                "workflow": "instagram_phone_handoff",
+                "vision_primary": True,
+                "vision_provider": "grok",
+                "image_reference": image_reference,
+                "creative_mode": creative_mode,
+                "prompt_metadata": dict(prompt_metadata or {}),
+                "generation_metadata": dict(generation_metadata or {}),
+                "idea_seed": idea_seed,
+            },
+        )
+        result = CaptionResult(
+            caption_result_id=new_generation_id("caption_result"),
+            caption_request_id=item.caption_request_id,
+            session_id=item.session_id,
+            platform=CaptionPlatform.INSTAGRAM.value,
+            variations=variations,
+            selected_text=None,
+            formatter_metadata={
+                "provider_neutral": True,
+                "formatter": "CaptionStudioService",
+                "workflow": "instagram_phone_handoff",
+                "vision_primary": True,
+                "vision_provider": "grok",
+                "vision": vision,
+                "themes": themes,
+                "personas": {"instagram_handoff": "Instagram Captions"},
+                "engagement_goals": ("caption selection", "manual Instagram posting"),
+            },
+        )
+        results = list(self.list_results())
+        results.insert(0, result)
+        self._write_results(results)
+        self._append_history(item, result)
+        return result
+
     def generate_telegram_vision_themes(
         self,
         *,

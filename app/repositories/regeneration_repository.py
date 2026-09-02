@@ -38,6 +38,38 @@ class RegenerationRepository:
             row = cursor.fetchone()
         return RegenerationRun(**dict(row)) if row else None
 
+    def discover_workspace(self, *, creator_profile_id: int) -> RegenerationRun | None:
+        """Newest active run wins, then newest terminal run still needing review."""
+        with self.connection_factory() as connection, connection.cursor() as cursor:
+            cursor.execute("""SELECT r.* FROM public.regeneration_runs r
+                JOIN public.background_operations o ON o.operation_id=r.operation_id
+                WHERE r.creator_profile_id=%s AND r.workspace_dismissed_at IS NULL
+                  AND (o.status IN ('QUEUED','RUNNING','WAITING_EXTERNAL','CANCEL_REQUESTED') OR (
+                    r.created_at > COALESCE((
+                      SELECT MAX(dismissed.workspace_dismissed_at)
+                      FROM public.regeneration_runs dismissed
+                      WHERE dismissed.creator_profile_id=r.creator_profile_id
+                    ), '-infinity'::timestamptz)
+                    AND EXISTS (
+                      SELECT 1 FROM public.regeneration_results x
+                      WHERE x.operation_id=r.operation_id
+                        AND (x.status IN ('PENDING','RUNNING','FAILED','SUBMISSION_AMBIGUOUS')
+                             OR (x.status='SUCCEEDED' AND x.disposition='PENDING_REVIEW')))))
+                ORDER BY CASE WHEN o.status IN ('QUEUED','RUNNING','WAITING_EXTERNAL','CANCEL_REQUESTED') THEN 0 ELSE 1 END,
+                         r.updated_at DESC LIMIT 1""", (int(creator_profile_id),))
+            row = cursor.fetchone()
+        return RegenerationRun(**dict(row)) if row else None
+
+    def dismiss_workspace(self, operation_id, *, creator_profile_id: int) -> RegenerationRun:
+        with self.connection_factory() as connection, connection.cursor() as cursor:
+            cursor.execute("""UPDATE public.regeneration_runs SET workspace_dismissed_at=NOW(),updated_at=NOW()
+                WHERE operation_id=%s AND creator_profile_id=%s RETURNING *""",
+                (operation_id, int(creator_profile_id)))
+            row = cursor.fetchone()
+        if not row:
+            raise KeyError("Regeneration operation not found.")
+        return RegenerationRun(**dict(row))
+
     def results(self, operation_id) -> tuple[RegenerationResult, ...]:
         with self.connection_factory() as connection, connection.cursor() as cursor:
             cursor.execute(

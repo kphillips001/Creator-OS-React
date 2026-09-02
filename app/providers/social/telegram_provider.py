@@ -10,13 +10,10 @@ from typing import Any, Mapping
 from urllib.parse import urlparse
 
 import requests
-from PIL import Image, ImageOps
-
 from app.config import settings
+from app.services.telegram_image_normalization_service import TelegramImageNormalizationService
 
 
-TELEGRAM_IMAGE_MAX_SIDE = 4096
-TELEGRAM_IMAGE_MAX_TOTAL_DIMENSIONS = 9500
 TELEGRAM_API_TIMEOUT = 45
 
 
@@ -43,8 +40,9 @@ class TelegramPublishResult:
 class TelegramPublishingProvider:
     """Thin provider for posting generated images to Telegram Bot API."""
 
-    def __init__(self, *, http_client=None):
+    def __init__(self, *, http_client=None, image_normalizer=None):
         self.http_client = http_client or requests
+        self.image_normalizer = image_normalizer or TelegramImageNormalizationService()
 
     def publish(
         self,
@@ -55,6 +53,7 @@ class TelegramPublishingProvider:
         cta_enabled: bool = False,
         cta_label: str = "",
         cta_url: str = "",
+        cta_buttons: tuple[Mapping[str, Any], ...] | None = None,
     ) -> TelegramPublishResult:
         result = self.publish_to_telegram(
             image_reference=image_reference,
@@ -63,6 +62,7 @@ class TelegramPublishingProvider:
             cta_enabled=cta_enabled,
             cta_label=cta_label,
             cta_url=cta_url,
+            cta_buttons=cta_buttons,
         )
         if not result.get("ok"):
             raise TelegramPublishError(str(result.get("error") or "Unknown Telegram API error."))
@@ -84,6 +84,8 @@ class TelegramPublishingProvider:
             ),
             "vault_chat_id": str(settings.TELEGRAM_VAULT_CHANNEL_ID or "").strip(),
             "content_vault_url": str(settings.TELEGRAM_CONTENT_VAULT_URL or "").strip(),
+            "cashapp_tip_url": str(settings.CASHAPP_TIP_URL or "").strip(),
+            "chat_url": str(settings.TELEGRAM_CHAT_URL or "").strip(),
             "main_channel_url": str(settings.TELEGRAM_MAIN_CHANNEL_URL or "").strip(),
             "ava_chat_url": str(settings.TELEGRAM_AVA_CHAT_URL or "").strip(),
             "dmgate_url": str(settings.DMGATE_URL_AVA or "").strip(),
@@ -121,7 +123,31 @@ class TelegramPublishingProvider:
         cta_enabled: bool = False,
         cta_label: str = "",
         cta_url: str = "",
+        cta_buttons: tuple[Mapping[str, Any], ...] | None = None,
     ) -> Mapping[str, Any] | None:
+        if cta_buttons is not None:
+            if not cta_buttons:
+                return None
+            button_count = len(cta_buttons)
+            rendered = []
+            for button in cta_buttons:
+                identity = str(button.get("identity") or "").strip().upper()
+                label = str(button.get("text") or "").strip()
+                url = str(button.get("url") or "").strip()
+                if identity == "VAULT":
+                    label = TelegramPublishingProvider.vault_cta_label(button_count)
+                elif identity == "CHAT":
+                    label = TelegramPublishingProvider.chat_cta_label(button_count)
+                elif identity == "TIP":
+                    label = TelegramPublishingProvider.tip_cta_label(button_count)
+                if not label:
+                    raise TelegramPublishError("CTA button text is required when CTA is enabled.")
+                if not url:
+                    raise TelegramPublishError("CTA button URL is required when CTA is enabled.")
+                if not TelegramPublishingProvider.valid_cta_url(url):
+                    raise TelegramPublishError("CTA URL must start with http://, https://, or tg://.")
+                rendered.append({"text": label, "url": url})
+            return {"inline_keyboard": [rendered]}
         if not cta_enabled:
             return None
         label = (cta_label or "").strip()
@@ -130,54 +156,40 @@ class TelegramPublishingProvider:
             raise TelegramPublishError("CTA button text is required when CTA is enabled.")
         if not url:
             raise TelegramPublishError("CTA button URL is required when CTA is enabled.")
-        if not url.startswith(("http://", "https://", "tg://")):
+        if not TelegramPublishingProvider.valid_cta_url(url):
             raise TelegramPublishError("CTA URL must start with http://, https://, or tg://.")
         return {"inline_keyboard": [[{"text": label, "url": url}]]}
 
+    @staticmethod
+    def vault_cta_label(button_count: int) -> str:
+        if button_count <= 1:
+            return "🔒 Private Content Vault"
+        return "🔒 Vault" if button_count == 2 else "🔒"
+
+    @staticmethod
+    def tip_cta_label(button_count: int) -> str:
+        if button_count <= 1:
+            return "❤️ Show Ava Some Love"
+        return "❤️ Tip" if button_count == 2 else "❤️"
+
+    @staticmethod
+    def chat_cta_label(button_count: int) -> str:
+        if button_count <= 1:
+            return "💬 Chat With Me"
+        return "💬 Chat" if button_count == 2 else "💬"
+
+    @staticmethod
+    def valid_cta_url(value: str) -> bool:
+        parsed = urlparse(str(value or "").strip())
+        if parsed.scheme in {"http", "https"}:
+            return bool(parsed.netloc)
+        return parsed.scheme == "tg" and bool(parsed.netloc or parsed.path)
+
     def prepare_telegram_photo(self, image_path: str | Path) -> Path:
-        source_path = Path(image_path)
-        if not source_path.exists():
-            raise TelegramPublishError(f"Image file does not exist: {source_path}")
-
-        with Image.open(source_path) as image:
-            image = ImageOps.exif_transpose(image)
-            if image.mode in ("RGBA", "LA") or (image.mode == "P" and "transparency" in image.info):
-                background = Image.new("RGB", image.size, "white")
-                alpha = image.convert("RGBA").getchannel("A")
-                background.paste(image.convert("RGBA"), mask=alpha)
-                image = background
-            else:
-                image = image.convert("RGB")
-
-            width, height = image.size
-            scale = min(
-                TELEGRAM_IMAGE_MAX_SIDE / max(width, height),
-                TELEGRAM_IMAGE_MAX_TOTAL_DIMENSIONS / (width + height),
-                1.0,
-            )
-            if scale < 1.0:
-                image = image.resize(
-                    (max(1, int(width * scale)), max(1, int(height * scale))),
-                    Image.Resampling.LANCZOS,
-                )
-
-            width, height = image.size
-            if max(width, height) / max(1, min(width, height)) > 20:
-                if width > height:
-                    new_height = max(1, int(width / 20))
-                    canvas = Image.new("RGB", (width, new_height), "white")
-                    canvas.paste(image, (0, (new_height - height) // 2))
-                else:
-                    new_width = max(1, int(height / 20))
-                    canvas = Image.new("RGB", (new_width, height), "white")
-                    canvas.paste(image, ((new_width - width) // 2, 0))
-                image = canvas
-
-            temp_file = tempfile.NamedTemporaryFile(delete=False, suffix="_telegram.jpg")
-            temp_path = Path(temp_file.name)
-            temp_file.close()
-            image.save(temp_path, "JPEG", quality=92, optimize=True)
-        return temp_path
+        try:
+            return self.image_normalizer.normalize(image_path).path
+        except (FileNotFoundError, OSError, ValueError) as error:
+            raise TelegramPublishError(str(error)) from error
 
     @staticmethod
     def parse_telegram_response(response) -> dict[str, Any]:
@@ -219,6 +231,7 @@ class TelegramPublishingProvider:
         cta_enabled: bool = False,
         cta_label: str = "",
         cta_url: str = "",
+        cta_buttons: tuple[Mapping[str, Any], ...] | None = None,
     ) -> dict[str, Any]:
         config = self.load_telegram_env()
         temp_image_path: Path | None = None
@@ -235,6 +248,7 @@ class TelegramPublishingProvider:
                 cta_enabled=cta_enabled,
                 cta_label=cta_label,
                 cta_url=cta_url,
+                cta_buttons=cta_buttons,
             )
             data = {"chat_id": chat_id, "parse_mode": "HTML"}
             if reply_markup:
@@ -270,10 +284,97 @@ class TelegramPublishingProvider:
                 "post_to": (post_to or "main").strip().lower(),
             }
         finally:
-            if temp_image_path:
-                temp_image_path.unlink(missing_ok=True)
             if local_source and local_source.parent.name.startswith("creator_os_telegram_"):
+                if temp_image_path:
+                    temp_image_path.unlink(missing_ok=True)
                 local_source.unlink(missing_ok=True)
+                try:
+                    local_source.parent.rmdir()
+                except OSError:
+                    pass
+
+    def edit_message_reply_markup(
+        self, *, chat_id: str, message_id: str | int,
+        reply_markup: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        """Replace only an existing message's inline keyboard."""
+        config = self.load_telegram_env()
+        try:
+            response = self.http_client.post(
+                f"https://api.telegram.org/bot{config['bot_token']}/editMessageReplyMarkup",
+                data={"chat_id": str(chat_id), "message_id": str(message_id),
+                      "reply_markup": json.dumps(dict(reply_markup), ensure_ascii=False)},
+                timeout=TELEGRAM_API_TIMEOUT,
+            )
+            result = self.parse_telegram_response(response)
+            message = ((result.get("response") or {}).get("result") or {})
+            result["chat_id"] = (message.get("chat") or {}).get("id")
+            result["reply_markup"] = message.get("reply_markup")
+            return result
+        except Exception as error:
+            return {"ok": False, "error": str(error)}
+
+    def edit_message_caption(
+        self, *, chat_id: str, message_id: str | int, caption: str,
+        reply_markup: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        """Edit only an existing media caption while explicitly preserving its keyboard."""
+        config = self.load_telegram_env()
+        try:
+            response = self.http_client.post(
+                f"https://api.telegram.org/bot{config['bot_token']}/editMessageCaption",
+                data={
+                    "chat_id": str(chat_id), "message_id": str(message_id),
+                    "caption": str(caption), "parse_mode": "HTML",
+                    "reply_markup": json.dumps(dict(reply_markup), ensure_ascii=False),
+                },
+                timeout=TELEGRAM_API_TIMEOUT,
+            )
+            result = self.parse_telegram_response(response)
+            message = ((result.get("response") or {}).get("result") or {})
+            result["chat_id"] = (message.get("chat") or {}).get("id")
+            result["message_id"] = message.get("message_id")
+            result["caption"] = message.get("caption")
+            result["caption_entities"] = message.get("caption_entities")
+            result["reply_markup"] = message.get("reply_markup")
+            return result
+        except Exception as error:
+            return {"ok": False, "error": str(error)}
+
+    def edit_message_media(
+        self, *, chat_id: str | int, message_id: str | int,
+        image_path: str | Path, caption: str,
+        caption_entities: tuple[Mapping[str, Any], ...] = (),
+        reply_markup: Mapping[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Replace one bot-authored photo in place while preserving post metadata."""
+        config = self.load_telegram_env()
+        prepared = self.prepare_telegram_photo(image_path)
+        media = {
+            "type": "photo",
+            "media": "attach://replacement",
+            "caption": str(caption or ""),
+        }
+        if caption_entities:
+            media["caption_entities"] = [dict(entity) for entity in caption_entities]
+        data = {
+            "chat_id": str(chat_id),
+            "message_id": str(message_id),
+            "media": json.dumps(media, ensure_ascii=False),
+        }
+        if reply_markup is not None:
+            data["reply_markup"] = json.dumps(dict(reply_markup), ensure_ascii=False)
+        try:
+            with prepared.open("rb") as replacement:
+                response = self.http_client.post(
+                    f"https://api.telegram.org/bot{config['bot_token']}/editMessageMedia",
+                    data=data,
+                    files={"replacement": (prepared.name, replacement, "image/jpeg")},
+                    timeout=TELEGRAM_API_TIMEOUT,
+                )
+            return self.parse_telegram_response(response)
+        except Exception as error:
+            return {"ok": False, "error": str(error)}
 
     def _materialize_image_reference(self, image_reference: str | Path) -> Path:
         reference = str(image_reference or "").strip()

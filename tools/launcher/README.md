@@ -67,3 +67,13 @@ The launcher requires the same prerequisites as manual startup: Python with the 
 The supervised runtimes include the standalone Image orchestrator and NudeNet, Vision, Grok, and Content Intelligence workers, the Photoshoot Analysis worker, and the durable Photoshoot Auto Run worker. Both Photoshoot workers use the same PID validation, heartbeat, lease recovery, restart, and process-tree shutdown protections as the existing workers. Photoshoot Auto Run owns full-plan generation after the UI issues start, pause, resume, stop, or retry commands.
 
 Canonical reference hosting is configured through `HOSTED_REFERENCE_VERIFY_TTL_SECONDS`, `HOSTED_REFERENCE_RETRY_COUNT`, `HOSTED_REFERENCE_RETRY_BACKOFF_SECONDS`, `HOSTED_REFERENCE_VERIFY_TIMEOUT_SECONDS`, and `WAVESPEED_TRANSPORT_TIMEOUT_SECONDS`. These settings are consumed by the generation runtime; the launcher does not override them.
+
+## Session 5 synthetic certification cleanup
+
+The ignored `.env.session5.local` marker may temporarily enable the isolated
+Session 5 Scenario Lab for local development. Before final launch certification:
+
+- remove or disable `.env.session5.local`;
+- verify `CREATOR_OS_CERTIFICATION_SCENARIO_MODE` is false or unset;
+- verify the normal production API rejects synthetic scenario mutation; and
+- separately remove or disable the Session 5 pacing bypass.

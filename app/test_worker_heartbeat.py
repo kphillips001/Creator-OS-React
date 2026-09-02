@@ -16,8 +16,8 @@ class MemoryRepository:
     def record_heartbeat(self, instance, *, status, at, metadata=None): return self._set(instance, status=status, last_heartbeat_at=at, metadata={**self.records[instance].metadata, **dict(metadata or {})})
     def record_poll(self, instance, *, at): return self._set(instance, status=WorkerHeartbeatStatus.RUNNING, last_poll_at=at, last_heartbeat_at=at)
     def record_success(self, instance, *, at, idle): return self._set(instance, status=WorkerHeartbeatStatus.IDLE if idle else WorkerHeartbeatStatus.RUNNING, last_success_at=at, last_heartbeat_at=at, last_error=None)
-    def record_failure(self, instance, *, at, error): return self._set(instance, status=WorkerHeartbeatStatus.DEGRADED, last_failure_at=at, last_heartbeat_at=at, last_error=error)
-    def record_shutdown(self, instance, *, at, status): return self._set(instance, status=status, last_heartbeat_at=at, shutdown_at=at if status == WorkerHeartbeatStatus.STOPPED else None)
+    def record_failure(self, instance, *, at, error, metadata=None): return self._set(instance, status=WorkerHeartbeatStatus.DEGRADED, last_failure_at=at, last_heartbeat_at=at, last_error=error, metadata={**self.records[instance].metadata, **dict(metadata or {})})
+    def record_shutdown(self, instance, *, at, status, metadata=None): return self._set(instance, status=status, last_heartbeat_at=at, shutdown_at=at if status == WorkerHeartbeatStatus.STOPPED else None, metadata={**self.records[instance].metadata, **dict(metadata or {})})
     def get_by_instance(self, instance): return self.records.get(instance)
     def list_latest_per_worker(self, *, creator_profile_id=None, account_id=None):
         scoped = [item for item in self.records.values() if (item.creator_profile_id in {None, creator_profile_id}) and (item.account_id in {None, account_id})]
@@ -51,6 +51,7 @@ def test_full_heartbeat_lifecycle_and_bounded_failure():
     failed = service.record_failure("x" * 1200); assert failed.status == WorkerHeartbeatStatus.DEGRADED and len(failed.last_error) == 1000
     assert service.record_stopping().status == WorkerHeartbeatStatus.STOPPING
     stopped = service.record_shutdown(); assert stopped.status == WorkerHeartbeatStatus.STOPPED and stopped.shutdown_at == NOW
+    assert stopped.metadata["lifecycle_state"] == "STOPPED"
 
 
 def test_classification_requires_recent_heartbeat_and_honors_terminal_state():

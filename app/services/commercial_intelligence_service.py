@@ -21,6 +21,9 @@ class CommercialIntelligenceService:
         "show", "see", "have", "photo", "photos", "video", "set", "content",
         "outfit", "wearing", "wardrobe", "theme", "mood", "location",
         "setting", "activity", "collection",
+        "send", "buy", "unlock", "another", "more", "next", "else",
+        "hotter",
+        "cheaper", "less", "different",
     })
     _COMPLETE_SET_PHRASES = (
         "complete set", "full set", "whole set", "entire set",
@@ -88,7 +91,10 @@ class CommercialIntelligenceService:
             )
 
         message = str(context.latest_message or "").strip()
-        complete_set = self._complete_set_requested(message)
+        complete_set = (
+            context.requested_media_type in {"PHOTOSET", "BUNDLE"}
+            or self._complete_set_requested(message)
+        )
         request_present = self._request_present(context, message)
         bundle_available = "BUNDLE" in context.available_offering_types
 

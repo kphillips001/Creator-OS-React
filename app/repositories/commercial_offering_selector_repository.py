@@ -30,6 +30,23 @@ class CommercialOfferingSelectorRepository:
             offering_id, creator_profile_id=creator_profile_id
         )
 
+    def get_controlled_test_candidate(self, *, creator_profile_id: int):
+        """Resolve the one publication explicitly tagged for controlled smoke tests."""
+        with self.fulfillments.connection_factory() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute("""SELECT offering.offering_id
+                    FROM commercial_offerings offering
+                    JOIN commercial_publications publication
+                      ON publication.commercial_offering_id=offering.offering_id
+                    WHERE offering.creator_profile_id=%s
+                      AND publication.publication_metadata @> '{"test_specific": true}'::jsonb
+                      AND publication.publication_metadata->>'purpose' LIKE 'controlled_smoke_test%%'
+                    ORDER BY publication.published_at DESC,publication.publication_id DESC
+                    LIMIT 1""", (creator_profile_id,))
+                row = cursor.fetchone()
+        return (self.get_candidate(row["offering_id"], creator_profile_id=creator_profile_id)
+                if row else None)
+
     def list_purchased_offering_ids(
         self, *, creator_profile_id: int, fanvue_account_id: int,
         external_fanvue_user_uuid, telegram_user_id: int | None,

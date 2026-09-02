@@ -23,7 +23,8 @@ class PhotoshootCommerceDeliverableService:
     RISK = {"SAFE": 0, "TEASE": 1, "NUDITY": 2, "EXPLICIT": 3}
 
     def __init__(self, *, queue=None, library=None, repository=None, intelligence=None,
-                 commercial_intelligence=None, session_sales_strategy=None, workflows=None):
+                 commercial_intelligence=None, session_sales_strategy=None, workflows=None,
+                 bundle_preparation=None):
         self.queue = queue or PhotoshootQueueService()
         self.library = library or GenerationLibraryService()
         self.repository = repository or PhotoshootCommerceRepository()
@@ -37,6 +38,7 @@ class PhotoshootCommerceDeliverableService:
             from app.repositories.photoshoot_analysis_workflow_repository import PhotoshootAnalysisWorkflowRepository
             workflows = PhotoshootAnalysisWorkflowRepository()
         self.workflows = workflows
+        self.bundle_preparation = bundle_preparation
 
     def complete(self, session_id: str, creator_profile_id: int):
         session = self.queue.get_session(session_id)
@@ -140,6 +142,61 @@ class PhotoshootCommerceDeliverableService:
             self.repository.mark_intelligence_failure(session_id, intelligence_version, stage, error)
             raise
 
+    def run_source_neutral_intelligence(
+        self, *, session_key: str, chapters, display_name: str,
+        hero_asset_id: int, source_kind: str = "GENERATION_LIBRARY_IMPORT",
+        intelligence_version: str = PHOTOSHOOT_INTELLIGENCE_VERSION,
+    ):
+        """Persist the canonical Photoshoot contract without fabricating Studio state."""
+        ordered = tuple(chapters)
+        if not ordered:
+            raise ValueError("Assembled Photoshoot Intelligence requires member evidence.")
+        existing = self.repository.get_intelligence(session_key)
+        if (existing and existing.get("status") == "READY"
+                and existing.get("pipeline_stage") == "COMPLETE"
+                and existing.get("intelligence_version") == intelligence_version
+                and len(self.repository.shot_intelligence(session_key, intelligence_version)) == len(ordered)):
+            return dict(existing.get("profile_data") or {})
+        self.repository.mark_intelligence_running(session_key, intelligence_version)
+        try:
+            profile = self.build_source_neutral_intelligence(
+                chapters=ordered, display_name=display_name, hero_asset_id=hero_asset_id,
+                source_kind=source_kind, intelligence_version=intelligence_version,
+                progress=lambda stage, state: self.repository.update_intelligence_stage(
+                    session_key, stage, dict(state)))
+            self.repository.persist_canonical_intelligence(session_key, intelligence_version, profile)
+            return profile
+        except Exception as error:
+            stage = str(getattr(error, "stage", "PERSISTENCE_FAILED"))
+            self.repository.mark_intelligence_failure(
+                session_key, intelligence_version, stage, error)
+            raise
+
+    def build_source_neutral_intelligence(
+        self, *, chapters, display_name: str, hero_asset_id: int,
+        source_kind: str = "GENERATION_LIBRARY_IMPORT",
+        intelligence_version: str = PHOTOSHOOT_INTELLIGENCE_VERSION,
+        progress=None,
+    ):
+        """Build canonical aggregate intelligence without mutating persistence."""
+        ordered = tuple(chapters)
+        if not ordered:
+            raise ValueError("Assembled Photoshoot Intelligence requires member evidence.")
+        approved_metadata = {
+            "source_kind": str(source_kind), "hero_asset_id": int(hero_asset_id),
+            "member_count": len(ordered),
+        }
+        if str(display_name or "").strip():
+            approved_metadata["photoshoot_name"] = str(display_name).strip()
+        profile = self.commercial_intelligence.generate(
+            chapters=ordered,
+            approved_metadata=approved_metadata,
+            intelligence_version=intelligence_version, progress=progress)
+        missing = PhotoshootCommercialIntelligenceService.missing_required_commercial_fields(profile)
+        if missing:
+            raise PhotoshootCommercialIntelligenceIncompleteError(missing)
+        return profile
+
     @staticmethod
     def _preserve_legacy_commercial_intelligence(profile: dict, existing: dict) -> dict:
         """Add canonical analysis while retaining the legacy commercial aggregate verbatim."""
@@ -198,9 +255,25 @@ class PhotoshootCommerceDeliverableService:
         current = PhotoshootSellingMode.parse(existing.get("selling_mode") or "SESSION")
         if current is mode:
             return existing
-        updated = self.repository.update_selling_mode(
+        updated, blockers = self.repository.reassign_selling_mode(
             str(deliverable_id), int(creator_profile_id), mode.value,
         )
+        blocker_labels = {
+            "publication_count": "publication state",
+            "purchase_intent_count": "purchase intent or purchase history",
+            "lifecycle_count": "customer Photoshoot lifecycle",
+            "lifecycle_event_count": "customer Photoshoot activity",
+            "sales_session_count": "Photoshoot sales session",
+        }
+        active_blockers = [
+            label for key, label in blocker_labels.items()
+            if int((blockers or {}).get(key) or 0) > 0
+        ]
+        if active_blockers:
+            raise ValueError(
+                "Selling mode cannot be changed because this Photoshoot has "
+                + ", ".join(active_blockers) + "."
+            )
         if updated is not None:
             return updated
         if self.repository.has_protected_commercial_evidence(
@@ -224,6 +297,19 @@ class PhotoshootCommerceDeliverableService:
         )
         if current is selected:
             return existing
+        if (current is BundleSalesChannel.CONTENT_WALL
+                and selected is BundleSalesChannel.CHAT):
+            preparation = self.bundle_preparation
+            if preparation is None:
+                from app.services.photoshoot_bundle_sale_preparation_service import PhotoshootBundleSalePreparationService
+                preparation = PhotoshootBundleSalePreparationService(photoshoots=self.repository)
+            publication = dict(preparation.inspect(
+                deliverable_id, creator_profile_id=int(creator_profile_id),
+            ).get("contentVaultPublication") or {})
+            if publication.get("status") in {"PUBLISHING", "PUBLISHED"}:
+                raise ValueError(
+                    "Bundle sales channel cannot be changed after Content Wall publishing has started."
+                )
         updated = self.repository.update_bundle_sales_channel(
             str(deliverable_id), int(creator_profile_id), selected.value,
         )
@@ -236,6 +322,37 @@ class PhotoshootCommerceDeliverableService:
                 "Bundle sales channel cannot be changed after the Bundle has been presented or a purchase intent exists."
             )
         raise ValueError("Bundle sales channel could not be changed for this Photoshoot.")
+
+    def reassign_commerce(self, deliverable_id: str, creator_profile_id: int,
+                          *, selling_mode, bundle_sales_channel=None):
+        """Change the two canonical Photoshoot commerce dimensions coherently."""
+        mode = PhotoshootSellingMode.parse(selling_mode)
+        if mode is PhotoshootSellingMode.BUNDLE and bundle_sales_channel is None:
+            raise ValueError("BUNDLE selling mode requires CHAT or CONTENT_WALL sales channel.")
+        channel = (BundleSalesChannel.parse(bundle_sales_channel)
+                   if mode is PhotoshootSellingMode.BUNDLE else None)
+        if mode is PhotoshootSellingMode.SESSION and bundle_sales_channel is not None:
+            raise ValueError("Sales channel is available only for BUNDLE selling mode.")
+        existing = self.repository.get(str(deliverable_id))
+        if existing is None or int(existing["creator_profile_id"]) != int(creator_profile_id):
+            raise KeyError("Photoshoot not found.")
+        current_mode = PhotoshootSellingMode.parse(existing.get("selling_mode") or "SESSION")
+        current_channel = (BundleSalesChannel.parse(
+            existing.get("bundle_sales_channel") or BundleSalesChannel.CHAT.value)
+            if current_mode is PhotoshootSellingMode.BUNDLE else None)
+        if current_mode is mode and current_channel is channel:
+            return existing
+        updated = existing
+        if current_mode is not mode:
+            updated = self.set_selling_mode(deliverable_id, creator_profile_id, mode)
+        if mode is PhotoshootSellingMode.BUNDLE:
+            persisted = BundleSalesChannel.parse(
+                updated.get("bundle_sales_channel") or BundleSalesChannel.CHAT.value)
+            if persisted is not channel:
+                updated = self.set_bundle_sales_channel(
+                    deliverable_id, creator_profile_id, channel,
+                )
+        return updated
 
     def _ordered_members(self, session_id: str):
         members, images = [], []

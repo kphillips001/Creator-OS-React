@@ -22,13 +22,30 @@ class OutreachMassPPVCoordinationService:
 
     def evaluate(self, user_memory: dict) -> dict:
         user_memory = user_memory or {}
+        from app.services.customer_value_attention_service import CustomerValueAttentionService
+
+        supplied_projection = dict(user_memory.get("customer_value_attention") or {})
+        if supplied_projection:
+            value_attention = supplied_projection
+        else:
+            value_attention = dict(CustomerValueAttentionService().project(
+                behavior=user_memory,
+                legacy=user_memory,
+            ).to_mapping())
 
         outreach_attempts = user_memory.get("outreach_attempts", 0) or 0
         outreach_ignore_count = user_memory.get("outreach_ignore_count", 0) or 0
         outreach_response_count = user_memory.get("outreach_response_count", 0) or 0
 
-        purchase_count = user_memory.get("purchase_count", 0) or 0
-        total_spend = float(user_memory.get("total_spend", 0) or 0)
+        purchase_count = (
+            value_attention.get("purchaseCount", 0)
+            if supplied_projection else user_memory.get("purchase_count", 0)
+        ) or 0
+        total_spend = float(
+            (value_attention.get("lifetimeSpendMinor", 0) / 100.0)
+            if supplied_projection else user_memory.get("total_spend", 0)
+            or 0
+        )
 
         inbound_message_count = user_memory.get("inbound_message_count", 0) or 0
         ignored_offer_count = user_memory.get("ignored_offer_count", 0) or 0
@@ -40,10 +57,18 @@ class OutreachMassPPVCoordinationService:
         buyer_session_active = bool(user_memory.get("buyer_session_active"))
         close_ready = bool(user_memory.get("close_ready"))
 
-        protected_user = (
+        canonical_protected = (
+            bool(value_attention.get("buyerProtectionApplied"))
+            or value_attention.get("retentionPriority") in {"HIGH", "VIP"}
+        )
+        legacy_protected = (
             is_whale
             or buyer_tier in {"whale", "high_value"}
             or user_value_tier in {"high", "whale"}
+        )
+        protected_user = (
+            canonical_protected
+            or (not supplied_projection and legacy_protected)
             or buyer_session_active
             or close_ready
         )
@@ -57,7 +82,7 @@ class OutreachMassPPVCoordinationService:
 
         has_spent = purchase_count > 0 or total_spend > 0
 
-        time_waster = (
+        time_waster = value_attention.get("timeWasterRisk") == "HIGH" or (
             inbound_message_count >= self.max_nonbuyer_chat_messages
             and not has_spent
         ) or (
@@ -100,4 +125,5 @@ class OutreachMassPPVCoordinationService:
             "time_waster": time_waster,
             "protected_user": protected_user,
             "recommended_action": action,
+            "customer_value_attention": value_attention,
         }

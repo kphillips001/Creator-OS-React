@@ -3,6 +3,8 @@ from datetime import datetime, timezone
 from types import SimpleNamespace
 from uuid import uuid4
 
+import pytest
+
 from app.models.autonomous_sales_progression import (
     BuyingMomentumAssessment,
     BuyingMomentumState,
@@ -17,6 +19,10 @@ from app.services.photoshoot_session_conversation_context_builder import (
     PhotoshootSessionConversationContextBuilder,
 )
 from app.services.gpt_service import GPTService
+from app.services.conversation_gateway import ConversationGateway
+from app.models.customer_sales_decision import (
+    CustomerBuyerStage, CustomerSalesDecisionType, CustomerSalesReasonCode,
+)
 
 
 class Strategies:
@@ -110,7 +116,53 @@ def test_role_objectives_change_framing_without_changing_runtime_selection():
     assert "worth purchasing" in context["boundaries"]["message_objective"]
 
 
-def test_gpt_prompt_receives_one_canonical_session_conversation_block():
+def test_missing_current_shot_intelligence_fails_closed(caplog):
+    class MissingShot(Photoshoots):
+        def latest_shot_intelligence(self, session_id):
+            return ()
+
+    builder = PhotoshootSessionConversationContextBuilder(
+        strategies=Strategies(), photoshoots=MissingShot(),
+    )
+    with pytest.raises(ValueError, match="current-shot intelligence"):
+        builder.build(SimpleNamespace(next_sales_action=action_with_runtime()))
+    assert "session_current_shot_intelligence_missing" in caplog.text
+
+
+def test_gateway_fails_closed_when_paid_session_context_cannot_be_built():
+    class BrokenBuilder:
+        def build(self, decision):
+            raise RuntimeError("read unavailable")
+
+    gateway = ConversationGateway.__new__(ConversationGateway)
+    gateway._photoshoot_conversation_context_builder = BrokenBuilder()
+    action = replace(
+        action_with_runtime("FIRST_UNLOCK"),
+        selected_offering_id=uuid4(), selected_asset_id=20,
+    )
+    decision = SimpleNamespace(
+        decision=CustomerSalesDecisionType.PRESENT_OFFER,
+        reason_code=CustomerSalesReasonCode.NO_ACTIVE_OFFER,
+        buyer_stage=CustomerBuyerStage.PROSPECT,
+        active_offer_status=None, active_offer_conversion_state="NONE",
+        recommended_offering_id=action.selected_offering_id,
+        recommended_offering_title="Current unlock",
+        recommended_offering_price_minor=999,
+        recommended_offering_currency="USD",
+        recommended_offering_short_description="Verified chapter",
+        recommended_photoshoot_experience=None,
+        recommended_product_context={"sellingMode": "SESSION"},
+        next_sales_action=action, bundle_sales_context=None,
+    )
+    runtime = gateway._commerce_runtime_injection(decision)
+    assert runtime["authoritative_selection_missing"] is True
+    assert runtime["commerce_execution_policy"] == "COMMERCE_DISABLED_FOR_TURN"
+    assert runtime["commerce_decision"]["grounding_failure"] == (
+        "SESSION_CURRENT_SHOT_INTELLIGENCE_UNAVAILABLE"
+    )
+
+
+def test_gpt_prompt_suppresses_session_selling_context_when_commerce_disabled():
     builder = PhotoshootSessionConversationContextBuilder(
         strategies=Strategies(), photoshoots=Photoshoots(),
     )
@@ -146,9 +198,9 @@ def test_gpt_prompt_receives_one_canonical_session_conversation_block():
     )
 
     prompt = captured["messages"][0]["content"]
-    assert prompt.count("SESSION CONVERSATION CONTEXT") == 1
-    assert '"currentAssetId"' not in prompt
-    assert '"assetId": 20' in prompt
-    assert '"conversationGoal": "Invite interest"' in prompt
-    assert '"psychologicalObjective": "Create curiosity"' in prompt
-    assert "never choose a different Asset" in prompt
+    assert "ORDINARY RELATIONSHIP CONVERSATION" in prompt
+    assert "COMMERCE_DISABLED_FOR_TURN" in prompt
+    assert "SESSION CONVERSATION CONTEXT" not in prompt
+    assert '"assetId": 20' not in prompt
+    assert '"conversationGoal": "Invite interest"' not in prompt
+    assert "never choose a different Asset" not in prompt

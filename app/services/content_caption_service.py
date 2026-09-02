@@ -43,6 +43,17 @@ def _normalize_json_field(value):
     return [str(value)]
 
 
+def _ava_persona_prompt(user_memory: dict, topic: str) -> str:
+    account_id = user_memory.get("fanvue_account_id")
+    if account_id is None:
+        return ""
+    from app.services.ava_persona_runtime_service import AvaPersonaRuntimeService
+    return AvaPersonaRuntimeService().build(
+        fanvue_account_id=account_id, topic=topic,
+        creator_profile=user_memory.get("creator_profile"),
+    ).prompt_block()
+
+
 def generate_tease_caption_from_content(content: dict, user_memory: dict | None = None) -> str:
     """
     Generates a short image-aware TEASE caption using stored content metadata.
@@ -54,7 +65,8 @@ def generate_tease_caption_from_content(content: dict, user_memory: dict | None 
     detected_themes = _normalize_json_field(content.get("detected_themes"))
     suggested_tags = _normalize_json_field(content.get("suggested_tags"))
 
-    prompt = f"""
+    persona_prompt = _ava_persona_prompt(user_memory, str(content.get("summary") or "teaser image"))
+    prompt = f"""{persona_prompt}
 You are generating a VERY short Fanvue outreach caption to send WITH a teaser image.
 
 GOAL:
@@ -134,7 +146,8 @@ def generate_text_outreach_opener(user_memory: dict | None = None) -> str:
     """
     user_memory = user_memory or {}
 
-    prompt = f"""
+    persona_prompt = _ava_persona_prompt(user_memory, "casual text outreach")
+    prompt = f"""{persona_prompt}
 You are generating a VERY short text-only Fanvue outreach opener.
 
 GOAL:
