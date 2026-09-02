@@ -29,3 +29,6 @@ data/photoshoot_queue/.*.recovery
 # OS
 .DS_Store
 Thumbs.db
+
+logs/
+*.log
