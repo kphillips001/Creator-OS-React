@@ -409,6 +409,38 @@ class ContentStudioCreativeTagActionTests(unittest.TestCase):
         self.assertEqual(call[1]["creative_mode"], "premium_teaser")
         self.assertEqual(call[1]["prompt_count"], 2)
 
+    def test_recreate_prompt_preview_accepts_canonical_social_planner_contract(self):
+        creative_direction = (
+            "[ORIGINAL USER TAGS — mandatory: Scene: moonlit bedroom, "
+            "Pose: seated on the bed] "
+            "[ENHANCED SUGGESTIONS — vary any wardrobe detail not present in "
+            "ORIGINAL USER TAGS: cinematic moonlight with Ava]"
+        )
+        result = _create_prompt_preview(
+            PromptPreviewRequest(
+                creativeMode="premium_teaser",
+                creativeTags=creative_direction,
+                promptCount=1,
+                lane="social",
+                origin="recreate_with_ava",
+            )
+        )
+
+        preview = result["preview"]
+        self.assertEqual(preview["creativeMode"], "premium_teaser")
+        self.assertEqual(preview["signature"], {
+            "creativeMode": "premium_teaser",
+            "promptCount": 1,
+            "creativeTags": creative_direction,
+        })
+        self.assertEqual(len(preview["prompts"]), 1)
+        self.assertTrue(preview["prompts"][0].startswith("preview one"))
+        self.assertIn("FINAL REFERENCE BODY LOCK", preview["prompts"][0])
+        call = next(call for call in self.director.calls if call[0] == "preview")
+        self.assertEqual(call[1]["creative_mode"], "premium_teaser")
+        self.assertEqual(call[1]["creative_tags"], creative_direction)
+        self.assertEqual(call[1]["prompt_count"], 1)
+
     def test_prompt_preview_rejects_empty_input_and_historical_invalid_mode(self):
         with self.assertRaisesRegex(ValueError, "Creative Tags are required"):
             _create_prompt_preview(

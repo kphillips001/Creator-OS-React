@@ -16,6 +16,8 @@ from datetime import datetime, timedelta, timezone
 from enum import Enum
 from hashlib import sha256
 from threading import RLock
+from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, Callable
 from collections.abc import Mapping
 from uuid import UUID, uuid4, uuid5, NAMESPACE_URL
@@ -27,6 +29,7 @@ from app.testing.postgres_safety import (
     Session5DatabasePurpose,
     require_session5_database_purpose,
 )
+from app.services.schema_manager_service import SchemaManagerService
 
 
 PROVENANCE = "CERTIFICATION_SIMULATED_PROVIDER_EVENT"
@@ -35,7 +38,48 @@ PROTECTED_LIVE_TELEGRAM_ID = 7_857_064_998
 DETERMINISTIC_CERTIFICATION = "DETERMINISTIC_CERTIFICATION"
 REAL_AVA_LANGUAGE = "REAL_AVA_LANGUAGE"
 LANGUAGE_MODES = frozenset({DETERMINISTIC_CERTIFICATION, REAL_AVA_LANGUAGE})
+SCENARIO_LAB_RUNTIME_MIGRATIONS = (
+    "20260901_101_customer_abuse_review.sql",
+    "20260901_102_unified_operator_notifications.sql",
+)
 _SCENARIO_EXECUTION_LOCK = RLock()
+
+
+class ScenarioLabRuntimeMediaResolver:
+    """Resolve only marked certification assets for the isolated transport.
+
+    Scenario fixtures intentionally have no customer media file.  Production's
+    resolver remains authoritative for every non-fixture asset; the Scenario
+    Lab substitutes a logical synthetic path only when the persisted asset is
+    explicitly marked as a certification fixture.
+    """
+
+    def __init__(self):
+        from app.services.runtime_media_resolver import RuntimeMediaResolver
+        self._production = RuntimeMediaResolver()
+
+    def resolve_original(self, asset_like, *, require_exists=False):
+        metadata = getattr(asset_like, "media_metadata", {}) or {}
+        if isinstance(metadata, str):
+            try:
+                metadata = json.loads(metadata)
+            except json.JSONDecodeError:
+                metadata = {}
+        fixture = dict(metadata.get("certification_fixture") or {})
+        path = str(getattr(asset_like, "file_path", "") or "")
+        asset_id = getattr(asset_like, "id", None)
+        if fixture.get("scenario_id") and path.startswith("certification/"):
+            logical = Path(path)
+            return SimpleNamespace(
+                path=logical,
+                source="scenario_lab.certification_fixture",
+                exists=True,
+                candidates=(("scenario_lab.certification_fixture", logical),),
+                asset_id=asset_id,
+            )
+        return self._production.resolve_original(
+            asset_like, require_exists=require_exists,
+        )
 
 
 def normalize_provider_diagnostics(metadata: Any) -> dict[str, Any]:
@@ -159,6 +203,13 @@ class DeterministicSyntheticLanguageProvider:
         if self.purchase_count: return "RETURNING_BUYER", "VERIFIED_PURCHASE_HISTORY"
         if re.search(r"\b(?:too expensive|can't afford|not paying|price is high)\b", text):
             return "OBJECTION", "CURRENT_OBJECTION_LANGUAGE"
+        if re.search(r"\blink\b", text):
+            return "LINK_REQUEST", "CURRENT_LINK_REQUEST"
+        if re.search(r"\b(?:private|exclusive)\b.{0,24}\b(?:content|set|photos?|videos?|stuff)\b|"
+                     r"\b(?:content|set|photos?|videos?|stuff)\b.{0,24}\b(?:private|exclusive)\b", text):
+            return "PRIVATE_CONTENT_INQUIRY", "CURRENT_PRIVATE_CONTENT_INQUIRY"
+        if re.search(r"\b(?:tease|teasing|flirt|flirty|talk dirty|something dirtier)\b", text):
+            return "TEASE_REQUEST", "CURRENT_TEASE_REQUEST"
         buying = bool(re.search(r"\b(?:buy|price|how much|unlock|show me)\b", text))
         sexual = bool(re.search(r"\b(?:horny|naked|sexy)\b", text))
         if buying and sexual: return "SEXUAL_BUYER", "SEXUAL_AND_BUYING_LANGUAGE"
@@ -197,6 +248,9 @@ class DeterministicSyntheticLanguageProvider:
         drafts = {
             "GREETING": "hey 😊 good to hear from you",
             "DIRECT_QUESTION": "pretty chill over here honestly",
+            "PRIVATE_CONTENT_INQUIRY": "I do keep some things private",
+            "TEASE_REQUEST": "careful, I can still tease you a little",
+            "LINK_REQUEST": "the link stays with the private unlock",
             "EMOTIONAL_DISCLOSURE": "ugh yeah, sounds like you earned the chance to relax 😅",
             "LIGHT_FLIRT": "okayyy, that was kinda smooth 😂",
             "CUSTOMER_DISCLOSURE": "okay, that actually tells me a little more about you 😂",
@@ -262,8 +316,21 @@ class CommercialTrajectory(str, Enum):
 
 class ScenarioState(str, Enum):
     AVAILABLE="AVAILABLE"; PREPARING="PREPARING"; READY="READY"; RUNNING="RUNNING"
-    COMPLETED="COMPLETED"; SNAPSHOTTED="SNAPSHOTTED"; RESET="RESET"
+    COMPLETED="COMPLETED"; FAILED="FAILED"; SNAPSHOTTED="SNAPSHOTTED"; RESET="RESET"
     VERIFIED_CLEAN="VERIFIED_CLEAN"
+
+
+@dataclass(frozen=True)
+class CanonicalScenarioEvent:
+    """A required action sequenced after a committed logical scenario turn."""
+
+    event_id: str
+    event_type: str
+    after_turn: int
+    presentation_authority_types: tuple[str, ...] = ()
+    expected_session_position: int | None = None
+    expected_foundation_reference: str | None = None
+    expected_session_role: str | None = None
 
 
 @dataclass(frozen=True)
@@ -289,6 +356,8 @@ class ScenarioDefinition:
     purchase_emulation_requirements: tuple[str, ...] = ()
     adaptive_branches: tuple[str, ...] = ()
     maximum_turn_count: int = 0
+    historical_purchase_acknowledgement_pending: bool = False
+    canonical_events: tuple[CanonicalScenarioEvent, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -465,6 +534,9 @@ SCENARIO_MANIFEST = (
             "and any continuation avoids duplicate delivery or ownership."),
         pre_turn_condition="Fresh synthetic prospect with zero runtime, memory, or commerce history.",
         purchase_emulation_requirements=("After the presented PurchaseIntent and before the payment claim is evaluated, settle exactly that intent through the provider emulator.",),
+        canonical_events=(CanonicalScenarioEvent(
+            "C04_PURCHASE_SETTLEMENT", "SYNTHETIC_PROVIDER_SETTLEMENT", 4,
+        ),),
     ),
     ScenarioDefinition(
         "C05", "HORNY_NEW_PROSPECT", "Horny New Prospect",
@@ -658,6 +730,7 @@ SCENARIO_MANIFEST = (
             "let me see the link at least", "nah, I'm still not paying",
             "just keep talking dirty to me", "I'm probably not unlocking anything"),
         canonical_turn_count=10,
+        maximum_turn_count=12,
         completion_condition=("Complete only after sexuality is kept separate from commercial evidence "
             "and at least two actual presented paid opportunities remain unconverted; chat volume or sexual language alone cannot satisfy it."),
         pre_turn_condition="No seeded commercial history; sexual and nonconversion evidence must emerge from this attempt.",
@@ -680,6 +753,9 @@ SCENARIO_MANIFEST = (
             "any alternative is eligible and within the disclosed budget, and a purchase is acknowledged only after provider settlement."),
         pre_turn_condition="No seeded objection or commercial history; price sensitivity must be learned from current messages.",
         purchase_emulation_requirements=("If the lower-price PurchaseIntent is presented, settle that exact intent before evaluating the payment claim.",),
+        canonical_events=(CanonicalScenarioEvent(
+            "C10_LOWER_PRICE_SETTLEMENT", "SYNTHETIC_PROVIDER_SETTLEMENT", 7,
+        ),),
     ),
     ScenarioDefinition(
         "C11", "FIRST_BUYER", "First Buyer", EconomicState.FIRST_TIME_BUYER,
@@ -687,14 +763,19 @@ SCENARIO_MANIFEST = (
         seeded_history=("one provider-confirmed purchase", "ownership for the purchased asset"),
         facts_ava_must_discover=("current post-purchase sentiment from actual messages",),
         certification_objectives=("FIRST_BUYER_RECOGNITION", "PURCHASE_ACKNOWLEDGEMENT",
-            "BUYER_RETENTION", "OWNERSHIP_EXCLUSION", "NO_WHALE_ONLY_TREATMENT"),
-        branch_checkpoints=("VERIFIED_PURCHASE", "POST_PURCHASE_REACTION", "NATURAL_RETENTION"),
+            "BUYER_RETENTION", "OWNERSHIP_EXCLUSION", "NO_WHALE_ONLY_TREATMENT",
+            "LOW_PRESSURE_DEFERRED_INTEREST_CROSS_SELL"),
+        branch_checkpoints=("VERIFIED_PURCHASE", "POST_PURCHASE_REACTION", "NATURAL_RETENTION",
+            "DEFERRED_POSITIVE_COMMERCIAL_INTEREST"),
         canonical_customer_turns=("that set I bought was really good", "the outdoor shots were my favorite",
             "you nailed the vibe honestly", "I'm glad I finally unlocked something",
             "what are you doing later?", "I'd probably check out something similar next time",
             "keep me posted when you have another one"), canonical_turn_count=7,
-        completion_condition="Complete when the verified first buyer receives genuine retention and ownership-safe continuity without inflated VIP treatment or immediate pressure.",
+        completion_condition=("Complete when the verified first buyer receives genuine retention and ownership-safe continuity without inflated VIP treatment; "
+            "meaningful deferred or tentative positive commercial interest may authorize one distinct, unowned, canonical-price, low-pressure offer now, "
+            "without discount, urgency, scarcity, coercion, or repeated immediate pushing after non-action."),
         pre_turn_condition="Exactly one provider-confirmed historical purchase and its ownership; no unrelated conversation memory.",
+        historical_purchase_acknowledgement_pending=True,
     ),
     ScenarioDefinition(
         "C12", "ACTIVE_NORMAL_BUYER", "Active Normal Buyer", EconomicState.ACTIVE_BUYER,
@@ -717,29 +798,43 @@ SCENARIO_MANIFEST = (
         seeded_history=("two provider-confirmed purchases", "ownership for both purchased assets"),
         facts_ava_must_discover=("fresh repeat-purchase intent from actual messages",),
         certification_objectives=("REPEAT_BUYER_RECOGNITION", "NEXT_BEST_UNOWNED_OFFER",
-            "CROSS_SELL_AUTHORITY", "STRUCTURED_PRICE_NO_VERBAL_PRICE", "PROVIDER_PURCHASE_TRUTH", "RETENTION_CONTINUITY"),
+            "CROSS_SELL_AUTHORITY", "STRUCTURED_PRICE_NO_VERBAL_PRICE", "PROVIDER_PURCHASE_TRUTH",
+            "PURCHASE_REFERENT_PRIMARY_SEMANTICS_PRESERVED", "RETENTION_CONTINUITY"),
         branch_checkpoints=("PURCHASE_HISTORY", "FRESH_REPEAT_INTENT", "UNOWNED_SELECTION",
             "NEXT_PURCHASE", "POST_PURCHASE_CONTINUATION"),
         canonical_customer_turns=("you've been two for two so far", "I liked the second set even more",
             "you know my taste pretty well now", "got anything I haven't seen yet?",
             "yeah, show me the next one", "send the link", "I bought it",
             "okay, you definitely get me"), canonical_turn_count=8,
-        completion_condition="Complete when verified history informs an unowned next-best offer, provider settlement confirms the new purchase, and retention continues without duplicating owned content.",
+        completion_condition=(
+            "Complete when verified history informs an unowned next-best offer, "
+            "provider settlement confirms the new purchase, and retention continues "
+            "without duplicating owned content. Purchase-history reactions must retain "
+            "the correct referent, primary sentiment, and completed timing; omitted "
+            "secondary comparative emphasis remains visible quality debt unless it "
+            "reverses the comparison or otherwise changes material meaning."
+        ),
         pre_turn_condition="Exactly two provider-confirmed purchases and their ownership; no active offer or Session.",
         purchase_emulation_requirements=("Settle only the newly presented unowned PurchaseIntent before evaluating the payment claim.",),
+        canonical_events=(CanonicalScenarioEvent(
+            "C13_NEW_PURCHASE_SETTLEMENT", "SYNTHETIC_PROVIDER_SETTLEMENT", 6,
+        ),),
     ),
     ScenarioDefinition(
         "C14", "COOLING_BUYER", "Cooling Buyer", EconomicState.COOLING_BUYER,
-        BehaviorProfile.BLUNT, CommercialTrajectory.REJECTING,
+        BehaviorProfile.QUIET, CommercialTrajectory.NO_INTEREST,
         seeded_history=("one provider-confirmed purchase",),
-        facts_ava_must_discover=("current cooling interest and decline from actual messages",),
-        certification_objectives=("BUYER_HISTORY_RESPECTED", "CURRENT_DECLINE_AUTHORITY",
-            "PRESSURE_REDUCTION", "RELATIONSHIP_PRESERVATION", "NO_FALSE_TIME_WASTER"),
-        branch_checkpoints=("VERIFIED_BUYER", "COOLING_SIGNAL", "DECLINE", "BACK_OFF_CONTINUITY"),
-        canonical_customer_turns=("hey", "I've been less online lately", "the last set was fine",
-            "I'm not really looking to buy anything tonight", "no, don't send another link",
-            "I just wanted to check in for a minute", "I'll reach out if I'm interested again"), canonical_turn_count=7,
-        completion_condition="Complete when current decline overrides sales pressure while verified-buyer continuity remains respectful and no commercial time-waster label is fabricated.",
+        facts_ava_must_discover=("current passive cooling and relationship continuity from actual messages",),
+        certification_objectives=("BUYER_HISTORY_RESPECTED", "PASSIVE_NONCONVERSION_COOLING",
+            "REDUCED_COMMERCIAL_INVESTMENT", "RELATIONSHIP_PRESERVATION",
+            "FUTURE_REACTIVATION_ALLOWED", "NO_FALSE_TIME_WASTER"),
+        branch_checkpoints=("VERIFIED_BUYER", "PASSIVE_COOLING_HISTORY",
+            "ORDINARY_CONTINUITY", "FUTURE_REENTRY"),
+        canonical_customer_turns=("hey", "I've been busy and less online lately",
+            "the last set was fine", "work has been taking most of my attention",
+            "I'm mostly just catching up tonight", "I still like checking in with you",
+            "I'll stop by again when things settle down"), canonical_turn_count=7,
+        completion_condition="Complete when repeated passive nonconversion reduces current commercial investment without fabricating rejection, erasing verified-buyer value, or preventing future reactivation.",
         pre_turn_condition="One provider-confirmed purchase with ownership; no active offer or Session.",
     ),
     ScenarioDefinition(
@@ -770,20 +865,32 @@ SCENARIO_MANIFEST = (
         completion_condition="Complete when provider-backed whale value receives justified VIP care, a genuinely unowned offer is selected, and any new purchase is provider-confirmed without fabricated privileges.",
         pre_turn_condition="Five provider-confirmed purchases totaling at least 50000 minor units with ownership.",
         purchase_emulation_requirements=("Settle the newly presented PurchaseIntent before evaluating the payment claim.",),
+        canonical_events=(CanonicalScenarioEvent(
+            "C16_NEW_PURCHASE_SETTLEMENT", "SYNTHETIC_PROVIDER_SETTLEMENT", 6,
+        ),),
     ),
     ScenarioDefinition(
         "C17", "NONBUYING_WHALE", "Nonbuying Whale", EconomicState.WHALE,
         BehaviorProfile.EVASIVE, CommercialTrajectory.NO_INTEREST,
         seeded_history=("five provider-confirmed purchases totaling at least 50000 minor units",),
-        facts_ava_must_discover=("current nonbuying intent from actual messages",),
+        facts_ava_must_discover=(
+            "current noncommercial relationship intent from actual messages",
+            "at least one durable lake/fishing continuity fact when qualified",
+        ),
         certification_objectives=("WHALE_VALUE_PRESERVED", "CURRENT_NONBUYING_STATE",
             "NO_REPEATED_PRESSURE", "RELATIONSHIP_RETENTION", "NO_TIME_WASTER_DOWNGRADE"),
         branch_checkpoints=("VERIFIED_WHALE", "CURRENT_DECLINE", "ORDINARY_RELATIONSHIP_CONTACT", "PRESSURE_SUPPRESSION"),
-        canonical_customer_turns=("hey, just checking in", "I'm not shopping tonight",
-            "I've already got plenty to look through", "seriously, no links right now",
-            "I still like talking to you though", "tell me how your week has been",
-            "I'll buy again when I'm actually in the mood"), canonical_turn_count=7,
-        completion_condition="Complete when current nonbuying intent suppresses selling without erasing verified whale value, relationship continuity, or buyer protection.",
+        canonical_customer_turns=("hey, just checking in", "work's been crazy lately",
+            "I'm finally getting away to the lake this weekend",
+            "yeah I usually fish when I'm out there",
+            "honestly that's probably my favorite way to unwind",
+            "anyway I just wanted to come say hi for a bit",
+            "I'll talk to you later"), canonical_turn_count=7,
+        completion_condition=(
+            "Complete when an ordinary noncommercial visit activates buyer relationship "
+            "nurture, preserves verified whale value and future commercial reentry, "
+            "persists qualified continuity memory, and creates no offer or failed opportunity."
+        ),
         pre_turn_condition="Five provider-confirmed purchases totaling at least 50000 minor units; no active offer or Session.",
     ),
     ScenarioDefinition(
@@ -792,7 +899,8 @@ SCENARIO_MANIFEST = (
         seeded_history=("one old provider-confirmed purchase", "dormant buyer recency"),
         facts_ava_must_discover=("returning customer's present mood and interest from actual messages",),
         certification_objectives=("DORMANT_BUYER_RECOGNITION", "NATURAL_REACTIVATION",
-            "PURCHASE_HISTORY_CONTINUITY", "BUYER_RETENTION", "NO_AGGRESSIVE_OFFER", "OWNERSHIP_EXCLUSION"),
+            "BUYER_REWARMING", "PURCHASE_HISTORY_CONTINUITY", "BUYER_RETENTION",
+            "NO_AGGRESSIVE_OFFER", "OWNERSHIP_EXCLUSION"),
         branch_checkpoints=("RETURN_AFTER_DORMANCY", "RELATIONSHIP_REOPENING", "CURRENT_RECEPTIVENESS"),
         canonical_customer_turns=("hey, it's been a while", "I've been busy and barely online",
             "I still remember that set I bought though", "it was a fun surprise",
@@ -816,6 +924,12 @@ SCENARIO_MANIFEST = (
         completion_condition="Complete when the existing Session remains authoritative, the correct next step is offered and provider-settled, and no unrelated inventory interrupts progression.",
         pre_turn_condition="A coherent active test Session backed by a provider-confirmed first Session purchase and ownership.",
         purchase_emulation_requirements=("Settle only the next Session PurchaseIntent before evaluating the payment claim.",),
+        canonical_events=(CanonicalScenarioEvent(
+            "C19_SESSION_STEP_SETTLEMENT", "SYNTHETIC_PROVIDER_SETTLEMENT", 6,
+            presentation_authority_types=("SEND_OR_LINK_REQUEST",),
+            expected_session_position=2,
+            expected_foundation_reference="certification-C19",
+        ),),
     ),
     ScenarioDefinition(
         scenario_id="C20",
@@ -825,7 +939,9 @@ SCENARIO_MANIFEST = (
         behavior_profile=BehaviorProfile.PLAYFUL,
         trajectory=CommercialTrajectory.CONTENT_CURIOUS,
         seeded_history=(),
-        facts_ava_must_discover=("current Session interest from actual messages",),
+        facts_ava_must_discover=(
+            "current interest in progressively seeing more content from actual messages",
+        ),
         certification_objectives=(
             "SESSION_OPPORTUNITY", "TEASER", "FIRST_PAID_ITEM",
             "STRUCTURED_PRICE_NO_VERBAL_PRICE",
@@ -834,18 +950,18 @@ SCENARIO_MANIFEST = (
             "ESCALATION", "FINALE", "COMPLETION", "POST_SESSION_RETENTION",
         ),
         branch_checkpoints=(
-            "HESITATION", "TEMPORARY_DISAPPEARANCE_AND_RETURN",
-            "DECLINE_ONE_STEP", "FREE_CONTENT_ATTEMPT",
-            "SESSION_STATE_CONTINUITY", "NO_UNRELATED_OFFER_INTERRUPTION",
-            "OWNERSHIP_EXCLUSION",
+            "CUSTOMER_FACING_SESSION_TERMINOLOGY_NOT_REQUIRED",
+            "FREE_TEASER_NO_PAID_COMMERCE", "SESSION_STATE_CONTINUITY",
+            "NO_UNRELATED_OFFER_INTERRUPTION", "OWNERSHIP_EXCLUSION",
+            "POST_COMPLETION_NO_AUTOMATIC_REOPEN",
         ),
         canonical_customer_turns=(
-            "you've got me curious tonight", "what kind of private session did you have in mind?",
-            "okay, tease me a little first", "I like where this is going",
-            "send me the first paid part", "I paid for it", "that was hot, keep going",
-            "what's the next part?", "send it", "I paid for that one too",
-            "take it up another level", "I'm ready for the finale", "I bought the finale",
-            "that was a really good session", "we should do that again sometime",
+            "you've got me curious tonight", "okay, now you've got my attention",
+            "tease me a little", "I like where this is going",
+            "show me more", "I paid for it", "that was worth it, keep going",
+            "what's next?", "send me that one", "I paid for that one too",
+            "take it up another level", "show me the next one", "I bought it",
+            "that was really good", "we should do that again sometime",
         ),
         canonical_turn_count=15,
         completion_condition=(
@@ -855,18 +971,52 @@ SCENARIO_MANIFEST = (
         ),
         pre_turn_condition=(
             "No purchase, ownership, persisted conversation, or customer memory. "
-            "Relationship and Session interest must emerge from canonical messages; scenario metadata remains hidden from Ava."
+            "Relationship and progressive-content interest must emerge from canonical messages; "
+            "the internal Session abstraction and scenario metadata remain hidden from Ava and the customer."
         ),
         purchase_emulation_requirements=(
             "Settle the first Session PurchaseIntent before the first payment claim.",
             "Settle the next Session PurchaseIntent before the second payment claim.",
             "Settle the finale PurchaseIntent before the finale payment claim.",
         ),
+        canonical_events=(
+            CanonicalScenarioEvent(
+                "C20_FIRST_STEP_SETTLEMENT", "SYNTHETIC_PROVIDER_SETTLEMENT", 5,
+                presentation_authority_types=("SEND_OR_LINK_REQUEST",),
+                expected_session_position=2,
+                expected_foundation_reference="certification-C20",
+            ),
+            CanonicalScenarioEvent(
+                "C20_NEXT_STEP_SETTLEMENT", "SYNTHETIC_PROVIDER_SETTLEMENT", 9,
+                presentation_authority_types=("SEND_OR_LINK_REQUEST",),
+                expected_session_position=3,
+                expected_foundation_reference="certification-C20",
+            ),
+            CanonicalScenarioEvent(
+                "C20_FINALE_SETTLEMENT", "SYNTHETIC_PROVIDER_SETTLEMENT", 12,
+                presentation_authority_types=("SEND_OR_LINK_REQUEST",),
+                expected_session_position=4,
+                expected_foundation_reference="certification-C20",
+                expected_session_role="FINALE",
+            ),
+        ),
     ),
 )
 
 
 class CustomerScenarioHarness:
+    @staticmethod
+    def structured_presentation_confirmed(metadata):
+        """Require exact durable paid-presentation delivery evidence."""
+        values = dict(metadata or {})
+        return bool(
+            values.get("purchase_intent_id")
+            and values.get("purchase_intent_presented_at")
+            and values.get("synthetic_delivery_operation_id")
+            and values.get("synthetic_delivery_state") == "CONFIRMED"
+            and values.get("test_transport_customer_visible_confirmed")
+        )
+
     def __init__(self, *, test_database_url=None, production_database_url=None,
                  certification_mode=None, database_purpose=None):
         enabled = certification_mode if certification_mode is not None else (
@@ -899,7 +1049,14 @@ class CustomerScenarioHarness:
         )
         if not enabled:
             raise PermissionError("Explicit certification scenario mode is required.")
+        self._ensure_runtime_schema_parity()
         self._bootstrap()
+
+    def _ensure_runtime_schema_parity(self, manager_factory=SchemaManagerService):
+        """Apply canonical migrations required by the exercised runtime path."""
+        manager = manager_factory(connection_factory=self.connection)
+        for migration_name in SCENARIO_LAB_RUNTIME_MIGRATIONS:
+            manager.reconcile_one(migration_name)
 
     @contextmanager
     def connection(self):
@@ -944,8 +1101,11 @@ class CustomerScenarioHarness:
 
     def transition(self, scenario_id: str, target: ScenarioState):
         allowed = {
-            "READY":{"RUNNING"}, "RUNNING":{"COMPLETED"},
-            "COMPLETED":{"SNAPSHOTTED"}, "SNAPSHOTTED":{"RESET"},
+            # READY -> FAILED is used only by the runner's guarded, allocated
+            # zero-turn material-defect finalization path.
+            "READY":{"RUNNING", "FAILED"}, "RUNNING":{"COMPLETED", "FAILED"},
+            "COMPLETED":{"SNAPSHOTTED"}, "FAILED":{"SNAPSHOTTED"},
+            "SNAPSHOTTED":{"RESET"},
             "RESET":{"VERIFIED_CLEAN"},
         }
         with self.connection() as c:
@@ -957,8 +1117,8 @@ class CustomerScenarioHarness:
     def snapshot(self, scenario_id: str, evidence: dict[str, Any]):
         with self.connection() as c:
             row=c.execute("SELECT * FROM certification_scenario_runs WHERE scenario_id=%s FOR UPDATE",(scenario_id,)).fetchone()
-            if not row or row["state"] != "COMPLETED":
-                raise ValueError("Scenario must be COMPLETED before snapshot.")
+            if not row or row["state"] not in {"COMPLETED", "FAILED"}:
+                raise ValueError("Scenario must be terminal before snapshot.")
             digest=sha256(json.dumps(evidence,sort_keys=True,default=str).encode()).hexdigest()
             snapshot_id=uuid5(NAMESPACE_URL,f"{scenario_id}:{digest}")
             c.execute("""INSERT INTO certification_scenario_snapshots(snapshot_id,scenario_id,evidence,evidence_sha256)
@@ -971,7 +1131,56 @@ class CustomerScenarioHarness:
         """Referentially remove one synthetic customer's complete test state."""
         with self.connection() as c:
             row=c.execute("SELECT * FROM certification_scenario_runs WHERE scenario_id=%s FOR UPDATE",(scenario_id,)).fetchone()
-            if not row or row["state"] != "SNAPSHOTTED":
+            if row and row["state"] == "VERIFIED_CLEAN":
+                self._assert_synthetic(int(row["telegram_user_id"]))
+                return {"scenarioId":scenario_id,"state":"VERIFIED_CLEAN",
+                        "recordsCleared":0,"clearedByTable":{},"alreadyClean":True}
+            unallocated_prepare_residue = False
+            if row and row["state"] == "READY":
+                attempt_evidence = {
+                    "allocations": int(c.execute(
+                        "SELECT COUNT(1) AS count FROM certification_scenario_attempt_allocations WHERE scenario_id=%s",
+                        (scenario_id,),
+                    ).fetchone()["count"]),
+                    "attempts": int(c.execute(
+                        "SELECT COUNT(1) AS count FROM certification_scenario_attempts WHERE scenario_id=%s",
+                        (scenario_id,),
+                    ).fetchone()["count"]),
+                    "turnAttempts": int(c.execute(
+                        "SELECT COUNT(1) AS count FROM certification_scenario_turn_attempts WHERE scenario_id=%s",
+                        (scenario_id,),
+                    ).fetchone()["count"]),
+                    "assessments": int(c.execute(
+                        "SELECT COUNT(1) AS count FROM certification_scenario_assessments WHERE scenario_id=%s",
+                        (scenario_id,),
+                    ).fetchone()["count"]),
+                    "defects": int(c.execute(
+                        "SELECT COUNT(1) AS count FROM certification_scenario_defects WHERE scenario_id=%s",
+                        (scenario_id,),
+                    ).fetchone()["count"]),
+                    "snapshots": int(c.execute(
+                        "SELECT COUNT(1) AS count FROM certification_scenario_snapshots WHERE scenario_id=%s",
+                        (scenario_id,),
+                    ).fetchone()["count"]),
+                    "turnEvidence": int(c.execute(
+                        "SELECT COUNT(1) AS count FROM certification_scenario_turn_evidence WHERE scenario_id=%s",
+                        (scenario_id,),
+                    ).fetchone()["count"]),
+                }
+                unallocated_prepare_residue = not any(attempt_evidence.values())
+                if not unallocated_prepare_residue:
+                    raise ValueError(
+                        "READY scenario has allocated attempt/evidence and cannot "
+                        "be cleaned as unallocated prepare residue: "
+                        + ", ".join(
+                            f"{name}={value}"
+                            for name, value in attempt_evidence.items() if value
+                        )
+                    )
+            if not row or (
+                row["state"] != "SNAPSHOTTED"
+                and not unallocated_prepare_residue
+            ):
                 raise ValueError("Snapshot is required before scenario reset.")
             self._assert_synthetic(int(row["telegram_user_id"]))
             telegram_id=int(row["telegram_user_id"]); buyer_uuid=row["buyer_uuid"]
@@ -986,15 +1195,49 @@ class CustomerScenarioHarness:
             recorded_offerings=[UUID(item["record_id"]) for item in c.execute(
                 "SELECT record_id FROM certification_scenario_records WHERE scenario_id=%s AND table_name='commercial_offerings'",
                 (scenario_id,)).fetchall()]
+            recorded_assets=[int(item["record_id"]) for item in c.execute(
+                "SELECT record_id FROM certification_scenario_records WHERE scenario_id=%s AND table_name='content_items'",
+                (scenario_id,)).fetchall()]
             offering_ids=list(dict.fromkeys([item["offering_id"] for item in offering_rows]+recorded_offerings))
             asset_rows=c.execute("SELECT asset_id FROM commercial_offering_assets WHERE offering_id=ANY(%s)",(offering_ids,)).fetchall() if offering_ids else []
-            asset_ids=list(dict.fromkeys([item["asset_id"] for item in offering_rows]+[item["asset_id"] for item in asset_rows]))
+            asset_ids=list(dict.fromkeys(
+                [item["asset_id"] for item in offering_rows]
+                + [item["asset_id"] for item in asset_rows]
+                + recorded_assets
+            ))
+            recorded_deliverable_ids=[UUID(item["record_id"]) for item in c.execute(
+                "SELECT record_id FROM certification_scenario_records WHERE scenario_id=%s AND table_name='photoshoot_commerce_deliverables'",
+                (scenario_id,)).fetchall()]
+            related_session_rows = c.execute("""SELECT DISTINCT photoshoot_session_id
+                FROM photoshoot_asset_memberships WHERE asset_id=ANY(%s)""",
+                (asset_ids,)).fetchall() if asset_ids else []
+            related_session_refs = [
+                str(item["photoshoot_session_id"])
+                for item in related_session_rows
+            ]
+            related_deliverable_rows = c.execute("""SELECT deliverable_id,
+                    photoshoot_session_id FROM photoshoot_commerce_deliverables
+                WHERE deliverable_id=ANY(%s) OR photoshoot_session_id=ANY(%s)""",
+                (recorded_deliverable_ids, related_session_refs),
+            ).fetchall() if recorded_deliverable_ids or related_session_refs else []
+            deliverable_ids=list(dict.fromkeys(
+                recorded_deliverable_ids
+                + [item["deliverable_id"] for item in related_deliverable_rows]
+            ))
+            session_refs=list(dict.fromkeys(
+                related_session_refs
+                + [str(item["photoshoot_session_id"])
+                   for item in related_deliverable_rows]
+            ))
             mapping_ids=[item["id"] for item in c.execute(
                 "SELECT id FROM telegram_identity_map WHERE telegram_user_id=%s OR external_fanvue_user_uuid=%s",
                 (telegram_id,buyer_uuid)).fetchall()]
             profile_ids=[item["customer_commerce_profile_id"] for item in c.execute(
                 "SELECT customer_commerce_profile_id FROM customer_commerce_profiles WHERE external_fanvue_user_uuid=%s",
                 (buyer_uuid,)).fetchall()]
+            lifecycle_ids=[item["lifecycle_id"] for item in c.execute(
+                "SELECT lifecycle_id FROM customer_photoshoot_lifecycles WHERE customer_commerce_profile_id=ANY(%s)",
+                (profile_ids,)).fetchall()]
             session_ids=[item["sales_session_id"] for item in c.execute(
                 "SELECT sales_session_id FROM sales_sessions WHERE external_fanvue_user_uuid=%s",
                 (buyer_uuid,)).fetchall()]
@@ -1014,6 +1257,23 @@ class CustomerScenarioHarness:
             optional_delete("telegram_engagement_teaser_delivery_operations","telegram_engagement_teaser_delivery_operations","DELETE FROM telegram_engagement_teaser_delivery_operations WHERE fanvue_user_id=ANY(%s)",(fanvue_user_ids,))
             optional_delete("customer_contact_reservations","customer_contact_reservations","DELETE FROM customer_contact_reservations WHERE fanvue_account_id=ANY(%s) AND customer_scope=ANY(%s)",
                    (fanvue_account_ids,[f"fanvue:{value}" for value in fanvue_user_ids]))
+            # Commerce profiles and sales sessions are shared parents in the
+            # photoshoot progression graph.  Remove only this synthetic
+            # customer's dependent fixture rows before either parent.  The
+            # explicit child deletes make reset ordering observable and avoid
+            # depending on incidental cascade behavior.
+            optional_delete("autonomous_sales_actions","autonomous_sales_actions",
+                   "DELETE FROM autonomous_sales_actions WHERE customer_commerce_profile_id=ANY(%s)",
+                   (profile_ids,))
+            optional_delete("customer_photoshoot_lifecycle_sessions","customer_photoshoot_lifecycle_sessions",
+                   "DELETE FROM customer_photoshoot_lifecycle_sessions WHERE lifecycle_id=ANY(%s) OR sales_session_id=ANY(%s)",
+                   (lifecycle_ids,session_ids))
+            optional_delete("customer_photoshoot_lifecycle_events","customer_photoshoot_lifecycle_events",
+                   "DELETE FROM customer_photoshoot_lifecycle_events WHERE lifecycle_id=ANY(%s)",
+                   (lifecycle_ids,))
+            optional_delete("customer_photoshoot_lifecycles","customer_photoshoot_lifecycles",
+                   "DELETE FROM customer_photoshoot_lifecycles WHERE lifecycle_id=ANY(%s)",
+                   (lifecycle_ids,))
             delete("sales_session_purchase_intents","DELETE FROM sales_session_purchase_intents WHERE sales_session_id=ANY(%s) OR purchase_intent_id=ANY(%s)",(session_ids,intent_ids))
             optional_delete("sales_session_history","sales_session_history","DELETE FROM sales_session_history WHERE sales_session_id=ANY(%s)",(session_ids,))
             delete("telegram_sales_delivery_operations","DELETE FROM telegram_sales_delivery_operations WHERE purchase_intent_id=ANY(%s)",(intent_ids,))
@@ -1045,13 +1305,13 @@ class CustomerScenarioHarness:
             delete("commercial_publications","DELETE FROM commercial_publications WHERE commercial_offering_id=ANY(%s)",(offering_ids,))
             delete("commercial_offering_assets","DELETE FROM commercial_offering_assets WHERE offering_id=ANY(%s)",(offering_ids,))
             delete("commercial_offerings","DELETE FROM commercial_offerings WHERE offering_id=ANY(%s)",(offering_ids,))
-            deliverable_ids=[UUID(item["record_id"]) for item in c.execute(
-                "SELECT record_id FROM certification_scenario_records WHERE scenario_id=%s AND table_name='photoshoot_commerce_deliverables'",
-                (scenario_id,)).fetchall()]
             if deliverable_ids:
-                session_refs=[item["photoshoot_session_id"] for item in c.execute(
-                    "SELECT photoshoot_session_id FROM photoshoot_commerce_deliverables WHERE deliverable_id=ANY(%s)",
-                    (deliverable_ids,)).fetchall()]
+                optional_delete(
+                    "photoshoot_session_sales_strategies",
+                    "photoshoot_session_sales_strategies",
+                    "DELETE FROM photoshoot_session_sales_strategies WHERE photoshoot_session_id=ANY(%s)",
+                    (session_refs,),
+                )
                 delete("photoshoot_asset_memberships","DELETE FROM photoshoot_asset_memberships WHERE photoshoot_session_id=ANY(%s)",(session_refs,))
                 delete("photoshoot_intelligence_profiles","DELETE FROM photoshoot_intelligence_profiles WHERE photoshoot_session_id=ANY(%s)",(session_refs,))
                 delete("photoshoot_commerce_deliverables","DELETE FROM photoshoot_commerce_deliverables WHERE deliverable_id=ANY(%s)",(deliverable_ids,))
@@ -1071,12 +1331,17 @@ class CustomerScenarioHarness:
                        "DELETE FROM certification_scenario_execution_leases WHERE scenario_id=%s",
                        (scenario_id,))
             delete("simulated_provider_events","DELETE FROM certification_simulated_provider_events WHERE scenario_id=%s",(scenario_id,))
-            delete("certification_scenario_defects","DELETE FROM certification_scenario_defects WHERE scenario_id=%s",(scenario_id,))
-            delete("certification_scenario_assessments","DELETE FROM certification_scenario_assessments WHERE scenario_id=%s",(scenario_id,))
+            # Assessments and defects are historical certification evidence.
+            # They are attempt-qualified and must survive disposable fixture
+            # cleanup alongside snapshots and attempt allocations.
             c.execute("DELETE FROM certification_scenario_records WHERE scenario_id=%s",(scenario_id,))
             c.execute("UPDATE certification_scenario_runs SET state='VERIFIED_CLEAN',updated_at=NOW() WHERE scenario_id=%s",(scenario_id,))
         return {"scenarioId":scenario_id,"state":"VERIFIED_CLEAN",
-                "recordsCleared":sum(counts.values()),"clearedByTable":counts}
+                "recordsCleared":sum(counts.values()),"clearedByTable":counts,
+                "recoveryClassification": (
+                    "UNALLOCATED_PREPARE_RESIDUE"
+                    if unallocated_prepare_residue else "SNAPSHOTTED_ATTEMPT_RESET"
+                )}
 
     def record_fixture(self, scenario_id: str, table_name: str, record_id: Any):
         with self.connection() as c:
@@ -1215,12 +1480,15 @@ class CustomerScenarioHarness:
         }
 
     def validate_starting_state(self, scenario_id: str, *,
-                                expected_purchase_count: int) -> dict[str, Any]:
+                                expected_purchase_count: int,
+                                now: datetime | None = None) -> dict[str, Any]:
         """Fail closed unless runtime state exactly matches the scenario seed."""
         inventory = self.starting_state_inventory(scenario_id)
         counts = inventory["counts"]
         prospect = inventory["prospect"]
-        derived = HistoricalPurchaseFixtureBuilder(self).derived_state(scenario_id)
+        derived = HistoricalPurchaseFixtureBuilder(self).derived_state(
+            scenario_id, now=now,
+        )
         expected = int(expected_purchase_count)
         always_zero = (
             "visibleMessages", "chatThreads", "memory", "behaviorEvents",
@@ -1229,15 +1497,30 @@ class CustomerScenarioHarness:
             "recommendationOutcomes", "learningProfiles", "paidDeliveries",
             "identityChallenges", "commerceReconciliations",
         )
+        if scenario_id == "C14":
+            always_zero = tuple(
+                name for name in always_zero
+                if name not in {"behaviorEvents", "ordinaryOperations"}
+            )
         failures = [f"{name}={counts[name]}" for name in always_zero if counts[name] != 0]
+        c19_progression = None
+        c20_fixture = None
         if not prospect["exists"]:
             failures.append("prospectShell=missing")
         if prospect["relationshipState"] or prospect["preferenceState"] or prospect["inboundMessageCount"]:
             failures.append("prospectShell=not_empty")
-        for name in ("purchaseIntents", "providerTransactions", "ownership",
-                     "simulatedProviderEvents"):
-            if counts[name] != expected:
-                failures.append(f"{name}={counts[name]} expected={expected}")
+        expected_intents = 5 if scenario_id == "C14" else expected
+        count_expectations = {
+            "purchaseIntents": expected_intents,
+            "providerTransactions": expected,
+            "ownership": expected,
+            "simulatedProviderEvents": expected,
+        }
+        for name, expected_count in count_expectations.items():
+            if counts[name] != expected_count:
+                failures.append(
+                    f"{name}={counts[name]} expected={expected_count}"
+                )
         expected_mapping = 1 if expected else 0
         if counts["identityMappings"] != expected_mapping:
             failures.append(
@@ -1264,9 +1547,10 @@ class CustomerScenarioHarness:
             failures.append(
                 f"provisionalSessions={counts['provisionalSessions']} expected={expected_provisional}"
             )
-        if counts["fingerprints"] != expected or counts["runtimeMediaLinks"] != expected:
+        if (counts["fingerprints"] != expected_intents
+                or counts["runtimeMediaLinks"] != expected_intents):
             failures.append(
-                f"fingerprintRuntime={counts['fingerprints']}/{counts['runtimeMediaLinks']} expected={expected}/{expected}"
+                f"fingerprintRuntime={counts['fingerprints']}/{counts['runtimeMediaLinks']} expected={expected_intents}/{expected_intents}"
             )
         if expected == 0:
             exact = {
@@ -1282,11 +1566,316 @@ class CustomerScenarioHarness:
             failures.append(
                 f"derived.purchaseOwnership={derived.get('purchaseCount')}/{derived.get('ownershipCount')} expected={expected}/{expected}"
             )
+        if expected:
+            customer = self.customer_for(self.definition(scenario_id))
+            with self.connection() as c:
+                historical = c.execute(
+                    """SELECT COUNT(*) FILTER (
+                               WHERE status='PURCHASED'
+                                 AND attribution_result='ATTRIBUTED'
+                           ) AS verified,
+                              COUNT(*) FILTER (
+                               WHERE status='PURCHASED'
+                                 AND attribution_result='ATTRIBUTED'
+                                 AND purchase_acknowledged_at IS NULL
+                           ) AS pending
+                         FROM purchase_intents
+                        WHERE telegram_user_id=%s""",
+                    (customer.telegram_user_id,),
+                ).fetchone()
+            verified_historical = int(historical["verified"] or 0)
+            pending_historical = int(historical["pending"] or 0)
+            expected_pending = int(
+                self.definition(
+                    scenario_id
+                ).historical_purchase_acknowledgement_pending
+            )
+            if verified_historical != expected:
+                failures.append(
+                    f"verifiedHistoricalPurchases={verified_historical} expected={expected}"
+                )
+            if pending_historical != expected_pending:
+                failures.append(
+                    "purchaseAcknowledgementPending="
+                    f"{pending_historical} expected={expected_pending}"
+                )
+        if scenario_id == "C15":
+            exact = {
+                "purchaseCount": 3,
+                "ownershipCount": 3,
+                "lifetimeSpendMinor": 15003,
+                "buyerStatus": "VERIFIED_BUYER",
+                "buyerStage": "HIGH_VALUE_BUYER",
+                "valueTier": "HIGH_VALUE",
+                "activePurchaseIntent": None,
+                "activeSession": None,
+                "activeUnresolvedOpportunity": False,
+            }
+            for key, value in exact.items():
+                if derived.get(key) != value:
+                    failures.append(
+                        f"derived.{key}={derived.get(key)!r} expected={value!r}"
+                    )
+        if scenario_id == "C19":
+            customer = self.customer_for(self.definition(scenario_id))
+            with self.connection() as c:
+                session_rows = c.execute("""SELECT sales_session_id,s.creator_profile_id,
+                        commercial_foundation_type,commercial_foundation_reference,
+                        state,progression_stage,customer_commerce_profile_id
+                    FROM sales_sessions s
+                    JOIN customer_commerce_profiles p
+                      ON p.external_fanvue_user_uuid=s.external_fanvue_user_uuid
+                    WHERE s.external_fanvue_user_uuid=%s
+                      AND s.state IN ('ACTIVE','OFFERING','AWAITING_PAYMENT','CONTINUING')""",
+                    (customer.synthetic_buyer_uuid,)).fetchall()
+                steps = c.execute("""SELECT m.shot_order,m.asset_id,o.offering_id,
+                        o.price_minor,o.status AS offering_status,
+                        p.status AS publication_status,
+                        EXISTS(SELECT 1 FROM provider_purchase_asset_ownership owned
+                            WHERE owned.external_fanvue_user_uuid=%s
+                              AND owned.content_item_id=m.asset_id) AS owned
+                    FROM photoshoot_asset_memberships m
+                    LEFT JOIN commercial_offering_assets oa ON oa.asset_id=m.asset_id
+                    LEFT JOIN commercial_offerings o ON o.offering_id=oa.offering_id
+                    LEFT JOIN commercial_publications p
+                      ON p.commercial_offering_id=o.offering_id
+                     AND p.status='LIVE' AND p.provider_resource_status='PRESENT'
+                    WHERE m.photoshoot_session_id='certification-C19'
+                      AND m.approved=TRUE
+                    ORDER BY m.shot_order,m.asset_id""",
+                    (customer.synthetic_buyer_uuid,)).fetchall()
+            if len(session_rows) != 1:
+                failures.append(f"c19.activeSessions={len(session_rows)} expected=1")
+            else:
+                session = session_rows[0]
+                expected_session = {
+                    "commercial_foundation_type": "PHOTOSHOOT",
+                    "commercial_foundation_reference": "certification-C19",
+                    "state": "CONTINUING", "progression_stage": "PROGRESSION",
+                }
+                for key, value in expected_session.items():
+                    if str(session[key]) != value:
+                        failures.append(f"c19.session.{key}={session[key]!r} expected={value!r}")
+            if len(steps) < 2:
+                failures.append(f"c19.sessionSteps={len(steps)} expected>=2")
+            else:
+                first, second = steps[0], steps[1]
+                if int(first["shot_order"]) != 1 or not first["owned"]:
+                    failures.append("c19.step1 must be ordered first and owned")
+                if int(second["shot_order"]) != 2 or second["owned"]:
+                    failures.append("c19.step2 must be ordered second and unowned")
+                if (second["offering_id"] is None
+                        or second["offering_status"] != "READY"
+                        or second["publication_status"] != "LIVE"
+                        or int(second["price_minor"] or 0) <= 0):
+                    failures.append("c19.step2 is not canonically selectable")
+                if len(session_rows) == 1:
+                    from app.repositories.autonomous_sales_progression_repository import (
+                        AutonomousSalesProgressionRepository,
+                    )
+                    ordered = AutonomousSalesProgressionRepository(
+                        self.connection
+                    ).ordered_assets(
+                        creator_profile_id=int(session_rows[0]["creator_profile_id"]),
+                        customer_commerce_profile_id=session_rows[0][
+                            "customer_commerce_profile_id"
+                        ],
+                        photoshoot_id="certification-C19",
+                    )
+                    next_asset = next((item for item in ordered if not item.owned), None)
+                    if (len(ordered) < 2 or not ordered[0].owned
+                            or next_asset is None
+                            or next_asset.position != 2
+                            or str(next_asset.offering_id) != str(second["offering_id"])):
+                        failures.append("c19.normalSessionSelectorNextStep mismatch")
+                    c19_progression = {
+                        "foundationType": session_rows[0]["commercial_foundation_type"],
+                        "foundationReference": session_rows[0]["commercial_foundation_reference"],
+                        "salesSessionId": str(session_rows[0]["sales_session_id"]),
+                        "consumedStep": 1,
+                        "ownedAssetId": int(first["asset_id"]),
+                        "expectedNextStep": 2,
+                        "expectedNextAssetId": int(second["asset_id"]),
+                        "expectedNextOfferingId": str(second["offering_id"]),
+                        "expectedNextPriceMinor": int(second["price_minor"]),
+                        "orderingAuthority": "AutonomousSalesProgressionRepository.ordered_assets",
+                    }
+            if derived.get("activePurchaseIntent") is not None:
+                failures.append("c19.activePurchaseIntent must be null")
+            if derived.get("activeUnresolvedOpportunity") is not False:
+                failures.append("c19.activeUnresolvedOpportunity must be false")
+        if scenario_id == "C20":
+            with self.connection() as c:
+                deliverables = c.execute("""SELECT deliverable_id,
+                        photoshoot_session_id,selling_mode,intelligence_status,
+                        commerce_status,ordered_member_asset_ids,shot_count
+                    FROM photoshoot_commerce_deliverables
+                    WHERE photoshoot_session_id='certification-C20'
+                      AND is_active=TRUE AND is_archived=FALSE""").fetchall()
+                strategies = c.execute("""SELECT status,strategy_data
+                    FROM photoshoot_session_sales_strategies
+                    WHERE photoshoot_session_id='certification-C20'
+                    ORDER BY generated_at DESC,strategy_version DESC""").fetchall()
+                steps = c.execute("""SELECT m.shot_order,m.asset_id,
+                        destination.destination,o.offering_id,o.price_minor,
+                        o.currency,o.status AS offering_status,
+                        publication.status AS publication_status,
+                        EXISTS(SELECT 1
+                            FROM provider_purchase_asset_ownership owned
+                            WHERE owned.external_fanvue_user_uuid=%s
+                              AND owned.content_item_id=m.asset_id) AS owned
+                    FROM photoshoot_asset_memberships m
+                    LEFT JOIN asset_content_destinations destination
+                      ON destination.asset_id=m.asset_id
+                    LEFT JOIN commercial_offering_assets member
+                      ON member.asset_id=m.asset_id
+                    LEFT JOIN commercial_offerings o
+                      ON o.offering_id=member.offering_id
+                    LEFT JOIN commercial_publications publication
+                      ON publication.commercial_offering_id=o.offering_id
+                     AND publication.status='LIVE'
+                     AND publication.provider_resource_status='PRESENT'
+                    WHERE m.photoshoot_session_id='certification-C20'
+                      AND m.approved=TRUE
+                    ORDER BY m.shot_order,m.asset_id""",
+                    (self.customer_for(
+                        self.definition(scenario_id)
+                    ).synthetic_buyer_uuid,),
+                ).fetchall()
+            if len(deliverables) != 1:
+                failures.append(
+                    f"c20.sessionDeliverables={len(deliverables)} expected=1"
+                )
+            elif (
+                deliverables[0]["selling_mode"] != "SESSION"
+                or deliverables[0]["intelligence_status"] != "READY"
+                or deliverables[0]["commerce_status"] != "READY"
+                or int(deliverables[0]["shot_count"] or 0) != 4
+            ):
+                failures.append("c20.Session deliverable is not READY with 4 steps")
+            if len(strategies) != 1 or strategies[0]["status"] != "READY":
+                failures.append("c20.READY Session strategy missing or ambiguous")
+                strategy_shots = []
+            else:
+                strategy = dict(strategies[0]["strategy_data"] or {})
+                strategy_shots = sorted(
+                    (dict(item) for item in strategy.get("shots") or ()),
+                    key=lambda item: int(item.get("sales_position") or 0),
+                )
+                if strategy.get("session_completion_strategy") != "COMPLETE_AFTER_FINALE":
+                    failures.append("c20.Session completion strategy mismatch")
+            expected_roles = ["FREE_TEASER", "FIRST_UNLOCK", "ESCALATION", "FINALE"]
+            actual_roles = [str(item.get("sales_role") or "") for item in strategy_shots]
+            if actual_roles != expected_roles:
+                failures.append(
+                    f"c20.strategyRoles={actual_roles!r} expected={expected_roles!r}"
+                )
+            strategy_asset_ids = [
+                int(item.get("asset_id") or 0) for item in strategy_shots
+            ]
+            expected_next_ids = [*strategy_asset_ids[1:], None]
+            actual_next_ids = [
+                (int(item["suggested_next_asset_id"])
+                 if item.get("suggested_next_asset_id") is not None else None)
+                for item in strategy_shots
+            ]
+            if actual_next_ids != expected_next_ids:
+                failures.append(
+                    "c20.suggestedNextChain="
+                    f"{actual_next_ids!r} expected={expected_next_ids!r}"
+                )
+            if strategy_shots and (
+                strategy_shots[-1].get("recommended_progression") != "COMPLETE"
+                or strategy_shots[-1].get("suggested_next_asset_id") is not None
+            ):
+                failures.append("c20.FINALE must terminate Session progression")
+            if len(steps) != 4:
+                failures.append(f"c20.sessionSteps={len(steps)} expected=4")
+            else:
+                positions = [int(row["shot_order"]) for row in steps]
+                prices = [
+                    int(row["price_minor"]) if row["price_minor"] is not None else None
+                    for row in steps
+                ]
+                if positions != [1, 2, 3, 4]:
+                    failures.append(f"c20.stepOrder={positions!r} expected=[1, 2, 3, 4]")
+                if steps[0]["destination"] != "TEASER" or steps[0]["offering_id"] is not None:
+                    failures.append("c20.step1 must be a free teaser without an Offering")
+                if prices != [None, 900, 1900, 2900]:
+                    failures.append(
+                        f"c20.stepPrices={prices!r} expected=[None, 900, 1900, 2900]"
+                    )
+                if any(row["owned"] for row in steps):
+                    failures.append("c20 paid/teaser assets must all be unowned at Turn 0")
+                for row in steps[1:]:
+                    if (row["currency"] != "USD"
+                            or row["offering_status"] != "READY"
+                            or row["publication_status"] != "LIVE"):
+                        failures.append("c20 paid Session step is not selectable")
+                        break
+                c20_fixture = {
+                    "foundationReference": "certification-C20",
+                    "salesSessionAtTurn0": False,
+                    "provisionalSessionAtTurn0": False,
+                    "roles": actual_roles,
+                    "pricesMinor": prices,
+                    "orderedAssetIds": [int(row["asset_id"]) for row in steps],
+                    "orderingAuthority": "PERSISTED_SESSION_SALES_STRATEGY",
+                }
+            if derived.get("activePurchaseIntent") is not None:
+                failures.append("c20.activePurchaseIntent must be null")
+            if derived.get("activeSession") is not None:
+                failures.append("c20.activeSession must be null")
+            if derived.get("activeUnresolvedOpportunity") is not False:
+                failures.append("c20.activeUnresolvedOpportunity must be false")
+        if scenario_id == "C14":
+            behavior = self.behavior_summary(scenario_id)
+            exact = {
+                "purchaseCount": 1, "ownershipCount": 1,
+                "lifetimeSpendMinor": 1400,
+                "buyerStatus": "VERIFIED_BUYER",
+                "buyerStage": "FIRST_TIME_BUYER",
+                "retentionLifecycle": "COOLING_BUYER",
+                "effortMode": "COMPRESSED", "timeWasterRisk": "NONE",
+                "activePurchaseIntent": None, "activeSession": None,
+                "activeUnresolvedOpportunity": False,
+            }
+            for key, value in exact.items():
+                if derived.get(key) != value:
+                    failures.append(
+                        f"derived.{key}={derived.get(key)!r} expected={value!r}"
+                    )
+            for key, value in {
+                "inbound_message_count": 18,
+                "offer_exposure_count": 4,
+                "rejection_count": 0,
+            }.items():
+                if behavior.get(key) != value:
+                    failures.append(
+                        f"behavior.{key}={behavior.get(key)!r} expected={value!r}"
+                    )
+            recency = derived.get("purchaseRecencyDays")
+            if recency is None or not 44.9 <= float(recency) <= 45.1:
+                failures.append(
+                    f"derived.purchaseRecencyDays={recency!r} expected~=45"
+                )
+            customer = self.customer_for(self.definition(scenario_id))
+            with self.connection() as c:
+                pending = int(c.execute(
+                    """SELECT COUNT(*) AS count FROM purchase_intents
+                       WHERE telegram_user_id=%s AND status='PURCHASED'
+                         AND purchase_acknowledged_at IS NULL""",
+                    (customer.telegram_user_id,),
+                ).fetchone()["count"])
+            if pending:
+                failures.append(f"purchaseAcknowledgementPending={pending} expected=0")
         if failures:
             raise RuntimeError(
                 "SCENARIO_STARTING_STATE_VALIDATION_FAILED: " + "; ".join(failures)
             )
-        return {"result": "VALIDATED", "inventory": inventory, "derivedState": derived}
+        return {"result": "VALIDATED", "inventory": inventory,
+                "derivedState": derived, "sessionProgression": c19_progression,
+                "c20SessionFixture": c20_fixture}
 
     def projected_behavior_summary(self, scenario_id: str,
                                    events: list[dict[str, Any]]) -> dict[str, Any]:
@@ -1510,10 +2099,15 @@ class CustomerScenarioHarness:
         )
         with self.connection() as c:
             acknowledgement = c.execute("""SELECT purchase_intent_id
-                FROM purchase_intents
-                WHERE telegram_user_id=%s AND status='PURCHASED'
-                  AND purchase_acknowledged_at IS NULL
-                ORDER BY purchased_at DESC NULLS LAST, created_at DESC LIMIT 1""",
+                FROM (
+                    SELECT purchase_intent_id,purchase_acknowledged_at
+                    FROM purchase_intents
+                    WHERE telegram_user_id=%s AND status='PURCHASED'
+                      AND attribution_result='ATTRIBUTED'
+                    ORDER BY purchased_at DESC NULLS LAST,created_at DESC
+                    LIMIT 1
+                ) AS latest_verified_purchase
+                WHERE purchase_acknowledged_at IS NULL""",
                 (base["telegram_user_id"],)).fetchone()
             active_session = c.execute("""SELECT sales_session_id,conversation_thread_id
                 FROM sales_sessions
@@ -1694,10 +2288,44 @@ class CustomerScenarioHarness:
                         fanvue_account_id=base["fanvue_account_id"],
                     )
                 ),
-                ava_persona_runtime_service=gpt.persona_runtime_service)
+                ava_persona_runtime_service=gpt.persona_runtime_service,
+                runtime_media_resolver=ScenarioLabRuntimeMediaResolver())
             output=gateway.execute(ConversationGatewayInput(
                 engine_user_id=context.customer_identifier,message_text=message,
                 chat_history=history,correlation_id=correlation,brain_context=context))
+            diagnostics = dict(output.diagnostic_metadata or {})
+            outbound_suppression = dict(
+                diagnostics.get("outbound_suppression") or {}
+            )
+            authoritative_intentional_suppression = bool(
+                output.blocked
+                and not str(output.response_text or "").strip()
+                and diagnostics.get("status") == "suppressed"
+                and diagnostics.get("outbound_decision") == "NO_RESPONSE"
+                and outbound_suppression.get("reason")
+            )
+            if output.blocked and not authoritative_intentional_suppression:
+                raise RuntimeError(
+                    "SCENARIO_GATEWAY_BLOCKED_PRE_COMMIT: "
+                    f"error_code={output.error_code or 'NOT_PROVIDED'} "
+                    f"status={diagnostics.get('status') or 'NOT_PROVIDED'}"
+                )
+            if (
+                language_mode == REAL_AVA_LANGUAGE
+                and not provider_outputs
+                and not authoritative_intentional_suppression
+            ):
+                raise RuntimeError(
+                    "REAL_AVA_LANGUAGE_NOT_HONORED: live provider produced no "
+                    "valid generation"
+                )
+            diagnostics.update({
+                "authoritativeIntentionalSuppression": (
+                    authoritative_intentional_suppression
+                ),
+                "outboundSuppression": outbound_suppression,
+            })
+            output.diagnostic_metadata.update(diagnostics)
             # Only a successfully generated gateway turn becomes authoritative
             # inbound/reply lifecycle evidence. This preserves the existing
             # failed-turn rollback contract while still exercising production's
@@ -1724,6 +2352,24 @@ class CustomerScenarioHarness:
             if ordinary_operation is None:
                 raise RuntimeError(
                     "SCENARIO_TEST_TRANSPORT_GENERATION_PERSIST_FAILED"
+                )
+            if (
+                not str(output.response_text or "").strip()
+                and not authoritative_intentional_suppression
+            ):
+                output.diagnostic_metadata.update({
+                    "synthetic_ordinary_reply_operation_id": str(
+                        ordinary_operation.operation_id
+                    ),
+                    "synthetic_ordinary_reply_state": ordinary_operation.state.value,
+                    "test_transport_customer_visible_confirmed": False,
+                    "ordinaryReplySuppressed": False,
+                    "ordinaryReplySuppressionReason": None,
+                    "committedExactResponse": None,
+                })
+                raise RuntimeError(
+                    "SCENARIO_UNBLOCKED_EMPTY_RESPONSE_RETRYABLE: "
+                    f"state={ordinary_operation.state.value}"
                 )
             persona_value=output.diagnostic_metadata.get("avaPersonaRuntime")
             persona=dict(persona_value) if isinstance(persona_value,Mapping) else {}
@@ -1831,6 +2477,83 @@ class CustomerScenarioHarness:
                 purchase_intent=purchase_intent,
                 correlation_id=correlation,
             )
+            free_teaser = dict(
+                dict(output.delivery_payload.get("metadata") or {}).get(
+                    "free_teaser_delivery"
+                ) or {}
+            )
+            if free_teaser.get("provisional_session_id"):
+                from app.repositories.telegram_provisional_sales_session_repository import (
+                    TelegramProvisionalSalesSessionRepository,
+                )
+                provisional = TelegramProvisionalSalesSessionRepository(
+                    connection_factory=self.connection,
+                ).record_free_teaser_delivery(
+                    provisional_session_id=free_teaser["provisional_session_id"],
+                    asset_id=int(free_teaser["asset_id"]),
+                    provider="SCENARIO_TEST_TRANSPORT",
+                    provider_delivery_id=str(
+                        ordinary_operation.outbound_telegram_message_id
+                    ),
+                    metadata={
+                        "photoshoot_session_id": free_teaser.get(
+                            "photoshoot_session_id"
+                        ),
+                        "sales_role": "FREE_TEASER",
+                    },
+                )
+                output.diagnostic_metadata.update({
+                    "synthetic_delivery_operation_id": str(
+                        ordinary_operation.operation_id
+                    ),
+                    "synthetic_delivery_state": "CONFIRMED",
+                    "free_teaser_operation_state": ordinary_operation.state.value,
+                    "test_transport_customer_visible_confirmed": (
+                        ordinary_operation.state.value == "SENT_CONFIRMED"
+                    ),
+                    "teaser_domain": "SESSION_FREE_TEASER",
+                    "session_free_teaser_selected": True,
+                    "free_teaser_asset_id": int(free_teaser["asset_id"]),
+                    "free_teaser_foundation": free_teaser.get(
+                        "photoshoot_session_id"
+                    ),
+                    "free_teaser_position": int(free_teaser["position"]),
+                    "free_teaser_delivery_operation_id": str(
+                        ordinary_operation.operation_id
+                    ),
+                    "free_teaser_delivery_state": "CONFIRMED",
+                    "provisional_session_id": str(
+                        provisional.provisional_session_id
+                    ),
+                    "provisional_session_progression_stage": (
+                        provisional.progression_stage
+                    ),
+                    "provisional_session_current_position": int(
+                        provisional.current_position
+                    ),
+                    "commercial_tease_delivery_pending_confirmation": False,
+                    "commercial_tease_delivered": True,
+                    "commercial_tease_exposure_recorded": True,
+                    "progression_finalized_after_delivery": True,
+                })
+                from app.services.sales_brain_full_analysis_service import (
+                    SalesBrainFullAnalysisService,
+                )
+                output.diagnostic_metadata["commercial_summary"] = (
+                    SalesBrainFullAnalysisService.reconcile_confirmed_session_free_teaser(
+                        output.diagnostic_metadata.get("commercial_summary"),
+                        delivery_payload=output.delivery_payload,
+                        delivery_operation_id=str(ordinary_operation.operation_id),
+                        delivery_state="CONFIRMED",
+                        customer_binding_confirmed=bool(
+                            ordinary_operation.telegram_chat_id
+                            == base["telegram_chat_id"]
+                            and ordinary_operation.inbound_sender_telegram_user_id
+                            == base["telegram_user_id"]
+                        ),
+                        provisional_session=provisional,
+                    )
+                )
             # Scenario Lab's test transport is the customer-visible delivery
             # authority for ordinary TEASE text. Mirror the production durable
             # confirmation boundary; generated text alone is never exposure.
@@ -1957,12 +2680,24 @@ class CustomerScenarioHarness:
             telegram_chat_id=base["telegram_chat_id"],
         )
         full_analysis=output.diagnostic_metadata.get("commercial_summary") or {}
+        full_analysis.update({
+            "authoritativeIntentionalSuppression": (
+                authoritative_intentional_suppression
+            ),
+            "outboundSuppression": outbound_suppression,
+        })
         current_offer = dict(full_analysis.get("currentOffer") or {})
         if current_offer.get("customerInitiatedOfferContinuation") is True:
-            current_offer["structuredOfferRedelivered"] = bool(
+            committed_redelivery = bool(
                 output.diagnostic_metadata.get(
                     "test_transport_customer_visible_confirmed"
                 )
+            )
+            current_offer["structuredOfferReused"] = committed_redelivery
+            current_offer["structuredOfferRedelivered"] = committed_redelivery
+            current_offer["purchaseIntentReused"] = bool(
+                committed_redelivery
+                and current_offer.get("activePurchaseIntentId")
             )
             full_analysis["currentOffer"] = current_offer
         acknowledgement_authorized = (
@@ -1987,32 +2722,34 @@ class CustomerScenarioHarness:
             "purchaseAcknowledgedAt": purchase_acknowledged_at,
             "purchaseAcknowledgementCompleted": bool(purchase_acknowledged_at),
         })
+        presentation_intent_id = output.diagnostic_metadata.get(
+            "purchase_intent_id"
+        )
+        presentation_operation_id = output.diagnostic_metadata.get(
+            "synthetic_delivery_operation_id"
+        )
+        presentation_delivery_state = output.diagnostic_metadata.get(
+            "synthetic_delivery_state"
+        )
+        presentation_confirmed = self.structured_presentation_confirmed(
+            output.diagnostic_metadata
+        )
         full_analysis["commerceLifecycleConfirmation"] = {
-            "purchaseIntentId": output.diagnostic_metadata.get(
-                "purchase_intent_id"
-            ) or output.diagnostic_metadata.get(
+            "purchaseIntentId": presentation_intent_id or output.diagnostic_metadata.get(
                 "purchase_acknowledgement_intent_id"
             ),
             "purchaseIntentState": output.diagnostic_metadata.get(
                 "purchase_intent_state"
             ),
-            "structuredPresentationConfirmed": bool(
-                output.diagnostic_metadata.get(
-                    "test_transport_customer_visible_confirmed"
-                )
-            ),
+            "structuredPresentationConfirmed": presentation_confirmed,
             "presentedAt": output.diagnostic_metadata.get(
                 "purchase_intent_presented_at"
             ),
             "purchaseAcknowledgedAt": output.diagnostic_metadata.get(
                 "purchase_acknowledged_at"
             ),
-            "deliveryOperationId": output.diagnostic_metadata.get(
-                "synthetic_delivery_operation_id"
-            ),
-            "deliveryState": output.diagnostic_metadata.get(
-                "synthetic_delivery_state"
-            ),
+            "deliveryOperationId": presentation_operation_id,
+            "deliveryState": presentation_delivery_state,
             "provider": "SYNTHETIC_TEST_TRANSPORT",
             "providerBackedSettlementRequired": True,
         }
@@ -2055,9 +2792,20 @@ class CustomerScenarioHarness:
         if purchase_intent_id and output.offer_authorized and output.delivery_requires_payment:
             with self.connection() as c:
                 selected = c.execute("""SELECT offering.title,offering.offering_type,
-                    offering.price_minor,offering.currency,offering.primary_sales_channel
+                    offering.price_minor,offering.currency,offering.primary_sales_channel,
+                    deliverable.photoshoot_session_id AS session_foundation_reference,
+                    membership.shot_order AS session_position
                     FROM purchase_intents intent JOIN commercial_offerings offering
                       ON offering.offering_id=intent.commercial_offering_id
+                    LEFT JOIN commercial_offering_assets member
+                      ON member.offering_id=offering.offering_id
+                    LEFT JOIN photoshoot_commerce_deliverables deliverable
+                      ON deliverable.deliverable_id=
+                         offering.source_photoshoot_deliverable_id
+                    LEFT JOIN photoshoot_asset_memberships membership
+                      ON membership.photoshoot_session_id=
+                         deliverable.photoshoot_session_id
+                     AND membership.asset_id=member.asset_id
                     WHERE intent.purchase_intent_id=%s""",(purchase_intent_id,)).fetchone()
             if selected:
                 button = dict((output.delivery_payload.get("metadata") or {}).get(
@@ -2072,6 +2820,10 @@ class CustomerScenarioHarness:
                     "price": f"${int(selected['price_minor']) / 100:.2f}",
                     "currency": selected["currency"],
                     "channel": selected["primary_sales_channel"],
+                    "sessionFoundationReference": selected[
+                        "session_foundation_reference"
+                    ],
+                    "sessionPosition": selected["session_position"],
                     "cta": {
                         "label": button.get("label") or "Unlock",
                         "target": "SYNTHETIC_PRIVATE_CHAT_UNLOCK",
@@ -2108,6 +2860,11 @@ class CustomerScenarioHarness:
             "providerDraft":provider_outputs[0] if provider_outputs else None,
             "rewriteHistory":provider_outputs[1:],
             "syntheticProvider": synthetic_diagnostics,
+            "testTransportCustomerVisibleConfirmed": bool(
+                output.diagnostic_metadata.get(
+                    "test_transport_customer_visible_confirmed"
+                )
+            ),
             "testTransportResult":"TEST_TRANSPORT_NO_WAIT"}
         with self.connection() as c:
             existing = c.execute("""SELECT scenario_id,telegram_user_id,inbound,
@@ -2299,6 +3056,33 @@ class SimulatedProviderPurchaseHarness:
 
 class HistoricalPurchaseFixtureBuilder:
     """Create coherent scenario commerce history through canonical settlement."""
+    C13_PURCHASED_ASSET_INTELLIGENCE = {
+        1: {
+            "title": "Indoor portrait",
+            "short_description": "an indoor portrait with studio lighting",
+            "content_summary": "a portrait photographed in an indoor studio setting",
+            "setting": "studio",
+            "environment": "indoor studio",
+            "indoor_outdoor": "indoor",
+            "lighting": "studio lighting",
+            "tags": ("indoor", "portrait", "studio"),
+            "themes": ("controlled lighting", "portrait"),
+            "keywords": ("indoor", "studio", "portrait"),
+        },
+        2: {
+            "title": "Outdoor portrait",
+            "short_description": "an outdoor portrait in natural light",
+            "content_summary": "a portrait photographed in an outdoor setting",
+            "setting": "outdoor setting",
+            "environment": "outdoors",
+            "indoor_outdoor": "outdoor",
+            "lighting": "natural light",
+            "tags": ("outdoor", "portrait", "natural light"),
+            "themes": ("natural light", "portrait"),
+            "keywords": ("outdoor", "natural light", "portrait"),
+        },
+    }
+
     def __init__(self, scenarios: CustomerScenarioHarness):
         self.scenarios=scenarios
         self.emulator=SimulatedProviderPurchaseHarness(scenarios)
@@ -2323,9 +3107,77 @@ class HistoricalPurchaseFixtureBuilder:
             )
             if result["settlement"] is None:
                 raise RuntimeError("Canonical simulated historical settlement failed.")
+            if not self.scenarios.definition(
+                scenario_id
+            ).historical_purchase_acknowledgement_pending:
+                from app.repositories.purchase_intent_repository import (
+                    PurchaseIntentRepository,
+                )
+                PurchaseIntentRepository(
+                    connection_factory=self.scenarios.connection,
+                ).mark_purchase_acknowledged(
+                    item["purchase_intent_id"], at=item["purchased_at"],
+                )
             results.append({**item,"result":result})
         return {"scenarioId":scenario_id,"customer":base,"purchases":results,
                 "derived":self.derived_state(scenario_id)}
+
+    def seed_c14_cooling_history(self, scenario_id: str, *,
+                                 canonical_now: datetime):
+        """Seed C14's authoritative pre-scenario cooling history."""
+        if scenario_id != "C14":
+            raise ValueError("Cooling-history fixture is scoped to C14.")
+        customer = self.scenarios.customer_for(self.scenarios.definition(scenario_id))
+        with self.scenarios.connection() as c:
+            purchased = c.execute(
+                """SELECT purchase_intent_id,purchased_at FROM purchase_intents
+                   WHERE telegram_user_id=%s AND status='PURCHASED'
+                   ORDER BY purchased_at DESC LIMIT 1""",
+                (customer.telegram_user_id,),
+            ).fetchone()
+        if purchased is None:
+            raise RuntimeError("C14 cooling history requires its verified purchase.")
+        from app.repositories.purchase_intent_repository import PurchaseIntentRepository
+        PurchaseIntentRepository(
+            connection_factory=self.scenarios.connection,
+        ).mark_purchase_acknowledged(
+            purchased["purchase_intent_id"], at=purchased["purchased_at"],
+        )
+        base = self._ensure_customer(scenario_id)
+        for index in range(2, 6):
+            failed = self._create_intent(
+                scenario_id, base, index=index, amount_minor=1400 + index,
+                purchased_at=canonical_now - timedelta(days=44 - index),
+                session=False,
+            )
+            with self.scenarios.connection() as c:
+                c.execute(
+                    """UPDATE purchase_intents
+                       SET status='EXPIRED',
+                           presented_at=%s,
+                           updated_at=%s
+                       WHERE purchase_intent_id=%s""",
+                    (
+                        canonical_now - timedelta(days=44 - index),
+                        canonical_now - timedelta(days=44 - index),
+                        failed["purchase_intent_id"],
+                    ),
+                )
+        start = canonical_now - timedelta(days=44)
+        events = [
+            {
+                "type": "INBOUND", "message": f"historical check-in {index}",
+                "idempotency_key": f"c14-inbound-{index}",
+                "occurred_at": start + timedelta(hours=index),
+            }
+            for index in range(1, 19)
+        ]
+        events.extend({
+            "type": "OFFER_EXPOSURE", "message": "historical paid offer",
+            "idempotency_key": f"c14-offer-{index}",
+            "occurred_at": start + timedelta(days=index),
+        } for index in range(1, 5))
+        return self.scenarios.record_behavior_history(scenario_id, events)
 
     def add_eligible_inventory(self, scenario_id: str, prices=(900,)):
         """Create test-only READY/LIVE unowned inventory for the real selector."""
@@ -2360,16 +3212,56 @@ class HistoricalPurchaseFixtureBuilder:
         for item in created:self.scenarios.record_fixture(scenario_id,"commercial_offerings",item["offeringId"])
         return created
 
-    def prepare_session_compatible_inventory(self, scenario_id: str, inventory):
+    def prepare_session_compatible_inventory(
+            self, scenario_id: str, inventory, *, session_reference=None,
+            display_name=None, include_free_teaser=False):
         """Bind synthetic READY offerings to one canonical SESSION deliverable."""
         items=tuple(dict(item) for item in inventory)
         if len(items) < 2:
             raise ValueError("C06 Session fixture requires at least two paid steps.")
         base=self._ensure_customer(scenario_id)
         deliverable_id=uuid5(NAMESPACE_URL,f"session-deliverable:{scenario_id}")
-        session_ref=f"certification-{scenario_id.lower()}-session"
-        asset_ids=[int(item["assetId"]) for item in items]
+        session_ref=session_reference or f"certification-{scenario_id.lower()}-session"
+        title=display_name or f"{scenario_id} Certification Session"
+        paid_asset_ids=[int(item["assetId"]) for item in items]
+        teaser_asset_id = None
         with self.scenarios.connection() as c:
+            if include_free_teaser:
+                teaser_path = f"certification/{scenario_id}/session-teaser.jpg"
+                teaser = c.execute(
+                    """SELECT id FROM content_items
+                       WHERE creator_profile_id=%s AND file_path=%s
+                       ORDER BY id DESC LIMIT 1""",
+                    (base["creator_profile_id"], teaser_path),
+                ).fetchone()
+                if teaser is None:
+                    teaser = c.execute(
+                        """INSERT INTO content_items(
+                               file_path,classification,creator_profile_id,
+                               media_metadata)
+                           VALUES (%s,'SAFE',%s,%s::jsonb) RETURNING id""",
+                        (teaser_path, base["creator_profile_id"], json.dumps({
+                            "photoshoot_session": {"session_id": session_ref},
+                            "certification_fixture": {
+                                "scenario_id": scenario_id,
+                                "session_role": "FREE_TEASER",
+                            },
+                        })),
+                    ).fetchone()
+                teaser_asset_id = int(teaser["id"])
+                c.execute(
+                    """INSERT INTO asset_content_destinations(asset_id,destination)
+                       VALUES (%s,'TEASER') ON CONFLICT(asset_id)
+                       DO UPDATE SET destination=EXCLUDED.destination""",
+                    (teaser_asset_id,),
+                )
+            asset_ids=(
+                [teaser_asset_id, *paid_asset_ids]
+                if teaser_asset_id is not None else paid_asset_ids
+            )
+            session_steps = self._session_fixture_step_plan(
+                items, teaser_asset_id=teaser_asset_id,
+            )
             c.execute("""INSERT INTO photoshoot_commerce_deliverables(
                 deliverable_id,photoshoot_session_id,creator_profile_id,display_name,
                 ordered_member_asset_ids,shot_count,hero_asset_id,completed_at,
@@ -2384,43 +3276,257 @@ class HistoricalPurchaseFixtureBuilder:
                     registration_state='IN_ASSET_LIBRARY',selling_mode='SESSION',
                     is_active=TRUE,is_archived=FALSE,updated_at=NOW()""",
                 (deliverable_id,session_ref,base["creator_profile_id"],
-                 "C06 Certification Session",json.dumps(asset_ids),len(asset_ids),asset_ids[0]))
+                 title,json.dumps(asset_ids),len(asset_ids),asset_ids[0]))
             c.execute("""INSERT INTO photoshoot_intelligence_profiles(
                 photoshoot_session_id,status,profile_data)
                 VALUES (%s,'READY',%s::jsonb)
                 ON CONFLICT(photoshoot_session_id) DO UPDATE SET
                     status='READY',profile_data=EXCLUDED.profile_data,updated_at=NOW()""",
-                (session_ref,json.dumps({"commercial_title":"C06 Certification Session",
+                (session_ref,json.dumps({"commercial_title":title,
                                          "commercial_summary":"Synthetic Session boundary fixture"})))
-            for position,item in enumerate(items,1):
-                asset_id=int(item["assetId"])
+            for step in session_steps:
+                asset_id = int(step["asset_id"])
+                position = int(step["position"])
                 c.execute("""INSERT INTO photoshoot_asset_memberships(
                     photoshoot_session_id,asset_id,shot_order,approved,is_hero)
                     VALUES (%s,%s,%s,TRUE,%s) ON CONFLICT(photoshoot_session_id,asset_id)
                     DO UPDATE SET shot_order=EXCLUDED.shot_order,approved=TRUE,is_hero=EXCLUDED.is_hero""",
-                    (session_ref,asset_id,position,position==1))
+                    (session_ref,asset_id,position,position == 1))
                 c.execute("""UPDATE content_items SET media_metadata=jsonb_set(
                     COALESCE(media_metadata,'{}'::jsonb),'{photoshoot_session}',%s::jsonb,true)
                     WHERE id=%s""",(json.dumps({"session_id":session_ref}),asset_id))
-                c.execute("""UPDATE commercial_offerings
-                    SET source_photoshoot_deliverable_id=%s WHERE offering_id=%s""",
-                    (deliverable_id,item["offeringId"]))
+                if step["offering_id"] is not None:
+                    c.execute("""UPDATE commercial_offerings
+                        SET source_photoshoot_deliverable_id=%s
+                        WHERE offering_id=%s""",
+                        (deliverable_id,step["offering_id"]))
+        if teaser_asset_id is not None:
+            self.scenarios.record_fixture(
+                scenario_id, "content_items", teaser_asset_id,
+            )
+        from app.repositories.photoshoot_session_sales_strategy_repository import (
+            PhotoshootSessionSalesStrategyRepository,
+        )
+        shots = [dict(step["strategy"]) for step in session_steps]
+        PhotoshootSessionSalesStrategyRepository(
+            self.scenarios.connection
+        ).save(
+            photoshoot_session_id=session_ref,
+            deliverable_id=deliverable_id,
+            creator_profile_id=base["creator_profile_id"],
+            strategy_version="certification_fixture_v1",
+            intelligence_version="certification_fixture_v1",
+            strategy_data={
+                "best_teaser_asset_id": asset_ids[0],
+                "recommended_customer_entry_point": "CURRENT_POSITION",
+                "suggested_sales_progression": asset_ids,
+                "recommended_stopping_points": [],
+                "session_completion_strategy": "COMPLETE_AFTER_FINALE",
+                "customer_engagement_strategy": "CUSTOMER_LED_CONTINUATION",
+                "escalation_pacing": "ORDERED",
+                "overall_selling_approach": "SESSION_PROGRESSION",
+                "shots": shots,
+                "metadata": {
+                    "authority": "SCENARIO_FIXTURE_USING_PRODUCTION_RUNTIME_SCHEMA",
+                },
+            },
+            model="DETERMINISTIC_CERTIFICATION_FIXTURE",
+            generated_at=datetime.now(timezone.utc),
+        )
         self.scenarios.record_fixture(
             scenario_id,"photoshoot_commerce_deliverables",deliverable_id,
         )
         return {"deliverableId":deliverable_id,"sessionReference":session_ref,
-                "sellingMode":"SESSION","offeringIds":[item["offeringId"] for item in items]}
+                "sellingMode":"SESSION","teaserAssetId":teaser_asset_id,
+                "orderedAssetIds":asset_ids,
+                "offeringIds":[item["offeringId"] for item in items]}
+
+    @staticmethod
+    def _session_fixture_step_plan(items, *, teaser_asset_id=None):
+        """Map paid inventory into Session coordinates without index arithmetic."""
+        paid = tuple(dict(item) for item in items)
+        if not paid:
+            raise ValueError("Session fixture requires paid inventory.")
+        rows = []
+        if teaser_asset_id is not None:
+            rows.append({
+                "position": 1, "asset_id": int(teaser_asset_id),
+                "offering_id": None, "price_minor": None,
+                "role": "FREE_TEASER", "access": "FREE",
+            })
+        canonical_paid_roles = ("FIRST_UNLOCK", "ESCALATION", "FINALE")
+        for paid_index, item in enumerate(paid):
+            final = paid_index == len(paid) - 1
+            rows.append({
+                "position": len(rows) + 1,
+                "asset_id": int(item["assetId"]),
+                "offering_id": item["offeringId"],
+                "price_minor": int(item["priceMinor"]),
+                "role": (
+                    canonical_paid_roles[paid_index]
+                    if teaser_asset_id is not None and len(paid) == 3
+                    else "FINALE" if final else "PAID_PROGRESSION"
+                ),
+                "access": "PAID",
+            })
+        for index, row in enumerate(rows):
+            final = index == len(rows) - 1
+            next_asset_id = (
+                None if final else int(rows[index + 1]["asset_id"])
+            )
+            free = row["access"] == "FREE"
+            row["strategy"] = {
+                "asset_id": row["asset_id"],
+                "shot_order": row["position"],
+                "sales_position": row["position"],
+                "sales_role": row["role"],
+                "teaser_recommended": free,
+                "access_recommendation": row["access"],
+                "recommended_progression": (
+                    "COMPLETE" if final else "NEXT_POSITION"
+                ),
+                "suggested_next_asset_id": next_asset_id,
+                "customer_journey_purpose": (
+                    "SESSION_ENTRY_TEASER" if free else
+                    "SESSION_COMPLETION" if final else "SESSION_PROGRESSION"
+                ),
+                "escalation_role": (
+                    "DISCOVERY" if free else "FINALE" if final else "PROGRESSION"
+                ),
+                "psychological_objective": (
+                    "BUILD_SESSION_INTEREST" if free
+                    else "CONTINUE_ORDERED_SESSION"
+                ),
+                "conversation_goal": (
+                    "DELIVER_WHEN_CUSTOMER_REQUESTS_TEASER" if free
+                    else "PRESENT_WHEN_CUSTOMER_AUTHORIZES"
+                ),
+            }
+        return tuple(rows)
+
+    def prepare_c20_session_compatible_inventory(self, inventory):
+        """Prepare C20's Session graph without creating customer Session state."""
+        items = tuple(dict(item) for item in inventory)
+        if [int(item["priceMinor"]) for item in items] != [900, 1900, 2900]:
+            raise RuntimeError(
+                "C20 Session fixture requires paid prices 900/1900/2900 USD."
+            )
+        return self.prepare_session_compatible_inventory(
+            "C20", items,
+            session_reference="certification-C20",
+            display_name="C20 Certification Session",
+            include_free_teaser=True,
+        )
+
+    def prepare_c19_session_compatible_inventory(self, inventory):
+        """Bind C19's purchased first step and unowned continuation steps."""
+        scenario_id = "C19"
+        customer = self.scenarios.customer_for(self.scenarios.definition(scenario_id))
+        with self.scenarios.connection() as c:
+            first = c.execute("""SELECT pi.purchase_intent_id,pi.commercial_offering_id,
+                    coa.asset_id,pi.expected_price_minor
+                FROM purchase_intents pi
+                JOIN commercial_offering_assets coa
+                  ON coa.offering_id=pi.commercial_offering_id
+                WHERE pi.telegram_user_id=%s AND pi.status='PURCHASED'
+                  AND pi.attribution_result='ATTRIBUTED'
+                ORDER BY pi.purchased_at,coa.position LIMIT 1""",
+                (customer.telegram_user_id,)).fetchone()
+            profile = c.execute("""SELECT customer_commerce_profile_id
+                FROM customer_commerce_profiles
+                WHERE external_fanvue_user_uuid=%s
+                ORDER BY updated_at DESC LIMIT 1""",
+                (customer.synthetic_buyer_uuid,)).fetchone()
+        if first is None or profile is None:
+            raise RuntimeError("C19 Session fixture requires its verified first purchase.")
+        first_item = {
+            "offeringId": first["commercial_offering_id"],
+            "assetId": int(first["asset_id"]),
+            "priceMinor": int(first["expected_price_minor"]),
+        }
+        result = self.prepare_session_compatible_inventory(
+            scenario_id, (first_item, *tuple(inventory)),
+            session_reference="certification-C19",
+            display_name="C19 Certification Session",
+        )
+        from app.repositories.customer_photoshoot_lifecycle_repository import (
+            CustomerPhotoshootLifecycleRepository,
+        )
+        from app.services.customer_photoshoot_lifecycle_service import (
+            CustomerPhotoshootLifecycleService,
+        )
+        _opportunity, coverage = CustomerPhotoshootLifecycleService(
+            CustomerPhotoshootLifecycleRepository(self.scenarios.connection)
+        ).synchronize_purchase(
+            creator_profile_id=self._ensure_customer(scenario_id)["creator_profile_id"],
+            customer_commerce_profile_id=profile["customer_commerce_profile_id"],
+            photoshoot_id="certification-C19",
+            asset_ids=(int(first["asset_id"]),),
+            purchase_outcome_id=first["purchase_intent_id"],
+            offering_id=first["commercial_offering_id"],
+            purchase_intent_id=first["purchase_intent_id"],
+        )
+        if int(first["asset_id"]) not in set(
+                coverage.get("purchased_asset_ids") or ()):
+            raise RuntimeError(
+                "C19 Session fixture failed to project purchased Step 1 ownership."
+            )
+        return {**result, "consumedStep": first_item,
+                "nextStep": dict(tuple(inventory)[0])}
 
     def derived_state(self, scenario_id: str, *, behavior=None, now=None):
         definition=self.scenarios.definition(scenario_id)
         customer=self.scenarios.customer_for(definition)
         with self.scenarios.connection() as c:
+            prospect=c.execute("""SELECT creator_profile_id,fanvue_account_id,
+                telegram_chat_id FROM telegram_sales_prospects
+                WHERE telegram_user_id=%s ORDER BY last_observed_at DESC LIMIT 1""",
+                (customer.telegram_user_id,)).fetchone()
             profile=c.execute("""SELECT * FROM customer_commerce_profiles
                 WHERE external_fanvue_user_uuid=%s ORDER BY updated_at DESC LIMIT 1""",
                 (customer.synthetic_buyer_uuid,)).fetchone()
             ownership=c.execute("SELECT COUNT(*) n FROM provider_purchase_asset_ownership WHERE external_fanvue_user_uuid=%s",(customer.synthetic_buyer_uuid,)).fetchone()["n"]
             active_intent=c.execute("SELECT purchase_intent_id FROM purchase_intents WHERE telegram_user_id=%s AND status IN ('CREATED','PRESENTED','CLICKED') ORDER BY created_at DESC LIMIT 1",(customer.telegram_user_id,)).fetchone()
             active_session=c.execute("SELECT sales_session_id,state FROM sales_sessions WHERE external_fanvue_user_uuid=%s AND state IN ('ACTIVE','OFFERING','AWAITING_PAYMENT','CONTINUING') ORDER BY created_at DESC LIMIT 1",(customer.synthetic_buyer_uuid,)).fetchone()
+        evidence = dict(behavior) if behavior is not None else self.scenarios.behavior_summary(
+            scenario_id
+        )
+        if behavior is None and prospect is not None:
+            # Scenario behavior rows are cumulative evidence. Turn-local intent
+            # flags within that summary must not make a later accumulated read
+            # look commercially active; the next real inbound will supply its
+            # own current-turn classification through ``behavior``.
+            for transient_key in (
+                "direct_buying_intent", "fresh_direct_intent",
+                "commercial_interest_type", "price_question",
+                "content_request", "active_purchase_intent",
+                "active_session", "sales_session_id",
+            ):
+                evidence.pop(transient_key, None)
+            from app.repositories.ordinary_chat_reply_repository import (
+                OrdinaryChatReplyRepository,
+            )
+            from app.repositories.purchase_intent_repository import (
+                PurchaseIntentRepository,
+            )
+            ordinary = OrdinaryChatReplyRepository(
+                connection_factory=self.scenarios.connection,
+            ).customer_behavior_evidence(
+                account_scope="AVA_TELETHON_PRIVATE",
+                chat_id=int(prospect["telegram_chat_id"]),
+                sender_user_id=customer.telegram_user_id,
+            )
+            opportunities = PurchaseIntentRepository(
+                connection_factory=self.scenarios.connection,
+            ).get_customer_opportunity_evidence(
+                creator_profile_id=int(prospect["creator_profile_id"]),
+                fanvue_account_id=int(prospect["fanvue_account_id"]),
+                telegram_user_id=customer.telegram_user_id,
+            )
+            evidence = merge_scenario_customer_behavior_evidence(evidence, ordinary)
+            evidence = merge_scenario_customer_behavior_evidence(
+                evidence, opportunities,
+            )
         commerce={
             "schemaVersion":"customer_commerce_memory_v1",
             "verifiedPurchaseCount":int(profile["purchase_count"] if profile else 0),
@@ -2434,8 +3540,7 @@ class HistoricalPurchaseFixtureBuilder:
         from app.services.customer_value_attention_service import CustomerValueAttentionService
         attention=CustomerValueAttentionService().project(
             commerce_memory=commerce,
-            behavior=(dict(behavior) if behavior is not None
-                      else self.scenarios.behavior_summary(scenario_id)),now=now)
+            behavior=evidence,now=now)
         return {"scenarioId":scenario_id,"telegramId":customer.telegram_user_id,
             "economicState":definition.economic_state.value,**attention.to_mapping(),
             "ownershipCount":ownership,
@@ -2533,6 +3638,52 @@ class HistoricalPurchaseFixtureBuilder:
                 creator_profile_id) VALUES (%s,'SAFE',%s) RETURNING id""",
                 (f"certification/{scenario_id}/{index}.jpg",
                  base["creator_profile_id"])).fetchone()["id"]
+            intelligence = self.C13_PURCHASED_ASSET_INTELLIGENCE.get(index)
+            if scenario_id == "C13" and intelligence is not None:
+                profile_data = {
+                    **intelligence,
+                    "tags": list(intelligence["tags"]),
+                    "themes": list(intelligence["themes"]),
+                    "keywords": list(intelligence["keywords"]),
+                    "safety_classification": "SAFE",
+                    "risk_flags": [],
+                    "overall_confidence": 1.0,
+                    "field_confidence": {
+                        "short_description": 1.0,
+                        "indoor_outdoor": 1.0,
+                        "tags": 1.0,
+                        "themes": 1.0,
+                    },
+                    "provider_agreement": {
+                        "fixtureAuthority": "SCENARIO_LAB_DETERMINISTIC",
+                    },
+                }
+                c.execute("""UPDATE content_items SET
+                    short_safe_summary=%s,
+                    suggested_tags=%s::jsonb,
+                    detected_themes=%s::jsonb,
+                    confidence=1.0
+                    WHERE id=%s""", (
+                        intelligence["short_description"],
+                        json.dumps(list(intelligence["tags"])),
+                        json.dumps(list(intelligence["themes"])),
+                        asset,
+                    ))
+                c.execute("""INSERT INTO asset_intelligence_profiles(
+                    asset_id,creator_profile_id,schema_version,analysis_status,
+                    analyzed_at,profile_data)
+                    VALUES (%s,%s,'asset_intelligence_profile_v1','READY',
+                        %s,%s::jsonb)
+                    ON CONFLICT(asset_id) DO UPDATE SET
+                        creator_profile_id=EXCLUDED.creator_profile_id,
+                        schema_version=EXCLUDED.schema_version,
+                        analysis_status=EXCLUDED.analysis_status,
+                        analyzed_at=EXCLUDED.analyzed_at,
+                        profile_data=EXCLUDED.profile_data,
+                        updated_at=NOW()""", (
+                            asset, base["creator_profile_id"], purchased_at,
+                            json.dumps(profile_data),
+                        ))
             c.execute("""INSERT INTO commercial_offerings(offering_id,creator_profile_id,offering_type,title,
                 hero_asset_id,primary_sales_channel,status,price_minor,currency)
                 VALUES (%s,%s,'SINGLE_IMAGE',%s,%s,'AI_CHAT','READY',%s,'USD')""",(offering_id,base["creator_profile_id"],f"Certification {scenario_id} #{index}",asset,amount_minor))

@@ -21,6 +21,10 @@ class CustomerValueAttention:
     last_purchase_at: str | None
     purchase_recency_days: float | None
     reactivation_state: str
+    relationship_rewarming_active: bool
+    relationship_rewarming_objective: str | None
+    relationship_rewarming_reason: str | None
+    relationship_rewarming_commercial_reentry_allowed: bool
     commercial_momentum: str
     attention_tier: str
     effort_mode: str
@@ -58,6 +62,10 @@ class CustomerValueAttention:
     memory_priority: str
     sales_pressure: str
     offer_cadence: str
+    relationship_nurture_active: bool = False
+    relationship_nurture_reason: str | None = None
+    relationship_nurture_outcome: str | None = None
+    relationship_nurture_commercial_reentry_allowed: bool = True
     current_commercial_interest: bool = False
     historical_commercial_interest: bool = False
     commercial_trajectory_protection_active: bool = False
@@ -99,6 +107,12 @@ class CustomerValueAttention:
             "lastPurchaseAt": self.last_purchase_at,
             "purchaseRecencyDays": self.purchase_recency_days,
             "reactivationState": self.reactivation_state,
+            "relationshipRewarmingActive": self.relationship_rewarming_active,
+            "relationshipRewarmingObjective": self.relationship_rewarming_objective,
+            "relationshipRewarmingReason": self.relationship_rewarming_reason,
+            "relationshipRewarmingCommercialReentryAllowed": (
+                self.relationship_rewarming_commercial_reentry_allowed
+            ),
             "commercialMomentum": self.commercial_momentum,
             "attentionTier": self.attention_tier,
             "effortMode": self.effort_mode,
@@ -136,6 +150,12 @@ class CustomerValueAttention:
             "memoryPriority": self.memory_priority,
             "salesPressure": self.sales_pressure,
             "offerCadence": self.offer_cadence,
+            "relationshipNurtureActive": self.relationship_nurture_active,
+            "relationshipNurtureReason": self.relationship_nurture_reason,
+            "relationshipNurtureOutcome": self.relationship_nurture_outcome,
+            "relationshipNurtureCommercialReentryAllowed": (
+                self.relationship_nurture_commercial_reentry_allowed
+            ),
             "currentCommercialInterest": self.current_commercial_interest,
             "historicalCommercialInterest": self.historical_commercial_interest,
             "commercialTrajectoryProtectionActive": self.commercial_trajectory_protection_active,

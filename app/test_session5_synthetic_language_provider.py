@@ -37,6 +37,9 @@ def memory(*, callback=False, disclosure=False):
     ("That's too expensive", {}, "OBJECTION"),
     ("hey again", {"purchase_count": 1}, "RETURNING_BUYER"),
     ("keep going", {"active_session": True}, "SESSION_CONTINUATION"),
+    ("Do you have any exclusive photos?", {}, "PRIVATE_CONTENT_INQUIRY"),
+    ("Can you flirt with me a little?", {}, "TEASE_REQUEST"),
+    ("Can you send me the link?", {}, "LINK_REQUEST"),
 ))
 def test_normal_synthetic_provider_matrix_is_contextual_and_deterministic(
     message, kwargs, expected,
@@ -48,6 +51,18 @@ def test_normal_synthetic_provider_matrix_is_contextual_and_deterministic(
     assert first.complete() == second.complete()
     assert first.diagnostics()["syntheticProviderMode"] == "NORMAL_DETERMINISTIC_SYNTHETIC_PROVIDER"
     assert first.diagnostics()["liveProviderCalled"] is False
+
+
+@pytest.mark.parametrize(("message", "marker"), (
+    ("Do you have any exclusive photos?", "private"),
+    ("Can you flirt with me a little?", "tease"),
+    ("Can you send me the link?", "link"),
+))
+def test_synthetic_provider_answers_the_current_semantic_act(message, marker):
+    response = DeterministicSyntheticLanguageProvider(
+        message=message, memory=memory(),
+    ).complete()
+    assert marker in response.lower()
 
 
 def test_synthetic_outputs_are_differentiated_and_adversarial_fixture_is_explicit():

@@ -23,6 +23,9 @@ from app.services.commerce_signal_service import CommerceSignalService
 from app.services.commercial_offering_selector_service import (
     CommercialOfferingSelectorService,
 )
+from app.services.commercial_inventory_authority import (
+    is_test_specific_inventory,
+)
 from app.services.commercial_intelligence_context_service import (
     CommercialIntelligenceContextService,
 )
@@ -137,6 +140,7 @@ class CustomerSalesBrainService:
         commercial_objection_service=None,
         customer_value_attention_service=None,
         unmapped_telegram_prospect_service=None,
+        provisional_sales_session_service=None,
         clock=lambda: datetime.now(timezone.utc),
     ):
         self.customers = customer_repository or CustomerCommerceRepository()
@@ -166,6 +170,7 @@ class CustomerSalesBrainService:
             customer_commerce_memory_service or CustomerCommerceMemoryService()
         )
         self.unmapped_prospects = unmapped_telegram_prospect_service
+        self.provisional_sales_sessions = provisional_sales_session_service
         if telegram_sales_delivery_repository is None:
             from app.repositories.telegram_sales_delivery_repository import TelegramSalesDeliveryRepository
             telegram_sales_delivery_repository = TelegramSalesDeliveryRepository()
@@ -308,6 +313,25 @@ class CustomerSalesBrainService:
             )
         else:
             context["sales_progression_source"] = "NONE"
+        provisional = None
+        try:
+            service = self.provisional_sales_sessions
+            if service is None:
+                from app.services.telegram_provisional_sales_session_service import (
+                    TelegramProvisionalSalesSessionService,
+                )
+                service = TelegramProvisionalSalesSessionService()
+            provisional = service.get_active(
+                creator_profile_id=creator_profile_id,
+                fanvue_account_id=account_id,
+                telegram_user_id=telegram_user_id,
+            )
+            self.provisional_sales_sessions = service
+        except Exception as error:
+            logger.warning(
+                "event=provisional_session_context_unavailable error_type=%s",
+                type(error).__name__,
+            )
         tone = dict(context.get("contextual_customer_tone") or {})
         active = self.intents.get_active_for_buyer(
             creator_profile_id=creator_profile_id, fanvue_account_id=account_id,
@@ -341,9 +365,12 @@ class CustomerSalesBrainService:
             ),
             "continuationIntentType": active_offer_continuation_type,
             "nudgeCooldownApplies": not bool(active_offer_continuation_type),
-            "structuredOfferReused": bool(active_offer_continuation_type),
+            "reuseRequested": bool(active_offer_continuation_type),
+            "redeliveryAuthorized": bool(active_offer_continuation_type),
+            "purchaseIntentReuseEligible": bool(active_offer_continuation_type),
+            "structuredOfferReused": False,
             "structuredOfferRedelivered": False,
-            "purchaseIntentReused": bool(active_offer_continuation_type),
+            "purchaseIntentReused": False,
             "relationshipDiscoverySuppressed": bool(
                 active_offer_continuation_type
             ),
@@ -387,7 +414,7 @@ class CustomerSalesBrainService:
             message=str(context.get("latest_message") or ""), context=context,
         )
         context["commercial_objection"] = self._objection_diagnostics(
-            objection, active or latest, context,
+            objection, active, context,
         )
         self._apply_objection_ranking_context(context, objection)
         common = dict(
@@ -444,6 +471,98 @@ class CustomerSalesBrainService:
         if objection.objection_type is CommercialObjectionType.TEMPORARY_HESITATION:
             return self._objection_stop(started, now, common, context, objection,
                                         decision=CustomerSalesDecisionType.CONTINUE_CONVERSATION)
+        explicit_teaser_request = (
+            self.conversational_progression.has_explicit_teaser_asset_request(
+                str(context.get("latest_message") or "")
+            )
+        )
+        if explicit_teaser_request and active is None:
+            repository = self.progression_repository
+            if repository is None:
+                from app.repositories.autonomous_sales_progression_repository import (
+                    AutonomousSalesProgressionRepository,
+                )
+                repository = AutonomousSalesProgressionRepository()
+            candidates = repository.pre_session_free_teaser_candidates(
+                creator_profile_id=creator_profile_id,
+            )
+            authority = {
+                "explicitRequestDetected": True,
+                "authority": "CANONICAL_READY_SESSION_GRAPH",
+                "authorized": False,
+                "candidateCount": len(candidates),
+            }
+            if len(candidates) == 1:
+                candidate = dict(candidates[0])
+                try:
+                    provisional = provisional or self.provisional_sales_sessions.create_or_get(
+                        creator_profile_id=creator_profile_id,
+                        fanvue_account_id=account_id,
+                        telegram_user_id=telegram_user_id,
+                        telegram_chat_id=int(
+                            context.get("telegram_chat_id")
+                            or restricted.prospect.telegram_chat_id
+                        ),
+                        photoshoot_reference=candidate["photoshoot_reference"],
+                        session_strategy=candidate["strategy_version"],
+                        configured_base_price_minor=candidate["next_price_minor"],
+                        commercial_context={
+                            "authority": "PRE_SESSION_FREE_TEASER",
+                            "canonicalCandidate": candidate,
+                        },
+                    )
+                    if (
+                        str(provisional.photoshoot_reference)
+                        == candidate["photoshoot_reference"]
+                        and int(provisional.current_position) == 1
+                    ):
+                        authority.update({
+                            **candidate, "authorized": True,
+                            "provisionalSessionId": str(
+                                provisional.provisional_session_id
+                            ),
+                            "deliveryConfirmed": False,
+                        })
+                except Exception as error:
+                    authority["failureReason"] = type(error).__name__
+                    logger.warning(
+                        "event=pre_session_free_teaser_authority_failed error_type=%s",
+                        type(error).__name__,
+                    )
+            if authority["authorized"]:
+                decision = self._finish(
+                    started, now, **common,
+                    decision=CustomerSalesDecisionType.TEASE,
+                    reason=CustomerSalesReasonCode.EXPLICIT_FREE_TEASER_REQUEST,
+                    summary="The customer explicitly requested the canonical free Session teaser asset.",
+                )
+            else:
+                authority.setdefault(
+                    "failureReason",
+                    "CANONICAL_FREE_TEASER_UNAVAILABLE_OR_AMBIGUOUS",
+                )
+                decision = self._finish(
+                    started, now, **common,
+                    decision=CustomerSalesDecisionType.CONTINUE_CONVERSATION,
+                    reason=CustomerSalesReasonCode.CURRENT_TURN_NOT_READY,
+                    summary="No unique canonical free teaser is available.",
+                )
+            metadata = dict(decision.decision_metadata or {})
+            metadata["preSessionFreeTeaser"] = authority
+            metadata["teaseType"] = "FREE_TEASER_ASSET"
+            if authority["authorized"]:
+                metadata["salesProgression"] = {
+                    "phase": "CONVERSATIONAL",
+                    "teaseType": "FREE_TEASER_ASSET",
+                    "freeTeaserAssetId": authority["teaser_asset_id"],
+                    "foundationReference": authority["photoshoot_reference"],
+                    "nextPosition": authority["next_position"],
+                    "awaitingCustomerResponse": False,
+                }
+            return replace(
+                decision, sell_allowed=False, nudge_allowed=False,
+                decision_metadata=immutable_mapping(metadata),
+            )
         proactive_readiness = self._deterministic_proactive_tease_readiness(context)
         if (
             proactive_readiness["authorized"]
@@ -551,6 +670,28 @@ class CustomerSalesBrainService:
                 summary="Ordinary relationship conversation does not invoke commerce inventory selection.",
             )
         constraints = self._recovery_constraints(objection, latest)
+        if provisional is not None and int(provisional.current_position) >= 2:
+            canonical_candidate = dict(
+                dict(provisional.commercial_context or {}).get(
+                    "canonicalCandidate"
+                ) or {}
+            )
+            if canonical_candidate.get("next_offering_id"):
+                context["sales_progression"] = {
+                    "phase": "PRESENT_OFFER",
+                    "offeringId": canonical_candidate["next_offering_id"],
+                    "foundationReference": str(
+                        provisional.photoshoot_reference
+                    ),
+                    "position": int(provisional.current_position),
+                }
+            constraints = replace(
+                constraints,
+                required_selling_modes=("SESSION",),
+                required_photoshoot_reference=str(
+                    provisional.photoshoot_reference
+                ),
+            )
         selection = self.offering_selector.select(
             creator_profile_id=creator_profile_id,
             telegram_user_id=telegram_user_id,
@@ -1063,6 +1204,18 @@ class CustomerSalesBrainService:
                 summary="No Customer Commerce profile exists for this buyer.",
                 stage=CustomerBuyerStage.UNKNOWN,
             )
+        active_session_context = (
+            self._active_session_continuity_context(
+                context=context,
+                creator_profile_id=creator_profile_id,
+                customer_commerce_profile_id=(
+                    profile.customer_commerce_profile_id
+                ),
+            )
+            if context.get("sales_session_id") else {}
+        )
+        if active_session_context:
+            context["active_session_context"] = active_session_context
         stage = self.buyer_stage(profile.purchase_count)
         signal = self.signals.get_signal(
             creator_profile_id=creator_profile_id,
@@ -1073,6 +1226,29 @@ class CustomerSalesBrainService:
             creator_profile_id=creator_profile_id,
             fanvue_account_id=fanvue_account_id,
             telegram_user_id=telegram_user_id,
+        )
+        requested_acknowledgement_id = str(
+            context.get("purchase_acknowledgement_intent_id") or ""
+        )
+        latest_purchase_id = str(
+            getattr(latest, "purchase_intent_id", "") or ""
+        )
+        acknowledgement_pending = bool(
+            context.get("purchase_acknowledgement_pending") is True
+            and latest is not None
+            and latest.status.value == "PURCHASED"
+            and getattr(latest, "purchase_acknowledged_at", None) is None
+            and (
+                not requested_acknowledgement_id
+                or requested_acknowledgement_id == latest_purchase_id
+            )
+        )
+        # The lifecycle obligation is scoped to the latest verified purchase.
+        # A stale boolean or an older historical purchase must not reopen an
+        # acknowledgement that the latest purchase has durably completed.
+        context["purchase_acknowledgement_pending"] = acknowledgement_pending
+        context["purchase_acknowledgement_intent_id"] = (
+            latest_purchase_id if acknowledgement_pending else None
         )
         active = self.intents.get_active_for_buyer(
             creator_profile_id=creator_profile_id,
@@ -1167,9 +1343,12 @@ class CustomerSalesBrainService:
             ),
             "continuationIntentType": active_offer_continuation_type,
             "nudgeCooldownApplies": not bool(active_offer_continuation_type),
-            "structuredOfferReused": bool(active_offer_continuation_type),
+            "reuseRequested": bool(active_offer_continuation_type),
+            "redeliveryAuthorized": bool(active_offer_continuation_type),
+            "purchaseIntentReuseEligible": bool(active_offer_continuation_type),
+            "structuredOfferReused": False,
             "structuredOfferRedelivered": False,
-            "purchaseIntentReused": bool(active_offer_continuation_type),
+            "purchaseIntentReused": False,
             "relationshipDiscoverySuppressed": bool(
                 active_offer_continuation_type
             ),
@@ -1228,7 +1407,7 @@ class CustomerSalesBrainService:
             message=str(context.get("latest_message") or ""), context=context,
         )
         context["commercial_objection"] = self._objection_diagnostics(
-            objection, active or latest, context,
+            objection, active, context,
         )
         self._apply_objection_ranking_context(context, objection)
         opportunity = self._apply_photoshoot_opportunity_policy(
@@ -1297,6 +1476,40 @@ class CustomerSalesBrainService:
                 started, now, common, context, objection,
                 decision=CustomerSalesDecisionType.CONTINUE_CONVERSATION,
             )
+        inventory_existence_question = (
+            self.commercial_receptiveness.inventory_existence_question(
+                str(context.get("latest_message") or "")
+            )
+        )
+        if inventory_existence_question:
+            # Read-only eligibility probe. It neither authorizes presentation nor
+            # creates a PurchaseIntent; cooldown remains the controlling gate.
+            existence_selection = self.offering_selector.select(
+                creator_profile_id=creator_profile_id,
+                telegram_user_id=telegram_user_id,
+                customer_profile=profile,
+                commerce_signal=signal,
+                active_purchase_intent=None,
+                conversation_context={
+                    **context, "primary_sales_channel": "AI_CHAT",
+                },
+                strategy_constraints=StrategyConstraints(
+                    excluded_selling_modes=("SESSION",),
+                ),
+                strategy="INVENTORY_EXISTENCE_PROBE",
+            )
+            context["inventory_existence"] = {
+                "directInventoryQuestionDetected": True,
+                "inventoryExistenceKnown": True,
+                "eligibleUnownedInventoryExists": bool(
+                    existence_selection.offering_id
+                ),
+                "authority": "OWNERSHIP_SAFE_OFFERING_SELECTOR",
+                "existenceProbeOnly": True,
+                "offerPresentationAuthorized": False,
+                "structuredOfferDelivered": False,
+                "purchaseIntentCreated": False,
+            }
         # Priority 5: cooldown controls unsolicited pressure, but fresh direct
         # intent remains authoritative for a new ownership-safe opportunity.
         if (
@@ -1489,15 +1702,31 @@ class CustomerSalesBrainService:
         )
         if session_intent == "NONE" and deferred.get("state") in {"READY", "CLAIMED"}:
             session_intent = str(deferred.get("continuationType") or "NONE")
+        active_session_authority = bool(context.get("sales_session_id"))
+        # An already-active ordered Session has resolved its commercial role
+        # and next asset through the persisted READY strategy plus
+        # AutonomousSalesProgressionRepository.  At this boundary the generic
+        # selector validates the exact Session candidate; it must not demand a
+        # second, independent commercial-role assignment for that asset.
         session_constraints = replace(
             recovery_constraints,
             required_selling_modes=("SESSION",),
             excluded_selling_modes=(),
+            progression=(
+                None if active_session_authority
+                else recovery_constraints.progression
+            ),
+            approved_commercial_roles=(
+                () if active_session_authority
+                else recovery_constraints.approved_commercial_roles
+            ),
         )
         session_selection = None
-        if (
-            int(profile.purchase_count or 0) >= 2
-            and (session_intent == "ONGOING_EXPERIENCE" or proposal.get("state") == "PENDING")
+        if self._should_resolve_session_inventory(
+            active_session_authority=active_session_authority,
+            purchase_count=int(profile.purchase_count or 0),
+            session_intent=session_intent,
+            proposal_state=proposal.get("state"),
         ):
             session_selection = self.offering_selector.select(
                 creator_profile_id=creator_profile_id,
@@ -1575,6 +1804,31 @@ class CustomerSalesBrainService:
             "DECLINE_AND_STOP",
         }
         session_escalation.update({
+            # Inventory selection and presentation authority are separate.
+            # Preserve the exact candidate selected for an already-active,
+            # ordered Session even when this turn remains conversational and
+            # the final decision therefore carries no recommended offering.
+            "canonicalSessionCandidate": bool(
+                active_session_authority
+                and session_selection
+                and session_selection.offering_id
+            ),
+            "canonicalSessionCandidateOfferingId": (
+                str(session_selection.offering_id)
+                if active_session_authority
+                and session_selection
+                and session_selection.offering_id
+                else None
+            ),
+            "canonicalSessionCandidateReason": (
+                "ACTIVE_SESSION_ORDERED_CANDIDATE_SELECTED"
+                if active_session_authority
+                and session_selection
+                and session_selection.offering_id
+                else "ACTIVE_SESSION_ORDERED_CANDIDATE_UNAVAILABLE"
+                if active_session_authority
+                else "NOT_AN_ACTIVE_SESSION_SELECTION"
+            ),
             "sessionProposalDelivered": bool(proposal.get("delivered")),
             "sessionProposalId": proposal.get("proposalId"),
             "sessionProposalSourceInbound": proposal.get("sourceInbound"),
@@ -1639,6 +1893,23 @@ class CustomerSalesBrainService:
                     "boundary; no ordinary PurchaseIntent is authorized."
                 ),
             )
+        if active_session_authority:
+            direct_session_presentation = self._direct_session_presentation_requested(
+                receptiveness.commercial_interest_type
+            )
+            if not direct_session_presentation:
+                return self._finish(
+                    started, now, **common,
+                    decision=CustomerSalesDecisionType.CONTINUE_CONVERSATION,
+                    reason=CustomerSalesReasonCode.ACTIVE_SESSION_PRECEDENCE,
+                    summary=(
+                        "The active ordered Session remains available, but the "
+                        "current turn does not directly authorize presentation."
+                    ),
+                    selector_result=session_selection,
+                    commercial_intelligence=intelligence,
+                )
+            selection = session_selection
         if (
             intelligence.strategy is None
             and escalation_decision != "CONTINUE_DISCRETE_PPVS"
@@ -1741,6 +2012,30 @@ class CustomerSalesBrainService:
         )
 
     @staticmethod
+    def _should_resolve_session_inventory(*, active_session_authority: bool,
+                                          purchase_count: int,
+                                          session_intent: str,
+                                          proposal_state: str | None) -> bool:
+        return bool(
+            active_session_authority
+            or (
+                purchase_count >= 2
+                and (
+                    session_intent == "ONGOING_EXPERIENCE"
+                    or proposal_state == "PENDING"
+                )
+            )
+        )
+
+    @staticmethod
+    def _direct_session_presentation_requested(
+            commercial_interest_type: str | None) -> bool:
+        return str(commercial_interest_type or "NONE") in {
+            "PURCHASE_ACCEPTANCE", "SEND_OR_LINK_REQUEST",
+            "PRICE_REQUEST", "DIRECT_CONTENT_INTENT",
+        }
+
+    @staticmethod
     def _readiness_metadata(decision):
         return {
             "policyVersion": decision.policy_version,
@@ -1823,6 +2118,10 @@ class CustomerSalesBrainService:
                 primary_sales_channel="AI_CHAT",
             )
             if selector_repository is not None else ()
+        )
+        candidates = tuple(
+            candidate for candidate in candidates
+            if not is_test_specific_inventory(candidate)
         )
         bundle_compositions = tuple(
             {
@@ -1987,6 +2286,115 @@ class CustomerSalesBrainService:
                 session.commercial_foundation_reference
             ),
         }
+
+    def _active_session_continuity_context(
+        self, *, context: dict, creator_profile_id: int,
+        customer_commerce_profile_id,
+    ) -> dict:
+        """Bounded descriptive Session truth, independent of a turn action."""
+        session_id = context.get("sales_session_id")
+        foundation = context.get("sales_session_foundation")
+        if not session_id or not foundation:
+            return {}
+        projection = {
+            "schemaVersion": "active_sales_session_context_v1",
+            "available": False,
+            "completeness": "HEADER_ONLY",
+            "runtimeStatus": "NOT_EVALUATED",
+            "unavailableReason": None,
+            "salesSessionId": str(session_id),
+            "state": context.get("sales_session_state"),
+            "progressionStage": context.get("sales_session_progression"),
+            "foundationType": context.get("sales_session_foundation_type"),
+            "foundationReference": str(foundation),
+            "orderedAssets": [],
+            "ownedPositions": [],
+            "currentConsumedPosition": None,
+            "nextEligiblePosition": None,
+        }
+        if str(projection["foundationType"] or "").upper() != "PHOTOSHOOT":
+            projection.update({
+                "available": True,
+                "completeness": "FOUNDATION_CONTEXT_COMPLETE",
+                "runtimeStatus": "NOT_APPLICABLE",
+            })
+            return projection
+        try:
+            repository = self.progression_repository
+            if repository is None:
+                from app.repositories.autonomous_sales_progression_repository import (
+                    AutonomousSalesProgressionRepository,
+                )
+                repository = AutonomousSalesProgressionRepository()
+            assets = repository.ordered_assets(
+                creator_profile_id=creator_profile_id,
+                customer_commerce_profile_id=customer_commerce_profile_id,
+                photoshoot_id=foundation,
+            )
+            runtime_service = self.session_runtime
+            if runtime_service is None:
+                from app.services.photoshoot_session_runtime_service import (
+                    PhotoshootSessionRuntimeService,
+                )
+                runtime_service = PhotoshootSessionRuntimeService()
+            runtime = runtime_service.evaluate(
+                creator_profile_id=creator_profile_id,
+                customer_commerce_profile_id=customer_commerce_profile_id,
+                photoshoot_session_id=foundation,
+            )
+            owned_ids = set(runtime.owned_asset_ids)
+            ordered = [{
+                "position": item.position,
+                "assetId": item.asset_id,
+                "offeringId": str(item.offering_id) if item.offering_id else None,
+                "priceMinor": item.price_minor,
+                "currency": item.currency,
+                "owned": item.asset_id in owned_ids,
+            } for item in assets]
+            owned_positions = [item["position"] for item in ordered if item["owned"]]
+            runtime_position = int(runtime.current_position or 0)
+            runtime_complete = runtime.status.value == "COMPLETED"
+            for item in ordered:
+                item["consumed"] = bool(
+                    runtime_complete or item["position"] < runtime_position
+                )
+            consumed_positions = [
+                item["position"] for item in ordered if item["consumed"]
+            ]
+            next_asset = (
+                next((item for item in ordered
+                      if item["position"] == runtime_position), None)
+                if not runtime_complete else None
+            )
+            projection.update({
+                "available": bool(ordered and next_asset),
+                "completeness": (
+                    "POSITIONAL_CONTEXT_COMPLETE"
+                    if ordered and next_asset else "POSITIONAL_CONTEXT_INCOMPLETE"
+                ),
+                "runtimeStatus": runtime.status.value,
+                "orderedAssets": ordered,
+                "ownedPositions": owned_positions,
+                "consumedPositions": consumed_positions,
+                "currentConsumedPosition": (
+                    max(consumed_positions) if consumed_positions else None
+                ),
+                "nextEligiblePosition": next_asset["position"] if next_asset else None,
+                "sessionRuntime": runtime.to_context(),
+            })
+        except Exception as error:
+            projection.update({
+                "available": False,
+                "completeness": "POSITIONAL_CONTEXT_UNAVAILABLE",
+                "runtimeStatus": "UNAVAILABLE",
+                "unavailableReason": f"{type(error).__name__}: {error}",
+            })
+            logger.warning(
+                "event=active_session_continuity_context_unavailable "
+                "error_type=%s session_id=%s",
+                type(error).__name__, session_id,
+            )
+        return projection
 
     @staticmethod
     def refine_for_readiness(
@@ -2801,13 +3209,30 @@ class CustomerSalesBrainService:
     def _objection_diagnostics(objection, current_intent, context):
         result = dict(objection.to_mapping())
         previous = dict(context.get("sales_progression") or {})
+        status = str(getattr(
+            getattr(current_intent, "status", None), "value",
+            getattr(current_intent, "status", ""),
+        ) or "").upper()
+        current_offer_authority = bool(
+            current_intent is not None
+            and status in {"PRESENTED", "CLICKED"}
+        )
+        rejection_applicable = objection.objection_type in {
+            CommercialObjectionType.PRICE_RESISTANCE,
+            CommercialObjectionType.DISCOUNT_REQUEST,
+            CommercialObjectionType.BUDGET_LIMIT,
+            CommercialObjectionType.CONTENT_MISMATCH,
+            CommercialObjectionType.PRODUCT_REJECTION,
+            CommercialObjectionType.TEMPORARY_HESITATION,
+            CommercialObjectionType.GLOBAL_DECLINE,
+        }
         offering_id = (
             getattr(current_intent, "commercial_offering_id", None)
-            if current_intent is not None else previous.get("offeringId")
+            if current_offer_authority else None
         )
         price = (
             getattr(current_intent, "expected_price_minor", None)
-            if current_intent is not None else previous.get("priceMinor")
+            if current_offer_authority else None
         )
         maximum = None
         if (objection.objection_type in {
@@ -2832,8 +3257,21 @@ class CustomerSalesBrainService:
                     CommercialObjectionType.PRODUCT_REJECTION,
                 }
             ),
-            "rejectedOfferingId": str(offering_id) if offering_id else None,
+            "currentOfferAuthority": current_offer_authority,
+            "rejectedOfferingId": (
+                str(offering_id)
+                if offering_id and rejection_applicable else None
+            ),
             "recoveryAttemptCount": int(previous.get("recoveryAttemptCount") or 0),
+            "newMaterialCommercialInformationDetected": bool(
+                int(previous.get("recoveryAttemptCount") or 0) >= 1
+                and objection.consider_alternative
+                and objection.objection_type in {
+                    CommercialObjectionType.BUDGET_LIMIT,
+                    CommercialObjectionType.CONTENT_MISMATCH,
+                    CommercialObjectionType.PRODUCT_REJECTION,
+                }
+            ),
         })
         return result
 
@@ -2907,9 +3345,11 @@ class CustomerSalesBrainService:
             "budgetRemaining": 0,
             "strategy": "VALUE_DEFENSE",
             "negativeContactAuthorized": True,
-            "negativeContactUsed": negative_contact_used,
+            "negativeContactRequested": negative_contact_used,
+            "negativeContactUsed": False,
             "negativeContactIntensity": intensity,
-            "valueDefenseUsed": True,
+            "valueDefenseRequested": True,
+            "valueDefenseUsed": False,
             "originalOfferPreserved": True,
             "originalOfferingId": str(offering_id) if offering_id else None,
             "originalPrice": int(price) if price is not None else None,
@@ -3106,6 +3546,12 @@ class CustomerSalesBrainService:
             )
             if progression_context.get(key) is not None
         }
+        commercial_receptiveness = dict(
+            progression_context.get("commercial_receptiveness") or {}
+        )
+        fresh_direct_intent = bool(
+            commercial_receptiveness.get("freshDirectIntentDetected")
+        )
         value_attention = self.customer_value_attention.project(
             commerce_memory=memory_summary,
             behavior={
@@ -3113,10 +3559,10 @@ class CustomerSalesBrainService:
                 "active_purchase_intent": active is not None,
                 "active_session": bool(progression_context.get("sales_session_id")),
                 "sales_progression_phase": progression.get("phase"),
-                "direct_buying_intent": self.conversational_progression.has_direct_purchase_intent(latest_message),
-                "commercial_interest_type": dict(
-                    progression_context.get("commercial_receptiveness") or {}
-                ).get("commercialInterestType", "NONE"),
+                "direct_buying_intent": fresh_direct_intent,
+                "commercial_interest_type": commercial_receptiveness.get(
+                    "commercialInterestType", "NONE"
+                ),
                 "current_inbound_activity": bool(latest_message.strip()),
                 "recovery_attempt_count": max(
                     int(behavior_evidence.get("rejection_count") or 0),
@@ -3147,9 +3593,6 @@ class CustomerSalesBrainService:
             progression_context.get("contextual_customer_tone") or {}
         )
         prior_backoff = str(progression.get("phase") or "").upper() == "BACK_OFF"
-        fresh_direct_intent = self.conversational_progression.has_direct_purchase_intent(
-            latest_message
-        )
         suppress_repeated_abuse = bool(
             (prior_backoff or int(
                 contextual_tone.get("priorExplicitDisengagementCount") or 0
@@ -3164,7 +3607,16 @@ class CustomerSalesBrainService:
             and decision in {
                 CustomerSalesDecisionType.CONTINUE_CONVERSATION,
                 CustomerSalesDecisionType.NO_SALE,
+                # With no active offer, BACK_OFF is only an optional ordinary
+                # acknowledgement.  It must not escape an already-consumed
+                # nurture budget merely because current nonpayment semantics
+                # selected the back-off strategy.
+                CustomerSalesDecisionType.BACK_OFF,
             }
+            and not (
+                decision is CustomerSalesDecisionType.BACK_OFF
+                and active is not None
+            )
             and not fresh_direct_intent
         )
         outbound_suppressed = bool(
@@ -3331,6 +3783,9 @@ class CustomerSalesBrainService:
                 "customerCommerceMemory": dict(
                     memory_summary
                 ),
+                "activeSessionContext": dict(
+                    progression_context.get("active_session_context") or {}
+                ),
                 "commercialOpportunity": {
                     "source": progression_context.get(
                         "commercial_opportunity_evidence_source"
@@ -3397,6 +3852,9 @@ class CustomerSalesBrainService:
                 ),
                 "activeOfferContinuation": dict(
                     progression_context.get("active_offer_continuation") or {}
+                ),
+                "inventoryExistence": dict(
+                    progression_context.get("inventory_existence") or {}
                 ),
                 "commercialObjection": dict(
                     progression_context.get("commercial_objection") or {}
@@ -3510,6 +3968,10 @@ class CustomerSalesBrainService:
                     {
                         "selectionReason": (
                             selector_result.selection_reason.value
+                        ),
+                        "selectedOfferingId": (
+                            str(selector_result.offering_id)
+                            if selector_result.offering_id else None
                         ),
                         "exclusionReasons": list(
                             selector_result.exclusion_reasons
@@ -3767,7 +4229,24 @@ class CustomerSalesBrainService:
                                 reason="Execute the persisted Session Sales Strategy free teaser.",
                                 decision_trace=("active_lifecycle","session_runtime","free_teaser"),
                             )
-                        action=replace(action,metadata={**dict(action.metadata),"sessionRuntime":session_runtime_state.to_context()})
+                        action=replace(action,metadata={
+                            **dict(action.metadata),
+                            "sessionRuntime": session_runtime_state.to_context(),
+                            "sessionOrderedAssets": [
+                                {
+                                    "assetId": item.asset_id,
+                                    "position": item.position,
+                                    "offeringId": (
+                                        str(item.offering_id)
+                                        if item.offering_id else None
+                                    ),
+                                    "priceMinor": item.price_minor,
+                                    "currency": item.currency,
+                                    "owned": item.owned,
+                                }
+                                for item in assets
+                            ],
+                        })
                     result=replace(result,next_sales_action=action)
                     # The opportunity engine is authoritative for fulfillment.
                     # Never leave the generic ranked Offering attached when it

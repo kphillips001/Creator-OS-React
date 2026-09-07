@@ -119,12 +119,14 @@ def test_grok_failure_uses_one_openai_fallback_in_same_generation_call():
     assert result == "bounded fallback"
     assert calls == ["GROK", "OPENAI"]
     assert preview == {
+        "preferredProvider": "GROK",
         "responseProvider": "OPENAI",
         "grokAttempted": True,
         "grokSucceeded": False,
         "providerFallbackAttempted": True,
         "providerFallbackProvider": "OPENAI",
         "providerFallbackOutcome": "SUCCEEDED",
+        "fallbackReason": "GROK_UNAVAILABLE",
     }
 
 

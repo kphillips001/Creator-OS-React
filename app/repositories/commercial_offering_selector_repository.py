@@ -40,9 +40,9 @@ class CommercialOfferingSelectorRepository:
                       ON publication.commercial_offering_id=offering.offering_id
                     WHERE offering.creator_profile_id=%s
                       AND publication.publication_metadata @> '{"test_specific": true}'::jsonb
-                      AND publication.publication_metadata->>'purpose' LIKE 'controlled_smoke_test%%'
+                      AND publication.publication_metadata->>'purpose' LIKE %s
                     ORDER BY publication.published_at DESC,publication.publication_id DESC
-                    LIMIT 1""", (creator_profile_id,))
+                    LIMIT 1""", (creator_profile_id, 'controlled_smoke_test%'))
                 row = cursor.fetchone()
         return (self.get_candidate(row["offering_id"], creator_profile_id=creator_profile_id)
                 if row else None)

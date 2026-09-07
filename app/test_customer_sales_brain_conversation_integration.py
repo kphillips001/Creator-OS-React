@@ -15,11 +15,13 @@ from app.models.customer_sales_decision import (
 )
 from app.services.chat_commerce_service import ChatCommerceService
 from app.services.conversation_gateway import ConversationGateway
+from app.services.gpt_service import GPTService
 from app.services.commerce_execution_policy import (
     CommerceExecutionPolicy,
     derive_commerce_execution_policy,
 )
 from app.models.commerce_mode import CommerceMode
+from app.testing.session5_scenario_harness import HistoricalPurchaseFixtureBuilder
 
 
 BUYER = UUID("9d7ce679-ccef-4bb9-9b01-7ee8b97516bc")
@@ -113,7 +115,7 @@ class LiveCommerceMode:
 class Brain:
     def __init__(
         self, send_offer=True, response_text="Ava's existing reply.",
-        commerce_readiness=None,
+        commerce_readiness=None, diagnostics=None,
     ):
         self.send_offer = send_offer
         self.response_text = response_text
@@ -121,6 +123,7 @@ class Brain:
             "conversation_ready_for_offer": True,
             "current_buying_intent": True,
         }
+        self.diagnostics = dict(diagnostics or {})
         self.calls = []
 
     def process_message(
@@ -137,6 +140,7 @@ class Brain:
             "blocked": False,
             "route": {"route": "sales", "reason": "fixture"},
             "commerce_readiness": dict(self.commerce_readiness),
+            **self.diagnostics,
         }
 
 
@@ -168,6 +172,139 @@ def test_gateway_preserves_exact_selector_recommendation_trace():
     ] is trace
 
 
+def test_verified_purchase_context_reaches_generation_with_safe_asset_detail():
+    asset = SimpleNamespace(
+        short_safe_summary="an outdoor portrait set",
+        suggested_tags=["outdoor", "portrait"],
+        detected_themes=["natural light"],
+    )
+    gateway = object.__new__(ConversationGateway)
+    gateway._asset_repository = SimpleNamespace(
+        get_by_id=lambda asset_id: asset if asset_id == 42 else None
+    )
+    decision = replace(
+        sales_decision(
+            CustomerSalesDecisionType.CONGRATULATE_PURCHASE,
+            reason=CustomerSalesReasonCode.PURCHASE_VERIFIED,
+            congratulate=True,
+        ),
+        decision_metadata=MappingProxyType({
+            "customerCommerceMemory": {
+                "verifiedPurchaseCount": 1,
+                "ownedAssetIds": [42],
+                "ownedOfferingIds": ["internal-offering-id"],
+                "recentVerifiedPurchaseEvidence": [{
+                    "assetIds": [42], "saleType": "SINGLE_IMAGE",
+                }],
+            },
+        }),
+    )
+
+    context = gateway._commerce_runtime_injection(decision)["commerce_decision"]
+
+    assert context["customer_commerce_memory"]["verifiedPurchaseCount"] == 1
+    purchased = context["recent_purchased_content"]
+    assert purchased["referenceIsUnambiguous"] is True
+    assert purchased["purchasedContentHistoryCount"] == 1
+    assert purchased["boundedHistoryEntryCount"] == 1
+    assert purchased["maximumHistoryEntries"] == 20
+    assert purchased["contentType"] == "SINGLE_IMAGE"
+    assert purchased["safeSummary"] == "an outdoor portrait set"
+    assert purchased["safeTags"] == ("outdoor", "portrait")
+    assert purchased["safeThemes"] == ("natural light",)
+    assert purchased["historyEntries"][0]["ownershipConfirmed"] is True
+
+
+def test_multiple_purchases_project_bounded_ordered_authoritative_history():
+    gateway = object.__new__(ConversationGateway)
+    gateway._asset_repository = SimpleNamespace(
+        get_by_id=lambda asset_id: SimpleNamespace(
+            short_safe_summary=("outdoor portrait" if asset_id == 42 else None),
+            suggested_tags=(["outdoor"] if asset_id == 42 else []),
+            detected_themes=[],
+        )
+    )
+
+    result = gateway._recent_purchased_content_context({
+        "verifiedPurchaseCount": 2,
+        "ownedAssetIds": [41, 42],
+        "recentVerifiedPurchaseEvidence": [
+            {"assetIds": [41], "grossMinor": 1200, "currency": "USD"},
+            {"assetIds": [42], "grossMinor": 1800, "currency": "USD"},
+        ],
+    })
+
+    assert result["referenceIsUnambiguous"] is False
+    assert [item["ordinal"] for item in result["historyEntries"]] == [1, 2]
+    assert result["historyEntries"][1]["safeTags"] == ("outdoor",)
+    assert all(item["ownershipConfirmed"] for item in result["historyEntries"])
+
+
+def test_large_purchase_history_projection_is_capped_at_twenty():
+    gateway = object.__new__(ConversationGateway)
+    gateway._asset_repository = SimpleNamespace(get_by_id=lambda _asset_id: None)
+    result = gateway._recent_purchased_content_context({
+        "verifiedPurchaseCount": 100,
+        "recentVerifiedPurchaseEvidence": [
+            {"assetIds": [index]} for index in range(1, 31)
+        ],
+    })
+
+    assert result["boundedHistoryEntryCount"] == 20
+    assert result["purchasedContentHistoryCount"] == 100
+    assert [item["ordinal"] for item in result["historyEntries"]] == list(
+        range(81, 101)
+    )
+
+
+def test_c13_fixture_intelligence_projects_and_resolves_authoritatively():
+    specifications = HistoricalPurchaseFixtureBuilder.C13_PURCHASED_ASSET_INTELLIGENCE
+    assets = {
+        2481: SimpleNamespace(
+            short_safe_summary=specifications[1]["short_description"],
+            suggested_tags=specifications[1]["tags"],
+            detected_themes=specifications[1]["themes"],
+        ),
+        2482: SimpleNamespace(
+            short_safe_summary=specifications[2]["short_description"],
+            suggested_tags=specifications[2]["tags"],
+            detected_themes=specifications[2]["themes"],
+        ),
+    }
+    gateway = object.__new__(ConversationGateway)
+    gateway._asset_repository = SimpleNamespace(get_by_id=assets.get)
+    projected = gateway._recent_purchased_content_context({
+        "verifiedPurchaseCount": 2,
+        "ownedAssetIds": [2481, 2482],
+        "recentVerifiedPurchaseEvidence": [
+            {
+                "purchasedAt": "2026-09-03T16:08:33.137156-05:00",
+                "saleType": "SINGLE_IMAGE", "assetIds": [2481],
+                "grossMinor": 1200, "currency": "USD",
+            },
+            {
+                "purchasedAt": "2026-09-03T16:08:33.817764-05:00",
+                "saleType": "SINGLE_IMAGE", "assetIds": [2482],
+                "grossMinor": 1800, "currency": "USD",
+            },
+        ],
+    })
+    resolve = GPTService._resolve_purchase_history_reference
+
+    assert projected["historyEntries"][0]["safeTags"] == (
+        "indoor", "portrait", "studio",
+    )
+    assert projected["historyEntries"][1]["safeTags"] == (
+        "outdoor", "portrait", "natural light",
+    )
+    assert resolve("the indoor one", projected)["resolvedOrdinal"] == 1
+    assert resolve("the outdoor one", projected)["resolvedOrdinal"] == 2
+    assert resolve("the second set", projected)["resolutionType"] == "ORDINAL"
+    assert resolve("the $18 one", projected)["resolutionType"] == "UNIQUE_PRICE"
+    assert resolve("the beach one", projected)["purchaseHistoryReferentResolved"] is False
+    assert resolve("the portrait one", projected)["purchaseHistoryReferentResolved"] is False
+
+
 class Sales:
     def __init__(self, selected):
         self.selected = selected
@@ -192,10 +329,13 @@ def execute(
     commerce_readiness=None,
     message_text="Show me one photo",
     chat_history=None,
+    engine_diagnostics=None,
+    conversational_memory=None,
 ):
     engine = Brain(
         send_offer=engine_send_offer, response_text=response_text,
         commerce_readiness=commerce_readiness,
+        diagnostics=engine_diagnostics,
     )
     sales = Sales(selected)
     customer_brain = SalesBrain(decision)
@@ -221,9 +361,208 @@ def execute(
             conversation_identifier="conversation-1",
             telegram_user_id=123,
             purchase_acknowledgement_pending=acknowledgement,
+            conversational_memory=dict(conversational_memory or {}),
         ),
     ))
     return output, engine, sales, customer_brain
+
+
+def test_attempt3_aggregate_acknowledgement_uses_deletion_first_repair():
+    original = (
+        "Looks like I’m on a roll with you—two for two, huh? "
+        "Should I be worried or flattered? 😏"
+    )
+    provider_calls = []
+    decision = replace(
+        sales_decision(
+            CustomerSalesDecisionType.CONGRATULATE_PURCHASE,
+            reason=CustomerSalesReasonCode.PURCHASE_VERIFIED,
+            congratulate=True,
+        ),
+        decision_metadata=MappingProxyType({
+            "customerValueAttention": {"purchaseCount": 2},
+        }),
+    )
+    output, _, _, _ = execute(
+        decision,
+        acknowledgement=True,
+        message_text="you've been two for two so far",
+        response_text=original,
+        acknowledgement_generator=lambda **kwargs: (
+            provider_calls.append(kwargs) or "you’re on fire"
+        ),
+        conversational_memory={"memoryDiagnostics": {
+            "conversationStyle": {
+                "manufacturedQuestionRisk": True,
+                "unauthorizedRelationshipQuestion": True,
+                "questionReason": "MANUFACTURED_ENGAGEMENT",
+            },
+        }},
+    )
+    diagnostics = output.diagnostic_metadata
+
+    assert output.response_text == "Looks like I’m on a roll with you—two for two."
+    assert provider_calls == []
+    assert diagnostics["purchaseAcknowledgementRewriteOutcome"] == (
+        "DELETION_FIRST_REPAIR_SUCCEEDED"
+    )
+    assert diagnostics["aggregatePurchaseReactionRequired"] is True
+    assert diagnostics["aggregatePurchaseReactionSatisfied"] is True
+    assert diagnostics["retrospectivePurchaseReactionSatisfied"] is True
+    assert diagnostics["semanticPreservationAfterRewrite"] is True
+    assert diagnostics["purchaseAcknowledgementQuestionAuthorized"] is False
+    assert diagnostics["purchaseAcknowledgementRewriteRemovedSegments"] == [
+        "huh?", "Should I be worried or flattered?"
+    ]
+    assert diagnostics["purchaseAcknowledgementCommittedResponse"] == (
+        output.response_text
+    )
+
+
+def test_aggregate_ava_subject_candidate_passes_without_unnecessary_rewrite():
+    provider_calls = []
+    decision = replace(
+        sales_decision(
+            CustomerSalesDecisionType.CONGRATULATE_PURCHASE,
+            reason=CustomerSalesReasonCode.PURCHASE_VERIFIED,
+            congratulate=True,
+        ),
+        decision_metadata=MappingProxyType({
+            "customerValueAttention": {"purchaseCount": 2},
+        }),
+    )
+    output, _, _, _ = execute(
+        decision, acknowledgement=True,
+        message_text="you've been two for two so far",
+        response_text="Guess I\u2019m on fire today.",
+        acknowledgement_generator=lambda **kwargs: (
+            provider_calls.append(kwargs) or "replacement"
+        ),
+    )
+    diagnostics = output.diagnostic_metadata
+
+    assert output.response_text == "Guess I\u2019m on fire today."
+    assert provider_calls == []
+    assert diagnostics["purchaseAcknowledgementRewriteOutcome"] == "NOT_REQUIRED"
+    assert diagnostics["semanticFrameSubject"] == (
+        "AVA_OR_PURCHASED_CONTENT_TRACK_RECORD"
+    )
+    assert diagnostics["finalResponseSubjectCompatible"] is True
+    assert diagnostics["contradictorySemanticSegmentDetected"] is False
+    assert diagnostics["semanticPreservationAfterRewrite"] is True
+
+
+def test_aggregate_mixed_subject_reversal_is_deleted_before_commit():
+    decision = replace(
+        sales_decision(
+            CustomerSalesDecisionType.CONGRATULATE_PURCHASE,
+            reason=CustomerSalesReasonCode.PURCHASE_VERIFIED,
+            congratulate=True,
+        ),
+        decision_metadata=MappingProxyType({
+            "customerValueAttention": {"purchaseCount": 2},
+        }),
+    )
+    output, _, _, _ = execute(
+        decision, acknowledgement=True,
+        message_text="you've been two for two so far",
+        response_text="Look at you, on a roll! Glad they both landed.",
+    )
+    diagnostics = output.diagnostic_metadata
+
+    assert output.response_text == "Glad they both landed."
+    assert diagnostics["purchaseAcknowledgementRewriteOutcome"] == (
+        "DELETION_FIRST_REPAIR_SUCCEEDED"
+    )
+    assert diagnostics["purchaseAcknowledgementRewriteRemovedSegments"] == [
+        "Look at you, on a roll"
+    ]
+    assert diagnostics["preRewriteContradictorySemanticSegmentDetected"] is True
+    assert diagnostics["finalResponseSubjectCompatible"] is True
+    assert diagnostics["contradictorySemanticSegmentDetected"] is False
+
+
+def test_resolved_second_purchase_referent_reaches_protected_semantic_frame():
+    candidate = "Glad you liked that one more—guess I nailed the vibe just right this time."
+    decision = replace(
+        sales_decision(
+            CustomerSalesDecisionType.CONGRATULATE_PURCHASE,
+            reason=CustomerSalesReasonCode.PURCHASE_VERIFIED,
+            congratulate=True,
+        ),
+        decision_metadata=MappingProxyType({
+            "customerValueAttention": {"purchaseCount": 2},
+        }),
+    )
+    reference = {
+        "purchaseHistoryReferentDetected": True,
+        "purchaseHistoryReferentResolved": True,
+        "resolutionType": "ORDINAL",
+        "resolvedOrdinal": 2,
+    }
+    output, _, sales, _ = execute(
+        decision, acknowledgement=True,
+        message_text="I liked the second set even more",
+        response_text=candidate,
+        conversational_memory={"memoryDiagnostics": {
+            "conversationStyle": {"purchaseHistoryReference": reference},
+        }},
+    )
+    diagnostics = output.diagnostic_metadata
+
+    assert output.response_text == candidate
+    assert sales.resolve_calls == []
+    assert diagnostics["purchaseAcknowledgementRewriteOutcome"] == "NOT_REQUIRED"
+    assert diagnostics["purchaseAcknowledgementReactionState"] == (
+        "COMPLETED_POSITIVE_EXPERIENCE"
+    )
+    assert diagnostics["preRewriteSemanticFrame"] == {
+        "purchaseReactionState": "COMPLETED_POSITIVE_EXPERIENCE",
+        "verifiedPurchaseCount": 2,
+        "aggregatePurchaseReactionRequired": False,
+        "retrospectivePurchaseReactionRequired": True,
+        "aggregateSubject": None,
+        "singularAcknowledgementAloneSufficient": True,
+        **reference,
+        "comparativePurchaseReaction": True,
+        "aggregatePurchaseReference": False,
+        "resolvedPurchaseCount": 0,
+        "resolvedPurchaseIds": [],
+        "purchaseFeedbackAggregate": False,
+    }
+    assert diagnostics["retrospectivePurchaseReactionSatisfied"] is True
+    assert diagnostics["semanticPreservationAfterRewrite"] is True
+
+
+def test_resolved_comparative_safe_fallback_is_retrospective_and_comparative():
+    decision = replace(
+        sales_decision(
+            CustomerSalesDecisionType.CONGRATULATE_PURCHASE,
+            reason=CustomerSalesReasonCode.PURCHASE_VERIFIED,
+            congratulate=True,
+        ),
+        decision_metadata=MappingProxyType({
+            "customerValueAttention": {"purchaseCount": 2},
+        }),
+    )
+    output, _, _, _ = execute(
+        decision, acknowledgement=True,
+        message_text="I liked the second set even more",
+        response_text="Unlock it when you're ready.",
+        acknowledgement_generator=lambda **_: "Still deciding?",
+        conversational_memory={"memoryDiagnostics": {"conversationStyle": {
+            "purchaseHistoryReference": {
+                "purchaseHistoryReferentDetected": True,
+                "purchaseHistoryReferentResolved": True,
+                "resolutionType": "ORDINAL",
+                "resolvedOrdinal": 2,
+            },
+        }}},
+    )
+
+    assert output.response_text == "I'm glad that one landed even better for you."
+    assert "hope you enjoy" not in output.response_text.lower()
+    assert output.diagnostic_metadata["purchaseAcknowledgementSatisfied"] is True
 
 
 def test_relationship_mode_runs_recommendation_but_suppresses_commerce_execution():
@@ -302,6 +641,8 @@ def test_present_offer_is_evaluated_once_and_uses_existing_workflow():
         "decision": "PRESENT_OFFER",
         "reason_code": "NO_ACTIVE_OFFER",
         "buyer_stage": "FIRST_TIME_BUYER",
+        "active_purchase_intent_id": None,
+        "active_offering_id": None,
         "current_offer_status": None,
         "conversion_state": "NO_ACTIVE_OFFER",
         "commerce_execution_policy": "COMMERCE_DISABLED_FOR_TURN",
@@ -371,7 +712,7 @@ def test_customer_initiated_active_offer_continuation_reuses_structured_offer():
             },
         }),
     )
-    output, _, sales, _ = execute(
+    output, engine, sales, _ = execute(
         decision, selected,
         response_text="I'm not dropping links just yet.",
         presentation_generator=lambda **values: values["draft"],
@@ -396,7 +737,37 @@ def test_customer_initiated_active_offer_continuation_reuses_structured_offer():
     assert output.diagnostic_metadata["active_purchase_intent_id"] == str(
         intent_id
     )
+    runtime_context = engine.calls[0]["runtime_injection"]["commerce_decision"]
+    assert runtime_context["active_purchase_intent_id"] == str(intent_id)
+    assert runtime_context["active_offering_id"] == str(selected.offering_id)
     assert len(sales.resolve_calls) == 1
+
+
+def test_wait_projects_active_structured_ids_into_generation_context():
+    selected = offering()
+    intent_id = uuid4()
+    decision = replace(
+        sales_decision(CustomerSalesDecisionType.WAIT),
+        active_purchase_intent_id=intent_id,
+        active_offering_id=selected.offering_id,
+        active_offer_status="PRESENTED",
+        decision_metadata=MappingProxyType({
+            "objectionRecovery": {
+                "originalPrice": 900,
+                "recoverySuppressionReason": "RECOVERY_LIMIT_REACHED",
+            },
+        }),
+    )
+    _, engine, _, _ = execute(
+        decision, selected,
+        message_text="do you have something smaller in that range?",
+    )
+    context = engine.calls[0]["runtime_injection"]["commerce_decision"]
+    assert context["decision"] == "WAIT"
+    assert context["active_purchase_intent_id"] == str(intent_id)
+    assert context["active_offering_id"] == str(selected.offering_id)
+    assert context["current_offer_status"] == "PRESENTED"
+    assert context["objection_recovery"]["originalPrice"] == 900
 
 
 def test_paid_offer_regenerates_authoritative_copy_when_initial_draft_is_empty():
@@ -640,6 +1011,49 @@ def test_wait_suppresses_existing_engine_offer_without_reselection():
     assert sales.recommend_calls == []
 
 
+def test_low_cost_nurture_budget_suppresses_before_provider_generation():
+    decision = replace(
+        sales_decision(CustomerSalesDecisionType.CONTINUE_CONVERSATION),
+        decision_metadata=MappingProxyType({
+            "customerValueAttention": {
+                "timeWasterScore": 6,
+                "timeWasterRisk": "HIGH",
+                "attentionTier": "LOW",
+                "effortMode": "MINIMAL",
+                "lowCostNurtureActive": True,
+                "nurtureResponsesUsed": 1,
+                "nurtureResponseBudget": 1,
+                "optionalOrdinaryReplySuppressed": True,
+                "suppressionReason": "LOW_COST_NURTURE_DAILY_BUDGET_CONSUMED",
+            },
+            "outboundSuppression": {
+                "suppressed": True,
+                "outcome": "NO_RESPONSE",
+                "reason": "LOW_COST_NURTURE_DAILY_BUDGET_CONSUMED",
+                "inboundProcessingRequired": True,
+                "futureCommercialReentryAllowed": True,
+                "freshCommercialIntentDetected": False,
+                "nurtureBypassedForCommercialIntent": False,
+            },
+        }),
+    )
+    output, engine, sales, customer_brain = execute(
+        decision, message_text="no, I'm not paying; I'm just looking",
+    )
+
+    assert len(customer_brain.calls) == 1
+    assert engine.calls == []
+    assert sales.resolve_calls == []
+    assert sales.recommend_calls == []
+    assert output.blocked is True
+    assert output.response_text == ""
+    assert output.delivery_payload == {}
+    assert output.diagnostic_metadata["ai_generation_count"] == 0
+    assert output.diagnostic_metadata["outbound_suppression"]["reason"] == (
+        "LOW_COST_NURTURE_DAILY_BUDGET_CONSUMED"
+    )
+
+
 def test_purchase_acknowledgement_context_and_decision_reach_brain():
     decision = sales_decision(
         CustomerSalesDecisionType.CONGRATULATE_PURCHASE,
@@ -713,6 +1127,149 @@ def test_invalid_acknowledgement_repair_uses_safe_truth_preserving_fallback_once
     assert output.diagnostic_metadata["purchaseAcknowledgementRewriteOutcome"] == (
         "PROVIDER_REPAIR_REJECTED_SAFE_FALLBACK"
     )
+
+
+def test_completed_positive_purchase_reaction_commits_generated_copy_and_final_truth():
+    candidate = (
+        "I'm glad you're loving it! Feels good to find a set that hits just right, "
+        "doesn't it?"
+    )
+    decision = sales_decision(
+        CustomerSalesDecisionType.CONGRATULATE_PURCHASE,
+        reason=CustomerSalesReasonCode.PURCHASE_VERIFIED,
+        congratulate=True,
+    )
+    output, _, sales, _ = execute(
+        decision, acknowledgement=True,
+        message_text="that set I bought was really good",
+        response_text=candidate,
+    )
+    diagnostics = output.diagnostic_metadata
+    style = diagnostics["conversationStyle"]
+    assert output.blocked is False
+    assert output.response_text == candidate
+    assert "hope you enjoy" not in output.response_text.lower()
+    assert sales.resolve_calls == []
+    assert sales.recommend_calls == []
+    assert diagnostics["purchaseAcknowledgementReactionState"] == (
+        "COMPLETED_POSITIVE_EXPERIENCE"
+    )
+    assert diagnostics["purchaseAcknowledgementRewriteAttempted"] is False
+    assert diagnostics["purchaseAcknowledgementFinalCandidate"] == output.response_text
+    assert style["finalValidationFinalCandidate"] == output.response_text
+    assert style["currentTopicCoverageSatisfied"] is True
+    assert style["foregroundSemanticRelevanceSatisfied"] is True
+    assert style["purchaseAcknowledged"] is True
+    assert style["turnObligationsSatisfied"] is True
+
+
+def test_completed_positive_purchase_reaction_with_known_purchase_noun_uses_retrospective_fallback():
+    decision = sales_decision(
+        CustomerSalesDecisionType.CONGRATULATE_PURCHASE,
+        reason=CustomerSalesReasonCode.PURCHASE_VERIFIED,
+        congratulate=True,
+    )
+    output, _, sales, _ = execute(
+        decision, acknowledgement=True,
+        message_text="hey, I liked the last set",
+        response_text="I saw you grabbed it - hope you enjoy this one.",
+        acknowledgement_generator=lambda **_: "Still scrolling?",
+    )
+    diagnostics = output.diagnostic_metadata
+    style = diagnostics["conversationStyle"]
+    assert output.response_text.startswith("I'm glad you liked it")
+    assert "hope you enjoy" not in output.response_text.lower()
+    assert diagnostics["purchaseAcknowledgementReactionState"] == (
+        "COMPLETED_POSITIVE_EXPERIENCE"
+    )
+    assert diagnostics["purchaseAcknowledgementFinalCandidate"] == output.response_text
+    assert style["finalValidationFinalCandidate"] == output.response_text
+    assert style["currentTopicCoverageSatisfied"] is True
+    assert style["foregroundSemanticRelevanceSatisfied"] is True
+    assert style["turnObligationsSatisfied"] is True
+    assert sales.resolve_calls == []
+    assert sales.recommend_calls == []
+
+
+def test_repeat_buyer_aggregate_positive_reaction_uses_plural_retrospective_fallback():
+    decision = replace(
+        sales_decision(
+            CustomerSalesDecisionType.CONGRATULATE_PURCHASE,
+            reason=CustomerSalesReasonCode.PURCHASE_VERIFIED,
+            congratulate=True,
+        ),
+        buyer_stage=CustomerBuyerStage.REPEAT_BUYER,
+        decision_metadata=MappingProxyType({
+            "customerValueAttention": {"purchaseCount": 2},
+        }),
+    )
+    output, _, sales, _ = execute(
+        decision, acknowledgement=True,
+        message_text="you've been two for two so far",
+        response_text="I saw you grabbed it - hope you enjoy this one.",
+        acknowledgement_generator=lambda **_: "What do you want next?",
+    )
+    diagnostics = output.diagnostic_metadata
+    style = diagnostics["conversationStyle"]
+    assert "streak" in output.response_text.lower()
+    assert "they've landed" in output.response_text.lower()
+    assert "hope you enjoy" not in output.response_text.lower()
+    assert diagnostics["purchaseAcknowledgementReactionState"] == (
+        "COMPLETED_POSITIVE_EXPERIENCE"
+    )
+    assert diagnostics["purchaseAcknowledgementFinalCandidate"] == output.response_text
+    assert style["finalValidationFinalCandidate"] == output.response_text
+    assert style["currentTopicCoverageSatisfied"] is True
+    assert style["foregroundSemanticRelevanceSatisfied"] is True
+    assert style["turnObligationsSatisfied"] is True
+    assert sales.resolve_calls == []
+    assert sales.recommend_calls == []
+
+
+def test_just_purchased_retains_prospective_acknowledgement():
+    decision = sales_decision(
+        CustomerSalesDecisionType.CONGRATULATE_PURCHASE,
+        reason=CustomerSalesReasonCode.PURCHASE_VERIFIED,
+        congratulate=True,
+    )
+    output, _, sales, _ = execute(
+        decision, acknowledgement=True,
+        message_text="I just bought the set",
+        response_text="I saw you grabbed it — hope you enjoy this one.",
+    )
+    assert output.response_text == "I saw you grabbed it — hope you enjoy this one."
+    assert output.diagnostic_metadata["purchaseAcknowledgementReactionState"] == (
+        "JUST_PURCHASED"
+    )
+    assert sales.resolve_calls == []
+
+
+def test_completed_negative_purchase_reaction_uses_grounded_safe_fallback():
+    decision = sales_decision(
+        CustomerSalesDecisionType.CONGRATULATE_PURCHASE,
+        reason=CustomerSalesReasonCode.PURCHASE_VERIFIED,
+        congratulate=True,
+    )
+    output, _, sales, _ = execute(
+        decision, acknowledgement=True,
+        message_text="I bought it but didn't like it",
+        response_text="Congrats — hope you enjoy it!",
+        acknowledgement_generator=lambda **_: "So glad you loved it!",
+    )
+    diagnostics = output.diagnostic_metadata
+    assert output.blocked is False
+    assert output.response_text == (
+        "I'm sorry that one didn't land for you — I appreciate you telling me."
+    )
+    assert diagnostics["purchaseAcknowledgementReactionState"] == (
+        "COMPLETED_NEGATIVE_EXPERIENCE"
+    )
+    assert diagnostics["purchaseAcknowledgementFinalCandidate"] == output.response_text
+    assert diagnostics["conversationStyle"]["finalValidationFinalCandidate"] == (
+        output.response_text
+    )
+    assert sales.resolve_calls == []
+    assert sales.recommend_calls == []
 
 
 def test_nudge_reuses_selector_result_without_resolving_or_reselecting():

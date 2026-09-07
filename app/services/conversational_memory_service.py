@@ -206,13 +206,20 @@ class ConversationalMemoryService:
                                    r"(.+?)(?=\s+person\b|[.!?]|$)", lowered)
             if preference is not None:
                 preference_domain = "leisure_activity"
-        if preference:
+        if preference and not any(
+            record.get("category") == "preference"
+            and record.get("source") == "customer_self_disclosure"
+            for record in records
+        ):
             raw_preference = re.sub(
                 r"\s+(?:now|then|today|tonight|lately)\s*$", "",
                 preference.group(1).strip(" ,"), flags=re.I,
             )
             for value in cls._split_preferences(raw_preference):
-                if value.strip().lower() in {"now", "then", "today", "tonight", "lately"}:
+                if value.strip().lower() in {
+                    "it", "that", "this", "one", "now", "then", "today",
+                    "tonight", "lately",
+                }:
                     continue
                 metadata = ({"domain": preference_domain}
                             if preference_domain is not None else None)
@@ -292,14 +299,20 @@ class ConversationalMemoryService:
             or re.search(r"\bi(?:'m| am)\s+more of (?:a|an)\s+[^.!?]+\s+person\b", lowered)
             or re.search(r"\bi(?:'m| am)\s+(?:(?:really|big)\s+)?into\s+[^.!?]+", lowered)
             or re.search(r"\bi\s+(?:love|enjoy|play)\s+[^.!?]+", lowered)
+            or re.search(r"\bi\s+(?:usually|normally|often)\s+fish\b", lowered)
             or re.search(r"\b[^.!?]+\s+is probably my favorite thing\b", lowered)
             or re.search(r"\bweekends?\s+are\s+usually\s+[^.!?]+", lowered)
         ):
             domain, significance = "HOBBY_INTEREST", "DURABLE"
             facts = []
             if re.search(r"\boutdoors?\b", lowered): facts.append(("interest", "outdoors", "OUTDOORS"))
-            for fact in ("hiking", "camping", "fishing", "guitar"):
-                if re.search(rf"\b{fact}\b", lowered):
+            for fact, pattern in (
+                ("hiking", r"\bhiking\b"),
+                ("camping", r"\bcamping\b"),
+                ("fishing", r"\bfish(?:ing)?\b"),
+                ("guitar", r"\bguitar\b"),
+            ):
+                if re.search(pattern, lowered):
                     facts.append(("hobby", fact, fact.upper()))
             if re.search(
                 r"\b(?:trying|checking out|visiting)\s+(?:a\s+)?new\s+coffee\s+places?\b",
@@ -322,6 +335,16 @@ class ConversationalMemoryService:
                 evidence.append(marker if marker.endswith("_INTEREST") else marker + "_INTEREST")
                 candidates.append({"category": category, "key": cls._slug(value),
                                    "value": value, "confidence": .92})
+        elif (strong_preference := cls._strong_preference(lowered)) is not None:
+            domain = strong_preference["domain"]
+            significance = "DURABLE"
+            evidence = [strong_preference["evidence"]]
+            candidates.append({
+                "category": strong_preference["category"],
+                "key": strong_preference["key"],
+                "value": strong_preference["value"],
+                "confidence": strong_preference["confidence"],
+            })
         elif re.search(r"\bi have (?:a|an) .+? (?:named|called) [a-z]", lowered):
             domain, significance, evidence = "PERSONAL_CONTEXT", "DURABLE", ["NAMED_PET_OR_ENTITY"]
         else:
@@ -357,6 +380,108 @@ class ConversationalMemoryService:
                 "CONTINUITY_RELEVANT_DURABLE_DISCLOSURE" if persistence == "PERSIST"
                 else "EPHEMERAL_OR_NON_RELATIONSHIP_DETAIL"
             ),
+        }
+
+    @classmethod
+    def _strong_preference(cls, lowered):
+        """Extract explicit stable preference semantics, not casual praise."""
+        text = re.sub(r"\s+", " ", str(lowered or "").strip())
+        negative = re.search(
+            r"\bi\s+(?:do not|don't)\s+(?:really\s+)?like\s+"
+            r"(.+?)(?=[.!?]|$)", text,
+        )
+        comparative = re.search(
+            r"\bi\s+(?:really\s+)?(?:like|prefer)\s+(.+?)\s+"
+            r"(?:more than|over|better than)\s+(.+?)(?=[.!?]|$)", text,
+        ) or re.search(
+            r"\bi(?:'m| am)\s+more\s+into\s+(.+?)\s+than\s+"
+            r"(.+?)(?=[.!?]|$)", text,
+        )
+        favorite = re.search(
+            r"\b(.+?)\s+(?:was|were|is|are)\s+(?:still\s+)?(?:probably\s+)?my\s+"
+            r"favou?rite(?:\s+(?:part|one|thing|kind|type))?(?=[.!?]|$)",
+            text,
+        )
+        best = re.search(
+            r"\bi\s+(?:really\s+)?like\s+(.+?)\s+(?:the\s+)?best"
+            r"(?=[.!?]|$)", text,
+        )
+        prefer = re.search(
+            r"\bi\s+prefer\s+(.+?)(?=[.!?]|$)", text,
+        )
+        changed = re.search(
+            r"\bi\s+(?:actually\s+)?(?:think\s+)?i?\s*like\s+(.+?)\s+"
+            r"better(?:\s+now)?(?=[.!?]|$)", text,
+        )
+        strong_like = re.search(
+            r"\bi\s+really\s+like\s+(.+?)(?=[.!?]|$)", text,
+        )
+
+        polarity = "positive"
+        evidence = "STRONG_PREFERENCE"
+        comparison = None
+        if negative:
+            subject = negative.group(1)
+            polarity, evidence = "negative", "STRONG_DISLIKE"
+        elif comparative:
+            subject, comparison = comparative.group(1), comparative.group(2)
+            evidence = "COMPARATIVE_PREFERENCE"
+        elif favorite:
+            subject, evidence = favorite.group(1), "EXPLICIT_FAVORITE"
+        elif best:
+            subject, evidence = best.group(1), "EXPLICIT_BEST_PREFERENCE"
+        elif changed:
+            subject, evidence = changed.group(1), "UPDATED_PREFERENCE"
+        elif prefer:
+            subject, evidence = prefer.group(1), "EXPLICIT_PREFERENCE"
+        elif strong_like:
+            subject, evidence = strong_like.group(1), "STRONG_LIKE"
+        else:
+            return None
+
+        clean = lambda value: re.sub(
+            r"^(?:yeah\s+|actually\s+|the\s+|those\s+|these\s+)", "",
+            re.sub(r"\s+", " ", str(value).strip(" ,")), flags=re.I,
+        )
+        subject = clean(subject)
+        comparison = clean(comparison) if comparison else None
+        if not subject or subject in {"it", "that", "this", "one"}:
+            return None
+        hobby = bool(re.search(
+            r"\b(?:hiking|camping|fishing|guitar|running|cycling)\b", subject,
+        ))
+        music = bool(re.search(
+            r"\b(?:music|rock|pop|jazz|country|hip hop|metal|band|artist)\b",
+            f"{subject} {comparison or ''}",
+        ))
+        content_style = bool(re.search(
+            r"\b(?:shots?|photos?|pictures?|images?|sets?|close-ups?|"
+            r"outdoor|indoor|studio|beach|natural-looking|style|lighting)\b",
+            f"{subject} {comparison or ''}",
+        ))
+        if hobby and polarity == "positive" and comparison is None:
+            return {
+                "domain": "HOBBY_INTEREST", "category": "hobby",
+                "key": cls._slug(subject), "value": subject,
+                "evidence": evidence, "confidence": .92,
+            }
+        domain = "MUSIC" if music else "PREFERENCE"
+        key = (
+            "content_style_preference" if content_style and polarity == "positive"
+            else "content_style_dislike_" + cls._slug(subject)
+            if content_style else
+            ("dislikes_" if polarity == "negative" else "preference_")
+            + cls._slug(subject)
+        )
+        value = (
+            f"dislikes {subject}" if polarity == "negative"
+            else f"prefers {subject} over {comparison}" if comparison
+            else subject
+        )
+        return {
+            "domain": domain, "category": "preference", "key": key,
+            "value": value, "evidence": evidence,
+            "confidence": .95 if evidence == "EXPLICIT_FAVORITE" else .93,
         }
 
     @classmethod
@@ -1063,6 +1188,9 @@ class ConversationalMemoryService:
         if record.get("category") != "preference":
             return set()
         domains = {str((record.get("metadata") or {}).get("domain") or "")}
+        if "preference" in domains:
+            domains.remove("preference")
+            domains.add("preferences")
         evidence = (str(record.get("evidence") or "").lower()
                     .replace("\u2019", "'").replace("�", "'"))
         if re.search(r"\bi(?:'m| am)\s+more of (?:a|an)\s+.+?\s+person\b", evidence):

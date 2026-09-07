@@ -825,11 +825,50 @@ class TelethonRuntime:
                         ) or {}
                     )
                     if execution.executed and teaser_metadata:
-                        await asyncio.to_thread(
+                        provisional_confirmation = await asyncio.to_thread(
                             self._record_free_teaser_delivery,
                             delivery_payload,
                             execution,
                         )
+                        result.diagnostic_metadata.update({
+                            "commercial_tease_delivery_pending_confirmation": False,
+                            "commercial_tease_delivered": True,
+                            "commercial_tease_exposure_recorded": True,
+                            "progression_finalized_after_delivery": True,
+                        })
+                        commercial_projection = dict(dict(
+                            result.diagnostic_metadata.get("commercial_summary") or {}
+                        ).get("sexualCommercialProgression") or {})
+                        commercial_projection.update({
+                            "commercialTeaseAuthorized": True,
+                            "commercialTeaseDelivered": True,
+                            "commercialTeaseExposureRecorded": True,
+                            "progressionFinalizedAfterDelivery": True,
+                            "adaptiveSwitchEligible": True,
+                            "adaptiveSwitchReason": (
+                                "CONFIRMED_CUSTOMER_VISIBLE_COMMERCIAL_TEASE"
+                            ),
+                        })
+                        result.diagnostic_metadata.setdefault(
+                            "commercial_summary", {}
+                        )["sexualCommercialProgression"] = commercial_projection
+                        if provisional_confirmation is not None and claimed_ordinary is not None:
+                            from app.services.sales_brain_full_analysis_service import (
+                                SalesBrainFullAnalysisService,
+                            )
+                            result.diagnostic_metadata["commercial_summary"] = (
+                                SalesBrainFullAnalysisService.reconcile_confirmed_session_free_teaser(
+                                    result.diagnostic_metadata.get("commercial_summary"),
+                                    delivery_payload=delivery_payload,
+                                    delivery_operation_id=str(claimed_ordinary.operation_id),
+                                    delivery_state="CONFIRMED",
+                                    customer_binding_confirmed=bool(
+                                        claimed_ordinary.outbound_telegram_message_id
+                                        == execution.metadata.get("telegram_message_id")
+                                    ),
+                                    provisional_session=provisional_confirmation,
+                                )
+                            )
                     if execution.executed and bundle_teaser_metadata:
                         await asyncio.to_thread(
                             self._record_bundle_teaser_delivery,
@@ -968,16 +1007,26 @@ class TelethonRuntime:
                 "asset_id=%s", teaser.get("asset_id"),
             )
             return
-        self._photoshoot_lifecycles.record_free_teaser_delivery(
-            lifecycle_id=teaser["lifecycle_id"],
-            asset_id=int(teaser["asset_id"]),
-            provider="TELEGRAM",
-            provider_delivery_id=str(provider_delivery_id),
-            metadata={
+        confirmation = {
+            "asset_id": int(teaser["asset_id"]),
+            "provider": "TELEGRAM",
+            "provider_delivery_id": str(provider_delivery_id),
+            "metadata": {
                 "photoshoot_session_id": teaser.get("photoshoot_session_id"),
                 "sales_role": teaser.get("sales_role"),
                 "delivery_method": execution.delivery_method,
             },
+        }
+        if teaser.get("provisional_session_id"):
+            from app.services.telegram_provisional_sales_session_service import (
+                TelegramProvisionalSalesSessionService,
+            )
+            return TelegramProvisionalSalesSessionService().record_free_teaser_delivery(
+                provisional_session_id=teaser["provisional_session_id"],
+                **confirmation,
+            )
+        return self._photoshoot_lifecycles.record_free_teaser_delivery(
+            lifecycle_id=teaser["lifecycle_id"], **confirmation,
         )
 
     def _record_bundle_teaser_delivery(self, delivery_payload, execution) -> None:

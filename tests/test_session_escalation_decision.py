@@ -36,6 +36,7 @@ def test_two_purchases_discrete_language_remains_discrete_with_session_inventory
     "don't stop, I want to keep this going with you",
     "take me through the rest",
     "keep showing me more",
+    "yeah, keep the session going",
 ))
 def test_two_purchases_ongoing_experience_authorizes_proposal(message):
     value = project(message)
@@ -108,6 +109,10 @@ def test_rejection_and_active_session_have_precedence():
     active = project("keep going", active_session=True)
     assert active["activeSessionPrecedence"] is True
     assert active["sessionProposalAuthorized"] is False
+    assert active["sessionCandidate"] is False
+    assert active["sessionCandidateReason"] == (
+        "EXISTING_ACTIVE_SESSION_NOT_SESSION_START_CANDIDATE"
+    )
 
 
 def test_deferred_ongoing_continuation_survives_acknowledgement():

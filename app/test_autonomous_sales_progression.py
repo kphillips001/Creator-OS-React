@@ -9,6 +9,9 @@ from app.models.autonomous_sales_progression import (
 )
 from app.models.customer_photoshoot_lifecycle import CustomerPhotoshootLifecycle, CustomerPhotoshootStatus
 from app.services.autonomous_sales_progression_service import AutonomousSalesProgressionService, BuyingMomentumService
+from app.repositories.autonomous_sales_progression_repository import (
+    AutonomousSalesProgressionRepository,
+)
 
 NOW = datetime(2026, 8, 4, tzinfo=timezone.utc)
 CUSTOMER = uuid4(); OFFER = uuid4(); PUBLICATION = uuid4()
@@ -30,6 +33,35 @@ def opportunity(status=CustomerPhotoshootStatus.ACTIVE, photoshoot="shoot-a"):
 
 def engine():
     return AutonomousSalesProgressionService(clock=lambda: NOW)
+
+
+def test_ordered_assets_binds_ilike_wildcards_as_psycopg_parameters():
+    captured = {}
+
+    class Cursor:
+        def __enter__(self): return self
+        def __exit__(self, *_): return None
+        def execute(self, statement, parameters):
+            captured["statement"] = statement
+            captured["parameters"] = parameters
+        def fetchall(self): return []
+
+    class Connection:
+        def __enter__(self): return self
+        def __exit__(self, *_): return None
+        def cursor(self): return Cursor()
+
+    result = AutonomousSalesProgressionRepository(
+        connection_factory=Connection
+    ).ordered_assets(
+        creator_profile_id=1, customer_commerce_profile_id=CUSTOMER,
+        photoshoot_id="certification-C19",
+    )
+
+    assert result == ()
+    assert "ILIKE %s" in captured["statement"]
+    assert "ILIKE 'video%" not in captured["statement"]
+    assert captured["parameters"][:2] == ("video%", "teaser%")
 
 
 def momentum(**changes):

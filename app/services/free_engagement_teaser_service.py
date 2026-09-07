@@ -148,6 +148,7 @@ class FreeEngagementTeaserService:
                 "delivery_reason": "controlled_free_engagement_teaser",
                 "metadata": {
                     "action": "SEND_FREE_ENGAGEMENT_TEASER",
+                    "teaser_domain": "GENERAL_ENGAGEMENT_TEASER",
                     "asset_id": claimed.teaser_asset_id,
                     "operation_id": str(claimed.operation_id),
                     "free": True,

@@ -17,7 +17,24 @@ class CustomerPhotoshootLifecycleRepository:
                 selected_offering_id=None, recommendation_reason=None, metadata=None):
         with self.connection_factory() as connection:
             with connection.cursor() as cursor:
-                cursor.execute("""INSERT INTO public.customer_photoshoot_lifecycles
+                row = self.resolve_with_cursor(
+                    cursor, creator_profile_id=creator_profile_id,
+                    customer_commerce_profile_id=customer_commerce_profile_id,
+                    photoshoot_id=photoshoot_id,
+                    selected_offering_id=selected_offering_id,
+                    recommendation_reason=recommendation_reason,
+                    metadata=metadata,
+                )
+        return self._model(row)
+
+    @staticmethod
+    def resolve_with_cursor(
+        cursor, *, creator_profile_id, customer_commerce_profile_id,
+        photoshoot_id, selected_offering_id=None,
+        recommendation_reason=None, metadata=None,
+    ):
+        """Canonical idempotent resolution inside a caller-owned transaction."""
+        cursor.execute("""INSERT INTO public.customer_photoshoot_lifecycles
                     (lifecycle_id,creator_profile_id,customer_commerce_profile_id,photoshoot_id,status,
                      selected_offering_id,recommendation_reason,metadata,first_started_at,last_activity_at,expires_at)
                     VALUES (%s,%s,%s,%s,'ACTIVE',%s,%s,%s::jsonb,NOW(),NOW(),NOW()+INTERVAL '7 days')
@@ -38,8 +55,7 @@ class CustomerPhotoshootLifecycleRepository:
                         str(photoshoot_id), selected_offering_id, recommendation_reason,
                         json.dumps(dict(metadata or {}), default=str),
                     ))
-                row = cursor.fetchone()
-        return self._model(row)
+        return cursor.fetchone()
 
     def get(self, *, creator_profile_id, customer_commerce_profile_id, photoshoot_id):
         return self._one(
@@ -251,7 +267,7 @@ class CustomerPhotoshootLifecycleRepository:
                     ORDER BY membership.shot_order,membership.asset_id""", (lifecycle_id,))
                 return tuple(row["asset_id"] for row in cursor.fetchall())
 
-    def _role_asset_ids(self, lifecycle_id, predicate):
+    def _role_asset_ids(self, lifecycle_id, predicate, predicate_params=()):
         with self.connection_factory() as connection:
             with connection.cursor() as cursor:
                 cursor.execute(f"""SELECT DISTINCT p.asset_id FROM public.customer_photoshoot_lifecycles l
@@ -267,17 +283,18 @@ class CustomerPhotoshootLifecycleRepository:
                     LEFT JOIN LATERAL (SELECT role FROM public.commercial_role_assignments r
                       WHERE r.asset_id=p.asset_id AND r.creator_profile_id=l.creator_profile_id AND r.state='APPROVED'
                       ORDER BY r.updated_at DESC LIMIT 1) role ON TRUE
-                    WHERE l.lifecycle_id=%s AND {predicate} ORDER BY p.asset_id""", (lifecycle_id,))
+                    WHERE l.lifecycle_id=%s AND {predicate} ORDER BY p.asset_id""",
+                    (lifecycle_id, *tuple(predicate_params)))
                 return tuple(row["asset_id"] for row in cursor.fetchall())
 
     def teaser_asset_ids(self, lifecycle_id):
-        return self._role_asset_ids(lifecycle_id, "(strategy_shot.value->>'access_recommendation'='FREE' OR (strategy_shot.value IS NULL AND (role.role IN ('DISCOVERY','TEASER') OR (role.role IS NULL AND ci.content_type ILIKE 'teaser%'))))")
+        return self._role_asset_ids(lifecycle_id, "(strategy_shot.value->>'access_recommendation'='FREE' OR (strategy_shot.value IS NULL AND (role.role IN ('DISCOVERY','TEASER') OR (role.role IS NULL AND ci.content_type ILIKE %s))))", ('teaser%',))
 
     def finale_video_asset_ids(self, lifecycle_id):
-        return self._role_asset_ids(lifecycle_id, "(role.role='FINALE_VIDEO' OR ci.content_type ILIKE 'video%')")
+        return self._role_asset_ids(lifecycle_id, "(role.role='FINALE_VIDEO' OR ci.content_type ILIKE %s)", ('video%',))
 
     def required_core_asset_ids(self, lifecycle_id):
-        return self._role_asset_ids(lifecycle_id, "((strategy_shot.value IS NOT NULL AND strategy_shot.value->>'access_recommendation'='PAID') OR (strategy_shot.value IS NULL AND COALESCE(role.role,'CORE_SESSION') NOT IN ('DISCOVERY','TEASER','FINALE_VIDEO') AND ci.content_type NOT ILIKE 'video%' AND ci.content_type NOT ILIKE 'teaser%'))")
+        return self._role_asset_ids(lifecycle_id, "((strategy_shot.value IS NOT NULL AND strategy_shot.value->>'access_recommendation'='PAID') OR (strategy_shot.value IS NULL AND COALESCE(role.role,'CORE_SESSION') NOT IN ('DISCOVERY','TEASER','FINALE_VIDEO') AND ci.content_type NOT ILIKE %s AND ci.content_type NOT ILIKE %s))", ('video%', 'teaser%'))
 
     def get_for_purchase_intent(self, intent):
         if intent.external_fanvue_user_uuid is None:

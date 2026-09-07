@@ -6,7 +6,6 @@ import { CanonicalPromptPlannerSection, type CanonicalPromptPlannerHandle } from
 import { CreativeConfigurationSection } from "./CreativeConfigurationSection";
 import { CreativeDirectorToolsSection, type CreativeDirectorToolsHandle } from "./CreativeDirectorToolsSection";
 import { ManualPromptSection } from "./ManualPromptSection";
-import { RecreateWithAvaSection } from "./RecreateWithAvaSection";
 import {
   GenerationWorkflowSections,
   type GenerationWorkflowHandle,
@@ -14,6 +13,7 @@ import {
 } from "./GenerationWorkflowSections";
 import { PromptWorkshopSection } from "./PromptWorkshopSection";
 import { ExplicitContentSection } from "./ExplicitContentSection";
+import { RecreateWithAvaWorkflowSection } from "./RecreateWithAvaWorkflowSection";
 import type { ContentStudioContext } from "../types/contentStudioContext";
 import type {
   CreativeToolInputs,
@@ -21,7 +21,6 @@ import type {
 } from "../types/contentStudioCreativeTools";
 import { type PlannerBatchItem, updatePlannerBatchItems } from "../types/plannerBatch";
 import type { CanonicalPlannerItem } from "../types/promptPlanner";
-import type { RecreateRuntimeState } from "../types/recreateRuntime";
 
 type ContentStudioWorkflowProps = {
   context: ContentStudioContext | null;
@@ -39,7 +38,6 @@ const EMPTY_CREATIVE_INPUTS: CreativeToolInputs = {
 const CREATIVE_STUDIO_RECONNECT_ORIGINS = [
   "canonical_planner",
   "manual_creative_concept",
-  "recreate_with_ava",
 ];
 
 function enhancedPromptInput(originalTags: string, enhancedTags: string) {
@@ -89,7 +87,6 @@ export function ContentStudioWorkflow({ context, error, loading }: ContentStudio
   const [manualGenerationActivated, setManualGenerationActivated] = useState(false);
   const [manualWorkflowPending, setManualWorkflowPending] = useState(false);
   const [manualWorkflowError, setManualWorkflowError] = useState("");
-  const [recreateRuntime, setRecreateRuntime] = useState<RecreateRuntimeState | null>(null);
   const [activePlannerGeneration, setActivePlannerGeneration] = useState<{
     item: CanonicalPlannerItem;
     enhancedResult: string;
@@ -260,7 +257,6 @@ export function ContentStudioWorkflow({ context, error, loading }: ContentStudio
     setManualGenerationActivated(true);
     setManualWorkflowPending(true);
     setManualWorkflowError("");
-    setRecreateRuntime(null);
     try {
       const diagnosticTraceId = crypto.randomUUID();
       const enhancedTags = await enhanceCreativeTags(
@@ -296,26 +292,6 @@ export function ContentStudioWorkflow({ context, error, loading }: ContentStudio
     }
   };
 
-  const createRecreatedImages = async (source: string, enhanced: string) => {
-    if (manualWorkflowInFlight.current || ideaGenerationDisabled) return;
-    manualWorkflowInFlight.current = true; setManualGenerationActivated(true); setManualWorkflowPending(true); setManualWorkflowError("");
-    try {
-      const promptInput = enhancedPromptInput(source, enhanced);
-      let preview;
-      try { preview = await createPromptPreview(creativeMode ?? "", promptInput, 1); }
-      catch { throw new Error("Failed while creating canonical prompt."); }
-      const result = await generationRef.current?.generateWithResult({
-        creativeMode: creativeMode ?? "", origin: "recreate_with_ava",
-        promptBatch: preview.prompts, promptCount: 1,
-        promptSource: promptInput, promptSourceLabel: "Enhanced Tags",
-        provider: provider ?? "",
-      });
-      if (!result) throw new Error("Generation submission was blocked because the generation runtime was unavailable.");
-      if (result.status !== "completed") throw new Error(result.reason);
-    } catch (reason) { throw new Error(reason instanceof Error ? reason.message : "Recreate With Ava failed"); }
-    finally { manualWorkflowInFlight.current = false; setManualWorkflowPending(false); }
-  };
-
   const startNewGeneration = useCallback(() => {
     generationStartedIdeaId.current = null;
     plannerBatchInFlight.current = false;
@@ -330,7 +306,6 @@ export function ContentStudioWorkflow({ context, error, loading }: ContentStudio
     setManualGenerationActivated(false);
     setManualWorkflowPending(false);
     setManualWorkflowError("");
-    setRecreateRuntime(null);
     setCreativeStudioOpen(true);
     window.requestAnimationFrame(() => {
       creativeStudioRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -449,7 +424,6 @@ export function ContentStudioWorkflow({ context, error, loading }: ContentStudio
                 onChange={setManualPrompt}
                 value={manualPrompt}
               />
-              <RecreateWithAvaSection disabled={authoringDisabled || manualWorkflowPending} onGenerate={createRecreatedImages} onRuntimeChange={(state) => { setRecreateRuntime(state); setManualGenerationActivated(true); }} onRuntimeReset={() => setRecreateRuntime(null)} />
               <div className={manualGenerationActivated
                 ? "workflow-live-preview workflow-live-preview--creative"
                 : "workflow-controller"}>
@@ -477,8 +451,6 @@ export function ContentStudioWorkflow({ context, error, loading }: ContentStudio
                     plannerBatchItems={plannerBatchItems}
                     plannerBatchRunning={plannerBatchRunning}
                     reconnectOrigins={CREATIVE_STUDIO_RECONNECT_ORIGINS}
-                    recreateRuntime={recreateRuntime}
-                    onRecreateRuntimeChange={setRecreateRuntime}
                     request={{
                       creativeMode: creativeMode ?? "",
                       promptBatch: [],
@@ -508,6 +480,13 @@ export function ContentStudioWorkflow({ context, error, loading }: ContentStudio
             <ExplicitContentSection
               context={context}
               onStartNewGeneration={startNewGeneration}
+            />
+          )}
+          {context && (
+            <RecreateWithAvaWorkflowSection
+              context={context}
+              creativeMode={creativeMode ?? ""}
+              provider={provider ?? ""}
             />
           )}
         </>

@@ -85,6 +85,21 @@ class TelegramProvisionalSalesSessionRepository:
                          configured_base_price_minor,
                          json.dumps(dict(commercial_context or {}), default=str)))
                     row = cursor.fetchone()
+                else:
+                    if str(row["photoshoot_reference"]) != str(photoshoot_reference):
+                        raise ValueError(
+                            "Existing provisional Session has a different commercial foundation."
+                        )
+                    cursor.execute("""UPDATE public.telegram_provisional_sales_sessions
+                        SET commercial_context=COALESCE(commercial_context,'{}'::jsonb)
+                                || %s::jsonb,
+                            updated_at=NOW()
+                        WHERE provisional_session_id=%s
+                        RETURNING *""", (
+                        json.dumps(dict(commercial_context or {}), default=str),
+                        row["provisional_session_id"],
+                    ))
+                    row = cursor.fetchone()
         return self._model(row)
 
     def associate_intent(self, provisional_session_id, purchase_intent_id):
@@ -100,6 +115,38 @@ class TelegramProvisionalSalesSessionRepository:
                 row = cursor.fetchone()
         if row is None:
             raise ValueError("Provisional Session is already bound to another intent.")
+        return self._model(row)
+
+    def record_free_teaser_delivery(self, *, provisional_session_id, asset_id,
+                                    provider, provider_delivery_id, metadata=None):
+        """Confirm free Step 1 only after the customer-visible send succeeds."""
+        evidence = {
+            "assetId": int(asset_id), "position": 1,
+            "salesRole": "FREE_TEASER", "provider": str(provider),
+            "providerDeliveryId": str(provider_delivery_id),
+            **dict(metadata or {}),
+        }
+        with self.connection_factory() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute("""UPDATE public.telegram_provisional_sales_sessions
+                    SET progression_stage='PROGRESSION',current_position=2,
+                        commercial_context=jsonb_set(
+                            COALESCE(commercial_context,'{}'::jsonb),
+                            '{freeTeaserDelivery}',%s::jsonb,TRUE),updated_at=NOW()
+                    WHERE provisional_session_id=%s
+                      AND state IN ('ACTIVE','OFFERING','AWAITING_PAYMENT')
+                      AND photoshoot_reference=COALESCE(%s,photoshoot_reference)
+                      AND (
+                        commercial_context->'freeTeaserDelivery' IS NULL OR
+                        commercial_context#>>'{freeTeaserDelivery,providerDeliveryId}'=%s
+                      )
+                    RETURNING *""", (json.dumps(evidence, default=str),
+                    provisional_session_id,
+                    dict(metadata or {}).get("photoshoot_session_id"),
+                    str(provider_delivery_id)))
+                row = cursor.fetchone()
+        if row is None:
+            raise ValueError("Provisional free teaser confirmation conflicted with authority.")
         return self._model(row)
 
     def graduate(self, *, purchase_intent_id, mapping, buyer_uuid,

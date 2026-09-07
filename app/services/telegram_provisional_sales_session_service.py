@@ -26,5 +26,16 @@ class TelegramProvisionalSalesSessionService:
     def associate_intent(self, provisional_session_id, purchase_intent_id):
         return self.repository.associate_intent(provisional_session_id, purchase_intent_id)
 
+    def get_active(self, *, creator_profile_id, fanvue_account_id,
+                   telegram_user_id):
+        return self.repository.get_active(
+            creator_profile_id=creator_profile_id,
+            fanvue_account_id=fanvue_account_id,
+            telegram_user_id=telegram_user_id,
+        )
+
+    def record_free_teaser_delivery(self, **values):
+        return self.repository.record_free_teaser_delivery(**values)
+
     def graduate(self, **values):
         return self.repository.graduate(**values)

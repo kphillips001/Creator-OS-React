@@ -1,8 +1,15 @@
+from datetime import datetime, timezone
+from enum import Enum
+from types import MappingProxyType
 from types import SimpleNamespace
 from unittest.mock import Mock
+from uuid import UUID
 
 from app.models.telegram_inbound import TelegramInboundResult
-from app.services.ordinary_chat_reply_service import OrdinaryChatReplyService
+from app.services.ordinary_chat_reply_service import (
+    OrdinaryChatReplyService,
+    durable_plain_data,
+)
 
 
 def inbound_result(*, text="Hi there", blocked=False, error_code=None):
@@ -58,17 +65,22 @@ def test_blocked_empty_generation_is_terminal_suppression_with_reason():
     ] == "PAID_PRESENTATION_UNMAPPED_EXPLICIT_PRICE"
 
 
-def test_empty_unblocked_result_is_not_misclassified_as_policy_suppression():
+def test_empty_unblocked_result_is_generation_failure_not_send_ready_or_suppression():
     repository = Mock()
-    repository.store_generated.return_value = "generated"
+    repository.fail_empty_generation.return_value = "retryable"
     service = OrdinaryChatReplyService(repository=repository, worker_id="worker")
 
-    service.generated(
+    stored = service.generated(
         SimpleNamespace(operation_id="operation"),
         inbound_result(text="", blocked=False),
     )
 
-    repository.store_generated.assert_called_once()
+    assert stored == "retryable"
+    repository.fail_empty_generation.assert_called_once_with(
+        "operation", owner="worker",
+        reason="EmptyOrdinaryReply: unblocked generation produced no text",
+    )
+    repository.store_generated.assert_not_called()
     repository.store_suppressed_generation.assert_not_called()
 
 
@@ -87,3 +99,116 @@ def test_provider_failure_uses_generation_failure_not_policy_suppression():
         "operation", owner="worker", reason="TimeoutError: provider timeout",
     )
     repository.store_suppressed_generation.assert_not_called()
+
+
+def test_durable_plain_data_recursively_copies_immutable_mappings():
+    class Signal(Enum):
+        FUTURE = "FUTURE_COMMERCIAL_INTEREST"
+
+    nested_dict = {"preference": "outdoor shots"}
+    source = MappingProxyType({
+        "direct": MappingProxyType({"buyerStatus": "VERIFIED_BUYER"}),
+        "sequence": [
+            MappingProxyType({"commercialInterestType": Signal.FUTURE}),
+            (MappingProxyType({"purchaseCount": 1}),),
+        ],
+        "ordinary": nested_dict,
+        "identity": UUID("00000000-0000-0000-0000-000000000011"),
+        "observedAt": datetime(2026, 9, 3, tzinfo=timezone.utc),
+        "evidence": frozenset({"BUYER", "PREFERENCE"}),
+    })
+
+    durable = durable_plain_data(source)
+
+    assert durable == {
+        "direct": {"buyerStatus": "VERIFIED_BUYER"},
+        "sequence": [
+            {"commercialInterestType": "FUTURE_COMMERCIAL_INTEREST"},
+            [{"purchaseCount": 1}],
+        ],
+        "ordinary": {"preference": "outdoor shots"},
+        "identity": "00000000-0000-0000-0000-000000000011",
+        "observedAt": "2026-09-03T00:00:00+00:00",
+        "evidence": ["BUYER", "PREFERENCE"],
+    }
+    durable["direct"]["buyerStatus"] = "CHANGED"
+    durable["ordinary"]["preference"] = "changed"
+    assert source["direct"]["buyerStatus"] == "VERIFIED_BUYER"
+    assert nested_dict["preference"] == "outdoor shots"
+
+
+def test_generated_persists_turn6_shaped_immutable_diagnostics_without_loss():
+    repository = Mock()
+    repository.store_generated.return_value = "generated"
+    service = OrdinaryChatReplyService(repository=repository, worker_id="worker")
+    result = inbound_result(text="I’ll keep that in mind for next time")
+    result.diagnostic_metadata.update({
+        "customer_value_attention": MappingProxyType({
+            "buyerStatus": "VERIFIED_BUYER",
+            "purchaseCount": 1,
+            "ownershipCount": 1,
+        }),
+        "conversational_memory": MappingProxyType({
+            "retrieved": (
+                MappingProxyType({
+                    "key": "content_style_preference",
+                    "value": "outdoor shots",
+                }),
+            ),
+        }),
+        "commercial_receptiveness": MappingProxyType({
+            "commercialInterestType": "FUTURE_COMMERCIAL_INTEREST",
+            "continuationEligible": True,
+        }),
+    })
+    result.delivery_payload["metadata"] = MappingProxyType({
+        "transport": MappingProxyType({"mode": "TEST_TRANSPORT_NO_WAIT"}),
+    })
+
+    stored = service.generated(SimpleNamespace(operation_id="operation"), result)
+
+    assert stored == "generated"
+    payload = repository.store_generated.call_args.kwargs["response_payload"]
+    assert payload["diagnostic_metadata"]["customer_value_attention"] == {
+        "buyerStatus": "VERIFIED_BUYER",
+        "purchaseCount": 1,
+        "ownershipCount": 1,
+    }
+    assert payload["diagnostic_metadata"]["conversational_memory"]["retrieved"] == [{
+        "key": "content_style_preference",
+        "value": "outdoor shots",
+    }]
+    assert payload["diagnostic_metadata"]["commercial_receptiveness"] == {
+        "commercialInterestType": "FUTURE_COMMERCIAL_INTEREST",
+        "continuationEligible": True,
+    }
+    assert repository.store_generated.call_args.kwargs["delivery_payload"] == {
+        "message_text": "I’ll keep that in mind for next time",
+        "metadata": {"transport": {"mode": "TEST_TRANSPORT_NO_WAIT"}},
+    }
+    assert isinstance(
+        result.diagnostic_metadata["commercial_receptiveness"],
+        type(MappingProxyType({})),
+    )
+
+
+def test_suppressed_generation_accepts_nested_immutable_diagnostics():
+    repository = Mock()
+    repository.store_suppressed_generation.return_value = "suppressed"
+    service = OrdinaryChatReplyService(repository=repository, worker_id="worker")
+    result = inbound_result(
+        text="", blocked=True, error_code="AUTHORITATIVE_REPLY_SUPPRESSION",
+    )
+    result.diagnostic_metadata["commercial_summary"] = MappingProxyType({
+        "outboundSuppression": MappingProxyType({"suppressed": True}),
+    })
+
+    assert service.generated(
+        SimpleNamespace(operation_id="operation"), result,
+    ) == "suppressed"
+    payload = repository.store_suppressed_generation.call_args.kwargs[
+        "response_payload"
+    ]
+    assert payload["diagnostic_metadata"]["commercial_summary"] == {
+        "outboundSuppression": {"suppressed": True},
+    }

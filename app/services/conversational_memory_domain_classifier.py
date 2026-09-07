@@ -43,6 +43,12 @@ class ConversationalMemoryDomainClassifier:
                      "open", "opening", "reserved", "social"}
     _HOBBY_INTEREST = {"outside", "outdoors", "outdoor", "hiking", "hike", "camping", "camp",
                        "fishing", "fish", "guitar", "hobby", "hobbies", "trail"}
+    _PREFERENCE_SUBJECT = {
+        "favorite", "favourite", "prefer", "preference", "best", "style",
+        "shot", "shots", "photo", "photos", "picture", "pictures", "image",
+        "images", "set", "sets", "close-up", "close-ups", "studio", "indoor",
+        "lighting",
+    }
 
     @classmethod
     def classify(cls, message: str, *, active_records: Iterable[Mapping] = ()):
@@ -58,6 +64,7 @@ class ConversationalMemoryDomainClassifier:
         seeking = bool(tokens & cls._SEEKING)
         leisure_context = bool(tokens & cls._LEISURE)
         available_time = "free" in tokens and bool(tokens & {"time", "hours", "afternoon"})
+        free_weekend = "free" in tokens and "weekend" in tokens
         if seeking and (leisure_context or available_time):
             domains.add("leisure_activity"); scores.append(.9)
         if tokens & cls._ENTITY:
@@ -80,6 +87,16 @@ class ConversationalMemoryDomainClassifier:
             domains.add("personality_social_style"); scores.append(.91)
         if tokens & cls._HOBBY_INTEREST:
             domains.add("hobby_interest"); scores.append(.93)
+        if free_weekend and any(
+            record.get("category") in {"hobby", "interest"}
+            for record in active_records
+        ):
+            domains.add("hobby_interest"); scores.append(.9)
+        if tokens & cls._PREFERENCE_SUBJECT or re.search(
+            r"\b(?:more\s+than|better\s+than|more\s+into|really\s+like|"
+            r"do not like|don't like)\b", normalized,
+        ):
+            domains.add("preferences"); scores.append(.94)
 
         # A persisted entity name is a stable semantic anchor, not a guessed fact.
         known_entity_mentioned = False

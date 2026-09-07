@@ -81,10 +81,18 @@ class OrdinaryChatReplyRepository:
                     AS customer_commercial_response_count,
                 COUNT(*) FILTER (WHERE state='SENT_CONFIRMED'
                     AND sent_confirmed_at >= NOW() - INTERVAL '24 hours'
-                    AND COALESCE(response_payload#>>'{diagnostic_metadata,customer_value_attention,lowCostNurtureActive}','false')='true')::BIGINT
+                    AND COALESCE(
+                        response_payload#>>'{diagnostic_metadata,customer_value_attention,lowCostNurtureActive}',
+                        response_payload#>>'{diagnostic_metadata,commercial_summary,customerValueAttention,lowCostNurtureActive}',
+                        'false'
+                    )='true')::BIGINT
                     AS nurture_response_count_rolling_day,
                 MAX(sent_confirmed_at) FILTER (WHERE state='SENT_CONFIRMED'
-                    AND COALESCE(response_payload#>>'{diagnostic_metadata,customer_value_attention,lowCostNurtureActive}','false')='true')
+                    AND COALESCE(
+                        response_payload#>>'{diagnostic_metadata,customer_value_attention,lowCostNurtureActive}',
+                        response_payload#>>'{diagnostic_metadata,commercial_summary,customerValueAttention,lowCostNurtureActive}',
+                        'false'
+                    )='true')
                     AS last_nurture_response_at
                 FROM ordinary_chat_reply_operations
                 WHERE telegram_account_scope=%s AND telegram_chat_id=%s
@@ -304,6 +312,19 @@ class OrdinaryChatReplyRepository:
             claim_owner=NULL,claimed_at=NULL,lease_expires_at=NULL,updated_at=NOW()
             WHERE operation_id=%s AND state='GENERATING' AND claim_owner=%s RETURNING *""",
             (reason[:1000], max(1,int(retry_seconds)), operation_id, owner))
+
+    def fail_empty_generation(self, operation_id, *, owner, reason):
+        """Atomically reject an unblocked empty candidate for immediate retry."""
+        return self._one("""UPDATE ordinary_chat_reply_operations SET
+            state=CASE WHEN generation_attempt_count>=max_generation_attempts
+                       THEN 'TERMINAL_FAILED' ELSE 'RETRYABLE' END,
+            last_error=%s,failed_at=CASE WHEN generation_attempt_count>=max_generation_attempts
+                                        THEN NOW() ELSE failed_at END,
+            next_retry_at=CASE WHEN generation_attempt_count>=max_generation_attempts
+                               THEN NULL ELSE NOW() END,
+            claim_owner=NULL,claimed_at=NULL,lease_expires_at=NULL,updated_at=NOW()
+            WHERE operation_id=%s AND state='GENERATING' AND claim_owner=%s
+            RETURNING *""", (reason[:1000], operation_id, owner))
 
     def suppress(self, operation_id, *, reason):
         return self._one("""UPDATE ordinary_chat_reply_operations SET state='SUPPRESSED',

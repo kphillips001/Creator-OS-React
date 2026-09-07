@@ -4,6 +4,10 @@ from __future__ import annotations
 import re
 from dataclasses import replace
 
+from app.services.commercial_receptiveness_service import (
+    CommercialReceptivenessService,
+)
+
 from app.models.customer_sales_decision import (
     CustomerSalesDecision,
     CustomerSalesDecisionType,
@@ -45,6 +49,13 @@ class ConversationalSalesProgressionService:
         r"\bhow\s+do\s+i\s+(?:buy|get|unlock)\s+(?:it|that)\b",
     ))
     PRICE_PATTERN = re.compile(r"\b(?:how\s+much|price|cost)\b", re.I)
+    EXPLICIT_TEASER_ASSET_PATTERNS = tuple(re.compile(value, re.I) for value in (
+        r"\btease\s+me(?:\s+(?:a\s+)?little)?\b",
+        r"\bgive\s+me\s+(?:a\s+)?(?:little\s+)?tease\b",
+        r"\bshow\s+me\s+(?:a\s+)?(?:little\s+)?preview\b",
+        r"\bgive\s+me\s+(?:a\s+)?sneak\s+peek\b",
+        r"\blet\s+me\s+have\s+(?:a\s+)?little\s+taste\b",
+    ))
     NEGATIVE_PATTERN = re.compile(
         r"\b(?:no|nah|not\s+(?:now|interested)|stop|don(?:'|’)t\s+want|leave\s+it|maybe\s+later)\b",
         re.I,
@@ -118,7 +129,23 @@ class ConversationalSalesProgressionService:
 
     def has_direct_purchase_intent(self, message: str) -> bool:
         """Expose the existing authoritative matcher without duplicating phrases."""
-        return any(pattern.search(str(message or "")) for pattern in self.DIRECT_PATTERNS)
+        text = str(message or "")
+        if CommercialReceptivenessService.temporal_commercial_deferment(
+            text
+        )["deferredCommercialInterest"]:
+            return False
+        return bool(
+            not CommercialReceptivenessService.commercial_boundary_type(text)
+            and any(pattern.search(text) for pattern in self.DIRECT_PATTERNS)
+        )
+
+    @classmethod
+    def has_explicit_teaser_asset_request(cls, message: str) -> bool:
+        """Identify a customer request for free teaser media, not playful prose."""
+        text = str(message or "")
+        if CommercialReceptivenessService.commercial_boundary_type(text):
+            return False
+        return any(pattern.search(text) for pattern in cls.EXPLICIT_TEASER_ASSET_PATTERNS)
 
     @classmethod
     def recommended_conversational_action(
@@ -133,6 +160,17 @@ class ConversationalSalesProgressionService:
         text = str(message or "")
         classifier = dict(classifier_result or {})
         explicit = dict(explicit_profile or {})
+        boundary = CommercialReceptivenessService.commercial_boundary_type(text)
+        temporal = CommercialReceptivenessService.temporal_commercial_deferment(text)
+        if temporal["deferredCommercialInterest"]:
+            return "BACK_OFF"
+        if boundary in {
+            "CURRENT_NO_BUY_BOUNDARY", "NO_LINK_BOUNDARY",
+            "DEFERRED_SELF_REACTIVATION",
+        }:
+            return "BACK_OFF"
+        if boundary == "RELATIONSHIP_ONLY_BOUNDARY":
+            return "CHAT"
         if cls.NEGATIVE_PATTERN.search(text) or cls.HESITATION_PATTERN.search(text):
             return "BACK_OFF"
         if explicit.get("suppress_sales_pressure") is True:
@@ -175,6 +213,30 @@ class ConversationalSalesProgressionService:
     def transition_features(cls, message: str) -> dict[str, bool]:
         """Extract bounded current-turn concepts without persisting classifier truth."""
         text = str(message or "")
+        temporal = CommercialReceptivenessService.temporal_commercial_deferment(text)
+        if temporal["deferredCommercialInterest"]:
+            return {
+                "content_request": False,
+                "positive_tease_response": False,
+                "reveal_request": False,
+                "sustained_interest": False,
+                "commercial_response_interest": False,
+                "commercial_response_interest_meaning": (
+                    "DEFERRED_FUTURE_COMMERCIAL_INTEREST"
+                ),
+                **temporal,
+            }
+        if CommercialReceptivenessService.commercial_boundary_type(text):
+            return {
+                "content_request": False,
+                "positive_tease_response": False,
+                "reveal_request": False,
+                "sustained_interest": False,
+                "commercial_response_interest": False,
+                "commercial_response_interest_meaning": (
+                    "POSITIVE_RESPONSE_TO_TEASE_OR_REVEAL_REQUEST"
+                ),
+            }
         direct_request = any(pattern.search(text) for pattern in cls.DIRECT_PATTERNS)
         positive = any(
             pattern.search(text) for pattern in cls.POSITIVE_TEASE_PATTERNS
@@ -188,6 +250,7 @@ class ConversationalSalesProgressionService:
         )
         return {
             "content_request": direct_request,
+            "explicit_teaser_asset_request": cls.has_explicit_teaser_asset_request(text),
             "positive_tease_response": positive or reveal,
             "reveal_request": reveal,
             "sustained_interest": positive or reveal,
@@ -195,6 +258,7 @@ class ConversationalSalesProgressionService:
             "commercial_response_interest_meaning": (
                 "POSITIVE_RESPONSE_TO_TEASE_OR_REVEAL_REQUEST"
             ),
+            **temporal,
         }
 
     def back_off_reason(self, context: dict | None):

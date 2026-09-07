@@ -2,13 +2,53 @@
 from __future__ import annotations
 
 import hashlib
-from dataclasses import asdict
-from datetime import timedelta
-from uuid import uuid4
+from collections.abc import Mapping
+from dataclasses import fields, is_dataclass
+from datetime import date, datetime, timedelta
+from enum import Enum
+from uuid import UUID, uuid4
 
 from app.models.ordinary_chat_reply_operation import OrdinaryChatReplyState
 from app.models.telegram_inbound import TelegramInboundResult
 from app.repositories.ordinary_chat_reply_repository import OrdinaryChatReplyRepository
+
+
+def durable_plain_data(value):
+    """Copy a runtime value into an independent JSON-safe durable payload.
+
+    ``dataclasses.asdict`` delegates unknown nested values to ``deepcopy``.
+    That is incompatible with immutable mapping views such as mappingproxy,
+    which are valid in canonical commerce projections.  Walk fields and
+    containers explicitly so immutability remains a runtime concern while the
+    persistence boundary receives ordinary data.
+    """
+    if is_dataclass(value) and not isinstance(value, type):
+        return {
+            item.name: durable_plain_data(getattr(value, item.name))
+            for item in fields(value)
+        }
+    if isinstance(value, Mapping):
+        return {
+            str(durable_plain_data(key)): durable_plain_data(item)
+            for key, item in value.items()
+        }
+    if isinstance(value, (list, tuple)):
+        return [durable_plain_data(item) for item in value]
+    if isinstance(value, (set, frozenset)):
+        return [durable_plain_data(item) for item in sorted(
+            value, key=lambda item: str(item),
+        )]
+    if isinstance(value, Enum):
+        return durable_plain_data(value.value)
+    if isinstance(value, UUID):
+        return str(value)
+    if isinstance(value, (datetime, date)):
+        return value.isoformat()
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    raise TypeError(
+        f"Unsupported durable ordinary-reply payload type: {type(value).__name__}"
+    )
 
 
 class OrdinaryChatReplyService:
@@ -37,7 +77,7 @@ class OrdinaryChatReplyService:
         return self.repository.claim_generation(operation.operation_id, owner=self.worker_id)
 
     def generated(self, operation, result):
-        payload = asdict(result)
+        payload = durable_plain_data(result)
         text = str(result.response_text or "")
         diagnostics = dict(result.diagnostic_metadata or {})
         thread_id = diagnostics.get("conversation_thread_id")
@@ -53,14 +93,24 @@ class OrdinaryChatReplyService:
                 operation.operation_id, owner=self.worker_id,
                 response_payload=payload, response_text=text,
                 content_sha256=content_sha256,
-                delivery_payload=dict(result.delivery_payload or {}),
+                delivery_payload=durable_plain_data(
+                    result.delivery_payload or {}
+                ),
                 reason=f"intentional_suppression:{reason}",
                 conversation_thread_id=thread_id,
+            )
+        if not text.strip():
+            # An unblocked empty candidate is a generation failure, never a
+            # send-ready ordinary reply.  This keeps durable state truthful and
+            # allows the existing retry/idempotency path to recover it.
+            return self.repository.fail_empty_generation(
+                operation.operation_id, owner=self.worker_id,
+                reason="EmptyOrdinaryReply: unblocked generation produced no text",
             )
         return self.repository.store_generated(operation.operation_id, owner=self.worker_id,
             response_payload=payload,response_text=text,
             content_sha256=content_sha256,
-            delivery_payload=dict(result.delivery_payload or {}),
+            delivery_payload=durable_plain_data(result.delivery_payload or {}),
             conversation_thread_id=thread_id)
 
     def generation_failed(self, operation, error):
@@ -97,8 +147,8 @@ class OrdinaryChatReplyService:
         })
         return self.repository.update_generated_payload(
             operation.operation_id,
-            response_payload=asdict(result),
-            delivery_payload=dict(result.delivery_payload or {}),
+            response_payload=durable_plain_data(result),
+            delivery_payload=durable_plain_data(result.delivery_payload or {}),
         )
 
     def requeue_empty_generation(self, operation, *, reason):

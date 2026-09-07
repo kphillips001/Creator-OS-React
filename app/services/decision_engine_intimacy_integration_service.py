@@ -182,12 +182,12 @@ class DecisionEngineIntimacyIntegrationService:
             canonical_buyer_memory if canonical_authority else user_memory
         )
 
-        premium_sexting_allowed = bool(
+        legacy_premium_sexting_allowed = bool(
             runtime_state.get("premium_sexting_allowed")
             or user_memory.get("premium_sexting_allowed")
         )
 
-        explicit_allowed = bool(
+        legacy_explicit_allowed = bool(
             runtime_state.get("explicit_allowed")
             or user_memory.get("explicit_allowed")
         )
@@ -278,23 +278,30 @@ class DecisionEngineIntimacyIntegrationService:
         # current verified buying momentum may raise current investment by one
         # bounded step without fabricating a permanent customer tier.
         if purchase_count <= 0:
-            intimacy_entitlement = "GATED"
+            base_intimacy_entitlement = "GATED"
             entitlement_reason = "NO_PROVIDER_VERIFIED_PURCHASE"
         elif normalized_buyer_tier == "WHALE":
-            intimacy_entitlement = "VIP"
+            base_intimacy_entitlement = "VIP"
             entitlement_reason = "CANONICAL_WHALE_VALUE"
         elif normalized_buyer_tier == "HIGH_VALUE":
-            intimacy_entitlement = "PREMIUM"
+            base_intimacy_entitlement = "PREMIUM"
             entitlement_reason = "CANONICAL_HIGH_VALUE_BUYER"
         elif purchase_count >= 2:
-            intimacy_entitlement = "ELEVATED"
+            base_intimacy_entitlement = "ELEVATED"
             entitlement_reason = "CANONICAL_REPEAT_BUYER"
         else:
-            intimacy_entitlement = "LIMITED"
+            base_intimacy_entitlement = "LIMITED"
             entitlement_reason = "CANONICAL_FIRST_TIME_BUYER"
 
+        intimacy_entitlement = base_intimacy_entitlement
         momentum_elevated = False
-        if active_buying_window and current_commercial_momentum == "HOT":
+        if (
+            canonical_authority
+            and normalized_buyer_tier == "REPEAT_BUYER"
+            and purchase_count >= 2
+            and active_buying_window
+            and current_commercial_momentum == "HOT"
+        ):
             if intimacy_entitlement == "LIMITED":
                 intimacy_entitlement = "ELEVATED"
                 momentum_elevated = True
@@ -352,6 +359,26 @@ class DecisionEngineIntimacyIntegrationService:
             == "DORMANT_WHALE"
         )
 
+        # Eligibility is durable for canonical PREMIUM/VIP value.  Freshness
+        # and trajectory shape current investment without erasing the earned
+        # entitlement.  Legacy cached flags remain visible below, but are not
+        # an independent authority capable of elevating canonical commerce.
+        if premium_freshness_state == "COOLING_PREMIUM":
+            intimacy_investment = (
+                "STRONG_PREMIUM_INTIMACY"
+                if intimacy_entitlement == "VIP"
+                else "SUSTAINED_BUT_BOUNDED_INTIMACY"
+            )
+        elif premium_freshness_state == "DORMANT_WHALE":
+            intimacy_investment = "BOUNDED_INTIMACY_REWARM"
+
+        canonical_premium_eligible = bool(
+            canonical_authority
+            and intimacy_entitlement in ("PREMIUM", "VIP")
+        )
+        premium_sexting_allowed = canonical_premium_eligible
+        explicit_allowed = canonical_premium_eligible
+
         adult_generation_allowed = (
             premium_sexting_allowed
             and explicit_allowed
@@ -393,6 +420,7 @@ class DecisionEngineIntimacyIntegrationService:
             "buyer_stage": buyer_stage,
             "purchase_count": purchase_count,
             "intimacy_entitlement": intimacy_entitlement,
+            "base_intimacy_entitlement": base_intimacy_entitlement,
             "intimacy_entitlement_reason": entitlement_reason,
             "intimacy_investment": intimacy_investment,
             "intimacy_investment_inputs": {
@@ -406,6 +434,9 @@ class DecisionEngineIntimacyIntegrationService:
             },
             "canonical_buyer_authority_used": canonical_authority,
             "legacy_buyer_memory_authority_used": not canonical_authority,
+            "legacy_premium_sexting_allowed": legacy_premium_sexting_allowed,
+            "legacy_explicit_allowed": legacy_explicit_allowed,
+            "legacy_permission_flags_authoritative": False,
             "premium_freshness_state": (
                 premium_freshness_state
             ),
@@ -421,4 +452,36 @@ class DecisionEngineIntimacyIntegrationService:
             ),
             "send_allowed": False,
             "reason": "decision_engine_compatibility_wrapper",
+        }
+
+    @staticmethod
+    def select_provider(
+        intimacy_overrides: dict | None,
+        *,
+        explicit_requested: bool,
+    ) -> dict:
+        """Select the response provider without performing generation.
+
+        This is the controlled checkpoint boundary: canonical commerce must
+        have produced the effective permission and entitlement, and the
+        current turn must independently warrant explicit premium intimacy.
+        """
+        intimacy = intimacy_overrides or {}
+        entitlement = str(
+            intimacy.get("intimacy_entitlement") or "GATED"
+        ).upper()
+        premium_qualified = bool(
+            intimacy.get("canonical_buyer_authority_used")
+            and intimacy.get("premium_sexting_allowed")
+            and intimacy.get("explicit_allowed")
+            and intimacy.get("adult_generation_allowed")
+            and entitlement in ("PREMIUM", "VIP")
+        )
+        grok_eligible = bool(premium_qualified and explicit_requested)
+        return {
+            "preferred_provider": "GROK" if grok_eligible else "OPENAI",
+            "selected_provider": "GROK" if grok_eligible else "OPENAI",
+            "premium_qualified": premium_qualified,
+            "grok_eligible": grok_eligible,
+            "explicit_requested": bool(explicit_requested),
         }

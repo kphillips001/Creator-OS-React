@@ -107,6 +107,7 @@ def prepare_scenario(request: ScenarioPrepareRequest):
 def scenario_turn(request: ScenarioTurnRequest):
     return _scenario_action(lambda runner: runner.turn(
         request.customer_message, language_mode=request.language_mode,
+        require_language_mode=True,
     ))
 
 

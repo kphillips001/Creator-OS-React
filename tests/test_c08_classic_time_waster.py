@@ -11,6 +11,10 @@ from app.testing.session5_scenario_harness import (
     merge_scenario_customer_behavior_evidence,
 )
 from app.testing.session5_scenario_runner import Session5ScenarioRunner
+from app.services.commercial_receptiveness_service import CommercialReceptivenessService
+from app.services.conversational_sales_progression_service import (
+    ConversationalSalesProgressionService,
+)
 
 
 def _turn(*, intent=None, value=None, boundary=False, reactivation=False,
@@ -46,6 +50,44 @@ def test_c08_definition_is_bounded_adaptive_nonsexual_nonbuyer():
     assert "SAME_WINDOW_REPLY_SUPPRESSED" in item.branch_checkpoints
     assert "COMMERCIAL_REACTIVATION" in item.branch_checkpoints
     assert all("sexual" not in value.lower() for value in item.canonical_customer_turns)
+
+
+def test_c08_canonical_reactivation_message_reenters_commercial_evaluation():
+    message = Session5ScenarioRunner.c08_next_action(
+        [
+            _turn(intent="one"),
+            _turn(intent="two"),
+            _turn(value={
+            "failedNonconvertedOpportunityCount": 2,
+            "lowCostNurtureActive": True,
+            "nurtureResponsesUsed": 1,
+            "optionalOrdinaryReplySuppressed": True,
+            }),
+        ],
+        {
+            "failedNonconvertedOpportunityCount": 2,
+            "lowCostNurtureActive": True,
+            "nurtureResponsesUsed": 1,
+            "optionalOrdinaryReplySuppressed": True,
+            "purchaseIntents": [
+                {"id": "one", "state": "ADMIN_CLOSED"},
+                {"id": "two", "state": "ADMIN_CLOSED"},
+            ],
+        },
+        fixed_messages=("hello",),
+    )["message"]
+    result = CommercialReceptivenessService(
+        ConversationalSalesProgressionService().has_direct_purchase_intent
+    ).evaluate(
+        context={"latest_message": message},
+        recent_purchase=False,
+        cooldown_active=False,
+    )
+
+    assert message == "okay, what private content do you actually have available?"
+    assert result.commercial_interest_type == "OFFERING_AVAILABILITY_INQUIRY"
+    assert result.fresh_direct_intent is True
+    assert result.continuation_eligible is True
 
 
 def test_c08_evidence_merge_preserves_durable_rejection_and_browsing_counts():

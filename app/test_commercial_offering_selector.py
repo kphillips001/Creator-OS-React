@@ -40,6 +40,7 @@ def candidate(**changes):
         "delivery_url": "https://share.fanvue.com/release",
         "publication_status": "LIVE",
         "provider_resource_status": "PRESENT",
+        "publication_metadata": {},
         "last_reconciled_at": NOW, "published_at": NOW - timedelta(days=1),
     }
     values.update(changes)
@@ -162,13 +163,138 @@ def test_active_intent_reuses_same_offering():
 
 def test_controlled_context_selects_only_designated_test_candidate():
     normal = candidate(title="Intimate Evening Repose", price_minor=999)
-    controlled = candidate(title="CONTROLLED SMOKE TEST", price_minor=300)
+    controlled = candidate(
+        title="CONTROLLED SMOKE TEST", price_minor=300,
+        publication_metadata={
+            "test_specific": True,
+            "purpose": "controlled_smoke_test_launch_7",
+        },
+    )
     result = select(Repository((normal, controlled)), conversation_context={
         "primary_sales_channel": "AI_CHAT", "controlled_test_commerce": True,
     })
     assert result.offering_id == controlled["offering_id"]
     assert result.price_minor == 300
     assert result.selector_metadata["strategy"] == "CONTROLLED_TEST_DESIGNATED"
+
+
+@pytest.mark.parametrize("publication_metadata", (
+    {"test_specific": True},
+    {"purpose": "controlled_smoke_test_launch_7"},
+))
+def test_ordinary_selection_excludes_authoritatively_marked_test_inventory(
+    publication_metadata,
+):
+    controlled = candidate(publication_metadata=publication_metadata)
+    result = select(Repository((controlled,)))
+
+    assert result.offering_id is None
+    assert result.evaluations[0].eligible is False
+    assert "TEST_SPECIFIC_INVENTORY_EXCLUDED" in (
+        result.evaluations[0].exclusion_reasons
+    )
+
+
+def test_test_inventory_cannot_reenter_through_ranking_fallback():
+    invalid_real = candidate(publication_status="FAILED")
+    controlled = candidate(
+        published_at=NOW,
+        publication_metadata={
+            "test_specific": True,
+            "purpose": "controlled_smoke_test_launch_7",
+        },
+    )
+
+    result = select(Repository((invalid_real, controlled)))
+
+    assert result.offering_id is None
+    assert result.recommendation_result.candidate_count == 0
+
+
+def test_real_three_dollar_inventory_remains_eligible_by_metadata_not_price():
+    real = candidate(price_minor=300, publication_metadata={})
+    result = select(Repository((real,)))
+
+    assert result.offering_id == real["offering_id"]
+    assert result.price_minor == 300
+
+
+def test_active_test_intent_is_not_reintroduced_to_ordinary_customer_path():
+    controlled = candidate(publication_metadata={"test_specific": True})
+    active = SimpleNamespace(commercial_offering_id=controlled["offering_id"])
+
+    result = select(Repository((controlled,)), active=active)
+
+    assert result.offering_id is None
+    assert "TEST_SPECIFIC_INVENTORY_EXCLUDED" in (
+        result.evaluations[0].exclusion_reasons
+    )
+
+
+def test_test_specific_bundle_cannot_become_ordinary_candidate():
+    real = candidate(title="Real standalone")
+    controlled_bundle = candidate(
+        offering_type="BUNDLE",
+        asset_ids=[51, 52],
+        destinations=["BUNDLE", "BUNDLE"],
+        photoshoot_identifier="controlled-bundle",
+        photoshoot_identifiers=["controlled-bundle"],
+        photoshoot_selling_mode="BUNDLE",
+        bundle_teaser_asset_id=61,
+        bundle_teaser_source_asset_id=51,
+        bundle_teaser_registered=True,
+        publication_metadata={"test_specific": True},
+    )
+
+    result = select(Repository((controlled_bundle, real)))
+
+    assert result.offering_id == real["offering_id"]
+    rejected = next(
+        item for item in result.evaluations
+        if item.offering_id == controlled_bundle["offering_id"]
+    )
+    assert "TEST_SPECIFIC_INVENTORY_EXCLUDED" in rejected.exclusion_reasons
+
+
+def test_test_specific_session_step_cannot_become_ordinary_candidate():
+    controlled_session = candidate(
+        source_photoshoot_deliverable_id=uuid4(),
+        photoshoot_identifier="controlled-session",
+        photoshoot_selling_mode="SESSION",
+        publication_metadata={"test_specific": True},
+    )
+
+    result = select(Repository((controlled_session,)))
+
+    assert result.offering_id is None
+    assert "TEST_SPECIFIC_INVENTORY_EXCLUDED" in (
+        result.evaluations[0].exclusion_reasons
+    )
+
+
+def test_test_specific_inventory_cannot_become_price_recovery_upsell_fallback():
+    rejected = candidate(price_minor=1200)
+    controlled_lower = candidate(
+        price_minor=900,
+        publication_metadata={"test_specific": True},
+    )
+
+    result = select(
+        Repository((rejected, controlled_lower)),
+        constraints=StrategyConstraints(
+            excluded_offering_ids=(rejected["offering_id"],),
+            maximum_price_minor=1080,
+        ),
+    )
+
+    assert result.offering_id is None
+    controlled_evaluation = next(
+        item for item in result.evaluations
+        if item.offering_id == controlled_lower["offering_id"]
+    )
+    assert "TEST_SPECIFIC_INVENTORY_EXCLUDED" in (
+        controlled_evaluation.exclusion_reasons
+    )
 
 
 def test_standalone_single_image_requires_canonical_chat_destination():

@@ -9,7 +9,7 @@ class SessionEscalationDecisionService:
     """Derive strategy only; never creates a Sales Session or PurchaseIntent."""
 
     ONGOING = re.compile(
-        r"\b(?:keep\s+(?:this\s+)?going|don(?:'|.)t\s+stop|keep\s+showing|"
+        r"\b(?:keep\s+(?:(?:this|the\s+session)\s+)?going|don(?:'|.)t\s+stop|keep\s+showing|"
         r"what\s+comes\s+next|take\s+me\s+through|the\s+(?:whole|rest)|"
         r"whole\s+(?:thing|sequence)|keep\s+it\s+going|going\s+with\s+you)\b",
         re.I,
@@ -75,10 +75,16 @@ class SessionEscalationDecisionService:
         )
         repeated_purchases = int(purchase_count) >= 2
         ongoing = current_intent == "ONGOING_EXPERIENCE"
-        candidate = bool(active_buying_window and repeated_purchases and ongoing)
+        candidate = bool(
+            not active_session
+            and active_buying_window and repeated_purchases and ongoing
+        )
         reason = (
-            "REPEATED_PURCHASES_AND_ONGOING_EXPERIENCE_INTENT"
-            if candidate else "SESSION_CANDIDATE_EVIDENCE_INSUFFICIENT"
+            "EXISTING_ACTIVE_SESSION_NOT_SESSION_START_CANDIDATE"
+            if active_session
+            else "REPEATED_PURCHASES_AND_ONGOING_EXPERIENCE_INTENT"
+            if candidate
+            else "SESSION_CANDIDATE_EVIDENCE_INSUFFICIENT"
         )
         if not safety_allowed or rejection_or_back_off or reaction == "DECLINE_AND_STOP":
             decision, escalation_reason = "NO_FURTHER_SALE_NOW", "SAFETY_OR_CUSTOMER_STOP"

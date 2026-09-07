@@ -136,6 +136,8 @@ class ConversationGateway:
         "provider",
         "selected_provider",
         "provider_preview",
+        "generation_preview",
+        "intimacy_overrides",
         "commerce_execution_policy",
         "legacy_offer_requested",
         "commerce_offer_authorized",
@@ -830,18 +832,82 @@ class ConversationGateway:
         lifecycle_context = dict(
             (commerce_runtime_injection.get("commerce_decision") or {}).get("offer_lifecycle") or {}
         )
+        verified_purchase_count = int(
+            dict(commerce_runtime_injection.get("customer_value_attention") or {}).get(
+                "purchaseCount"
+            ) or 0
+        )
         if (
             not blocked
             and customer_sales_decision is not None
             and customer_sales_decision.decision is CustomerSalesDecisionType.CONGRATULATE_PURCHASE
         ):
             original_acknowledgement = ava_presentation_text
+            purchase_history_reference = dict(
+                (diagnostics.get("conversationStyle") or {}).get(
+                    "purchaseHistoryReference"
+                ) or {}
+            )
+            pre_rewrite_semantic_frame = (
+                self._content_presentation_validator.purchase_reaction_semantic_frame(
+                    gateway_input.message_text,
+                    purchase_count=verified_purchase_count,
+                    purchase_history_reference=purchase_history_reference,
+                )
+            )
+            pre_rewrite_subject_analysis = (
+                self._content_presentation_validator.aggregate_purchase_subject_analysis(
+                    original_acknowledgement,
+                    expected_subject=str(
+                        pre_rewrite_semantic_frame.get("aggregateSubject") or ""
+                    ),
+                )
+                if pre_rewrite_semantic_frame["aggregatePurchaseReactionRequired"]
+                else {}
+            )
+            original_style = dict(diagnostics.get("conversationStyle") or {})
+            question_authorized = not bool(
+                original_style.get("manufacturedQuestionRisk")
+                or original_style.get("unauthorizedRelationshipQuestion")
+                or original_style.get("questionReason") == "MANUFACTURED_ENGAGEMENT"
+            )
             lifecycle_validation = self._content_presentation_validator.validate_lifecycle(
                 original_acknowledgement, lifecycle=lifecycle_context,
                 require_purchase_acknowledgement=True,
+                customer_message=gateway_input.message_text,
+                purchase_count=verified_purchase_count,
+                question_authorized=question_authorized,
+                purchase_history_reference=purchase_history_reference,
             )
             rewrite_attempted = False
             rewrite_outcome = "NOT_REQUIRED"
+            rewrite_removed_segments = []
+            if (
+                not lifecycle_validation.valid
+                and pre_rewrite_semantic_frame[
+                    "aggregatePurchaseReactionRequired"
+                ]
+            ):
+                repaired, rewrite_removed_segments = (
+                    self._deletion_first_protected_rewrite(
+                        original_acknowledgement,
+                        semantic_frame=pre_rewrite_semantic_frame,
+                    )
+                )
+                if repaired != original_acknowledgement:
+                    rewrite_attempted = True
+                    repaired_validation = self._content_presentation_validator.validate_lifecycle(
+                        repaired, lifecycle=lifecycle_context,
+                        require_purchase_acknowledgement=True,
+                        customer_message=gateway_input.message_text,
+                        purchase_count=verified_purchase_count,
+                        question_authorized=question_authorized,
+                        purchase_history_reference=purchase_history_reference,
+                    )
+                    if repaired_validation.valid:
+                        response_text = ava_presentation_text = repaired
+                        lifecycle_validation = repaired_validation
+                        rewrite_outcome = "DELETION_FIRST_REPAIR_SUCCEEDED"
             if (
                 not lifecycle_validation.valid
                 and callable(self._purchase_acknowledgement_copy_generator)
@@ -856,6 +922,10 @@ class ConversationGateway:
                     repaired_validation = self._content_presentation_validator.validate_lifecycle(
                         repaired, lifecycle=lifecycle_context,
                         require_purchase_acknowledgement=True,
+                        customer_message=gateway_input.message_text,
+                        purchase_count=verified_purchase_count,
+                        question_authorized=question_authorized,
+                        purchase_history_reference=purchase_history_reference,
                     )
                     if repaired_validation.valid:
                         response_text = ava_presentation_text = repaired
@@ -870,16 +940,58 @@ class ConversationGateway:
                     )
                     rewrite_outcome = "PROVIDER_REPAIR_ERROR_SAFE_FALLBACK"
             if not lifecycle_validation.valid:
-                fallback = "I saw you grabbed it — hope you enjoy this one."
+                reaction_state = self._content_presentation_validator.purchase_reaction_state(
+                    gateway_input.message_text,
+                    purchase_count=verified_purchase_count,
+                    purchase_history_reference=purchase_history_reference,
+                )
+                aggregate_positive_reaction = (
+                    self._content_presentation_validator.is_aggregate_positive_purchase_reaction(
+                        gateway_input.message_text,
+                        purchase_count=verified_purchase_count,
+                    )
+                )
+                fallback = {
+                    "COMPLETED_POSITIVE_EXPERIENCE": (
+                        "I'm glad you liked it — love that this one hit for you."
+                    ),
+                    "COMPLETED_NEGATIVE_EXPERIENCE": (
+                        "I'm sorry that one didn't land for you — I appreciate you telling me."
+                    ),
+                    "OPENING_OR_VIEWING_NOW": (
+                        "you've got it open now — hope it hits for you."
+                    ),
+                }.get(
+                    reaction_state,
+                    "I saw you grabbed it — hope you enjoy this one.",
+                )
+                if aggregate_positive_reaction:
+                    fallback = "I love that I'm still on a streak with you - glad they've landed."
+                elif pre_rewrite_semantic_frame.get("comparativePurchaseReaction"):
+                    fallback = "I'm glad that one landed even better for you."
                 fallback_validation = self._content_presentation_validator.validate_lifecycle(
                     fallback, lifecycle=lifecycle_context,
                     require_purchase_acknowledgement=True,
+                    customer_message=gateway_input.message_text,
+                    purchase_count=verified_purchase_count,
+                    question_authorized=False,
+                    purchase_history_reference=purchase_history_reference,
                 )
                 if fallback_validation.valid:
                     response_text = ava_presentation_text = fallback
                     lifecycle_validation = fallback_validation
                     if not rewrite_attempted:
                         rewrite_outcome = "SAFE_ACKNOWLEDGEMENT_FALLBACK"
+            aggregate_subject_analysis = (
+                self._content_presentation_validator.aggregate_purchase_subject_analysis(
+                    ava_presentation_text,
+                    expected_subject=str(
+                        pre_rewrite_semantic_frame.get("aggregateSubject") or ""
+                    ),
+                )
+                if pre_rewrite_semantic_frame["aggregatePurchaseReactionRequired"]
+                else {}
+            )
             diagnostics.update({
                 "purchaseAcknowledgementRequired": True,
                 "purchaseAcknowledgementSatisfied": lifecycle_validation.valid,
@@ -892,8 +1004,88 @@ class ConversationGateway:
                 "purchaseAcknowledgementRewriteOutcome": rewrite_outcome,
                 "purchaseAcknowledgementOriginalCandidate": original_acknowledgement,
                 "purchaseAcknowledgementFinalCandidate": ava_presentation_text,
+                "purchaseAcknowledgementReactionState": (
+                    self._content_presentation_validator.purchase_reaction_state(
+                        gateway_input.message_text,
+                        purchase_count=verified_purchase_count,
+                        purchase_history_reference=purchase_history_reference,
+                    )
+                ),
+                "preRewriteSemanticFrame": pre_rewrite_semantic_frame,
+                "preRewriteContradictorySemanticSegmentDetected": (
+                    pre_rewrite_subject_analysis.get(
+                        "contradictorySemanticSegmentDetected"
+                    ) if pre_rewrite_subject_analysis else None
+                ),
+                "aggregatePurchaseReactionRequired": (
+                    pre_rewrite_semantic_frame[
+                        "aggregatePurchaseReactionRequired"
+                    ]
+                ),
+                "aggregatePurchaseReactionSatisfied": (
+                    aggregate_subject_analysis.get(
+                        "aggregatePurchaseReactionSatisfied"
+                    ) if aggregate_subject_analysis else None
+                ),
+                "semanticFrameSubject": aggregate_subject_analysis.get(
+                    "semanticFrameSubject"
+                ),
+                "finalResponseSubjectCompatible": aggregate_subject_analysis.get(
+                    "finalResponseSubjectCompatible"
+                ),
+                "contradictorySemanticSegmentDetected": aggregate_subject_analysis.get(
+                    "contradictorySemanticSegmentDetected"
+                ),
+                "retrospectivePurchaseReactionSatisfied": not bool(
+                    re.search(
+                        r"\b(?:hope\s+you\s+(?:enjoy|like|love)|"
+                        r"once\s+you\s+(?:see|open)|when\s+you\s+open)\b",
+                        ava_presentation_text, re.I,
+                    )
+                ),
+                "semanticPreservationAfterRewrite": bool(
+                    lifecycle_validation.valid
+                    and not aggregate_subject_analysis.get(
+                        "contradictorySemanticSegmentDetected", False
+                    )
+                ),
+                "purchaseAcknowledgementRewriteRemovedSegments": (
+                    rewrite_removed_segments
+                ),
+                "purchaseAcknowledgementQuestionAuthorized": question_authorized,
+                "purchaseAcknowledgementCommittedResponse": response_text,
                 "purchase_acknowledgement_validated": lifecycle_validation.valid,
             })
+            committed_style = dict(diagnostics.get("conversationStyle") or {})
+            committed_style.update({
+                "finalValidationFinalCandidate": ava_presentation_text,
+                "foregroundSemanticIntent": "PURCHASE_REACTION_ACKNOWLEDGEMENT",
+                "foregroundSemanticRelevanceRequired": True,
+                "foregroundSemanticRelevanceSatisfied": lifecycle_validation.valid,
+                "currentTopicCoverageSatisfied": lifecycle_validation.valid,
+                "purchaseAcknowledged": lifecycle_validation.valid,
+            })
+            obligation = "ACKNOWLEDGE_PURCHASE_REACTION"
+            obligations = list(committed_style.get("turnObligations") or ())
+            satisfied = list(committed_style.get("satisfiedTurnObligations") or ())
+            unsatisfied = list(committed_style.get("unsatisfiedTurnObligations") or ())
+            if obligation not in obligations:
+                obligations.append(obligation)
+            if lifecycle_validation.valid:
+                if obligation not in satisfied:
+                    satisfied.append(obligation)
+                unsatisfied = [item for item in unsatisfied if item != obligation]
+            else:
+                satisfied = [item for item in satisfied if item != obligation]
+                if obligation not in unsatisfied:
+                    unsatisfied.append(obligation)
+            committed_style.update({
+                "turnObligations": obligations,
+                "satisfiedTurnObligations": satisfied,
+                "unsatisfiedTurnObligations": unsatisfied,
+                "turnObligationsSatisfied": not unsatisfied,
+            })
+            diagnostics["conversationStyle"] = committed_style
             if not lifecycle_validation.valid:
                 blocked = True
                 error_code = lifecycle_validation.reason
@@ -1014,6 +1206,10 @@ class ConversationGateway:
                 "delivery_source": (
                     "RESOLVED_COMMERCIAL_OFFERING"
                     if offering is not None and offer_authorized
+                    else "CANONICAL_FREE_TEASER"
+                    if dict(delivery_payload.get("metadata") or {}).get(
+                        "free_teaser_delivery"
+                    )
                     else "AUTHORITATIVE_CONVERSATION"
                 ),
                 "memory_source": "CANONICAL_COMMERCE",
@@ -1075,6 +1271,17 @@ class ConversationGateway:
             diagnostics["ctaLinkTruth"] = cta_truth
         if delivery_payload:
             diagnostics["telegram_delivery_payload_ready"] = True
+        delivery_metadata = dict(
+            dict(delivery_payload or {}).get("metadata") or {}
+        )
+        diagnostics.update({
+            "session_free_teaser_selected": bool(
+                delivery_metadata.get("free_teaser_delivery")
+                and delivery_metadata.get("teaser_domain")
+                    == "SESSION_FREE_TEASER"
+            ),
+            "teaser_domain": delivery_metadata.get("teaser_domain"),
+        })
         if sales_session is not None:
             session_commercial_context = dict(
                 getattr(sales_session, "commercial_context", {}) or {}
@@ -1705,6 +1912,11 @@ class ConversationGateway:
                     ),
                     "metadata": {
                         "commerce_mode": "AUTHORITATIVE",
+                        "teaser_domain": (
+                            "SESSION_FREE_TEASER"
+                            if not bundle_presentation
+                            else "BUNDLE_PROMOTIONAL_TEASER"
+                        ),
                         metadata_key: teaser,
                         "bundle_complete_presentation": bundle_presentation,
                         **offering_metadata,
@@ -1799,6 +2011,47 @@ class ConversationGateway:
     def _free_teaser_delivery(
         self, decision: CustomerSalesDecision | None,
     ) -> dict[str, Any] | None:
+        pre_session = dict(
+            dict(getattr(decision, "decision_metadata", None) or {}).get(
+                "preSessionFreeTeaser"
+            ) or {}
+        )
+        if pre_session.get("authorized") is True:
+            asset_id = pre_session.get("teaser_asset_id")
+            try:
+                asset = self._asset_repository.get_by_id(int(asset_id))
+                resolved = self._runtime_media_resolver.resolve_original(
+                    asset, require_exists=True,
+                )
+            except Exception as error:
+                logger.warning(
+                    "event=pre_session_free_teaser_asset_resolution_failed "
+                    "asset_id=%s error_type=%s",
+                    asset_id, type(error).__name__,
+                )
+                return None
+            if asset is None or resolved.path is None:
+                return None
+            return {
+                "provisional_session_id": str(
+                    pre_session["provisionalSessionId"]
+                ),
+                "photoshoot_session_id": str(
+                    pre_session["photoshoot_reference"]
+                ),
+                "asset_id": int(asset_id),
+                "position": 1,
+                "next_position": int(pre_session["next_position"]),
+                "next_asset_id": int(pre_session["next_asset_id"]),
+                "next_sales_role": str(pre_session["next_sales_role"]),
+                "next_offering_id": str(pre_session["next_offering_id"]),
+                "next_price_minor": int(pre_session["next_price_minor"]),
+                "currency": str(pre_session["currency"]),
+                "sales_role": "FREE_TEASER",
+                "asset_path": str(resolved.path),
+                "asset_path_source": resolved.source,
+                "authority": "PRE_SESSION_CANONICAL_SESSION_GRAPH",
+            }
         bundle = dict(getattr(decision, "bundle_sales_context", None) or {})
         if (
             bundle.get("eligible") is True
@@ -2275,6 +2528,138 @@ class ConversationGateway:
             "customer_commercial_response": response_class != "NONE",
         }
 
+    def _deletion_first_protected_rewrite(
+        self, text: str, *, semantic_frame: dict | None = None,
+    ) -> tuple[str, list[str]]:
+        """Remove optional or contradictory segments while preserving valid core."""
+        candidate = " ".join(str(text or "").split()).strip()
+        removed = []
+        frame = dict(semantic_frame or {})
+        if frame.get("aggregatePurchaseReactionRequired"):
+            segments = [
+                segment.strip() for segment in re.findall(
+                    r"[^.!?]+(?:[.!?]+|$)", candidate,
+                ) if segment.strip()
+            ]
+            kept = []
+            for segment in segments:
+                analysis = self._content_presentation_validator.aggregate_purchase_subject_analysis(
+                    segment,
+                    expected_subject=str(frame.get("aggregateSubject") or ""),
+                )
+                if analysis["contradictorySemanticSegmentDetected"]:
+                    removed.append(segment.rstrip(".!? "))
+                else:
+                    kept.append(segment)
+            if kept and len(kept) != len(segments):
+                candidate = " ".join(kept).strip()
+        # Remove trailing question sentences first, preserving the declarative
+        # core exactly apart from whitespace.
+        match = re.match(
+            r"(?s)^(.*[.!?])\s+([^.!?]*\?)\s*"
+            r"(?:[\U0001F300-\U0001FAFF]\s*)?$",
+            candidate,
+        )
+        if match:
+            removed.append(match.group(2).strip())
+            candidate = match.group(1).rstrip()
+        # A rhetorical tag can be attached to the otherwise-valid core.
+        tag = re.search(r"(?i)(?:,|\s)\s*(huh|right|yeah)\?\s*$", candidate)
+        if tag:
+            removed.insert(0, candidate[tag.start():].strip(" ,—-"))
+            candidate = candidate[:tag.start()].rstrip(" ,—-") + "."
+        return candidate.strip(), removed
+
+    def _recent_purchased_content_context(
+        self, commerce_memory: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        """Project bounded, customer-safe detail for verified purchases."""
+        purchase_count = int(
+            commerce_memory.get("verifiedPurchaseCount")
+            or commerce_memory.get("lifetimePurchaseCount")
+            or 0
+        )
+        events = tuple(
+            commerce_memory.get("recentVerifiedPurchaseEvidence") or ()
+        )
+        if not events:
+            return {}
+        # Sales Brain already bounds this evidence to its latest 20 events.
+        events = events[-20:]
+        first_ordinal = max(1, purchase_count - len(events) + 1)
+        owned_assets = {
+            int(value) for value in commerce_memory.get("ownedAssetIds") or ()
+        }
+        owned_offerings = {
+            str(value) for value in commerce_memory.get("ownedOfferingIds") or ()
+        }
+        entries = []
+        for offset, raw_event in enumerate(events):
+            event = dict(raw_event or {})
+            asset_ids = tuple(int(value) for value in event.get("assetIds") or ())
+            entry: dict[str, Any] = {
+                "ordinal": first_ordinal + offset,
+                "purchaseIntentId": event.get("sourceRecordId"),
+                "purchasedAt": event.get("purchasedAt"),
+                "offeringId": event.get("offeringId"),
+                "contentType": event.get("saleType"),
+                "assetIds": asset_ids,
+                "grossMinor": event.get("grossMinor"),
+                "currency": event.get("currency"),
+                "purchaseConfirmed": True,
+                "ownershipConfirmed": bool(
+                    (event.get("offeringId") and str(event["offeringId"]) in owned_offerings)
+                    or (asset_ids and all(value in owned_assets for value in asset_ids))
+                ),
+                "descriptiveMetadataAvailable": False,
+            }
+            if len(asset_ids) == 1:
+                try:
+                    asset = self._asset_repository.get_by_id(asset_ids[0])
+                except Exception as error:
+                    logger.warning(
+                        "event=purchased_asset_context_unavailable error_type=%s",
+                        type(error).__name__,
+                    )
+                    asset = None
+                if asset is not None:
+                    summary = self._customer_safe_offering_copy(
+                        getattr(asset, "short_safe_summary", None)
+                    )
+                    tags = tuple(str(value).strip() for value in (
+                        getattr(asset, "suggested_tags", None) or ()
+                    ) if str(value).strip())[:6]
+                    themes = tuple(str(value).strip() for value in (
+                        getattr(asset, "detected_themes", None) or ()
+                    ) if str(value).strip())[:6]
+                    if summary:
+                        entry["safeSummary"] = summary
+                    if tags:
+                        entry["safeTags"] = tags
+                    if themes:
+                        entry["safeThemes"] = themes
+                    entry["descriptiveMetadataAvailable"] = bool(
+                        summary or tags or themes
+                    )
+            entries.append(entry)
+        result: dict[str, Any] = {
+            "purchasedContentHistoryAvailable": True,
+            "purchasedContentHistoryCount": purchase_count,
+            "boundedHistoryEntryCount": len(entries),
+            "maximumHistoryEntries": 20,
+            "historyEntries": tuple(entries),
+            "referenceIsUnambiguous": purchase_count == 1 and len(entries) == 1,
+        }
+        # Preserve the established single-purchase convenience projection.
+        if result["referenceIsUnambiguous"]:
+            for key in (
+                "contentType", "safeSummary", "safeTags", "safeThemes",
+                "descriptiveMetadataAvailable",
+            ):
+                if key in entries[0]:
+                    result[key] = entries[0][key]
+        return result
+
     def _commerce_runtime_injection(
         self, decision: CustomerSalesDecision | None,
     ) -> dict[str, Any]:
@@ -2298,17 +2683,46 @@ class ConversationGateway:
             "decision": decision.decision.value,
             "reason_code": decision.reason_code.value,
             "buyer_stage": decision.buyer_stage.value,
+            "active_purchase_intent_id": (
+                str(decision.active_purchase_intent_id)
+                if decision.active_purchase_intent_id else None
+            ),
+            "active_offering_id": (
+                str(decision.active_offering_id)
+                if decision.active_offering_id else None
+            ),
             "current_offer_status": decision.active_offer_status,
             "conversion_state": decision.active_offer_conversion_state,
             "commerce_execution_policy": effective_policy.value,
         }
+        decision_metadata = dict(
+            getattr(decision, "decision_metadata", None) or {}
+        )
+        commerce_memory = dict(
+            decision_metadata.get("customerCommerceMemory") or {}
+        )
+        if commerce_memory:
+            # This is relationship context as well as a Sales Brain safeguard.
+            # Keep identifiers available to deterministic code, while GPTService
+            # projects only customer-safe facts into its prompt.
+            context["customer_commerce_memory"] = commerce_memory
+            purchased_content = self._recent_purchased_content_context(
+                commerce_memory
+            )
+            if purchased_content:
+                context["recent_purchased_content"] = purchased_content
         value_attention = dict(
-            dict(getattr(decision, "decision_metadata", None) or {}).get(
+            decision_metadata.get(
                 "customerValueAttention"
             ) or {}
         )
         if value_attention:
             context["customer_value_attention"] = value_attention
+        active_session_context = dict(
+            decision_metadata.get("activeSessionContext") or {}
+        )
+        if active_session_context.get("available") is True:
+            context["active_session_context"] = active_session_context
         commercial_receptiveness = dict(
             dict(getattr(decision, "decision_metadata", None) or {}).get(
                 "commercialReceptiveness"
@@ -2330,6 +2744,11 @@ class ConversationGateway:
         )
         if contextual_tone:
             context["contextual_customer_tone"] = contextual_tone
+        inventory_existence = dict(
+            decision_metadata.get("inventoryExistence") or {}
+        )
+        if inventory_existence:
+            context["inventory_existence"] = inventory_existence
         objection_recovery = dict(
             dict(getattr(decision, "decision_metadata", None) or {}).get(
                 "objectionRecovery"
@@ -2356,6 +2775,11 @@ class ConversationGateway:
         )
         if proactive:
             context["proactive_progression"] = proactive
+        pre_session_teaser = dict(
+            decision_metadata.get("preSessionFreeTeaser") or {}
+        )
+        if pre_session_teaser:
+            context["pre_session_free_teaser"] = pre_session_teaser
         product_context = dict(
             getattr(decision, "recommended_product_context", None) or {}
         )
@@ -2613,6 +3037,9 @@ class ConversationGateway:
         outbound_suppression = dict(decision.decision_metadata or {}).get(
             "outboundSuppression"
         )
+        pre_session_teaser = dict(decision.decision_metadata or {}).get(
+            "preSessionFreeTeaser"
+        )
         active_buying_window = dict(decision.decision_metadata or {}).get(
             "activeBuyingWindow"
         )
@@ -2629,6 +3056,8 @@ class ConversationGateway:
             ),
             "customer_sales_brain_evaluated": True,
             "active_purchase_intent_id": str(decision.active_purchase_intent_id) if decision.active_purchase_intent_id else None,
+            "active_offering_id": str(decision.active_offering_id) if decision.active_offering_id else None,
+            "current_offer_status": decision.active_offer_status,
             "purchase_acknowledgement_intent_id": acknowledgement_intent_id,
             "recommendation_trace": (
                 selector_diagnostics.get("recommendationTrace") or []
@@ -2690,6 +3119,10 @@ class ConversationGateway:
             "outbound_suppression": (
                 dict(outbound_suppression)
                 if isinstance(outbound_suppression, Mapping) else None
+            ),
+            "pre_session_free_teaser": (
+                dict(pre_session_teaser)
+                if isinstance(pre_session_teaser, Mapping) else None
             ),
             "sales_progression_source": dict(
                 decision.decision_metadata or {}

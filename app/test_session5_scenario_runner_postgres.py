@@ -14,6 +14,9 @@ from app.testing.adaptive_synthetic_customer import (
 from app.services.customer_content_presentation_validator import (
     CustomerContentPresentationValidator,
 )
+from app.repositories.customer_abuse_review_repository import (
+    CustomerAbuseReviewRepository,
+)
 
 
 pytestmark = pytest.mark.skipif(
@@ -30,7 +33,7 @@ def runner():
     )
     instance = Session5ScenarioRunner(harness)
     for item in instance.list():
-        if item["lifecycle"] in {"READY", "RUNNING", "COMPLETED", "SNAPSHOTTED"}:
+        if item["lifecycle"] in {"READY", "RUNNING", "COMPLETED", "FAILED", "SNAPSHOTTED"}:
             scenario = item["scenario"]
             with harness.connection() as connection:
                 connection.execute(
@@ -40,7 +43,7 @@ def runner():
             harness.reset(scenario)
     yield instance
     for item in instance.list():
-        if item["lifecycle"] in {"READY", "RUNNING", "COMPLETED", "SNAPSHOTTED"}:
+        if item["lifecycle"] in {"READY", "RUNNING", "COMPLETED", "FAILED", "SNAPSHOTTED"}:
             with harness.connection() as connection:
                 connection.execute(
                     "UPDATE certification_scenario_runs SET state='SNAPSHOTTED' "
@@ -90,6 +93,37 @@ def test_operator_workflow_preserves_turns_and_resets_cleanly(runner):
     next_scenario = runner.prepare("C02")
     assert next_scenario["startingState"]["purchaseCount"] == 0
     assert runner.status()["turnCount"] == 0
+
+
+def test_initialization_reconciles_abuse_review_runtime_schema(runner):
+    with runner.harness.connection() as connection:
+        objects = connection.execute("""SELECT
+            to_regclass('public.customer_abuse_review_incidents') AS incidents,
+            to_regclass('public.operator_notification_operations') AS notifications
+        """).fetchone()
+        indexes = {
+            row["indexname"] for row in connection.execute("""SELECT indexname
+                FROM pg_indexes WHERE schemaname='public' AND indexname IN (
+                    'customer_abuse_review_one_open_idx',
+                    'customer_abuse_review_telegram_idx',
+                    'operator_notification_recovery_idx',
+                    'operator_notification_customer_review_idx'
+                )""").fetchall()
+        }
+
+    assert objects["incidents"] == "customer_abuse_review_incidents"
+    assert objects["notifications"] == "operator_notification_operations"
+    assert indexes == {
+        "customer_abuse_review_one_open_idx",
+        "customer_abuse_review_telegram_idx",
+        "operator_notification_recovery_idx",
+        "operator_notification_customer_review_idx",
+    }
+    assert CustomerAbuseReviewRepository(
+        connection_factory=runner.harness.connection,
+    ).active_for_customer(
+        creator_profile_id=0, fanvue_account_id=0, fanvue_user_id=0,
+    ) is None
 
 
 def test_false_claim_never_simulates_purchase_and_command_requires_intent(runner):
@@ -210,7 +244,8 @@ def test_canonical_synthetic_delivery_confirms_ack_and_unsticks_later_turns(
 
 def test_fresh_attempt_replaces_runtime_but_preserves_prior_attempt_evidence(runner):
     first = runner.prepare("C04")
-    offer = runner.turn("hello before the purchase fixture")
+    inbound = "hey, how's your day going?"
+    offer = runner.turn(inbound)
     builder = HistoricalPurchaseFixtureBuilder(runner.harness)
     base = builder._ensure_customer("C04")
     intent = builder._create_intent(
@@ -252,7 +287,7 @@ def test_fresh_attempt_replaces_runtime_but_preserves_prior_attempt_evidence(run
     )
     assert any(
         row["scenario_attempt"] == first["scenarioAttempt"]
-        and row["inbound"] == "hello before the purchase fixture"
+        and row["inbound"] == inbound
         and row["outbound"] == offer["ava"]
         for row in historical["turnAttempts"]
     )
@@ -262,7 +297,164 @@ def test_fresh_attempt_replaces_runtime_but_preserves_prior_attempt_evidence(run
             (snapshot["snapshotId"],),
         ).fetchone()
     assert saved is not None
-    assert saved["evidence"]["turns"][0]["inboundText"] == "hello before the purchase fixture"
+    assert saved["evidence"]["turns"][0]["inboundText"] == inbound
+
+
+def test_zero_turn_failed_attempt_remains_allocated_after_snapshot_and_reset(runner):
+    first = runner.prepare("C18")
+    completed = runner.complete("FAIL")
+    assert completed["certificationOutcome"] == "FAIL"
+    assert completed["lifecycle"] == "FAILED"
+    snapshot = runner.snapshot("C18")
+
+    second = runner.prepare("C18")
+
+    assert second["scenarioAttempt"] == first["scenarioAttempt"] + 1
+    with runner.harness.connection() as connection:
+        allocation = connection.execute("""SELECT status,snapshot_id
+            FROM certification_scenario_attempt_allocations
+            WHERE scenario_id='C18' AND scenario_attempt=%s""", (
+                first["scenarioAttempt"],
+            )).fetchone()
+    assert allocation["status"] == "ARCHIVED"
+    assert str(allocation["snapshot_id"]) == snapshot["snapshotId"]
+
+
+def test_partial_certification_failure_is_terminal_and_snapshot_eligible(runner):
+    prepared = runner.prepare("C02")
+    runner.turn("hey")
+    defect = runner.defect("MAJOR", "material failure on first turn", turn_number=1)
+    completed = runner.complete("FAIL")
+
+    assert defect["turn"] == 1
+    assert completed["lifecycle"] == "FAILED"
+    snapshot = runner.snapshot("C02")
+    assert snapshot["lifecycle"] == "SNAPSHOTTED"
+    assert prepared["scenarioAttempt"] > 0
+
+
+def test_snapshot_rejects_genuinely_running_attempt(runner):
+    runner.prepare("C03")
+    with pytest.raises(RuntimeError, match="must be one of"):
+        runner.snapshot("C03")
+
+
+def test_c14_completed_batch_can_fail_at_turn_four_without_truncation(runner):
+    first = runner.prepare("C14")
+    for message in runner.harness.definition("C14").canonical_customer_turns:
+        runner.turn(message)
+
+    defect = runner.defect(
+        "MAJOR", "foreground response defect discovered after batch",
+        turn_number=4,
+    )
+    completed = runner.complete("FAIL")
+    assert defect["turn"] == 4
+    assert completed["lifecycle"] == "FAILED"
+    assert len(runner._turns("C14")) == 7
+    snapshot = runner.snapshot("C14")
+    with runner.harness.connection() as connection:
+        saved = connection.execute(
+            "SELECT evidence FROM certification_scenario_snapshots WHERE snapshot_id=%s",
+            (snapshot["snapshotId"],),
+        ).fetchone()["evidence"]
+    assert len(saved["turns"]) == 7
+    assert saved["assessment"]["grade"] == "FAIL"
+    assert saved["defects"][0]["turn_number"] == 4
+
+    second = runner.prepare("C14")
+    assert second["scenarioAttempt"] == first["scenarioAttempt"] + 1
+
+
+def test_c13_pass_keeps_successful_terminal_lifecycle(runner):
+    runner.prepare("C13")
+    completed = runner.complete("PASS")
+    assert completed["certificationOutcome"] == "PASS"
+    assert completed["lifecycle"] == "COMPLETED"
+    assert runner.snapshot("C13")["lifecycle"] == "SNAPSHOTTED"
+
+
+def test_archived_attempt_nine_allocates_ten_without_turn_evidence(runner):
+    with runner.harness.connection() as connection:
+        connection.execute(
+            "DELETE FROM certification_scenario_attempt_allocations WHERE scenario_id='C20'"
+        )
+        connection.execute(
+            "DELETE FROM certification_scenario_attempts WHERE scenario_id='C20'"
+        )
+        connection.execute(
+            "DELETE FROM certification_scenario_execution_leases WHERE scenario_id='C20'"
+        )
+        connection.execute(
+            "DELETE FROM certification_scenario_turn_attempts WHERE scenario_id='C20'"
+        )
+        connection.execute(
+            "UPDATE certification_scenario_runs SET scenario_attempt=1 WHERE scenario_id='C20'"
+        )
+        connection.execute("""INSERT INTO certification_scenario_attempt_allocations(
+            scenario_id,scenario_attempt,status)
+            VALUES ('C20',9,'ARCHIVED')
+            ON CONFLICT(scenario_id,scenario_attempt) DO UPDATE
+            SET status='ARCHIVED'""")
+
+    prepared = runner.prepare("C20")
+
+    assert prepared["scenarioAttempt"] == 10
+    assert runner.status()["turnCount"] == 0
+
+
+def test_attempt_allocation_is_monotonic_and_scenario_scoped(runner):
+    with runner.harness.connection() as connection:
+        c16_prior = connection.execute("""SELECT COALESCE(MAX(scenario_attempt),0) value
+            FROM certification_scenario_attempt_allocations WHERE scenario_id='C16'""").fetchone()["value"]
+        c17_prior = connection.execute("""SELECT COALESCE(MAX(scenario_attempt),0) value
+            FROM certification_scenario_attempt_allocations WHERE scenario_id='C17'""").fetchone()["value"]
+        c16_marker = int(c16_prior) + 40
+        c17_marker = int(c17_prior) + 7
+        connection.execute("""INSERT INTO certification_scenario_attempt_allocations(
+            scenario_id,scenario_attempt,status) VALUES ('C16',%s,'ARCHIVED')""",
+            (c16_marker,))
+        connection.execute("""INSERT INTO certification_scenario_attempt_allocations(
+            scenario_id,scenario_attempt,status) VALUES ('C17',%s,'ARCHIVED')""",
+            (c17_marker,))
+
+    c16 = runner.prepare("C16")
+    assert c16["scenarioAttempt"] == c16_marker + 1
+    runner.complete("FAIL")
+    runner.snapshot("C16")
+    c17 = runner.prepare("C17")
+    assert c17["scenarioAttempt"] == c17_marker + 1
+
+
+def test_empty_current_run_is_durable_allocation_and_cannot_be_reused(runner):
+    prepared = runner.prepare("C15")
+    first_attempt = prepared["scenarioAttempt"]
+
+    runner.complete("FAIL")
+    runner.snapshot("C15")
+    replacement = runner.prepare("C15")
+
+    assert replacement["scenarioAttempt"] == first_attempt + 1
+    with runner.harness.connection() as connection:
+        identities = connection.execute("""SELECT scenario_attempt,COUNT(*) total
+            FROM certification_scenario_attempt_allocations WHERE scenario_id='C15'
+            GROUP BY scenario_attempt HAVING COUNT(*) > 1""").fetchall()
+    assert identities == []
+
+
+@pytest.mark.parametrize("defects,turns,event", [
+    ([{"severity": "MAJOR", "turn_number": 7, "note": "semantic defect"}], [7], None),
+    ([{"materiality": "material", "logicalTurn": 3, "note": "semantic defect"}], [3], None),
+    ([{"material": True, "turnNumber": 7, "note": "semantic defect"}], [7], None),
+    ([{"severity": "CRITICAL", "turn_number": 0,
+       "note": "FULL_SCENARIO_ANALYSIS failed"}], [], "FULL_SCENARIO_ANALYSIS"),
+    ([{"severity": "QUALITY", "turn_number": 4, "note": "cosmetic"}], [], None),
+])
+def test_material_defect_projection_accepts_canonical_persisted_shapes(
+        defects, turns, event):
+    assert Session5ScenarioRunner._material_defect_projection(defects) == (
+        turns, event,
+    )
 
 
 def test_fresh_customer_state_does_not_cross_scenario_identity(runner):
@@ -302,6 +494,99 @@ def test_seeded_buyer_starting_state_is_exactly_rebuilt(runner):
     assert inventory["simulatedProviderEvents"] == 1
 
 
+def test_c14_prepare_reproduces_authoritative_cooling_fixture(runner):
+    prepared = runner.prepare("C14")
+    state = prepared["startingState"]
+    behavior = runner.harness.behavior_summary("C14")
+    assert prepared["startingStateValidation"]["result"] == "VALIDATED"
+    assert state["purchaseCount"] == state["ownershipCount"] == 1
+    assert state["lifetimeSpendMinor"] == 1400
+    assert 44.9 <= float(state["purchaseRecencyDays"]) <= 45.1
+    assert (state["buyerStatus"], state["buyerStage"]) == (
+        "VERIFIED_BUYER", "FIRST_TIME_BUYER",
+    )
+    assert state["retentionLifecycle"] == "COOLING_BUYER"
+    assert state["retentionPriority"] == "NORMAL"
+    assert state["attentionTier"] == "MEDIUM"
+    assert state["effortMode"] == "COMPRESSED"
+    assert state["relationshipInvestment"] == "WARM"
+    assert state["memoryPriority"] == "ELEVATED"
+    assert state["salesPressure"] == "LOW"
+    assert state["offerCadence"] == "POST_PURCHASE_CAREFUL"
+    assert state["timeWasterRisk"] == "NONE"
+    assert state["activePurchaseIntent"] is None
+    assert state["activeSession"] is None
+    assert state["activeUnresolvedOpportunity"] is False
+    assert behavior["inbound_message_count"] == 18
+    assert behavior["offer_exposure_count"] == 4
+    assert behavior["rejection_count"] == 0
+    customer = runner.harness.customer_for(runner.harness.definition("C14"))
+    with runner.harness.connection() as connection:
+        intents = connection.execute(
+            """SELECT status,expected_price_minor,purchased_at,
+                      purchase_acknowledged_at
+               FROM purchase_intents WHERE telegram_user_id=%s
+               ORDER BY purchased_at NULLS LAST""",
+            (customer.telegram_user_id,),
+        ).fetchall()
+        opportunity = connection.execute(
+            """SELECT COUNT(*) FILTER (WHERE status='EXPIRED') AS failed,
+                      BOOL_OR(status IN ('CREATED','PRESENTED','CLICKED')) AS active
+               FROM purchase_intents WHERE telegram_user_id=%s""",
+            (customer.telegram_user_id,),
+        ).fetchone()
+    intent = next(item for item in intents if item["status"] == "PURCHASED")
+    assert intent["status"] == "PURCHASED"
+    assert intent["expected_price_minor"] == 1400
+    assert intent["purchase_acknowledged_at"] == intent["purchased_at"]
+    assert opportunity["failed"] == 4
+    assert opportunity["active"] is False
+
+    assert tuple(runner.harness.definition("C14").canonical_customer_turns) == (
+        "hey", "I've been busy and less online lately", "the last set was fine",
+        "work has been taking most of my attention",
+        "I'm mostly just catching up tonight",
+        "I still like checking in with you",
+        "I'll stop by again when things settle down",
+    )
+
+
+def test_c14_validation_rejects_fresh_purchase_fixture(runner):
+    now = datetime.now(timezone.utc)
+    builder = HistoricalPurchaseFixtureBuilder(runner.harness)
+    builder.build("C14", [{"amount_minor": 1400, "purchased_at": now}])
+    builder.add_eligible_inventory("C14", prices=(900, 1900, 2900))
+    with pytest.raises(RuntimeError, match="SCENARIO_STARTING_STATE_VALIDATION_FAILED"):
+        runner.harness.validate_starting_state(
+            "C14", expected_purchase_count=1, now=now,
+        )
+
+
+def test_c14_validation_rejects_missing_commercial_history(runner):
+    prepared = runner.prepare("C14")
+    assert prepared["startingStateValidation"]["result"] == "VALIDATED"
+    with runner.harness.connection() as connection:
+        connection.execute(
+            """DELETE FROM certification_scenario_behavior_events
+               WHERE scenario_id='C14' AND event_type IN
+                     ('OFFER_EXPOSURE','REJECTION')"""
+        )
+    with pytest.raises(RuntimeError, match="behavior.offer_exposure_count"):
+        runner.harness.validate_starting_state(
+            "C14", expected_purchase_count=1,
+            now=datetime.now(timezone.utc),
+        )
+
+
+def test_c13_prepare_fixture_remains_unchanged(runner):
+    prepared = runner.prepare("C13")
+    state = prepared["startingState"]
+    assert state["purchaseCount"] == state["ownershipCount"] == 2
+    assert state["lifetimeSpendMinor"] == 3000
+    assert state["buyerStage"] == "REPEAT_BUYER"
+    assert runner.harness.behavior_summary("C13")["inbound_message_count"] == 0
+
+
 @pytest.mark.parametrize("scenario,purchase_count", [
     ("C11", 1), ("C12", 1), ("C13", 2), ("C14", 1), ("C15", 3),
     ("C16", 5), ("C17", 5), ("C18", 1), ("C19", 1),
@@ -313,7 +598,7 @@ def test_every_seeded_scenario_validates_only_its_canonical_history(
     assert seeded["startingState"]["purchaseCount"] == purchase_count
     assert seeded["startingState"]["ownershipCount"] == purchase_count
     counts = seeded["startingStateValidation"]["inventory"]["counts"]
-    assert counts["purchaseIntents"] == purchase_count
+    assert counts["purchaseIntents"] == (5 if scenario == "C14" else purchase_count)
     assert counts["providerTransactions"] == purchase_count
     assert counts["simulatedProviderEvents"] == purchase_count
 
@@ -370,6 +655,224 @@ def test_adaptive_offer_reaction_uses_structured_ppv_and_gates_purchase(runner):
     analysis = runner.full_attempt_analysis("C02")
     assert analysis["turns"][0]["customer"] == "okay, how much is it?"
     assert analysis["turns"][0]["syntheticPpvPresentation"]["purchaseIntent"]["id"]
+
+
+def _c13_purchase_claim_eligibility(**overrides):
+    intent_id = "00000000-0000-0000-0000-000000000013"
+    offering_id = "00000000-0000-0000-0000-000000000113"
+    turn = {
+        "customer": "I bought it",
+        "syntheticPpvPresentation": {
+            "offeringId": offering_id,
+            "priceMinor": 900,
+            "currency": "USD",
+            "purchaseIntent": {"id": intent_id, "state": "PRESENTED"},
+        },
+        "fullAnalysis": {
+            "currentOffer": {
+                "activePurchaseIntentId": intent_id,
+                "activeOfferingId": offering_id,
+            },
+            "purchaseCommerceState": {
+                "customerPurchaseClaimDetected": True,
+                "conversationalPurchaseClaim": True,
+                "providerPurchaseVerified": False,
+                "purchaseOwnershipVerified": False,
+                "activePurchaseIntentId": intent_id,
+                "activePurchaseIntentState": "PRESENTED",
+                "purchaseIntentStatus": "PRESENTED",
+            },
+            "conversationStyle": {"purchaseOwnershipGrounding": {
+                "customerPurchaseClaimDetected": True,
+                "providerPurchaseVerified": False,
+            }},
+            "commerceLifecycleConfirmation": {
+                "structuredPresentationConfirmed": True,
+            },
+        },
+    }
+    values = {
+        "scenario_id": "C13", "turns": [turn],
+        "purchase_intent_id": intent_id,
+        "purchase_intent_state": "PRESENTED",
+        "telegram_commerce": True,
+        "purchase_intent_offering_id": offering_id,
+        "expected_price_minor": 900, "expected_currency": "USD",
+        "presented_intent_count": 1,
+        "target_already_owned": False,
+        "prior_provider_settlement": False,
+    }
+    values.update(overrides)
+    return Session5ScenarioRunner.purchase_emulator_eligibility(**values)
+
+
+def test_c13_exact_purchase_claim_authorizes_only_synthetic_provider_emulation():
+    authority = _c13_purchase_claim_eligibility()
+    assert authority["simulatePurchaseEligible"] is True
+    assert authority["scenarioPurchaseAcceptanceSource"] == (
+        "C13_CANONICAL_EXACT_PURCHASE_CLAIM"
+    )
+    assert authority["purchaseEmulatorTargetIntent"] == (
+        "00000000-0000-0000-0000-000000000013"
+    )
+
+
+@pytest.mark.parametrize("override", [
+    {"purchase_intent_id": "00000000-0000-0000-0000-000000000099"},
+    {"purchase_intent_offering_id": "00000000-0000-0000-0000-000000000099"},
+    {"purchase_intent_state": "PURCHASED"},
+    {"presented_intent_count": 2},
+    {"target_already_owned": True},
+    {"prior_provider_settlement": True},
+    {"expected_price_minor": 901},
+])
+def test_c13_purchase_claim_rejects_broken_authoritative_binding(override):
+    assert _c13_purchase_claim_eligibility(
+        **override
+    )["simulatePurchaseEligible"] is False
+
+
+@pytest.mark.parametrize("message", [
+    "I might buy it", "I bought something", "I paid for another thing",
+])
+def test_c13_purchase_claim_rejects_noncanonical_or_ambiguous_wording(message):
+    intent_id = "00000000-0000-0000-0000-000000000013"
+    offering_id = "00000000-0000-0000-0000-000000000113"
+    result = _c13_purchase_claim_eligibility(turns=[{
+        "customer": message,
+        "syntheticPpvPresentation": {
+            "offeringId": offering_id, "priceMinor": 900, "currency": "USD",
+            "purchaseIntent": {"id": intent_id, "state": "PRESENTED"},
+        },
+        "fullAnalysis": {
+            "currentOffer": {"activePurchaseIntentId": intent_id,
+                             "activeOfferingId": offering_id},
+            "purchaseCommerceState": {
+                "customerPurchaseClaimDetected": True,
+                "conversationalPurchaseClaim": True,
+                "providerPurchaseVerified": False,
+                "purchaseOwnershipVerified": False,
+                "activePurchaseIntentId": intent_id,
+                "activePurchaseIntentState": "PRESENTED",
+                "purchaseIntentStatus": "PRESENTED",
+            },
+            "conversationStyle": {"purchaseOwnershipGrounding": {
+                "customerPurchaseClaimDetected": True,
+                "providerPurchaseVerified": False,
+            }},
+            "commerceLifecycleConfirmation": {
+                "structuredPresentationConfirmed": True,
+            },
+        },
+    }])
+    assert result["simulatePurchaseEligible"] is False
+
+
+def test_c13_purchase_claim_rejects_unconfirmed_structured_presentation():
+    result = _c13_purchase_claim_eligibility()
+    # Rebuild through the public helper with the confirmed diagnostic absent.
+    assert _c13_purchase_claim_eligibility(turns=[{
+        **{
+            "customer": "I bought it",
+            "syntheticPpvPresentation": {
+                "offeringId": "00000000-0000-0000-0000-000000000113",
+                "priceMinor": 900, "currency": "USD",
+                "purchaseIntent": {
+                    "id": "00000000-0000-0000-0000-000000000013",
+                    "state": "PRESENTED",
+                },
+            },
+        },
+        "fullAnalysis": {},
+    }])["simulatePurchaseEligible"] is False
+    assert result["simulatePurchaseEligible"] is True
+
+
+def test_c10_exact_offer_continuation_emulator_authority_is_unchanged():
+    intent_id = "00000000-0000-0000-0000-000000000010"
+    offering_id = "00000000-0000-0000-0000-000000000110"
+    authority = Session5ScenarioRunner.purchase_emulator_eligibility(
+        scenario_id="C10",
+        purchase_intent_id=intent_id,
+        purchase_intent_state="PRESENTED",
+        turns=[{
+            "customer": "send the link",
+            "syntheticPpvPresentation": {
+                "offeringId": offering_id,
+                "purchaseIntent": {"id": intent_id, "state": "PRESENTED"},
+            },
+            "salesBrainFullAnalysis": {
+                "currentOffer": {
+                    "customerInitiatedOfferContinuation": True,
+                    "continuationIntentType": "SEND_OR_LINK_REQUEST",
+                    "reuseRequested": True,
+                    "redeliveryAuthorized": True,
+                    "purchaseIntentReuseEligible": True,
+                    "structuredOfferReused": True,
+                    "structuredOfferRedelivered": True,
+                    "purchaseIntentReused": True,
+                    "activePurchaseIntentId": intent_id,
+                    "activeOfferingId": offering_id,
+                },
+                "purchaseCommerceState": {
+                    "activePurchaseIntentId": intent_id,
+                    "purchaseIntentStatus": "PRESENTED",
+                },
+                "commerceLifecycleConfirmation": {
+                    "structuredPresentationConfirmed": True,
+                    "deliveryState": "CONFIRMED",
+                },
+            },
+        }],
+    )
+    assert authority["simulatePurchaseEligible"] is True
+    assert authority["scenarioPurchaseAcceptanceSource"] == (
+        "C10_CANONICAL_EXACT_OFFER_CONTINUATION"
+    )
+
+
+def test_c13_canonical_claim_settles_exact_third_offer_and_acknowledges_it(runner):
+    runner.prepare("C13")
+    definition = runner.harness.definition("C13")
+    turns = [runner.turn(
+        message, language_mode="DETERMINISTIC_CERTIFICATION",
+    ) for message in definition.canonical_customer_turns[:7]]
+    presentations = [
+        turn["syntheticPpvPresentation"] for turn in turns
+        if turn.get("syntheticPpvPresentation")
+    ]
+    assert presentations
+    presented = presentations[-1]
+    claim = turns[-1]
+    assert claim["customer"] == "I bought it"
+    commerce = claim["fullAnalysis"]["purchaseCommerceState"]
+    assert commerce["customerPurchaseClaimDetected"] is True
+    assert commerce["conversationalPurchaseClaim"] is True
+    assert commerce["providerPurchaseVerified"] is False
+    assert commerce["purchaseOwnershipVerified"] is False
+
+    result = runner.simulate_purchase()
+    assert result["purchaseIntentId"] == presented["purchaseIntent"]["id"]
+    assert result["purchaseEmulatorAuthority"][
+        "scenarioPurchaseAcceptanceSource"
+    ] == "C13_CANONICAL_EXACT_PURCHASE_CLAIM"
+    assert result["before"]["purchaseCount"] == 2
+    assert result["before"]["ownershipCount"] == 2
+    assert result["after"]["purchaseCount"] == 3
+    assert result["after"]["ownershipCount"] == 3
+    assert result["after"]["lifetimeSpendMinor"] == 3900
+
+    acknowledgement = runner.turn(
+        definition.canonical_customer_turns[7],
+        language_mode="DETERMINISTIC_CERTIFICATION",
+    )
+    analysis = acknowledgement["fullAnalysis"]
+    settled_commerce = analysis["purchaseCommerceState"]
+    assert settled_commerce["providerPurchaseVerified"] is True
+    assert settled_commerce["firstPurchaseSemanticsAuthorized"] is False
+    assert analysis["purchaseAcknowledgementAuthorized"] is True
+    assert analysis["purchaseAcknowledgementCompleted"] is True
+    assert analysis["purchaseAcknowledgedAt"]
 
 
 def test_c06_exact_presented_intent_acceptance_settles_once(runner):
@@ -638,6 +1141,176 @@ def test_failed_owned_execution_creates_no_phantom_turn(runner, monkeypatch):
     assert runner.status()["turnCount"] == 0
     assert runner.harness.behavior_summary("C03")["inbound_message_count"] == 0
     assert runner.status()["execution"]["state"] == "FAILED"
+
+
+def test_zero_turn_provider_failure_retains_safe_pre_turn_retry_boundary(
+        runner, monkeypatch):
+    prepared = runner.prepare("C03")
+    attempt = prepared["scenarioAttempt"]
+    original_execute = runner.harness.execute_turn
+    calls = []
+
+    def fail_then_succeed(scenario_id, message, **kwargs):
+        calls.append(dict(kwargs))
+        if len(calls) == 1:
+            raise RuntimeError("synthetic provider connection failure")
+        # Exercise the deterministic runtime while proving that the retry
+        # preserved the operator-requested language mode at its boundary.
+        assert kwargs["language_mode"] == "REAL_AVA_LANGUAGE"
+        evidence = original_execute(
+            scenario_id, message,
+            **{**kwargs, "language_mode": "DETERMINISTIC_CERTIFICATION"},
+        )
+        evidence["syntheticProvider"].update({
+            "syntheticProviderMode": "REAL_AVA_LANGUAGE",
+            "liveProviderCalled": True,
+        })
+        return evidence
+
+    monkeypatch.setattr(runner.harness, "execute_turn", fail_then_succeed)
+    with pytest.raises(RuntimeError, match="synthetic provider connection failure"):
+        runner.turn(
+            "hey", language_mode="REAL_AVA_LANGUAGE",
+            require_language_mode=True,
+        )
+
+    failed = runner.recovery.latest_failed_precommit_turn("C03", attempt)
+    assert failed is not None
+    assert failed["logical_turn"] == 1
+    assert failed["inbound"] == "hey"
+    assert runner.status()["execution"]["lastCompletedLogicalTurn"] == 0
+
+    recovered = runner.turn(
+        "hey", language_mode="REAL_AVA_LANGUAGE",
+        require_language_mode=True,
+    )
+    assert recovered["turnNumber"] == 1
+    assert recovered["customer"] == "hey"
+    assert recovered["telegramSent"] is False
+    assert len(calls) == 2
+
+    rows = runner.recovery.turn_attempt_rows("C03", attempt)
+    assert [(row["turn_attempt"], row["status"]) for row in rows] == [
+        (1, "SUPERSEDED_BY_RETRY"),
+        (2, "CURRENT"),
+    ]
+    summary = runner.harness.behavior_summary("C03")
+    assert summary["inbound_message_count"] == 1
+    assert runner.status()["execution"]["lastCompletedLogicalTurn"] == 1
+
+
+def test_c15_run_canonical_provider_failure_stops_at_turn_one(
+        runner, monkeypatch):
+    prepared = runner.prepare("C15")
+    attempt = prepared["scenarioAttempt"]
+    calls = []
+
+    def provider_failure(scenario_id, message, **kwargs):
+        calls.append((scenario_id, message, kwargs))
+        raise RuntimeError("mocked C15 provider failure")
+
+    monkeypatch.setattr(runner.harness, "execute_turn", provider_failure)
+    with pytest.raises(RuntimeError, match="mocked C15 provider failure"):
+        runner.execute_canonical()
+
+    assert [(scenario, message) for scenario, message, _ in calls] == [
+        ("C15", "hey Ava"),
+    ]
+    assert calls[0][2]["language_mode"] == "REAL_AVA_LANGUAGE"
+    rows = runner.recovery.turn_attempt_rows("C15", attempt)
+    assert [
+        (row["logical_turn"], row["turn_attempt"], row["status"],
+         row["inbound"], row["outbound"])
+        for row in rows
+    ] == [(1, 1, "FAILED_PRE_COMMIT", "hey Ava", "")]
+    assert runner.recovery.next_logical_turn("C15", attempt) == 1
+    analysis = runner.full_attempt_analysis("C15")
+    assert analysis["scenario"]["canonicalTurnCount"] == 0
+    assert analysis["scenario"]["lastCompletedLogicalTurn"] == 0
+    assert analysis["turns"] == []
+    assert analysis["attemptAudit"]["failedExecutionAttempts"][0]["status"] == (
+        "FAILED_PRE_COMMIT"
+    )
+    state = analysis["finalAccumulatedState"]
+    assert state["inboundMessageCount"] == 0
+    assert state["derivedState"]["purchaseCount"] == 3
+    assert state["derivedState"]["ownershipCount"] == 3
+    assert state["derivedState"]["lifetimeSpendMinor"] == 15003
+    assert state["derivedState"]["activePurchaseIntent"] is None
+
+
+def test_two_precommit_failures_allocate_third_attempt_once(runner, monkeypatch):
+    prepared = runner.prepare("C03")
+    attempt = prepared["scenarioAttempt"]
+    original_execute = runner.harness.execute_turn
+    calls = 0
+
+    def fail_twice(scenario_id, message, **kwargs):
+        nonlocal calls
+        calls += 1
+        if calls < 3:
+            raise RuntimeError(f"provider failure {calls}")
+        evidence = original_execute(
+            scenario_id, message,
+            **{**kwargs, "language_mode": "DETERMINISTIC_CERTIFICATION"},
+        )
+        evidence["syntheticProvider"].update({
+            "syntheticProviderMode": "REAL_AVA_LANGUAGE",
+            "liveProviderCalled": True,
+        })
+        return evidence
+
+    monkeypatch.setattr(runner.harness, "execute_turn", fail_twice)
+    for expected in ("provider failure 1", "provider failure 2"):
+        with pytest.raises(RuntimeError, match=expected):
+            runner.turn(
+                "hey", language_mode="REAL_AVA_LANGUAGE",
+                require_language_mode=True,
+            )
+    result = runner.turn(
+        "hey", language_mode="REAL_AVA_LANGUAGE", require_language_mode=True,
+    )
+
+    rows = runner.recovery.turn_attempt_rows("C03", attempt)
+    assert [(row["turn_attempt"], row["status"]) for row in rows] == [
+        (1, "SUPERSEDED_BY_RETRY"),
+        (2, "SUPERSEDED_BY_RETRY"),
+        (3, "CURRENT"),
+    ]
+    assert result["turnNumber"] == 1
+    assert result["turnAttempt"] == 3
+    assert runner.harness.behavior_summary("C03")["inbound_message_count"] == 1
+    assert len(runner.recovery.current_outbound_transcript("C03", attempt)) == 1
+    assert runner.harness.starting_state_inventory("C03")["counts"][
+        "ordinaryOperations"
+    ] == 1
+
+    with pytest.raises(RuntimeError, match="LOGICAL TURN ALREADY COMMITTED"):
+        runner.retry_previous_turn("must not duplicate committed turn")
+
+
+def test_concurrent_turn_attempt_allocation_is_unique(runner):
+    prepared = runner.prepare("C03")
+    attempt = prepared["scenarioAttempt"]
+    allocated = []
+    failures = []
+
+    def allocate():
+        try:
+            allocated.append(
+                runner.recovery.allocate_turn_attempt("C03", attempt, 1)
+            )
+        except Exception as error:
+            failures.append(error)
+
+    workers = [Thread(target=allocate), Thread(target=allocate)]
+    for worker in workers:
+        worker.start()
+    for worker in workers:
+        worker.join(10)
+
+    assert not failures
+    assert sorted(allocated) == [1, 2]
 
 
 def test_repeated_post_backoff_abuse_is_audited_without_fake_outbound(runner):

@@ -1067,6 +1067,7 @@ class DecisionEngine:
         transition = ConversationalSalesProgressionService.transition_features(
             message
         )
+        deferred_commercial = bool(transition.get("deferredCommercialInterest"))
         requested_content = bool(
             requested_content or transition.get("content_request")
         )
@@ -1078,6 +1079,12 @@ class DecisionEngine:
             or requested_price
             or transition.get("content_request")
         )
+        if deferred_commercial:
+            requested_purchase = False
+            requested_link = False
+            requested_price = False
+            requested_content = False
+            buying_intent = False
         conversational_action = (
             ConversationalSalesProgressionService
             .recommended_conversational_action(
@@ -1105,6 +1112,7 @@ class DecisionEngine:
             "engagement_level": classifier.get("engagement_level"),
             "classifier_buying_intent": bool(classifier.get("buying_intent")),
             "classifier_close_ready": bool(classifier.get("close_ready")),
+            "deferredCommercialInterest": deferred_commercial,
         }
 
     def process_message(
@@ -4249,23 +4257,13 @@ class DecisionEngine:
             message, gpt_classifier_result
         )
 
-        premium_qualified = bool(
-            premium_sexting_allowed
-            and explicit_allowed
-            and intimacy_entitlement in ("PREMIUM", "VIP")
+        provider_selection = self.intimacy_integration_service.select_provider(
+            intimacy_overrides,
+            explicit_requested=explicit_requested,
         )
-
-        grok_eligible = bool(
-            premium_qualified
-            and explicit_requested
-            and adult_generation_allowed
-        )
-
-        selected_provider = (
-            "GROK"
-            if grok_eligible
-            else "OPENAI"
-        )
+        premium_qualified = provider_selection["premium_qualified"]
+        grok_eligible = provider_selection["grok_eligible"]
+        selected_provider = provider_selection["selected_provider"]
 
         if grok_eligible:
             provider_reason = (
@@ -4281,6 +4279,7 @@ class DecisionEngine:
             )
 
         provider_preview = {
+            "preferredProvider": provider_selection["preferred_provider"],
             "selected_provider": selected_provider,
             "provider": selected_provider,
             "runtime_mode": runtime_mode,
@@ -4304,6 +4303,15 @@ class DecisionEngine:
             "adult_generation_allowed": adult_generation_allowed,
             "premium_sexting_allowed": premium_sexting_allowed,
             "explicit_allowed": explicit_allowed,
+            "legacy_premium_sexting_allowed": bool(
+                intimacy_overrides.get("legacy_premium_sexting_allowed")
+            ),
+            "legacy_explicit_allowed": bool(
+                intimacy_overrides.get("legacy_explicit_allowed")
+            ),
+            "legacy_permission_flags_authoritative": bool(
+                intimacy_overrides.get("legacy_permission_flags_authoritative")
+            ),
             "explicit_requested": explicit_requested,
             "nsfw_requested": explicit_requested,
             "premium_qualified": premium_qualified,
@@ -4860,23 +4868,13 @@ class DecisionEngine:
             message, gpt_classifier_result
         )
 
-        premium_qualified = bool(
-            premium_sexting_allowed
-            and explicit_allowed
-            and intimacy_entitlement in ("PREMIUM", "VIP")
+        provider_selection = self.intimacy_integration_service.select_provider(
+            intimacy_overrides,
+            explicit_requested=explicit_requested,
         )
-
-        grok_eligible = bool(
-            premium_qualified
-            and explicit_requested
-            and adult_generation_allowed
-        )
-
-        selected_provider = (
-            "GROK"
-            if grok_eligible
-            else "OPENAI"
-        )
+        premium_qualified = provider_selection["premium_qualified"]
+        grok_eligible = provider_selection["grok_eligible"]
+        selected_provider = provider_selection["selected_provider"]
 
         if grok_eligible:
             provider_reason = (
@@ -4892,6 +4890,7 @@ class DecisionEngine:
             )
 
         provider_preview = {
+            "preferredProvider": provider_selection["preferred_provider"],
             **provider_preview,
             "selected_provider": selected_provider,
             "provider": selected_provider,
@@ -4916,6 +4915,15 @@ class DecisionEngine:
             "adult_generation_allowed": adult_generation_allowed,
             "premium_sexting_allowed": premium_sexting_allowed,
             "explicit_allowed": explicit_allowed,
+            "legacy_premium_sexting_allowed": bool(
+                intimacy_overrides.get("legacy_premium_sexting_allowed")
+            ),
+            "legacy_explicit_allowed": bool(
+                intimacy_overrides.get("legacy_explicit_allowed")
+            ),
+            "legacy_permission_flags_authoritative": bool(
+                intimacy_overrides.get("legacy_permission_flags_authoritative")
+            ),
             "explicit_requested": explicit_requested,
             "nsfw_requested": explicit_requested,
             "premium_qualified": premium_qualified,

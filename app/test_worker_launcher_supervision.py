@@ -345,8 +345,12 @@ def test_local_launcher_enables_uvicorn_reload_only_behind_development_switch():
 def test_local_launcher_preserves_guarded_session5_certification_environment():
     launcher = Path("tools/launcher/launch_creator_os.ps1").read_text(encoding="utf-8")
     assert '.env.session5.local' in launcher
-    assert 'CREATOR_OS_CERTIFICATION_TEST_DATABASE_NAME' in launcher
+    assert 'CREATOR_OS_SCENARIO_LAB_DATABASE_NAME' in launcher
+    assert 'CREATOR_OS_INTEGRATION_TEST_DATABASE_NAME' in launcher
+    assert 'CREATOR_OS_RECOVERY_TEST_DATABASE_NAME' in launcher
+    assert 'SESSION5_SCENARIO_LAB_DATABASE_URL' in launcher
+    assert 'SESSION5_INTEGRATION_DATABASE_URL' in launcher
+    assert 'SESSION5_RECOVERY_DATABASE_URL' in launcher
     assert 'must be explicitly test-scoped' in launcher
-    assert 'must differ from the production database' in launcher
+    assert 'must differ from production' in launcher
     assert 'SetEnvironmentVariable("CREATOR_OS_CERTIFICATION_SCENARIO_MODE", "true", "Process")' in launcher
-    assert 'SetEnvironmentVariable("TEST_DATABASE_URL", $testDatabaseUrl, "Process")' in launcher

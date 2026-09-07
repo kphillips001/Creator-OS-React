@@ -171,7 +171,19 @@ class GPTService:
         "MUSIC": r"\b(?:music|song|track|album|band|artist|playlist|concert|listen(?:ing)?)\b",
         "PET": r"\b(?:pet|dog|cat|puppy|kitten|retrievers?|vet|checkup|animal)\b",
         "OUTDOORS": r"\b(?:outdoors|outside|trail|nature|adventure|camp(?:ing)?|hik(?:e|ing)|woods|mountain)\b",
-        "WORK": r"\b(?:work|job|shift|office|boss|coworker|career)\b",
+        "WORK_BUSYNESS": (
+            r"\b(?:work|job|shift|office|boss|coworker|career|busy|slammed|"
+            r"swamped|a lot going on|much going on|free time)\b"
+        ),
+        "POSITIVE_ENGAGEMENT": (
+            r"\b(?:got|have|caught|grabbed|held)\s+(?:my|your)\s+attention\b"
+        ),
+        "WELLBEING_FATIGUE": (
+            r"\b(?:exhausted|tired|drained|draining|worn out|wore me out|"
+            r"wiped out|fatigue|brutal|rough|need(?:ing)? (?:some )?"
+            r"(?:rest|sleep)|low energy|breathe|relax(?:ing)?)\b"
+        ),
+        "PERSONAL_LIFE": r"\b(?:family|personal life|home stuff|family stuff)\b",
         "FOOD": r"\b(?:food|eat(?:ing)?|meal|restaurant|cook(?:ing)?|dinner|lunch|breakfast)\b",
         "TRAVEL": r"\b(?:travel|trip|flight|vacation|visit(?:ing)?|hotel|airport)\b",
         "WEEKEND_PLANS": r"\b(?:weekends?|tonight|tomorrow|friday|saturday|sunday|plan(?:s|ning)?)\b",
@@ -208,6 +220,26 @@ class GPTService:
                              if re.search(pattern, latest, re.I)]
             topics = latest_topics + [topic for topic in topics if topic not in latest_topics]
         topics = list(dict.fromkeys(topics))
+        normalized = text.lower().replace("â€™", "'")
+        if ("WORK_BUSYNESS" in topics
+                and re.search(r"\bafter work\b", normalized)
+                and not re.search(
+                    r"\b(?:busy|slammed|swamped|attention|brutal|rough|"
+                    r"drain\w*|wore me out|exhaust\w*|tired)\b",
+                    normalized, re.I,
+                )):
+            topics.remove("WORK_BUSYNESS")
+        if ("WELLBEING_FATIGUE" in topics
+                and not re.search(
+                    r"\b(?:exhausted|tired|drained|draining|worn out|wore me out|"
+                    r"wiped out|fatigue|brutal|rough|need(?:ing)? (?:some )?"
+                    r"(?:rest|sleep)|low energy)\b",
+                    normalized, re.I,
+                )):
+            topics.remove("WELLBEING_FATIGUE")
+        if "WELLBEING_FATIGUE" in topics:
+            topics.remove("WELLBEING_FATIGUE")
+            topics.insert(0, "WELLBEING_FATIGUE")
         if "WEEKEND_PLANS" in topics and any(
                 topic not in {"DIRECT_QUESTION", "WEEKEND_PLANS"} for topic in topics):
             topics.remove("WEEKEND_PLANS")
@@ -254,7 +286,10 @@ class GPTService:
             "MUSIC": "that sounds like a good soundtrack for a lazy weekend",
             "PET": "sounds like your little sidekick keeps life interesting",
             "OUTDOORS": "getting outside for a quiet weekend sounds pretty perfect",
-            "WORK": "sounds like work has been keeping you busy",
+            "WORK_BUSYNESS": "sounds like you've had a lot keeping you busy",
+            "POSITIVE_ENGAGEMENT": "good, I was hoping I had your attention",
+            "WELLBEING_FATIGUE": "sounds like you could use a little time to breathe",
+            "PERSONAL_LIFE": "sounds like you've had a lot to deal with lately",
             "FOOD": "good food is honestly hard to argue with",
             "TRAVEL": "a change of scenery sounds pretty nice",
             "WEEKEND_PLANS": "taking it easy this weekend sounds like a good call",
@@ -273,9 +308,11 @@ class GPTService:
             obligations.append("ACKNOWLEDGE_COMPLIMENT")
         if cls._has_direct_question(value):
             obligations.append("ANSWER_DIRECT_QUESTION")
-            if re.search(r"\b(?:how(?:'s|’s| is| has) your|how are you|what are you doing|what(?:'s|’s| is) your)\b", value, re.I):
+            if re.search(r"\b(?:how(?:'s|’s| is| has) your|how are you|what are you doing|what(?:'s|’s| is) your|are you (?:busy|free|available))\b", value, re.I):
                 obligations[-1] = "ANSWER_DIRECT_PERSONAL_QUESTION"
             if re.search(r"\byou into\b", value, re.I):
+                obligations[-1] = "ANSWER_DIRECT_PERSONAL_QUESTION"
+            if cls._direct_personal_question_slot(value):
                 obligations[-1] = "ANSWER_DIRECT_PERSONAL_QUESTION"
         affect = cls._customer_affect(value)
         if affect["emotionalDisclosureDetected"]:
@@ -297,9 +334,103 @@ class GPTService:
         disclosure = ConversationalMemoryService.classify_customer_self_disclosure(value)
         if disclosure["detected"] and disclosure["significance"] != "LOW":
             obligations.append("ACKNOWLEDGE_CUSTOMER_SELF_DISCLOSURE")
-        if re.search(r"\b(?:buy|purchase|price|how much|what (?:content|pics|videos) do you have|show me .* buy)\b", value, re.I):
+        commercial_boundary = cls._commercial_boundary(value)
+        if (not commercial_boundary["detected"] and re.search(
+                r"\b(?:buy|purchase|price|how much|what (?:content|pics|videos) do you have|show me .* buy)\b",
+                value, re.I)):
             obligations.append("HONOR_COMMERCIAL_REQUEST")
+        if commercial_boundary["detected"]:
+            obligations.append("ACKNOWLEDGE_COMMERCIAL_BOUNDARY")
         return list(dict.fromkeys(obligations))
+
+    @staticmethod
+    def _commercial_boundary(user_message: str) -> dict:
+        """Classify customer-led commercial boundaries without suppressing chat."""
+        value = str(user_message or "").replace("â€™", "'").strip()
+        boundary_type = None
+        if re.search(
+            r"\b(?:don['’]?t|do not|no)\s+(?:send|share|drop)\b.{0,24}\blink\b|"
+            r"\bno,?\s+don['’]?t\s+send\s+another\s+link\b",
+            value, re.I,
+        ):
+            boundary_type = "NO_LINK_BOUNDARY"
+        elif re.search(
+            r"\b(?:i(?:'ll| will)\s+(?:reach out|let you know)|"
+            r"i(?:'ll| will)\s+come back)\b.{0,40}\b(?:interested|ready|want)",
+            value, re.I,
+        ):
+            boundary_type = "DEFERRED_SELF_REACTIVATION"
+        elif re.search(
+            r"\b(?:just\s+(?:wanted|want)\s+to\s+(?:check in|talk|chat)|"
+            r"only\s+(?:wanted|want)\s+to\s+(?:check in|talk|chat))\b",
+            value, re.I,
+        ):
+            boundary_type = "RELATIONSHIP_ONLY_BOUNDARY"
+        elif re.search(
+            r"\b(?:not\s+(?:really\s+)?(?:looking|trying)\s+to\s+buy|"
+            r"not\s+buying|don['’]?t\s+want\s+to\s+buy|"
+            r"leave\s+the\s+sales\s+stuff\s+for\s+later|not\s+tonight)\b",
+            value, re.I,
+        ):
+            boundary_type = "CURRENT_NO_BUY_BOUNDARY"
+        return {"detected": boundary_type is not None, "type": boundary_type}
+
+    @classmethod
+    def _commercial_boundary_grounding(
+        cls, user_message: str, response: str,
+        commerce_decision: dict | None = None,
+    ) -> dict:
+        boundary = cls._commercial_boundary(user_message)
+        candidate = str(response or "").replace("â€™", "'").strip()
+        state = dict(commerce_decision or {})
+        active_referent = bool(
+            state.get("activePurchaseIntentId")
+            or state.get("active_purchase_intent_id")
+            or state.get("activeOfferingId")
+            or state.get("active_offering_id")
+            or state.get("structuredOfferDelivered")
+            or state.get("structured_offer_delivered")
+        )
+        unsupported = bool(
+            boundary["detected"] and not active_referent and re.search(
+                r"\b(?:the|your|this)\s+(?:link|unlock|offer|checkout)\b",
+                candidate, re.I,
+            )
+        )
+        patterns = {
+            "CURRENT_NO_BUY_BOUNDARY": (
+                r"\b(?:no pressure|all good|totally fair|that(?:'s| is) (?:fine|okay)|"
+                r"I (?:understand|hear you)|got it|we can just (?:talk|chat))\b"
+            ),
+            "NO_LINK_BOUNDARY": (
+                r"\b(?:won['’]?t|will not)\s+(?:send|share)\b|"
+                r"\bno more links?\b|\b(?:got it|understood|fair enough)\b"
+            ),
+            "RELATIONSHIP_ONLY_BOUNDARY": (
+                r"\b(?:nice|good|glad)\s+to\s+(?:hear from|talk to|chat with)\b|"
+                r"\b(?:check in|just (?:talk|chat))\b"
+            ),
+            "DEFERRED_SELF_REACTIVATION": (
+                r"\b(?:sounds good|fair enough|no pressure|when(?:ever)? you(?:'re| are)|"
+                r"I(?:'ll| will) be (?:here|around))\b"
+            ),
+        }
+        satisfied = bool(
+            not boundary["detected"]
+            or (
+                candidate and not unsupported
+                and re.search(patterns[boundary["type"]], candidate, re.I)
+            )
+        )
+        return {
+            "commercialBoundaryDetected": boundary["detected"],
+            "commercialBoundaryType": boundary["type"],
+            "commercialProgressionSuppressed": boundary["detected"],
+            "boundaryAcknowledgementRequired": boundary["detected"],
+            "boundaryAcknowledgementSatisfied": satisfied,
+            "unsupportedCommercialReferentDetected": unsupported,
+            "activeCommercialReferent": active_referent,
+        }
 
     @staticmethod
     def _social_flirtation(user_message: str) -> dict:
@@ -312,6 +443,11 @@ class GPTService:
             evidence.append("ENJOYS_INTERACTION")
         if re.search(r"\b(?:you(?:'re|’re| are) (?:cute|pretty|beautiful|trouble)|you(?:'re|’re| are) making it hard to behave|smooth)\b", value, re.I):
             evidence.append("DIRECT_PLAYFUL_ATTRACTION")
+        if re.search(
+            r"\byou(?: always)? (?:know how to )?distract me\b",
+            value, re.I,
+        ):
+            evidence.append("PLAYFUL_DISTRACTION_FLIRT")
         sexual = bool(re.search(
             r"\b(?:horny|naked|nudes?|sex|sexy|sexual|fuck|cum|pussy|dick|tits?|ass|"
             r"naughty|dirty|turned on)\b",
@@ -424,6 +560,133 @@ class GPTService:
         ))
 
     @staticmethod
+    def _customer_feedback_semantics(message: str) -> dict:
+        """Classify explicit retrospective content feedback by bounded strength."""
+        value = str(message or "").replace("â€™", "'").lower()
+        retrospective = bool(re.search(
+            r"\b(?:last|first|second|third|that|the)\s+(?:set|one|item|"
+            r"photo|image|video|content|part|step)\b|"
+            r"\b(?:set|one|item|part|step)\s+i\s+bought\b",
+            value,
+        ))
+        patterns = (
+            ("NEGATIVE", r"\b(?:hated|hate|didn['’]?t like|did not like|awful|terrible)\b"),
+            ("MILD_NEGATIVE", r"\b(?:wasn['’]?t great|was not great|meh|disappointing)\b"),
+            ("STRONG_POSITIVE", r"\b(?:loved|love|amazing|incredible|fantastic|perfect)\b"),
+            ("POSITIVE", r"\b(?:really good|very good|great|liked|like it|good|worth it)\b"),
+            ("MILD_POSITIVE", r"\b(?:not bad|fine|alright|all right)\b"),
+            ("NEUTRAL", r"\b(?:okay|ok|so[- ]so)\b"),
+        )
+        sentiment = next(
+            (label for label, pattern in patterns if re.search(pattern, value)),
+            None,
+        )
+        return {
+            "customerFeedbackDetected": bool(retrospective and sentiment),
+            "customerFeedbackSentiment": (
+                "POSITIVE" if sentiment in {
+                    "STRONG_POSITIVE", "POSITIVE", "MILD_POSITIVE"
+                } else "NEGATIVE" if sentiment in {
+                    "MILD_NEGATIVE", "NEGATIVE"
+                } else "NEUTRAL" if sentiment else None
+            ),
+            "customerFeedbackStrength": sentiment,
+        }
+
+    @staticmethod
+    def _feedback_response_semantics(response: str) -> dict:
+        """Measure acknowledgement strength without requiring lexical mirroring."""
+        value = str(response or "").replace("â€™", "'").lower()
+        if re.search(r"\b(?:loved|love|amazing|incredible|fantastic|a hit|hit the spot)\b", value):
+            strength = "STRONG_POSITIVE"
+        elif re.search(
+            r"\b(?:really liked|liked it|glad you liked|great|really good|"
+            r"landed (?:well|better))\b", value,
+        ):
+            strength = "POSITIVE"
+        elif re.search(r"\b(?:not bad|fine|alright|all right|landed|worked for you)\b", value):
+            strength = "MILD_POSITIVE"
+        elif re.search(r"\b(?:okay|ok|gotcha|i hear you|fair enough)\b", value):
+            strength = "NEUTRAL"
+        elif re.search(r"\b(?:wasn['’]?t great|meh|disappointing|didn['’]?t quite land)\b", value):
+            strength = "MILD_NEGATIVE"
+        elif re.search(r"\b(?:sorry|didn['’]?t land|missed the mark|you didn['’]?t like)\b", value):
+            strength = "NEGATIVE"
+        else:
+            strength = None
+        return {"responseFeedbackStrength": strength}
+
+    @staticmethod
+    def _feedback_sentiment_preserved(customer_strength: str | None,
+                                      response_strength: str | None) -> bool:
+        if not customer_strength:
+            return True
+        if response_strength is None:
+            return False
+        rank = {
+            "NEGATIVE": -2, "MILD_NEGATIVE": -1, "NEUTRAL": 0,
+            "MILD_POSITIVE": 1, "POSITIVE": 2, "STRONG_POSITIVE": 3,
+        }
+        return rank[customer_strength] == rank[response_strength]
+
+    @staticmethod
+    def _response_tease_semantics(response: str) -> dict:
+        value = str(response or "").replace("â€™", "'")
+        future_content = bool(re.search(
+            r"\b(?:next (?:one|set|drop|shoot|video|photo)|what i(?:'ve| have) got next|"
+            r"what i have next|something (?:hotter|better) (?:next|for you)|"
+            r"wait until you see|haven['’]?t seen (?:my|the) best|"
+            r"keep you guessing for the next)\b",
+            value, re.I,
+        ))
+        social = bool(re.search(
+            r"\b(?:you['’]?re trouble|careful|smooth|flirt(?:ing|y)?|"
+            r"make me blush|hard to behave)\b",
+            value, re.I,
+        )) and not future_content
+        other = bool(re.search(r"\b(?:teas(?:e|ing)|keep you guessing)\b", value, re.I))
+        tease_type = (
+            "COMMERCIAL_CONTENT_TEASE" if future_content
+            else "SOCIAL_FLIRT" if social
+            else "OTHER" if other
+            else None
+        )
+        return {
+            "responseTeaseDetected": tease_type is not None,
+            "responseTeaseType": tease_type,
+            "futureContentReferenceDetected": future_content,
+        }
+
+    @classmethod
+    def _remove_unauthorized_future_content_tease(cls, response: str) -> str:
+        """Deletion-first repair: retain only independently compliant beats."""
+        segments = re.split(r"(?<=[.!?])\s+|\s*(?:\.\.\.|[;])\s*", str(response or ""))
+        kept = [
+            segment.strip() for segment in segments
+            if segment.strip()
+            and not cls._response_tease_semantics(segment)[
+                "futureContentReferenceDetected"
+            ]
+        ]
+        return " ".join(kept).strip()
+
+    @staticmethod
+    def _feedback_acknowledgement_fallback(customer_strength: str) -> str:
+        return {
+            "STRONG_POSITIVE": "love that it was such a hit",
+            "POSITIVE": "glad you liked that one",
+            "MILD_POSITIVE": "gotcha, sounds like it was alright",
+            "NEUTRAL": "gotcha, sounds like it was okay",
+            "MILD_NEGATIVE": "gotcha, sounds like that one didn't quite land",
+            "NEGATIVE": "I hear you, that one missed the mark",
+        }[customer_strength]
+
+    @staticmethod
+    def _recent_subset_feedback_fallback() -> str:
+        """Bounded historical response with no invented count or descriptor."""
+        return "glad those have felt worth it"
+
+    @staticmethod
     def _violates_final_response_contract(style: dict | None) -> bool:
         values = dict(style or {})
         return bool(
@@ -452,7 +715,7 @@ class GPTService:
             value, re.I,
         ))
         positive = bool(re.search(
-            r"\b(?:great day|good day|feeling good|happy|excited|amazing|"
+            r"\b(?:great day|good day|feeling good|glad|happy|excited|amazing|"
             r"had (?:a )?(?:great|good|amazing) day)\b",
             value, re.I,
         ))
@@ -590,18 +853,254 @@ class GPTService:
                                                   temporal: dict) -> str:
         """Short deterministic last resort; decisions remain outside language."""
         approach = cls._new_prospect_approach(user_message)
-        personal_question = bool(re.search(
+        personal_slot = cls._direct_personal_question_slot(user_message)
+        personal_question = bool(personal_slot or re.search(
             r"\b(?:how(?:'s| is| has) your|how are you|what are you doing|"
             r"what(?:'s| is) up)\b",
             str(user_message or "").replace("â€™", "'").replace("’", "'"), re.I,
         ))
+        slot_answer = cls._direct_personal_question_fallback(personal_slot)
         if approach["warmthExpected"] and personal_question:
-            return "aww hey, I'm doing pretty good so far 😊"
+            return f"aww hey, I'm {slot_answer} 😊"
         if approach["warmthExpected"]:
             return "hey, really nice to hear from you 😊"
         if personal_question:
-            return "doing pretty good so far"
+            return slot_answer
         return "hey"
+
+    @staticmethod
+    def _direct_personal_question_slot(user_message: str) -> str | None:
+        """Return the requested semantic dimension inside DAY_OR_ACTIVITY."""
+        recent_value = str(user_message or "").replace("\u2019", "'")
+        if re.search(
+            r"\bwhat\s+have\s+you\s+been\s+(?:doing|up\s+to)\b|"
+            r"\bwhat(?:'s| is)\s+been\s+going\s+on\s+with\s+you\b",
+            recent_value, re.I,
+        ):
+            return "RECENT_ACTIVITY"
+        value = str(user_message or "").replace("â€™", "'").replace("’", "'")
+        if re.search(
+            r"\b(?:are you|you(?:'re| are))\s+(?:busy|free|available)\b|"
+            r"\b(?:free|available)\s+(?:later|tonight|tomorrow)\b", value, re.I,
+        ):
+            return "SCHEDULE_AVAILABILITY"
+        if re.search(
+            r"\b(?:later|tonight|tomorrow|after(?:ward|wards)?|this evening)\b|"
+            r"\bwhat(?:'s| is)\s+(?:your\s+)?plans?\b", value, re.I,
+        ):
+            return "FUTURE_ACTIVITY"
+        if re.search(
+            r"\b(?:right now|currently|at the moment)\b|"
+            r"\bwhat are you doing\s*(?:now)?\s*\?", value, re.I,
+        ):
+            return "CURRENT_ACTIVITY"
+        if re.search(
+            r"\b(?:how are you|how(?:'s| is) your (?:day|night|morning|evening)|"
+            r"how(?:'s| is) it going)\b", value, re.I,
+        ):
+            return "CURRENT_WELLBEING"
+        return None
+
+    @staticmethod
+    def _direct_personal_question_fallback(slot: str | None) -> str:
+        return {
+            "RECENT_ACTIVITY": "I've been keeping things pretty low-key lately",
+            "FUTURE_ACTIVITY": "probably keeping it pretty low-key later",
+            "SCHEDULE_AVAILABILITY": "I should be pretty free later",
+            "CURRENT_ACTIVITY": "just taking it easy right now",
+            "CURRENT_WELLBEING": "doing pretty good so far",
+        }.get(slot, "doing pretty good so far")
+
+    @staticmethod
+    def _session_position_question(user_message: str) -> bool:
+        """Recognize descriptive continuity questions for an active Session."""
+        value = str(user_message or "").replace("\u2019", "'")
+        return bool(re.search(
+            r"\b(?:where\s+(?:were\s+we|did\s+we\s+leave\s+off)|"
+            r"what\s+(?:part\s+were\s+we\s+on|is\s+left)|what's\s+left)\b",
+            value, re.I,
+        ))
+
+    @staticmethod
+    def _next_session_step_question(user_message: str) -> bool:
+        value = str(user_message or "").replace("\u2019", "'")
+        return bool(re.search(
+            r"\b(?:what(?:'s|\s+is)\s+(?:the\s+)?next\s+(?:step|part)|"
+            r"what\s+(?:do\s+we\s+do\s+next|comes\s+next)|what's\s+next)\b",
+            value, re.I,
+        ))
+
+    @staticmethod
+    def _next_session_step_grounding(user_message: str, response: str,
+                                     commerce_decision: dict | None = None) -> dict:
+        context = dict(dict(commerce_decision or {}).get("active_session_context") or {})
+        detected = GPTService._next_session_step_question(user_message)
+        next_position = context.get("nextEligiblePosition")
+        authoritative = bool(
+            detected and context.get("available") is True
+            and context.get("completeness") == "POSITIONAL_CONTEXT_COMPLETE"
+            and next_position
+            and str(context.get("state") or "").upper() not in {
+                "COMPLETED", "CLOSED", "ABANDONED", "DECLINED",
+            }
+        )
+        candidate = str(response or "").replace("\u2019", "'").strip()
+        ordinal_words = {1: "first", 2: "second", 3: "third", 4: "fourth",
+                         5: "fifth", 6: "sixth", 7: "seventh", 8: "eighth"}
+        next_word = ordinal_words.get(int(next_position or 0))
+        next_grounded = bool(next_word and re.search(
+            rf"\b(?:next|{next_word})\s+(?:part|one|step)\b", candidate, re.I,
+        ))
+        mentioned = {item.lower() for item in re.findall(
+            r"\b(first|second|third|fourth|fifth|sixth|seventh|eighth)\s+"
+            r"(?:part|one|step)\b", candidate, re.I,
+        )}
+        wrong_position = bool(authoritative and mentioned and next_word not in mentioned)
+        price_or_offer = bool(re.search(
+            r"(?:\$\s*\d|\b\d+\s*(?:dollars?|bucks?)\b|\b(?:price|costs?|pay|"
+            r"purchase|buy|unlock|send\s+(?:it|that)|link)\b)", candidate, re.I,
+        ))
+        unrelated = bool(re.search(
+            r"\b(?:another set|standalone|something else|different content|"
+            r"new bundle|inventory)\b", candidate, re.I,
+        ))
+        satisfied = bool(authoritative and next_grounded and not wrong_position
+                         and not price_or_offer and not unrelated)
+        return {
+            "required": authoritative, "detected": detected,
+            "satisfied": satisfied if authoritative else True,
+            "semanticSlot": "NEXT_SESSION_STEP" if authoritative else None,
+            "authorityAvailable": authoritative,
+            "nextEligiblePosition": next_position if authoritative else None,
+            "nextPositionGrounded": next_grounded if authoritative else None,
+            "wrongPositionDetected": wrong_position if authoritative else False,
+            "priceOrOfferDetected": price_or_offer if authoritative else False,
+            "unrelatedInventoryDetected": unrelated if authoritative else False,
+        }
+
+    @staticmethod
+    def _next_session_step_fallback(commerce_decision: dict | None) -> str:
+        context = dict(dict(commerce_decision or {}).get("active_session_context") or {})
+        words = {1: "first", 2: "second", 3: "third", 4: "fourth",
+                 5: "fifth", 6: "sixth", 7: "seventh", 8: "eighth"}
+        word = words.get(int(context.get("nextEligiblePosition") or 0))
+        return f"the {word} part is next" if word else ""
+
+    @staticmethod
+    def _session_position_grounding(user_message: str, response: str,
+                                    commerce_decision: dict | None = None) -> dict:
+        """Validate an answer against complete canonical active-Session position."""
+        context = dict(
+            dict(commerce_decision or {}).get("active_session_context") or {}
+        )
+        detected = GPTService._session_position_question(user_message)
+        authoritative = bool(
+            detected and context.get("available") is True
+            and context.get("completeness") == "POSITIONAL_CONTEXT_COMPLETE"
+            and str(context.get("state") or "").upper() not in {
+                "COMPLETED", "CLOSED", "ABANDONED", "DECLINED",
+            }
+        )
+        consumed = context.get("currentConsumedPosition")
+        next_position = context.get("nextEligiblePosition")
+        candidate = str(response or "").replace("\u2019", "'").strip()
+        ordinal_words = {1: "first", 2: "second", 3: "third", 4: "fourth",
+                         5: "fifth", 6: "sixth", 7: "seventh", 8: "eighth"}
+        consumed_word = ordinal_words.get(int(consumed or 0))
+        next_word = ordinal_words.get(int(next_position or 0))
+        completed = bool(consumed_word and re.search(
+            rf"\b(?:{consumed_word}|that)\s+(?:part|one|step)\b.{{0,28}}"
+            r"\b(?:done|finished|completed|got|have|already)\b|"
+            rf"\b(?:done|finished|completed|got|have|already)\b.{{0,28}}"
+            rf"\b(?:{consumed_word}|that)\s+(?:part|one|step)\b", candidate, re.I,
+        ))
+        next_grounded = bool(next_word and re.search(
+            rf"\b(?:next|{next_word})\s+(?:part|one|step)\b|"
+            rf"\b(?:pick(?:ing)?|start(?:ing)?|continue|continuing)\s+"
+            rf"(?:back\s+up\s+)?(?:with|at)\s+(?:the\s+)?(?:next|{next_word})\b",
+            candidate, re.I,
+        ))
+        mentioned_positions = set(re.findall(
+            r"\b(first|second|third|fourth|fifth|sixth|seventh|eighth)\s+"
+            r"(?:part|one|step)\b", candidate, re.I,
+        ))
+        wrong_position = bool(
+            authoritative and mentioned_positions
+            and next_word not in {item.lower() for item in mentioned_positions}
+        )
+        unsupported = bool(re.search(
+            r"\b(?:another set|standalone|something else|different content|"
+            r"new bundle|unrelated)\b", candidate, re.I,
+        ))
+        satisfied = bool(authoritative and completed and next_grounded
+                         and not wrong_position and not unsupported)
+        return {
+            "required": authoritative, "detected": detected,
+            "satisfied": satisfied if authoritative else True,
+            "semanticSlot": "SESSION_POSITION" if authoritative else None,
+            "authorityAvailable": authoritative,
+            "currentConsumedPosition": consumed if authoritative else None,
+            "nextEligiblePosition": next_position if authoritative else None,
+            "completedPositionGrounded": completed if authoritative else None,
+            "nextPositionGrounded": next_grounded if authoritative else None,
+            "wrongPositionDetected": wrong_position if authoritative else False,
+            "unrelatedInventoryDetected": unsupported if authoritative else False,
+        }
+
+    @staticmethod
+    def _session_position_fallback(commerce_decision: dict | None) -> str:
+        context = dict(
+            dict(commerce_decision or {}).get("active_session_context") or {}
+        )
+        ordinal_words = {1: "first", 2: "second", 3: "third", 4: "fourth",
+                         5: "fifth", 6: "sixth", 7: "seventh", 8: "eighth"}
+        consumed_word = ordinal_words.get(
+            int(context.get("currentConsumedPosition") or 0)
+        )
+        next_word = ordinal_words.get(int(context.get("nextEligiblePosition") or 0))
+        if not consumed_word or not next_word:
+            return ""
+        return (f"you already finished the {consumed_word} part, so the "
+                f"{next_word} part is where we'd pick back up")
+
+    @staticmethod
+    def _direct_personal_answer_satisfies(slot: str | None, response: str) -> bool:
+        if not slot:
+            return True
+        value = str(response or "").replace("â€™", "'").replace("’", "'")
+        patterns = {
+            "RECENT_ACTIVITY": (
+                r"\b(?:lately|recently|these days)\b|"
+                r"\b(?:i(?:'ve| have)\s+been|been)\s+(?:keeping|taking|"
+                r"working|making|doing|staying|lying|hanging|relaxing|chilling)\b"
+            ),
+            "FUTURE_ACTIVITY": (
+                r"\b(?:later|tonight|tomorrow|this evening|after(?:ward|wards)?)\b|"
+                r"\b(?:probably|might|will|gonna|planning to|plan to)\s+"
+                r"(?:stay|keep|take|relax|chill|work|head|go|be)\b|"
+                r"\bnot much planned\b"
+            ),
+            "SCHEDULE_AVAILABILITY": (
+                r"\b(?:free|available|busy|not busy|should be free|won't be free|"
+                r"will be free|have plans|don't have plans)\b"
+            ),
+            "CURRENT_ACTIVITY": (
+                r"\b(?:right now|currently|at the moment)\b|"
+                r"\bjust\s+(?:chilling|relaxing|working|cooking|getting ready|"
+                r"taking it easy|hanging out)\b"
+            ),
+            "CURRENT_WELLBEING": (
+                r"\b(?:doing|feeling)\s+(?:pretty\s+)?(?:good|great|fine|okay|well)\b|"
+                r"\b(?:I'm|I am)\s+(?:good|great|fine|okay|not bad)\b|\bnot bad\b|"
+                r"\bmy\s+(?:day|night|morning|evening)(?:'s| is| has)?\s+"
+                r"(?:been\s+)?(?:pretty\s+)?(?:good|great|fine|okay|well|chill|slow)\b|"
+                r"\bit(?:'s| is)\s+(?:going|been)\s+(?:pretty\s+)?"
+                r"(?:good|great|fine|okay|well)\b|"
+                r"\bpretty\s+(?:good|great|fine|okay|well|chill|slow)\s+"
+                r"(?:so far|over here)\b"
+            ),
+        }
+        return bool(re.search(patterns[slot], value, re.I))
 
     @staticmethod
     def _substantive_self_disclosure(text: str) -> bool:
@@ -660,6 +1159,13 @@ class GPTService:
         }
         question_domain = next((name for name, pattern in question_domains.items()
                                 if re.search(pattern, str(user_message or ""), re.I)), None)
+        personal_question_slot = cls._direct_personal_question_slot(user_message)
+        session_position = dict(pressure.get("sessionPositionQuestion") or {})
+        next_session_step = dict(pressure.get("nextSessionStepQuestion") or {})
+        if session_position.get("required") is True:
+            personal_question_slot = "SESSION_POSITION"
+        elif next_session_step.get("required") is True:
+            personal_question_slot = "NEXT_SESSION_STEP"
         answer_domain_patterns = {
             "OUTDOORS": r"\b(?:outdoors?|outside|hiking|camping|trail|nature|woods|mountains?)\b",
             "MUSIC": r"\b(?:music|band|song|artist|concert|listen)\b",
@@ -687,6 +1193,11 @@ class GPTService:
         )
         direct_answer = bool(customer_asked and (
             self_disclosure
+            or re.match(
+                r"^(?:no\b|not\b|nothing\b|there (?:isn['’]?t|is not)\b|"
+                r"i (?:don['’]?t|do not|can['’]?t|cannot)\b)",
+                answer_text, re.I,
+            )
             or (
                 question_domain
                 and re.search(
@@ -703,11 +1214,40 @@ class GPTService:
                 answer_text, re.I,
             )
         ))
+        semantic_answer = cls._foreground_semantic_relevance(
+            user_message, text,
+        )
+        if session_position.get("required") is True:
+            direct_answer = bool(
+                customer_asked and cls._session_position_grounding(
+                    user_message, text,
+                    {"active_session_context": session_position.get("context")},
+                )["satisfied"]
+            )
+        elif next_session_step.get("required") is True:
+            direct_answer = bool(
+                customer_asked and cls._next_session_step_grounding(
+                    user_message, text,
+                    {"active_session_context": next_session_step.get("context")},
+                )["satisfied"]
+            )
+        direct_answer = bool(
+            customer_asked and semantic_answer["satisfied"]
+            if semantic_answer["required"] else direct_answer
+        )
         domain_relevant_answer = bool(
             not question_domain
             or re.search(answer_domain_patterns[question_domain], answer_text, re.I)
         )
         direct_answer = bool(direct_answer and domain_relevant_answer)
+        if personal_question_slot and personal_question_slot not in {
+            "SESSION_POSITION", "NEXT_SESSION_STEP",
+        }:
+            slot_satisfied = cls._direct_personal_answer_satisfies(
+                personal_question_slot, answer_text,
+            )
+            direct_answer = bool(customer_asked and slot_satisfied)
+            domain_relevant_answer = bool(domain_relevant_answer or slot_satisfied)
         emotional_context = bool(re.search(
             r"\b(?:afraid|anxious|devastated|hurt|nervous|overwhelmed|sad|scared|"
             r"surgery|terrified|upset|worried)\b", str(user_message or ""), re.I,
@@ -721,6 +1261,12 @@ class GPTService:
                 r"couch|rest|relax|chill|do absolutely nothing|glad (?:it(?:'s| is)|that(?:'s| is)) over)\b",
                 text, re.I,
             ))
+            if affect["positive"]:
+                acknowledges = acknowledges or bool(re.search(
+                    r"\b(?:glad|happy|worth it|little win|good to hear|"
+                    r"first (?:purchase|unlock))\b",
+                    text, re.I,
+                ))
             contradicts = bool(re.search(
                 r"\b(?:love|like) your energy\b|\byou sound (?:so )?(?:excited|amazing|happy|energetic)\b|\b(?:amazing|great|awesome) day\b",
                 text, re.I,
@@ -782,6 +1328,99 @@ class GPTService:
                 and not re.search(r"\b(?:music|foo fighters)\b", text, re.I)):
             acknowledged_topics += 1
         over_acknowledgement = bool(ordinary and low_stakes and acknowledged_topics >= 2)
+        buyer_reaction_context = dict(
+            pressure.get("buyerReactionContext") or {}
+        )
+        positive_acknowledgement_beats = sum(bool(re.search(
+            r"\b(?:glad|happy|love|loved|like|liked|enjoyed|hit the spot|"
+            r"landed|clicked|worked)\b",
+            sentence, re.I,
+        )) for sentence in sentences)
+        redundant_purchase_affirmation = bool(
+            ordinary
+            and buyer_reaction_context.get("completedReaction") is True
+            and buyer_reaction_context.get("verifiedBuyer") is True
+            and positive_acknowledgement_beats >= 2
+        )
+        # Sentence-level economy: a generalized, impersonal evaluation after a
+        # complete reaction is padding unless it adds concrete context or a
+        # distinct personal contribution. This models semantic shape rather
+        # than banning any complete phrase.
+        redundant_semantic_segments = []
+        semantic_redundancy_reason = None
+        if ordinary and len(sentences) > 1:
+            for later_sentence in sentences[1:]:
+                impersonal = not re.search(
+                    r"\b(?:i|i'm|i've|i'd|my|me|we|our)\b",
+                    later_sentence.replace("â€™", "'").replace("’", "'"), re.I,
+                )
+                generalized = bool(re.search(
+                    r"\b(?:always|never|sometimes|everything|nothing|something|"
+                    r"can\s+(?:really\s+)?|such\s+(?:an?\s+)?(?:good|great|nice)|"
+                    r"(?:good|great|nice|hard|long)\s+(?:things?|days?|times?))\b",
+                    later_sentence, re.I,
+                ))
+                evaluative = bool(re.search(
+                    r"\b(?:good|great|nice|better|best|hard|exhausting|enjoy|"
+                    r"relax|worth|live\w*\s+up|take\w*\s+it\s+out|"
+                    r"way\s+to)\b",
+                    later_sentence, re.I,
+                ))
+                concrete_detail = bool(re.search(
+                    r"\b(?:today|tonight|tomorrow|morning|afternoon|evening|"
+                    r"sunrise|sunset|outdoor|indoors?|trail|couch|coffee|"
+                    r"\d+(?::\d+)?)\b",
+                    later_sentence, re.I,
+                ))
+                if impersonal and generalized and evaluative and not concrete_detail:
+                    redundant_semantic_segments.append(later_sentence)
+                    semantic_redundancy_reason = (
+                        "IMPERSONAL_GENERIC_RESTATEMENT_AFTER_COMPLETE_RESPONSE"
+                    )
+        # Compare adjacent evaluative propositions, not just their words. The
+        # facets are deliberately broad concepts (quality, distinctiveness,
+        # fatigue, mischief), allowing differently worded duplicates to be
+        # detected without banning any particular sentence.
+        evaluation_facets = (
+            (
+                "DISTINCTIVENESS",
+                r"\b(?:vibe|distinct\w*|unique|special|different|stand\w*\s+out|"
+                r"hit\w*\s+different)\b",
+            ),
+            (
+                "QUALITY",
+                r"\b(?:good|great|amazing|awesome|excellent|liked?|loved?|"
+                r"enjoyed?|worked?\s+out|hit(?:s|ting)?(?:\s+the\s+spot)?)\b",
+            ),
+            (
+                "FATIGUE",
+                r"\b(?:exhaust\w*|tired|drain\w*|wore\s+(?:me|you)\s+out|"
+                r"take\w*\s+it\s+out\s+of\s+(?:me|you))\b",
+            ),
+            (
+                "MISCHIEF",
+                r"\b(?:trouble|mischiev\w*|naughty|cheeky|dangerous\s+side)\b",
+            ),
+        )
+        sentence_facets = [
+            {name for name, pattern in evaluation_facets
+             if re.search(pattern, sentence, re.I)}
+            for sentence in sentences
+        ]
+        for index in range(1, len(sentences)):
+            later_sentence = sentences[index]
+            same_evaluation = sentence_facets[index - 1] & sentence_facets[index]
+            personal_contribution = bool(re.search(
+                r"\b(?:i|i'm|i've|i'd|my|me|we|our)\b",
+                later_sentence.replace("â€™", "'").replace("’", "'"), re.I,
+            ))
+            if (same_evaluation and not personal_contribution
+                    and later_sentence not in redundant_semantic_segments):
+                redundant_semantic_segments.append(later_sentence)
+                semantic_redundancy_reason = (
+                    "SEMANTICALLY_EQUIVALENT_ADJACENT_EVALUATION"
+                )
+        semantic_redundancy_detected = bool(redundant_semantic_segments)
         normalize = lambda value: " ".join(re.findall(r"[a-z0-9']+", str(value).lower()))
         current_tokens = set(normalize(text).split())
         repetition_score = 0.0
@@ -829,6 +1468,19 @@ class GPTService:
             and not memory_callback
             and not authorized_discovery_question
         )
+        unnecessary_buyer_reaction_question = bool(
+            ordinary
+            and question
+            and buyer_reaction_context.get("completedReaction") is True
+            and buyer_reaction_context.get("verifiedBuyer") is True
+            and not customer_asked
+            and re.search(
+                r"\b(?:what (?:part|bit|thing)|which (?:part|bit|one)|"
+                r"what stood out|anything (?:in particular )?(?:stand out|you liked)|"
+                r"tell me (?:what|which)|right)\b",
+                text, re.I,
+            )
+        )
         customer_question_unanswered = bool(
             ordinary and customer_asked and not direct_answer
         )
@@ -836,9 +1488,20 @@ class GPTService:
             user_message, new_relationship=new_relationship,
         )
         satisfied = []
+        perceptible_welcome = cls._warmth_satisfies(
+            receptiveness["level"], "FRIENDLY",
+        )
+        combined_semantic_welcome = bool(
+            semantic_answer["required"]
+            and "ANSWER_DIRECT_QUESTION" in obligations
+        )
         if ("WELCOME_NEW_RELATIONSHIP" in obligations and text
                 and not generic_acknowledgement
-                and (not warmth_expected or warmth_satisfied)):
+                and (
+                    perceptible_welcome
+                    if combined_semantic_welcome
+                    else (not warmth_expected or warmth_satisfied)
+                )):
             satisfied.append("WELCOME_NEW_RELATIONSHIP")
         if "RESPOND_TO_GREETING" in obligations and text and not generic_acknowledgement:
             satisfied.append("RESPOND_TO_GREETING")
@@ -846,7 +1509,7 @@ class GPTService:
             if obligation in obligations and direct_answer:
                 satisfied.append(obligation)
         if "ACKNOWLEDGE_EMOTIONAL_DISCLOSURE" in obligations and re.search(
-            r"\b(?:ugh|sorry|rough|brutal|hard|awful|exhausting|draining|that sucks|those days|at least|finally home|home now|couch|rest|relax)\b", text, re.I,
+            r"\b(?:ugh|sorry|rough|brutal|hard|awful|exhausting|draining|that sucks|those days|at least|finally home|home now|couch|rest|relax|glad|happy|worth it)\b", text, re.I,
         ):
             if emotional_alignment:
                 satisfied.append("ACKNOWLEDGE_EMOTIONAL_DISCLOSURE")
@@ -925,6 +1588,12 @@ class GPTService:
             satisfied.append("HONOR_RELEVANT_MEMORY_CALLBACK")
         if "HONOR_COMMERCIAL_REQUEST" in obligations and text and not ordinary:
             satisfied.append("HONOR_COMMERCIAL_REQUEST")
+        boundary_grounding = cls._commercial_boundary_grounding(
+            user_message, text,
+        )
+        if ("ACKNOWLEDGE_COMMERCIAL_BOUNDARY" in obligations
+                and boundary_grounding["boundaryAcknowledgementSatisfied"]):
+            satisfied.append("ACKNOWLEDGE_COMMERCIAL_BOUNDARY")
         unsatisfied = [item for item in obligations if item not in satisfied]
         reasons = []
         if paraphrase: reasons.append("PARAPHRASE_TEMPLATE")
@@ -932,10 +1601,16 @@ class GPTService:
         if length_risk: reasons.append("EXCESSIVE_ORDINARY_LENGTH")
         if polished_language_risk: reasons.append("OVERLY_POLISHED_LANGUAGE")
         if over_acknowledgement: reasons.append("OVER_ACKNOWLEDGEMENT")
+        if redundant_purchase_affirmation:
+            reasons.append("REDUNDANT_PURCHASE_AFFIRMATION")
+        if semantic_redundancy_detected:
+            reasons.append("REDUNDANT_SEMANTIC_FILLER")
         if repetition_risk: reasons.append("RECENT_PHRASE_REPETITION")
         if question_pressure_risk: reasons.append("REPEATED_QUESTION_PRESSURE")
         if customer_question_unanswered: reasons.append("CUSTOMER_QUESTION_UNANSWERED")
         if manufactured_question: reasons.append("MANUFACTURED_ENGAGEMENT_QUESTION")
+        if unnecessary_buyer_reaction_question:
+            reasons.append("UNNECESSARY_BUYER_REACTION_QUESTION")
         if not emotional_alignment: reasons.append("EMOTIONAL_ALIGNMENT_MISMATCH")
         if warmth_expected and not warmth_satisfied:
             reasons.append("NEW_PROSPECT_WARMTH_UNSATISFIED")
@@ -973,8 +1648,10 @@ class GPTService:
             contribution = "NONE"
         if not question:
             question_reason, question_value = "NONE", "NONE"
-        elif not ordinary:
+        elif not ordinary and pressure.get("commercialDiscoveryAuthorized") is True:
             question_reason, question_value = "COMMERCIAL_DISCOVERY", "HIGH"
+        elif not ordinary:
+            question_reason, question_value = "PROTECTED_TRANSACTIONAL_QUESTION", "HIGH"
         elif authorized_discovery_question:
             question_reason = "AUTHORIZED_CONTEXTUAL_DISCOVERY"
             question_value = str(discovery.get("valueLevel") or "MEDIUM")
@@ -1000,12 +1677,16 @@ class GPTService:
             "customerQuestionDetected": customer_asked,
             "customerQuestionAnswered": (direct_answer if customer_asked else None),
             "customerQuestionDomain": question_domain,
+            "customerQuestionSemanticSlot": personal_question_slot,
             "customerQuestionDomainRelevant": (
                 domain_relevant_answer if customer_asked and question_domain else None
             ),
             "questionReason": question_reason,
             "questionValue": question_value,
             "relationshipDiscoveryAuthorized": discovery.get("allowed") is True,
+            "commercialDiscoveryAuthorized": (
+                pressure.get("commercialDiscoveryAuthorized") is True
+            ),
             "relationshipDiscoveryQuestionAsked": authorized_discovery_question,
             "unauthorizedRelationshipQuestion": unauthorized_relationship_question,
             "relationshipDiscoveryDomain": discovery_domain or None,
@@ -1014,12 +1695,19 @@ class GPTService:
             "recentQuestionCount": pressure.get("recentQuestionCount", 0),
             "recentQuestionWindow": pressure.get("recentQuestionWindow", 0),
             "questionStreak": pressure.get("questionStreak", 0),
+            "purchaseHistoryReference": dict(
+                pressure.get("purchaseHistoryReference") or {}
+            ),
             "responseLengthCharacters": len(text),
             "responseLengthWords": len(words),
             "responseSentenceCount": len(sentences),
             "responseStructure": structure,
             "paraphraseRisk": paraphrase,
             "genericFillerRisk": generic,
+            "semanticEconomyApplied": ordinary,
+            "semanticRedundancyDetected": semantic_redundancy_detected,
+            "redundantSemanticSegments": redundant_semantic_segments,
+            "semanticRedundancyReason": semantic_redundancy_reason,
             "overAcknowledgementRisk": over_acknowledgement,
             "acknowledgedTopicCount": acknowledged_topics,
             "overlyPolishedLanguageRisk": polished_language_risk,
@@ -1075,6 +1763,7 @@ class GPTService:
             "unsatisfiedTurnObligations": unsatisfied,
             "memoryCallbackUsed": memory_callback,
             "styleRewriteReasons": reasons,
+            **boundary_grounding,
         }
 
     @staticmethod
@@ -1135,13 +1824,57 @@ class GPTService:
 
     @staticmethod
     def _value_defense_addresses_objection(text):
-        """Require direct acknowledgement/value handling, not generic banter."""
-        return bool(re.search(
-            r"\b(?:fair|understand|i get (?:it|that)|no worries|no pressure|"
-            r"price|cost|worth|value|more than (?:you )?expected|"
-            r"leave it there|think about it)\b",
-            str(text or ""), re.I,
+        """Require actual offer/value resistance, not acknowledgement alone."""
+        return GPTService._value_defense_language_analysis(text)["valueDefenseUsed"]
+
+    @classmethod
+    def _value_defense_language_analysis(cls, text):
+        """Describe only commercial acts substantiated by delivered language."""
+        value = str(text or "")
+        unsafe = cls._negative_contact_safety_reasons(value)
+        defense = bool(re.search(
+            r"\b(?:worth(?: it| holding| every)?|value|keeping (?:this|that|the|it)|"
+            r"(?:this|that|the) one(?:['â€™]s| is)? (?:staying|holding|worth)|"
+            r"(?:this|that|the) one (?:stays|holds)|"
+            r"hold(?:ing)? (?:the |its )?price|price (?:stays|holds)|"
+            r"not (?:budging|bargaining|discounting|changing)|"
+            r"won['â€™]?t (?:budge|discount|change)|picked (?:this|that) one for a reason|"
+            r"not making (?:this|that|it) cheaper)\b",
+            value, re.I,
         ))
+        playful_resistance = bool(re.search(
+            r"(?:[😉😏😂]|\b(?:mmm+|haha|nice try|cheeky|bold|trouble|"
+            r"trying to (?:talk me down|negotiate|make me cave)|"
+            r"make me cave|regret passing|miss(?:ing)? out)\b)",
+            value, re.I,
+        ))
+        voluntary = bool(re.search(
+            r"\b(?:no pressure|your call|up to you|free to pass|"
+            r"if (?:it['â€™]?s|that['â€™]?s) a no|leave it there)\b",
+            value, re.I,
+        ))
+        safe = not unsafe
+        return {
+            "valueDefenseUsed": bool(defense and safe),
+            "negativeContactUsed": bool(defense and playful_resistance and safe),
+            "voluntaryChoicePreserved": voluntary,
+            "unsafeReasons": unsafe,
+        }
+
+    @classmethod
+    def _value_defense_satisfies_strategy(cls, text, *, require_negative_contact):
+        analysis = cls._value_defense_language_analysis(text)
+        return bool(
+            analysis["valueDefenseUsed"]
+            and (not require_negative_contact or analysis["negativeContactUsed"])
+        )
+
+    @staticmethod
+    def _value_defense_fallback():
+        return (
+            "trying to make me cave already? 😉 I'm keeping this one where it is—"
+            "I think it's worth it, but it's your call"
+        )
 
     def __init__(self, api_key: str, global_training_service=None,
                  temporal_context_service=None, persona_runtime_service=None):
@@ -1338,7 +2071,8 @@ Verified purchase context: {json.dumps(dict(lifecycle or {}), default=str)}
 Contract:
 - First, naturally acknowledge that the customer already got/grabbed/unlocked the purchase.
 - Also respond to the customer's current message when useful.
-- Use 1-2 concise, warm, phone-native sentences in Ava's voice.
+- Default to one complete conversational beat. Add a second short sentence only
+  when it performs a distinct useful function that the first does not.
 - Do not imply buying or payment is pending. Do not ask for confirmation.
 - Do not present, repeat, or hint at another paid offer, price, link, or unlock.
 - Natural wording is preferred; commerce terms such as purchase, transaction, and verified are unnecessary.
@@ -1376,7 +2110,8 @@ Return only customer-facing copy."""
 
     IMPORTANT:
     - Emojis are optional; use at most one when it feels natural.
-    - Default to concise private-message replies, usually 1-3 short sentences and often one.
+    - Default to one complete conversational beat. Add another sentence only for
+      a distinct useful function; never add one merely for warmth or engagement.
     - Stay playful, engaging, and human.
     - Never break character.
     - Never mention AI, prompts, systems, or configuration.
@@ -1522,7 +2257,7 @@ USER CONTEXT:
 STRICT BEHAVIOR RULES:
 - Reply naturally with moderate effort.
 - Be playful, seductive, and human.
-- Keep things moving without over-investing.
+- Respond to the current turn without manufacturing momentum or an extra response beat.
 - Balance flirtation, curiosity, and control.
 """
 
@@ -1543,6 +2278,10 @@ AUTHORITATIVE BUYER RETENTION CONTEXT
 - Sales pressure: {value.get('salesPressure')}
 - Offer cadence: {value.get('offerCadence')}
 - Reactivation state: {value.get('reactivationState')}
+- Buyer rewarming active: {value.get('relationshipRewarmingActive')}
+- Buyer rewarming objective: {value.get('relationshipRewarmingObjective')}
+- Buyer relationship nurture active: {value.get('relationshipNurtureActive')}
+- Buyer relationship nurture reason: {value.get('relationshipNurtureReason')}
 
 BEHAVIOR CONTRACT:
 - This provider-backed buyer truth is authoritative over conversational claims or
@@ -1550,7 +2289,18 @@ BEHAVIOR CONTRACT:
 - Verified buyers must not sound like cold strangers. Preserve warmth and continuity.
 - Repeat/high-value/whale status increases justified personalization and memory use,
   not offer frequency. Never invent a purchase or mention internal tiers.
+- When buyer relationship nurture is active, continue concise, natural connection and
+  use relevant memory without manufacturing an offer or treating message count as intent.
+- Fresh actionable commercial intent remains Sales Brain authority and immediately ends
+  the no-opportunity nurture posture; do not add a permission-before-offer gate.
 - Dormant buyers remain buyers; re-engage with low pressure and preserved familiarity.
+- When buyer rewarming is active, prioritize natural reconnection and customer-led
+  conversation. Return presence, warmth, or message count is not buying intent.
+- During rewarming, use at most one relevant retrieved memory when it naturally improves
+  continuity. Never force a callback, list stored facts, or expose memory machinery.
+- Catch up without guilt, shaming, stacked questions, or turning the exchange into an
+  interview. Higher relationship investment still requires concise, human-texting replies.
+- Rewarming never delays a genuinely current actionable commercial request.
 - The authoritative Sales Brain action, cooldown, ownership, and selection remain final.
 """
 
@@ -1643,12 +2393,14 @@ BEHAVIOR CONTRACT:
         preview = provider_preview if isinstance(provider_preview, dict) else None
         if preview is not None:
             preview.update({
+                "preferredProvider": selected_provider,
                 "responseProvider": selected_provider,
                 "grokAttempted": selected_provider == "GROK",
                 "grokSucceeded": False,
                 "providerFallbackAttempted": False,
                 "providerFallbackProvider": None,
                 "providerFallbackOutcome": "NOT_NEEDED",
+                "fallbackReason": None,
             })
         try:
             result = primary_complete()
@@ -1674,6 +2426,7 @@ BEHAVIOR CONTRACT:
                     "providerFallbackAttempted": True,
                     "providerFallbackProvider": "OPENAI",
                     "providerFallbackOutcome": "ATTEMPTING",
+                    "fallbackReason": "GROK_UNAVAILABLE",
                 })
             try:
                 result = fallback_complete()
@@ -1685,6 +2438,23 @@ BEHAVIOR CONTRACT:
             if preview is not None:
                 preview["providerFallbackOutcome"] = "SUCCEEDED"
             return result
+
+    @staticmethod
+    def _openai_grok_fallback_messages(messages):
+        """Return normal-Ava instructions for a failed specialized-provider turn."""
+        return [
+            *list(messages or ()),
+            {
+                "role": "system",
+                "content": (
+                    "The preferred specialized provider was unavailable. Respond as "
+                    "normal Ava using only behavior this provider naturally supports. "
+                    "Continue the conversation warmly and intimately where appropriate, "
+                    "but do not attempt to reproduce or intensify specialized explicit "
+                    "output. Do not mention provider availability to the customer."
+                ),
+            },
+        ]
 
     @classmethod
     def _volunteered_attention_labor_reason(
@@ -1796,13 +2566,312 @@ BEHAVIOR CONTRACT:
         return list(dict.fromkeys(violations))
 
     @staticmethod
-    def _foreground_semantic_relevance(user_message: str, response: str) -> dict:
+    def _commercial_comparison_question(user_message: str) -> bool:
+        inbound = str(user_message or "")
+        return bool(re.search(
+            r"\b(?:anything|something|another|else|option|one|smallest)\b.{0,32}"
+            r"\b(?:cheaper|smaller|lower(?:-priced)?|similar|like that|"
+            r"(?:that|this|same) (?:price|range))\b|"
+            r"\b(?:what else|anything similar|is that the smallest)\b|"
+            r"\b(?:cheaper|smaller|lower(?:-priced)?|similar)\b.{0,24}"
+            r"\b(?:option|one|that|range|price)\b",
+            inbound, re.I,
+        ))
+
+    @classmethod
+    def _commercial_comparison_grounding(
+        cls, user_message: str, response: str,
+        commerce_decision: dict | None = None,
+    ) -> dict:
+        """Validate relative-offer answers against authoritative active context."""
+        if not cls._commercial_comparison_question(user_message):
+            return {"required": False, "satisfied": True,
+                    "activeCommercialReferent": False,
+                    "unsupportedInventoryClaim": False,
+                    "reason": "NOT_A_COMMERCIAL_COMPARISON"}
+        context = dict(commerce_decision or {})
+        candidate = str(response or "").strip()
+        active_id = context.get("active_purchase_intent_id")
+        active_offering_id = context.get("active_offering_id")
+        active_status = (context.get("current_offer_status")
+                         or context.get("customer_current_offer_status"))
+        objection = dict(context.get("commercial_objection") or {})
+        recovery = dict(context.get("objection_recovery") or {})
+        product = dict(context.get("recommended_product_context") or {})
+        authorized_options = list(context.get("authorized_offerings") or ())
+        price_minor = (objection.get("previousOfferPriceMinor")
+                       or recovery.get("originalPrice")
+                       or product.get("priceMinor") or product.get("price_minor"))
+        active = bool(active_id or active_offering_id or active_status)
+        plural_claim = bool(re.search(
+            r"\b(?:i(?:'|’)ve got|i have|there (?:are|is))\s+"
+            r"(?:a few|several|a couple|some|more options|other options|things)\b",
+            candidate, re.I,
+        ))
+        unsupported_plural = plural_claim and len(authorized_options) < 2
+        unsupported_singular = bool(re.search(
+            r"\b(?:i(?:'|’)ve got|i have)\s+(?:something|another (?:one|option))\b",
+            candidate, re.I,
+        )) and not active and not authorized_options
+        referent = bool(re.search(
+            r"\b(?:this|that|current|active|the)\s+(?:one|option|offer)|"
+            r"\b(?:one|option)\s+i\s+(?:sent|showed|shared)|"
+            r"\b(?:already|right now|smallest|budget|range)\b",
+            candidate, re.I,
+        ))
+        if price_minor:
+            dollars = int(price_minor) / 100
+            price_tokens = [f"${dollars:g}"] + (["nine"] if dollars == 9 else [])
+            referent = referent or any(token in candidate.lower() for token in price_tokens)
+        bounded_truth = bool(re.search(
+            r"\b(?:don['’]?t have another|no other|not another|"
+            r"this is|that is|this one(?:'s| is)|that one(?:'s| is)|"
+            r"not (?:below|cheaper than|smaller than) (?:this|that) one|"
+            r"already (?:fits|in|under)|smallest|smaller option|"
+            r"keep (?:this|that|the current) (?:one|option))\b",
+            candidate, re.I,
+        ))
+        satisfied = bool(
+            candidate and not unsupported_plural and not unsupported_singular
+            and ((referent and bounded_truth) if active
+                 else (bounded_truth or (plural_claim and len(authorized_options) >= 2)))
+        )
+        return {
+            "required": True, "satisfied": satisfied,
+            "activeCommercialReferent": active,
+            "activePurchaseIntentId": str(active_id) if active_id else None,
+            "activeOfferingId": str(active_offering_id) if active_offering_id else None,
+            "activePriceMinor": int(price_minor) if price_minor else None,
+            "unsupportedInventoryClaim": bool(unsupported_plural or unsupported_singular),
+            "reason": ("GROUNDED_IN_ACTIVE_OFFER" if satisfied and active
+                       else "BOUNDED_NO_ACTIVE_INVENTORY" if satisfied
+                       else "UNSUPPORTED_INVENTORY_CLAIM" if (unsupported_plural or unsupported_singular)
+                       else "ACTIVE_OFFER_REFERENT_NOT_GROUNDED" if active
+                       else "COMPARISON_NOT_BOUNDED"),
+        }
+
+    @classmethod
+    def _foreground_semantic_relevance(
+        cls, user_message: str, response: str,
+        commerce_decision: dict | None = None,
+        recent_transcript: list[dict] | tuple[dict, ...] | None = None,
+    ) -> dict:
         """Validate broad foreground acts after safety/style rewrites."""
         from app.services.contextual_customer_tone_service import (
             ContextualCustomerToneService,
         )
         inbound = str(user_message or "").strip()
         candidate = str(response or "").strip()
+        foreground_topics = cls._foreground_topics(inbound)
+        if "POSITIVE_ENGAGEMENT" in foreground_topics:
+            # Interest in the present exchange is not a disclosure about the
+            # customer's work, schedule, location, or history.  Reject drafts
+            # that introduce one of those customer-context domains without a
+            # source in the inbound turn or recent transcript.
+            context_text = " ".join([
+                inbound,
+                *(str(item.get("content") or "")
+                  for item in (recent_transcript or ())),
+            ])
+            contextual_domains = {
+                "WORK_BUSYNESS": cls._FOREGROUND_TOPIC_PATTERNS["WORK_BUSYNESS"],
+                "TRAVEL": cls._FOREGROUND_TOPIC_PATTERNS["TRAVEL"],
+                "PERSONAL_LIFE": cls._FOREGROUND_TOPIC_PATTERNS["PERSONAL_LIFE"],
+            }
+            unsupported = [
+                domain for domain, pattern in contextual_domains.items()
+                if re.search(pattern, candidate, re.I)
+                and not re.search(pattern, context_text, re.I)
+            ]
+            acknowledges = bool(re.search(
+                r"\b(?:attention|curious|curiosity|intrigued|interest(?:ed)?)\b|"
+                r"\b(?:good|glad|perfect|nice|exactly)\b.{0,36}"
+                r"\b(?:hop(?:e|ed|ing)|want(?:ed|ing)?|attention|interest)\b|"
+                r"\bi was hoping\b",
+                candidate, re.I,
+            ))
+            return {
+                "required": True,
+                "satisfied": bool(candidate and acknowledges and not unsupported),
+                "intent": "POSITIVE_CONVERSATIONAL_ENGAGEMENT",
+                "currentTopicDomain": "POSITIVE_ENGAGEMENT",
+                "unsupportedContextDomains": unsupported,
+                "customerDisclosureDetected": False,
+            }
+        purchase_grounding = cls._purchase_unlock_foreground_grounding(
+            inbound, candidate, commerce_decision,
+        )
+        if purchase_grounding["required"]:
+            return {
+                "required": True,
+                "satisfied": purchase_grounding["satisfied"],
+                "intent": "PURCHASE_OR_UNLOCK_ACKNOWLEDGEMENT",
+                "purchaseOwnershipGrounding": purchase_grounding,
+            }
+        session_position = cls._session_position_grounding(
+            inbound, candidate, commerce_decision,
+        )
+        if session_position["required"]:
+            return {
+                "required": True,
+                "satisfied": session_position["satisfied"],
+                "intent": "SESSION_POSITION",
+                "sessionPositionGrounding": session_position,
+            }
+        next_session_step = cls._next_session_step_grounding(
+            inbound, candidate, commerce_decision,
+        )
+        if next_session_step["required"]:
+            return {
+                "required": True,
+                "satisfied": next_session_step["satisfied"],
+                "intent": "NEXT_SESSION_STEP",
+                "nextSessionStepGrounding": next_session_step,
+            }
+        inventory_grounding = cls._inventory_existence_grounding(
+            inbound, candidate, commerce_decision,
+        )
+        if inventory_grounding["required"]:
+            return {
+                "required": True,
+                "satisfied": inventory_grounding["satisfied"],
+                "intent": "DIRECT_INVENTORY_AVAILABILITY_QUESTION",
+                "commercialInventoryGrounding": inventory_grounding,
+            }
+        from app.models.commercial_objection import CommercialObjectionType
+        from app.services.commercial_objection_service import CommercialObjectionService
+        budget_objection = CommercialObjectionService().evaluate(message=inbound)
+        if budget_objection.objection_type is CommercialObjectionType.BUDGET_LIMIT:
+            satisfied = bool(re.search(
+                r"(?:\$\s*\d|\b(?:budget|under|dollars?|price|range|"
+                r"afford|fits?|within|cheaper)\b)",
+                candidate, re.I,
+            ))
+            return {
+                "required": True,
+                "satisfied": satisfied,
+                "intent": "CURRENT_BUDGET_CONSTRAINT",
+            }
+        if cls._commercial_comparison_question(inbound):
+            grounding = cls._commercial_comparison_grounding(
+                inbound, candidate, commerce_decision,
+            )
+            return {"required": True, "satisfied": grounding["satisfied"],
+                    "intent": "COMMERCIAL_OFFER_COMPARISON",
+                    "inventoryGrounding": grounding}
+        price_question = bool(re.search(
+            r"\b(?:how much|what(?:'s| is) the price|price)\b",
+            inbound, re.I,
+        ))
+        if price_question:
+            satisfied = bool(re.search(
+                r"(?:\$\s*\d|\b(?:price|offer|unlock|attached|costs?)\b)",
+                candidate, re.I,
+            ))
+            return {
+                "required": True,
+                "satisfied": satisfied,
+                "intent": "PRICE_QUESTION",
+            }
+        private_content = bool(re.search(
+            r"\b(?:private|exclusive)\b.{0,24}\b(?:content|set|photos?|videos?|stuff)\b|"
+            r"\b(?:content|set|photos?|videos?|stuff)\b.{0,24}\b(?:private|exclusive)\b",
+            inbound, re.I,
+        ))
+        link_request = bool(re.search(
+            r"\b(?:send|show|see|open|get|where(?:'s| is))\b.{0,20}\blink\b|"
+            r"\blink\b.{0,20}\b(?:send|show|see|open|get|where)\b",
+            inbound, re.I,
+        ))
+        tease_request = bool(re.search(
+            r"\b(?:tease|teasing|flirt|flirty|talk dirty|something dirtier)\b",
+            inbound, re.I,
+        ))
+        if link_request:
+            satisfied = bool(re.search(
+                r"\b(?:link|unlock|private|offer|there|send|open)\b",
+                candidate, re.I,
+            ))
+            return {
+                "required": True,
+                "satisfied": satisfied,
+                "intent": "LINK_OR_UNLOCK_REQUEST",
+            }
+        if private_content:
+            satisfied = bool(re.search(
+                r"\b(?:private|exclusive|content|set|photos?|videos?|stuff|unlock)\b",
+                candidate, re.I,
+            ))
+            return {
+                "required": True,
+                "satisfied": satisfied,
+                "intent": "PRIVATE_CONTENT_INQUIRY",
+            }
+        if tease_request:
+            satisfied = bool(re.search(
+                r"\b(?:tease|teasing|flirt|play|trouble|bold|tempt|careful|"
+                r"dangerous|behave|mood)\b",
+                candidate, re.I,
+            ))
+            return {
+                "required": True,
+                "satisfied": satisfied,
+                "intent": "TEASE_OR_FLIRT_REQUEST",
+            }
+        neutral_domains = {
+            "WORK_BUSYNESS", "WELLBEING_FATIGUE", "PERSONAL_LIFE",
+        }
+        current_domains = [
+            item for item in foreground_topics if item in neutral_domains
+        ]
+        if current_domains:
+            topic_covered, topic_evidence = cls._topic_coverage(
+                candidate, foreground_topics, user_message=inbound,
+            )
+            current_flirt = cls._social_flirtation(inbound)
+            recent_customer_messages = [
+                str(item.get("content") or "")
+                for item in (recent_transcript or ())
+                if str(item.get("role") or "").lower() in {"user", "customer"}
+            ][-2:]
+            active_flirt_context = any(
+                (lambda signal: signal["detected"] or signal["sexual"])(
+                    cls._social_flirtation(item)
+                )
+                for item in recent_customer_messages
+            )
+            response_escalation = bool(re.search(
+                r"\b(?:dangerous side|naughty|dirty|turned on|horny|sexy|"
+                r"keep talking like that|make you behave|hard to behave|"
+                r"tempt(?:ing|ed)?|seduc(?:e|ing)|teas(?:e|ing) you|"
+                r"my trouble side|more interesting kind of trouble)\b",
+                candidate, re.I,
+            ))
+            inbound_authority = bool(
+                current_flirt["detected"] or current_flirt["sexual"]
+            )
+            escalation_authorized = bool(
+                response_escalation
+                and (inbound_authority or active_flirt_context)
+                and topic_covered
+            )
+            satisfied = bool(
+                topic_covered
+                and (not response_escalation or escalation_authorized)
+            )
+            return {
+                "required": True,
+                "satisfied": satisfied,
+                "intent": "NEUTRAL_CUSTOMER_DISCLOSURE",
+                "currentTopicDomain": current_domains[0],
+                "currentTopicCoverageEvidence": topic_evidence,
+                "customerDisclosureDetected": True,
+                "customerDisclosureDomain": current_domains[0],
+                "flirtOrSexualInboundSignal": inbound_authority,
+                "activeFlirtContext": active_flirt_context,
+                "responseFlirtEscalationDetected": response_escalation,
+                "responseFlirtEscalationAuthorized": escalation_authorized,
+            }
         tone = ContextualCustomerToneService().classify(message=inbound)
         criticism = bool(tone.get("dismissiveOrContemptuous"))
         if not criticism:
@@ -1842,10 +2911,604 @@ BEHAVIOR CONTRACT:
         }
 
     @staticmethod
-    def _foreground_semantic_fallback(user_message: str, *, effort_mode: str) -> str:
-        """Last bounded fallback for required criticism/dismissal relevance."""
+    def _resolve_purchase_history_reference(
+        user_message: str, purchased_content: dict | None,
+        recent_transcript: list[dict] | tuple[dict, ...] | None = None,
+        session_context: dict | None = None,
+    ) -> dict:
+        """Resolve only explicit references against bounded verified history."""
+        context = dict(purchased_content or {})
+        entries = [dict(item) for item in context.get("historyEntries") or ()]
+        inbound = str(user_message or "").replace("â€™", "'").strip().lower()
+        result = {
+            "purchaseHistoryReferentDetected": False,
+            "purchaseHistoryReferentResolved": False,
+            "resolutionType": None,
+            "unresolvedReason": None,
+            "aggregatePurchaseReference": False,
+            "pluralPurchaseReference": False,
+            "subsetScope": None,
+            "resolvedPurchaseCount": 0,
+            "resolvedPurchaseIds": [],
+        }
+        if not entries:
+            result["unresolvedReason"] = "NO_BOUNDED_VERIFIED_HISTORY"
+            return result
+
+        ordinal_words = {
+            "first": 1, "second": 2, "third": 3, "fourth": 4,
+            "fifth": 5, "sixth": 6, "seventh": 7, "eighth": 8,
+            "ninth": 9, "tenth": 10,
+        }
+        action = dict(session_context or {})
+        action_metadata = dict(action.get("metadata") or {})
+        session_runtime = dict(
+            action.get("sessionRuntime")
+            or action_metadata.get("sessionRuntime") or {}
+        )
+        session_assets = [
+            dict(item) for item in
+            action.get("orderedAssets")
+            or action_metadata.get("sessionOrderedAssets") or ()
+        ]
+        session_id = action.get("salesSessionId") or action.get("sales_session_id")
+        session_foundation = (
+            action.get("foundationReference")
+            or session_runtime.get("photoshootSessionId")
+        )
+        session_ordinal_match = re.search(
+            r"\b(first|second|third|fourth|fifth|sixth|seventh|eighth|"
+            r"ninth|tenth|\d+(?:st|nd|rd|th))\s+(?:part|step|one)\b",
+            inbound,
+        )
+        session_started_match = re.search(
+            r"\b(?:part|step|one)\s+(?:that\s+)?we\s+started\s+with\b",
+            inbound,
+        )
+        session_last_match = re.search(
+            r"\b(?:that\s+|the\s+)?(?:last|latest|most recent)\s+"
+            r"(?:part|step|one)\b",
+            inbound,
+        )
+        session_owned_match = re.search(
+            r"\b(?:the\s+)?(?:part|step|one)\s+(?:that\s+)?i\s+"
+            r"(?:already\s+)?(?:got|unlocked|bought|purchased)\b",
+            inbound,
+        )
+        session_reference_match = any((
+            session_ordinal_match,
+            session_started_match,
+            session_last_match,
+            session_owned_match,
+        ))
+        if (
+            session_reference_match and session_id
+            and session_foundation and session_assets
+        ):
+            result["purchaseHistoryReferentDetected"] = True
+            if session_ordinal_match:
+                token = session_ordinal_match.group(1)
+                position = ordinal_words.get(token)
+                if position is None:
+                    position = int(re.match(r"\d+", token).group())
+            elif session_started_match:
+                position = 1
+            else:
+                owned_positions = sorted({
+                    int(item.get("position") or 0) for item in session_assets
+                    if item.get("owned") is True
+                    and int(item.get("position") or 0) > 0
+                })
+                if session_last_match and owned_positions:
+                    position = owned_positions[-1]
+                elif session_owned_match and len(owned_positions) == 1:
+                    position = owned_positions[0]
+                else:
+                    result["unresolvedReason"] = (
+                        "SESSION_OWNED_REFERENCE_NOT_UNIQUE"
+                    )
+                    return result
+            positioned = [
+                item for item in session_assets
+                if int(item.get("position") or 0) == position
+            ]
+            if len(positioned) != 1 or positioned[0].get("owned") is not True:
+                result["unresolvedReason"] = (
+                    "SESSION_POSITION_NOT_UNIQUELY_PURCHASED_AND_OWNED"
+                )
+                return result
+            session_asset = positioned[0]
+            purchase_matches = [
+                item for item in entries
+                if int(session_asset.get("assetId") or 0) in {
+                    int(value) for value in item.get("assetIds") or ()
+                }
+                and item.get("purchaseConfirmed") is True
+                and item.get("ownershipConfirmed") is True
+            ]
+            resolved = GPTService._purchase_reference_result(
+                result, purchase_matches, "ORDINAL",
+                "SESSION_POSITION_NOT_IN_BOUNDED_VERIFIED_HISTORY",
+            )
+            if resolved.get("purchaseHistoryReferentResolved") is True:
+                entry = dict(resolved.get("entry") or {})
+                entry.update({
+                    "sessionId": str(session_id),
+                    "sessionFoundation": session_foundation,
+                    "membershipPosition": position,
+                    "assetId": session_asset.get("assetId"),
+                    "offeringId": session_asset.get("offeringId"),
+                    "priceMinor": session_asset.get("priceMinor"),
+                    "currency": session_asset.get("currency"),
+                })
+                resolved.update({
+                    "entry": entry,
+                    "sessionRelativeReference": True,
+                    "sessionId": str(session_id),
+                    "sessionFoundation": session_foundation,
+                    "membershipPosition": position,
+                })
+            return resolved
+
+        ordinal_match = re.search(
+            r"\b(first|second|third|fourth|fifth|sixth|seventh|eighth|"
+            r"ninth|tenth|\d+(?:st|nd|rd|th))\s+"
+            r"(?:purchase|set|one|item|thing|photo|image|video)\b",
+            inbound,
+        )
+        if ordinal_match:
+            result["purchaseHistoryReferentDetected"] = True
+            token = ordinal_match.group(1)
+            ordinal = ordinal_words.get(token)
+            if ordinal is None:
+                ordinal = int(re.match(r"\d+", token).group())
+            matches = [item for item in entries if int(item.get("ordinal") or 0) == ordinal]
+            return GPTService._purchase_reference_result(
+                result, matches, "ORDINAL", "ORDINAL_NOT_IN_BOUNDED_VERIFIED_HISTORY"
+            )
+
+        if re.search(
+            r"\b(?:last|latest|most recent)\s+"
+            r"(?:purchase|set|one|item|thing|photo|image|video)\b",
+            inbound,
+        ):
+            result["purchaseHistoryReferentDetected"] = True
+            latest = max(entries, key=lambda item: int(item.get("ordinal") or 0))
+            return GPTService._purchase_reference_result(
+                result, [latest], "RECENCY", "NO_VERIFIED_RECENT_PURCHASE"
+            )
+
+        exact_recent_match = re.search(
+            r"\b(?:last|latest|most recent)\s+"
+            r"(couple|two|three)(?:\s+"
+            r"(?:purchases|sets|ones|items|things|photos|images|videos))?\b",
+            inbound,
+        )
+        if exact_recent_match:
+            result["purchaseHistoryReferentDetected"] = True
+            requested = {"couple": 2, "two": 2, "three": 3}[
+                exact_recent_match.group(1)
+            ]
+            if len(entries) < requested:
+                result["unresolvedReason"] = (
+                    "RECENT_SUBSET_EXCEEDS_BOUNDED_VERIFIED_HISTORY"
+                )
+                return result
+            ordered = sorted(
+                entries, key=lambda item: int(item.get("ordinal") or 0),
+            )[-requested:]
+            return GPTService._recent_purchase_subset_result(
+                result, ordered, resolved_count=requested,
+            )
+
+        if re.search(
+            r"\b(?:(?:last|latest|most recent|past)\s+(?:few|several)|recent)"
+            r"(?:\s+(?:purchases|sets|ones|items|things|photos|images|videos))?\b",
+            inbound,
+        ):
+            result["purchaseHistoryReferentDetected"] = True
+            if len(entries) < 2:
+                result["unresolvedReason"] = (
+                    "RECENT_PLURAL_SUBSET_NOT_IN_BOUNDED_VERIFIED_HISTORY"
+                )
+                return result
+            # These words establish plural recent scope, not exact cardinality.
+            return GPTService._recent_purchase_subset_result(result, ())
+
+        price_match = re.search(
+            r"(?<!\w)\$\s*(\d+)(?:\.(\d{1,2}))?\s*"
+            r"(?:purchase|set|one|item|thing|photo|image|video)\b",
+            inbound,
+        )
+        if price_match:
+            result["purchaseHistoryReferentDetected"] = True
+            cents = int(price_match.group(1)) * 100 + int(
+                (price_match.group(2) or "").ljust(2, "0") or 0
+            )
+            matches = [
+                item for item in entries
+                if str(item.get("currency") or "").upper() == "USD"
+                and int(item.get("grossMinor") or -1) == cents
+            ]
+            return GPTService._purchase_reference_result(
+                result, matches, "UNIQUE_PRICE", "PRICE_NOT_UNIQUE_OR_NOT_VERIFIED"
+            )
+
+        if len(entries) > 1 and re.search(
+            r"\b(?:both|all)\s+(?:purchases|sets|ones|items|things|photos|images|videos)\b|"
+            r"\beverything\s+i(?:'ve|\s+have)\s+(?:bought|purchased|unlocked|got(?:ten)?)\b|"
+            r"\b(?:what|the\s+(?:stuff|things))\s+i(?:'ve|\s+have)\s+"
+            r"(?:bought|purchased|unlocked|got(?:ten)?)(?:\s+from\s+you)?\b|"
+            r"\b(?:stuff|things)\s+i(?:'ve|\s+have)\s+"
+            r"(?:bought|purchased|unlocked|got(?:ten)?)\b",
+            inbound,
+        ):
+            resolved_ids = [
+                str(item.get("purchaseIntentId") or item.get("purchase_intent_id") or item.get("id"))
+                for item in entries
+                if item.get("purchaseIntentId") or item.get("purchase_intent_id") or item.get("id")
+            ]
+            result.update({
+                "purchaseHistoryReferentDetected": True,
+                "purchaseHistoryReferentResolved": True,
+                "resolutionType": "AGGREGATE",
+                "resolvedOrdinal": "ALL_BOUNDED",
+                "aggregatePurchaseReference": True,
+                "resolvedPurchaseCount": len(entries),
+                "resolvedPurchaseIds": resolved_ids,
+            })
+            return result
+
+        # A demonstrative singular purchased-object reference is uniquely
+        # resolvable only when bounded verified commerce contains one purchase.
+        # Multiple purchases remain explicitly ambiguous unless another
+        # existing resolver (ordinal, price, descriptor, recency) identified it.
+        singular_purchase_reference = bool(re.search(
+            r"\b(?:that|this|the)\s+"
+            r"(?:purchase|set|one|item|thing|photo|image|video)\s+"
+            r"i\s+(?:bought|purchased|unlocked|got)(?:\s+from\s+you)?\b",
+            inbound,
+        ))
+        if singular_purchase_reference:
+            result["purchaseHistoryReferentDetected"] = True
+            if len(entries) == 1:
+                return GPTService._purchase_reference_result(
+                    result, entries, "RECENCY", "NO_VERIFIED_RECENT_PURCHASE"
+                )
+            result["unresolvedReason"] = "SINGULAR_REFERENCE_AMBIGUOUS"
+            return result
+
+        # A bare pronoun can inherit the immediately preceding customer turn's
+        # resolved purchase topic. It never binds from history alone.
+        if re.match(r"^\s*(?:it|that)\b", inbound):
+            prior_customer = next((
+                str(item.get("content") or "")
+                for item in reversed(tuple(recent_transcript or ()))
+                if str(item.get("role") or "").lower() in {"user", "customer"}
+            ), "")
+            if prior_customer:
+                inherited = GPTService._resolve_purchase_history_reference(
+                    prior_customer, purchased_content,
+                    session_context=session_context,
+                )
+                if inherited.get("purchaseHistoryReferentResolved") is True:
+                    inherited["purchaseHistoryReferentDetected"] = True
+                    return inherited
+
+        descriptor_tokens = set(re.findall(r"[a-z0-9]+", inbound))
+        ignored = {
+            "the", "that", "this", "one", "ones", "set", "sets", "photo",
+            "photos", "image", "images", "video", "videos", "i", "liked",
+            "loved", "enjoyed", "was", "were", "is", "my", "favorite",
+        }
+        descriptor_tokens -= ignored
+        described = []
+        if descriptor_tokens and re.search(
+            r"\b(?:one|ones|set|sets|photo|photos|image|images|video|videos)\b",
+            inbound,
+        ):
+            for item in entries:
+                authoritative = " ".join((
+                    str(item.get("safeSummary") or ""),
+                    " ".join(str(value) for value in item.get("safeTags") or ()),
+                    " ".join(str(value) for value in item.get("safeThemes") or ()),
+                )).lower()
+                if authoritative and descriptor_tokens.intersection(
+                    re.findall(r"[a-z0-9]+", authoritative)
+                ):
+                    described.append(item)
+        if described:
+            result["purchaseHistoryReferentDetected"] = True
+            return GPTService._purchase_reference_result(
+                result, described, "DESCRIPTOR",
+                "DESCRIPTOR_NOT_UNIQUE_OR_NOT_AUTHORITATIVE",
+            )
+        return result
+
+    @staticmethod
+    def _purchase_reference_result(result, matches, resolution_type, failure):
+        if len(matches) == 1:
+            entry = dict(matches[0])
+            purchase_id = (
+                entry.get("purchaseIntentId")
+                or entry.get("purchase_intent_id") or entry.get("id")
+            )
+            result.update({
+                "purchaseHistoryReferentResolved": True,
+                "resolutionType": resolution_type,
+                "resolvedOrdinal": entry.get("ordinal"),
+                "resolvedPurchaseCount": 1,
+                "resolvedPurchaseIds": [str(purchase_id)] if purchase_id else [],
+                "entry": entry,
+            })
+        else:
+            result["unresolvedReason"] = failure
+        return result
+
+    @staticmethod
+    def _recent_purchase_subset_result(result, entries, *, resolved_count=None):
+        resolved_ids = [
+            str(item.get("purchaseIntentId") or item.get("purchase_intent_id")
+                or item.get("id"))
+            for item in entries
+            if item.get("purchaseIntentId") or item.get("purchase_intent_id")
+            or item.get("id")
+        ]
+        result.update({
+            "purchaseHistoryReferentResolved": True,
+            "resolutionType": "RECENT_SUBSET",
+            "pluralPurchaseReference": True,
+            "subsetScope": "RECENT",
+            "resolvedPurchaseCount": int(resolved_count or 0),
+            "resolvedPurchaseIds": resolved_ids,
+        })
+        return result
+
+    @staticmethod
+    def _purchase_unlock_foreground_grounding(
+        user_message: str, response: str,
+        commerce_decision: dict | None = None,
+    ) -> dict:
+        """Bind positive completed-purchase references before generic affect."""
+        inbound = str(user_message or "").replace("â€™", "'").strip()
+        candidate = str(response or "").replace("â€™", "'").strip()
+        decision = dict(commerce_decision or {})
+        attention = dict(decision.get("customer_value_attention") or {})
+        commerce_memory = dict(decision.get("customer_commerce_memory") or {})
+        verified_count = int(
+            commerce_memory.get("verifiedPurchaseCount")
+            or attention.get("purchaseCount") or 0
+        )
+        verified = bool(
+            verified_count > 0
+            or attention.get("buyerStatus") == "VERIFIED_BUYER"
+        )
+        active_intent_state = str(
+            decision.get("current_offer_status")
+            or dict(commerce_memory.get("activePurchaseState") or {}).get("status")
+            or ""
+        ).upper() or None
+        acknowledgement_authorized = bool(
+            str(decision.get("decision") or "").upper() == "CONGRATULATE_PURCHASE"
+            and str(decision.get("reason_code") or "").upper() == "PURCHASE_VERIFIED"
+        )
+        authority_projection_present = any(
+            key in decision for key in (
+                "decision", "reason_code", "current_offer_status",
+                "commerce_execution_policy",
+            )
+        )
+        customer_claim = bool(re.search(
+            r"\b(?:i\s+(?:just\s+|already\s+)?(?:bought|purchased|unlocked|"
+            r"grabbed|paid\s+for)\s+(?:it|that|this|one)|i\s+already\s+paid)\b",
+            inbound, re.I,
+        ))
+        provider_purchase_verified = bool(
+            acknowledgement_authorized
+            or (verified and not customer_claim)
+            or (
+                not authority_projection_present
+                and verified
+                and active_intent_state not in {"PRESENTED", "CREATED", "PENDING"}
+            )
+        )
+        ownership_verified = bool(
+            provider_purchase_verified
+            and (verified_count > 0 or commerce_memory.get("ownedOfferingIds"))
+        )
+        first_purchase_semantics_authorized = bool(
+            provider_purchase_verified and verified_count == 1
+        )
+        explicit_event = bool(re.search(
+            r"\b(?:"
+            r"(?:glad|happy)(?:\s+(?:that|because))?\s+i\s+"
+            r"(?:finally\s+)?(?:bought|purchased|unlocked|grabbed|picked\s+up)\b|"
+            r"(?:that|it)\s+was\s+my\s+first\s+(?:purchase|unlock)\b|"
+            r"my\s+first\s+(?:purchase|unlock)\b|"
+            r"finally\s+(?:decided\s+to\s+)?(?:buy|purchase|unlock|grab)\b|"
+            r"i\s+(?:finally\s+)?(?:bought|purchased|unlocked|grabbed|picked\s+up)\s+"
+            r"(?:something|one|it|that(?:\s+one)?)\b"
+            r")",
+            inbound, re.I,
+        ))
+        contextual_event = bool(
+            verified and re.search(
+                r"\b(?:glad|happy)\s+i\s+(?:finally\s+)?"
+                r"(?:went\s+for\s+it|got\s+it|picked\s+that\s+one)\b",
+                inbound, re.I,
+            )
+        )
+        required = bool(customer_claim or (verified and (explicit_event or contextual_event)))
+        acknowledges_purchase = bool(re.search(
+            r"\b(?:"
+            r"first\s+(?:purchase|unlock)|"
+            r"(?:bought|purchased|unlocked|grabbed|picked\s+up|went\s+for)\s+"
+            r"(?:it|that|one|something)|"
+            r"(?:finally\s+)?(?:crack(?:ed)?|open(?:ed)?)\s+"
+            r"(?:it|that(?:\s+one)?|one)(?:\s+open)?|"
+            r"(?:have|get)\s+(?:it|that|one)\s+unlocked|"
+            r"(?:purchase|unlock)\s+(?:happened|was|turned\s+out)|"
+            r"glad\s+(?:you|your)\s+(?:went\s+for|got|grabbed|unlocked|bought)|"
+            r"glad\s+(?:it|that)\s+was\s+worth\s+it|"
+            r"(?:your|the)\s+(?:first\s+)?(?:purchase|unlock)"
+            r")\b",
+            candidate, re.I,
+        ))
+        generic_relief_only = bool(re.search(
+            r"\b(?:earned (?:the |a )?chance to (?:rest|relax)|"
+            r"chance to relax|finally (?:rest|relax|unwind)|rough day|long day)\b",
+            candidate, re.I,
+        )) and not acknowledges_purchase
+        first_purchase_language = bool(re.search(
+            r"\bfirst\s+(?:purchase|unlock)\b", candidate, re.I,
+        ))
+        verified_completion_language = bool(re.search(
+            r"\b(?:i\s+(?:saw|see|noticed)|your\s+(?:purchase|payment|unlock)|"
+            r"(?:purchase|payment)\s+(?:went\s+through|completed|cleared)|"
+            r"you(?:'ve|\s+have)?\s+(?:got|unlocked|bought|grabbed)|"
+            r"glad\s+(?:you|your)\s+(?:went\s+for|got|grabbed|unlocked|bought)|"
+            r"(?:unlock|purchase)\s+(?:happened|completed))\b",
+            candidate, re.I,
+        ))
+        unverified_claim_safe = bool(
+            customer_claim
+            and re.search(
+                r"\b(?:got\s+you|okay|alright|thanks?\s+for\s+(?:telling|letting)|"
+                r"wait\s+for|once\s+it\s+(?:shows|comes)\s+through|"
+                r"when\s+it\s+(?:shows|comes)\s+through)\b",
+                candidate, re.I,
+            )
+            and not verified_completion_language
+            and not first_purchase_language
+        )
+        semantic_satisfied = bool(
+            required
+            and not generic_relief_only
+            and (
+                (provider_purchase_verified and acknowledges_purchase)
+                or (not provider_purchase_verified and unverified_claim_safe)
+            )
+            and (not first_purchase_language or first_purchase_semantics_authorized)
+        )
+        return {
+            "required": required,
+            "satisfied": semantic_satisfied,
+            "verifiedPurchase": verified,
+            "verifiedPurchaseCount": verified_count,
+            "ownedOfferingIds": list(commerce_memory.get("ownedOfferingIds") or ()),
+            "customerPurchaseClaimDetected": customer_claim,
+            "providerPurchaseVerified": provider_purchase_verified,
+            "activePurchaseIntentState": active_intent_state,
+            "purchaseOwnershipVerified": ownership_verified,
+            "firstPurchaseSemanticsAuthorized": first_purchase_semantics_authorized,
+            "purchaseAcknowledgementAuthorized": acknowledgement_authorized,
+            "purchaseAcknowledgementReason": (
+                "PROVIDER_VERIFIED_PURCHASE"
+                if acknowledgement_authorized
+                else "CUSTOMER_CLAIM_AWAITING_PROVIDER_SETTLEMENT"
+                if customer_claim and not provider_purchase_verified
+                else "VERIFIED_HISTORICAL_PURCHASE_CONTEXT"
+                if provider_purchase_verified
+                else "NO_VERIFIED_PURCHASE_EVENT"
+            ),
+            "explicitPurchaseEvent": explicit_event,
+            "contextualPurchaseReferent": contextual_event,
+            "positiveAffect": bool(re.search(r"\b(?:glad|happy)\b", inbound, re.I)),
+            "purchaseAcknowledged": acknowledges_purchase,
+            "genericReliefOnly": generic_relief_only,
+            "reason": (
+                "GROUNDED_VERIFIED_PURCHASE_ACKNOWLEDGEMENT"
+                if semantic_satisfied and provider_purchase_verified
+                else "GROUNDED_UNVERIFIED_PURCHASE_CLAIM"
+                if semantic_satisfied and customer_claim
+                else "UNVERIFIED_PURCHASE_CLAIM_OVERSTATED"
+                if customer_claim and not provider_purchase_verified
+                and (verified_completion_language or first_purchase_language)
+                else "PURCHASE_EVENT_NOT_ACKNOWLEDGED" if required
+                else "NO_PURCHASE_EVENT_FOREGROUND"
+            ),
+        }
+
+    @staticmethod
+    def _foreground_semantic_fallback(user_message: str, *, effort_mode: str,
+                                      commerce_decision: dict | None = None) -> str:
+        """Last bounded fallback for required current-turn relevance."""
         inbound = str(user_message or "").strip()
         compressed = str(effort_mode or "").upper() in {"COMPRESSED", "MINIMAL"}
+        boundary = GPTService._commercial_boundary(inbound)
+        if boundary["type"] == "CURRENT_NO_BUY_BOUNDARY":
+            return "that's totally fine—no pressure"
+        if boundary["type"] == "NO_LINK_BOUNDARY":
+            return "got it, I won't send another link"
+        if boundary["type"] == "RELATIONSHIP_ONLY_BOUNDARY":
+            return "nice to hear from you, even if it's just for a bit"
+        if boundary["type"] == "DEFERRED_SELF_REACTIVATION":
+            return "sounds good—I'll be around when you're interested"
+        session_position = GPTService._session_position_grounding(
+            inbound, "", commerce_decision,
+        )
+        if session_position["required"]:
+            return GPTService._session_position_fallback(commerce_decision)
+        next_session_step = GPTService._next_session_step_grounding(
+            inbound, "", commerce_decision,
+        )
+        if next_session_step["required"]:
+            return GPTService._next_session_step_fallback(commerce_decision)
+        purchase = GPTService._purchase_unlock_foreground_grounding(
+            inbound, "", commerce_decision,
+        )
+        if purchase["required"]:
+            if not purchase["providerPurchaseVerified"]:
+                return "got you — I'll wait for it to show on my side"
+            if purchase["firstPurchaseSemanticsAuthorized"]:
+                return "I'm glad your first unlock finally happened and you went for it"
+            return "I'm glad you went for it"
+        inventory = GPTService._inventory_existence_grounding(
+            inbound, "", commerce_decision,
+        )
+        if inventory["required"]:
+            if not inventory["inventoryExistenceKnown"]:
+                return "I can't promise what I have available right now"
+            if inventory["eligibleUnownedInventoryExists"]:
+                return "yeah, I do have something you haven't seen yet"
+            return "no, you’ve already seen what I have available right now"
+        from app.models.commercial_objection import CommercialObjectionType
+        from app.services.commercial_objection_service import CommercialObjectionService
+        if CommercialObjectionService().evaluate(
+            message=inbound,
+        ).objection_type is CommercialObjectionType.BUDGET_LIMIT:
+            return "I hear you—I’ll keep your budget in mind if I have something that fits"
+        if re.search(r"\b(?:how much|what(?:'s| is) the price|price)\b", inbound, re.I):
+            return "the current offer has the price attached"
+        if GPTService._commercial_comparison_question(inbound):
+            decision = str((commerce_decision or {}).get("decision") or "").upper()
+            reason = str((commerce_decision or {}).get("reason_code") or "").upper()
+            context = GPTService._commercial_comparison_grounding(
+                inbound, "", commerce_decision,
+            )
+            price_minor = context.get("activePriceMinor")
+            price = f"${int(price_minor) / 100:g}" if price_minor else None
+            if (decision == "WAIT"
+                    or reason == "ACTIVE_OFFER_NOT_YET_ELIGIBLE_FOR_NUDGE"):
+                if context.get("activeCommercialReferent"):
+                    label = f"The {price} option I sent" if price else "The option I sent"
+                    return (f"{label} is the smaller option in your range; "
+                            "I don't have another one to offer right now")
+                return "I don't have another smaller option to offer right now"
+            return "I can keep that range in mind, but I don't have another option to offer right now"
+        if re.search(r"\blink\b", inbound, re.I):
+            return "the link stays with the private unlock"
+        if re.search(
+            r"\b(?:private|exclusive)\b.{0,24}\b(?:content|set|photos?|videos?|stuff)\b|"
+            r"\b(?:content|set|photos?|videos?|stuff)\b.{0,24}\b(?:private|exclusive)\b",
+            inbound, re.I,
+        ):
+            return "I do keep some things private"
+        if re.search(
+            r"\b(?:tease|teasing|flirt|flirty|talk dirty|something dirtier)\b",
+            inbound, re.I,
+        ):
+            return "careful, I can still tease you a little"
         if re.search(r"\b(?:always|usually)\s+(?:this\s+)?chatty\b", inbound, re.I):
             return "only when I'm in the mood"
         if re.search(r"\b(?:keep me entertained|entertain me)\b", inbound, re.I):
@@ -1854,7 +3517,127 @@ BEHAVIOR CONTRACT:
             return "fair enough, don't force it" if compressed else "fair enough"
         if re.search(r"\b(?:trying too hard|too much|whole life story|still talking)\b", inbound, re.I):
             return "fair enough, I'll keep it simple"
+        if "POSITIVE_ENGAGEMENT" in GPTService._foreground_topics(inbound):
+            return GPTService._topic_safe_fallback("POSITIVE_ENGAGEMENT")
+        topics = GPTService._foreground_topics(inbound)
+        neutral_topic = next((
+            topic for topic in topics if topic in {
+                "WORK_BUSYNESS", "WELLBEING_FATIGUE", "PERSONAL_LIFE",
+            }
+        ), None)
+        if neutral_topic:
+            return GPTService._topic_safe_fallback(neutral_topic)
         return "fair enough"
+
+    @staticmethod
+    def _inventory_existence_grounding(
+        user_message: str, response: str,
+        commerce_decision: dict | None = None,
+    ) -> dict:
+        inbound = str(user_message or "").replace("’", "'")
+        direct = bool(re.search(
+            r"\b(?:got|have|is there|are there|do you have)\b.{0,40}"
+            r"\b(?:anything|something|more|new|else|stuff|content)\b|"
+            r"\b(?:anything|something)\s+i\s+haven't\s+"
+            r"(?:seen|bought|unlocked)\b|\bis\s+there\s+anything\s+else\b",
+            inbound, re.I,
+        )) and not bool(re.search(
+            r"\b(?:show|send|drop|share|link|how much|price|cost|range|"
+            r"smaller|cheaper|lower-priced|similar)\b",
+            inbound, re.I,
+        ))
+        if not direct:
+            return {
+                "required": False, "satisfied": True,
+                "directInventoryQuestionDetected": False,
+                "inventoryExistenceKnown": False,
+                "eligibleUnownedInventoryExists": None,
+                "inventoryAnswerGrounded": True,
+                "reason": "NOT_DIRECT_INVENTORY_QUESTION",
+            }
+        state = dict(
+            dict(commerce_decision or {}).get("inventory_existence") or {}
+        )
+        known = state.get("inventoryExistenceKnown") is True
+        exists = (
+            bool(state.get("eligibleUnownedInventoryExists")) if known else None
+        )
+        candidate = str(response or "").replace("’", "'").strip()
+        affirmative = bool(re.search(
+            r"(?:^|\b)(?:yes|yeah|yep)\b|\b(?:i\s+(?:do\s+)?have|"
+            r"i've\s+got|there\s+(?:is|are))\b.{0,35}"
+            r"\b(?:something|anything|more|new|else|stuff|content|one)\b",
+            candidate, re.I,
+        ))
+        negative = bool(re.search(
+            r"\b(?:no|nothing|don['’]?t\s+have|do\s+not\s+have|"
+            r"already\s+seen\s+(?:it\s+)?all)\b",
+            candidate, re.I,
+        ))
+        unknown_answer = bool(re.search(
+            r"\b(?:can['’]?t\s+(?:say|confirm|promise)|"
+            r"don['’]?t\s+know|not\s+sure|need\s+to\s+check)\b",
+            candidate, re.I,
+        ))
+        grounded = bool(
+            (known and exists is True and affirmative and not negative)
+            or (known and exists is False and negative and not affirmative)
+            or (not known and unknown_answer and not affirmative)
+        )
+        return {
+            "required": True,
+            "satisfied": grounded,
+            "directInventoryQuestionDetected": True,
+            "inventoryExistenceKnown": known,
+            "eligibleUnownedInventoryExists": exists,
+            "inventoryAnswerGrounded": grounded,
+            "offerPresentationAuthorized": bool(
+                state.get("offerPresentationAuthorized")
+            ),
+            "structuredOfferDelivered": bool(
+                state.get("structuredOfferDelivered")
+            ),
+            "purchaseIntentCreated": bool(state.get("purchaseIntentCreated")),
+            "reason": (
+                "AFFIRMATIVE_INVENTORY_EXISTENCE_GROUNDED"
+                if grounded and exists is True
+                else "NEGATIVE_INVENTORY_EXISTENCE_GROUNDED"
+                if grounded and exists is False
+                else "UNKNOWN_INVENTORY_FAIL_CLOSED"
+                if grounded
+                else "INVENTORY_ANSWER_NOT_GROUNDED"
+            ),
+        }
+
+    @classmethod
+    def _combined_obligation_fallback(
+        cls, user_message: str, *, effort_mode: str,
+        obligations: list[str] | tuple[str, ...] | set[str],
+        commerce_decision: dict | None = None,
+    ) -> str:
+        """Compose compatible required obligations without commercial invention."""
+        answer = cls._foreground_semantic_fallback(
+            user_message, effort_mode=effort_mode,
+            commerce_decision=commerce_decision,
+        )
+        required = set(obligations or ())
+        if "ACKNOWLEDGE_EMOTIONAL_DISCLOSURE" in required:
+            topics = cls._foreground_topics(user_message)
+            topic = next((item for item in topics if item in {
+                "WELLBEING_FATIGUE", "WORK_BUSYNESS", "PERSONAL_LIFE",
+            }), None)
+            if topic:
+                if topic == "WELLBEING_FATIGUE":
+                    return "ugh yeah, sounds like you earned the chance to relax 😅"
+                return "ugh, " + cls._topic_safe_fallback(topic)
+        if ("WELCOME_NEW_RELATIONSHIP" not in required
+                or not required.intersection({
+                    "ANSWER_DIRECT_QUESTION", "ANSWER_DIRECT_PERSONAL_QUESTION",
+                })):
+            return answer
+        if not answer:
+            return ""
+        return f"hey, good to hear from you 😊 — {answer}"
 
     @staticmethod
     def _minimal_attention_fallback(response: str) -> str:
@@ -2092,12 +3875,160 @@ OWNERSHIP RULES:
             )
             or {}
         )
+        active_session_context = dict(
+            commerce_decision.get("active_session_context") or {}
+        )
+        session_position_question = self._session_position_grounding(
+            user_message, "", commerce_decision,
+        )
+        if session_position_question["required"]:
+            question_pressure["sessionPositionQuestion"] = {
+                **session_position_question,
+                "context": active_session_context,
+            }
+        next_session_step_question = self._next_session_step_grounding(
+            user_message, "", commerce_decision,
+        )
+        if next_session_step_question["required"]:
+            question_pressure["nextSessionStepQuestion"] = {
+                **next_session_step_question,
+                "context": active_session_context,
+            }
+        commerce_memory = dict(
+            commerce_decision.get("customer_commerce_memory") or {}
+        )
+        recent_purchased_content = dict(
+            commerce_decision.get("recent_purchased_content") or {}
+        )
+        verified_purchase_count = int(
+            commerce_memory.get("verifiedPurchaseCount")
+            or commerce_memory.get("lifetimePurchaseCount")
+            or 0
+        )
+        completed_purchase_reaction = bool(
+            verified_purchase_count
+            and re.search(
+                r"\b(?:was|is)\s+(?:really\s+)?(?:good|great|amazing)\b|"
+                r"\b(?:loved|liked|enjoyed)\s+(?:it|that|the|this)\b",
+                str(user_message or ""), re.I,
+            )
+        )
+        question_pressure["buyerReactionContext"] = {
+            "verifiedBuyer": verified_purchase_count > 0,
+            "completedReaction": completed_purchase_reaction,
+        }
+        buyer_purchase_instruction = ""
+        purchase_reference = {}
+        session_purchase_grounding = None
+        if verified_purchase_count:
+            purchase_reference = self._resolve_purchase_history_reference(
+                user_message, recent_purchased_content,
+                recent_transcript=chat_history,
+                session_context=dict(
+                    commerce_decision.get("active_session_context")
+                    or commerce_decision.get("next_sales_action") or {}
+                ),
+            )
+            resolved_entry = dict(purchase_reference.get("entry") or {})
+            if purchase_reference.get("sessionRelativeReference") is True:
+                session_purchase_grounding = {
+                    "required": True,
+                    "satisfied": bool(
+                        purchase_reference.get(
+                            "purchaseHistoryReferentResolved"
+                        )
+                        and resolved_entry.get("purchaseConfirmed") is True
+                        and resolved_entry.get("ownershipConfirmed") is True
+                    ),
+                    "resolutionType": purchase_reference.get("resolutionType"),
+                    "purchaseIntentId": resolved_entry.get("purchaseIntentId"),
+                    "offeringId": resolved_entry.get("offeringId"),
+                    "assetId": resolved_entry.get("assetId"),
+                    "sessionId": resolved_entry.get("sessionId"),
+                    "sessionFoundation": resolved_entry.get(
+                        "sessionFoundation"
+                    ),
+                    "membershipPosition": resolved_entry.get(
+                        "membershipPosition"
+                    ),
+                    "purchaseStatus": "PURCHASED",
+                    "attributionResult": "ATTRIBUTED",
+                    "ownershipVerified": bool(
+                        resolved_entry.get("ownershipConfirmed")
+                    ),
+                }
+            reference_is_unambiguous = bool(
+                purchase_reference.get("purchaseHistoryReferentResolved")
+                or recent_purchased_content.get("referenceIsUnambiguous")
+            )
+            safe_detail = {
+                key: (resolved_entry or recent_purchased_content).get(key)
+                for key in ("contentType", "safeSummary", "safeTags", "safeThemes")
+                if (resolved_entry or recent_purchased_content).get(key)
+            }
+            safe_history = [{
+                key: entry.get(key) for key in (
+                    "ordinal", "purchasedAt", "contentType", "grossMinor",
+                    "currency", "purchaseConfirmed", "ownershipConfirmed",
+                    "safeSummary", "safeTags", "safeThemes",
+                ) if entry.get(key) is not None
+            } for entry in recent_purchased_content.get("historyEntries") or ()]
+            reference_diagnostic = {
+                key: value for key, value in purchase_reference.items()
+                if key != "entry"
+            }
+            question_pressure["purchaseHistoryReference"] = (
+                reference_diagnostic
+            )
+            buyer_purchase_instruction = f"""
+VERIFIED BUYER RELATIONSHIP CONTEXT
+- This customer has {verified_purchase_count} authoritative verified purchase(s).
+- A customer saying they bought or paid is conversational evidence only. It is not a
+  verified new purchase unless the authoritative decision is CONGRATULATE_PURCHASE
+  with reason PURCHASE_VERIFIED. Current intent state:
+  {str(commerce_decision.get("current_offer_status") or "NONE").upper()}.
+- If a customer claims a purchase while that intent is still PRESENTED, acknowledge
+  the statement without saying payment cleared, the unlock happened, or ownership
+  was created. Never call it their first purchase/unlock from message wording alone.
+- Speak as someone who knows the purchase happened and the customer owns what was delivered.
+- If the customer reacts after viewing it, respond retrospectively; never act as if it is
+  still unknown, locked, pending, or merely hoped-for.
+- A brief natural reaction can be complete. Do not pad it with polished affirmation or
+  append a broad preference-interview question merely to keep the exchange going.
+- The current purchase reference is {"unambiguous" if reference_is_unambiguous else "not safe to bind to one specific purchase"}.
+- Bounded authoritative purchase history: {json.dumps(safe_history, ensure_ascii=False, default=str)}.
+- Purchase-reference resolution: {json.dumps(reference_diagnostic, ensure_ascii=False, default=str)}.
+- If that resolution is AGGREGATE or RECENT_SUBSET, preserve the customer's
+  collective/plural meaning.
+  Do not answer with a singular "it", "that one", or equivalent ungrounded item.
+- Customer-safe purchased-content detail: {json.dumps(safe_detail, ensure_ascii=False, default=str) if safe_detail else "NONE"}.
+- Use only those supplied descriptive fields. If none are supplied, say "that one" or an
+  equally natural neutral referent; do not invent setting, wardrobe, pose, mood, or format.
+- Never expose identifiers, internal state names, transaction data, or system terminology.
+"""
         proactive_progression = dict(
             commerce_decision.get("proactive_progression") or {}
         )
         proactive_tease = bool(
             proactive_progression.get("proactiveProgressionAuthorized")
             and proactive_progression.get("progressionAction") == "TEASE"
+        )
+        requested_free_teaser = bool(
+            dict(commerce_decision.get("pre_session_free_teaser") or {}).get(
+                "authorized"
+            )
+        )
+        customer_feedback = self._customer_feedback_semantics(user_message)
+        recent_customer_flirt = any(
+            self._social_flirtation(str(item.get("content") or ""))["detected"]
+            for item in (chat_history or [])[-4:]
+            if str(item.get("role") or "").lower() in {"user", "customer"}
+        )
+        current_customer_flirt = self._social_flirtation(user_message)
+        social_tease_authorized = bool(
+            current_customer_flirt["detected"]
+            or current_customer_flirt["sexual"]
+            or recent_customer_flirt
         )
         commercial_receptiveness = dict(
             commerce_decision.get("commercial_receptiveness") or {}
@@ -2136,6 +4067,12 @@ OWNERSHIP RULES:
                 send_offer=send_offer,
             )
         )
+        protected_conversational_prose = bool(
+            commerce_execution_policy == "COMMERCE_ACKNOWLEDGEMENT_ALLOWED"
+        )
+        question_pressure["commercialDiscoveryAuthorized"] = bool(
+            protected_commercial_semantics and not protected_conversational_prose
+        )
         prior_customer_turns = sum(
             1 for item in chat_history
             if str(item.get("role") or "").lower() == "user"
@@ -2162,6 +4099,22 @@ OWNERSHIP RULES:
         turn_obligations = self._turn_obligations(
             user_message, new_relationship=new_relationship,
         )
+        if session_position_question["required"]:
+            turn_obligations = [
+                item for item in turn_obligations
+                if item not in {
+                    "ANSWER_DIRECT_QUESTION", "ANSWER_DIRECT_PERSONAL_QUESTION",
+                }
+            ]
+            turn_obligations.append("ANSWER_SESSION_POSITION")
+        elif next_session_step_question["required"]:
+            turn_obligations = [
+                item for item in turn_obligations
+                if item not in {
+                    "ANSWER_DIRECT_QUESTION", "ANSWER_DIRECT_PERSONAL_QUESTION",
+                }
+            ]
+            turn_obligations.append("ANSWER_NEXT_SESSION_STEP")
         if curiosity_truth_obligation:
             turn_obligations.append(
                 "DO_NOT_OVERSTATE_CUSTOMER_COMMERCIAL_STATE"
@@ -2172,6 +4125,8 @@ OWNERSHIP RULES:
         authoritative_commerce = protected_commercial_semantics
         commerce_decision_instruction = ""
         session_conversation_instruction = ""
+        session_position_instruction = ""
+        next_session_step_instruction = ""
         bundle_conversation_instruction = ""
         single_image_conversation_instruction = ""
         if commerce_decision:
@@ -2181,6 +4136,21 @@ OWNERSHIP RULES:
                 and not protected_commercial_semantics
                 and not proactive_tease
             )
+            if session_position_question["required"]:
+                session_position_instruction = f"""
+ACTIVE SESSION POSITION QUESTION
+- This is descriptive continuity, not authorization to sell.
+- The customer has completed part {session_position_question.get('currentConsumedPosition')}.
+- The next eligible continuation point is part {session_position_question.get('nextEligiblePosition')}.
+- Answer both facts naturally without internal identifiers, prices, an offer, or a permission question.
+"""
+            elif next_session_step_question["required"]:
+                next_session_step_instruction = f"""
+ACTIVE SESSION NEXT-STEP QUESTION
+- This is a descriptive Session-continuity question, not authorization to sell.
+- The next eligible continuation point is part {next_session_step_question.get('nextEligiblePosition')}.
+- Answer that fact naturally without prices, an offer, a link, inventory claims, or a permission question.
+"""
             session_conversation = commerce_decision.get("session_conversation") or {}
             if isinstance(session_conversation, dict):
                 session_conversation_instruction = str(
@@ -2343,6 +4313,8 @@ ORDINARY RELATIONSHIP CONVERSATION
 - Reply naturally to the current conversation. Do not introduce paid content,
   an offering, an unlock, a surprise-content hint, or sales persuasion merely
   because customer purchase history or commercial infrastructure exists.
+{session_position_instruction}
+{next_session_step_instruction}
 """
             else:
                 commerce_decision_instruction = f"""
@@ -2837,7 +4809,6 @@ STRICT BEHAVIOR RULES:
 
         if authoritative_commerce:
             offer_instruction = ""
-            ownership_gpt_context = ""
         elif send_offer and offer_type != "none":
             if should_include_link_now:
                 offer_instruction = f"""
@@ -2916,7 +4887,8 @@ STRICT RULES:
 - Do NOT mention paid content.
 - Do NOT say "$", "price", "unlock", "buy", "purchase", "PPV", or "offer".
 - Do NOT imply content is ready to send.
-- Just chat naturally, build curiosity, and keep the user engaged.
+- Respond naturally to the current message. Once its conversational purpose is
+  satisfied, stop; do not add a beat merely to sustain engagement.
 - If the user asks for content, tease lightly without pricing or promises.
 
 CRITICAL:
@@ -3059,7 +5031,7 @@ Rebuild comfort and engagement before any monetization resumes.
 """
 
         ordinary_phone_texting = bool(
-            not protected_commercial_semantics
+            (not protected_commercial_semantics or protected_conversational_prose)
             and not send_offer
             and not monetization_intent
             and sleep_context.get("state") not in {
@@ -3070,16 +5042,24 @@ Rebuild comfort and engagement before any monetization resumes.
         if ordinary_phone_texting:
             phone_texting_instruction = f"""
 CANONICAL ORDINARY TELEGRAM PHONE-TEXTING CONTRACT
+- The final user-role message is the CURRENT CUSTOMER MESSAGE. Respond to its
+  meaning first; earlier transcript, memory, and diagnostics are supporting context.
 - Ava is privately texting from her phone, not writing desktop assistant copy.
-- SHORT BY DEFAULT: normally use one natural fragment, one short sentence, or two
-  short sentences. Expand only when emotion, explanation, support, safety, or real
-  conversational substance warrants it. Do not pad a reply to look balanced.
+- ONE COMPLETE BEAT BY DEFAULT: once the current turn's required response is
+  naturally complete, stop. Add a sentence or clause only when it performs a
+  distinct useful function (answer, grounded detail, personal perspective,
+  clarification, emotional nuance, authorized discovery/progression, or continuity).
+  This is not a sentence limit. Do not add another beat for warmth, emphasis,
+  engagement, elaboration, reinforcement, or to make the reply feel complete.
 - In low-stakes banter, roughly 5-15 words is a strong preference, not a hard cap.
 - When the customer mentions several things, select one salient thread. Do not
   summarize or acknowledge every fact merely because it is available.
 - Prefer the subject the customer foregrounds in the current message over an
   older named entity or callback. Recent memory is optional context, not the
   default topic owner.
+- Neutral disclosures about work, busyness, family, or fatigue do not authorize
+  sexual or provocative escalation by themselves. If an immediately active flirt
+  thread supports a blended reply, still acknowledge the current disclosure.
 - Answer what the customer actually asked. Add one small reaction, useful detail,
   callback, tease, or bounded low-stakes glimpse of Ava's immediate moment when it
   helps. Do not merely paraphrase the customer's statement to prove understanding.
@@ -3237,6 +5217,8 @@ INTIMACY ELIGIBILITY CONTEXT
 {intimacy_gpt_context}
 
 {ownership_gpt_context}
+
+{buyer_purchase_instruction}
 
 CURRENT STATE:
 - Mode: {conversation_mode}
@@ -3474,26 +5456,19 @@ FINAL TELEGRAM RESPONSE CONTRACT (highest priority for wording):
 
         messages = [{"role": "system", "content": system_prompt}]
 
-        if chat_history:
-            messages.extend(chat_history)
-
-        should_append_user_message = True
-        if chat_history:
-            last_msg = chat_history[-1]
+        history_messages = list(chat_history)
+        if history_messages:
+            last_msg = history_messages[-1]
             if (
                 last_msg.get("role") == "user"
                 and (last_msg.get("content") or "").strip()
                 == (user_message or "").strip()
             ):
-                should_append_user_message = False
-
-        if should_append_user_message:
-            messages.append(
-                {
-                    "role": "user",
-                    "content": user_message,
-                }
-            )
+                history_messages.pop()
+        messages.extend(history_messages)
+        # One unambiguous current-turn authority is always last. A trailing
+        # transcript copy is removed rather than duplicated.
+        messages.append({"role": "user", "content": user_message})
 
         if intimacy_continuation and not authoritative_commerce:
             messages.append(
@@ -3585,7 +5560,7 @@ No selling.
         def fallback_complete():
             nonlocal client, model
             client, model = fallback_client, fallback_model
-            return complete(messages)
+            return complete(self._openai_grok_fallback_messages(messages))
 
         # One bounded fallback stays inside this generation call and therefore
         # inside the same durable ordinary-reply operation. It does not retry
@@ -3689,12 +5664,21 @@ to prolong the exchange. Return only the rewritten customer-facing reply.
             ((commerce_decision or {}).get("objection_recovery") or {}).get("strategy")
             == "VALUE_DEFENSE"
         )
+        value_defense_negative_contact_required = bool(
+            value_defense_active
+            and ((commerce_decision or {}).get("objection_recovery") or {}).get(
+                "negativeContactAuthorized"
+            )
+        )
         if value_defense_active:
             style["styleRewriteReasons"].extend(
                 "UNSAFE_NEGATIVE_CONTACT_" + reason
                 for reason in self._negative_contact_safety_reasons(response)
             )
-            if not self._value_defense_addresses_objection(response):
+            if not self._value_defense_satisfies_strategy(
+                response,
+                require_negative_contact=value_defense_negative_contact_required,
+            ):
                 style["styleRewriteReasons"].append(
                     "COMMERCIAL_OBJECTION_NOT_ADDRESSED"
                 )
@@ -3721,8 +5705,11 @@ Rewrite the draft once as a natural private phone text. Return only the reply.
 Triggers: {json.dumps(initial_style_reasons)}
 - Required turn obligations: {json.dumps(style.get('unsatisfiedTurnObligations') or [])}
 - Keep its actual meaning, direct answer, temporal truth, and safety boundaries.
-- Usually use one fragment/sentence or two short sentences; no polished paraphrase,
-  generic aphorism, filler, or mechanical engagement question.
+- Prefer deletion and compression. If one existing beat already satisfies the
+  obligations, keep that beat and remove redundant material; never make the rewrite
+  longer merely to sound natural. Add another beat only for a distinct required or
+  useful function. No polished paraphrase, generic aphorism, filler, or mechanical
+  engagement question.
 - Compress low-stakes banter toward one compact beat. Select one salient customer
   thread instead of acknowledging every detail.
 - Do not repeat a conspicuous phrase or opening from Ava's recent replies.
@@ -3731,6 +5718,9 @@ Triggers: {json.dumps(initial_style_reasons)}
   reciprocal question. Do not dodge it by interviewing the customer about an
   incidental noun or activity in their message.
 - Low-stakes immediate self-disclosure is allowed, but invent no consequential biography.
+- When VALUE_DEFENSE is authoritative, acknowledgement alone is not enough:
+  maintain or defend the current offer, include bounded playful resistance when
+  authorized, and keep the decision voluntary. Never retreat into generic chat.
 {('- Preserve exactly one required callback to this selected memory: ' + json.dumps(continuity_guidance.get('strongestMemory'), ensure_ascii=False)) if expected else '- Memory is available context, not required response content. Do not force a callback.'}
 """,
             })
@@ -3758,7 +5748,10 @@ Triggers: {json.dumps(initial_style_reasons)}
                         "UNSAFE_NEGATIVE_CONTACT_" + reason
                         for reason in self._negative_contact_safety_reasons(candidate)
                     )
-                    if not self._value_defense_addresses_objection(candidate):
+                    if not self._value_defense_satisfies_strategy(
+                        candidate,
+                        require_negative_contact=value_defense_negative_contact_required,
+                    ):
                         candidate_style["styleRewriteReasons"].append(
                             "COMMERCIAL_OBJECTION_NOT_ADDRESSED"
                         )
@@ -3769,6 +5762,9 @@ Triggers: {json.dumps(initial_style_reasons)}
                     "EXCESSIVE_ORDINARY_LENGTH",
                     "REPEATED_QUESTION_PRESSURE",
                     "MANUFACTURED_ENGAGEMENT_QUESTION",
+                    "UNNECESSARY_BUYER_REACTION_QUESTION",
+                    "REDUNDANT_PURCHASE_AFFIRMATION",
+                    "REDUNDANT_SEMANTIC_FILLER",
                 }.intersection(candidate_style["styleRewriteReasons"])
                 if (retryable_candidate_defects
                         and not ({"CUSTOMER_QUESTION_UNANSWERED", "EMOTIONAL_ALIGNMENT_MISMATCH"}
@@ -3827,6 +5823,9 @@ obligation. Prefer the current message's salient topic. Return only the reply.
                     "CUSTOMER_QUESTION_UNANSWERED",
                     "MANUFACTURED_ENGAGEMENT_QUESTION",
                     "REPEATED_QUESTION_PRESSURE",
+                    "UNNECESSARY_BUYER_REACTION_QUESTION",
+                    "REDUNDANT_PURCHASE_AFFIRMATION",
+                    "REDUNDANT_SEMANTIC_FILLER",
                     "EMOTIONAL_ALIGNMENT_MISMATCH",
                     "TEMPORAL_MISGROUNDING",
                 }.intersection(candidate_style["styleRewriteReasons"])
@@ -3861,8 +5860,8 @@ obligation. Prefer the current message's salient topic. Return only the reply.
                         response = original_response
                         style_rewrite_outcome = "REJECTED_OBLIGATION_LOSS_ORIGINAL_PRESERVED"
                     elif value_defense_active:
-                        style_rewrite_outcome = "NONCOMPLIANT_REWRITE_SAFE_BACKOFF"
-                        response = "haha fair — no pressure, we can leave it there"
+                        style_rewrite_outcome = "NONCOMPLIANT_REWRITE_STRATEGY_FALLBACK"
+                        response = self._value_defense_fallback()
                     else:
                         missing = set(candidate_style.get("unsatisfiedTurnObligations") or ())
                         required = set(candidate_style.get("turnObligations") or ())
@@ -3875,7 +5874,11 @@ obligation. Prefer the current message's salient topic. Return only the reply.
                                 response = self._obligation_aware_first_contact_fallback(
                                     user_message=user_message,
                                     temporal=temporal_language,
-                                ) if "WELCOME_NEW_RELATIONSHIP" in required else "doing pretty good so far"
+                                ) if "WELCOME_NEW_RELATIONSHIP" in required else (
+                                    self._direct_personal_question_fallback(
+                                        self._direct_personal_question_slot(user_message)
+                                    )
+                                )
                         elif "ACKNOWLEDGE_COMPLIMENT" in missing:
                             response = "aww thank you, that's sweet of you 😊"
                         elif "ACKNOWLEDGE_EMOTIONAL_DISCLOSURE" in missing:
@@ -4162,10 +6165,13 @@ Return only the reply.
 
         objection_response_satisfied = (
             not value_defense_active
-            or self._value_defense_addresses_objection(response)
+            or self._value_defense_satisfies_strategy(
+                response,
+                require_negative_contact=value_defense_negative_contact_required,
+            )
         )
         if value_defense_active and not objection_response_satisfied:
-            response = "haha fair — no pressure, we can leave it there"
+            response = self._value_defense_fallback()
             style = self._style_analysis(
                 response, user_message, pressure=question_pressure,
                 ordinary=ordinary_phone_texting, memory_callback=False,
@@ -4177,7 +6183,9 @@ Return only the reply.
             )
             objection_response_satisfied = True
             style_rewrite_attempted = True
-            style_rewrite_outcome = "SAFE_OBJECTION_ACKNOWLEDGEMENT_FALLBACK"
+            style_rewrite_outcome = "SAFE_VALUE_DEFENSE_STRATEGY_FALLBACK"
+
+        value_defense_language = self._value_defense_language_analysis(response)
 
         commercial_action = str(
             (commerce_decision or {}).get("decision") or ""
@@ -4350,6 +6358,112 @@ semantics. Return only the customer-facing reply.
                 recent_responses=recent_responses,
             )
             violations = []
+            feedback_response = self._feedback_response_semantics(candidate)
+            feedback_preserved = self._feedback_sentiment_preserved(
+                customer_feedback.get("customerFeedbackStrength"),
+                feedback_response.get("responseFeedbackStrength"),
+            )
+            tease = self._response_tease_semantics(candidate)
+            tease_type = tease.get("responseTeaseType")
+            tease_authorized = bool(
+                (tease_type == "COMMERCIAL_CONTENT_TEASE" and proactive_tease)
+                or (tease_type == "COMMERCIAL_CONTENT_TEASE" and requested_free_teaser)
+                or (tease_type == "SOCIAL_FLIRT" and social_tease_authorized)
+                or tease_type == "OTHER" and (
+                    proactive_tease or social_tease_authorized
+                    or requested_free_teaser
+                )
+            )
+            candidate_style.update(customer_feedback)
+            candidate_style.update(feedback_response)
+            candidate_style.update(tease)
+            from app.services.customer_content_presentation_validator import (
+                CustomerContentPresentationValidator,
+            )
+            purchase_frame = (
+                CustomerContentPresentationValidator.purchase_reaction_semantic_frame(
+                    user_message,
+                    purchase_count=verified_purchase_count,
+                    purchase_history_reference=purchase_reference,
+                )
+            )
+            aggregate_analysis = (
+                CustomerContentPresentationValidator.aggregate_purchase_subject_analysis(
+                    candidate,
+                    expected_subject=str(purchase_frame.get("aggregateSubject") or ""),
+                )
+                if purchase_frame.get("aggregatePurchaseReactionRequired") else {}
+            )
+            aggregate_satisfied = bool(
+                not purchase_frame.get("aggregatePurchaseReactionRequired")
+                or aggregate_analysis.get("aggregatePurchaseReactionSatisfied")
+            )
+            subset_feedback_satisfied = (
+                CustomerContentPresentationValidator.
+                recent_subset_positive_feedback_satisfied(
+                    candidate, semantic_frame=purchase_frame,
+                )
+            )
+            candidate_style.update({
+                "purchaseFeedbackAggregate": bool(
+                    purchase_frame.get("purchaseFeedbackAggregate")
+                ),
+                "aggregatePurchaseReference": bool(
+                    purchase_frame.get("aggregatePurchaseReference")
+                ),
+                "resolvedPurchaseCount": purchase_frame.get("resolvedPurchaseCount", 0),
+                "aggregateResponseSatisfied": aggregate_satisfied,
+                "aggregatePurchaseReactionRequired": bool(
+                    purchase_frame.get("aggregatePurchaseReactionRequired")
+                ),
+                "aggregatePurchaseReactionSatisfied": aggregate_satisfied,
+                "recentSubsetPositiveFeedbackRequired": bool(
+                    purchase_frame.get("recentSubsetPositiveFeedbackRequired")
+                ),
+                "recentSubsetPositiveFeedbackSatisfied": (
+                    subset_feedback_satisfied
+                ),
+            })
+            if not aggregate_satisfied:
+                violations.append("AGGREGATE_PURCHASE_RESPONSE_NOT_PRESERVED")
+            if not subset_feedback_satisfied:
+                violations.append(
+                    "RECENT_SUBSET_POSITIVE_FEEDBACK_NOT_PRESERVED"
+                )
+            resolved_purchase_ambiguity_question = bool(
+                purchase_reference.get("purchaseHistoryReferentResolved") is True
+                and re.search(
+                    r"\b(?:which|what)\s+(?:one|set|purchase|item|thing)\b|"
+                    r"\bwhat\s+did\s+you\s+(?:buy|purchase|unlock|get)\b",
+                    candidate, re.I,
+                )
+            )
+            candidate_style["resolvedPurchaseAmbiguityQuestion"] = (
+                resolved_purchase_ambiguity_question
+            )
+            if resolved_purchase_ambiguity_question:
+                violations.append("RESOLVED_PURCHASE_AMBIGUITY_QUESTION")
+            candidate_style.update({
+                "feedbackSentimentPreserved": feedback_preserved,
+                "responseTeaseAuthorized": tease_authorized,
+                "futureContentReferenceAuthorized": bool(
+                    tease.get("futureContentReferenceDetected") and proactive_tease
+                ),
+            })
+            if (customer_feedback.get("customerFeedbackDetected")
+                    and not feedback_preserved):
+                violations.append("CUSTOMER_FEEDBACK_SENTIMENT_NOT_PRESERVED")
+            if tease.get("responseTeaseDetected") and not tease_authorized:
+                violations.append("UNAUTHORIZED_RESPONSE_TEASE")
+            boundary_grounding = self._commercial_boundary_grounding(
+                user_message, candidate, commerce_decision,
+            )
+            candidate_style.update(boundary_grounding)
+            if (boundary_grounding["boundaryAcknowledgementRequired"]
+                    and not boundary_grounding["boundaryAcknowledgementSatisfied"]):
+                violations.append("FOREGROUND_OBLIGATION_ACKNOWLEDGE_COMMERCIAL_BOUNDARY")
+            if boundary_grounding["unsupportedCommercialReferentDetected"]:
+                violations.append("UNSUPPORTED_COMMERCIAL_REFERENT")
             if curiosity_truth_obligation:
                 obligation = "DO_NOT_OVERSTATE_CUSTOMER_COMMERCIAL_STATE"
                 obligations = list(candidate_style.get("turnObligations") or ())
@@ -4398,8 +6512,68 @@ semantics. Return only the customer-facing reply.
             if self._violates_final_response_contract(candidate_style):
                 violations.append("MANUFACTURED_QUESTION_CONTRACT")
             semantic_relevance = self._foreground_semantic_relevance(
-                user_message, candidate,
+                user_message, candidate, commerce_decision,
+                recent_transcript=chat_history,
             )
+            # The generic style pass deliberately has no commerce authority.
+            # Reconcile its direct-question flag here against the authoritative
+            # semantic result so a grounded inventory answer is not rejected as
+            # "unanswered" merely because the style-only pass could not know
+            # whether unowned inventory exists.
+            if (semantic_relevance.get("required")
+                    and "ANSWER_DIRECT_QUESTION" in
+                    (candidate_style.get("turnObligations") or ())):
+                satisfied = list(
+                    candidate_style.get("satisfiedTurnObligations") or ()
+                )
+                unsatisfied = list(
+                    candidate_style.get("unsatisfiedTurnObligations") or ()
+                )
+                if semantic_relevance.get("satisfied"):
+                    if "ANSWER_DIRECT_QUESTION" not in satisfied:
+                        satisfied.append("ANSWER_DIRECT_QUESTION")
+                    unsatisfied = [
+                        item for item in unsatisfied
+                        if item != "ANSWER_DIRECT_QUESTION"
+                    ]
+                    candidate_style["customerQuestionAnswered"] = True
+                else:
+                    satisfied = [
+                        item for item in satisfied
+                        if item != "ANSWER_DIRECT_QUESTION"
+                    ]
+                    if "ANSWER_DIRECT_QUESTION" not in unsatisfied:
+                        unsatisfied.append("ANSWER_DIRECT_QUESTION")
+                    candidate_style["customerQuestionAnswered"] = False
+                candidate_style["satisfiedTurnObligations"] = satisfied
+                candidate_style["unsatisfiedTurnObligations"] = unsatisfied
+                candidate_style["turnObligationsSatisfied"] = not unsatisfied
+                if semantic_relevance.get("satisfied"):
+                    violations = [
+                        item for item in violations
+                        if item != (
+                            "FOREGROUND_OBLIGATION_ANSWER_DIRECT_QUESTION"
+                        )
+                    ]
+            if semantic_relevance.get("intent") == "PURCHASE_OR_UNLOCK_ACKNOWLEDGEMENT":
+                purchase_obligation = "ACKNOWLEDGE_PURCHASE_OR_UNLOCK"
+                obligations = list(candidate_style.get("turnObligations") or ())
+                satisfied = list(candidate_style.get("satisfiedTurnObligations") or ())
+                unsatisfied = list(candidate_style.get("unsatisfiedTurnObligations") or ())
+                if purchase_obligation not in obligations:
+                    obligations.append(purchase_obligation)
+                if semantic_relevance["satisfied"]:
+                    if purchase_obligation not in satisfied:
+                        satisfied.append(purchase_obligation)
+                    unsatisfied = [item for item in unsatisfied if item != purchase_obligation]
+                else:
+                    satisfied = [item for item in satisfied if item != purchase_obligation]
+                    if purchase_obligation not in unsatisfied:
+                        unsatisfied.append(purchase_obligation)
+                candidate_style["turnObligations"] = obligations
+                candidate_style["satisfiedTurnObligations"] = satisfied
+                candidate_style["unsatisfiedTurnObligations"] = unsatisfied
+                candidate_style["turnObligationsSatisfied"] = not unsatisfied
             if (semantic_relevance["required"]
                     and not semantic_relevance["satisfied"]):
                 violations.append("FOREGROUND_SEMANTIC_RELEVANCE")
@@ -4417,6 +6591,30 @@ semantics. Return only the customer-facing reply.
             return list(dict.fromkeys(violations)), memory_evidence, candidate_style
 
         final_composition_violations, _, _ = final_composition(response)
+        direct_personal_violation = (
+            "FOREGROUND_OBLIGATION_ANSWER_DIRECT_PERSONAL_QUESTION"
+        )
+        bounded_personal_fallback_violations = {
+            direct_personal_violation,
+            "FOREGROUND_OBLIGATION_WELCOME_NEW_RELATIONSHIP",
+            "FOREGROUND_OBLIGATION_RESPOND_TO_GREETING",
+        }
+        if (
+            direct_personal_violation in final_composition_violations
+            and set(final_composition_violations).issubset(
+                bounded_personal_fallback_violations
+            )
+        ):
+            response = (
+                self._obligation_aware_first_contact_fallback(
+                    user_message=user_message, temporal=temporal_language,
+                )
+                if "WELCOME_NEW_RELATIONSHIP" in (style.get("turnObligations") or ())
+                else self._direct_personal_question_fallback(
+                    self._direct_personal_question_slot(user_message)
+                )
+            )
+            final_composition_violations, _, style = final_composition(response)
         if final_composition_violations:
             combined_obligation_repair_attempted = True
             repair_messages = list(messages)
@@ -4431,6 +6629,9 @@ Required foreground obligations: {json.dumps(style.get('turnObligations') or [])
 {('Include one natural callback grounded in: ' + json.dumps(continuity_guidance.get('strongestMemory'), ensure_ascii=False)) if expected else 'Memory is optional; do not force it.'}
 Authoritative Sales Brain action: {('TEASE — preserve playful curiosity/tension without price, an offer, or purchase language.' if proactive_tease else 'Preserve the current non-tease strategy.')}
 Preserve safety, canonical temporal truth, attention effort, and direct answers.
+Active structured commercial context (knowledge only; it authorizes no new action):
+{json.dumps({key: commerce_decision.get(key) for key in ('active_purchase_intent_id', 'active_offering_id', 'current_offer_status', 'customer_current_offer_status', 'commercial_objection', 'objection_recovery', 'recommended_product_context')}, ensure_ascii=False, default=str)}
+Ground relative product/price answers in that context. Do not invent plural inventory.
 Do not concatenate checklist fragments or add a manufactured question.
 Return only the customer-facing reply.
 """},
@@ -4488,17 +6689,37 @@ Return only the customer-facing reply.
                 required_obligations = set(
                     style.get("turnObligations") or ()
                 )
-                if required_obligations.intersection({
+                if customer_feedback.get("customerFeedbackDetected"):
+                    response = self._remove_unauthorized_future_content_tease(
+                        response
+                    )
+                    feedback_check = self._feedback_response_semantics(response)
+                    if not self._feedback_sentiment_preserved(
+                        customer_feedback.get("customerFeedbackStrength"),
+                        feedback_check.get("responseFeedbackStrength"),
+                    ):
+                        response = self._feedback_acknowledgement_fallback(
+                            customer_feedback["customerFeedbackStrength"]
+                        )
+                elif required_obligations.intersection({
                     "WELCOME_NEW_RELATIONSHIP", "RESPOND_TO_GREETING",
-                    "ANSWER_DIRECT_QUESTION", "ANSWER_DIRECT_PERSONAL_QUESTION",
+                    "ANSWER_DIRECT_PERSONAL_QUESTION",
                 }):
                     response = self._obligation_aware_first_contact_fallback(
                         user_message=user_message,
                         temporal=temporal_validation,
                     )
-                else:
-                    response = self._foreground_semantic_fallback(
+                elif "ANSWER_DIRECT_QUESTION" in required_obligations:
+                    response = self._combined_obligation_fallback(
                         user_message, effort_mode=effort_mode,
+                        obligations=required_obligations,
+                        commerce_decision=commerce_decision,
+                    )
+                else:
+                    response = self._combined_obligation_fallback(
+                        user_message, effort_mode=effort_mode,
+                        obligations=required_obligations,
+                        commerce_decision=commerce_decision,
                     )
                 fallback_violations, _, fallback_style = final_composition(response)
                 style = fallback_style
@@ -4614,13 +6835,15 @@ Return only the customer-facing reply.
         # This guard runs after best-candidate restoration so no later stage can
         # reintroduce an unrelated ordinary-chat response.
         semantic_gate = self._foreground_semantic_relevance(
-            user_message, response,
+            user_message, response, recent_transcript=chat_history,
         )
         if (ordinary_phone_texting and not protected_commercial_semantics
                 and not expected and not proactive_tease
                 and semantic_gate["required"] and not semantic_gate["satisfied"]):
-            response = self._foreground_semantic_fallback(
+            response = self._combined_obligation_fallback(
                 user_message, effort_mode=effort_mode,
+                obligations=style.get("turnObligations") or (),
+                commerce_decision=commerce_decision,
             )
             style = self._style_analysis(
                 response, user_message, pressure=question_pressure,
@@ -4700,6 +6923,71 @@ Return only the customer-facing reply.
             final_validation_final = response
             final_validation_outcome = "CUSTOMER_COMMERCIAL_STATE_TRUTH_ENFORCED"
 
+        # Material current-turn obligations are a delivery gate, not telemetry.
+        # The bounded provider repair above may fail, but an unrelated fallback
+        # must never remain the optional customer-visible response.
+        binding_violations, _, _ = final_composition(response)
+        feedback_or_tease_violations = {
+            "CUSTOMER_FEEDBACK_SENTIMENT_NOT_PRESERVED",
+            "UNAUTHORIZED_RESPONSE_TEASE",
+            "AGGREGATE_PURCHASE_RESPONSE_NOT_PRESERVED",
+            "RECENT_SUBSET_POSITIVE_FEEDBACK_NOT_PRESERVED",
+        }.intersection(binding_violations)
+        if feedback_or_tease_violations:
+            response = (
+                self._recent_subset_feedback_fallback()
+                if purchase_reference.get("resolutionType") == "RECENT_SUBSET"
+                and "RECENT_SUBSET_POSITIVE_FEEDBACK_NOT_PRESERVED"
+                in feedback_or_tease_violations
+                else self._remove_unauthorized_future_content_tease(response)
+            )
+            feedback_check = self._feedback_response_semantics(response)
+            if (customer_feedback.get("customerFeedbackDetected")
+                    and not self._feedback_sentiment_preserved(
+                        customer_feedback.get("customerFeedbackStrength"),
+                        feedback_check.get("responseFeedbackStrength"),
+                    )):
+                response = self._feedback_acknowledgement_fallback(
+                    customer_feedback["customerFeedbackStrength"]
+                )
+            binding_violations, _, style = final_composition(response)
+            final_validation_final = response
+            final_validation_outcome = "FEEDBACK_AND_TEASE_AUTHORITY_ENFORCED"
+            combined_obligation_repair_outcome = "DELETION_FIRST_SEMANTIC_FALLBACK"
+        material_foreground_violations = [
+            item for item in binding_violations
+            if item.startswith("FOREGROUND_OBLIGATION_")
+            or item == "FOREGROUND_SEMANTIC_RELEVANCE"
+            or item == "RESOLVED_PURCHASE_AMBIGUITY_QUESTION"
+        ]
+        if material_foreground_violations:
+            response = self._combined_obligation_fallback(
+                user_message, effort_mode=effort_mode,
+                obligations=style.get("turnObligations") or (),
+                commerce_decision=commerce_decision,
+            )
+            fallback_violations, _, style = final_composition(response)
+            if fallback_violations:
+                response = ""
+                style = self._style_analysis(
+                    response, user_message, pressure=question_pressure,
+                    ordinary=ordinary_phone_texting, memory_callback=False,
+                    new_relationship=new_relationship,
+                    recent_responses=recent_responses,
+                )
+                combined_obligation_repair_outcome = (
+                    "UNRESOLVED_OPTIONAL_RESPONSE_WITHHELD"
+                )
+            else:
+                combined_obligation_repair_outcome = (
+                    "BINDING_CONTEXT_AWARE_FALLBACK"
+                )
+                final_validation_final = response
+                final_validation_outcome = "FINAL_TURN_OBLIGATION_ENFORCED"
+                temporal_validation = self.temporal_context_service.evaluate_response(
+                    user_message, response, temporal_context,
+                )
+
         if used:
             final_memory_omission_reason = None
         elif expected:
@@ -4716,8 +7004,70 @@ Return only the customer-facing reply.
             user_message=user_message,
         )
         final_semantic_relevance = self._foreground_semantic_relevance(
-            user_message, response,
+            user_message, response, commerce_decision,
+            recent_transcript=chat_history,
         )
+        if (final_semantic_relevance.get("required")
+                and "ANSWER_DIRECT_QUESTION" in
+                (style.get("turnObligations") or ())):
+            satisfied_obligations = list(
+                style.get("satisfiedTurnObligations") or ()
+            )
+            unsatisfied_obligations = list(
+                style.get("unsatisfiedTurnObligations") or ()
+            )
+            if final_semantic_relevance.get("satisfied"):
+                if "ANSWER_DIRECT_QUESTION" not in satisfied_obligations:
+                    satisfied_obligations.append("ANSWER_DIRECT_QUESTION")
+                unsatisfied_obligations = [
+                    item for item in unsatisfied_obligations
+                    if item != "ANSWER_DIRECT_QUESTION"
+                ]
+                style["customerQuestionAnswered"] = True
+            else:
+                satisfied_obligations = [
+                    item for item in satisfied_obligations
+                    if item != "ANSWER_DIRECT_QUESTION"
+                ]
+                if "ANSWER_DIRECT_QUESTION" not in unsatisfied_obligations:
+                    unsatisfied_obligations.append("ANSWER_DIRECT_QUESTION")
+                style["customerQuestionAnswered"] = False
+            style["satisfiedTurnObligations"] = satisfied_obligations
+            style["unsatisfiedTurnObligations"] = unsatisfied_obligations
+            style["turnObligationsSatisfied"] = not unsatisfied_obligations
+        if final_semantic_relevance.get("intent") == "PURCHASE_OR_UNLOCK_ACKNOWLEDGEMENT":
+            obligation = "ACKNOWLEDGE_PURCHASE_OR_UNLOCK"
+            obligations = list(style.get("turnObligations") or ())
+            satisfied_obligations = list(style.get("satisfiedTurnObligations") or ())
+            unsatisfied_obligations = list(style.get("unsatisfiedTurnObligations") or ())
+            if obligation not in obligations:
+                obligations.append(obligation)
+            if final_semantic_relevance["satisfied"]:
+                if obligation not in satisfied_obligations:
+                    satisfied_obligations.append(obligation)
+                unsatisfied_obligations = [item for item in unsatisfied_obligations if item != obligation]
+            else:
+                satisfied_obligations = [item for item in satisfied_obligations if item != obligation]
+                if obligation not in unsatisfied_obligations:
+                    unsatisfied_obligations.append(obligation)
+            style["turnObligations"] = obligations
+            style["satisfiedTurnObligations"] = satisfied_obligations
+            style["unsatisfiedTurnObligations"] = unsatisfied_obligations
+            style["turnObligationsSatisfied"] = not unsatisfied_obligations
+        if (final_semantic_relevance["required"]
+                and not final_semantic_relevance["satisfied"]
+                and "ANSWER_DIRECT_QUESTION" in (style.get("turnObligations") or ())):
+            satisfied_obligations = list(style.get("satisfiedTurnObligations") or ())
+            unsatisfied_obligations = list(style.get("unsatisfiedTurnObligations") or ())
+            style["satisfiedTurnObligations"] = [
+                item for item in satisfied_obligations
+                if item != "ANSWER_DIRECT_QUESTION"
+            ]
+            if "ANSWER_DIRECT_QUESTION" not in unsatisfied_obligations:
+                unsatisfied_obligations.append("ANSWER_DIRECT_QUESTION")
+            style["customerQuestionAnswered"] = False
+            style["unsatisfiedTurnObligations"] = unsatisfied_obligations
+            style["turnObligationsSatisfied"] = False
         recent_similarity = self._recent_response_similarity(
             response, recent_responses,
         )
@@ -4744,7 +7094,14 @@ Return only the customer-facing reply.
             "fallbackPreservedOriginal": fallback_preserved_original,
             "unnecessaryMemoryCallbackRisk": repeated_optional_memory,
             "ephemeralSelfDisclosureOnly": style["selfDisclosureUsed"],
-            "customerMemoryMutationAllowed": False,
+            "customerMemoryMutationAllowed": bool(
+                dict(memory_diagnostics.get("customerSelfDisclosure") or {}).get(
+                    "persistenceDecision"
+                ) == "PERSIST"
+                and dict(memory_diagnostics.get("customerSelfDisclosure") or {}).get(
+                    "memoryCandidateCreated"
+                )
+            ),
             "sharedInterestDetected": bool(shared_interest.get("detected")),
             "sharedInterestDomain": shared_interest.get("domain"),
             "sharedInterestEvidence": list(shared_interest.get("evidence") or ()),
@@ -4790,17 +7147,98 @@ Return only the customer-facing reply.
             "proactiveTeaseExpected": proactive_tease,
             "proactiveTeaseSatisfied": proactive_satisfied if proactive_tease else None,
             "proactiveTeaseRewriteAttempted": proactive_rewrite_attempted,
+            "customerFeedbackDetected": customer_feedback.get(
+                "customerFeedbackDetected"
+            ),
+            "customerFeedbackSentiment": customer_feedback.get(
+                "customerFeedbackSentiment"
+            ),
+            "customerFeedbackStrength": customer_feedback.get(
+                "customerFeedbackStrength"
+            ),
+            "feedbackSentimentPreserved": style.get(
+                "feedbackSentimentPreserved", True
+            ),
+            "responseTeaseDetected": style.get("responseTeaseDetected", False),
+            "responseTeaseType": style.get("responseTeaseType"),
+            "responseTeaseAuthorized": style.get(
+                "responseTeaseAuthorized", False
+            ),
+            "futureContentReferenceDetected": style.get(
+                "futureContentReferenceDetected", False
+            ),
+            "futureContentReferenceAuthorized": style.get(
+                "futureContentReferenceAuthorized", False
+            ),
             "temporalRewriteAttempted": temporal_rewrite_attempted,
             "temporalRewriteOutcome": combined_rewrite_outcome,
             "responseComplianceRewriteAttempted": combined_rewrite_attempted,
             "responseComplianceRewriteTriggers": combined_triggers,
             "foregroundTopics": foreground_topics,
             "primaryForegroundTopic": primary_foreground_topic,
-            "currentTopicCoverageSatisfied": topic_covered,
-            "currentTopicCoverageEvidence": topic_evidence,
+            "currentTopicCoverageSatisfied": (
+                final_semantic_relevance["satisfied"]
+                if final_semantic_relevance["required"] else topic_covered
+            ),
+            "currentTopicCoverageEvidence": (
+                list(dict.fromkeys(topic_evidence + [
+                    final_semantic_relevance["intent"]
+                ])) if final_semantic_relevance["required"]
+                and final_semantic_relevance["satisfied"] else topic_evidence
+            ),
             "foregroundSemanticIntent": final_semantic_relevance["intent"],
             "foregroundSemanticRelevanceRequired": final_semantic_relevance["required"],
             "foregroundSemanticRelevanceSatisfied": final_semantic_relevance["satisfied"],
+            "sessionPositionGrounding": final_semantic_relevance.get(
+                "sessionPositionGrounding"
+            ),
+            "nextSessionStepGrounding": final_semantic_relevance.get(
+                "nextSessionStepGrounding"
+            ),
+            "providerCandidateCount": len(generation_candidates),
+            "providerReturnedUsableText": bool(generation_candidates),
+            "providerCandidateSemanticValidity": [
+                self._foreground_semantic_relevance(
+                    user_message, item, commerce_decision,
+                    recent_transcript=chat_history,
+                ).get("satisfied")
+                for item in generation_candidates
+            ] if (session_position_question["required"]
+                  or next_session_step_question["required"]) else [],
+            "groundedSessionPositionFallbackUsed": bool(
+                session_position_question["required"]
+                and response == self._session_position_fallback(commerce_decision)
+            ),
+            "groundedNextSessionStepFallbackUsed": bool(
+                next_session_step_question["required"]
+                and response == self._next_session_step_fallback(commerce_decision)
+            ),
+            "currentTopicDomain": final_semantic_relevance.get("currentTopicDomain"),
+            "customerDisclosureDetected": final_semantic_relevance.get(
+                "customerDisclosureDetected", style.get("customerSelfDisclosureDetected")
+            ),
+            "customerDisclosureDomain": final_semantic_relevance.get(
+                "customerDisclosureDomain", style.get("customerSelfDisclosureDomain")
+            ),
+            "flirtOrSexualInboundSignal": final_semantic_relevance.get(
+                "flirtOrSexualInboundSignal",
+                bool(style.get("socialFlirtationDetected") or style.get("sexualEngagementDetected")),
+            ),
+            "activeFlirtContext": final_semantic_relevance.get("activeFlirtContext", False),
+            "responseFlirtEscalationDetected": final_semantic_relevance.get(
+                "responseFlirtEscalationDetected", False
+            ),
+            "responseFlirtEscalationAuthorized": final_semantic_relevance.get(
+                "responseFlirtEscalationAuthorized", False
+            ),
+            "commercialInventoryGrounding": final_semantic_relevance.get(
+                "commercialInventoryGrounding"
+            ) or final_semantic_relevance.get(
+                "inventoryGrounding"
+            ),
+            "purchaseOwnershipGrounding": final_semantic_relevance.get(
+                "purchaseOwnershipGrounding"
+            ) or session_purchase_grounding,
             "staleCallbackDetected": stale_callback,
             "staleCallbackReason": stale_reason,
             "recentResponseSimilarity": recent_similarity,
@@ -4837,6 +7275,22 @@ Return only the customer-facing reply.
             ),
             "objectionResponseRequired": value_defense_active,
             "objectionResponseSatisfied": objection_response_satisfied,
+            "valueDefenseRequested": value_defense_active,
+            "valueDefenseUsed": bool(
+                value_defense_active and value_defense_language["valueDefenseUsed"]
+            ),
+            "negativeContactRequested": bool(
+                value_defense_active
+                and ((commerce_decision or {}).get("objection_recovery") or {}).get(
+                    "negativeContactAuthorized"
+                )
+            ),
+            "negativeContactUsed": bool(
+                value_defense_active and value_defense_language["negativeContactUsed"]
+            ),
+            "voluntaryChoicePreserved": bool(
+                value_defense_language["voluntaryChoicePreserved"]
+            ),
             "attentionPolicyEffortMode": str(effort_mode).upper(),
             "attentionComplianceRequired": str(effort_mode).upper() in {
                 "MINIMAL", "COMPRESSED",
@@ -4890,6 +7344,29 @@ Return only the customer-facing reply.
             raise RuntimeError(
                 "Final response repeated an exact low-information recent response"
             )
+        final_binding_violations, _, final_binding_style = final_composition(
+            response
+        )
+        purchase_binding_violations = {
+            "AGGREGATE_PURCHASE_RESPONSE_NOT_PRESERVED",
+            "RECENT_SUBSET_POSITIVE_FEEDBACK_NOT_PRESERVED",
+            "CUSTOMER_FEEDBACK_SENTIMENT_NOT_PRESERVED",
+        }.intersection(final_binding_violations)
+        if purchase_binding_violations:
+            raise RuntimeError(
+                "Final response failed binding purchase-reaction semantics: "
+                + ",".join(sorted(purchase_binding_violations))
+            )
+        style.update({
+            key: final_binding_style.get(key)
+            for key in (
+                "purchaseFeedbackAggregate", "aggregateResponseSatisfied",
+                "aggregatePurchaseReactionRequired",
+                "aggregatePurchaseReactionSatisfied",
+                "recentSubsetPositiveFeedbackRequired",
+                "recentSubsetPositiveFeedbackSatisfied",
+            )
+        })
         memory_diagnostics["conversationStyle"] = style
 
         memory_diagnostics["generationCompliance"] = {

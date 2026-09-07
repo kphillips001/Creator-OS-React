@@ -26,6 +26,11 @@ class CommercialReceptiveness:
     another_sale_appropriate_now: bool
     reason: str
     commercial_interest_type: str = "NONE"
+    deferred_commercial_interest: bool = False
+    deferred_interest_reason: str | None = None
+    current_commercial_interest: bool = False
+    future_commercial_reentry_allowed: bool = True
+    temporal_commercial_qualifier: str | None = None
 
     def to_mapping(self) -> Mapping[str, Any]:
         return MappingProxyType({
@@ -40,4 +45,9 @@ class CommercialReceptiveness:
             "anotherSaleAppropriateNow": self.another_sale_appropriate_now,
             "reason": self.reason,
             "commercialInterestType": self.commercial_interest_type,
+            "deferredCommercialInterest": self.deferred_commercial_interest,
+            "deferredInterestReason": self.deferred_interest_reason,
+            "currentCommercialInterest": self.current_commercial_interest,
+            "futureCommercialReentryAllowed": self.future_commercial_reentry_allowed,
+            "temporalCommercialQualifier": self.temporal_commercial_qualifier,
         })

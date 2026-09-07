@@ -1,11 +1,13 @@
 """PostgreSQL certification for the isolated Session 5 scenario harness."""
 import json
 import os
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from uuid import NAMESPACE_URL, uuid4, uuid5
 
 import pytest
 
+from app.services.gpt_service import GPTService
 from app.testing.session5_scenario_harness import (
     CustomerScenarioHarness, SimulatedProviderPurchaseHarness,
     HistoricalPurchaseFixtureBuilder,
@@ -193,15 +195,19 @@ def test_failed_gateway_turn_does_not_advance_behavior_or_inbound_operation(
             )).fetchone()["count"]
         evidence_count = connection.execute("""SELECT COUNT(*) AS count
             FROM certification_scenario_turn_evidence WHERE scenario_id='C02'""").fetchone()["count"]
-        completed_turn_count = connection.execute("""SELECT COUNT(*) AS count
+        turn_attempts = connection.execute("""SELECT status,inbound,outbound
             FROM certification_scenario_turn_attempts
             WHERE scenario_id='C02' AND scenario_attempt=(
                 SELECT scenario_attempt FROM certification_scenario_runs
                 WHERE scenario_id='C02'
-            )""").fetchone()["count"]
+            ) ORDER BY logical_turn,turn_attempt""").fetchall()
     assert operation_count == 0
     assert evidence_count == 0
-    assert completed_turn_count == 0
+    assert [dict(row) for row in turn_attempts] == [{
+        "status": "FAILED_PRE_COMMIT",
+        "inbound": "yeah, pretty much",
+        "outbound": "",
+    }]
     assert runner.recovery.next_logical_turn(
         "C02", runner.recovery.scenario_attempt("C02")
     ) == 1
@@ -297,6 +303,148 @@ def test_prepare_snapshot_reset_lifecycle_and_snapshot_survival(harness):
     with harness.connection() as c:
         assert c.execute("SELECT COUNT(*) n FROM certification_scenario_snapshots WHERE snapshot_id=%s",(snapshot,)).fetchone()["n"]==1
         assert c.execute("SELECT state FROM certification_scenario_runs WHERE scenario_id='C01'").fetchone()["state"]=="VERIFIED_CLEAN"
+
+
+def test_reset_removes_scoped_photoshoot_graph_preserves_evidence_and_is_idempotent(harness):
+    runner = Session5ScenarioRunner(harness=harness)
+    prepared = runner.prepare("C19")
+    attempt = prepared["scenarioAttempt"]
+    state = prepared["startingState"]
+    progression = prepared["startingStateValidation"]["sessionProgression"]
+    assert prepared["startingStateValidation"]["result"] == "VALIDATED"
+    assert (state["purchaseCount"], state["ownershipCount"], state["lifetimeSpendMinor"]) == (1, 1, 2200)
+    assert state["activePurchaseIntent"] is None
+    assert state["activeUnresolvedOpportunity"] is False
+    assert state["activeSession"]["state"] == "CONTINUING"
+    assert progression["foundationReference"] == "certification-C19"
+    assert progression["consumedStep"] == 1
+    assert progression["expectedNextStep"] == 2
+    assert progression["expectedNextPriceMinor"] == 900
+    with harness.connection() as c:
+        profile_row = c.execute(
+            """SELECT customer_commerce_profile_id,creator_profile_id
+               FROM customer_commerce_profiles
+               WHERE external_fanvue_user_uuid=%s""",
+            (harness.customer_for(
+                harness.definition("C19")
+            ).synthetic_buyer_uuid,),
+        ).fetchone()
+    from app.services.photoshoot_session_runtime_service import (
+        PhotoshootSessionRuntimeService,
+    )
+    with harness.application_test_database_scope():
+        runtime = PhotoshootSessionRuntimeService().evaluate(
+            creator_profile_id=profile_row["creator_profile_id"],
+            customer_commerce_profile_id=profile_row[
+                "customer_commerce_profile_id"
+            ],
+            photoshoot_session_id="certification-C19",
+        )
+    assert runtime.current_position == 2
+    assert runtime.current_asset_id == progression["expectedNextAssetId"]
+    assert runtime.owned_asset_ids == (progression["ownedAssetId"],)
+    runner.defect("CRITICAL", "dependency-aware reset regression", turn_number=0)
+    runner.complete("FAIL")
+    snapshot = runner.snapshot("C19")
+
+    # Keep a second synthetic customer's normal lifecycle as an adversarial
+    # isolation control while resetting C19.
+    runner.prepare("C13")
+    with harness.connection() as c:
+        target_profile = c.execute("""SELECT customer_commerce_profile_id
+            FROM customer_commerce_profiles WHERE external_fanvue_user_uuid=%s""", (
+                harness.customer_for(harness.definition("C19")).synthetic_buyer_uuid,
+            )).fetchone()["customer_commerce_profile_id"]
+        unrelated_profile = c.execute("""SELECT customer_commerce_profile_id,
+                creator_profile_id FROM customer_commerce_profiles
+            WHERE external_fanvue_user_uuid=%s""", (
+                harness.customer_for(harness.definition("C13")).synthetic_buyer_uuid,
+            )).fetchone()
+        unrelated_lifecycle = uuid4()
+        c.execute("""INSERT INTO customer_photoshoot_lifecycles(
+                lifecycle_id,creator_profile_id,customer_commerce_profile_id,
+                photoshoot_id,status,closed_at)
+            VALUES (%s,%s,%s,%s,'CLOSED',NOW())""", (
+                unrelated_lifecycle, unrelated_profile["creator_profile_id"],
+                unrelated_profile["customer_commerce_profile_id"],
+                "reset-isolation-control",
+            ))
+
+    first = harness.reset("C19")
+    second = harness.reset("C19")
+    assert first["state"] == second["state"] == "VERIFIED_CLEAN"
+    assert second["alreadyClean"] is True
+    with harness.connection() as c:
+        assert c.execute("SELECT 1 FROM customer_commerce_profiles WHERE customer_commerce_profile_id=%s", (target_profile,)).fetchone() is None
+        assert c.execute("SELECT 1 FROM customer_photoshoot_lifecycles WHERE customer_commerce_profile_id=%s", (target_profile,)).fetchone() is None
+        assert c.execute("SELECT 1 FROM customer_photoshoot_lifecycles WHERE lifecycle_id=%s", (unrelated_lifecycle,)).fetchone() is not None
+        assert c.execute("SELECT 1 FROM certification_scenario_snapshots WHERE snapshot_id=%s", (snapshot["snapshotId"],)).fetchone() is not None
+        assert c.execute("SELECT grade FROM certification_scenario_assessments WHERE scenario_id='C19' AND scenario_attempt=%s", (attempt,)).fetchone()["grade"] == "FAIL"
+        assert c.execute("SELECT 1 FROM certification_scenario_defects WHERE scenario_id='C19' AND scenario_attempt=%s", (attempt,)).fetchone() is not None
+        allocation = c.execute("""SELECT status,snapshot_id
+            FROM certification_scenario_attempt_allocations
+            WHERE scenario_id='C19' AND scenario_attempt=%s""", (attempt,)).fetchone()
+        assert allocation["status"] == "ARCHIVED"
+        assert str(allocation["snapshot_id"]) == snapshot["snapshotId"]
+
+
+def test_reset_rolls_back_dependent_cleanup_when_later_parent_delete_fails(harness, monkeypatch):
+    runner = Session5ScenarioRunner(harness=harness)
+    runner.prepare("C19")
+    runner.defect("CRITICAL", "forced reset rollback regression", turn_number=0)
+    runner.complete("FAIL")
+    runner.snapshot("C19")
+    buyer_uuid = harness.customer_for(harness.definition("C19")).synthetic_buyer_uuid
+    with harness.connection() as c:
+        lifecycle_id = c.execute("""SELECT lifecycle.lifecycle_id
+            FROM customer_photoshoot_lifecycles lifecycle
+            JOIN customer_commerce_profiles profile USING(customer_commerce_profile_id)
+            WHERE profile.external_fanvue_user_uuid=%s""", (buyer_uuid,)).fetchone()["lifecycle_id"]
+
+    original_connection = harness.connection
+
+    class FailingConnection:
+        def __init__(self, connection):
+            self.connection = connection
+
+        def execute(self, sql, params=None):
+            if str(sql).startswith("DELETE FROM customer_commerce_profiles"):
+                raise RuntimeError("forced parent-delete failure")
+            return self.connection.execute(sql, params)
+
+    @contextmanager
+    def failing_connection():
+        with original_connection() as connection:
+            yield FailingConnection(connection)
+
+    monkeypatch.setattr(harness, "connection", failing_connection)
+    with pytest.raises(RuntimeError, match="forced parent-delete failure"):
+        harness.reset("C19")
+    monkeypatch.setattr(harness, "connection", original_connection)
+
+    with harness.connection() as c:
+        assert c.execute("SELECT 1 FROM customer_photoshoot_lifecycles WHERE lifecycle_id=%s", (lifecycle_id,)).fetchone() is not None
+        assert c.execute("SELECT state FROM certification_scenario_runs WHERE scenario_id='C19'").fetchone()["state"] == "SNAPSHOTTED"
+
+
+@pytest.mark.parametrize("scenario_id", ("C06", "C13", "C14", "C16", "C17", "C18"))
+def test_dependency_aware_reset_preserves_other_fixture_families(harness, scenario_id):
+    runner = Session5ScenarioRunner(harness=harness)
+    prepared = runner.prepare(scenario_id)
+    runner.defect("CRITICAL", "cross-family reset regression", turn_number=0)
+    runner.complete("FAIL")
+    snapshot = runner.snapshot(scenario_id)
+
+    result = harness.reset(scenario_id)
+
+    assert result["state"] == "VERIFIED_CLEAN"
+    assert runner.verify_clean(scenario_id)["result"] == "VERIFIED_CLEAN"
+    with harness.connection() as c:
+        assert c.execute("SELECT 1 FROM certification_scenario_snapshots WHERE snapshot_id=%s", (snapshot["snapshotId"],)).fetchone() is not None
+        assert c.execute("""SELECT 1 FROM certification_scenario_attempt_allocations
+            WHERE scenario_id=%s AND scenario_attempt=%s AND status='ARCHIVED'""", (
+                scenario_id, prepared["scenarioAttempt"],
+            )).fetchone() is not None
 
 
 def test_reset_refuses_before_snapshot(harness):
@@ -498,6 +646,38 @@ def test_buyer_lifecycle_is_derived_from_purchase_recency_and_behavior(
     assert state["buyerStage"]=="FIRST_TIME_BUYER"
     assert state["retentionLifecycle"]==expected_lifecycle
     assert state["effortMode"]==expected_effort
+
+
+def test_unblocked_empty_scenario_reply_is_retryable_and_does_not_commit_turn(
+        harness, monkeypatch):
+    harness.prepare("C01")
+    monkeypatch.setattr(
+        "app.services.gpt_service.GPTService.generate_response",
+        lambda *_args, **_kwargs: "",
+    )
+    with pytest.raises(
+        RuntimeError, match="SCENARIO_UNBLOCKED_EMPTY_RESPONSE_RETRYABLE",
+    ):
+        harness.execute_turn("C01", "okay then", provider_draft="unused")
+    customer = harness.customer_for(harness.definition("C01"))
+    with harness.connection() as connection:
+        operation = connection.execute(
+            """SELECT state,response_text,outbound_telegram_message_id
+               FROM ordinary_chat_reply_operations
+               WHERE inbound_sender_telegram_user_id=%s
+               ORDER BY created_at DESC LIMIT 1""",
+            (customer.telegram_user_id,),
+        ).fetchone()
+        committed = connection.execute(
+            """SELECT COUNT(*) AS count
+               FROM certification_scenario_turn_evidence
+               WHERE scenario_id='C01'"""
+        ).fetchone()["count"]
+    assert operation == {
+        "state": "RETRYABLE", "response_text": None,
+        "outbound_telegram_message_id": None,
+    }
+    assert committed == 0
 
 
 def test_nonbuying_whale_retains_economic_truth_and_buyer_protection(harness):
@@ -1258,8 +1438,8 @@ def test_focused_04_horny_ready_to_buy_reaches_actual_selector(harness):
 
 
 def test_focused_08_price_recovery_defends_value_then_uses_explicit_budget(harness):
-    values=_commerce_fixture(harness,scenario_id="C10",price=900)
-    cheaper=HistoricalPurchaseFixtureBuilder(harness).add_eligible_inventory("C10",[500])[0]
+    values=_commerce_fixture(harness,scenario_id="C10",price=2900)
+    cheaper=HistoricalPurchaseFixtureBuilder(harness).add_eligible_inventory("C10",[900])[0]
     first=harness.execute_turn("C10","That's more than I wanted to spend.",
         provider_draft="Mmm, I picked that one for a reason - it's staying right where it is.")
     d=first["gatewayDiagnostics"]
@@ -1268,21 +1448,22 @@ def test_focused_08_price_recovery_defends_value_then_uses_explicit_budget(harne
     assert d["customer_sales_decision"]=="CONTINUE_CONVERSATION"
     assert recovery["strategy"]=="VALUE_DEFENSE"
     assert recovery["originalOfferPreserved"] is True
-    assert recovery["originalPrice"]==900
+    assert recovery["originalPrice"]==2900
     assert recovery["alternativeSelected"] is False
     assert recovery["noDynamicDiscount"] is True
     assert first["SalesBrainFullAnalysis"]["objectionRecovery"]["strategy"]=="VALUE_DEFENSE"
     assert first["SalesBrainFullAnalysis"]["objectionRecovery"]["falseScarcityAllowed"] is False
-    second=harness.execute_turn("C10","I really only have $5 to spend.",
+    second=harness.execute_turn("C10","I'm trying to stay under ten dollars",
         provider_draft="I do have a different little something that fits that.")
     d=second["gatewayDiagnostics"]
     assert d["commercial_objection"]["type"]=="BUDGET_LIMIT"
-    assert d["commercial_objection"]["budgetConstraintAmount"]==500
+    assert d["commercial_objection"]["budgetConstraintAmount"]==1000
+    assert d["commercial_objection"]["newMaterialCommercialInformationDetected"] is True
     constraints=d["recommendation_diagnostics"]["recoveryConstraints"]
-    assert constraints["maximumPriceMinor"]==500
+    assert constraints["maximumPriceMinor"]==1000
     selected=d["recommendation_diagnostics"]["recommendationTrace"][0]
     assert selected["offeringId"]==str(cheaper["offeringId"])
-    assert selected["priceMinor"]==500
+    assert selected["priceMinor"]==900
     assert d["customer_sales_decision"]=="PRESENT_ALTERNATIVE_OFFER"
     third=harness.execute_turn("C10","No thanks, I still don't want it.",
         provider_draft="No worries.")
@@ -1295,7 +1476,7 @@ def test_c02_exact_price_hesitation_uses_existing_value_defense(harness):
         "C02", "$19 is more than I expected.",
         provider_draft=[
             "I like keeping a little mystery around it.",
-            "haha fair — no pressure, we can leave it there",
+            "no worries, we can keep things simple here",
         ],
     )
     diagnostics = evidence["gatewayDiagnostics"]
@@ -1308,7 +1489,14 @@ def test_c02_exact_price_hesitation_uses_existing_value_defense(harness):
     assert style["objectionResponseRequired"] is True
     assert style["objectionResponseSatisfied"] is True
     assert "COMMERCIAL_OBJECTION_NOT_ADDRESSED" in style["styleRewriteTriggers"]
-    assert evidence["outbound"] == "haha fair — no pressure, we can leave it there"
+    assert evidence["outbound"] == GPTService._value_defense_fallback()
+    assert style["valueDefenseUsed"] is True
+    assert style["negativeContactUsed"] is True
+    full = evidence["SalesBrainFullAnalysis"]["objectionRecovery"]
+    assert full["valueDefenseRequested"] is True
+    assert full["valueDefenseUsed"] is True
+    assert full["negativeContactRequested"] is True
+    assert full["negativeContactUsed"] is True
 
 
 def test_scenario_history_exposes_prior_ava_questions_to_phone_texting(harness):
@@ -1332,16 +1520,16 @@ def test_scenario_history_exposes_prior_ava_questions_to_phone_texting(harness):
      "Mmm, that one's staying at its price — no pressure though.",
      "UNSAFE_NEGATIVE_CONTACT_CONDITIONAL_AFFECTION"),
     ("Last chance, it disappears tonight.",
-     "That one's worth holding its spot — we can leave it there if you want.",
+     "Nice try 😏 that one's worth holding its spot — we can leave it there if you want.",
      "UNSAFE_NEGATIVE_CONTACT_FALSE_SCARCITY"),
     ("You're cheap if you can't even afford it.",
-     "I'm keeping that one at its price, but no pressure.",
+     "Nice try 😏 I'm keeping that one at its price, but no pressure.",
      "UNSAFE_NEGATIVE_CONTACT_FINANCIAL_OR_SUPPORTER_SHAME"),
     ("Real supporters buy when I ask.",
-     "I know what that one's worth — you're still free to pass.",
+     "Mmm, I know what that one's worth — you're still free to pass.",
      "UNSAFE_NEGATIVE_CONTACT_FINANCIAL_OR_SUPPORTER_SHAME"),
     ("After everything I do for you, you owe me.",
-     "That one's holding its price, but we can leave it there.",
+     "Nice try 😏 that one's holding its price, but we can leave it there.",
      "UNSAFE_NEGATIVE_CONTACT_GUILT_OR_PUNISHMENT"),
     ("Prove you care or else I'll be mad.",
      "Mmm, I'm not bargaining that one down — no worries if it's a no.",

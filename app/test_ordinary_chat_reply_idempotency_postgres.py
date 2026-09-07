@@ -71,6 +71,23 @@ def execution(message_id=9001):
         delivery_method="text",metadata={"telegram_message_id":message_id})
 
 
+def nurture_result(item, *, legacy_projection=False):
+    attention = {
+        "timeWasterRisk": "HIGH",
+        "attentionTier": "LOW",
+        "effortMode": "MINIMAL",
+        "lowCostNurtureActive": True,
+        "nurtureResponsesUsed": 0,
+        "nurtureResponseBudget": 1,
+    }
+    diagnostics = (
+        {"commercial_summary": {"customerValueAttention": attention}}
+        if legacy_projection else
+        {"customer_value_attention": attention}
+    )
+    return result(item, diagnostics=diagnostics)
+
+
 def runtime(adapter, delivery, replies, *, saver=None, purchases=None):
     return TelethonRuntime(transport=Transport(),inbound_adapter=adapter,
         delivery_executor=delivery,ordinary_reply_service=replies,
@@ -208,10 +225,13 @@ def test_empty_unsent_generation_can_be_safely_requeued_once():
     item=payload(); replies=service("empty-recovery"); operation,_=replies.begin(item)
     empty=replace(result(item), response_text="", delivery_payload={})
     stored=replies.generated(replies.claim_generation(operation),empty)
+    assert stored is not None and stored.state.value=="RETRYABLE"
     recovered=replies.requeue_empty_generation(
         stored, reason="generation_runtime_encoding_failure",
     )
-    assert recovered is not None and recovered.state.value=="RETRYABLE"
+    # Empty unblocked output now enters RETRYABLE atomically at the generation
+    # boundary; the legacy recovery call remains a safe no-op.
+    assert recovered is None
     delivery=Delivery([execution(9061)])
     asyncio.run(runtime(Adapter(result(item)),delivery,service("empty-retry")).handle_payload(item))
     with connection_factory() as c:
@@ -358,6 +378,35 @@ def test_confirmed_low_cost_nurture_response_consumes_rolling_budget():
     assert evidence["last_nurture_response_at"] is not None
 
 
+def test_suppressed_low_cost_nurture_response_does_not_consume_budget():
+    item = payload()
+    blocked = replace(
+        result(item, diagnostics={
+            "customer_value_attention": {
+                "lowCostNurtureActive": True,
+                "nurtureResponseBudget": 1,
+            },
+        }),
+        response_text="",
+        delivery_payload={},
+        blocked=True,
+        error_code="LOW_COST_NURTURE_DAILY_BUDGET_CONSUMED",
+    )
+    asyncio.run(runtime(
+        Adapter(blocked), Delivery([]), service("nurture-suppressed"),
+    ).handle_payload(item))
+
+    evidence = service(
+        "nurture-suppressed-read"
+    ).repository.customer_behavior_evidence(
+        account_scope="AVA_TELETHON_PRIVATE",
+        chat_id=item.telegram_chat_id,
+        sender_user_id=item.telegram_user_id,
+    )
+    assert evidence["nurture_response_count_rolling_day"] == 0
+    assert evidence["last_nurture_response_at"] is None
+
+
 def test_behavior_evidence_counts_semantic_nonpayment_and_browsing():
     base = payload()
     messages = (
@@ -486,3 +535,73 @@ def test_startup_recovery_changes_only_inflight_sending():
     assert [item.operation_id for item in recovered]==[sending.operation_id]
     states=[replies.repository.get(item.operation_id).state.value for item in operations]
     assert states==["SEND_UNCERTAIN","SENT_CONFIRMED","RETRYABLE"]
+
+
+@pytest.mark.parametrize("legacy_projection", (False, True))
+def test_confirmed_nurture_reply_counts_once_from_canonical_or_legacy_projection(
+    legacy_projection,
+):
+    item = payload()
+    replies = service("nurture-confirmed")
+    operation, _ = replies.begin(item)
+    generated = replies.generated(
+        replies.claim_generation(operation),
+        nurture_result(item, legacy_projection=legacy_projection),
+    )
+    sending = replies.claim_send(generated)
+    confirmed = replies.confirmed(sending, 9100)
+
+    # Confirmation replay cannot transition the row a second time, and the
+    # authoritative usage query counts the durable operation rather than calls.
+    assert replies.confirmed(sending, 9100) is None
+    evidence = replies.repository.customer_behavior_evidence(
+        account_scope=replies.ACCOUNT_SCOPE,
+        chat_id=item.telegram_chat_id,
+        sender_user_id=item.telegram_user_id,
+    )
+    assert confirmed.state.value == "SENT_CONFIRMED"
+    assert evidence["nurture_response_count_rolling_day"] == 1
+    assert evidence["last_nurture_response_at"] is not None
+
+
+def test_failed_nurture_send_does_not_consume_budget():
+    item = payload()
+    replies = service("nurture-failed")
+    operation, _ = replies.begin(item)
+    generated = replies.generated(
+        replies.claim_generation(operation), nurture_result(item),
+    )
+    failed = replies.failed(
+        replies.claim_send(generated), RuntimeError("definitively unsent"),
+        definitive=True,
+    )
+    evidence = replies.repository.customer_behavior_evidence(
+        account_scope=replies.ACCOUNT_SCOPE,
+        chat_id=item.telegram_chat_id,
+        sender_user_id=item.telegram_user_id,
+    )
+    assert failed.state.value == "RETRYABLE"
+    assert evidence["nurture_response_count_rolling_day"] == 0
+    assert evidence["last_nurture_response_at"] is None
+
+
+def test_confirmed_nurture_reply_expires_from_rolling_window():
+    item = payload()
+    replies = service("nurture-expired")
+    operation, _ = replies.begin(item)
+    generated = replies.generated(
+        replies.claim_generation(operation), nurture_result(item),
+    )
+    replies.confirmed(replies.claim_send(generated), 9101)
+    with connection_factory() as connection:
+        connection.execute(
+            "UPDATE ordinary_chat_reply_operations "
+            "SET sent_confirmed_at=NOW()-INTERVAL '25 hours'"
+        )
+    evidence = replies.repository.customer_behavior_evidence(
+        account_scope=replies.ACCOUNT_SCOPE,
+        chat_id=item.telegram_chat_id,
+        sender_user_id=item.telegram_user_id,
+    )
+    assert evidence["nurture_response_count_rolling_day"] == 0
+    assert evidence["last_nurture_response_at"] is not None

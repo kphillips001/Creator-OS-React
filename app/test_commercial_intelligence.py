@@ -11,6 +11,10 @@ from app.models.commercial_intelligence import (
     StrategyConstraints,
     StrategyDecisionReason,
 )
+from app.models.autonomous_sales_progression import (
+    ProgressionAssetRole, SellableProgressionAsset,
+)
+from app.models.customer_photoshoot_lifecycle import CustomerPhotoshootStatus
 from app.services.commercial_intelligence_context_service import (
     CommercialIntelligenceContextService,
 )
@@ -23,6 +27,7 @@ from app.services.commercial_offering_selector_service import (
 from app.services.telegram_purchase_intent_service import (
     TelegramPurchaseIntentService,
 )
+from app.services.customer_sales_brain_service import CustomerSalesBrainService
 
 
 def context(**changes):
@@ -241,6 +246,190 @@ def test_selector_fails_closed_when_progression_role_evidence_is_missing():
         constraints=StrategyConstraints(progression="PREMIUM"),
     )
     assert "STRATEGY_ROLE_EVIDENCE_MISSING" in result.exclusion_reasons
+
+
+def test_active_ordered_session_candidate_uses_strategy_order_not_duplicate_role():
+    service = CommercialOfferingSelectorService(repository=SimpleNamespace())
+    value = candidate(offering_type="SINGLE_IMAGE", asset_ids=(11,))
+    value.update({
+        "photoshoot_selling_mode": "SESSION",
+        "commercial_roles": [],
+        "destinations": ["SINGLE_PPV"],
+        "source_photoshoot_deliverable_id": uuid4(),
+    })
+    result = service._evaluate(
+        value, creator_profile_id=1, channel="AI_CHAT",
+        purchased=frozenset(),
+        constraints=StrategyConstraints(
+            required_selling_modes=("SESSION",),
+            required_photoshoot_reference="photoshoot-1",
+            progression=None,
+        ),
+    )
+
+    assert result.eligible is True
+    assert "STRATEGY_SELLING_MODE_EXCLUDED" not in result.exclusion_reasons
+    assert "STRATEGY_ROLE_EVIDENCE_MISSING" not in result.exclusion_reasons
+
+
+def test_one_purchase_active_session_resolves_inventory_without_forcing_offer():
+    assert CustomerSalesBrainService._should_resolve_session_inventory(
+        active_session_authority=True, purchase_count=1,
+        session_intent="ONGOING_EXPERIENCE", proposal_state=None,
+    ) is True
+    assert CustomerSalesBrainService._direct_session_presentation_requested(
+        "NONE"
+    ) is False
+    assert CustomerSalesBrainService._direct_session_presentation_requested(
+        "SEND_OR_LINK_REQUEST"
+    ) is True
+
+
+def test_no_active_session_keeps_existing_two_purchase_proposal_boundary():
+    assert CustomerSalesBrainService._should_resolve_session_inventory(
+        active_session_authority=False, purchase_count=1,
+        session_intent="ONGOING_EXPERIENCE", proposal_state=None,
+    ) is False
+    assert CustomerSalesBrainService._should_resolve_session_inventory(
+        active_session_authority=False, purchase_count=2,
+        session_intent="ONGOING_EXPERIENCE", proposal_state=None,
+    ) is True
+
+
+def test_active_session_scope_selects_exact_first_unowned_ordered_step():
+    step_one, step_two, step_three, unrelated = (
+        uuid4(), uuid4(), uuid4(), uuid4()
+    )
+    assets = (
+        SellableProgressionAsset(
+            10, 1, ProgressionAssetRole.CORE_SESSION,
+            offering_id=step_one, owned=True,
+        ),
+        SellableProgressionAsset(
+            11, 2, ProgressionAssetRole.CORE_SESSION,
+            offering_id=step_two, price_minor=900, currency="USD",
+        ),
+        SellableProgressionAsset(
+            12, 3, ProgressionAssetRole.CORE_SESSION,
+            offering_id=step_three, price_minor=1900, currency="USD",
+        ),
+    )
+    progression = SimpleNamespace(ordered_assets=lambda **_kwargs: assets)
+    service = CommercialOfferingSelectorService(
+        repository=SimpleNamespace(), progression_repository=progression,
+    )
+    candidates = tuple(
+        {"offering_id": offering_id, "photoshoot_identifier": photoshoot}
+        for offering_id, photoshoot in (
+            (step_one, "photoshoot-1"), (step_two, "photoshoot-1"),
+            (step_three, "photoshoot-1"), (unrelated, "photoshoot-other"),
+        )
+    )
+    opportunity = SimpleNamespace(
+        photoshoot_id="photoshoot-1", status=CustomerPhotoshootStatus.ACTIVE,
+    )
+    customer = SimpleNamespace(customer_commerce_profile_id=uuid4())
+
+    selected = service._active_opportunity_candidates(
+        candidates, opportunity, 1, customer,
+    )
+
+    assert selected == (candidates[1],)
+
+
+def test_active_session_scope_overlays_provider_ownership_before_selecting_next():
+    step_two, step_three, step_four = uuid4(), uuid4(), uuid4()
+    assets = (
+        SellableProgressionAsset(
+            20, 2, ProgressionAssetRole.CORE_SESSION,
+            offering_id=step_two, price_minor=900, currency="USD",
+        ),
+        SellableProgressionAsset(
+            30, 3, ProgressionAssetRole.CORE_SESSION,
+            offering_id=step_three, price_minor=1900, currency="USD",
+        ),
+        SellableProgressionAsset(
+            40, 4, ProgressionAssetRole.FINALE_IMAGE,
+            offering_id=step_four, price_minor=2900, currency="USD",
+        ),
+    )
+    service = CommercialOfferingSelectorService(
+        repository=SimpleNamespace(),
+        progression_repository=SimpleNamespace(
+            ordered_assets=lambda **_kwargs: assets,
+        ),
+    )
+    candidates = tuple(
+        {"offering_id": value, "photoshoot_identifier": "photoshoot-1"}
+        for value in (step_three, step_four)
+    )
+    opportunity = SimpleNamespace(
+        photoshoot_id="photoshoot-1", status=CustomerPhotoshootStatus.ACTIVE,
+    )
+    customer = SimpleNamespace(customer_commerce_profile_id=uuid4())
+
+    selected = service._active_opportunity_candidates(
+        candidates, opportunity, 1, customer, owned_asset_ids=(20,),
+    )
+
+    assert selected == (candidates[0],)
+
+
+def test_active_session_scope_does_not_skip_ineligible_ordered_step():
+    step_three, step_four = uuid4(), uuid4()
+    assets = (
+        SellableProgressionAsset(
+            30, 3, ProgressionAssetRole.CORE_SESSION,
+            offering_id=step_three,
+        ),
+        SellableProgressionAsset(
+            40, 4, ProgressionAssetRole.FINALE_IMAGE,
+            offering_id=step_four,
+        ),
+    )
+    service = CommercialOfferingSelectorService(
+        repository=SimpleNamespace(),
+        progression_repository=SimpleNamespace(
+            ordered_assets=lambda **_kwargs: assets,
+        ),
+    )
+    # Step 3 was removed by shared eligibility. Step 4 must not leapfrog it.
+    candidates = ({
+        "offering_id": step_four,
+        "photoshoot_identifier": "photoshoot-1",
+    },)
+    selected = service._active_opportunity_candidates(
+        candidates,
+        SimpleNamespace(
+            photoshoot_id="photoshoot-1",
+            status=CustomerPhotoshootStatus.ACTIVE,
+        ),
+        1, SimpleNamespace(customer_commerce_profile_id=uuid4()),
+    )
+    assert selected == ()
+
+
+def test_active_session_scope_has_no_candidate_when_all_steps_are_owned():
+    offering = uuid4()
+    asset = SellableProgressionAsset(
+        30, 3, ProgressionAssetRole.FINALE_IMAGE, offering_id=offering,
+    )
+    service = CommercialOfferingSelectorService(
+        repository=SimpleNamespace(),
+        progression_repository=SimpleNamespace(
+            ordered_assets=lambda **_kwargs: (asset,),
+        ),
+    )
+    selected = service._active_opportunity_candidates(
+        ({"offering_id": offering, "photoshoot_identifier": "photoshoot-1"},),
+        SimpleNamespace(
+            photoshoot_id="photoshoot-1",
+            status=CustomerPhotoshootStatus.ACTIVE,
+        ),
+        1, SimpleNamespace(customer_commerce_profile_id=uuid4()),
+        owned_asset_ids=(30,),
+    )
+    assert selected == ()
 
 
 def test_selector_rejects_offering_unrelated_to_session_photoshoot():

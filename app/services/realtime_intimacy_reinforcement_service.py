@@ -53,7 +53,6 @@ class RealtimeIntimacyReinforcementService:
         # --------------------------------------------------
 
         if event_type in [
-            "purchase_created",
             "purchase_received",
             "unlock_confirmed",
             "content_unlocked",
@@ -62,6 +61,7 @@ class RealtimeIntimacyReinforcementService:
                 "spender_confidence": "high",
                 "intimacy_tier": "premium",
                 "premium_sexting_allowed": True,
+                "explicit_allowed": True,
                 "escalation_priority": "high",
                 "runtime_mode": "premium_gate",
                 "last_purchase_reinforced_at": now,

@@ -31,6 +31,67 @@ class SalesBrainFullAnalysisService:
     })
 
     @classmethod
+    def reconcile_confirmed_session_free_teaser(
+        cls, analysis: Mapping | None, *, delivery_payload: Mapping,
+        delivery_operation_id: str | None, delivery_state: str | None,
+        customer_binding_confirmed: bool, provisional_session,
+    ) -> dict:
+        """Project exact post-confirmation teaser truth without authorizing it."""
+        result = dict(analysis or {})
+        metadata = dict(dict(delivery_payload or {}).get("metadata") or {})
+        teaser = dict(metadata.get("free_teaser_delivery") or {})
+        provisional_context = dict(
+            getattr(provisional_session, "commercial_context", {}) or {}
+        )
+        recorded = dict(provisional_context.get("freeTeaserDelivery") or {})
+        exact = bool(
+            delivery_operation_id
+            and str(delivery_state or "").upper() == "CONFIRMED"
+            and customer_binding_confirmed
+            and metadata.get("teaser_domain") == "SESSION_FREE_TEASER"
+            and teaser.get("sales_role") == "FREE_TEASER"
+            and int(teaser.get("position") or 0) == 1
+            and str(teaser.get("provisional_session_id") or "")
+                == str(getattr(provisional_session, "provisional_session_id", ""))
+            and str(teaser.get("photoshoot_session_id") or "")
+                == str(getattr(provisional_session, "photoshoot_reference", ""))
+            and int(teaser.get("asset_id") or 0)
+                == int(recorded.get("assetId") or 0)
+            and str(recorded.get("providerDeliveryId") or "")
+            and str(getattr(provisional_session, "progression_stage", ""))
+                == "PROGRESSION"
+            and int(getattr(provisional_session, "current_position", 0)) == 2
+        )
+        if not exact:
+            return result
+        accounting = dict(result.get("commercialTeaseAccounting") or {})
+        accounting.update({
+            "commercialTeaseType": "FREE_TEASER_ASSET",
+            "commercialTeaseAuthorized": True,
+            "commercialTeaseDelivered": True,
+            "commercialTeaseExposureRecorded": True,
+            "teaserDomain": "SESSION_FREE_TEASER",
+            "deliveryOperationId": str(delivery_operation_id),
+            "deliveryState": "CONFIRMED",
+            "assetId": int(teaser["asset_id"]),
+            "foundation": str(teaser["photoshoot_session_id"]),
+            "position": 1,
+            "provisionalSessionId": str(teaser["provisional_session_id"]),
+            "provisionalProgressionStage": "PROGRESSION",
+            "nextPosition": 2,
+        })
+        result["commercialTeaseAccounting"] = accounting
+        progression = dict(result.get("sexualCommercialProgression") or {})
+        progression.update({
+            "commercialTeaseAuthorized": True,
+            "commercialTeaseDelivered": True,
+            "commercialTeaseExposureRecorded": True,
+            "progressionFinalizedAfterDelivery": True,
+        })
+        result["sexualCommercialProgression"] = progression
+        return result
+
+    @classmethod
     def project(cls, decision: CustomerSalesDecision | None, *,
                 runtime_diagnostics: Mapping | None = None,
                 customer_message: str = "") -> dict:
@@ -52,6 +113,9 @@ class SalesBrainFullAnalysisService:
         next_best = dict(metadata.get("nextBestOffer") or {})
         intelligence = dict(metadata.get("commercialIntelligence") or {})
         session_context = dict(intelligence.get("salesSessionContext") or {})
+        active_session_context = dict(
+            metadata.get("activeSessionContext") or {}
+        )
         if not session_context.get("salesSessionId"):
             session_context = dict(runtime.get("active_sales_session") or {})
         progression = dict(metadata.get("salesProgression") or {})
@@ -118,6 +182,36 @@ class SalesBrainFullAnalysisService:
         )
         verified_purchase = bool(verified_count > 0)
         conversational_claim = bool(cls.PURCHASE_CLAIM.search(customer_message or ""))
+        provider_purchase_verified = bool(
+            decision.decision is CustomerSalesDecisionType.CONGRATULATE_PURCHASE
+            and decision.reason_code is CustomerSalesReasonCode.PURCHASE_VERIFIED
+            and str(decision.active_offer_status or metadata.get("latestIntentStatus") or "").upper()
+            == "PURCHASED"
+        )
+        active_offering_id = (
+            str(decision.active_offering_id) if decision.active_offering_id else None
+        )
+        latest_purchase = (
+            dict(tuple(memory.get("recentVerifiedPurchaseEvidence") or ())[-1])
+            if memory.get("recentVerifiedPurchaseEvidence") else {}
+        )
+        latest_offering_id = str(latest_purchase.get("offeringId") or "") or None
+        latest_asset_ids = {
+            int(value) for value in latest_purchase.get("assetIds") or ()
+        }
+        owned_offering_ids = {
+            str(value) for value in memory.get("ownedOfferingIds") or ()
+        }
+        owned_asset_ids = {
+            int(value) for value in memory.get("ownedAssetIds") or ()
+        }
+        purchase_ownership_verified = bool(
+            provider_purchase_verified
+            and (
+                bool(latest_offering_id and latest_offering_id in owned_offering_ids)
+                or bool(latest_asset_ids and latest_asset_ids <= owned_asset_ids)
+            )
+        )
         provider_source = (
             "PROVIDER_VERIFIED_COMMERCE_MEMORY"
             if verified_purchase else "NONE"
@@ -128,6 +222,22 @@ class SalesBrainFullAnalysisService:
             and runtime.get("commerce_execution_policy")
             == "COMMERCE_PRESENTATION_ALLOWED"
         )
+        relationship_nurture_active = bool(
+            value_attention.get("relationshipNurtureActive")
+            and not opportunity_exists
+            and not presentation_authorized
+            and decision.decision not in cls.PRESENTATION_ACTIONS
+        )
+        active_offer_status = str(decision.active_offer_status or "").upper()
+        current_offer_authority = bool(
+            decision.active_purchase_intent_id
+            and active_offer_status in {"PRESENTED", "CLICKED"}
+        )
+        applicable_rejection = str(objection.get("type") or "NONE").upper() in {
+            "PRICE_RESISTANCE", "DISCOUNT_REQUEST", "BUDGET_LIMIT",
+            "CONTENT_MISMATCH", "PRODUCT_REJECTION", "TEMPORARY_HESITATION",
+            "GLOBAL_DECLINE",
+        }
         controlling_gate = cls._controlling_gate(
             decision, objection=objection, cooldown=cooldown,
             selector=selector, runtime=runtime,
@@ -260,9 +370,33 @@ class SalesBrainFullAnalysisService:
                 or provider.get("intimacy_investment_inputs") or {}
             ),
             "premiumSextingAllowed": bool(
-                intimacy.get("premium_sexting_allowed")
+                intimacy.get(
+                    "premium_sexting_allowed",
+                    provider.get("premium_sexting_allowed", False),
+                )
             ),
-            "explicitAllowed": bool(intimacy.get("explicit_allowed")),
+            "explicitAllowed": bool(intimacy.get(
+                "explicit_allowed", provider.get("explicit_allowed", False),
+            )),
+            "effectivePremiumSextingAllowed": bool(intimacy.get(
+                "premium_sexting_allowed",
+                provider.get("premium_sexting_allowed", False),
+            )),
+            "effectiveExplicitAllowed": bool(intimacy.get(
+                "explicit_allowed", provider.get("explicit_allowed", False),
+            )),
+            "legacyPremiumSextingAllowed": bool(intimacy.get(
+                "legacy_premium_sexting_allowed",
+                provider.get("legacy_premium_sexting_allowed", False),
+            )),
+            "legacyExplicitAllowed": bool(intimacy.get(
+                "legacy_explicit_allowed",
+                provider.get("legacy_explicit_allowed", False),
+            )),
+            "legacyPermissionFlagsAuthoritative": bool(intimacy.get(
+                "legacy_permission_flags_authoritative",
+                provider.get("legacy_permission_flags_authoritative", False),
+            )),
             "canonicalBuyerAuthorityUsed": bool(
                 intimacy.get("canonical_buyer_authority_used")
                 or provider.get("canonical_buyer_authority_used")
@@ -349,6 +483,15 @@ class SalesBrainFullAnalysisService:
             ),
             "sessionCandidateReason": session_escalation.get(
                 "sessionCandidateReason"
+            ),
+            "canonicalSessionCandidate": bool(
+                session_escalation.get("canonicalSessionCandidate")
+            ),
+            "canonicalSessionCandidateOfferingId": session_escalation.get(
+                "canonicalSessionCandidateOfferingId"
+            ),
+            "canonicalSessionCandidateReason": session_escalation.get(
+                "canonicalSessionCandidateReason"
             ),
             "sessionCompatibleInventoryAvailable": bool(
                 session_escalation.get("sessionCompatibleInventoryAvailable")
@@ -593,15 +736,73 @@ class SalesBrainFullAnalysisService:
                 **relationship_discovery,
                 "questionActuallyAsked": bool(
                     discovery_generation.get("questionActuallyAsked")
+                    or style.get("questionAsked")
                 ),
-                "questionReason": discovery_generation.get("questionReason"),
-                "questionValue": discovery_generation.get("questionValue"),
+                "questionReason": (
+                    discovery_generation.get("questionReason")
+                    or style.get("questionReason")
+                ),
+                "questionValue": (
+                    discovery_generation.get("questionValue")
+                    or style.get("questionValue")
+                ),
+                "commercialDiscoveryAuthorized": bool(
+                    style.get("commercialDiscoveryAuthorized")
+                ),
                 "customerAnsweredDiscovery": discovery_generation.get(
                     "customerAnsweredDiscovery"
                 ),
                 "memoryLearnedFromAnswer": bool(
                     discovery_generation.get("memoryLearnedFromAnswer")
                 ),
+            },
+            "relationshipNurture": {
+                "active": relationship_nurture_active,
+                "objective": (
+                    "BUYER_RELATIONSHIP_NURTURE"
+                    if relationship_nurture_active else None
+                ),
+                "reason": value_attention.get("relationshipNurtureReason"),
+                "outcome": value_attention.get("relationshipNurtureOutcome"),
+                "commercialOpportunityExists": opportunity_exists,
+                "salesBrainDecision": decision.decision.value,
+                "commercialReentryAllowed": bool(value_attention.get(
+                    "relationshipNurtureCommercialReentryAllowed", True
+                )),
+                "distinctFromLowCostNurture": True,
+                "authority": "CustomerValueAttentionService+CustomerSalesBrainService",
+            },
+            "relationshipRewarming": {
+                "active": bool(value_attention.get(
+                    "relationshipRewarmingActive"
+                )),
+                "objective": value_attention.get(
+                    "relationshipRewarmingObjective"
+                ),
+                "reason": value_attention.get("relationshipRewarmingReason"),
+                "retentionLifecycle": value_attention.get("retentionLifecycle"),
+                "reactivationState": value_attention.get("reactivationState"),
+                "currentCommercialInterest": bool(value_attention.get(
+                    "currentCommercialInterest"
+                )),
+                "commercialReentryAllowed": bool(value_attention.get(
+                    "relationshipRewarmingCommercialReentryAllowed", True
+                )),
+                "overlapsBuyerRelationshipNurture": bool(
+                    relationship_nurture_active
+                    and value_attention.get("relationshipRewarmingActive")
+                ),
+                "interpretation": (
+                    "This verified buyer has returned and Ava is rebuilding the "
+                    "relationship, but the customer is not currently shopping."
+                    if (
+                        value_attention.get("relationshipRewarmingActive")
+                        and value_attention.get("retentionLifecycle") == "DORMANT_BUYER"
+                        and value_attention.get("reactivationState") == "REACTIVATED_BUYER"
+                        and not value_attention.get("currentCommercialInterest")
+                    ) else None
+                ),
+                "authority": "CustomerValueAttentionService",
             },
             "conversationInvestment": {
                 "desiredEffort": value_attention.get("effortMode"),
@@ -701,6 +902,10 @@ class SalesBrainFullAnalysisService:
                 "operationalMemoryPolicy": memory_policy,
                 "salesPressure": value_attention.get("salesPressure"),
                 "offerCadence": value_attention.get("offerCadence"),
+                "relationshipNurtureActive": relationship_nurture_active,
+                "relationshipNurtureReason": value_attention.get(
+                    "relationshipNurtureReason"
+                ),
                 "buyerProtection": bool(
                     value_attention.get("buyerProtectionApplied")
                 ),
@@ -1096,6 +1301,24 @@ class SalesBrainFullAnalysisService:
             "purchaseCommerceState": {
                 "conversationalPurchaseClaim": conversational_claim,
                 "verifiedPurchase": verified_purchase,
+                "customerPurchaseClaimDetected": conversational_claim,
+                "providerPurchaseVerified": provider_purchase_verified,
+                "activePurchaseIntentState": (
+                    decision.active_offer_status or metadata.get("latestIntentStatus")
+                ),
+                "purchaseOwnershipVerified": purchase_ownership_verified,
+                "verifiedPurchaseCount": verified_count,
+                "firstPurchaseSemanticsAuthorized": bool(
+                    provider_purchase_verified and verified_count == 1
+                ),
+                "purchaseAcknowledgementAuthorized": provider_purchase_verified,
+                "purchaseAcknowledgementReason": (
+                    "PROVIDER_VERIFIED_PURCHASE"
+                    if provider_purchase_verified
+                    else "CUSTOMER_CLAIM_AWAITING_PROVIDER_SETTLEMENT"
+                    if conversational_claim
+                    else "NO_NEW_VERIFIED_PURCHASE_EVENT"
+                ),
                 "verificationSource": provider_source,
                 "latestVerifiedPurchaseAt": memory.get("lastPurchaseAt") or signal.get("lastPurchaseAt"),
                 "latestVerifiedPurchaseEvidence": (
@@ -1121,6 +1344,9 @@ class SalesBrainFullAnalysisService:
                 "overrideReason": cooldown.get("overrideReason"),
                 "recentOfferPressure": list(opportunity.get("suppressions") or ()),
                 "recoveryAttemptCount": recovery_attempts,
+                "newMaterialCommercialInformationDetected": bool(
+                    objection.get("newMaterialCommercialInformationDetected")
+                ),
                 "pressureReduced": pressure_reduced,
             },
             "currentOffer": {
@@ -1139,8 +1365,22 @@ class SalesBrainFullAnalysisService:
                 "nudgeCooldownApplies": active_offer_continuation.get(
                     "nudgeCooldownApplies"
                 ),
+                "reuseRequested": bool(
+                    active_offer_continuation.get("reuseRequested")
+                ),
+                "redeliveryAuthorized": bool(
+                    active_offer_continuation.get("redeliveryAuthorized")
+                ),
+                "purchaseIntentReuseEligible": bool(
+                    active_offer_continuation.get(
+                        "purchaseIntentReuseEligible"
+                    )
+                ),
                 "structuredOfferReused": bool(
-                    active_offer_continuation.get("structuredOfferReused")
+                    runtime.get("paidPresentationDelivered")
+                    and active_offer_continuation.get(
+                        "customerInitiatedOfferContinuation"
+                    )
                 ),
                 "structuredOfferRedelivered": bool(
                     runtime.get("paidPresentationDelivered")
@@ -1149,7 +1389,11 @@ class SalesBrainFullAnalysisService:
                     )
                 ),
                 "purchaseIntentReused": bool(
-                    active_offer_continuation.get("purchaseIntentReused")
+                    runtime.get("paidPresentationDelivered")
+                    and active_offer_continuation.get(
+                        "customerInitiatedOfferContinuation"
+                    )
+                    and decision.active_purchase_intent_id
                 ),
                 "relationshipDiscoverySuppressed": bool(
                     active_offer_continuation.get(
@@ -1166,7 +1410,11 @@ class SalesBrainFullAnalysisService:
                 "type": objection.get("type") or "NONE",
                 "scope": objection.get("scope") or "NONE",
                 "strength": objection.get("strength") or "NONE",
-                "currentOfferRejected": bool(objection.get("rejectedOfferingId")),
+                "currentOfferRejected": bool(
+                    current_offer_authority
+                    and applicable_rejection
+                    and objection.get("rejectedOfferingId")
+                ),
                 "globalRejection": objection.get("scope") == "GLOBAL",
                 "customerStillCommerciallyReceptive": bool(objection.get("customerStillCommerciallyReceptive", True)),
                 "alternativeSelectionAllowed": bool(objection.get("alternativeSelectionAllowed")),
@@ -1190,8 +1438,14 @@ class SalesBrainFullAnalysisService:
                 "negativeContactAuthorized": bool(recovery.get(
                     "negativeContactAuthorized", objection.get("negativeContactAuthorized")
                 )),
-                "negativeContactUsed": bool(recovery.get("negativeContactUsed")),
-                "valueDefenseUsed": bool(recovery.get("valueDefenseUsed")),
+                "negativeContactRequested": bool(recovery.get(
+                    "negativeContactRequested", recovery.get("negativeContactAuthorized")
+                )),
+                "negativeContactUsed": bool(style.get("negativeContactUsed")),
+                "valueDefenseRequested": bool(recovery.get(
+                    "valueDefenseRequested", recovery.get("strategy") == "VALUE_DEFENSE"
+                )),
+                "valueDefenseUsed": bool(style.get("valueDefenseUsed")),
                 "originalOfferPreserved": bool(recovery.get(
                     "originalOfferPreserved", objection.get("currentOfferAuthoritative")
                 )),
@@ -1228,6 +1482,18 @@ class SalesBrainFullAnalysisService:
                 "candidateCount": selector.get("candidateCount"),
                 "eligibleCount": selector.get("eligibleCount"),
                 "selectedOfferingId": str(decision.recommended_offering_id) if decision.recommended_offering_id else None,
+                # selectedOfferingId remains the offering carried by the final
+                # commercial/presentation decision.  This separate field is
+                # the deterministic inventory result and may remain populated
+                # on an authorized conversational turn.
+                "canonicalCandidateOfferingId": selector.get(
+                    "selectedOfferingId"
+                ),
+                "presentedOfferingId": (
+                    str(decision.recommended_offering_id)
+                    if presentation_authorized
+                    and decision.recommended_offering_id else None
+                ),
                 "selectedOfferingType": dict(decision.recommended_product_context or {}).get("offeringType"),
                 "selectedPriceMinor": decision.recommended_offering_price_minor,
                 "classification": classification,
@@ -1257,6 +1523,10 @@ class SalesBrainFullAnalysisService:
                 ),
                 "genericSelectorOverride": False,
             },
+            "activeSessionContext": {
+                **active_session_context,
+                "available": bool(active_session_context.get("available")),
+            },
             "policyGate": {
                 "controllingGate": controlling_gate,
                 "opportunityBeforePolicyGate": opportunity_exists,
@@ -1275,7 +1545,10 @@ class SalesBrainFullAnalysisService:
                 "offerAuthorized": offer_authorized,
                 "commercePresentationAuthorized": presentation_authorized,
                 "acknowledgementAction": decision.decision is CustomerSalesDecisionType.CONGRATULATE_PURCHASE,
-                "sessionAction": intelligence.get("continuationGuidance"),
+                "sessionAction": (
+                    decision.next_sales_action.to_context()
+                    if decision.next_sales_action is not None else None
+                ),
                 "selectionClassification": classification,
                 "anotherSaleAppropriateNow": bool(receptiveness.get("anotherSaleAppropriateNow")),
                 "rationale": decision.reason_summary,

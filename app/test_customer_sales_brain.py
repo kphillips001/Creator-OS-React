@@ -31,6 +31,7 @@ from app.models.photoshoot_experience_recommendation import (
 )
 from app.services.customer_sales_brain_config import CustomerSalesBrainConfig
 from app.services.customer_sales_brain_service import CustomerSalesBrainService
+from app.services.commercial_objection_service import CommercialObjectionService
 from app.services.unmapped_telegram_prospect_service import UnmappedTelegramProspectService
 
 
@@ -60,6 +61,64 @@ def test_historical_session_resolution_matches_customer_and_photoshoot():
 
 NOW = datetime(2026, 7, 26, tzinfo=timezone.utc)
 BUYER = UUID("9d7ce679-ccef-4bb9-9b01-7ee8b97516bc")
+
+
+@pytest.mark.parametrize("status", [
+    PurchaseIntentStatus.CREATED,
+    PurchaseIntentStatus.PURCHASED,
+    PurchaseIntentStatus.EXPIRED,
+    PurchaseIntentStatus.ABANDONED,
+    PurchaseIntentStatus.SUPERSEDED,
+    PurchaseIntentStatus.ADMIN_CLOSED,
+])
+def test_terminal_historical_intent_is_not_current_rejection_authority(status):
+    objection = CommercialObjectionService().evaluate(
+        message="no thanks", context={},
+    )
+    intent = SimpleNamespace(
+        status=status, commercial_offering_id=uuid4(),
+        expected_price_minor=1400,
+    )
+    result = CustomerSalesBrainService._objection_diagnostics(
+        objection, intent, {"sales_progression": {"offeringId": "historical"}},
+    )
+
+    assert result["currentOfferAuthority"] is False
+    assert result["rejectedOfferingId"] is None
+    assert result["previousOfferPriceMinor"] is None
+
+
+def test_active_presented_intent_with_rejection_is_current_rejection_authority():
+    objection = CommercialObjectionService().evaluate(
+        message="not interested", context={},
+    )
+    offering_id = uuid4()
+    intent = SimpleNamespace(
+        status=PurchaseIntentStatus.PRESENTED,
+        commercial_offering_id=offering_id, expected_price_minor=1400,
+    )
+    result = CustomerSalesBrainService._objection_diagnostics(
+        objection, intent, {},
+    )
+
+    assert result["currentOfferAuthority"] is True
+    assert result["rejectedOfferingId"] == str(offering_id)
+
+
+def test_active_presented_intent_without_objection_is_not_rejected():
+    objection = CommercialObjectionService().evaluate(
+        message="send the link", context={},
+    )
+    intent = SimpleNamespace(
+        status=PurchaseIntentStatus.PRESENTED,
+        commercial_offering_id=uuid4(), expected_price_minor=1400,
+    )
+    result = CustomerSalesBrainService._objection_diagnostics(
+        objection, intent, {},
+    )
+
+    assert result["currentOfferAuthority"] is True
+    assert result["rejectedOfferingId"] is None
 
 
 class Customers:
@@ -163,7 +222,8 @@ def signal(*, reconciliation=None, attribution="PENDING", conversion="NO_ACTIVE_
     )
 
 
-def intent(*, status="PRESENTED", presented_at=None, attribution="PENDING"):
+def intent(*, status="PRESENTED", presented_at=None, attribution="PENDING",
+           purchase_acknowledged_at=None):
     return SimpleNamespace(
         purchase_intent_id=uuid4(), commercial_offering_id=uuid4(),
         status=PurchaseIntentStatus(status),
@@ -172,6 +232,7 @@ def intent(*, status="PRESENTED", presented_at=None, attribution="PENDING"):
         presented_at=presented_at or NOW - timedelta(hours=2),
         updated_at=NOW - timedelta(hours=1),
         expected_price_minor=999,
+        purchase_acknowledged_at=purchase_acknowledged_at,
     )
 
 
@@ -239,6 +300,29 @@ def test_explicit_budget_after_value_defense_authorizes_different_product():
     assert result.decision is CustomerSalesDecisionType.PRESENT_ALTERNATIVE_OFFER
     assert result.recommended_offering_id == alternative.offering_id
     assert service.intents.active is None
+
+
+def test_attempt_5_worded_budget_survives_prior_recovery_limit():
+    current = intent(status="PRESENTED")
+    current.expected_price_minor = 2900
+    alternative = offering(); alternative.price_minor = 900
+    commerce = signal(); commerce.lifetime_spend_minor = 2900
+    service = brain(customer=profile(), commerce_signal=commerce,
+                    latest=current, active=current, eligible=alternative)
+    result = evaluate(service, {
+        "latest_message": "I'm trying to stay under ten dollars",
+        "sales_progression": {"phase": "PRESENT_OFFER", "recoveryAttemptCount": 1},
+    })
+    objection = result.decision_metadata["commercialObjection"]
+    constraints = service.offering_selector.calls[-1]["strategy_constraints"]
+    assert objection["type"] == "BUDGET_LIMIT"
+    assert objection["budgetConstraintDetected"] is True
+    assert objection["budgetConstraintAmount"] == 1000
+    assert objection["newMaterialCommercialInformationDetected"] is True
+    assert constraints.maximum_price_minor == 1000
+    # Selection was reevaluated with the new ceiling. The separate canonical
+    # alternative test above proves presentation when its strategy is eligible.
+    assert current.expected_price_minor == 2900
 
 
 def test_clear_global_rejection_never_uses_negative_contact():
@@ -420,6 +504,65 @@ def evaluate(service, context=None):
     )
 
 
+def test_active_session_preserves_canonical_candidate_without_presentation():
+    step_three = offering()
+    customer = profile(
+        purchases=2, last_purchase=NOW - timedelta(minutes=5),
+    )
+    customer.customer_commerce_profile_id = uuid4()
+    service = brain(
+        customer=customer,
+        commerce_signal=signal(attribution="ATTRIBUTED"), eligible=step_three,
+    )
+
+    result = evaluate(service, {
+        "latest_message": "don't stop now",
+        "sales_session_id": str(uuid4()),
+        "active_buying_window": {"active": False},
+        "explicit_continuation_detected": True,
+    })
+
+    escalation = result.decision_metadata["sessionEscalation"]
+    selector = result.decision_metadata["offeringSelector"]
+    assert result.decision is CustomerSalesDecisionType.CONTINUE_CONVERSATION
+    assert result.recommended_offering_id is None
+    assert escalation["canonicalSessionCandidate"] is True
+    assert escalation["canonicalSessionCandidateOfferingId"] == str(
+        step_three.offering_id
+    )
+    assert escalation["canonicalSessionCandidateReason"] == (
+        "ACTIVE_SESSION_ORDERED_CANDIDATE_SELECTED"
+    )
+    assert escalation["sessionCandidateReason"] == (
+        "EXISTING_ACTIVE_SESSION_NOT_SESSION_START_CANDIDATE"
+    )
+    assert selector["selectedOfferingId"] == str(step_three.offering_id)
+
+
+def test_active_session_direct_request_presents_same_canonical_candidate():
+    step_three = offering()
+    customer = profile(
+        purchases=2, last_purchase=NOW - timedelta(minutes=5),
+    )
+    customer.customer_commerce_profile_id = uuid4()
+    service = brain(
+        customer=customer,
+        commerce_signal=signal(attribution="ATTRIBUTED"), eligible=step_three,
+    )
+
+    result = evaluate(service, {
+        "latest_message": "send the next one",
+        "sales_session_id": str(uuid4()),
+        "active_buying_window": {"active": False},
+    })
+
+    assert result.recommended_offering_id == step_three.offering_id
+    assert result.sell_allowed is True
+    assert result.decision_metadata["sessionEscalation"][
+        "canonicalSessionCandidateOfferingId"
+    ] == str(step_three.offering_id)
+
+
 class RepeatedNonconversionIntents(Intents):
     def get_customer_opportunity_evidence(self, **_kwargs):
         return {
@@ -460,8 +603,75 @@ def test_low_cost_nurture_suppresses_optional_chat_but_not_fresh_buying_intent()
     commercial_attention = commercial.decision_metadata["customerValueAttention"]
     commercial_suppression = commercial.decision_metadata["outboundSuppression"]
     assert commercial_attention["nurtureBypassedForCommercialIntent"] is True
+    assert commercial_attention["freshCommercialIntentDetected"] is True
     assert commercial_suppression["suppressed"] is False
     assert commercial.sell_allowed is True
+
+    canonical = evaluate(service, {
+        **history,
+        "latest_message": (
+            "okay, what private content do you actually have available?"
+        ),
+    })
+    canonical_attention = canonical.decision_metadata["customerValueAttention"]
+    assert canonical.decision_metadata["commercialReceptiveness"][
+        "commercialInterestType"
+    ] == "OFFERING_AVAILABILITY_INQUIRY"
+    assert canonical_attention["freshCommercialIntentDetected"] is True
+    assert canonical_attention["nurtureBypassedForCommercialIntent"] is True
+    assert canonical.decision_metadata["outboundSuppression"]["suppressed"] is False
+    assert canonical.sell_allowed is True
+
+
+def test_consumed_nurture_suppresses_attempt_7_backoff_acknowledgement():
+    service = brain(
+        customer=profile(), commerce_signal=signal(), eligible=offering(),
+    )
+    service.intents = RepeatedNonconversionIntents()
+    result = evaluate(service, {
+        "latest_message": "no, I'm not paying; I'm just looking",
+        "inbound_message_count": 20,
+        "rejection_count": 4,
+        "idle_browsing_signal_count": 4,
+        "nurture_response_count_rolling_day": 1,
+        "last_nurture_response_at": NOW - timedelta(hours=2),
+        "sales_progression": {"phase": "TEASE"},
+    })
+
+    assert result.decision is CustomerSalesDecisionType.BACK_OFF
+    assert result.decision_metadata["customerValueAttention"][
+        "nurtureResponsesUsed"
+    ] == 1
+    assert result.decision_metadata["outboundSuppression"] == {
+        "suppressed": True,
+        "outcome": "NO_RESPONSE",
+        "reason": "LOW_COST_NURTURE_DAILY_BUDGET_CONSUMED",
+        "inboundProcessingRequired": True,
+        "futureCommercialReentryAllowed": True,
+        "freshCommercialIntentDetected": False,
+        "nurtureBypassedForCommercialIntent": False,
+    }
+
+
+def test_active_offer_backoff_is_not_suppressed_as_optional_ordinary_chat():
+    current = intent(status="PRESENTED")
+    service = brain(
+        customer=profile(), commerce_signal=signal(),
+        latest=current, active=current, eligible=offering(),
+    )
+    service.intents = RepeatedNonconversionIntents(
+        latest=current, active=current,
+    )
+    result = evaluate(service, {
+        "latest_message": "no, I don't want that offer",
+        "inbound_message_count": 20,
+        "rejection_count": 4,
+        "idle_browsing_signal_count": 4,
+        "nurture_response_count_rolling_day": 1,
+        "last_nurture_response_at": NOW - timedelta(hours=2),
+    })
+
+    assert result.decision_metadata["outboundSuppression"]["suppressed"] is False
 
 
 def test_canonical_sustained_sexual_receptiveness_projection_is_fail_closed():
@@ -800,6 +1010,59 @@ def test_verified_purchase_acknowledgement_precedes_cooldown():
     assert result.congratulate_allowed is True
 
 
+def test_completed_latest_purchase_does_not_reopen_acknowledgement():
+    purchased = intent(
+        status="PURCHASED", attribution="ATTRIBUTED",
+        purchase_acknowledged_at=NOW - timedelta(minutes=5),
+    )
+    result = evaluate(brain(
+        customer=profile(purchases=2, last_purchase=NOW - timedelta(hours=1)),
+        commerce_signal=signal(attribution="ATTRIBUTED", conversion="PURCHASED"),
+        latest=purchased,
+    ), {
+        "latest_message": "you know my taste pretty well now",
+        "purchase_acknowledgement_pending": True,
+        "purchase_acknowledgement_intent_id": str(purchased.purchase_intent_id),
+    })
+
+    assert result.decision is not CustomerSalesDecisionType.CONGRATULATE_PURCHASE
+    assert result.decision_metadata["offerLifecycle"] is None
+    assert result.decision_metadata["latestPurchaseAcknowledgedAt"] == (
+        purchased.purchase_acknowledged_at.isoformat()
+    )
+
+
+def test_pending_acknowledgement_must_match_latest_purchase_identity():
+    purchased = intent(status="PURCHASED", attribution="ATTRIBUTED")
+    result = evaluate(brain(
+        customer=profile(purchases=2, last_purchase=NOW - timedelta(hours=1)),
+        commerce_signal=signal(attribution="ATTRIBUTED", conversion="PURCHASED"),
+        latest=purchased,
+    ), {
+        "purchase_acknowledgement_pending": True,
+        "purchase_acknowledgement_intent_id": str(uuid4()),
+    })
+
+    assert result.decision is not CustomerSalesDecisionType.CONGRATULATE_PURCHASE
+
+
+def test_new_latest_purchase_still_creates_purchase_scoped_acknowledgement():
+    purchased = intent(status="PURCHASED", attribution="ATTRIBUTED")
+    result = evaluate(brain(
+        customer=profile(purchases=3, last_purchase=NOW - timedelta(minutes=2)),
+        commerce_signal=signal(attribution="ATTRIBUTED", conversion="PURCHASED"),
+        latest=purchased,
+    ), {
+        "purchase_acknowledgement_pending": True,
+        "purchase_acknowledgement_intent_id": str(purchased.purchase_intent_id),
+    })
+
+    assert result.decision is CustomerSalesDecisionType.CONGRATULATE_PURCHASE
+    assert result.decision_metadata["offerLifecycle"]["purchaseIntentId"] == (
+        str(purchased.purchase_intent_id)
+    )
+
+
 def test_recent_purchase_cooldown_blocks_sale():
     result = evaluate(brain(
         customer=profile(
@@ -811,6 +1074,49 @@ def test_recent_purchase_cooldown_blocks_sale():
     assert result.decision is CustomerSalesDecisionType.CONTINUE_CONVERSATION
     assert result.reason_code is CustomerSalesReasonCode.RECENT_PURCHASE_COOLDOWN
     assert result.cooldown_until == NOW + timedelta(hours=23)
+
+
+def test_inventory_existence_question_projects_unowned_availability_without_sale():
+    selected = offering()
+    result = evaluate(brain(
+        customer=profile(
+            purchases=2, last_purchase=NOW - timedelta(hours=1)
+        ),
+        commerce_signal=signal(attribution="ATTRIBUTED"),
+        eligible=selected,
+    ), {"latest_message": "got anything I haven't seen yet?"})
+
+    existence = result.decision_metadata["inventoryExistence"]
+    assert result.decision is CustomerSalesDecisionType.CONTINUE_CONVERSATION
+    assert result.reason_code is CustomerSalesReasonCode.RECENT_PURCHASE_COOLDOWN
+    assert result.recommended_offering_id is None
+    assert result.active_purchase_intent_id is None
+    assert existence == {
+        "directInventoryQuestionDetected": True,
+        "inventoryExistenceKnown": True,
+        "eligibleUnownedInventoryExists": True,
+        "authority": "OWNERSHIP_SAFE_OFFERING_SELECTOR",
+        "existenceProbeOnly": True,
+        "offerPresentationAuthorized": False,
+        "structuredOfferDelivered": False,
+        "purchaseIntentCreated": False,
+    }
+
+
+def test_inventory_existence_question_projects_known_empty_inventory():
+    result = evaluate(brain(
+        customer=profile(
+            purchases=2, last_purchase=NOW - timedelta(hours=1)
+        ),
+        commerce_signal=signal(attribution="ATTRIBUTED"),
+        eligible=None,
+    ), {"latest_message": "is there anything else?"})
+
+    existence = result.decision_metadata["inventoryExistence"]
+    assert result.decision is CustomerSalesDecisionType.CONTINUE_CONVERSATION
+    assert existence["inventoryExistenceKnown"] is True
+    assert existence["eligibleUnownedInventoryExists"] is False
+    assert result.recommended_offering_id is None
 
 
 @pytest.mark.parametrize("message", (
@@ -857,6 +1163,25 @@ def test_recent_purchase_positive_engagement_is_elevated_but_not_forced_offer():
         "anotherSaleAppropriateNow"
     ] is False
     assert result.decision_metadata["activeBuyingWindow"]["active"] is False
+
+
+def test_high_value_deferred_content_interest_does_not_create_offer_now():
+    selected = offering()
+    result = evaluate(brain(
+        customer=profile(purchases=3, last_purchase=NOW - timedelta(hours=1)),
+        commerce_signal=signal(attribution="ATTRIBUTED"), eligible=selected,
+    ), {"latest_message": "maybe show me something another time"})
+
+    assert result.decision is CustomerSalesDecisionType.CONTINUE_CONVERSATION
+    assert result.sell_allowed is False
+    assert result.recommended_offering_id is None
+    receptiveness = result.decision_metadata["commercialReceptiveness"]
+    assert receptiveness["state"] == "COOLING"
+    assert receptiveness["deferredCommercialInterest"] is True
+    assert receptiveness["currentCommercialInterest"] is False
+    assert receptiveness["freshDirectIntentDetected"] is False
+    assert receptiveness["futureCommercialReentryAllowed"] is True
+    assert result.decision_metadata["commercialObjection"]["type"] == "NONE"
 
 
 def test_repeat_and_high_history_buyers_still_require_current_momentum():
@@ -923,6 +1248,10 @@ def test_fresh_direct_intent_closes_existing_offer_without_timer_wait():
 @pytest.mark.parametrize("message,continuation_type", (
     ("how much is it?", "PRICE_REQUEST"),
     ("yeah, send me the link", "SEND_OR_LINK_REQUEST"),
+    ("send me the cheaper one", "SEND_OR_LINK_REQUEST"),
+    ("give me the cheaper option", "SEND_OR_LINK_REQUEST"),
+    ("I'll take the smaller one", "SEND_OR_LINK_REQUEST"),
+    ("send me the $9 one", "SEND_OR_LINK_REQUEST"),
 ))
 def test_customer_initiated_active_offer_continuation_bypasses_nudge_timer(
     message, continuation_type,
@@ -944,14 +1273,35 @@ def test_customer_initiated_active_offer_continuation_bypasses_nudge_timer(
         "customerInitiatedOfferContinuation": True,
         "continuationIntentType": continuation_type,
         "nudgeCooldownApplies": False,
-        "structuredOfferReused": True,
+        "reuseRequested": True,
+        "redeliveryAuthorized": True,
+        "purchaseIntentReuseEligible": True,
+        "structuredOfferReused": False,
         "structuredOfferRedelivered": False,
-        "purchaseIntentReused": True,
+        "purchaseIntentReused": False,
         "relationshipDiscoverySuppressed": True,
     }
     assert result.decision_metadata["offerLifecycle"]["messagePurpose"] == (
         "ACTIVE_OFFER_CONTINUATION"
     )
+
+
+@pytest.mark.parametrize("message", (
+    "anything cheaper than that?",
+    "anything under $9?",
+    "can you go lower?",
+))
+def test_active_offer_fresh_comparative_request_still_searches_lower(message):
+    active = intent(presented_at=NOW - timedelta(minutes=1))
+    service = brain(
+        customer=profile(), commerce_signal=signal(), latest=active,
+        active=active, eligible=None,
+    )
+    result = evaluate(service, {"latest_message": message})
+    continuation = result.decision_metadata["activeOfferContinuation"]
+    assert continuation["customerInitiatedOfferContinuation"] is False
+    assert result.decision is CustomerSalesDecisionType.NO_SALE
+    assert result.active_purchase_intent_id is None
 
 
 @pytest.mark.parametrize("purchase_count", (2, 3))

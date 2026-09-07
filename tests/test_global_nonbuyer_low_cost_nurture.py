@@ -8,6 +8,12 @@ from app.services.customer_value_attention_service import (
 from app.services.commercial_nonpayment_evidence_service import (
     CommercialNonpaymentEvidenceService,
 )
+from app.services.commercial_receptiveness_service import (
+    CommercialReceptivenessService,
+)
+from app.services.conversational_sales_progression_service import (
+    ConversationalSalesProgressionService,
+)
 
 
 NOW = datetime(2026, 9, 1, 18, 0, tzinfo=timezone.utc)
@@ -83,6 +89,61 @@ def test_fresh_buying_intent_immediately_bypasses_nurture():
     assert result.optional_ordinary_reply_suppressed is False
     assert result.fresh_commercial_intent_detected is True
     assert result.nurture_bypassed_for_commercial_intent is True
+    assert result.attention_tier == "HIGH"
+
+
+def test_canonical_renewed_commercial_interest_bypasses_nurture_without_erasing_risk():
+    result = project(behavior=repeated_nonconversion(
+        nurture_response_count_rolling_day=1,
+        commercial_interest_type="COMMERCIAL_CURIOSITY",
+    ))
+    assert result.low_cost_nurture_eligible is True
+    assert result.low_cost_nurture_active is False
+    assert result.optional_ordinary_reply_suppressed is False
+    assert result.nurture_bypassed_for_commercial_intent is True
+    assert "MULTIPLE_OFFERS_NO_CONVERSION" in result.time_waster_evidence
+    assert "CURRENT_MEANINGFUL_COMMERCIAL_TRAJECTORY_PROTECTION" in (
+        result.time_waster_evidence
+    )
+    assert result.failed_nonconverted_opportunity_count == 2
+    assert result.attention_tier == "HIGH"
+
+
+def test_weak_small_talk_does_not_reactivate_consumed_nurture_budget():
+    result = project(behavior=repeated_nonconversion(
+        nurture_response_count_rolling_day=1,
+        commercial_interest_type="NONE",
+    ))
+    assert result.time_waster_risk == "HIGH"
+    assert result.low_cost_nurture_active is True
+    assert result.optional_ordinary_reply_suppressed is True
+    assert result.nurture_bypassed_for_commercial_intent is False
+
+
+def test_canonical_c08_availability_inquiry_bypasses_consumed_nurture_budget():
+    receptiveness = CommercialReceptivenessService(
+        ConversationalSalesProgressionService().has_direct_purchase_intent
+    ).evaluate(
+        context={"latest_message": (
+            "okay, what private content do you actually have available?"
+        )},
+        recent_purchase=False,
+        cooldown_active=False,
+    )
+    result = project(behavior=repeated_nonconversion(
+        nurture_response_count_rolling_day=1,
+        commercial_interest_type=receptiveness.commercial_interest_type,
+        fresh_direct_intent=receptiveness.fresh_direct_intent,
+    ))
+
+    assert receptiveness.commercial_interest_type == (
+        "OFFERING_AVAILABILITY_INQUIRY"
+    )
+    assert result.fresh_commercial_intent_detected is True
+    assert result.nurture_bypassed_for_commercial_intent is True
+    assert result.optional_ordinary_reply_suppressed is False
+    assert result.low_cost_nurture_active is False
+    assert result.failed_nonconverted_opportunity_count == 2
     assert result.attention_tier == "HIGH"
 
 

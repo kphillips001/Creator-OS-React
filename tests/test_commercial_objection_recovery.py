@@ -39,6 +39,48 @@ def test_explicit_cheaper_product_request_authorizes_alternative(message):
 
 
 @pytest.mark.parametrize("message", (
+    "send me the cheaper one",
+    "give me the cheaper option",
+    "I'll take the smaller one",
+    "send me the $9 one",
+))
+def test_known_active_offer_reference_precedes_cheaper_objection(message):
+    result = CommercialObjectionService().evaluate(
+        message=message,
+        context={"active_offer_continuation": {
+            "customerInitiatedOfferContinuation": True,
+            "continuationIntentType": "SEND_OR_LINK_REQUEST",
+        }},
+    )
+    assert result.objection_type is CommercialObjectionType.NONE
+    assert result.consider_alternative is False
+    assert result.selector_constraints.get("maximumPriceMinor") is None
+
+
+@pytest.mark.parametrize("message", (
+    "anything cheaper than that?",
+    "something even cheaper?",
+    "anything under $9?",
+    "that's still too expensive",
+))
+def test_fresh_comparative_request_is_not_treated_as_known_offer_reference(message):
+    from app.services.commercial_receptiveness_service import (
+        CommercialReceptivenessService,
+    )
+
+    assert CommercialReceptivenessService.active_offer_continuation_type(
+        message
+    ) is None
+    result = CommercialObjectionService().evaluate(message=message)
+    assert result.objection_type in {
+        CommercialObjectionType.PRICE_RESISTANCE,
+        CommercialObjectionType.BUDGET_LIMIT,
+    }
+    if "still too expensive" not in message:
+        assert result.consider_alternative is True
+
+
+@pytest.mark.parametrize("message", (
     "give me a discount", "Come on, give it to me for $5", "what's your best price?",
 ))
 def test_discount_fishing_holds_original_price(message):
@@ -53,6 +95,11 @@ def test_discount_fishing_holds_original_price(message):
     ("I only have $5", 500),
     ("I can't spend more than $5 tonight", 500),
     ("Do you have anything around $4.50?", 450),
+    ("I'm trying to stay under ten dollars", 1000),
+    ("I only have about $8 to spend", 800),
+    ("my budget is $10", 1000),
+    ("anything under $10?", 1000),
+    ("I need something cheaper, like under ten", 1000),
 ))
 def test_explicit_budget_is_authoritative_for_different_product(message, minor):
     result = CommercialObjectionService().evaluate(message=message)
@@ -73,15 +120,25 @@ def test_content_mismatch_preserves_receptiveness(message):
     assert result.consider_alternative is True
 
 
-@pytest.mark.parametrize("message", (
-    "maybe later on that offer", "let me think about buying it",
-    "not right now, maybe I'll unlock it later",
-))
-def test_temporary_hesitation_retains_offer_without_replacement(message):
-    result = CommercialObjectionService().evaluate(message=message)
+def test_temporary_hesitation_retains_offer_without_replacement():
+    result = CommercialObjectionService().evaluate(
+        message="let me think about buying it"
+    )
     assert result.objection_type is CommercialObjectionType.TEMPORARY_HESITATION
     assert result.current_offer_authoritative is True
     assert result.consider_alternative is False
+
+
+@pytest.mark.parametrize("message", (
+    "maybe later on that offer",
+    "not right now, maybe I'll unlock it later",
+))
+def test_future_timing_is_deferred_interest_not_an_objection(message):
+    result = CommercialObjectionService().evaluate(message=message)
+    assert result.objection_type is CommercialObjectionType.NONE
+    assert result.continue_selling is False
+    assert result.consider_alternative is False
+    assert result.evidence == ("DEFERRED_FUTURE_COMMERCIAL_INTEREST",)
 
 
 @pytest.mark.parametrize("message", ("maybe later", "let me think", "not right now"))
@@ -106,13 +163,37 @@ def test_payment_issue_preserves_offer_authority(message):
     assert result.consider_alternative is False
 
 
-def test_second_recovery_is_bounded():
+def test_repeated_unchanged_objection_after_recovery_is_bounded():
     context = {"sales_progression": {"recoveryAttemptCount": 1}}
     result = CommercialObjectionService().evaluate(
-        message="anything cheaper?", context=context,
+        message="still too much", context=context,
     )
     assert result.consider_alternative is False
     assert result.continue_selling is False
+
+
+def test_new_cheaper_product_request_after_value_defense_is_still_processed():
+    context = {"sales_progression": {
+        "recoveryAttemptCount": 1,
+        "reasonCode": "OBJECTION_VALUE_DEFENSE",
+    }}
+    result = CommercialObjectionService().evaluate(
+        message="anything cheaper?", context=context,
+    )
+    assert result.consider_alternative is True
+    assert result.recovery_strategy == "ALTERNATIVE_PRODUCT"
+
+
+@pytest.mark.parametrize("message", (
+    "I spent under $10 last time",
+    "maybe someday I'll only spend ten dollars",
+    "I'm not saying my budget is $10",
+    "We were talking about a $10 price yesterday",
+))
+def test_noncurrent_money_references_are_not_budget_constraints(message):
+    result = CommercialObjectionService().evaluate(message=message)
+    assert result.objection_type is not CommercialObjectionType.BUDGET_LIMIT
+    assert result.budget_constraint_minor is None
 
 
 def test_explicit_cheaper_request_excludes_current_and_requires_material_reduction():

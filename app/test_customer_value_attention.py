@@ -79,6 +79,131 @@ def test_d_first_party_sexual_engagement_is_not_buying_intent():
     assert result.time_waster_opportunity_basis is False
 
 
+@pytest.mark.parametrize(("spend", "tier", "reason"), (
+    (15_000, "HIGH_VALUE", "HIGH_VALUE_NO_CURRENT_ACTIONABLE_COMMERCIAL_OPPORTUNITY"),
+    (50_000, "WHALE", "WHALE_NO_CURRENT_ACTIONABLE_COMMERCIAL_OPPORTUNITY"),
+))
+def test_high_value_buyers_prefer_relationship_nurture_without_opportunity(
+        spend, tier, reason):
+    result = project({"purchaseCount": 5, "lifetimeGrossMinor": spend}, {
+        "message_count": 4, "meaningful_engagement_count": 3,
+        "commercial_interest_type": "NONE",
+    })
+    assert result.value_tier == tier
+    assert result.relationship_nurture_active is True
+    assert result.relationship_nurture_reason == reason
+    assert result.relationship_nurture_outcome == "ACTIVE_RELATIONSHIP_RETENTION"
+    assert result.low_cost_nurture_active is False
+    assert result.time_waster_risk == "NONE"
+
+
+def test_whale_presence_is_not_commercial_intent_or_failed_opportunity():
+    result = project({"purchaseCount": 5, "lifetimeGrossMinor": 50_000}, {
+        "message_count": 20, "meaningful_engagement_count": 10,
+        "latest_message": "hey, just checking in",
+    })
+    assert result.relationship_nurture_active is True
+    assert result.current_commercial_interest is False
+    assert result.commercial_momentum != "HOT"
+    assert result.offer_exposure_count == 0
+    assert result.failed_nonconverted_opportunity_count == 0
+    assert result.time_waster_opportunity_basis is False
+
+
+@pytest.mark.parametrize("signal", (
+    {"direct_buying_intent": True},
+    {"commercial_interest_type": "DIRECT_BUYING_INTENT"},
+    {"active_purchase_intent": True},
+    {"active_session": True},
+))
+def test_actionable_commerce_exits_buyer_relationship_nurture(signal):
+    result = project(
+        {"purchaseCount": 5, "lifetimeGrossMinor": 50_000}, signal,
+    )
+    assert result.relationship_nurture_active is False
+    assert result.relationship_nurture_commercial_reentry_allowed is True
+
+
+def test_whale_cooling_tapers_current_effort_without_erasing_nurture_value():
+    result = project({"purchaseCount": 5, "lifetimeGrossMinor": 50_000}, {
+        "failed_nonconverted_opportunity_count": 3,
+        "rejection_count": 0,
+    })
+    assert result.value_tier == "WHALE"
+    assert result.retention_priority == "VIP"
+    assert result.effort_mode == "BALANCED"
+    assert result.buyer_protection_applied is True
+    assert result.relationship_nurture_active is True
+    assert result.low_cost_nurture_active is False
+
+
+def test_verified_cooling_buyer_negative_boundary_preserves_value_without_momentum():
+    result = project({
+        "purchaseCount": 1,
+        "lifetimeGrossMinor": 1400,
+        "purchaseRecencyDays": 45,
+    }, {
+        "message_count": 26,
+        "offer_exposure_count": 4,
+        "presented_opportunity_count": 4,
+        "failed_nonconverted_opportunity_count": 4,
+        "rejection_count": 4,
+        "commercial_movement": False,
+        "commercial_movement_count": 0,
+        "commercial_interest_type": "NONE",
+        "direct_buying_intent": False,
+        "back_off": True,
+    })
+
+    assert result.buyer_status == "VERIFIED_BUYER"
+    assert result.retention_lifecycle == "COOLING_BUYER"
+    assert result.current_commercial_interest is False
+    assert result.commercial_momentum != "WARM"
+    assert result.commercial_trajectory_protection_active is False
+    assert result.buyer_protection_applied is True
+
+
+def test_repeated_passive_nonconversion_tapers_cooling_buyer_without_rejection():
+    result = project({
+        "purchaseCount": 1,
+        "lifetimeGrossMinor": 1400,
+        "purchaseRecencyDays": 45,
+    }, {
+        "message_count": 18,
+        "offer_exposure_count": 4,
+        "presented_opportunity_count": 4,
+        "failed_nonconverted_opportunity_count": 4,
+        "rejection_count": 0,
+        "commercial_movement": False,
+        "direct_buying_intent": False,
+    })
+
+    assert result.retention_lifecycle == "COOLING_BUYER"
+    assert result.effort_mode == "COMPRESSED"
+    assert result.attention_tier == "MEDIUM"
+    assert result.sales_pressure == "LOW"
+    assert result.offer_cadence == "POST_PURCHASE_CAREFUL"
+    assert result.time_waster_risk == "NONE"
+    assert result.buyer_protection_applied is True
+    assert "BUYER_REPEATED_PASSIVE_NONCONVERSION_TAPER" in result.time_waster_evidence
+    assert "REPEATED_COMMERCIAL_REJECTION" not in result.time_waster_evidence
+
+
+def test_explicit_rejection_remains_stronger_than_passive_nonconversion():
+    passive = project({"purchaseCount": 1, "lifetimeGrossMinor": 1400}, {
+        "failed_nonconverted_opportunity_count": 4, "rejection_count": 0,
+    })
+    explicit = project({"purchaseCount": 1, "lifetimeGrossMinor": 1400}, {
+        "failed_nonconverted_opportunity_count": 4, "rejection_count": 4,
+        "back_off": True,
+    })
+
+    assert passive.commercial_momentum == "COLD"
+    assert explicit.commercial_momentum == "COOLING"
+    assert "REPEATED_COMMERCIAL_REJECTION" not in passive.time_waster_evidence
+    assert "REPEATED_COMMERCIAL_REJECTION" in explicit.time_waster_evidence
+
+
 def test_sexual_high_volume_after_repeated_commercial_exposure_is_attributed():
     result = project({"purchaseCount": 0}, {
         "message_count": 12,
@@ -331,6 +456,90 @@ def test_dormant_buyer_reactivation_restores_buyer_attention_without_cold_reset(
     assert result.reactivation_state == "REACTIVATED_BUYER"
     assert result.relationship_investment == "ELEVATED"
     assert result.attention_tier == "HIGH"
+    assert result.relationship_rewarming_active is True
+    assert result.relationship_rewarming_objective == "BUYER_REWARMING"
+
+
+def test_dormant_first_buyer_return_activates_noncommercial_rewarming():
+    result = project({
+        "purchaseCount": 1, "lifetimeGrossMinor": 1400,
+        "lastPurchaseAt": (NOW - timedelta(days=120)).isoformat(),
+    }, {"current_inbound_activity": True, "message_count": 40})
+    assert result.retention_lifecycle == "DORMANT_BUYER"
+    assert result.reactivation_state == "REACTIVATED_BUYER"
+    assert result.relationship_rewarming_active is True
+    assert result.relationship_rewarming_objective == "BUYER_REWARMING"
+    assert result.current_commercial_interest is False
+    assert result.commercial_momentum == "COLD"
+    assert result.low_cost_nurture_active is False
+    assert result.failed_nonconverted_opportunity_count == 0
+
+
+def test_zero_spend_returning_prospect_is_not_buyer_rewarming():
+    result = project(
+        {"purchaseCount": 0, "lifetimeGrossMinor": 0},
+        {"current_inbound_activity": True, "message_count": 20},
+    )
+    assert result.buyer_status == "NONBUYER"
+    assert result.relationship_rewarming_active is False
+
+
+@pytest.mark.parametrize("purchases,spend,tier", [
+    (2, 3000, "REPEAT_BUYER"),
+    (3, 20000, "HIGH_VALUE"),
+    (5, 60000, "WHALE"),
+])
+def test_dormant_rewarming_preserves_canonical_value_scale(
+        purchases, spend, tier):
+    result = project({
+        "purchaseCount": purchases, "lifetimeGrossMinor": spend,
+        "lastPurchaseAt": (NOW - timedelta(days=120)).isoformat(),
+    }, {"current_inbound_activity": True, "message_count": 12})
+    assert result.value_tier == tier
+    assert result.relationship_rewarming_active is True
+    assert result.current_commercial_interest is False
+    assert result.buyer_protection_applied is True
+    assert result.low_cost_nurture_active is False
+    assert result.relationship_nurture_active is (tier in {"HIGH_VALUE", "WHALE"})
+
+
+def test_actionable_commercial_signal_interrupts_rewarming_immediately():
+    result = project({
+        "purchaseCount": 1, "lifetimeGrossMinor": 1400,
+        "lastPurchaseAt": (NOW - timedelta(days=120)).isoformat(),
+    }, {
+        "current_inbound_activity": True,
+        "direct_buying_intent": True,
+        "commercial_interest_type": "DIRECT_CONTENT_INTENT",
+    })
+    assert result.relationship_rewarming_active is False
+    assert result.current_commercial_interest is True
+    assert result.commercial_momentum == "HOT"
+
+
+def test_deferred_future_interest_does_not_end_rewarming_or_authorize_sale():
+    result = project({
+        "purchaseCount": 1, "lifetimeGrossMinor": 1400,
+        "lastPurchaseAt": (NOW - timedelta(days=120)).isoformat(),
+    }, {
+        "current_inbound_activity": True,
+        "commercial_interest_type": "NONE",
+        "direct_buying_intent": False,
+    })
+    assert result.relationship_rewarming_active is True
+    assert result.current_commercial_interest is False
+
+
+def test_explicit_boundary_ends_current_rewarming_objective():
+    result = project({
+        "purchaseCount": 1, "lifetimeGrossMinor": 1400,
+        "lastPurchaseAt": (NOW - timedelta(days=120)).isoformat(),
+    }, {
+        "current_inbound_activity": True,
+        "explicit_disengagement": True,
+        "back_off": True,
+    })
+    assert result.relationship_rewarming_active is False
 
 
 def test_whale_value_changes_relationship_investment_not_offer_frequency():

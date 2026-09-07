@@ -1,4 +1,5 @@
 """Real PostgreSQL certification for atomic fingerprint settlement."""
+import json
 import os
 from contextlib import contextmanager
 from concurrent.futures import ThreadPoolExecutor
@@ -29,7 +30,7 @@ def connection_factory():
         yield connection
 
 
-def fixture(*, session=False, offering_type="SINGLE_IMAGE"):
+def fixture(*, session=False, offering_type="SINGLE_IMAGE", free_teaser=False):
     telegram = 800_000_000 + (uuid4().int % 90_000_000)
     buyer_uuid, offering_id, publication_id, intent_id = uuid4(), uuid4(), uuid4(), uuid4()
     reservation_id, runtime_id, prospect_id = uuid4(), uuid4(), uuid4()
@@ -85,13 +86,44 @@ def fixture(*, session=False, offering_type="SINGLE_IMAGE"):
         provisional_id = None
         if session:
             provisional_id = uuid4()
+            photoshoot_reference = f"synthetic-shoot-{uuid4()}"
+            teaser_asset = None
+            commercial_context = {}
+            if free_teaser:
+                teaser_asset = c.execute(
+                    "INSERT INTO content_items(file_path,classification) "
+                    "VALUES (%s,'SAFE') RETURNING id",
+                    (f"synthetic/{uuid4()}.jpg",),
+                ).fetchone()["id"]
+                c.execute("""INSERT INTO photoshoot_asset_memberships(
+                    photoshoot_session_id,asset_id,shot_order,approved,is_hero)
+                    VALUES (%s,%s,1,TRUE,TRUE)""",
+                    (photoshoot_reference, teaser_asset))
+                commercial_context = {"freeTeaserDelivery": {
+                    "assetId": teaser_asset, "position": 1,
+                    "salesRole": "FREE_TEASER",
+                    "provider": "SCENARIO_TEST_TRANSPORT",
+                    "providerDeliveryId": f"teaser-{provisional_id}",
+                }}
+            c.execute("""INSERT INTO photoshoot_asset_memberships(
+                photoshoot_session_id,asset_id,shot_order,approved,is_hero)
+                VALUES (%s,%s,%s,TRUE,%s)
+                ON CONFLICT(photoshoot_session_id,asset_id) DO UPDATE SET
+                approved=TRUE""", (
+                    photoshoot_reference, asset, 2 if free_teaser else 1,
+                    not free_teaser,
+                ))
             c.execute("""INSERT INTO telegram_provisional_sales_sessions(
                 provisional_session_id,telegram_sales_prospect_id,creator_profile_id,
                 fanvue_account_id,telegram_user_id,telegram_chat_id,photoshoot_reference,
-                session_strategy,state,configured_base_price_minor,first_purchase_intent_id)
-                VALUES (%s,%s,%s,%s,%s,%s,'synthetic-shoot','ESCALATING',
-                'AWAITING_PAYMENT',1499,%s)""", (provisional_id, prospect_id, creator,
-                account, telegram, telegram, intent_id))
+                session_strategy,state,configured_base_price_minor,first_purchase_intent_id,
+                current_position,commercial_context)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,'ESCALATING',
+                'AWAITING_PAYMENT',1499,%s,%s,%s::jsonb)""", (
+                    provisional_id, prospect_id, creator, account, telegram,
+                    telegram, photoshoot_reference, intent_id,
+                    2 if free_teaser else 1, json.dumps(commercial_context),
+                ))
     return locals()
 
 
@@ -117,7 +149,10 @@ def state(values):
         }
 
 
-@pytest.mark.parametrize("checkpoint", ["mapping","intent","fingerprint","prospect","before_commit"])
+@pytest.mark.parametrize("checkpoint", [
+    "mapping", "intent", "fingerprint", "session_reconciliation",
+    "prospect", "before_commit",
+])
 def test_atomic_rollback_non_session(checkpoint):
     values = fixture()
     with pytest.raises(RuntimeError): settle(values, fail_after=checkpoint)
@@ -128,7 +163,10 @@ def test_atomic_rollback_non_session(checkpoint):
     assert state(values)["mappings"] == 1
 
 
-@pytest.mark.parametrize("checkpoint", ["canonical_session","provisional_session","session_advancement"])
+@pytest.mark.parametrize("checkpoint", [
+    "canonical_session", "photoshoot_lifecycle",
+    "provisional_session", "session_advancement",
+])
 def test_atomic_rollback_session(checkpoint):
     values = fixture(session=True)
     with pytest.raises(RuntimeError): settle(values, fail_after=checkpoint)
@@ -136,6 +174,12 @@ def test_atomic_rollback_session(checkpoint):
     assert result["mappings"] == 0 and result["sessions"] == 0
     assert result["intent"]["status"] == "CREATED"
     assert result["reservation"] == result["runtime"] == "ACTIVE"
+    with connection_factory() as c:
+        assert c.execute("""SELECT count(*) n
+            FROM customer_photoshoot_lifecycles
+            WHERE creator_profile_id=%s AND photoshoot_id=%s""", (
+                values["creator"], values["photoshoot_reference"],
+            )).fetchone()["n"] == 0
     settle(values)
     with connection_factory() as c:
         provisional = c.execute("SELECT * FROM telegram_provisional_sales_sessions WHERE provisional_session_id=%s",(values["provisional_id"],)).fetchone()
@@ -169,6 +213,43 @@ def test_real_session_replay_advances_once():
         assert c.execute("SELECT COUNT(*) n FROM sales_session_purchase_intents WHERE purchase_intent_id=%s",(values["intent_id"],)).fetchone()["n"] == 1
         row=c.execute("SELECT current_position FROM telegram_provisional_sales_sessions WHERE provisional_session_id=%s",(values["provisional_id"],)).fetchone()
         assert row["current_position"] == 2
+        lifecycle = c.execute("""SELECT lifecycle.lifecycle_id
+            FROM customer_photoshoot_lifecycles lifecycle
+            JOIN customer_photoshoot_lifecycle_sessions link
+              ON link.lifecycle_id=lifecycle.lifecycle_id
+            JOIN sales_sessions session
+              ON session.sales_session_id=link.sales_session_id
+            WHERE session.fanvue_user_id=%s""", (values["user"],)).fetchall()
+        assert len(lifecycle) == 1
+        purchased = c.execute("""SELECT count(*) n
+            FROM customer_photoshoot_lifecycle_events
+            WHERE lifecycle_id=%s AND event_type='PURCHASED'
+              AND purchase_intent_id=%s""",
+            (lifecycle[0]["lifecycle_id"], values["intent_id"])).fetchone()["n"]
+        assert purchased == 1
+
+
+def test_free_teaser_graduation_transfers_consumption_without_paid_ownership():
+    values = fixture(session=True, free_teaser=True)
+    settle(values); settle(values)
+    with connection_factory() as c:
+        lifecycle = c.execute("""SELECT lifecycle_id
+            FROM customer_photoshoot_lifecycles
+            WHERE creator_profile_id=%s AND photoshoot_id=%s""",
+            (values["creator"], values["photoshoot_reference"])).fetchone()
+        events = c.execute("""SELECT event_type,asset_id
+            FROM customer_photoshoot_lifecycle_events
+            WHERE lifecycle_id=%s ORDER BY event_type,asset_id""",
+            (lifecycle["lifecycle_id"],)).fetchall()
+        owned = c.execute("""SELECT content_item_id
+            FROM provider_purchase_asset_ownership
+            WHERE fanvue_account_id=%s AND provider_transaction_id='tx-1'""",
+            (values["account"],)).fetchall()
+    assert [(row["event_type"], row["asset_id"]) for row in events] == [
+        ("PRESENTED", values["teaser_asset"]),
+        ("PURCHASED", values["asset"]),
+    ]
+    assert [row["content_item_id"] for row in owned] == [values["asset"]]
 
 
 def test_settlement_atomically_retires_unlock_and_projects_exact_ownership():

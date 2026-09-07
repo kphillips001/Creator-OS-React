@@ -324,6 +324,12 @@ def test_snapshot_and_reset_mutate_only_explicit_target():
     runner._turns = lambda _scenario_id: []
     runner._defects = lambda _scenario_id: []
     runner.builder = SimpleNamespace(derived_state=lambda _scenario_id: {})
+    runner.recovery = SimpleNamespace(
+        scenario_attempt=lambda _scenario_id: 5,
+        link_snapshot=lambda scenario_id, attempt, snapshot_id: calls.append(
+            ("link_snapshot", scenario_id, attempt, snapshot_id)
+        ),
+    )
     runner.harness = SimpleNamespace(
         connection=lambda: Context(),
         definition=lambda _scenario_id: SimpleNamespace(name="HORNY_NEW_PROSPECT"),
@@ -333,7 +339,11 @@ def test_snapshot_and_reset_mutate_only_explicit_target():
     before = dict(history)
     runner.snapshot("C05")
     runner.reset("C05")
-    assert calls == [("snapshot", "C05"), ("reset", "C05")]
+    assert calls == [
+        ("snapshot", "C05"),
+        ("link_snapshot", "C05", 5, "snap"),
+        ("reset", "C05"),
+    ]
     assert history == before
 
 
@@ -348,7 +358,7 @@ def test_prepare_targets_requested_scenario_and_active_owner_still_blocks():
     runner.harness = SimpleNamespace(
         reset=lambda scenario_id: calls.append(("reset", scenario_id)),
         prepare=lambda scenario_id: calls.append(("prepare", scenario_id)),
-        validate_starting_state=lambda scenario_id, expected_purchase_count: {
+        validate_starting_state=lambda scenario_id, expected_purchase_count, **_kwargs: {
             "scenario": scenario_id, "result": "VALIDATED",
         },
         transition=lambda scenario_id, state: calls.append(
@@ -359,7 +369,7 @@ def test_prepare_targets_requested_scenario_and_active_owner_still_blocks():
         add_eligible_inventory=lambda scenario_id, prices: calls.append(
             ("inventory", scenario_id)
         ),
-        derived_state=lambda scenario_id: {"scenario": scenario_id},
+        derived_state=lambda scenario_id, **_kwargs: {"scenario": scenario_id},
     )
     runner.recovery = SimpleNamespace(start_attempt=lambda scenario_id: 2)
     result = runner._prepare_with_slot("C05")

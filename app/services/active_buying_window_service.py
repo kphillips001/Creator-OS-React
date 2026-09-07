@@ -24,6 +24,10 @@ class ActiveBuyingWindowService:
             or acknowledgement_pending
             or deferred_ready
         )
+        customer_led_continuation = bool(
+            explicit_continuation
+            and (continuation_commercial_context or active_session)
+        )
         continuation_authority = bool(
             fresh_direct_intent
             or deferred_ready
@@ -104,8 +108,7 @@ class ActiveBuyingWindowService:
             "anotherSaleAppropriateNow": another_sale,
             "anotherSaleSuppressionReason": None if another_sale else reason,
             "customerLedContinuation": bool(
-                active and explicit_continuation
-                and continuation_commercial_context
+                customer_led_continuation
             ),
             "continuationCommercialContextPresent": (
                 continuation_commercial_context

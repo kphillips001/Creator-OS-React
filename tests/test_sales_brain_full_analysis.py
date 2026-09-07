@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from types import MappingProxyType
+from types import MappingProxyType, SimpleNamespace
 from uuid import uuid4
 
 from app.models.customer_sales_decision import (
@@ -14,6 +14,221 @@ from app.services.sales_brain_full_analysis_service import (
 
 
 NOW = datetime(2026, 8, 27, tzinfo=timezone.utc)
+
+
+def _confirmed_session_teaser_inputs():
+    payload = {"metadata": {
+        "teaser_domain": "SESSION_FREE_TEASER",
+        "free_teaser_delivery": {
+            "provisional_session_id": "provisional-1",
+            "photoshoot_session_id": "foundation-1",
+            "asset_id": 41,
+            "position": 1,
+            "sales_role": "FREE_TEASER",
+        },
+    }}
+    provisional = SimpleNamespace(
+        provisional_session_id="provisional-1",
+        photoshoot_reference="foundation-1",
+        progression_stage="PROGRESSION",
+        current_position=2,
+        commercial_context={"freeTeaserDelivery": {
+            "assetId": 41, "providerDeliveryId": "provider-message-1",
+        }},
+    )
+    return payload, provisional
+
+
+def test_full_analysis_reconciles_exact_confirmed_session_teaser():
+    payload, provisional = _confirmed_session_teaser_inputs()
+    result = SalesBrainFullAnalysisService.reconcile_confirmed_session_free_teaser(
+        {"commercialTeaseAccounting": {
+            "commercialTeaseType": "FREE_TEASER_ASSET",
+            "commercialTeaseDelivered": False,
+            "commercialTeaseExposureRecorded": False,
+        }},
+        delivery_payload=payload,
+        delivery_operation_id="operation-1",
+        delivery_state="CONFIRMED",
+        customer_binding_confirmed=True,
+        provisional_session=provisional,
+    )
+    accounting = result["commercialTeaseAccounting"]
+    assert accounting["commercialTeaseAuthorized"] is True
+    assert accounting["commercialTeaseDelivered"] is True
+    assert accounting["commercialTeaseExposureRecorded"] is True
+    assert accounting["deliveryOperationId"] == "operation-1"
+    assert accounting["deliveryState"] == "CONFIRMED"
+    assert accounting["teaserDomain"] == "SESSION_FREE_TEASER"
+    assert accounting["assetId"] == 41
+    assert accounting["foundation"] == "foundation-1"
+    assert accounting["position"] == 1
+    assert accounting["nextPosition"] == 2
+
+
+def test_full_analysis_does_not_reconcile_unconfirmed_or_wrongly_bound_teaser():
+    payload, provisional = _confirmed_session_teaser_inputs()
+    original = {"commercialTeaseAccounting": {
+        "commercialTeaseDelivered": False,
+        "commercialTeaseExposureRecorded": False,
+    }}
+    controls = (
+        {"delivery_state": "FAILED"},
+        {"customer_binding_confirmed": False},
+        {"delivery_operation_id": None},
+    )
+    for override in controls:
+        kwargs = {
+            "delivery_payload": payload,
+            "delivery_operation_id": "operation-1",
+            "delivery_state": "CONFIRMED",
+            "customer_binding_confirmed": True,
+            "provisional_session": provisional,
+            **override,
+        }
+        result = SalesBrainFullAnalysisService.reconcile_confirmed_session_free_teaser(
+            original, **kwargs,
+        )
+        assert result["commercialTeaseAccounting"]["commercialTeaseDelivered"] is False
+    payload["metadata"]["free_teaser_delivery"]["asset_id"] = 99
+    mismatched = SalesBrainFullAnalysisService.reconcile_confirmed_session_free_teaser(
+        original, delivery_payload=payload, delivery_operation_id="operation-1",
+        delivery_state="CONFIRMED", customer_binding_confirmed=True,
+        provisional_session=provisional,
+    )
+    assert mismatched["commercialTeaseAccounting"]["commercialTeaseDelivered"] is False
+
+
+def test_full_analysis_rejects_ordinary_and_engagement_teaser_confirmations():
+    payload, provisional = _confirmed_session_teaser_inputs()
+    controls = ({}, {"metadata": {
+        "teaser_domain": "GENERAL_ENGAGEMENT_TEASER",
+        "free_teaser_delivery": payload["metadata"]["free_teaser_delivery"],
+    }})
+    for candidate in controls:
+        result = SalesBrainFullAnalysisService.reconcile_confirmed_session_free_teaser(
+            {"commercialTeaseAccounting": {"commercialTeaseDelivered": False}},
+            delivery_payload=candidate,
+            delivery_operation_id="operation-1", delivery_state="CONFIRMED",
+            customer_binding_confirmed=True, provisional_session=provisional,
+        )
+        assert result["commercialTeaseAccounting"]["commercialTeaseDelivered"] is False
+
+
+def test_active_session_context_is_distinct_from_null_session_action():
+    item = decision()
+    metadata = dict(item.decision_metadata)
+    metadata["activeSessionContext"] = {
+        "available": True,
+        "salesSessionId": "session-c19",
+        "foundationType": "PHOTOSHOOT",
+        "foundationReference": "certification-C19",
+        "state": "CONTINUING",
+        "progressionStage": "PROGRESSION",
+        "currentConsumedPosition": 1,
+        "nextEligiblePosition": 2,
+        "orderedAssets": [{
+            "position": 1, "assetId": 2705, "owned": True,
+        }, {
+            "position": 2, "assetId": 2706, "owned": False,
+            "priceMinor": 900, "currency": "USD",
+        }],
+    }
+    item = __import__("dataclasses").replace(
+        item, decision_metadata=MappingProxyType(metadata),
+        next_sales_action=None,
+    )
+
+    result = SalesBrainFullAnalysisService.project(item)
+
+    assert result["activeSessionContext"]["available"] is True
+    assert result["activeSessionContext"]["currentConsumedPosition"] == 1
+    assert result["activeSessionContext"]["nextEligiblePosition"] == 2
+    assert result["finalSalesDecision"]["sessionAction"] is None
+
+
+def test_active_session_candidate_is_distinct_from_presented_offering():
+    candidate_id = str(uuid4())
+    item = decision()
+    metadata = dict(item.decision_metadata)
+    metadata["sessionEscalation"] = {
+        "sessionCandidate": False,
+        "sessionCandidateReason": (
+            "EXISTING_ACTIVE_SESSION_NOT_SESSION_START_CANDIDATE"
+        ),
+        "canonicalSessionCandidate": True,
+        "canonicalSessionCandidateOfferingId": candidate_id,
+        "canonicalSessionCandidateReason": (
+            "ACTIVE_SESSION_ORDERED_CANDIDATE_SELECTED"
+        ),
+        "sessionCompatibleInventoryAvailable": True,
+    }
+    metadata["offeringSelector"] = {
+        "strategy": "SESSION_SELLING",
+        "selectedOfferingId": candidate_id,
+        "candidateCount": 2,
+        "eligibleCount": 2,
+    }
+    item = __import__("dataclasses").replace(
+        item, decision_metadata=MappingProxyType(metadata),
+        recommended_offering_id=None,
+    )
+
+    result = SalesBrainFullAnalysisService.project(item)
+
+    assert result["canonicalSessionCandidate"] is True
+    assert result["canonicalSessionCandidateOfferingId"] == candidate_id
+    assert result["inventorySelection"][
+        "canonicalCandidateOfferingId"
+    ] == candidate_id
+    assert result["inventorySelection"]["selectedOfferingId"] is None
+    assert result["inventorySelection"]["presentedOfferingId"] is None
+    assert result["finalSalesDecision"]["commercePresentationAuthorized"] is False
+
+
+def test_incomplete_active_session_context_is_truthfully_unavailable():
+    item = decision()
+    metadata = dict(item.decision_metadata)
+    metadata["activeSessionContext"] = {
+        "available": False,
+        "completeness": "POSITIONAL_CONTEXT_UNAVAILABLE",
+        "runtimeStatus": "UNAVAILABLE",
+        "unavailableReason": "PhotoshootSessionRuntimeUnavailable",
+        "salesSessionId": "session-c19",
+        "foundationReference": "certification-C19",
+        "orderedAssets": [],
+        "ownedPositions": [],
+        "currentConsumedPosition": None,
+        "nextEligiblePosition": None,
+    }
+    item = __import__("dataclasses").replace(
+        item, decision_metadata=MappingProxyType(metadata),
+        next_sales_action=None,
+    )
+
+    result = SalesBrainFullAnalysisService.project(item)
+
+    assert result["activeSessionContext"]["available"] is False
+    assert result["activeSessionContext"]["completeness"] == (
+        "POSITIONAL_CONTEXT_UNAVAILABLE"
+    )
+    assert result["finalSalesDecision"]["sessionAction"] is None
+
+
+def test_full_analysis_projects_commercial_question_authorization_truthfully():
+    result = SalesBrainFullAnalysisService.project(
+        decision(), runtime_diagnostics={
+            "conversationStyle": {
+                "questionAsked": True,
+                "questionReason": "PROTECTED_TRANSACTIONAL_QUESTION",
+                "commercialDiscoveryAuthorized": False,
+            },
+        },
+    )
+    assert result["relationshipDiscovery"]["commercialDiscoveryAuthorized"] is False
+    assert result["relationshipDiscovery"]["questionReason"] == (
+        "PROTECTED_TRANSACTIONAL_QUESTION"
+    )
 
 
 def test_full_analysis_exposes_operational_buyer_relationship_contract():
@@ -97,6 +312,29 @@ def test_full_analysis_exposes_intimacy_and_provider_fallback_truth():
     assert result["grokAttempted"] is True
     assert result["grokSucceeded"] is False
     assert result["providerFallbackOutcome"] == "SUCCEEDED"
+
+
+def test_full_analysis_recovers_effective_intimacy_permissions_from_provider_preview():
+    result = SalesBrainFullAnalysisService.project(
+        decision(purchase_count=3),
+        runtime_diagnostics={
+            "provider_preview": {
+                "premium_sexting_allowed": True,
+                "explicit_allowed": True,
+                "legacy_premium_sexting_allowed": False,
+                "legacy_explicit_allowed": False,
+                "legacy_permission_flags_authoritative": False,
+            },
+        },
+    )
+
+    assert result["premiumSextingAllowed"] is True
+    assert result["explicitAllowed"] is True
+    assert result["effectivePremiumSextingAllowed"] is True
+    assert result["effectiveExplicitAllowed"] is True
+    assert result["legacyPremiumSextingAllowed"] is False
+    assert result["legacyExplicitAllowed"] is False
+    assert result["legacyPermissionFlagsAuthoritative"] is False
 
 
 def test_full_analysis_exposes_canonical_sexual_and_tease_delivery_truth():
@@ -385,6 +623,37 @@ def test_full_analysis_projects_global_structured_price_contract():
     }
 
 
+def test_active_offer_reuse_diagnostics_require_committed_redelivery():
+    item = decision(
+        action=CustomerSalesDecisionType.NO_SALE,
+        reason=CustomerSalesReasonCode.NO_ELIGIBLE_OFFERING,
+    )
+    metadata = dict(item.decision_metadata)
+    metadata["activeOfferContinuation"] = {
+        "customerInitiatedOfferContinuation": True,
+        "continuationIntentType": "SEND_OR_LINK_REQUEST",
+        "reuseRequested": True,
+        "redeliveryAuthorized": True,
+        "purchaseIntentReuseEligible": True,
+        # Decision-stage intent must not become committed-behavior truth.
+        "structuredOfferReused": True,
+        "structuredOfferRedelivered": True,
+        "purchaseIntentReused": True,
+    }
+    item = __import__("dataclasses").replace(
+        item, decision_metadata=MappingProxyType(metadata),
+    )
+
+    failed = project(item, runtime_extra={"paidPresentationDelivered": False})
+    current = failed["currentOffer"]
+    assert current["reuseRequested"] is True
+    assert current["redeliveryAuthorized"] is True
+    assert current["purchaseIntentReuseEligible"] is True
+    assert current["structuredOfferReused"] is False
+    assert current["structuredOfferRedelivered"] is False
+    assert current["purchaseIntentReused"] is False
+
+
 def test_full_analysis_separates_adaptive_service_from_wording_source():
     result = project(decision(), runtime_extra={
         "adaptiveCustomerService": "AdaptiveSyntheticCustomerService",
@@ -644,17 +913,50 @@ def test_provider_verified_purchase_and_acknowledgement_are_visible():
         action=CustomerSalesDecisionType.CONGRATULATE_PURCHASE,
         reason=CustomerSalesReasonCode.PURCHASE_VERIFIED,
         state="HOT", purchase_count=1, spend=900,
+        latest_status="PURCHASED", active_intent=True,
     ))
     assert summary["purchaseCommerceState"]["verifiedPurchase"] is True
     assert summary["purchaseCommerceState"]["verificationSource"] == "PROVIDER_VERIFIED_COMMERCE_MEMORY"
     assert summary["finalSalesDecision"]["acknowledgementAction"] is True
+    assert summary["purchaseCommerceState"]["purchaseOwnershipVerified"] is True
+
+
+def test_provider_verified_purchase_requires_exact_ownership_evidence():
+    item = decision(
+        action=CustomerSalesDecisionType.CONGRATULATE_PURCHASE,
+        reason=CustomerSalesReasonCode.PURCHASE_VERIFIED,
+        purchase_count=2, spend=2900, latest_status="PURCHASED",
+        active_intent=True,
+    )
+    metadata = dict(item.decision_metadata)
+    memory = dict(metadata["customerCommerceMemory"])
+    memory["ownedOfferingIds"] = ["unrelated-offering"]
+    memory["ownedAssetIds"] = [999]
+    metadata["customerCommerceMemory"] = memory
+    item = __import__("dataclasses").replace(
+        item, decision_metadata=MappingProxyType(metadata),
+    )
+
+    state = project(item, message="I bought it")["purchaseCommerceState"]
+
+    assert state["providerPurchaseVerified"] is True
+    assert state["purchaseOwnershipVerified"] is False
 
 
 def test_false_purchase_claim_remains_non_authoritative():
     summary = project(decision(), message="I bought it")
-    assert summary["purchaseCommerceState"]["conversationalPurchaseClaim"] is True
-    assert summary["purchaseCommerceState"]["verifiedPurchase"] is False
-    assert summary["purchaseCommerceState"]["ownedOfferingIds"] == []
+    state = summary["purchaseCommerceState"]
+    assert state["conversationalPurchaseClaim"] is True
+    assert state["customerPurchaseClaimDetected"] is True
+    assert state["verifiedPurchase"] is False
+    assert state["providerPurchaseVerified"] is False
+    assert state["purchaseOwnershipVerified"] is False
+    assert state["firstPurchaseSemanticsAuthorized"] is False
+    assert state["purchaseAcknowledgementAuthorized"] is False
+    assert state["purchaseAcknowledgementReason"] == (
+        "CUSTOMER_CLAIM_AWAITING_PROVIDER_SETTLEMENT"
+    )
+    assert state["ownedOfferingIds"] == []
 
 
 def test_hot_continuation_shows_cooldown_override_and_novel_selection():
@@ -732,6 +1034,39 @@ def test_hesitation_reduces_pressure_without_alternative():
     }))
     assert summary["resistance"]["pressureReduced"] is True
     assert summary["objectionRecovery"]["alternativeSelectionAllowed"] is False
+
+
+def test_historical_purchased_intent_cannot_be_current_offer_rejection():
+    summary = project(decision(
+        purchase_count=1, latest_status="PURCHASED", active_intent=False,
+        objection={
+            "type": "NONE", "scope": "NONE",
+            "rejectedOfferingId": "historical-purchased-offering",
+        },
+    ))
+    assert summary["objectionRecovery"]["currentOfferRejected"] is False
+
+
+def test_presented_active_offer_with_explicit_rejection_is_current_rejection():
+    summary = project(decision(
+        latest_status="PRESENTED", active_intent=True,
+        objection={
+            "type": "GLOBAL_DECLINE", "scope": "GLOBAL",
+            "rejectedOfferingId": "current-presented-offering",
+        },
+    ))
+    assert summary["objectionRecovery"]["currentOfferRejected"] is True
+
+
+def test_presented_active_offer_without_rejection_is_not_current_rejection():
+    summary = project(decision(
+        latest_status="PRESENTED", active_intent=True,
+        objection={
+            "type": "NONE", "scope": "NONE",
+            "rejectedOfferingId": "current-presented-offering",
+        },
+    ))
+    assert summary["objectionRecovery"]["currentOfferRejected"] is False
 
 
 def test_global_decline_has_backoff_controlling_gate():
@@ -861,3 +1196,64 @@ def test_full_analysis_reports_direct_bypass_copy_memory_and_exposure_clarity():
         "internalOfferingMetadataExposedToGeneration": False,
     }
     assert summary["memoryQuality"]["invalidMemoryCaptureRejected"] is True
+
+
+def test_full_analysis_projects_buyer_relationship_nurture_as_noncommercial_success():
+    summary = project(decision(purchase_count=5, spend=50_000), runtime_extra={
+        "customer_value_attention": {
+            "buyerStatus": "VERIFIED_BUYER", "valueTier": "WHALE",
+            "relationshipNurtureActive": True,
+            "relationshipNurtureReason": (
+                "WHALE_NO_CURRENT_ACTIONABLE_COMMERCIAL_OPPORTUNITY"
+            ),
+            "relationshipNurtureOutcome": "ACTIVE_RELATIONSHIP_RETENTION",
+            "relationshipNurtureCommercialReentryAllowed": True,
+            "lowCostNurtureActive": False,
+        },
+    })
+    nurture = summary["relationshipNurture"]
+    assert nurture["active"] is True
+    assert nurture["objective"] == "BUYER_RELATIONSHIP_NURTURE"
+    assert nurture["commercialOpportunityExists"] is False
+    assert nurture["distinctFromLowCostNurture"] is True
+    assert nurture["commercialReentryAllowed"] is True
+
+
+def test_full_analysis_actionable_signal_prevents_relationship_nurture():
+    summary = project(decision(
+        action=CustomerSalesDecisionType.PRESENT_OFFER,
+        reason=CustomerSalesReasonCode.DIRECT_PURCHASE_INTENT,
+        direct=True, selected=True,
+    ), authorized=True, runtime_extra={
+        "customer_value_attention": {"relationshipNurtureActive": True},
+    })
+    assert summary["relationshipNurture"]["active"] is False
+    assert summary["buyingSignals"]["commercialOpportunityExists"] is True
+
+
+def test_full_analysis_distinguishes_dormancy_reactivation_and_rewarming():
+    summary = project(decision(purchase_count=1), runtime_extra={
+        "customer_value_attention": {
+            "buyerStatus": "VERIFIED_BUYER",
+            "retentionLifecycle": "DORMANT_BUYER",
+            "reactivationState": "REACTIVATED_BUYER",
+            "relationshipRewarmingActive": True,
+            "relationshipRewarmingObjective": "BUYER_REWARMING",
+            "relationshipRewarmingReason": (
+                "VERIFIED_DORMANT_BUYER_RETURNED_WITHOUT_CURRENT_COMMERCIAL_OPPORTUNITY"
+            ),
+            "relationshipRewarmingCommercialReentryAllowed": True,
+            "currentCommercialInterest": False,
+        },
+    })
+    rewarming = summary["relationshipRewarming"]
+    assert rewarming["active"] is True
+    assert rewarming["objective"] == "BUYER_REWARMING"
+    assert rewarming["retentionLifecycle"] == "DORMANT_BUYER"
+    assert rewarming["reactivationState"] == "REACTIVATED_BUYER"
+    assert rewarming["currentCommercialInterest"] is False
+    assert rewarming["commercialReentryAllowed"] is True
+    assert rewarming["interpretation"] == (
+        "This verified buyer has returned and Ava is rebuilding the relationship, "
+        "but the customer is not currently shopping."
+    )

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -1067,6 +1068,16 @@ class SchemaManagerService:
                 "delivery_correlation_id", "state", "failure_reason",
             ),
         },
+        "20260901_102_unified_operator_notifications.sql": {
+            "operator_notification_operations": (
+                "creator_profile_id", "fanvue_account_id", "telegram_user_id",
+                "telegram_chat_id", "source_correlation_id", "quality_reason",
+                "severity", "incident_window_started_at", "reviewed_at",
+            ),
+        },
+        "20260901_103_x_competitor_creator_platform.sql": {
+            "x_intelligence.competitors": ("platform",),
+        },
         "20260824_088_adaptive_sales_readiness.sql": {
             "sales_readiness_decisions": ("decision_id", "warmup_depth", "customer_segment", "decision", "reason_code", "policy_version", "resulting_sales_action"),
             "ai_runtime_instructions": ("policy_key", "enforcement_mode", "policy_configuration"),
@@ -1462,6 +1473,57 @@ class SchemaManagerService:
                 "history_id", "sales_session_id", "event_type",
                 "new_state", "new_progression_stage",
             ),
+        },
+    }
+
+    HISTORY_ONLY_SCHEMA_ATTESTATIONS: Mapping[str, Mapping[str, Any]] = {
+        "20260901_102_unified_operator_notifications.sql": {
+            "schema": "public", "table": "operator_notification_operations",
+            "columns": {
+                "abuse_incident_id": ("uuid", "YES", None),
+                "creator_profile_id": ("bigint", "YES", None),
+                "fanvue_account_id": ("bigint", "YES", None),
+                "telegram_user_id": ("bigint", "YES", None),
+                "telegram_chat_id": ("bigint", "YES", None),
+                "source_correlation_id": ("text", "YES", None),
+                "quality_reason": ("text", "YES", None),
+                "severity": ("text", "YES", None),
+                "incident_window_started_at": (
+                    "timestamp with time zone", "YES", None,
+                ),
+                "reviewed_at": ("timestamp with time zone", "YES", None),
+            },
+            "checks": {
+                "operator_notification_operations_notification_type_check": (
+                    "notification_type", (
+                        "CUSTOMER_ABUSE_REVIEW", "ABUSIVE_CUSTOMER_REVIEW",
+                        "AVA_CONVERSATION_REVIEW",
+                    ),
+                ),
+                "operator_notification_operations_severity_check": (
+                    "severity", ("INFO", "REVIEW", "HIGH"),
+                ),
+            },
+            "indexes": {
+                "operator_notification_customer_review_idx": (
+                    "notification_type", "telegram_user_id", "quality_reason",
+                    "incident_window_started_at desc",
+                ),
+            },
+        },
+        "20260901_103_x_competitor_creator_platform.sql": {
+            "schema": "x_intelligence", "table": "competitors",
+            "columns": {
+                "platform": ("text", "NO", "'FANVUE'::text"),
+            },
+            "checks": {
+                "ck_x_intelligence_competitors_platform": (
+                    "platform", ("FANVUE", "ONLYFANS", "OTHER"),
+                ),
+            },
+            "allowed_values": {
+                "platform": ("FANVUE", "ONLYFANS", "OTHER"),
+            },
         },
     }
 
@@ -2333,6 +2395,18 @@ class SchemaManagerService:
                 if applied.get(migration.name) == migration.checksum:
                     continue
 
+                if migration.name in self.HISTORY_ONLY_SCHEMA_ATTESTATIONS:
+                    if not self._migration_schema_already_present(
+                        conn, migration.name
+                    ):
+                        raise RuntimeError(
+                            "History-only schema attestation failed: "
+                            + migration.name
+                        )
+                    self._record_migration(conn, migration)
+                    migrations_recorded.append(migration.name)
+                    continue
+
                 if self._migration_schema_already_present(conn, migration.name):
                     self._record_migration(conn, migration)
                     migrations_recorded.append(migration.name)
@@ -2368,6 +2442,19 @@ class SchemaManagerService:
                 )
             if prior_checksum == migration.checksum:
                 return self.certify()
+            if migration.name in self.HISTORY_ONLY_SCHEMA_ATTESTATIONS:
+                if not self._migration_schema_already_present(
+                    connection, migration.name
+                ):
+                    raise RuntimeError(
+                        "History-only schema attestation failed: "
+                        + migration.name
+                    )
+                self._record_migration(connection, migration)
+                recorded_names.append(migration.name)
+                return self.certify(
+                    migrations_recorded=tuple(recorded_names),
+                )
             if self._migration_schema_already_present(
                 connection, migration.name
             ):
@@ -2560,21 +2647,129 @@ class SchemaManagerService:
         if not expected:
             return False
         with connection.cursor() as cursor:
-            for table_name, required_columns in expected.items():
+            for relation_name, required_columns in expected.items():
+                schema_name, table_name = self._relation_parts(relation_name)
                 cursor.execute(
                     """
                     SELECT column_name
                     FROM information_schema.columns
-                    WHERE table_schema = 'public'
+                    WHERE table_schema = %s
                       AND table_name = %s
                     """,
-                    (table_name,),
+                    (schema_name, table_name),
                 )
                 columns = {row["column_name"] for row in cursor.fetchall()}
                 if not columns:
                     return False
                 if not all(column in columns for column in required_columns):
                     return False
+        exact = self.HISTORY_ONLY_SCHEMA_ATTESTATIONS.get(migration_name)
+        if exact is not None:
+            snapshot = self._read_schema_attestation(connection, exact)
+            return self._schema_attestation_matches(exact, snapshot)
+        return True
+
+    @staticmethod
+    def _relation_parts(relation_name: str) -> tuple[str, str]:
+        if "." not in relation_name:
+            return "public", relation_name
+        schema_name, table_name = relation_name.split(".", 1)
+        return schema_name, table_name
+
+    @staticmethod
+    def _read_schema_attestation(connection, requirement) -> Mapping[str, Any]:
+        schema_name = requirement["schema"]
+        table_name = requirement["table"]
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """SELECT column_name,data_type,is_nullable,column_default
+                   FROM information_schema.columns
+                   WHERE table_schema=%s AND table_name=%s""",
+                (schema_name, table_name),
+            )
+            columns = {
+                row["column_name"]: (
+                    row["data_type"], row["is_nullable"], row["column_default"],
+                )
+                for row in cursor.fetchall()
+            }
+            cursor.execute(
+                """SELECT tc.constraint_name,
+                          pg_get_constraintdef(pg_constraint.oid) AS definition
+                   FROM information_schema.table_constraints tc
+                   JOIN pg_namespace namespace
+                     ON namespace.nspname=tc.constraint_schema
+                   JOIN pg_constraint
+                     ON pg_constraint.conname=tc.constraint_name
+                    AND pg_constraint.connamespace=namespace.oid
+                   WHERE tc.table_schema=%s
+                     AND tc.table_name=%s
+                     AND tc.constraint_type='CHECK'""",
+                (schema_name, table_name),
+            )
+            checks = {
+                row["constraint_name"]: row["definition"]
+                for row in cursor.fetchall()
+            }
+            cursor.execute(
+                """SELECT indexname,indexdef FROM pg_indexes
+                   WHERE schemaname=%s AND tablename=%s""",
+                (schema_name, table_name),
+            )
+            indexes = {
+                row["indexname"]: row["indexdef"]
+                for row in cursor.fetchall()
+            }
+            invalid_values = {}
+            for column_name, allowed in requirement.get(
+                "allowed_values", {}
+            ).items():
+                cursor.execute(
+                    "SELECT count(*) AS invalid_count FROM "
+                    + f'"{schema_name}"."{table_name}" '
+                    + f'WHERE "{column_name}" IS NULL '
+                    + f'OR NOT ("{column_name}" = ANY(%s))',
+                    (list(allowed),),
+                )
+                invalid_values[column_name] = int(
+                    cursor.fetchone()["invalid_count"]
+                )
+        return {
+            "columns": columns, "checks": checks, "indexes": indexes,
+            "invalid_values": invalid_values,
+        }
+
+    @staticmethod
+    def _schema_attestation_matches(requirement, snapshot) -> bool:
+        columns = snapshot.get("columns", {})
+        if any(
+            columns.get(column_name) != tuple(expected)
+            for column_name, expected in requirement.get("columns", {}).items()
+        ):
+            return False
+        checks = snapshot.get("checks", {})
+        for constraint_name, (column_name, allowed) in requirement.get(
+            "checks", {}
+        ).items():
+            definition = str(checks.get(constraint_name) or "")
+            values = tuple(re.findall(r"'([^']+)'::text", definition))
+            if column_name not in definition or set(values) != set(allowed):
+                return False
+        indexes = snapshot.get("indexes", {})
+        for index_name, expected_columns in requirement.get(
+            "indexes", {}
+        ).items():
+            definition = " ".join(
+                str(indexes.get(index_name) or "").lower().split()
+            )
+            expected = "(" + ", ".join(expected_columns).lower() + ")"
+            if expected not in definition:
+                return False
+        if any(
+            int(snapshot.get("invalid_values", {}).get(column_name, -1)) != 0
+            for column_name in requirement.get("allowed_values", {})
+        ):
+            return False
         return True
 
     def _record_migration(self, connection, migration: MigrationFile) -> None:

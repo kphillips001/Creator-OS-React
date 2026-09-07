@@ -103,6 +103,271 @@ class CustomerContentPresentationValidator:
           | \bstill\s+(?:deciding|thinking|browsing|scrolling)\b
         )"""
     )
+    _COMPLETED_POSITIVE_REACTION = re.compile(
+        r"(?ix)\b(?:was\s+(?:really\s+)?(?:good|great|amazing)|"
+        r"(?:watched|saw|opened|viewed|checked)\s+(?:it|that).{0,24}"
+        r"(?:loved|liked|enjoyed)|(?:loved|liked|enjoyed)\s+(?:it|that)|"
+        r"(?:really\s+)?(?:loved|liked|enjoyed)\s+(?:the\s+)?"
+        r"(?:(?:last|previous|recent)\s+)?(?:one|set|photo|pic|video|bundle|content)|"
+        r"(?:it|that)\s+(?:was|is)\s+(?:really\s+)?(?:good|great|amazing)|"
+        r"(?:it|that)\s+was\s+worth\s+it)\b"
+    )
+    _NEGATIVE_PURCHASE_REACTION = re.compile(
+        r"(?ix)\b(?:didn['’]?t|did\s+not)\s+(?:really\s+)?(?:like|love|enjoy)\s+(?:it|that)|"
+        r"\b(?:it|that)\s+(?:wasn['’]?t|was\s+not)\s+(?:for\s+me|good|worth\s+it)\b"
+    )
+    _CURRENT_OPENING_REACTION = re.compile(
+        r"(?ix)\b(?:opening|watching|viewing|checking)\s+(?:it|that)\s+(?:now|right\s+now)\b"
+    )
+    _NEGATIVE_NAMED_PURCHASE_REACTION = re.compile(
+        r"(?ix)\b(?:didn['\u2019]?t|did\s+not)\s+(?:really\s+)?"
+        r"(?:like|love|enjoy)\s+(?:the\s+)?(?:(?:last|previous|recent)\s+)?"
+        r"(?:one|set|photo|pic|video|bundle|content)\b"
+    )
+    _AGGREGATE_POSITIVE_PURCHASE_REACTION = re.compile(
+        r"(?ix)(?:"
+        r"\b(?:two|three|four|five|\d+)\s+for\s+(?:two|three|four|five|\d+)\b|"
+        r"\b(?:both|all|everything)\b.{0,60}\b(?:good|great|amazing|liked|loved|enjoyed|worth\s+it|landed|hit)\b|"
+        r"\b(?:liked|loved|enjoyed|happy\s+with)\b.{0,40}\b(?:both|all|everything)\b|"
+        r"\b(?:liked|loved|enjoyed|happy\s+with)\b.{0,40}\b(?:what|stuff|things)\s+i(?:['\u2019]?ve|\s+have)\s+(?:bought|purchased|unlocked|got(?:ten)?)\b|"
+        r"\b(?:what|everything|stuff|things)\s+i(?:['\u2019]?ve|\s+have)\s+(?:bought|purchased|unlocked|got(?:ten)?)\b.{0,40}\b(?:good|great|solid|liked|loved|enjoyed)\b|"
+        r"\bhaven['\u2019]?t\s+missed\s+yet\b"
+        r")"
+    )
+    _MIXED_PURCHASE_REACTION = re.compile(
+        r"(?ix)\b(?:one|some|first|second).{0,30}"
+        r"(?:good|great|liked|loved|enjoyed).{0,30}\b(?:but|and|,)?.{0,10}"
+        r"(?:one|some|first|second).{0,16}"
+        r"(?:wasn['\u2019]?t|was\s+not|didn['\u2019]?t|did\s+not|bad)\b"
+    )
+    _POSITIVE_EXPERIENCE_ACKNOWLEDGEMENT = re.compile(
+        r"(?ix)\b(?:glad|love|happy).{0,40}(?:liked|loved|enjoyed|loving|"
+        r"hit|landed|worked\s+out|lived\s+up)|"
+        r"\b(?:nice|glad|love).{0,30}\bsurpris(?:e|es|ed|ing)\b|"
+        r"\b(?:liked|loved|enjoyed)\s+(?:it|that)|"
+        r"\b(?:that|it)\s+(?:hit|landed|worked\s+out)\b"
+    )
+    _NEGATIVE_EXPERIENCE_ACKNOWLEDGEMENT = re.compile(
+        r"(?ix)\b(?:sorry|appreciate\s+you\s+telling\s+me|thanks?\s+for\s+"
+        r"telling\s+me|didn['’]?t\s+(?:land|hit)|not\s+your\s+(?:thing|vibe))\b"
+    )
+    _RESOLVED_COMPLETED_POSITIVE_REACTION = re.compile(
+        r"(?ix)\b(?:liked|loved|enjoyed)\b|\b(?:was|is)\s+(?:even\s+|my\s+)?"
+        r"(?:favorite|better|best|good|great|amazing|worth\s+it|"
+        r"a\s+fun\s+surprise)\b"
+    )
+    _COMPARATIVE_PURCHASE_REACTION = re.compile(
+        r"(?ix)\b(?:even\s+more|better|best|favorite|prefer(?:red)?)\b"
+    )
+    _COMPARATIVE_PURCHASE_ACKNOWLEDGEMENT = re.compile(
+        r"(?ix)\b(?:even\s+more|better|best|favorite|prefer(?:red)?|won)\b|"
+        r"\b(?:liked|loved|enjoyed)\s+(?:that|this|the)\s+one\s+more\b"
+    )
+    _POSITIVE_PURCHASE_VALUE_FEEDBACK = re.compile(
+        r"(?ix)\b(?:worth\s+it|good|great|amazing|liked|loved|enjoyed|"
+        r"landed|worked|a\s+hit|hit\s+the\s+spot)\b"
+    )
+    _POSITIVE_PLURAL_RESPONSE = re.compile(
+        r"(?ix)\b(?:they|them|those|these|recent\s+ones|last\s+few|"
+        r"last\s+(?:couple|two|three)|sets|picks)\b.{0,55}"
+        r"\b(?:worth|good|great|land(?:ed|ing)?|work(?:ed|ing)?|hit|"
+        r"liked|loved|enjoyed)\b|"
+        r"\b(?:glad|happy|good\s+to\s+know|love)\b.{0,45}"
+        r"\b(?:they|them|those|these|recent\s+ones|sets|picks)\b"
+    )
+
+    @classmethod
+    def is_aggregate_positive_purchase_reaction(
+        cls, customer_message: str, *, purchase_count: int = 0,
+    ) -> bool:
+        return bool(
+            int(purchase_count or 0) > 1
+            and cls._AGGREGATE_POSITIVE_PURCHASE_REACTION.search(
+                str(customer_message or "")
+            )
+        )
+
+    @classmethod
+    def purchase_reaction_state(
+        cls, customer_message: str, *, purchase_count: int = 0,
+        purchase_history_reference: dict | None = None,
+    ) -> str:
+        text = str(customer_message or "")
+        reference = dict(purchase_history_reference or {})
+        resolved_completed_purchase = bool(
+            reference.get("purchaseHistoryReferentResolved") is True
+            and (
+                reference.get("resolutionType") in {"AGGREGATE", "RECENT_SUBSET"}
+                or (
+                    isinstance(reference.get("resolvedOrdinal"), int)
+                    and reference.get("resolvedOrdinal") > 0
+                )
+            )
+        )
+        if cls._MIXED_PURCHASE_REACTION.search(text):
+            return "NEUTRAL_PURCHASE_CONFIRMATION"
+        if (
+            cls._NEGATIVE_PURCHASE_REACTION.search(text)
+            or cls._NEGATIVE_NAMED_PURCHASE_REACTION.search(text)
+        ):
+            return "COMPLETED_NEGATIVE_EXPERIENCE"
+        if cls.is_aggregate_positive_purchase_reaction(
+            text, purchase_count=purchase_count,
+        ):
+            return "COMPLETED_POSITIVE_EXPERIENCE"
+        if (
+            resolved_completed_purchase
+            and cls._RESOLVED_COMPLETED_POSITIVE_REACTION.search(text)
+        ):
+            return "COMPLETED_POSITIVE_EXPERIENCE"
+        if cls._COMPLETED_POSITIVE_REACTION.search(text):
+            return "COMPLETED_POSITIVE_EXPERIENCE"
+        if cls._CURRENT_OPENING_REACTION.search(text):
+            return "OPENING_OR_VIEWING_NOW"
+        if re.search(r"\bjust\s+(?:bought|purchased|paid\s+for|unlocked|grabbed)\b", text, re.I):
+            return "JUST_PURCHASED"
+        return "NEUTRAL_PURCHASE_CONFIRMATION"
+
+    @classmethod
+    def purchase_reaction_semantic_frame(
+        cls, customer_message: str, *, purchase_count: int = 0,
+        purchase_history_reference: dict | None = None,
+    ) -> dict:
+        reference = dict(purchase_history_reference or {})
+        reaction_state = cls.purchase_reaction_state(
+            customer_message, purchase_count=purchase_count,
+            purchase_history_reference=reference,
+        )
+        collective = bool(
+            reference.get("resolutionType") == "AGGREGATE"
+            or reference.get("resolutionType") == "RECENT_SUBSET"
+            or cls.is_aggregate_positive_purchase_reaction(
+            customer_message, purchase_count=purchase_count,
+            )
+        )
+        recent_subset = reference.get("resolutionType") == "RECENT_SUBSET"
+        positive_value = bool(
+            recent_subset and cls._POSITIVE_PURCHASE_VALUE_FEEDBACK.search(
+                str(customer_message or "")
+            )
+        )
+        return {
+            "purchaseReactionState": reaction_state,
+            "verifiedPurchaseCount": int(purchase_count or 0),
+            "aggregatePurchaseReactionRequired": collective,
+            "retrospectivePurchaseReactionRequired": reaction_state in {
+                "COMPLETED_POSITIVE_EXPERIENCE",
+                "COMPLETED_NEGATIVE_EXPERIENCE",
+            },
+            "aggregateSubject": (
+                "AVA_OR_PURCHASED_CONTENT_TRACK_RECORD" if collective else None
+            ),
+            "singularAcknowledgementAloneSufficient": not collective,
+            "purchaseHistoryReferentDetected": bool(
+                reference.get("purchaseHistoryReferentDetected")
+            ),
+            "purchaseHistoryReferentResolved": bool(
+                reference.get("purchaseHistoryReferentResolved")
+            ),
+            "resolutionType": reference.get("resolutionType"),
+            "resolvedOrdinal": reference.get("resolvedOrdinal"),
+            "aggregatePurchaseReference": bool(
+                reference.get("aggregatePurchaseReference")
+            ),
+            "resolvedPurchaseCount": int(
+                reference.get("resolvedPurchaseCount")
+                or (purchase_count if reference.get("resolutionType") == "AGGREGATE" else 0)
+            ),
+            "resolvedPurchaseIds": list(reference.get("resolvedPurchaseIds") or ()),
+            "purchaseFeedbackAggregate": collective,
+            **({"recentSubsetPositiveFeedbackRequired": True}
+               if positive_value else {}),
+            "comparativePurchaseReaction": bool(
+                reference.get("purchaseHistoryReferentResolved") is True
+                and cls._COMPARATIVE_PURCHASE_REACTION.search(
+                    str(customer_message or "")
+                )
+            ),
+        }
+
+    @classmethod
+    def recent_subset_positive_feedback_satisfied(
+        cls, response: str, *, semantic_frame: dict | None = None,
+    ) -> bool:
+        frame = dict(semantic_frame or {})
+        if not frame.get("recentSubsetPositiveFeedbackRequired"):
+            return True
+        return bool(cls._POSITIVE_PLURAL_RESPONSE.search(str(response or "")))
+
+    _TRACK_RECORD_PREDICATE = (
+        r"(?:on\s+(?:a\s+)?(?:roll|streak)|on\s+fire|two\s+for\s+two|"
+        r"kill(?:ing|ed)\s+it|crush(?:ing|ed)\s+it|nailed\s+it|"
+        r"(?:have\s+not|haven['\u2019]?t)\s+missed|(?:keep|keeps)\s+landing)"
+    )
+
+    @classmethod
+    def aggregate_purchase_subject_analysis(
+        cls, response: str, *, expected_subject: str = "AVA_OR_PURCHASED_CONTENT_TRACK_RECORD",
+    ) -> dict:
+        """Validate the proposition owner independently of response wording."""
+        text = " ".join(str(response or "").split())
+        expected_ava_or_content = expected_subject == (
+            "AVA_OR_PURCHASED_CONTENT_TRACK_RECORD"
+        )
+        customer_success = re.compile(
+            rf"(?ix)(?:\b(?:you(?:['\u2019]?re|\s+are)|youre|u\s+r)\b.{{0,24}}"
+            rf"\b{cls._TRACK_RECORD_PREDICATE}\b|"
+            rf"\blook\s+at\s+you\b.{{0,30}}\b{cls._TRACK_RECORD_PREDICATE}\b)"
+        )
+        ava_success = re.compile(
+            rf"(?ix)(?:\b(?:i|we(?:['\u2019]?re|\s+are))\b"
+            rf".{{0,24}}\b{cls._TRACK_RECORD_PREDICATE}\b|"
+            rf"\b{cls._TRACK_RECORD_PREDICATE}\b.{{0,18}}\b(?:for\s+me|for\s+us)\b|"
+            rf"\b(?:two|three|four|five|\d+)\s+wins?\s+for\s+(?:me|us)\b)"
+        )
+        content_success = re.compile(
+            r"(?ix)(?:\b(?:my|our)\s+(?:picks?|content|sets?|stuff|ones?)\b.{0,35}"
+            r"\b(?:work(?:ing|ed)?|land(?:ing|ed)?|hit|keep|keeps)\b|"
+            r"\b(?:both|all|everything|they|them)\b.{0,45}"
+            r"\b(?:landed|hit|worked|liked|loved|enjoyed)\b|"
+            r"\b(?:glad|love|happy).{0,35}\b(?:both|all|everything|they|them)\b|"
+            r"\b(?:you|u)\s+(?:liked|loved|enjoyed).{0,25}\b(?:both|all|them)\b)"
+            r"|\b(?:glad|love|happy|good\s+to\s+know).{0,45}\b(?:they|them|those|things|purchases|unlocks|sets|picks)\b"
+            r"|\b(?:they|those|the\s+(?:things|purchases|unlocks|sets|picks))\b.{0,45}\b(?:hit|landed|worked|good|great|solid)\b"
+        )
+        customer_owned = bool(customer_success.search(text))
+        ava_or_content_owned = bool(
+            ava_success.search(text) or content_success.search(text)
+        )
+        if expected_ava_or_content:
+            contradictory = customer_owned
+            supported = ava_or_content_owned
+        elif expected_subject == "CUSTOMER_TRACK_RECORD":
+            contradictory = ava_or_content_owned
+            supported = customer_owned
+        else:
+            contradictory = False
+            supported = bool(customer_owned or ava_or_content_owned)
+        compatible = not contradictory
+        return {
+            "semanticFrameSubject": expected_subject,
+            "finalResponseSubjectCompatible": compatible,
+            "contradictorySemanticSegmentDetected": contradictory,
+            "aggregatePurchaseReactionSatisfied": bool(supported and compatible),
+        }
+
+    @classmethod
+    def aggregate_purchase_reaction_satisfied(
+        cls, response: str, *, semantic_frame: dict | None = None,
+    ) -> bool:
+        frame = dict(semantic_frame or {})
+        return bool(cls.aggregate_purchase_subject_analysis(
+            response,
+            expected_subject=str(
+                frame.get("aggregateSubject")
+                or "AVA_OR_PURCHASED_CONTENT_TRACK_RECORD"
+            ),
+        )["aggregatePurchaseReactionSatisfied"])
 
     def validate_paid(self, presentation: str, *, offering,
                       presentation_context=None) -> PaidPresentationValidation:
@@ -141,7 +406,21 @@ class CustomerContentPresentationValidator:
             return PaidPresentationValidation(
                 False, "PAID_PRESENTATION_PERMISSION_GATE"
             )
-        if not self._IMMEDIATE_OFFER.search(text):
+        lifecycle = dict(context.get("lifecycle") or {})
+        if lifecycle.get("messagePurpose") == "NUDGE":
+            original = self._normalize_comparison(lifecycle.get("originalPresentation"))
+            candidate = self._normalize_comparison(text)
+            if original and candidate and (
+                candidate == original
+                or SequenceMatcher(None, candidate, original).ratio() >= 0.90
+            ):
+                return PaidPresentationValidation(
+                    False, "PAID_PRESENTATION_REPEATS_ORIGINAL"
+                )
+        if (
+            lifecycle.get("messagePurpose") != "NUDGE"
+            and not self._IMMEDIATE_OFFER.search(text)
+        ):
             return PaidPresentationValidation(False, "PAID_PRESENTATION_NOT_AN_OFFER")
         if len(text) > 320:
             return PaidPresentationValidation(False, "PAID_PRESENTATION_NOT_CONCISE")
@@ -169,12 +448,6 @@ class CustomerContentPresentationValidator:
             return PaidPresentationValidation(
                 False, "PAID_PRESENTATION_FALSE_SESSION_HISTORY"
             )
-        lifecycle = dict(context.get("lifecycle") or {})
-        if lifecycle.get("messagePurpose") == "NUDGE":
-            original = self._normalize_comparison(lifecycle.get("originalPresentation"))
-            candidate = self._normalize_comparison(text)
-            if original and candidate and (candidate == original or SequenceMatcher(None, candidate, original).ratio() >= 0.90):
-                return PaidPresentationValidation(False, "PAID_PRESENTATION_REPEATS_ORIGINAL")
         if lifecycle.get("purchaseKind") == "SESSION_FINALE_PURCHASE" and self._FINALE_CONTINUATION.search(text):
             return PaidPresentationValidation(False, "PURCHASE_ACKNOWLEDGEMENT_FINALE_CONTINUATION_CLAIM")
         return PaidPresentationValidation(True, presentation=text)
@@ -190,12 +463,25 @@ class CustomerContentPresentationValidator:
         )
 
     def validate_lifecycle(self, presentation: str, *, lifecycle,
-                           require_purchase_acknowledgement: bool = False) -> PaidPresentationValidation:
+                           require_purchase_acknowledgement: bool = False,
+                           customer_message: str = "",
+                           purchase_count: int = 0,
+                           question_authorized: bool = True,
+                           purchase_history_reference: dict | None = None) -> PaidPresentationValidation:
         text = str(presentation or "").strip()
         if not text or self._UNUSABLE.fullmatch(text):
             return PaidPresentationValidation(False, "LIFECYCLE_PRESENTATION_UNUSABLE")
         context = dict(lifecycle or {})
         if require_purchase_acknowledgement:
+            semantic_frame = self.purchase_reaction_semantic_frame(
+                customer_message, purchase_count=purchase_count,
+                purchase_history_reference=purchase_history_reference,
+            )
+            reaction_state = semantic_frame["purchaseReactionState"]
+            if not question_authorized and "?" in text:
+                return PaidPresentationValidation(
+                    False, "PURCHASE_ACKNOWLEDGEMENT_UNAUTHORIZED_QUESTION"
+                )
             if self._PURCHASE_STILL_PENDING.search(text):
                 return PaidPresentationValidation(
                     False, "PURCHASE_ACKNOWLEDGEMENT_IMPLIES_PENDING"
@@ -204,7 +490,48 @@ class CustomerContentPresentationValidator:
                 return PaidPresentationValidation(
                     False, "PURCHASE_ACKNOWLEDGEMENT_REASKS_PERMISSION"
                 )
-            if not self._PURCHASE_ACKNOWLEDGEMENT.search(text):
+            completed_positive = bool(
+                reaction_state == "COMPLETED_POSITIVE_EXPERIENCE"
+                and self._POSITIVE_EXPERIENCE_ACKNOWLEDGEMENT.search(text)
+                and not re.search(r"\bhope\s+you\s+(?:enjoy|like|love)\b", text, re.I)
+            )
+            completed_negative = bool(
+                reaction_state == "COMPLETED_NEGATIVE_EXPERIENCE"
+                and self._NEGATIVE_EXPERIENCE_ACKNOWLEDGEMENT.search(text)
+                and not re.search(r"\b(?:congrats|glad\s+you\s+(?:liked|loved)|hope\s+you\s+enjoy)\b", text, re.I)
+            )
+            if reaction_state == "COMPLETED_POSITIVE_EXPERIENCE" and re.search(
+                r"\bhope\s+you\s+(?:enjoy|like|love)\b", text, re.I,
+            ):
+                return PaidPresentationValidation(False, "PURCHASE_ACKNOWLEDGEMENT_TEMPORAL_MISMATCH")
+            if reaction_state == "COMPLETED_NEGATIVE_EXPERIENCE" and not completed_negative:
+                return PaidPresentationValidation(False, "PURCHASE_ACKNOWLEDGEMENT_SENTIMENT_MISMATCH")
+            if (
+                semantic_frame["comparativePurchaseReaction"]
+                and not self._COMPARATIVE_PURCHASE_ACKNOWLEDGEMENT.search(text)
+            ):
+                return PaidPresentationValidation(
+                    False,
+                    "PURCHASE_ACKNOWLEDGEMENT_COMPARATIVE_SEMANTICS_MISSING",
+                )
+            if (
+                semantic_frame["aggregatePurchaseReactionRequired"]
+                and not self.aggregate_purchase_reaction_satisfied(
+                    text, semantic_frame=semantic_frame,
+                )
+            ):
+                return PaidPresentationValidation(
+                    False,
+                    "PURCHASE_ACKNOWLEDGEMENT_AGGREGATE_SEMANTICS_MISSING",
+                )
+            if not (self._PURCHASE_ACKNOWLEDGEMENT.search(text)
+                    or completed_positive or completed_negative
+                    or (
+                        semantic_frame["aggregatePurchaseReactionRequired"]
+                        and self.aggregate_purchase_reaction_satisfied(
+                            text, semantic_frame=semantic_frame,
+                        )
+                    )):
                 return PaidPresentationValidation(
                     False, "PURCHASE_ACKNOWLEDGEMENT_MISSING"
                 )

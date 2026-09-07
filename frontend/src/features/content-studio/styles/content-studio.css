@@ -431,6 +431,13 @@
 .recreate-with-ava__primary-action > button { min-height: 42px; width: 100%; }
 .recreate-with-ava__options { border-top: 1px solid var(--color-border); margin-top: var(--space-4); padding-top: var(--space-3); }
 .recreate-with-ava__options summary { color: var(--color-text-secondary); cursor: pointer; font-size: .78rem; font-weight: 600; }
+.recreate-with-ava-accordion {
+  overflow: hidden;
+}
+.recreate-with-ava-accordion__content {
+  display: grid;
+  gap: var(--space-4);
+}
 .inspiration-progress__stage--failed { color: var(--color-error, #e49a9f); }
 
 @media (max-width: 640px) {

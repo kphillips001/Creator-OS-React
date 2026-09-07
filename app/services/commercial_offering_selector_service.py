@@ -36,6 +36,10 @@ from app.services.ownership_intelligence_service import (
     OwnershipIntelligenceService,
 )
 from app.models.customer_photoshoot_lifecycle import CustomerPhotoshootStatus
+from app.services.commercial_inventory_authority import (
+    is_designated_controlled_smoke_inventory,
+    is_test_specific_inventory,
+)
 
 
 logger = logging.getLogger("commercial-offering-selector")
@@ -224,6 +228,7 @@ class CommercialOfferingSelectorService:
             evaluation = self._evaluate(
                 candidate, creator_profile_id=int(creator_profile_id),
                 channel=channel, purchased=purchased, constraints=constraints,
+                allow_test_specific=True,
             )
             eligible = (candidate,) if evaluation.eligible else ()
             recommendation = self._rank(
@@ -334,6 +339,7 @@ class CommercialOfferingSelectorService:
             eligible = (() if active.status is CustomerPhotoshootStatus.OBJECTION else
                         self._active_opportunity_candidates(
                             eligible, active, creator_profile_id, customer_profile,
+                            owned_asset_ids=ownership.owned_asset_ids,
                         ))
         if not eligible:
             recommendation = self.recommendation_engine.rank(
@@ -414,7 +420,8 @@ class CommercialOfferingSelectorService:
             return {}
 
     def _active_opportunity_candidates(self, candidates, opportunity,
-                                       creator_profile_id, customer_profile):
+                                       creator_profile_id, customer_profile,
+                                       owned_asset_ids=()):
         bundle_candidates = tuple(
             candidate for candidate in candidates
             if str(candidate.get("photoshoot_selling_mode") or "") == "BUNDLE"
@@ -439,11 +446,32 @@ class CommercialOfferingSelectorService:
             photoshoot_id=opportunity.photoshoot_id,
         )
         ordered = tuple(sorted(assets, key=lambda item: (item.position, item.asset_id)))
+        # The progression repository's lifecycle coverage can trail the exact
+        # provider-backed ownership projection during settlement reconciliation.
+        # Selection must consume the same authoritative ownership already used
+        # by eligibility so a purchased chapter cannot remain the apparent
+        # first-unowned step and discard the real next candidate.
+        authoritative_owned = {
+            int(asset_id) for asset_id in tuple(owned_asset_ids or ())
+        }
         paid = tuple(item for item in ordered if item.role.value in {"CORE_SESSION", "FINALE_IMAGE"})
-        selected = next((item for item in paid if not item.owned and not item.rejected), None)
+        # Ordered Session progression is fail-closed.  Resolve the first
+        # unowned paid step before eligibility checks; if that exact step is
+        # rejected/unavailable, a later chapter must not leapfrog it.
+        selected = next((
+            item for item in paid
+            if not (item.owned or item.asset_id in authoritative_owned)
+        ), None)
+        if selected is not None and selected.rejected:
+            return ()
         if selected is None:
             videos = tuple(item for item in ordered if item.role.value == "FINALE_VIDEO")
-            selected = next((item for item in videos if not item.owned and not item.rejected), None)
+            selected = next((
+                item for item in videos
+                if not (item.owned or item.asset_id in authoritative_owned)
+            ), None)
+            if selected is not None and selected.rejected:
+                return ()
         if selected is None or selected.offering_id is None:
             return ()
         return tuple(candidate for candidate in candidates
@@ -454,9 +482,17 @@ class CommercialOfferingSelectorService:
         self, candidate, *, creator_profile_id: int, channel: str,
         purchased: frozenset[UUID],
         constraints: StrategyConstraints | None = None,
+        allow_test_specific: bool = False,
     ) -> OfferingEligibilityEvaluation:
         constraints = constraints or StrategyConstraints()
         reasons: list[str] = []
+        if is_test_specific_inventory(candidate) and not (
+            allow_test_specific
+            and is_designated_controlled_smoke_inventory(candidate)
+        ):
+            reasons.append(
+                OfferingExclusionReason.TEST_SPECIFIC_INVENTORY_EXCLUDED.value
+            )
         if candidate.get("commercially_eligible") is False:
             reasons.append(
                 OfferingExclusionReason.CANONICAL_REFERENCE_ASSET.value

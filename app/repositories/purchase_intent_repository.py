@@ -420,12 +420,15 @@ class PurchaseIntentRepository:
         telegram_user_id: int,
     ) -> PurchaseIntent | None:
         return self._one(
-            """SELECT * FROM public.purchase_intents
-               WHERE creator_profile_id=%s AND fanvue_account_id=%s
-                 AND telegram_user_id=%s AND status='PURCHASED'
-                 AND attribution_result='ATTRIBUTED'
-                 AND purchase_acknowledged_at IS NULL
-               ORDER BY purchased_at,created_at LIMIT 1""",
+            """SELECT * FROM (
+                   SELECT * FROM public.purchase_intents
+                   WHERE creator_profile_id=%s AND fanvue_account_id=%s
+                     AND telegram_user_id=%s AND status='PURCHASED'
+                     AND attribution_result='ATTRIBUTED'
+                   ORDER BY purchased_at DESC NULLS LAST,created_at DESC
+                   LIMIT 1
+               ) AS latest_verified_purchase
+               WHERE purchase_acknowledged_at IS NULL""",
             (creator_profile_id, fanvue_account_id, telegram_user_id),
         )
 

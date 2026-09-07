@@ -14,6 +14,62 @@ from unittest.mock import patch
 import pytest
 
 
+@pytest.mark.parametrize("message,boundary_type,expected", [
+    ("I'm not really looking to buy anything tonight",
+     "CURRENT_NO_BUY_BOUNDARY", "no pressure"),
+    ("no, don't send another link", "NO_LINK_BOUNDARY", "won't send"),
+    ("I just wanted to check in", "RELATIONSHIP_ONLY_BOUNDARY", "hear from"),
+    ("I'll reach out if I'm interested again",
+     "DEFERRED_SELF_REACTIVATION", "I'll be around"),
+])
+def test_commercial_boundaries_require_grounded_ordinary_acknowledgement(
+        message, boundary_type, expected):
+    fallback = GPTService._combined_obligation_fallback(
+        message, effort_mode="COMPRESSED",
+        obligations={"ACKNOWLEDGE_COMMERCIAL_BOUNDARY"},
+        commerce_decision={},
+    )
+    grounding = GPTService._commercial_boundary_grounding(
+        message, fallback, {},
+    )
+    assert grounding == {
+        "commercialBoundaryDetected": True,
+        "commercialBoundaryType": boundary_type,
+        "commercialProgressionSuppressed": True,
+        "boundaryAcknowledgementRequired": True,
+        "boundaryAcknowledgementSatisfied": True,
+        "unsupportedCommercialReferentDetected": False,
+        "activeCommercialReferent": False,
+    }
+    assert expected.lower() in fallback.lower()
+    assert "?" not in fallback
+
+
+def test_no_link_boundary_rejects_unsupported_commercial_referent():
+    grounding = GPTService._commercial_boundary_grounding(
+        "no, don't send another link",
+        "the link stays with the private unlock",
+        {},
+    )
+    assert grounding["boundaryAcknowledgementSatisfied"] is False
+    assert grounding["unsupportedCommercialReferentDetected"] is True
+    assert grounding["activeCommercialReferent"] is False
+
+
+def test_no_link_boundary_with_active_offer_still_acknowledges_without_redelivery():
+    fallback = GPTService._foreground_semantic_fallback(
+        "no, don't send another link", effort_mode="COMPRESSED",
+        commerce_decision={"activePurchaseIntentId": "intent-1"},
+    )
+    grounding = GPTService._commercial_boundary_grounding(
+        "no, don't send another link", fallback,
+        {"activePurchaseIntentId": "intent-1"},
+    )
+    assert grounding["activeCommercialReferent"] is True
+    assert grounding["boundaryAcknowledgementSatisfied"] is True
+    assert "won't send" in fallback.lower()
+
+
 def test_shadow_pacing_runs_real_calculation_without_wait():
     service = TelegramResponsePacingService(variance=lambda: 1.0)
     short = service.calculate(inbound_text="lol", reply_text="maybe I do", shadow=True)

@@ -15,14 +15,14 @@ from app.testing.session5_scenario_harness import (
     CustomerScenarioHarness, HistoricalPurchaseFixtureBuilder,
     SCENARIO_MANIFEST, ScenarioState, SimulatedProviderPurchaseHarness,
     DETERMINISTIC_CERTIFICATION, REAL_AVA_LANGUAGE,
-    ScenarioTurnExecutionIdentity,
+    ScenarioTurnExecutionIdentity, CanonicalScenarioEvent,
 )
 from app.testing.session5_scenario_recovery import ScenarioRecoveryService
 from app.testing.postgres_safety import Session5DatabasePurpose
 
 
 EXECUTION_STATES = ("PREPARING", "READY", "RUNNING")
-TERMINAL_STATES = ("COMPLETED", "SNAPSHOTTED")
+TERMINAL_STATES = ("COMPLETED", "FAILED", "SNAPSHOTTED")
 INSPECTABLE_STATES = EXECUTION_STATES + TERMINAL_STATES
 GRADES = {"PASS", "PASS_WITH_NOTES", "FAIL"}
 SEVERITIES = {"CRITICAL", "MAJOR", "QUALITY"}
@@ -82,7 +82,7 @@ class Session5ScenarioRunner:
                     raise RuntimeError(
                         "SCENARIO PREPARE BLOCKED: prior VERIFIED_CLEAN runtime is contaminated."
                     )
-            elif existing["state"] == "COMPLETED":
+            elif existing["state"] in {"COMPLETED", "FAILED"}:
                 raise RuntimeError(
                     f"Scenario {scenario_id} must be snapshotted before a new attempt is prepared."
                 )
@@ -91,16 +91,23 @@ class Session5ScenarioRunner:
                     f"Scenario {scenario_id} cannot be prepared from lifecycle {existing['state']}."
                 )
         plan = PURCHASE_PLANS.get(scenario_id)
+        canonical_now = datetime.now(timezone.utc)
         if plan:
             purchases = [{"amount_minor": value} for value in plan]
             if scenario_id == "C18":
                 purchases[0]["purchased_at"] = (
-                    datetime.now(timezone.utc) - timedelta(days=120)
+                    canonical_now - timedelta(days=120)
                 )
+            elif scenario_id == "C14":
+                purchases[0]["purchased_at"] = canonical_now - timedelta(days=45)
             self.builder.build(
                 scenario_id, purchases,
                 session=scenario_id == "C19",
             )
+            if scenario_id == "C14":
+                self.builder.seed_c14_cooling_history(
+                    scenario_id, canonical_now=canonical_now,
+                )
         else:
             self.harness.prepare(scenario_id)
         # Every scenario receives deterministic, account-scoped, test-only
@@ -115,12 +122,16 @@ class Session5ScenarioRunner:
             self.builder.prepare_session_compatible_inventory(
                 scenario_id, inventory[-3:],
             )
+        elif scenario_id == "C19":
+            self.builder.prepare_c19_session_compatible_inventory(inventory)
+        elif scenario_id == "C20":
+            self.builder.prepare_c20_session_compatible_inventory(inventory)
         validation = self.harness.validate_starting_state(
-            scenario_id, expected_purchase_count=len(plan or ()),
+            scenario_id, expected_purchase_count=len(plan or ()), now=canonical_now,
         )
         self.harness.transition(scenario_id, ScenarioState.RUNNING)
         scenario_attempt = self.recovery.start_attempt(scenario_id)
-        state = self.builder.derived_state(scenario_id)
+        state = self.builder.derived_state(scenario_id, now=canonical_now)
         return {"scenario": scenario_id, "lifecycle": "RUNNING",
                 "startingState": state, "readyForTurn": True,
                 "scenarioAttempt": scenario_attempt,
@@ -142,7 +153,8 @@ class Session5ScenarioRunner:
                     scenario_id, scenario_attempt, canonical_turn_count,
                 )}
 
-    def turn(self, message: str, *, language_mode: str = DETERMINISTIC_CERTIFICATION) -> dict[str, Any]:
+    def turn(self, message: str, *, language_mode: str = DETERMINISTIC_CERTIFICATION,
+             require_language_mode: bool = False) -> dict[str, Any]:
         active = self._active(required_state="RUNNING")
         scenario_id = active["scenario_id"]
         scenario_attempt = self.recovery.scenario_attempt(scenario_id)
@@ -150,6 +162,28 @@ class Session5ScenarioRunner:
         canonical_turn_count = int(
             definition.maximum_turn_count or definition.canonical_turn_count or 0
         )
+        failed_precommit = self.recovery.latest_failed_precommit_turn(
+            scenario_id, scenario_attempt,
+        )
+        if failed_precommit is not None:
+            recovery = dict(
+                dict(failed_precommit.get("full_analysis") or {}).get(
+                    "scenarioRecovery"
+                ) or {}
+            )
+            if str(message) != str(failed_precommit["inbound"]):
+                raise RuntimeError(
+                    "PRE_COMMIT_RETRY_INBOUND_MISMATCH: retry must preserve the failed inbound"
+                )
+            if (str(recovery.get("languageMode") or language_mode) != language_mode
+                    or bool(recovery.get("requireLanguageMode"))
+                    != bool(require_language_mode)):
+                raise RuntimeError(
+                    "PRE_COMMIT_RETRY_LANGUAGE_CONTRACT_MISMATCH"
+                )
+            return self.retry_previous_turn(
+                "automatic controlled retry after pre-commit failure",
+            )
         next_turn = self.recovery.next_logical_turn(scenario_id, scenario_attempt)
         if canonical_turn_count and next_turn > canonical_turn_count:
             raise RuntimeError(
@@ -165,6 +199,7 @@ class Session5ScenarioRunner:
                 raise RuntimeError("ATTEMPT_WIDE_EXECUTION_OWNER_SCOPE_MISMATCH")
             return self._turn_owned(
                 message, language_mode=language_mode,
+                require_language_mode=require_language_mode,
                 owner_id=attempt_owner["owner_id"],
                 expected_scenario=scenario_id,
                 expected_attempt=scenario_attempt,
@@ -175,7 +210,8 @@ class Session5ScenarioRunner:
         )
         try:
             result = self._turn_owned(
-                message, language_mode=language_mode, owner_id=owner_id,
+                message, language_mode=language_mode,
+                require_language_mode=require_language_mode, owner_id=owner_id,
                 expected_scenario=scenario_id,
                 expected_attempt=scenario_attempt,
             )
@@ -228,6 +264,7 @@ class Session5ScenarioRunner:
             del self._attempt_wide_owner
 
     def _turn_owned(self, message: str, *, language_mode: str,
+                    require_language_mode: bool = False,
                     owner_id: str, expected_scenario: str,
                     expected_attempt: int) -> dict[str, Any]:
         with self.harness.turn_execution_scope():
@@ -241,6 +278,9 @@ class Session5ScenarioRunner:
             )
             logical_turn = self.recovery.next_logical_turn(
                 scenario_id, scenario_attempt,
+            )
+            turn_attempt = self.recovery.allocate_turn_attempt(
+                scenario_id, scenario_attempt, logical_turn,
             )
             definition = self.harness.definition(scenario_id)
             canonical_turn_count = int(
@@ -256,24 +296,48 @@ class Session5ScenarioRunner:
             )
             before = self.builder.derived_state(scenario_id)
             checkpoint = self.recovery.checkpoint(
-                scenario_id, scenario_attempt, logical_turn, 1, before,
+                scenario_id, scenario_attempt, logical_turn, turn_attempt, before,
             )
             checkpoint["scenarioId"] = scenario_id
-            evidence = self.harness.execute_turn(
-                scenario_id, message, language_mode=language_mode,
-                recent_ava_responses=recent_ava_responses,
-                turn_identity=ScenarioTurnExecutionIdentity(
-                    scenario_id=scenario_id,
-                    scenario_attempt=scenario_attempt,
-                    logical_turn=logical_turn,
-                    turn_attempt=1,
-                ),
-            )
+            evidence = None
+            try:
+                evidence = self.harness.execute_turn(
+                    scenario_id, message, language_mode=language_mode,
+                    recent_ava_responses=recent_ava_responses,
+                    turn_identity=ScenarioTurnExecutionIdentity(
+                        scenario_id=scenario_id,
+                        scenario_attempt=scenario_attempt,
+                        logical_turn=logical_turn,
+                        turn_attempt=turn_attempt,
+                    ),
+                )
+                self._require_canonical_turn_commit(
+                    evidence,
+                    language_mode=language_mode,
+                    require_language_mode=require_language_mode,
+                )
+            except Exception as error:
+                failed_analysis = dict(
+                    (evidence or {}).get("SalesBrainFullAnalysis") or {}
+                )
+                failed_analysis["scenarioRecovery"] = {
+                    "languageMode": language_mode,
+                    "requireLanguageMode": bool(require_language_mode),
+                    "failureType": type(error).__name__,
+                    "failureReason": str(error),
+                }
+                self.recovery.record_turn(
+                    checkpoint, message,
+                    str((evidence or {}).get("finalResponseText") or ""),
+                    failed_analysis, before, status="FAILED_PRE_COMMIT",
+                    reason=f"{type(error).__name__}: {error}",
+                )
+                raise
             after = self.builder.derived_state(scenario_id)
             changes = self._changes(before, after, evidence)
             projection = self._turn_projection(evidence, changes)
             projection["scenarioAttempt"] = scenario_attempt
-            projection["turnAttempt"] = 1
+            projection["turnAttempt"] = turn_attempt
             with self.harness.connection() as connection:
                 connection.execute("""UPDATE certification_scenario_turn_evidence
                     SET full_analysis=jsonb_set(full_analysis,'{operatorResult}',%s::jsonb,true)
@@ -288,6 +352,52 @@ class Session5ScenarioRunner:
                 scenario_id, scenario_attempt, owner_id,
             )
             return projection
+
+    @staticmethod
+    def _require_requested_language_mode(evidence: dict[str, Any],
+                                         requested_mode: str) -> None:
+        """Fail closed when explicit real-language certification was not run."""
+        requested = str(requested_mode or "").upper()
+        provider = dict(evidence.get("syntheticProvider") or {})
+        actual = str(provider.get("syntheticProviderMode") or "").upper()
+        if requested == REAL_AVA_LANGUAGE and (
+            actual != REAL_AVA_LANGUAGE
+            or provider.get("liveProviderCalled") is not True
+        ):
+            raise RuntimeError(
+                "REAL_AVA_LANGUAGE_NOT_HONORED: "
+                f"requested={requested} actual={actual or 'NOT_REPORTED'} "
+                f"liveProviderCalled={provider.get('liveProviderCalled')}"
+            )
+
+    @classmethod
+    def _require_canonical_turn_commit(
+        cls, evidence: dict[str, Any], *, language_mode: str,
+        require_language_mode: bool,
+    ) -> None:
+        """One authority for admitting a customer/Ava pair as CURRENT."""
+        response = str(evidence.get("finalResponseText") or "").strip()
+        full = dict(evidence.get("SalesBrainFullAnalysis") or {})
+        suppression = dict(full.get("outboundSuppression") or {})
+        intentional_suppression = bool(
+            full.get("authoritativeIntentionalSuppression") is True
+            and suppression.get("reason")
+        )
+        if require_language_mode and not intentional_suppression:
+            cls._require_requested_language_mode(evidence, language_mode)
+        if not response and not intentional_suppression:
+            raise RuntimeError(
+                "CANONICAL_TURN_NOT_COMMITTED: empty response lacks "
+                "authoritative intentional suppression"
+            )
+        if (
+            response
+            and evidence.get("testTransportCustomerVisibleConfirmed") is not True
+        ):
+            raise RuntimeError(
+                "CANONICAL_TURN_NOT_COMMITTED: response lacks synthetic "
+                "delivery confirmation"
+            )
 
     def execute_canonical(self, *,
                           language_mode: str = REAL_AVA_LANGUAGE) -> dict[str, Any]:
@@ -320,12 +430,21 @@ class Session5ScenarioRunner:
             requested_end_turn=canonical_turn_count,
         )
         results = []
+        events = []
         try:
+            if next_turn > 1:
+                events.extend(self._execute_canonical_events_after_turn(
+                    definition, next_turn - 1,
+                ))
             for logical_turn in range(next_turn, canonical_turn_count + 1):
                 results.append(self._turn_owned(
                     messages[logical_turn - 1], language_mode=language_mode,
+                    require_language_mode=(language_mode == REAL_AVA_LANGUAGE),
                     owner_id=owner_id, expected_scenario=scenario_id,
                     expected_attempt=scenario_attempt,
+                ))
+                events.extend(self._execute_canonical_events_after_turn(
+                    definition, logical_turn,
                 ))
         except Exception as error:
             self.recovery.release_execution(
@@ -343,7 +462,115 @@ class Session5ScenarioRunner:
             "canonicalTurnCount": canonical_turn_count,
             "completedTurns": len(results),
             "turns": results,
+            "events": events,
         }
+
+    def _execute_canonical_events_after_turn(
+        self, definition, logical_turn: int,
+    ) -> list[dict[str, Any]]:
+        committed = []
+        for event in tuple(getattr(definition, "canonical_events", ()) or ()):
+            if int(event.after_turn) == int(logical_turn):
+                committed.append(self._dispatch_canonical_event(event))
+        return committed
+
+    def _dispatch_canonical_event(
+        self, event: CanonicalScenarioEvent,
+    ) -> dict[str, Any]:
+        if event.event_type == "SYNTHETIC_PROVIDER_SETTLEMENT":
+            prior = self._committed_canonical_settlement(event)
+            if prior is not None:
+                return {"eventId": event.event_id,
+                        "eventType": event.event_type,
+                        "status": "ALREADY_COMMITTED", "result": prior}
+            result = self._simulate_purchase(canonical_event=event)
+            before = dict(result.get("before") or {})
+            after = dict(result.get("after") or {})
+            expected_amount = int(
+                dict(result.get("purchaseEmulatorAuthority") or {}).get(
+                    "expectedPriceMinor"
+                ) or 0
+            )
+            authority = dict(result.get("purchaseEmulatorAuthority") or {})
+            committed_intent = dict(result.get("committedIntent") or {})
+            checks = {
+                "providerEventRecorded": bool(result.get("providerEventId")),
+                "transactionRecorded": result.get("transactionRecorded") is True,
+                "canonicalProvenance": result.get("provenance")
+                    == "CERTIFICATION_SIMULATED_PROVIDER_EVENT",
+                "exactIntentCommitted": bool(result.get("purchaseIntentId"))
+                    and result.get("purchaseIntentId")
+                    == authority.get("purchaseEmulatorTargetIntent"),
+                "exactOfferingCommitted": bool(result.get("commercialOfferingId"))
+                    and result.get("commercialOfferingId")
+                    == committed_intent.get("commercialOfferingId"),
+                "canonicalAmountCommitted": not expected_amount or (
+                    committed_intent.get("expectedPriceMinor") == expected_amount
+                ),
+                "canonicalCurrencyCommitted": str(
+                    committed_intent.get("expectedCurrency") or ""
+                ).upper() == str(authority.get("expectedCurrency") or "").upper(),
+                "purchaseIntentPurchased": str(
+                    committed_intent.get("status") or ""
+                ).upper() == "PURCHASED" and bool(
+                    committed_intent.get("purchasedAt")
+                ),
+                "purchaseCountIncremented": int(after.get("purchaseCount") or 0)
+                    == int(before.get("purchaseCount") or 0) + 1,
+                "ownershipCountIncremented": int(after.get("ownershipCount") or 0)
+                    == int(before.get("ownershipCount") or 0) + 1,
+                "spendIncremented": not expected_amount or (
+                    int(after.get("lifetimeSpendMinor") or 0)
+                    == int(before.get("lifetimeSpendMinor") or 0) + expected_amount
+                ),
+                "intentNoLongerActive": after.get("activePurchaseIntent") is None,
+            }
+            if not all(checks.values()):
+                failed = next(name for name, passed in checks.items() if not passed)
+                raise RuntimeError(
+                    f"CANONICAL_EVENT_COMMIT_VALIDATION_FAILED: {failed}"
+                )
+            return {"eventId": event.event_id, "eventType": event.event_type,
+                    "status": "COMMITTED", "checks": checks, "result": result}
+        raise RuntimeError(
+            f"CANONICAL_EVENT_TYPE_UNSUPPORTED: {event.event_type}"
+        )
+
+    def _committed_canonical_settlement(
+        self, event: CanonicalScenarioEvent,
+    ) -> dict[str, Any] | None:
+        active = self._active(required_state="RUNNING")
+        scenario_id = active["scenario_id"]
+        attempt = self.recovery.scenario_attempt(scenario_id)
+        turns = self._current_attempt_turn_projections(scenario_id, attempt)
+        presentation = next((
+            dict(turn.get("syntheticPpvPresentation") or {})
+            for turn in reversed(turns)
+            if self._committed_logical_turn(turn) == int(event.after_turn)
+            and turn.get("syntheticPpvPresentation")
+        ), None)
+        intent_id = str(dict((presentation or {}).get("purchaseIntent") or {}).get(
+            "id"
+        ) or "")
+        if not intent_id:
+            return None
+        with self.harness.connection() as connection:
+            row = connection.execute("""SELECT event_id,provenance,result
+                FROM certification_simulated_provider_events
+                WHERE scenario_id=%s AND payload->>'purchaseIntentId'=%s
+                ORDER BY created_at DESC LIMIT 1""", (
+                    scenario_id, intent_id,
+                )).fetchone()
+            intent = connection.execute("""SELECT status,purchased_at
+                FROM purchase_intents WHERE purchase_intent_id=%s""", (
+                    intent_id,
+                )).fetchone()
+        if not row or not intent or str(intent["status"]).upper() != "PURCHASED" \
+                or intent["purchased_at"] is None:
+            return None
+        return {"eventId": str(row["event_id"]),
+                "purchaseIntentId": intent_id,
+                "provenance": row["provenance"], "settlement": row["result"]}
 
     @staticmethod
     def _early_interest_type(message: str) -> str:
@@ -1601,7 +1828,12 @@ class Session5ScenarioRunner:
         active = self._active(required_state="RUNNING")
         scenario_id = active["scenario_id"]
         scenario_attempt = self.recovery.scenario_attempt(scenario_id)
-        latest = self.recovery.latest_current_turn(scenario_id, scenario_attempt)
+        latest = (
+            self.recovery.latest_failed_precommit_turn(
+                scenario_id, scenario_attempt,
+            )
+            or self.recovery.latest_current_turn(scenario_id, scenario_attempt)
+        )
         logical_turn = int(latest["logical_turn"]) if latest is not None else 1
         owner_id = self.recovery.claim_execution(
             scenario_id, scenario_attempt,
@@ -1689,20 +1921,67 @@ class Session5ScenarioRunner:
             "scenarioAttempt": int(original["scenario_attempt"]),
             "logicalTurn": int(original["logical_turn"]), "turnAttempt": int(original["turn_attempt"]),
         }
-        evidence = self.harness.execute_turn(
-            scenario_id, original["inbound"],
-            turn_identity=ScenarioTurnExecutionIdentity(
-                scenario_id=scenario_id,
-                scenario_attempt=scenario_attempt,
-                logical_turn=int(original["logical_turn"]),
-                turn_attempt=int(original["turn_attempt"]) + 1,
-            ),
+        recovery_metadata = dict(
+            dict(original.get("full_analysis") or {}).get("scenarioRecovery")
+            or {}
         )
+        language_mode = str(
+            recovery_metadata.get("languageMode")
+            or DETERMINISTIC_CERTIFICATION
+        )
+        require_language_mode = bool(
+            recovery_metadata.get("requireLanguageMode")
+        )
+        retry_turn_attempt = self.recovery.allocate_turn_attempt(
+            scenario_id, scenario_attempt, int(original["logical_turn"]),
+        )
+        retry_checkpoint = dict(old_checkpoint)
+        retry_checkpoint["turnAttempt"] = retry_turn_attempt
+        evidence = None
+        try:
+            evidence = self.harness.execute_turn(
+                scenario_id, original["inbound"], language_mode=language_mode,
+                recent_ava_responses=self.recovery.current_outbound_transcript(
+                    scenario_id, scenario_attempt,
+                ),
+                turn_identity=ScenarioTurnExecutionIdentity(
+                    scenario_id=scenario_id,
+                    scenario_attempt=scenario_attempt,
+                    logical_turn=int(original["logical_turn"]),
+                    turn_attempt=retry_turn_attempt,
+                ),
+            )
+            self._require_canonical_turn_commit(
+                evidence,
+                language_mode=language_mode,
+                require_language_mode=require_language_mode,
+            )
+        except Exception as error:
+            failed_analysis = dict(
+                (evidence or {}).get(
+                    "SalesBrainFullAnalysis"
+                ) or {}
+            )
+            failed_analysis["scenarioRecovery"] = {
+                "languageMode": language_mode,
+                "requireLanguageMode": require_language_mode,
+                "failureType": type(error).__name__,
+                "failureReason": str(error),
+            }
+            self.recovery.record_turn(
+                retry_checkpoint, original["inbound"],
+                str((evidence or {}).get(
+                    "finalResponseText"
+                ) or ""),
+                failed_analysis, restored, status="FAILED_PRE_COMMIT",
+                reason=f"{type(error).__name__}: {error}",
+            )
+            raise
         after = self.builder.derived_state(scenario_id)
         changes = self._changes(restored, after, evidence)
         projection = self._turn_projection(evidence, changes)
         projection["turnNumber"] = int(original["logical_turn"])
-        projection["turnAttempt"] = int(original["turn_attempt"]) + 1
+        projection["turnAttempt"] = retry_turn_attempt
         with self.harness.connection() as connection:
             connection.execute("""UPDATE certification_scenario_turn_evidence
                 SET full_analysis=jsonb_set(full_analysis,'{operatorResult}',%s::jsonb,true)
@@ -1994,6 +2273,15 @@ class Session5ScenarioRunner:
             simulated = connection.execute("""SELECT provenance,result,provider_timestamp
                 FROM certification_simulated_provider_events WHERE scenario_id=%s
                 ORDER BY created_at,event_id""", (scenario_id,)).fetchall()
+            assessment = connection.execute("""SELECT grade
+                FROM certification_scenario_assessments
+                WHERE scenario_id=%s AND scenario_attempt=%s""", (
+                    scenario_id, scenario_attempt,
+                )).fetchone()
+        defects = self._defects(scenario_id, scenario_attempt)
+        material_defect_turns, failure_event = self._material_defect_projection(
+            defects
+        )
         accumulated = {
             "derivedState": self.builder.derived_state(scenario_id),
             "relationshipState": dict(prospect["relationship_state"] or {}) if prospect else {},
@@ -2036,6 +2324,16 @@ class Session5ScenarioRunner:
                 "syntheticTelegramId": int(active["telegram_user_id"]),
                 "transport": "TEST_TRANSPORT_NO_WAIT",
                 "canonicalTurnCount": len(projections),
+                "lastCompletedLogicalTurn": self._last_completed_logical_turn(
+                    projections
+                ),
+                "certificationOutcome": (
+                    assessment["grade"] if assessment else None
+                ),
+                "firstMaterialDefectTurn": (
+                    min(material_defect_turns) if material_defect_turns else None
+                ),
+                "failureEvent": failure_event,
             },
             "currentAccumulatedState": accumulated,
             "turns": [
@@ -2046,8 +2344,58 @@ class Session5ScenarioRunner:
             "attemptAudit": {
                 "currentAttempt": audit_only(history),
                 "previousAttempts": audit_only(historical),
+                "failedExecutionAttempts": [
+                    {
+                        key: row.get(key) for key in (
+                            "scenario_attempt", "logical_turn", "turn_attempt",
+                            "status", "reason", "inbound", "outbound",
+                        )
+                    }
+                    for row in history.get("turnAttempts") or []
+                    if row.get("status") == "FAILED_PRE_COMMIT"
+                ],
             },
         }
+
+    @staticmethod
+    def _last_completed_logical_turn(projections) -> int:
+        return max((
+            int(turn.get("logicalTurn") or turn.get("turnNumber") or 0)
+            for turn in projections
+            if str(turn.get("status") or "CURRENT").upper() == "CURRENT"
+        ), default=0)
+
+    @staticmethod
+    def _material_defect_projection(defects) -> tuple[list[int], str | None]:
+        """Separate post-conversation analysis failures from logical-turn defects."""
+        turns = []
+        failure_event = None
+        for defect in defects:
+            severity = str(
+                defect.get("severity")
+                or defect.get("materiality")
+                or defect.get("defectSeverity")
+                or ""
+            ).upper()
+            explicitly_material = defect.get("material") is True
+            if severity not in {
+                "CRITICAL", "MAJOR", "MATERIAL", "BLOCKING",
+            } and not explicitly_material:
+                continue
+            note = str(defect.get("note") or "").upper()
+            if ("FULL_SCENARIO_ANALYSIS" in note
+                    or "FULL SCENARIO ANALYSIS" in note
+                    or "FULL_ATTEMPT_ANALYSIS" in note):
+                failure_event = "FULL_SCENARIO_ANALYSIS"
+                continue
+            turn_number = next((
+                defect.get(key) for key in (
+                    "turn_number", "logical_turn", "logicalTurn", "turnNumber",
+                ) if defect.get(key) is not None
+            ), None)
+            if turn_number is not None:
+                turns.append(int(turn_number))
+        return turns, failure_event
 
     def analysis(self) -> dict[str, Any]:
         active = self._active()
@@ -2057,18 +2405,24 @@ class Session5ScenarioRunner:
         evidence = dict(turns[-1]["full_analysis"] or {})
         return dict(evidence.get("SalesBrainFullAnalysis") or {})
 
-    def defect(self, severity: str, note: str) -> dict[str, Any]:
+    def defect(self, severity: str, note: str,
+               turn_number: int | None = None) -> dict[str, Any]:
         severity = severity.upper()
         if severity not in SEVERITIES:
             raise ValueError("Severity must be CRITICAL, MAJOR, or QUALITY.")
         active = self._active()
-        turn_number = len(self._turns(active["scenario_id"]))
+        committed_turn_count = len(self._turns(active["scenario_id"]))
+        turn_number = committed_turn_count if turn_number is None else int(turn_number)
+        if turn_number < 0 or turn_number > committed_turn_count:
+            raise ValueError("Defect turn must identify an existing committed turn, or 0 for pre-turn failure.")
+        scenario_attempt = int(active.get("scenario_attempt") or 1)
         defect_id = uuid4()
         with self.harness.connection() as connection:
             connection.execute("""INSERT INTO certification_scenario_defects(
-                defect_id,scenario_id,turn_number,severity,note)
-                VALUES (%s,%s,%s,%s,%s)""", (
-                    defect_id, active["scenario_id"], turn_number, severity, note,
+                defect_id,scenario_id,scenario_attempt,turn_number,severity,note)
+                VALUES (%s,%s,%s,%s,%s,%s)""", (
+                    defect_id, active["scenario_id"], scenario_attempt,
+                    turn_number, severity, note,
                 ))
         return {"defectId": str(defect_id), "scenario": active["scenario_id"],
                 "turn": turn_number, "severity": severity, "note": note}
@@ -2077,18 +2431,52 @@ class Session5ScenarioRunner:
         grade = grade.upper()
         if grade not in GRADES:
             raise ValueError("Grade must be PASS, PASS_WITH_NOTES, or FAIL.")
-        active = self._active(required_state="RUNNING")
-        self.harness.transition(active["scenario_id"], ScenarioState.COMPLETED)
+        active = self._active() if grade == "FAIL" else self._active(
+            required_state="RUNNING"
+        )
+        scenario_attempt = int(active.get("scenario_attempt") or 1)
+        if active["state"] != "RUNNING":
+            committed_turn_count = len(self._turns(active["scenario_id"]))
+            with self.harness.connection() as connection:
+                allocation = connection.execute("""SELECT 1
+                    FROM certification_scenario_attempt_allocations
+                    WHERE scenario_id=%s AND scenario_attempt=%s""", (
+                    active["scenario_id"], scenario_attempt,
+                )).fetchone()
+                material_defect = connection.execute("""SELECT 1
+                    FROM certification_scenario_defects
+                    WHERE scenario_id=%s AND scenario_attempt=%s
+                      AND turn_number=0 AND severity IN ('CRITICAL','MAJOR')""", (
+                    active["scenario_id"], scenario_attempt,
+                )).fetchone()
+            if not (
+                grade == "FAIL" and active["state"] in {"PREPARING", "READY"}
+                and committed_turn_count == 0 and allocation is not None
+                and material_defect is not None
+            ):
+                raise RuntimeError(
+                    "Only an allocated zero-turn attempt with a persisted material "
+                    "pre-turn defect may fail before RUNNING."
+                )
+        terminal = ScenarioState.FAILED if grade == "FAIL" else ScenarioState.COMPLETED
+        self.harness.transition(active["scenario_id"], terminal)
         with self.harness.connection() as connection:
             connection.execute("""INSERT INTO certification_scenario_assessments(
-                scenario_id,grade,completed_at) VALUES (%s,%s,NOW())
+                scenario_id,scenario_attempt,grade,completed_at) VALUES (%s,%s,%s,NOW())
                 ON CONFLICT(scenario_id) DO UPDATE SET grade=EXCLUDED.grade,
-                completed_at=EXCLUDED.completed_at""", (active["scenario_id"], grade))
+                scenario_attempt=EXCLUDED.scenario_attempt,
+                completed_at=EXCLUDED.completed_at""", (
+                    active["scenario_id"], scenario_attempt, grade,
+                ))
         return {"scenario": active["scenario_id"], "grade": grade,
-                "lifecycle": "COMPLETED", "next": "SNAPSHOT"}
+                "certificationOutcome": grade,
+                "lifecycle": terminal.value, "next": "SNAPSHOT"}
 
     def snapshot(self, scenario_id: str) -> dict[str, Any]:
-        scenario_id = self._target_scenario(scenario_id, required_state="COMPLETED")
+        scenario_id = self._target_scenario(
+            scenario_id, required_state=("COMPLETED", "FAILED"),
+        )
+        scenario_attempt = self.recovery.scenario_attempt(scenario_id)
         with self.harness.connection() as connection:
             assessment = connection.execute(
                 "SELECT grade,completed_at FROM certification_scenario_assessments WHERE scenario_id=%s",
@@ -2097,7 +2485,12 @@ class Session5ScenarioRunner:
         try:
             turn_evidence = [dict(row["full_analysis"] or {})
                              for row in self._turns(scenario_id)]
-            evidence_status = "COMPLETE"
+            evidence_status = (
+                "ZERO_TURN_FAILURE_NO_FULL_ANALYSIS"
+                if not turn_evidence and assessment
+                and assessment["grade"] == "FAIL"
+                else "COMPLETE"
+            )
         except RuntimeError as error:
             if "no unambiguous evidence projection" not in str(error):
                 raise
@@ -2105,20 +2498,27 @@ class Session5ScenarioRunner:
             evidence_status = "INCOMPLETE_TURN_ARCHIVED"
         evidence = {
             "scenario": scenario_id,
+            "scenarioAttempt": scenario_attempt,
             "startingDefinition": self.harness.definition(scenario_id).name,
             "turns": turn_evidence,
             "evidenceStatus": evidence_status,
             "finalState": self.builder.derived_state(scenario_id),
-            "defects": self._defects(scenario_id),
+            "defects": self._defects(scenario_id, scenario_attempt),
             "assessment": dict(assessment) if assessment else None,
             "transport": "TEST_TRANSPORT_NO_WAIT",
         }
         snapshot_id = self.harness.snapshot(scenario_id, evidence)
+        self.recovery.link_snapshot(
+            scenario_id, scenario_attempt, str(snapshot_id),
+        )
         return {"scenario": scenario_id, "snapshotId": str(snapshot_id),
                 "lifecycle": "SNAPSHOTTED", "next": "RESET"}
 
     def reset(self, scenario_id: str) -> dict[str, Any]:
-        scenario_id = self._target_scenario(scenario_id, required_state="SNAPSHOTTED")
+        scenario_id = self._target_scenario(
+            scenario_id,
+            required_state=("SNAPSHOTTED", "READY", "VERIFIED_CLEAN"),
+        )
         return self.harness.reset(scenario_id)
 
     def verify_clean(self, scenario_id: str | None = None) -> dict[str, Any]:
@@ -2146,10 +2546,41 @@ class Session5ScenarioRunner:
                 "state": state, "runtimeInventory": inventory}
 
     @staticmethod
+    def _committed_logical_turn(turn: dict[str, Any]) -> int | None:
+        """Return the persisted script position only for a committed turn.
+
+        ``logicalTurn`` is the canonical full-attempt projection of the
+        ledger's ``logical_turn``. ``turnNumber`` is retained solely as a
+        compatibility fallback for older projections that predate immutable
+        turn identity. A retry's ``turnAttempt`` never changes this value.
+        """
+        value = dict(turn or {})
+        if str(value.get("status") or "CURRENT").upper() != "CURRENT":
+            return None
+        logical_turn = value.get("logicalTurn")
+        if logical_turn is None:
+            identity = dict(value.get("scenarioTurnIdentity") or {})
+            logical_turn = identity.get("logicalTurn")
+        if logical_turn is None:
+            logical_turn = value.get("turnNumber")
+        if logical_turn is None:
+            return None
+        normalized = int(logical_turn)
+        return normalized if normalized > 0 else None
+
+    @staticmethod
     def purchase_emulator_eligibility(*, scenario_id: str, turns,
                                       purchase_intent_id,
                                       purchase_intent_state: str,
-                                      telegram_commerce: bool = True) -> dict[str, Any]:
+                                      telegram_commerce: bool = True,
+                                      purchase_intent_offering_id=None,
+                                      expected_price_minor=None,
+                                      expected_currency=None,
+                                      presented_intent_count: int | None = None,
+                                      target_already_owned: bool = False,
+                                      prior_provider_settlement: bool = False,
+                                      canonical_event: CanonicalScenarioEvent | None = None,
+                                      canonical_event_authorized: bool = False) -> dict[str, Any]:
         """Require exact presentation plus explicit customer acceptance evidence."""
         target = str(purchase_intent_id)
         turns = list(turns or ())
@@ -2171,6 +2602,237 @@ class Session5ScenarioRunner:
             or dict(offer_context.get("purchaseIntent") or {}).get("id") or ""
         )
         exact_acceptance = bool(accepted and accepted_target == target)
+        canonical_event_checks: dict[str, bool] = {}
+        canonical_event_acceptance = False
+        canonical_event_rejection_reason = None
+        if canonical_event is not None:
+            committed_turns = {
+                Session5ScenarioRunner._committed_logical_turn(turn)
+                for turn in turns
+            }
+            committed_turns.discard(None)
+            authorizing_turn = next((
+                dict(turn) for turn in turns
+                if Session5ScenarioRunner._committed_logical_turn(turn)
+                    == int(canonical_event.after_turn)
+            ), {})
+            event_latest = authorizing_turn
+            latest_analysis = dict(
+                event_latest.get("salesBrainFullAnalysis")
+                or event_latest.get("fullAnalysis") or {}
+            )
+            lifecycle = dict(
+                latest_analysis.get("commerceLifecycleConfirmation") or {}
+            )
+            inventory = dict(latest_analysis.get("inventorySelection") or {})
+            session = dict(latest_analysis.get("activeSessionContext") or {})
+            value = dict(
+                event_latest.get("customerValue")
+                or latest_analysis.get("customerValueAttention") or {}
+            )
+            reactivation = dict(
+                latest_analysis.get("commercialReactivation") or {}
+            )
+            authority_type = str(
+                value.get("commercialInterestType")
+                or reactivation.get("commercialInterestType") or ""
+            ).upper()
+            expected_types = {
+                str(item).upper() for item in
+                canonical_event.presentation_authority_types
+            }
+            session_binding_required = bool(
+                canonical_event.expected_session_position is not None
+                or canonical_event.expected_foundation_reference
+                or canonical_event.expected_session_role
+            )
+            ordered = list(session.get("orderedAssets") or ())
+            expected_position = canonical_event.expected_session_position
+            expected_role = str(
+                canonical_event.expected_session_role or ""
+            ).upper()
+            session_runtime = dict(session.get("sessionRuntime") or {})
+            expected_step = next((
+                dict(item) for item in ordered
+                if expected_position is not None
+                and int(dict(item).get("position") or 0)
+                    == int(expected_position)
+            ), {})
+            matching_intent = dict(matching.get("purchaseIntent") or {})
+            latest_presentation = dict(
+                event_latest.get("syntheticPpvPresentation") or {}
+            )
+            latest_presentation_intent = dict(
+                latest_presentation.get("purchaseIntent") or {}
+            )
+            presentation_foundation = str(
+                latest_presentation.get("sessionFoundationReference") or ""
+            )
+            presentation_position = latest_presentation.get("sessionPosition")
+            presentation_session_bound = bool(
+                presentation_foundation and presentation_position is not None
+            )
+            canonical_event_checks = {
+                "declaredSettlementEvent": (
+                    canonical_event.event_type
+                    == "SYNTHETIC_PROVIDER_SETTLEMENT"
+                ),
+                "sequencedAfterAuthorizingTurn": (
+                    bool(authorizing_turn)
+                    and max(committed_turns, default=0)
+                        == int(canonical_event.after_turn)
+                ),
+                "acceptedPresentationAuthority": bool(
+                    not expected_types or authority_type in expected_types
+                ),
+                "presentationOnAuthorizingTurn": (
+                    str(latest_presentation_intent.get("id") or "") == target
+                ),
+                "singlePresentedIntent": presented_intent_count == 1,
+                "exactPresentedIntent": (
+                    str(matching_intent.get("id") or "") == target
+                    and str(matching_intent.get("state") or "").upper()
+                        == "PRESENTED"
+                ),
+                "confirmedCustomerVisibleDelivery": (
+                    lifecycle.get("structuredPresentationConfirmed") is True
+                    and str(lifecycle.get("deliveryState") or "").upper()
+                        == "CONFIRMED"
+                    and str(lifecycle.get("purchaseIntentId") or "") == target
+                ),
+                "exactOffering": (
+                    bool(purchase_intent_offering_id)
+                    and str(matching.get("offeringId") or "")
+                        == str(purchase_intent_offering_id)
+                    and str(inventory.get("selectedOfferingId") or "")
+                        == str(purchase_intent_offering_id)
+                ),
+                "exactAmount": (
+                    expected_price_minor is not None
+                    and int(matching.get("priceMinor") or -1)
+                        == int(expected_price_minor)
+                ),
+                "exactCurrency": (
+                    bool(expected_currency)
+                    and str(matching.get("currency") or "").upper()
+                        == str(expected_currency).upper()
+                ),
+                "activeSessionBound": (
+                    not session_binding_required or (
+                        (
+                            session.get("available") is True
+                            and session.get("completeness")
+                                == "POSITIONAL_CONTEXT_COMPLETE"
+                            and bool(session.get("salesSessionId"))
+                            and str(dict(latest_analysis.get("activeSession") or {}).get(
+                                "sessionId"
+                            ) or "") == str(session.get("salesSessionId") or "")
+                        )
+                        if expected_role else (
+                            presentation_session_bound or (
+                                session.get("available") is True
+                                and session.get("completeness")
+                                    == "POSITIONAL_CONTEXT_COMPLETE"
+                                and bool(session.get("salesSessionId"))
+                                and str(dict(latest_analysis.get(
+                                    "activeSession"
+                                ) or {}).get("sessionId") or "")
+                                    == str(session.get("salesSessionId") or "")
+                            )
+                        )
+                    )
+                ),
+                "exactFoundation": (
+                    not canonical_event.expected_foundation_reference
+                    or str(
+                        session.get("foundationReference")
+                        or presentation_foundation
+                    )
+                        == canonical_event.expected_foundation_reference
+                ),
+                "exactOrderedStep": (
+                    expected_position is None or (
+                        bool(expected_step)
+                        and str(expected_step.get("offeringId") or "")
+                            == str(purchase_intent_offering_id or "")
+                        and int(expected_step.get("priceMinor") or -1)
+                            == int(expected_price_minor or -2)
+                        and str(expected_step.get("currency") or "").upper()
+                            == str(expected_currency or "").upper()
+                        and expected_step.get("owned") is False
+                    ) or (
+                        int(presentation_position or 0) == int(expected_position)
+                        and str(latest_presentation.get("offeringId") or "")
+                            == str(purchase_intent_offering_id or "")
+                        and int(latest_presentation.get("priceMinor") or -1)
+                            == int(expected_price_minor or -2)
+                        and str(latest_presentation.get("currency") or "").upper()
+                            == str(expected_currency or "").upper()
+                    )
+                ),
+                "exactSessionRole": (
+                    not expected_role or (
+                        session.get("available") is True
+                        and session.get("completeness")
+                            == "POSITIONAL_CONTEXT_COMPLETE"
+                        and int(session_runtime.get("currentPosition") or 0)
+                            == int(expected_position or 0)
+                        and str(
+                            session_runtime.get("currentSalesRole") or ""
+                        ).upper() == expected_role
+                    )
+                ),
+                "lifecycleBound": (
+                    not expected_role
+                    or bool(session_runtime.get("lifecycleId"))
+                ),
+                "notPreviouslySettled": not prior_provider_settlement,
+                "notAlreadyOwned": not target_already_owned,
+            }
+            canonical_event_acceptance = all(canonical_event_checks.values())
+            if not canonical_event_acceptance:
+                failed = next(
+                    name for name, passed in canonical_event_checks.items()
+                    if not passed
+                )
+                canonical_event_rejection_reason = (
+                    "CANONICAL_EVENT_" + re.sub(
+                        r"(?<!^)(?=[A-Z])", "_", failed
+                    ).upper() + "_REQUIRED"
+                )
+        c10_exact_offer_continuation = False
+        if str(scenario_id).upper() == "C10" and matching:
+            latest_analysis = dict(latest.get("salesBrainFullAnalysis") or {})
+            current_offer = dict(latest_analysis.get("currentOffer") or {})
+            commerce = dict(latest_analysis.get("purchaseCommerceState") or {})
+            lifecycle = dict(
+                latest_analysis.get("commerceLifecycleConfirmation") or {}
+            )
+            matching_offering = str(matching.get("offeringId") or "")
+            c10_exact_offer_continuation = bool(
+                current_offer.get("customerInitiatedOfferContinuation") is True
+                and current_offer.get("continuationIntentType")
+                    == "SEND_OR_LINK_REQUEST"
+                and current_offer.get("reuseRequested") is True
+                and current_offer.get("redeliveryAuthorized") is True
+                and current_offer.get("purchaseIntentReuseEligible") is True
+                and current_offer.get("structuredOfferReused") is True
+                and current_offer.get("structuredOfferRedelivered") is True
+                and current_offer.get("purchaseIntentReused") is True
+                and str(current_offer.get("activePurchaseIntentId") or "")
+                    == target
+                and str(current_offer.get("activeOfferingId") or "")
+                    == matching_offering
+                and str(commerce.get("activePurchaseIntentId") or "") == target
+                and str(commerce.get("purchaseIntentStatus") or "").upper()
+                    == "PRESENTED"
+                and lifecycle.get("structuredPresentationConfirmed") is True
+                and str(lifecycle.get("deliveryState") or "").upper()
+                    == "CONFIRMED"
+                and str(dict(matching.get("purchaseIntent") or {}).get(
+                    "state"
+                ) or "").upper() == "PRESENTED"
+            )
         c04_direct_acceptance = False
         if str(scenario_id).upper() == "C04" and matching:
             from app.services.conversational_sales_progression_service import (
@@ -2182,14 +2844,121 @@ class Session5ScenarioRunner:
                     customer_text
                 )
             )
+        c13_exact_purchase_claim = False
+        c13_rejection_reason = None
+        if str(scenario_id).upper() == "C13" and matching:
+            latest_analysis = dict(
+                latest.get("salesBrainFullAnalysis")
+                or latest.get("fullAnalysis") or {}
+            )
+            commerce = dict(latest_analysis.get("purchaseCommerceState") or {})
+            grounding = dict(
+                dict(latest_analysis.get("conversationStyle") or {}).get(
+                    "purchaseOwnershipGrounding"
+                ) or {}
+            )
+            current_offer = dict(latest_analysis.get("currentOffer") or {})
+            lifecycle = dict(
+                latest_analysis.get("commerceLifecycleConfirmation") or {}
+            )
+            matching_intent = dict(matching.get("purchaseIntent") or {})
+            matching_offering = str(matching.get("offeringId") or "")
+            intent_offering = str(purchase_intent_offering_id or "")
+            exact_canonical_claim = (
+                str(latest.get("customer") or "").strip().casefold()
+                == "i bought it"
+            )
+            checks = {
+                "canonicalClaim": exact_canonical_claim,
+                "customerClaimDetected": (
+                    commerce.get("customerPurchaseClaimDetected") is True
+                    and commerce.get("conversationalPurchaseClaim") is True
+                    and grounding.get("customerPurchaseClaimDetected") is True
+                ),
+                "providerStillUnverified": (
+                    commerce.get("providerPurchaseVerified") is False
+                    and commerce.get("purchaseOwnershipVerified") is False
+                    and grounding.get("providerPurchaseVerified") is False
+                ),
+                "singlePresentedIntent": presented_intent_count == 1,
+                "exactIntent": (
+                    str(commerce.get("activePurchaseIntentId") or "") == target
+                    and str(current_offer.get("activePurchaseIntentId") or "") == target
+                    and str(matching_intent.get("id") or "") == target
+                ),
+                "presentedState": (
+                    str(commerce.get("activePurchaseIntentState") or "").upper()
+                    == "PRESENTED"
+                    and str(commerce.get("purchaseIntentStatus") or "").upper()
+                    == "PRESENTED"
+                    and str(matching_intent.get("state") or "").upper()
+                    == "PRESENTED"
+                ),
+                "exactOffering": bool(
+                    intent_offering and matching_offering
+                    and intent_offering == matching_offering
+                    and str(current_offer.get("activeOfferingId") or "")
+                    == intent_offering
+                ),
+                "exactAmount": (
+                    expected_price_minor is not None
+                    and int(matching.get("priceMinor") or -1)
+                    == int(expected_price_minor)
+                    and str(matching.get("currency") or "").upper()
+                    == str(expected_currency or "").upper()
+                ),
+                "confirmedPresentation": (
+                    lifecycle.get("structuredPresentationConfirmed") is True
+                ),
+                "notPreviouslySettled": not prior_provider_settlement,
+                "notAlreadyOwned": not target_already_owned,
+            }
+            c13_exact_purchase_claim = all(checks.values())
+            if not c13_exact_purchase_claim:
+                c13_rejection_reason = next(
+                    ("C13_" + name.upper() + "_REQUIRED"
+                     for name, passed in checks.items() if not passed),
+                    "C13_CANONICAL_SETTLEMENT_EVIDENCE_REQUIRED",
+                )
         if not telegram_commerce:
             eligible, reason, source = True, "NON_TELEGRAM_COMMERCE_EXISTING_CONTRACT", "EXISTING_PROVIDER_EMULATOR_CONTRACT"
         elif str(purchase_intent_state).upper() != "PRESENTED":
             eligible, reason, source = False, "TARGET_PURCHASE_INTENT_NOT_PRESENTED", None
         elif not matching:
             eligible, reason, source = False, "AUTHORITATIVE_STRUCTURED_PRESENTATION_MISSING", None
+        elif canonical_event_acceptance:
+            eligible, reason, source = (
+                True, "CANONICAL_INTER_TURN_EVENT_REQUIRED",
+                "DECLARED_EVENT_WITH_EXACT_PRESENTATION_AUTHORITY",
+            )
+        elif canonical_event is not None:
+            eligible, reason, source = (
+                False, canonical_event_rejection_reason
+                or "CANONICAL_EVENT_PRESENTATION_AUTHORITY_REQUIRED", None,
+            )
+        elif canonical_event_authorized:
+            eligible, reason, source = (
+                False, "CANONICAL_EVENT_DECLARATION_REQUIRED", None,
+            )
         elif c04_direct_acceptance:
             eligible, reason, source = True, "EXACT_PRESENTED_INTENT_ACCEPTED", "C04_CANONICAL_DIRECT_BUYER_ACCEPTANCE"
+        elif c10_exact_offer_continuation:
+            eligible, reason, source = (
+                True,
+                "EXACT_PRESENTED_INTENT_ACCEPTED",
+                "C10_CANONICAL_EXACT_OFFER_CONTINUATION",
+            )
+        elif c13_exact_purchase_claim:
+            eligible, reason, source = (
+                True,
+                "EXACT_PRESENTED_INTENT_ACCEPTED",
+                "C13_CANONICAL_EXACT_PURCHASE_CLAIM",
+            )
+        elif str(scenario_id).upper() == "C13":
+            eligible, reason, source = (
+                False, c13_rejection_reason
+                or "C13_CANONICAL_SETTLEMENT_EVIDENCE_REQUIRED", None,
+            )
         elif not accepted:
             eligible, reason, source = False, "CANONICAL_CUSTOMER_ACCEPTANCE_REQUIRED", None
         elif not exact_acceptance:
@@ -2198,7 +2967,11 @@ class Session5ScenarioRunner:
             eligible, reason, source = True, "EXACT_PRESENTED_INTENT_ACCEPTED", "ADAPTIVE_OFFER_REACTION_ACCEPT"
         return {
             "scenarioPurchaseAcceptanceRequired": bool(telegram_commerce),
-            "scenarioPurchaseAcceptanceObserved": accepted,
+            "scenarioPurchaseAcceptanceObserved": bool(
+                accepted or c04_direct_acceptance
+                or c10_exact_offer_continuation or c13_exact_purchase_claim
+                or canonical_event_acceptance
+            ),
             "scenarioPurchaseAcceptanceSource": source,
             "simulatePurchaseEligible": eligible,
             "simulatePurchaseEligibilityReason": reason,
@@ -2206,15 +2979,35 @@ class Session5ScenarioRunner:
                 target if matching and str(purchase_intent_state).upper() == "PRESENTED" else None
             ),
             "purchaseEmulatorTargetIntent": target,
+            "expectedPriceMinor": expected_price_minor,
+            "expectedCurrency": expected_currency,
+            "canonicalEventId": (
+                canonical_event.event_id if canonical_event else None
+            ),
+            "canonicalEventChecks": canonical_event_checks,
+            "customerPresentationAuthority": (
+                "CUSTOMER_AUTHORIZED_STRUCTURED_PRESENTATION"
+                if canonical_event_acceptance else None
+            ),
+            "providerSettlementAuthority": (
+                "SCENARIO_LAB_EMULATED_PROVIDER_EVENT"
+                if canonical_event_acceptance else None
+            ),
         }
 
     def simulate_purchase(self) -> dict[str, Any]:
+        return self._simulate_purchase()
+
+    def _simulate_purchase(
+        self, *, canonical_event: CanonicalScenarioEvent | None = None,
+    ) -> dict[str, Any]:
         active = self._active(required_state="RUNNING")
         scenario_id = active["scenario_id"]
         customer = self.harness.customer_for(self.harness.definition(scenario_id))
         with self.harness.connection() as connection:
             intents = connection.execute("""SELECT purchase_intent_id,
-                expected_price_minor,expected_currency,created_metadata
+                commercial_offering_id,expected_price_minor,expected_currency,
+                created_metadata
                 FROM purchase_intents
                 WHERE telegram_user_id=%s AND status='PRESENTED'
                   AND presented_at IS NOT NULL
@@ -2240,6 +3033,21 @@ class Session5ScenarioRunner:
         intent = intents[0]
         attempt = self.recovery.scenario_attempt(scenario_id)
         turns = self._current_attempt_turn_projections(scenario_id, attempt)
+        if canonical_event is None and turns:
+            definition = self.harness.definition(scenario_id)
+            committed_turns = {
+                self._committed_logical_turn(turn) for turn in turns
+            }
+            committed_turns.discard(None)
+            current_turn = max(committed_turns, default=0)
+            matching_events = [
+                event for event in tuple(definition.canonical_events or ())
+                if event.event_type == "SYNTHETIC_PROVIDER_SETTLEMENT"
+                and int(event.after_turn) == current_turn
+                and int(event.after_turn) in committed_turns
+            ]
+            if len(matching_events) == 1:
+                canonical_event = matching_events[0]
         matching_ppv = next((
             dict(turn.get("syntheticPpvPresentation") or {})
             for turn in reversed(turns)
@@ -2253,6 +3061,21 @@ class Session5ScenarioRunner:
             raise RuntimeError(
                 "SIMULATE_PURCHASE requires a canonically presented structured PPV."
             )
+        with self.harness.connection() as connection:
+            prior_provider_settlement = connection.execute(
+                "SELECT 1 FROM certification_simulated_provider_events "
+                "WHERE scenario_id=%s AND payload->>'purchaseIntentId'=%s LIMIT 1",
+                (scenario_id, str(intent["purchase_intent_id"])),
+            ).fetchone() is not None
+            target_already_owned = connection.execute("""SELECT 1
+                FROM commercial_offering_assets member
+                JOIN provider_purchase_asset_ownership owned
+                  ON owned.content_item_id=member.asset_id
+                WHERE member.offering_id=%s
+                  AND owned.external_fanvue_user_uuid=%s LIMIT 1""", (
+                    intent["commercial_offering_id"],
+                    customer.synthetic_buyer_uuid,
+                )).fetchone() is not None
         eligibility = self.purchase_emulator_eligibility(
             scenario_id=scenario_id, turns=turns,
             purchase_intent_id=intent["purchase_intent_id"],
@@ -2261,6 +3084,13 @@ class Session5ScenarioRunner:
                 dict(intent.get("created_metadata") or {}).get("source")
                 == "TELEGRAM_COMMERCE"
             ),
+            purchase_intent_offering_id=intent["commercial_offering_id"],
+            expected_price_minor=intent["expected_price_minor"],
+            expected_currency=intent["expected_currency"],
+            presented_intent_count=len(intents),
+            target_already_owned=target_already_owned,
+            prior_provider_settlement=prior_provider_settlement,
+            canonical_event=canonical_event,
         )
         if not eligibility["simulatePurchaseEligible"]:
             raise RuntimeError(
@@ -2274,8 +3104,28 @@ class Session5ScenarioRunner:
             currency=str(intent["expected_currency"]),
         )
         after = self.builder.derived_state(scenario_id)
+        with self.harness.connection() as connection:
+            committed_intent = connection.execute("""SELECT status,purchased_at,
+                commercial_offering_id,expected_price_minor,expected_currency
+                FROM purchase_intents WHERE purchase_intent_id=%s""", (
+                    intent["purchase_intent_id"],
+                )).fetchone()
         return {"scenario": scenario_id, "provenance": result["provenance"],
                 "purchaseIntentId": str(intent["purchase_intent_id"]),
+                "commercialOfferingId": str(intent["commercial_offering_id"]),
+                "providerEventId": result["eventId"],
+                "transactionRecorded": bool(result["transactionRecorded"]),
+                "committedIntent": {
+                    "status": committed_intent["status"],
+                    "purchasedAt": committed_intent["purchased_at"],
+                    "commercialOfferingId": str(
+                        committed_intent["commercial_offering_id"]
+                    ),
+                    "expectedPriceMinor": int(
+                        committed_intent["expected_price_minor"]
+                    ),
+                    "expectedCurrency": committed_intent["expected_currency"],
+                },
                 "before": before, "after": after, "fanvueCalled": False,
                 "purchaseEmulatorAuthority": eligibility}
 
@@ -2366,7 +3216,8 @@ class Session5ScenarioRunner:
             )
         return row
 
-    def _target_scenario(self, scenario_id: str, *, required_state: str) -> str:
+    def _target_scenario(self, scenario_id: str, *,
+                         required_state: str | tuple[str, ...]) -> str:
         """Resolve mutation authority only from an explicit scenario identity."""
         selected = str(scenario_id or "").strip().upper()
         if selected not in {item.scenario_id for item in SCENARIO_MANIFEST}:
@@ -2379,9 +3230,11 @@ class Session5ScenarioRunner:
             ).fetchone()
         if row is None:
             raise LookupError(f"Scenario {selected} has no runtime state.")
-        if row["state"] != required_state:
+        required = ((required_state,) if isinstance(required_state, str)
+                    else tuple(required_state))
+        if row["state"] not in required:
             raise RuntimeError(
-                f"Scenario {selected} must be {required_state}; "
+                f"Scenario {selected} must be one of {required}; "
                 f"current state is {row['state']}."
             )
         return selected
@@ -2538,11 +3391,22 @@ class Session5ScenarioRunner:
             projections.append(projection)
         return projections
 
-    def _defects(self, scenario_id):
+    def _defects(self, scenario_id, scenario_attempt=None):
         with self.harness.connection() as connection:
-            return [dict(row) for row in connection.execute("""SELECT defect_id,turn_number,
-                severity,note,created_at FROM certification_scenario_defects
-                WHERE scenario_id=%s ORDER BY created_at,defect_id""", (scenario_id,)).fetchall()]
+            if scenario_attempt is None:
+                rows = connection.execute("""SELECT defect_id,turn_number,
+                    severity,note,created_at FROM certification_scenario_defects
+                    WHERE scenario_id=%s ORDER BY created_at,defect_id""", (
+                        scenario_id,
+                    )).fetchall()
+            else:
+                rows = connection.execute("""SELECT defect_id,turn_number,
+                    severity,note,created_at FROM certification_scenario_defects
+                    WHERE scenario_id=%s AND scenario_attempt=%s
+                    ORDER BY created_at,defect_id""", (
+                        scenario_id, scenario_attempt,
+                    )).fetchall()
+            return [dict(row) for row in rows]
 
     def _bootstrap_ledger(self):
         with self.harness.connection() as connection:
@@ -2550,10 +3414,12 @@ class Session5ScenarioRunner:
                 defect_id UUID PRIMARY KEY,scenario_id TEXT NOT NULL,turn_number INTEGER NOT NULL,
                 severity TEXT NOT NULL CHECK(severity IN ('CRITICAL','MAJOR','QUALITY')),
                 note TEXT NOT NULL,created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())""")
+            connection.execute("ALTER TABLE certification_scenario_defects ADD COLUMN IF NOT EXISTS scenario_attempt INTEGER")
             connection.execute("""CREATE TABLE IF NOT EXISTS certification_scenario_assessments(
                 scenario_id TEXT PRIMARY KEY,grade TEXT NOT NULL
                 CHECK(grade IN ('PASS','PASS_WITH_NOTES','FAIL')),
                 completed_at TIMESTAMPTZ NOT NULL)""")
+            connection.execute("ALTER TABLE certification_scenario_assessments ADD COLUMN IF NOT EXISTS scenario_attempt INTEGER")
 
 
 def _parser():
@@ -2567,13 +3433,30 @@ def _parser():
         targeted = sub.add_parser(command)
         targeted.add_argument("scenario")
     prepare = sub.add_parser("PREPARE"); prepare.add_argument("scenario")
-    turn = sub.add_parser("TURN"); turn.add_argument("message", nargs="+")
+    turn = sub.add_parser("TURN")
+    turn.add_argument(
+        "--language-mode",
+        choices=(REAL_AVA_LANGUAGE, DETERMINISTIC_CERTIFICATION),
+        default=DETERMINISTIC_CERTIFICATION,
+    )
+    turn.add_argument("message", nargs="+")
     complete = sub.add_parser("COMPLETE"); complete.add_argument("grade")
-    defect = sub.add_parser("DEFECT"); defect.add_argument("severity"); defect.add_argument("note", nargs="+")
+    defect = sub.add_parser("DEFECT"); defect.add_argument("severity")
+    defect.add_argument("--turn", type=int, default=None)
+    defect.add_argument("note", nargs="+")
     return parser
 
 
+def _configure_utf8_cli_streams() -> None:
+    """Emit real Ava text losslessly even under a legacy Windows code page."""
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if callable(reconfigure):
+            reconfigure(encoding="utf-8", errors="strict")
+
+
 def main(argv=None):
+    _configure_utf8_cli_streams()
     args = _parser().parse_args(argv)
     runner = Session5ScenarioRunner()
     command = args.command
@@ -2585,9 +3468,14 @@ def main(argv=None):
         "RUN_CANONICAL": runner.execute_canonical,
         "RECOVER_STALE_EXECUTION": runner.recover_stale_execution,
         "PREPARE": lambda: runner.prepare(args.scenario),
-        "TURN": lambda: runner.turn(" ".join(args.message)),
+        "TURN": lambda: runner.turn(
+            " ".join(args.message), language_mode=args.language_mode,
+            require_language_mode=True,
+        ),
         "COMPLETE": lambda: runner.complete(args.grade),
-        "DEFECT": lambda: runner.defect(args.severity, " ".join(args.note)),
+        "DEFECT": lambda: runner.defect(
+            args.severity, " ".join(args.note), turn_number=args.turn,
+        ),
     }[command]()
     print(json.dumps(result, indent=2, default=str, ensure_ascii=False))
     return 0

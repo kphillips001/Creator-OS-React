@@ -175,3 +175,19 @@ def test_deferred_acknowledgement_continuation_keeps_commercial_context():
     assert result["active"] is True
     assert result["continuationCommercialContextPresent"] is True
     assert result["activeBuyingWindowAuthoritySatisfied"] is True
+
+
+def test_active_session_continuation_is_observed_without_authorizing_sale():
+    result = project(
+        active_session=True,
+        cooldown_active=True,
+        explicit_continuation=True,
+        recent_verified_purchase=False,
+        fresh_direct_intent=False,
+    )
+
+    assert result["active"] is False
+    assert result["reason"] == "ACTIVE_SESSION_PRECEDENCE"
+    assert result["customerLedContinuation"] is True
+    assert result["anotherSaleAppropriateNow"] is False
+    assert result["purchaseCooldownOverridden"] is False

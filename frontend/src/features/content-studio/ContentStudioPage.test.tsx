@@ -98,6 +98,33 @@ function mockContext(
           status: 200,
         });
       }
+      if (url.endsWith("/recreate/analyze")) {
+        return Promise.resolve({
+          headers: new Headers({ "content-type": "application/json" }),
+          json: () => Promise.resolve({
+            success: true,
+            error: null,
+            analysis: {
+              scene: "moonlit bedroom",
+              pose: "seated on the bed",
+              camera_angle: "eye level",
+              camera_framing: "medium portrait",
+              lighting: "soft moonlight",
+              composition: "centered subject",
+              wardrobe_concept: "sheer robe",
+              expression: "soft and intimate",
+              mood: "private",
+              environment: "bedroom",
+              color_palette: "blue and silver",
+              styling: "cinematic",
+              elements_to_preserve: ["lighting", "pose"],
+              elements_to_ignore: ["source identity"],
+            },
+          }),
+          ok: true,
+          status: 200,
+        });
+      }
       if (url.includes("/explicit/batches/") && url.endsWith("/start")) {
         return Promise.resolve({
           headers: new Headers({ "content-type": "application/json" }),
@@ -344,6 +371,100 @@ describe("ContentStudioPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Back to Tags" }));
     expect(screen.getByLabelText("Explicit Tags")).toHaveValue("preserved explicit direction");
     expect(within(explicit).getByRole("region", { name: "Explicit Generation Settings" })).toBeInTheDocument();
+  });
+
+  it("renders three independent top-level cards and keeps Recreate With Ava generation isolated", async () => {
+    render(<ContentStudioPage />);
+    await screen.findByRole("region", { name: "Inspire Me Workspace" });
+
+    const topLevelCards = Array.from(document.querySelectorAll(
+      ".content-studio__workflow > details.creative-studio",
+    )) as HTMLDetailsElement[];
+    expect(topLevelCards).toHaveLength(3);
+    const creativeStudio = topLevelCards[0]!;
+    const explicitAccordion = topLevelCards[1]!;
+    const recreateAccordion = topLevelCards[2]!;
+    expect(creativeStudio).toHaveTextContent("Creative Studio");
+    expect(explicitAccordion).toHaveTextContent("Explicit Content");
+    expect(recreateAccordion).toHaveTextContent("Recreate With Ava");
+    expect(creativeStudio).not.toHaveAttribute("open");
+    expect(explicitAccordion).not.toHaveAttribute("open");
+    expect(recreateAccordion).not.toHaveAttribute("open");
+
+    const explicitSummary = explicitAccordion.querySelector(":scope > summary") as HTMLElement;
+    expect(creativeStudio.querySelector(".recreate-with-ava")).toBeNull();
+    expect(explicitAccordion.querySelector(".recreate-with-ava")).toBeNull();
+
+    fireEvent.click(explicitSummary);
+    screen.getByRole("region", { name: "Explicit Content" });
+    expect(explicitAccordion).toHaveAttribute("open");
+    expect(creativeStudio).not.toHaveAttribute("open");
+    expect(recreateAccordion).not.toHaveAttribute("open");
+
+    const recreateSummary = recreateAccordion.querySelector(":scope > summary") as HTMLElement;
+    fireEvent.click(recreateSummary);
+    expect(recreateAccordion).toHaveAttribute("open");
+    expect(explicitAccordion).toHaveAttribute("open");
+    fireEvent.click(explicitSummary);
+    expect(explicitAccordion).not.toHaveAttribute("open");
+    expect(recreateAccordion).toHaveAttribute("open");
+
+    expect(within(recreateAccordion).getByLabelText("Inspiration image")).toBeInTheDocument();
+
+    Object.defineProperty(URL, "createObjectURL", {
+      configurable: true,
+      value: vi.fn(() => "blob:recreate-preview"),
+    });
+    Object.defineProperty(URL, "revokeObjectURL", {
+      configurable: true,
+      value: vi.fn(),
+    });
+    const file = new File(["image"], "inspiration.png", { type: "image/png" });
+    fireEvent.change(within(recreateAccordion).getByLabelText("Inspiration image"), {
+      target: { files: [file] },
+    });
+    fireEvent.click(within(recreateAccordion).getByRole("button", { name: "Recreate With Ava" }));
+
+    await waitFor(() => expect(vi.mocked(fetch).mock.calls.filter(
+      ([url, options]) => String(url).endsWith("/generations") && options?.method === "POST",
+    )).toHaveLength(1));
+    await within(recreateAccordion).findByRole("img", { name: /Generated image 1 of/ });
+    await within(recreateAccordion).findByText("More Options");
+    expect(within(recreateAccordion).getByText("Recreate With Ava Live Preview")).toBeInTheDocument();
+    expect(within(recreateAccordion).queryByText("Creative Studio Live Preview")).not.toBeInTheDocument();
+    expect(vi.mocked(fetch).mock.calls.filter(
+      ([url]) => String(url).endsWith("/recreate/analyze"),
+    )).toHaveLength(1);
+    expect(vi.mocked(fetch).mock.calls.filter(
+      ([url]) => String(url).endsWith("/prompt-preview"),
+    )).toHaveLength(1);
+    const previewCall = vi.mocked(fetch).mock.calls.find(
+      ([url]) => String(url).endsWith("/prompt-preview"),
+    );
+    expect(JSON.parse(String(previewCall?.[1]?.body))).toEqual(expect.objectContaining({
+      creativeMode: "premium_teaser",
+      lane: "social",
+      promptCount: 1,
+    }));
+    const previewPayload = JSON.parse(String(previewCall?.[1]?.body)) as {
+      creativeTags: string;
+    };
+    expect(previewPayload.creativeTags).toContain("Scene: moonlit bedroom");
+    expect(previewPayload.creativeTags).toContain("ENHANCED SUGGESTIONS");
+    const generationCall = vi.mocked(fetch).mock.calls.find(
+      ([url, options]) => String(url).endsWith("/generations") && options?.method === "POST",
+    );
+    const generationPayload = JSON.parse(String(generationCall?.[1]?.body)) as {
+      lane?: string;
+    };
+    expect(generationPayload).toEqual(expect.objectContaining({
+      creativeMode: "premium_teaser",
+      origin: "recreate_with_ava",
+      promptBatch: ["preview prompt one", "preview prompt two"],
+      promptCount: 1,
+      provider: "seedream_5_0_pro",
+    }));
+    expect(generationPayload.lane ?? "social").toBe("social");
   });
 
   it("starts Explicit inspiration from the tab and displays scene-first concepts", async () => {

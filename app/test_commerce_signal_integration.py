@@ -435,6 +435,33 @@ def test_standalone_single_image_is_persistent_at_1_30_and_180_days(monkeypatch)
         assert len(repository.purchased) == 1
 
 
+def test_abandoned_persistent_offer_accepts_late_provider_purchase_without_redelivery(
+        monkeypatch):
+    item = replace(
+        purchase_intent(), presented_at=NOW,
+        expires_at=NOW + timedelta(hours=72),
+        status=PurchaseIntentStatus.ABANDONED,
+        abandoned_at=NOW + timedelta(days=3),
+    )
+    integration, _, _, intents, repository = service(
+        monkeypatch, [item], attribution_context(
+            item, offering_type="SINGLE_IMAGE",
+        ),
+    )
+
+    result = attribute_at(
+        integration, at=NOW + timedelta(days=180),
+        transaction="abandoned-late-order",
+    )
+
+    assert result["state"] == "ATTRIBUTED"
+    assert result["purchaseIntentId"] == item.purchase_intent_id
+    assert len(intents.references) == 1
+    assert len(repository.purchased) == 1
+    assert repository.purchased[0][0] == item.purchase_intent_id
+    assert len(integration.photoshoot_lifecycles.calls) == 1
+
+
 def test_session_single_image_keeps_72_hour_attribution_window(monkeypatch):
     item = replace(
         purchase_intent(), presented_at=NOW,

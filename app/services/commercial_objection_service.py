@@ -42,13 +42,31 @@ class CommercialObjectionService:
         re.I,
     )
     CHEAPER_PRODUCT = re.compile(
-        r"\b(?:anything cheaper|something cheaper|cheaper one|for less|lower price)\b",
+        r"\b(?:anything (?:even )?cheaper|something (?:even )?cheaper|"
+        r"cheaper one|for less|lower price|can you go lower|go lower)\b",
         re.I,
     )
     BUDGET = re.compile(
-        r"\b(?:i (?:really )?only have|i can['’]?t spend more than|"
-        r"i(?:'ve| have) got(?: like)?|anything around|my budget is)\s*"
-        r"\$?(\d+(?:\.\d{1,2})?)\b", re.I)
+        r"\b(?:i(?:['’]?m| am) trying to stay under|i (?:really )?only have(?: about)?|"
+        r"i can['’]?t spend more than|i(?:['’]?ve| have) got(?: like)?|"
+        r"anything (?:around|under)|my budget is|"
+        r"i need something cheaper,?\s*(?:like )?under)\s*"
+        r"\$?\s*(?P<amount>\d+(?:\.\d{1,2})?|one|two|three|four|five|six|"
+        r"seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|"
+        r"sixteen|seventeen|eighteen|nineteen|twenty)\s*(?:dollars?)?\b", re.I)
+    NON_CURRENT_BUDGET = re.compile(
+        r"\b(?:spent|paid)\s+(?:about\s+)?(?:under|around)\b.{0,24}\b(?:last time|before)\b|"
+        r"\b(?:maybe|perhaps)\s+(?:someday|one day)\b.{0,40}\b(?:spend|budget)\b|"
+        r"\bi(?:['’]?m| am) not saying\s+(?:that\s+)?my budget is\b",
+        re.I,
+    )
+    NUMBER_WORDS = {
+        "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
+        "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
+        "eleven": 11, "twelve": 12, "thirteen": 13, "fourteen": 14,
+        "fifteen": 15, "sixteen": 16, "seventeen": 17,
+        "eighteen": 18, "nineteen": 19, "twenty": 20,
+    }
     CONTENT = re.compile(
         r"\b(?:not (?:really )?into that|got something else|anything different|"
         r"something different|don['’]?t like that kind|not that one|not that kind|"
@@ -58,8 +76,23 @@ class CommercialObjectionService:
     def evaluate(self, *, message: str, context: dict | None = None) -> CommercialObjection:
         text = str(message or "").strip()
         values = dict(context or {})
+        from app.services.commercial_receptiveness_service import (
+            CommercialReceptivenessService,
+        )
+        if CommercialReceptivenessService.temporal_commercial_deferment(
+            text
+        )["deferredCommercialInterest"]:
+            return self._result(
+                CommercialObjectionType.NONE, strength="NONE",
+                current=False, selling=False, authoritative=True,
+                alternative=False, pressure=False,
+                evidence=("DEFERRED_FUTURE_COMMERCIAL_INTEREST",),
+            )
         previous = dict(values.get("sales_progression") or {})
         prior_attempts = int(previous.get("recoveryAttemptCount") or 0)
+        active_offer_continuation = dict(
+            values.get("active_offer_continuation") or {}
+        )
 
         if self.PAYMENT.search(text):
             return self._result(CommercialObjectionType.PAYMENT_TECHNICAL,
@@ -80,9 +113,10 @@ class CommercialObjectionService:
                                 strength="STRONG", current=False, selling=False,
                                 authoritative=False, alternative=False,
                                 evidence=("GLOBAL_OR_REPEATED_DECLINE",))
-        budget = self.BUDGET.search(text)
+        budget = None if self.NON_CURRENT_BUDGET.search(text) else self.BUDGET.search(text)
         if budget:
-            amount_minor = int(round(float(budget.group(1)) * 100))
+            amount = budget.group("amount").lower()
+            amount_minor = int(round(float(self.NUMBER_WORDS.get(amount, amount)) * 100))
             # A newly supplied hard ceiling is materially new evidence even
             # after one value-defense turn. It can authorize one different
             # product; it never changes the original product's price.
@@ -105,8 +139,24 @@ class CommercialObjectionService:
                 recovery_strategy="VALUE_DEFENSE",
                 negative_contact_authorized=prior_attempts < 1,
             )
+        # A deterministic reference to the authoritative active offer has
+        # already been resolved upstream.  Comparative wording inside that
+        # reference ("send me the cheaper one") describes which known offer
+        # to redeliver; it is not a new objection or lower-price search.
+        if (
+            active_offer_continuation.get(
+                "customerInitiatedOfferContinuation"
+            ) is True
+            and active_offer_continuation.get("continuationIntentType")
+                in {"SEND_OR_LINK_REQUEST", "PURCHASE_ACCEPTANCE"}
+        ):
+            return self._result(
+                CommercialObjectionType.NONE, strength="NONE",
+                current=False, selling=True, authoritative=True,
+                alternative=False, pressure=False,
+            )
         if self.CHEAPER_PRODUCT.search(text):
-            allowed = prior_attempts < 1
+            allowed = prior_attempts < 1 or str(previous.get("reasonCode") or "") == "OBJECTION_VALUE_DEFENSE"
             return self._result(
                 CommercialObjectionType.PRICE_RESISTANCE, strength="MODERATE",
                 current=True, selling=allowed, authoritative=False,
@@ -135,7 +185,7 @@ class CommercialObjectionService:
                                 recovery_strategy="VALUE_DEFENSE",
                                 negative_contact_authorized=allowed)
         if self.CONTENT.search(text):
-            allowed = prior_attempts < 1
+            allowed = prior_attempts < 1 or str(previous.get("reasonCode") or "") == "OBJECTION_VALUE_DEFENSE"
             preference = (
                 "HOTTER" if re.search(r"\bhotter\b", text, re.I) else
                 "MORE_TEASING" if re.search(r"\bmore teasing\b", text, re.I)
@@ -148,7 +198,7 @@ class CommercialObjectionService:
                                 evidence=("CONTENT_MISMATCH_LANGUAGE",),
                                 constraints={"contentPreference": preference})
         if self.PRODUCT.search(text):
-            allowed = prior_attempts < 1
+            allowed = prior_attempts < 1 or str(previous.get("reasonCode") or "") == "OBJECTION_VALUE_DEFENSE"
             return self._result(CommercialObjectionType.PRODUCT_REJECTION,
                                 strength="MODERATE", current=True,
                                 selling=allowed, authoritative=False,

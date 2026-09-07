@@ -206,6 +206,7 @@ class CommercialFulfillmentRepository:
             ) AS photoshoot_asset_count,
             publication.publication_id,publication.provider,
             publication.external_product_id,
+            publication.publication_metadata,
             publication.publication_metadata#>>'{{media_link,url}}' AS delivery_url,
             publication.status AS publication_status,
             COALESCE(publication.provider_resource_status,'UNVERIFIED')

@@ -418,7 +418,7 @@ class CommerceSignalService:
                 or canonical_resource_id == provider_resource_id
             )
             status_allowed = item.status.value in (
-                {"PRESENTED", "CLICKED", "EXPIRED", "SUPERSEDED", "ADMIN_CLOSED", "UNKNOWN"}
+                {"PRESENTED", "CLICKED", "EXPIRED", "ABANDONED", "SUPERSEDED", "ADMIN_CLOSED", "UNKNOWN"}
                 if persistent else {"PRESENTED", "CLICKED"}
             )
             window_matches = (

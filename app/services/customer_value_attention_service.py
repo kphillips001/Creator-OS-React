@@ -299,11 +299,20 @@ class CustomerValueAttentionService:
             and repeated_failure_basis
             and (
                 risk == "HIGH"
-                or (direct and message_count >= 10)
+                or (
+                    (direct or meaningful_commercial_interest)
+                    and message_count >= 10
+                )
             )
         )
+        previously_throttled = bool(
+            purchase_count == 0
+            and repeated_failure_basis
+            and nurture_used >= nurture_budget
+        )
         nurture_bypass = bool(
-            low_cost_eligible and (direct or meaningful_commercial_interest)
+            (low_cost_eligible or previously_throttled)
+            and (direct or meaningful_commercial_interest)
         )
         low_cost_active = bool(
             low_cost_eligible
@@ -343,12 +352,24 @@ class CustomerValueAttentionService:
         else:
             retention, attention, effort = "NONE", "MEDIUM", "BALANCED"
 
-        # Buyer protection is meaningful, not unlimited. Repeated post-purchase
-        # rejection can taper a normal buyer, while high-value history remains protected.
-        if purchase_count and rejection_count >= 3 and not direct and not active_session:
+        # Buyer protection is meaningful, not unlimited. Durable passive
+        # nonconversion can taper current investment without fabricating an
+        # explicit rejection or erasing historical buyer value.
+        buyer_nonconversion_taper = bool(
+            purchase_count
+            and (failed_count >= 3 or rejection_count >= 3)
+            and not direct
+            and not active_session
+            and not active_unresolved_opportunity
+        )
+        if buyer_nonconversion_taper:
             attention = "MEDIUM"
             effort = "BALANCED" if value_tier in {"HIGH_VALUE", "WHALE"} else "COMPRESSED"
-            evidence.append("BUYER_REPEATED_NONCONVERSION_TAPER")
+            evidence.append(
+                "BUYER_REPEATED_EXPLICIT_REJECTION_TAPER"
+                if rejection_count >= 3
+                else "BUYER_REPEATED_PASSIVE_NONCONVERSION_TAPER"
+            )
         if explicit_disengagement:
             attention = "LOW"
             effort = "MINIMAL"
@@ -388,6 +409,35 @@ class CustomerValueAttentionService:
             )
             sales_pressure = "LOW"
             offer_cadence = "REENGAGEMENT_CAREFUL"
+
+        relationship_nurture_active = bool(
+            canonical_available
+            and value_tier in {"HIGH_VALUE", "WHALE"}
+            and buyer_protection
+            and not current_commercial_interest
+            and not active_intent
+            and not active_session
+            and not active_unresolved_opportunity
+            and not explicit_disengagement
+            and not repeated_hostility
+        )
+        relationship_nurture_reason = (
+            f"{value_tier}_NO_CURRENT_ACTIONABLE_COMMERCIAL_OPPORTUNITY"
+            if relationship_nurture_active else None
+        )
+        relationship_rewarming_active = bool(
+            canonical_available
+            and buyer_status == "VERIFIED_BUYER"
+            and lifecycle == "DORMANT_BUYER"
+            and current_inbound_activity
+            and not current_commercial_interest
+            and not active_intent
+            and not active_session
+            and not active_unresolved_opportunity
+            and not explicit_disengagement
+            and not repeated_hostility
+            and not backoff
+        )
 
         taper = effort in {"COMPRESSED", "MINIMAL"}
         hostility_reduced_investment = bool(
@@ -444,6 +494,15 @@ class CustomerValueAttentionService:
             last_purchase_at=self._iso(last_purchase),
             purchase_recency_days=recency,
             reactivation_state=reactivation_state,
+            relationship_rewarming_active=relationship_rewarming_active,
+            relationship_rewarming_objective=(
+                "BUYER_REWARMING" if relationship_rewarming_active else None
+            ),
+            relationship_rewarming_reason=(
+                "VERIFIED_DORMANT_BUYER_RETURNED_WITHOUT_CURRENT_COMMERCIAL_OPPORTUNITY"
+                if relationship_rewarming_active else None
+            ),
+            relationship_rewarming_commercial_reentry_allowed=True,
             commercial_momentum=momentum,
             attention_tier=attention, effort_mode=effort, time_waster_risk=risk,
             time_waster_evidence=tuple(dict.fromkeys(evidence)),
@@ -493,6 +552,13 @@ class CustomerValueAttentionService:
             memory_priority=memory_priority,
             sales_pressure=sales_pressure,
             offer_cadence=offer_cadence,
+            relationship_nurture_active=relationship_nurture_active,
+            relationship_nurture_reason=relationship_nurture_reason,
+            relationship_nurture_outcome=(
+                "ACTIVE_RELATIONSHIP_RETENTION"
+                if relationship_nurture_active else None
+            ),
+            relationship_nurture_commercial_reentry_allowed=True,
             current_commercial_interest=current_commercial_interest,
             historical_commercial_interest=historical_commercial_interest,
             commercial_trajectory_protection_active=trajectory_protection,

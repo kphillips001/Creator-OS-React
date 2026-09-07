@@ -42,6 +42,39 @@ class ScenarioRecoveryService:
               lease_expires_at TIMESTAMPTZ NOT NULL,completed_at TIMESTAMPTZ NULL,
               failure_reason TEXT NULL,
               PRIMARY KEY(scenario_id,scenario_attempt))""")
+            c.execute("""CREATE TABLE IF NOT EXISTS certification_scenario_attempt_allocations(
+              scenario_id TEXT NOT NULL,scenario_attempt INTEGER NOT NULL,
+              status TEXT NOT NULL DEFAULT 'ALLOCATED',snapshot_id UUID NULL,
+              allocated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+              PRIMARY KEY(scenario_id,scenario_attempt))""")
+            c.execute("""CREATE TABLE IF NOT EXISTS certification_scenario_turn_attempt_allocations(
+              scenario_id TEXT NOT NULL,scenario_attempt INTEGER NOT NULL,
+              logical_turn INTEGER NOT NULL,turn_attempt INTEGER NOT NULL,
+              allocated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+              PRIMARY KEY(scenario_id,scenario_attempt,logical_turn,turn_attempt))""")
+            c.execute("""INSERT INTO certification_scenario_turn_attempt_allocations(
+                scenario_id,scenario_attempt,logical_turn,turn_attempt)
+                SELECT scenario_id,scenario_attempt,logical_turn,turn_attempt
+                FROM certification_scenario_turn_attempts
+                ON CONFLICT DO NOTHING""")
+            c.execute("""INSERT INTO certification_scenario_turn_attempt_allocations(
+                scenario_id,scenario_attempt,logical_turn,turn_attempt)
+                SELECT scenario_id,scenario_attempt,logical_turn,turn_attempt
+                FROM certification_scenario_checkpoints
+                ON CONFLICT DO NOTHING""")
+            # Reconcile legacy authorities once.  Unlike execution leases and
+            # runtime rows, this ledger is intentionally never cleared by reset.
+            c.execute("""INSERT INTO certification_scenario_attempt_allocations(
+                scenario_id,scenario_attempt)
+                SELECT DISTINCT scenario_id,scenario_attempt FROM (
+                  SELECT scenario_id,scenario_attempt FROM certification_scenario_runs
+                    WHERE scenario_attempt > 1
+                  UNION SELECT scenario_id,scenario_attempt FROM certification_scenario_attempts
+                  UNION SELECT scenario_id,scenario_attempt FROM certification_scenario_turn_attempts
+                  UNION SELECT scenario_id,scenario_attempt FROM certification_scenario_execution_leases
+                  UNION SELECT scenario_id,scenario_attempt FROM certification_scenario_defects
+                ) authority WHERE scenario_attempt > 0
+                ON CONFLICT(scenario_id,scenario_attempt) DO NOTHING""")
 
     def claim_execution(self, scenario_id: str, scenario_attempt: int, *,
                         requested_start_turn: int, requested_end_turn: int,
@@ -188,15 +221,38 @@ class ScenarioRecoveryService:
 
     def start_attempt(self, scenario_id: str) -> int:
         with self.harness.connection() as c:
+            c.execute(
+                "SELECT pg_advisory_xact_lock(hashtext(%s))",
+                (f"session5-attempt-allocation:{scenario_id}",),
+            )
             value = c.execute("""SELECT GREATEST(
+                COALESCE((SELECT MAX(scenario_attempt) FROM certification_scenario_attempt_allocations WHERE scenario_id=%s),0),
+                COALESCE((SELECT MAX(scenario_attempt) FROM certification_scenario_runs WHERE scenario_id=%s AND scenario_attempt > 1),0),
                 COALESCE((SELECT MAX(scenario_attempt) FROM certification_scenario_attempts WHERE scenario_id=%s),0),
                 COALESCE((SELECT MAX(scenario_attempt) FROM certification_scenario_turn_attempts WHERE scenario_id=%s),0),
                 COALESCE((SELECT MAX(scenario_attempt) FROM certification_scenario_execution_leases WHERE scenario_id=%s),0)
-            )+1 AS value""", (scenario_id, scenario_id, scenario_id)).fetchone()
+            )+1 AS value""", (
+                scenario_id, scenario_id, scenario_id, scenario_id, scenario_id,
+            )).fetchone()
             attempt = int(value["value"])
+            c.execute("""INSERT INTO certification_scenario_attempt_allocations(
+                scenario_id,scenario_attempt,status)
+                VALUES (%s,%s,'ACTIVE')""", (scenario_id, attempt))
             c.execute("UPDATE certification_scenario_runs SET scenario_attempt=%s WHERE scenario_id=%s",
                       (attempt, scenario_id))
         return attempt
+
+    def link_snapshot(self, scenario_id: str, scenario_attempt: int,
+                      snapshot_id: str) -> None:
+        """Bind immutable snapshot provenance to its allocated attempt identity."""
+        with self.harness.connection() as c:
+            updated = c.execute("""UPDATE certification_scenario_attempt_allocations
+                SET snapshot_id=%s,status='ARCHIVED'
+                WHERE scenario_id=%s AND scenario_attempt=%s""", (
+                    snapshot_id, scenario_id, scenario_attempt,
+                )).rowcount
+        if updated != 1:
+            raise RuntimeError("SCENARIO_ATTEMPT_ALLOCATION_NOT_FOUND")
 
     def next_logical_turn(self, scenario_id: str, scenario_attempt: int) -> int:
         """Allocate from the immutable attempt ledger, never behavior projections."""
@@ -207,6 +263,37 @@ class ScenarioRecoveryService:
                     scenario_id, scenario_attempt,
                 )).fetchone()
         return int(row["value"])
+
+    def allocate_turn_attempt(self, scenario_id: str, scenario_attempt: int,
+                              logical_turn: int) -> int:
+        """Durably allocate one retry identity across every recorded status."""
+        with self.harness.connection() as c:
+            c.execute(
+                "SELECT pg_advisory_xact_lock(hashtext(%s))",
+                (f"session5-turn-attempt:{scenario_id}:{scenario_attempt}:{logical_turn}",),
+            )
+            row = c.execute("""SELECT GREATEST(
+                COALESCE((SELECT MAX(turn_attempt)
+                  FROM certification_scenario_turn_attempt_allocations
+                  WHERE scenario_id=%s AND scenario_attempt=%s AND logical_turn=%s),0),
+                COALESCE((SELECT MAX(turn_attempt)
+                  FROM certification_scenario_turn_attempts
+                  WHERE scenario_id=%s AND scenario_attempt=%s AND logical_turn=%s),0),
+                COALESCE((SELECT MAX(turn_attempt)
+                  FROM certification_scenario_checkpoints
+                  WHERE scenario_id=%s AND scenario_attempt=%s AND logical_turn=%s),0)
+            )+1 AS value""", (
+                scenario_id, scenario_attempt, logical_turn,
+                scenario_id, scenario_attempt, logical_turn,
+                scenario_id, scenario_attempt, logical_turn,
+            )).fetchone()
+            turn_attempt = int(row["value"])
+            c.execute("""INSERT INTO certification_scenario_turn_attempt_allocations(
+                scenario_id,scenario_attempt,logical_turn,turn_attempt)
+                VALUES (%s,%s,%s,%s)""", (
+                    scenario_id, scenario_attempt, logical_turn, turn_attempt,
+                ))
+        return turn_attempt
 
     def current_outbound_transcript(self, scenario_id: str,
                                     scenario_attempt: int) -> list[str]:
@@ -273,6 +360,21 @@ class ScenarioRecoveryService:
                 ORDER BY attempt.logical_turn DESC,attempt.turn_attempt DESC LIMIT 1""",
                 (scenario_id, scenario_attempt)).fetchone()
 
+    def latest_failed_precommit_turn(self, scenario_id: str,
+                                     scenario_attempt: int):
+        """Return the newest failed turn that is safe to replay from PRE_TURN."""
+        with self.harness.connection() as c:
+            return c.execute("""SELECT attempt.*,checkpoint.schema_name,
+                checkpoint.state AS checkpoint_state,checkpoint.sequences,
+                checkpoint.checkpoint_type,
+                checkpoint.created_at AS checkpoint_created_at
+                FROM certification_scenario_turn_attempts attempt
+                JOIN certification_scenario_checkpoints checkpoint USING(checkpoint_id)
+                WHERE attempt.scenario_id=%s AND attempt.scenario_attempt=%s
+                  AND attempt.status='FAILED_PRE_COMMIT'
+                ORDER BY attempt.logical_turn DESC,attempt.turn_attempt DESC LIMIT 1""",
+                (scenario_id, scenario_attempt)).fetchone()
+
     def turn_attempt_rows(self, scenario_id: str, scenario_attempt: int):
         with self.harness.connection() as c:
             return c.execute("""SELECT * FROM certification_scenario_turn_attempts
@@ -315,7 +417,17 @@ class ScenarioRecoveryService:
             ))
 
     def retry_boundary(self, scenario_id: str, scenario_attempt: int):
-        latest = self.latest_current_turn(scenario_id, scenario_attempt)
+        # A provider/generation failure occurs after the durable PRE_TURN
+        # snapshot but before a CURRENT turn exists. Prefer that explicit
+        # failed boundary; otherwise preserve the legacy operator-authorized
+        # replay of the latest committed turn.
+        latest = self.latest_failed_precommit_turn(
+            scenario_id, scenario_attempt,
+        )
+        if latest is None:
+            committed = self.latest_current_turn(scenario_id, scenario_attempt)
+            if committed is not None:
+                return False, "RETRY BLOCKED - LOGICAL TURN ALREADY COMMITTED", committed
         if not latest:
             return False, "NO VALID PRE_TURN CHECKPOINT", None
         with self.harness.connection() as c:
@@ -327,7 +439,8 @@ class ScenarioRecoveryService:
         return True, None, latest
 
     def restore(self, checkpoint_row, *,
-                preserve_tables=("certification_scenario_execution_leases",)):
+                preserve_tables=("certification_scenario_execution_leases",
+                                 "certification_scenario_turn_attempt_allocations")):
         schema_name = checkpoint_row["schema_name"]
         with self.harness.connection() as c:
             tables = [row["tablename"] for row in c.execute(
