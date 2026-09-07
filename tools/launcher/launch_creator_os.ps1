@@ -360,7 +360,7 @@ function Start-CreatorService {
 }
 
 function Invoke-WorkerSupervisor {
-    param([Parameter(Mandatory)][ValidateSet("start-enabled", "stop-managed", "monitor-telegram")][string]$Action)
+    param([Parameter(Mandatory)][ValidateSet("start-enabled", "stop-managed", "monitor-telegram", "rotate-logs")][string]$Action)
 
     $python = Get-Command "python.exe" -ErrorAction SilentlyContinue
     if ($null -eq $python) {
@@ -440,6 +440,9 @@ try {
         -Port $BackendPort `
         -HealthUrl $BackendHealthUrl `
         -TimeoutSeconds $ProcessStopTimeoutSeconds)
+
+    Set-LauncherStep -Name "rotate-logs"
+    Invoke-WorkerSupervisor -Action "rotate-logs"
 
     Set-LauncherStep -Name "start-backend"
     $backendIds = @(Start-CreatorService `

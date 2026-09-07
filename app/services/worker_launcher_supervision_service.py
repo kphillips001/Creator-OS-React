@@ -16,6 +16,7 @@ from typing import Any, Callable, Mapping
 
 from app.models.worker_heartbeat import WorkerHealthClassification, WorkerHeartbeatStatus
 from app.repositories.worker_heartbeat_repository import WorkerHeartbeatRepository
+from app.services.log_retention_service import LogRetentionService
 from app.services.worker_heartbeat_service import WorkerHeartbeatService
 
 
@@ -202,6 +203,7 @@ class WorkerLauncherSupervisionService:
     })
     def __init__(self, *, project_root: Path | None = None, environment: Mapping[str, str] | None = None,
                  process_adapter: Any | None = None, heartbeat_repository: Any | None = None,
+                 log_retention_service: Any | None = None,
                  sleep: Callable[[float], None] = time.sleep, now: Callable[[], datetime] | None = None):
         self.project_root = project_root or Path(__file__).resolve().parents[2]
         self.environment = environment if environment is not None else os.environ
@@ -210,6 +212,7 @@ class WorkerLauncherSupervisionService:
         self.sleep = sleep
         self.now = now or (lambda: datetime.now(timezone.utc))
         self.runtime_logs = self.project_root / "logs" / "runtime"
+        self.log_retention = log_retention_service or LogRetentionService(self.project_root / "logs")
         self.state_path = self.runtime_logs / "launcher_state.json"
         self.reload_log_path = self.runtime_logs / "dev_auto_reload.log"
         self._reload_snapshot: dict[str, tuple[int, int]] | None = None
@@ -250,6 +253,7 @@ class WorkerLauncherSupervisionService:
         cycles = 0
         try:
             while any(_enabled(self.environment.get(item.environment_switch)) for item in definitions):
+                self.enforce_log_retention()
                 for definition in definitions:
                     if _enabled(self.environment.get(definition.environment_switch)):
                         self.supervise_telegram_once(definition)
@@ -261,6 +265,16 @@ class WorkerLauncherSupervisionService:
         finally:
             for definition in definitions:
                 self._record_supervisor_pid(definition, None, expected_pid=os.getpid())
+
+    def enforce_log_retention(self) -> tuple[dict[str, Any], ...]:
+        results = self.log_retention.enforce()
+        return tuple({
+            "path": item.path,
+            "bytesBefore": item.bytes_before,
+            "bytesAfter": item.bytes_after,
+            "bytesRemoved": item.bytes_removed,
+            "rotated": item.rotated,
+        } for item in results if item.rotated)
 
     def poll_development_reload(self) -> dict[str, Any] | None:
         """Coalesce Python source edits and reload enabled workers in development."""
