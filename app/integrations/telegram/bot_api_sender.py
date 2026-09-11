@@ -19,6 +19,13 @@ class TelegramOutboundSendError(RuntimeError):
 
     code = "BUSINESS_SEND_REJECTED"
 
+    def __init__(self, message, *, http_status=None, telegram_error_code=None,
+                 telegram_description=None):
+        super().__init__(message)
+        self.http_status = http_status
+        self.telegram_error_code = telegram_error_code
+        self.telegram_description = telegram_description
+
 
 class TelegramOutboundSendAmbiguousError(ConnectionError):
     code = "BUSINESS_SEND_AMBIGUOUS"
@@ -134,8 +141,15 @@ class TelegramBotApiSender:
                 raise TelegramBusinessPeerUsageMissingError(
                     "Telegram Business peer is not currently reply-eligible."
                 )
+            status = getattr(response, "status_code", None)
+            error_code = payload.get("error_code") if isinstance(payload, Mapping) else None
             raise TelegramOutboundSendError(
-                "Telegram rejected the sendMessage request."
+                "Telegram rejected sendMessage "
+                f"(HTTP {status if status is not None else 'unknown'}, "
+                f"error_code {error_code if error_code is not None else 'unknown'}): "
+                f"{description or 'No provider description.'}",
+                http_status=status, telegram_error_code=error_code,
+                telegram_description=description or None,
             )
         result = payload.get("result")
         if not isinstance(result, Mapping):
@@ -157,12 +171,15 @@ class TelegramBotApiSender:
         )
         sender = dict(result.get("from") or {})
         sender_bot = dict(result.get("sender_business_bot") or {})
+        button_verified = (
+            provider_button.get("text") == button_label
+            and provider_button.get("url") == button_url
+        ) if button_label and button_url else not keyboard
         verified = all((
             result.get("business_connection_id") == business_connection_id,
             (result.get("chat") or {}).get("id") == chat_id,
             result.get("text") == message_text,
-            provider_button.get("text") == button_label,
-            provider_button.get("url") == button_url,
+            button_verified,
             expected_business_owner_user_id is None
             or sender.get("id") == expected_business_owner_user_id,
             expected_business_bot_id is None
@@ -174,11 +191,12 @@ class TelegramBotApiSender:
             )
         return TelegramBotSendReceipt(
             id=message_id, final_text=message_text,
-            actionable_destination_attached=True,
+            actionable_destination_attached=bool(button_label and button_url),
             provider_action_verified=True,
-            provider_markup_included=True,
-            provider_markup_verified=True,
-            attachment_mode="TELEGRAM_BUSINESS_INLINE_BUTTON",
+            provider_markup_included=bool(button_label and button_url),
+            provider_markup_verified=button_verified,
+            attachment_mode=("TELEGRAM_BUSINESS_INLINE_BUTTON"
+                             if button_label and button_url else "TELEGRAM_BUSINESS_TEXT"),
             business_connection_id=business_connection_id,
             sender_business_bot=sender_bot, sender=sender,
             provider_payload=dict(result),

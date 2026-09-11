@@ -1,0 +1,16 @@
+name = "avablackthorne-link"
+main = "worker.js"
+compatibility_date = "2026-09-08"
+workers_dev = false
+
+[vars]
+CREATOR_OS_INGEST_URL = "https://hooks.fanterix.com/api/v1/analytics/x-link-clicks/events"
+
+[[queues.producers]]
+binding = "X_LINK_CLICKS"
+queue = "ava-x-link-clicks"
+
+[[queues.consumers]]
+queue = "ava-x-link-clicks"
+dead_letter_queue = "ava-x-link-clicks-dlq"
+max_retries = 5

@@ -3,7 +3,7 @@ import { useEffect, useRef, useState, type ClipboardEvent, type DragEvent } from
 import { analyzeInspirationScene, enhanceCreativeTags, type InspirationSceneAnalysis } from "../../../infrastructure/api/contentStudioApi";
 import type { RecreateRuntimeState } from "../types/recreateRuntime";
 
-type Props = { disabled: boolean; onGenerate: (source: string, enhanced: string) => Promise<void>; onRuntimeChange: (state: RecreateRuntimeState) => void; onRuntimeReset: () => void };
+type Props = { disabled: boolean; onGenerate: (source: string, enhanced: string, diagnosticTraceId: string) => Promise<void>; onRuntimeChange: (state: RecreateRuntimeState) => void; onRuntimeReset: () => void };
 type Dimensions = { width: number; height: number } | null;
 const ACCEPT = ".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp";
 const SUPPORTED_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
@@ -66,6 +66,7 @@ export function RecreateWithAvaSection({ disabled, onGenerate, onRuntimeChange, 
   };
   const recreate = async () => {
     if (!file || disabled || runningRef.current) return;
+    const diagnosticTraceId = crypto.randomUUID();
     runningRef.current = true; setRunning(true); setError("");
     let activeStage = 0;
     try {
@@ -77,11 +78,11 @@ export function RecreateWithAvaSection({ disabled, onGenerate, onRuntimeChange, 
       const direction = serialize(value);
       activeStage = 2; onRuntimeChange({ activeStage, message: "Building creative direction", state: "running" });
       await Promise.resolve();
-      const enhancedDirection = await enhanceCreativeTags(direction, false, undefined, { origin: "recreate_with_ava" });
+      const enhancedDirection = await enhanceCreativeTags(direction, false, undefined, { origin: "recreate_with_ava", diagnosticTraceId });
       setEnhanced(enhancedDirection);
       activeStage = 3; onRuntimeChange({ activeStage, message: "Generating canonical prompt", state: "running" });
       activeStage = 4;
-      await onGenerate(direction, enhancedDirection);
+      await onGenerate(direction, enhancedDirection, diagnosticTraceId);
       onRuntimeChange({ activeStage: 6, message: "Generation complete", state: "complete" });
     } catch (reason) {
       const detail = reason instanceof Error ? reason.message : "Recreate With Ava failed. Please retry.";

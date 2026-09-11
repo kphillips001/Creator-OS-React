@@ -24,9 +24,10 @@ class Transport:
 
 
 class Inbound:
-    def __init__(self): self.payloads = []
-    def execute(self, payload):
+    def __init__(self): self.payloads = []; self.observe_only = []
+    def execute(self, payload, *, observe_only=False):
         self.payloads.append(payload)
+        self.observe_only.append(observe_only)
         return TelegramInboundResult(
             correlation_id=f"telegram:{payload.telegram_chat_id}:{payload.message_id}",
             telegram_chat_id=payload.telegram_chat_id,
@@ -105,7 +106,10 @@ def test_runtime_allows_exact_id_and_blocks_unknown_and_username_collision(
             telegram_username="same-name", message_text="hello", message_id=2,
         ))
     asyncio.run(exercise())
-    assert [item.telegram_user_id for item in inbound.payloads] == [TEST_USER_ID]
+    assert [item.telegram_user_id for item in inbound.payloads] == [
+        TEST_USER_ID, TEST_USER_ID + 1,
+    ]
+    assert inbound.observe_only == [False, True]
 
 
 def test_new_service_instance_preserves_env_allowlist_across_restart(monkeypatch):

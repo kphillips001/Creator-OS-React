@@ -1,6 +1,10 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import type { ReactElement } from "react";
+import { fireEvent, render as renderLibrary, screen, waitFor, within } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { PhotoshootViewer } from "./PhotoshootViewer";
+
+const render = (ui: ReactElement) => renderLibrary(<MemoryRouter>{ui}</MemoryRouter>);
 
 const detail = {
   deliverableId: "set-1", sessionId: "session-1", name: "Test Photoshoot",

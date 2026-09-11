@@ -301,12 +301,15 @@ class ContentStudioCreativeTagActionTests(unittest.TestCase):
         create_directions.assert_called_once_with(
             fanvue_account_id=2,
             diagnostic_trace_id="run-inspire",
+            guidance=None,
         )
         queued = execute_generation.call_args.args[1]
         self.assertEqual(queued.promptCount, 6)
         self.assertEqual(queued.provider, "seedream_5_0_pro")
         self.assertEqual(queued.promptBatch, [])
         self.assertIn("private direction 0", queued.promptSource)
+        self.assertEqual(queued.creativeMode, "premium_teaser")
+        self.assertEqual(queued.origin, "autonomous_inspiration")
 
     def test_transform_actions_delegate_to_existing_services(self):
         enhanced = _enhance_tags(TransformTagsRequest(tags="  hotel robe  "))

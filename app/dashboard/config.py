@@ -19,6 +19,9 @@ def load_dashboard_config():
     behavior_config.setdefault("bot_enabled", False)
     behavior_config.setdefault("dashboard_theme", "light")
     behavior_config.setdefault("manual_pause_enabled", False)
+    # Canonical global commercial permissions. Missing legacy values fail closed.
+    behavior_config.setdefault("content_selling_enabled", False)
+    behavior_config.setdefault("session_selling_enabled", False)
     behavior_config.setdefault("modules", {})
 
     # =========================

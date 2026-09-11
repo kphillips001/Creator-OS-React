@@ -145,6 +145,7 @@ def test_gateway_fails_closed_when_paid_session_context_cannot_be_built():
         reason_code=CustomerSalesReasonCode.NO_ACTIVE_OFFER,
         buyer_stage=CustomerBuyerStage.PROSPECT,
         active_offer_status=None, active_offer_conversion_state="NONE",
+        active_purchase_intent_id=None, active_offering_id=None,
         recommended_offering_id=action.selected_offering_id,
         recommended_offering_title="Current unlock",
         recommended_offering_price_minor=999,
@@ -153,6 +154,7 @@ def test_gateway_fails_closed_when_paid_session_context_cannot_be_built():
         recommended_photoshoot_experience=None,
         recommended_product_context={"sellingMode": "SESSION"},
         next_sales_action=action, bundle_sales_context=None,
+        decision_metadata={},
     )
     runtime = gateway._commerce_runtime_injection(decision)
     assert runtime["authoritative_selection_missing"] is True

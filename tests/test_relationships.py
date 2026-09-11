@@ -1,0 +1,171 @@
+from datetime import datetime,timezone,timedelta
+
+import pytest
+from fastapi import HTTPException
+from app.api import relationships as relationships_api
+from app.services.relationships_service import RelationshipsService
+
+BASE=datetime(2026,9,6,12,tzinfo=timezone.utc)
+
+class PeopleRepo:
+ def people(self,**_): return [
+  {"telegram_user_id":1,"username":"NewName","display_name":"Alex","mapping_id":None,"verification_status":None,"mapping_active":None,"relationship_state":{}},
+  {"telegram_user_id":2,"username":None,"display_name":None,"mapping_id":2,"verification_status":"VERIFIED","mapping_active":True,"local_fanvue_user_id":4,"external_fanvue_user_uuid":"buyer","customer_commerce_profile_id":"profile","profile_state":"REPEAT_BUYER","lifetime_gross_minor":5000,"purchase_count":2},
+  {"telegram_user_id":3,"username":"maybe","display_name":None,"mapping_id":3,"verification_status":"PENDING","mapping_active":True,"profile_state":"HIGH_VALUE","lifetime_gross_minor":99999,"purchase_count":9}]
+ def inbound_events(self,**_): return [
+  {"telegram_user_id":1,"event_key":"in-1","occurred_at":BASE,"source":"ordinary"},
+  {"telegram_user_id":1,"event_key":"in-1","occurred_at":BASE,"source":"chat"},
+  {"telegram_user_id":2,"event_key":"in-2","occurred_at":BASE+timedelta(hours=1),"source":"chat"},
+  {"telegram_user_id":3,"event_key":"in-3","occurred_at":BASE-timedelta(hours=1),"source":"chat"}]
+ def ava_events(self,**_): return []
+ def current_customer_state(self,**_): return {2:{"active_purchase_intent":True,"active_sales_session":True}}
+
+class MessageRepo:
+ def latest_messages(self,**_):
+  return {user:self.messages(telegram_user_id=user)[-1] for user in (1,2,3)}
+ def messages(self,telegram_user_id,**_):
+  offset={1:0,2:1,3:-1}[telegram_user_id]
+  return [{"event_key":f"{telegram_user_id}-{i}","direction":"CUSTOMER" if i%2==0 else "AVA","content":f"message {i}","occurred_at":BASE+timedelta(hours=offset,seconds=i),"telegram_message_id":i,"message_type":"ORDINARY_CHAT","purchase_intent_id":None} for i in range(6)]
+
+def service(): return RelationshipsService(people_repository=PeopleRepo(),messages_repository=MessageRepo())
+
+def test_inventory_includes_mapped_unmapped_no_username_and_orders_latest():
+ result=service().list(creator_profile_id=7,fanvue_account_id=8)
+ assert [row["telegramUserId"] for row in result["items"]]==[2,1,3]
+ assert result["items"][0]["buyerStatus"]=="REPEAT_BUYER"
+ assert result["items"][1]["identityStatus"]=="UNMAPPED"
+ assert result["items"][2]["buyerStatus"] is None
+
+def test_inventory_search_is_case_insensitive_and_supports_numeric_id():
+ assert [r["telegramUserId"] for r in service().list(creator_profile_id=7,fanvue_account_id=8,search="alex")["items"]]==[1]
+ assert [r["telegramUserId"] for r in service().list(creator_profile_id=7,fanvue_account_id=8,search="2")["items"]]==[2]
+
+def test_inventory_cursor_paginates_without_duplicate_people():
+ first=service().list(creator_profile_id=7,fanvue_account_id=8,limit=2)
+ second=service().list(creator_profile_id=7,fanvue_account_id=8,limit=2,cursor=first["nextCursor"])
+ assert len(first["items"])==2 and len(second["items"])==1
+ assert {r["personKey"] for r in first["items"]}.isdisjoint({r["personKey"] for r in second["items"]})
+
+def test_explicit_latest_activity_matches_default():
+ default=service().list(creator_profile_id=7,fanvue_account_id=8)
+ explicit=service().list(creator_profile_id=7,fanvue_account_id=8,sort="LATEST_ACTIVITY")
+ assert [r["personKey"] for r in default["items"]]==[r["personKey"] for r in explicit["items"]]
+
+def test_lifetime_spend_uses_verified_value_then_activity_and_stable_identity():
+ result=service().list(creator_profile_id=7,fanvue_account_id=8,sort="LIFETIME_SPEND")
+ assert [r["telegramUserId"] for r in result["items"]]==[2,1,3]
+ assert result["items"][1]["lifetimeVerifiedRevenueMinor"] is None
+ assert result["items"][2]["lifetimeVerifiedRevenueMinor"] is None
+
+def test_search_sort_and_pagination_compose_deterministically():
+ first=service().list(creator_profile_id=7,fanvue_account_id=8,search="2",
+                      sort="LIFETIME_SPEND",limit=1)
+ assert [r["telegramUserId"] for r in first["items"]]==[2]
+ assert first["sort"]=="LIFETIME_SPEND"
+
+class InboxRepo(MessageRepo):
+ def inbox_state(self,**_): return {
+  1:{"control_mode":"HUMAN_OPERATOR","last_customer_inbound_at":BASE+timedelta(minutes=2),"last_visible_outbound_at":BASE},
+  2:{"control_mode":"AVA_AUTO","last_customer_inbound_at":BASE,"last_visible_outbound_at":BASE+timedelta(minutes=1)},
+  3:{"control_mode":"AVA_AUTO","last_customer_inbound_at":BASE,"last_visible_outbound_at":None}}
+
+def inbox_service(): return RelationshipsService(people_repository=PeopleRepo(),messages_repository=InboxRepo())
+
+def test_inbox_summary_and_deterministic_attention_use_confirmed_timestamps():
+ result=inbox_service().list(creator_profile_id=7,fanvue_account_id=8)
+ assert result["summary"]=={"total":3,"needsAttention":2,"buyers":1,"prospects":2,"manual":1}
+ assert next(row for row in result["items"] if row["telegramUserId"]==1)["needsAttention"] is True
+ assert next(row for row in result["items"] if row["telegramUserId"]==2)["needsAttention"] is False
+
+@pytest.mark.parametrize("selected,expected",[
+ ("NEEDS_ATTENTION",{1,3}),("BUYERS",{2}),("PROSPECTS",{1,3}),
+ ("MANUAL",{1}),("ACTIVE_SESSION",{2}),("ACTIVE_INTENT",{2})])
+def test_inbox_filters_compose_with_canonical_projection(selected,expected):
+ result=inbox_service().list(creator_profile_id=7,fanvue_account_id=8,filter=selected)
+ assert {row["telegramUserId"] for row in result["items"]}==expected
+
+def test_search_sort_and_filter_compose():
+ result=inbox_service().list(creator_profile_id=7,fanvue_account_id=8,
+  search="alex",sort="LIFETIME_SPEND",filter="MANUAL")
+ assert [row["telegramUserId"] for row in result["items"]]==[1]
+
+
+def test_transcript_loads_latest_then_eventually_reaches_first_in_order():
+ latest=service().messages(creator_profile_id=7,fanvue_account_id=8,telegram_user_id=1,limit=2)
+ older=service().messages(creator_profile_id=7,fanvue_account_id=8,telegram_user_id=1,limit=2,cursor=latest["olderCursor"])
+ first=service().messages(creator_profile_id=7,fanvue_account_id=8,telegram_user_id=1,limit=2,cursor=older["olderCursor"])
+ combined=first["items"]+older["items"]+latest["items"]
+ assert [m["content"] for m in combined]==[f"message {i}" for i in range(6)]
+ assert first["hasMoreOlder"] is False
+
+def test_unknown_account_scoped_person_is_rejected():
+ with pytest.raises(LookupError): service().messages(creator_profile_id=7,fanvue_account_id=8,telegram_user_id=99)
+
+class IntelligenceRepo(MessageRepo):
+ def intelligence(self,telegram_user_id,**_):
+  if telegram_user_id==1:
+   return {"intents":[],"purchases":[],"active_session":None,
+           "prospect":{"preference_state":{"records":[
+            {"status":"current","category":"fact","key":"location","value":"Austin"},
+            {"status":"current","category":"pet","key":"pet_name","value":"Milo"}]}}}
+  return {"intents":[
+   {"status":"PURCHASED","presented_at":BASE,"confirmed_delivery":True,"expected_price_minor":2500,"title":"Gold Set","offering_type":"PHOTOSET"},
+   {"status":"EXPIRED","presented_at":BASE-timedelta(days=1),"confirmed_delivery":True,"expected_price_minor":1800,"title":"Night Set","offering_type":"BUNDLE"},
+   {"status":"PURCHASED","presented_at":BASE-timedelta(hours=1),"confirmed_delivery":False,"expected_price_minor":2200,"title":"Unconfirmed Send","offering_type":"PHOTOSET"},
+   {"status":"PURCHASED","presented_at":None,"confirmed_delivery":False,"expected_price_minor":900,"title":"Undelivered","offering_type":"VIDEO"}],
+   "purchases":[
+    {"payment_timestamp":BASE,"gross_minor":2500,"title":"Gold Set","offering_type":"PHOTOSET","ownership_confirmed":True},
+    {"payment_timestamp":BASE-timedelta(days=2),"gross_minor":2500,"title":None,"offering_type":None}],
+   "active_session":{"state":"CONTINUING","progression_stage":"CORE","commercial_foundation_type":"PHOTOSHOOT"},
+   "prospect":{"preference_state":{"records":[]},"relationship_state":{}}}
+
+def intelligence_service():
+ return RelationshipsService(people_repository=PeopleRepo(),messages_repository=IntelligenceRepo())
+
+def test_verified_intelligence_uses_canonical_value_and_strict_offer_lifecycle():
+ result=intelligence_service().intelligence(creator_profile_id=7,fanvue_account_id=8,telegram_user_id=2)
+ assert result["customerValue"]["valueTier"]=="REPEAT_BUYER"
+ assert result["customerValue"]["purchaseCount"]==2
+ assert result["salesPerformance"]=={
+  "offersPresented":2,"offersPurchased":1,"offersNotPurchased":1,
+  "conversionRate":.5,"lastOffer":result["salesPerformance"]["lastOffer"],
+  "lastPurchase":result["salesPerformance"]["lastPurchase"]}
+ assert result["salesPerformance"]["lastOffer"]["title"]=="Gold Set"
+ assert len(result["purchaseHistory"])==2
+ assert result["purchaseHistory"][0]["ownershipStatus"]=="OWNED"
+ assert result["purchaseHistory"][1]["ownershipStatus"] is None
+ assert result["commercialState"]["activeSalesSession"]["state"]=="CONTINUING"
+
+def test_historical_purchase_without_presented_intent_is_not_conversion_numerator():
+ result=intelligence_service().intelligence(creator_profile_id=7,fanvue_account_id=8,telegram_user_id=2)
+ assert len(result["purchaseHistory"])==2
+ assert result["salesPerformance"]["offersPurchased"]==1
+
+def test_unmapped_prospect_returns_partial_memory_and_no_invented_value():
+ result=intelligence_service().intelligence(creator_profile_id=7,fanvue_account_id=8,telegram_user_id=1)
+ assert result["partial"] is True
+ assert result["customerValue"]["valueTier"] is None
+ assert result["customerValue"]["lifetimeSpendMinor"] is None
+ assert result["salesPerformance"]["conversionRate"] is None
+ assert result["relationshipIntelligence"]["location"]=="Austin"
+ assert result["relationshipIntelligence"]["pets"]==["Milo"]
+
+def test_unknown_scoped_person_cannot_load_intelligence():
+ with pytest.raises(LookupError):
+  intelligence_service().intelligence(creator_profile_id=7,fanvue_account_id=8,telegram_user_id=99)
+
+def test_intelligence_endpoint_rejects_projection_key_outside_active_scope(monkeypatch):
+ monkeypatch.setattr(relationships_api,"_snapshot_scope",lambda:(7,8))
+ with pytest.raises(HTTPException) as error:
+  relationships_api.relationship_intelligence("telegram:99:8:1")
+ assert error.value.status_code==404
+
+def test_intelligence_endpoint_passes_only_validated_scope(monkeypatch):
+ calls=[]
+ class ScopedService:
+  def intelligence(self,**values):
+   calls.append(values);return {"partial":True}
+ monkeypatch.setattr(relationships_api,"_snapshot_scope",lambda:(7,8))
+ monkeypatch.setattr(relationships_api,"RelationshipsService",ScopedService)
+ assert relationships_api.relationship_intelligence("telegram:7:8:1")=={"partial":True}
+ assert calls==[{"creator_profile_id":7,"fanvue_account_id":8,"telegram_user_id":1}]

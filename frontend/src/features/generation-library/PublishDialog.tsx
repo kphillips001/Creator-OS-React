@@ -1,5 +1,5 @@
 import { X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { LibraryImage } from "./LibraryImage";
 import type { CaptionTheme, GenerationRecord, PublishContext, PublishDestination } from "./types";
@@ -34,10 +34,21 @@ export function PublishDialog({ record, onClose, onPublished }: {
   const [selectedCtas, setSelectedCtas] = useState<TelegramCta[]>([]);
   const [selectedXAccounts, setSelectedXAccounts] = useState<string[]>([]);
   const [xAutoRepliesEnabled, setXAutoRepliesEnabled] = useState(true);
+  const [xThreadCtaEnabled, setXThreadCtaEnabled] = useState(true);
+  const [xThreadCtaText, setXThreadCtaText] = useState("");
+  const [xThreadCtaUrl, setXThreadCtaUrl] = useState("https://avablackthorne.com/me");
+  const publishOperationId = useRef("");
   const [sameXCaption, setSameXCaption] = useState(true);
   const [xDrafts, setXDrafts] = useState<Record<string, XCaptionDraft>>({});
   const [pending, setPending] = useState<"load" | "captions" | "publish" | "">("load");
   const [error, setError] = useState("");
+
+  if (!publishOperationId.current) {
+    const storageKey = `generation-library:x-publish-operation:${record.image_id}`;
+    const existing = sessionStorage.getItem(storageKey);
+    publishOperationId.current = existing || crypto.randomUUID();
+    if (!existing) sessionStorage.setItem(storageKey, publishOperationId.current);
+  }
 
   useEffect(() => {
     const controller = new AbortController();
@@ -129,7 +140,9 @@ export function PublishDialog({ record, onClose, onPublished }: {
       : Boolean(caption.trim())
   );
   const canPublish = Boolean(context && destinationAvailable && destination && !busy && (
-    destination === "x" ? xCaptionsComplete : caption.trim()
+    destination === "x"
+      ? xCaptionsComplete && (!xThreadCtaEnabled || xThreadCtaUrl.trim())
+      : caption.trim()
   ));
 
   const publish = async () => {
@@ -141,7 +154,10 @@ export function PublishDialog({ record, onClose, onPublished }: {
     const payload = destination === "instagram" ? { caption } : {
       destination, caption, captionResultId, selectedGeneratedCaption,
       ctaEnabled, selectedCtas: ctaEnabled ? (["VAULT", "CHAT", "TIP"] as TelegramCta[]).filter((value) => selectedCtas.includes(value)) : [],
-      ...(destination === "x" ? { xAutoRepliesEnabled } : {}),
+      ...(destination === "x" ? {
+        xAutoRepliesEnabled, xThreadCtaEnabled, xThreadCtaText, xThreadCtaUrl,
+        publishOperationId: publishOperationId.current,
+      } : {}),
       ...(destination === "x" ? { xTargets: selectedXAccounts.map((accountName) => {
         const draft = separateXCaptions ? (xDrafts[accountName] || emptyXDraft()) : {
           caption, captionResultId, selectedGeneratedCaption,
@@ -177,6 +193,9 @@ export function PublishDialog({ record, onClose, onPublished }: {
         const message = result.error || detail || responseBody || `HTTP ${response.status} ${response.statusText}`;
         throw new Error(result.exceptionType ? `${result.exceptionType}: ${message}` : message);
       }
+      if (destination === "x") {
+        sessionStorage.removeItem(`generation-library:x-publish-operation:${record.image_id}`);
+      }
       onPublished(result.message || `Published to ${destinationLabel}.`);
     } catch (reason: unknown) {
       const exceptionType = reason instanceof Error ? reason.name : typeof reason;
@@ -208,7 +227,9 @@ export function PublishDialog({ record, onClose, onPublished }: {
             </div>{destination === "x" && <div className="publish-dialog__x-accounts" aria-label="X accounts">
               {(context.xAccounts || []).filter(({ accountName }) => accountName !== "AvaBlackthorneX").map((account) => <label key={account.accountName}><input checked={selectedXAccounts.includes(account.accountName)} disabled={busy} onChange={(event) => toggleXAccount(account.accountName, event.target.checked)} type="checkbox" /><span>{account.label}</span></label>)}
               <label><input checked={xAutoRepliesEnabled} disabled={busy} onChange={(event) => setXAutoRepliesEnabled(event.target.checked)} type="checkbox" /><span>Enable X-AUTO replies</span></label>
+              <label><input checked={xThreadCtaEnabled} disabled={busy} onChange={(event) => setXThreadCtaEnabled(event.target.checked)} type="checkbox" /><span>Add Telegram CTA as thread</span></label>
             </div>}</section>
+            {destination === "x" && xThreadCtaEnabled && <section className="publish-dialog__telegram-options"><label className="publish-dialog__editor"><span>CTA text</span><input disabled={busy} onChange={(event) => setXThreadCtaText(event.target.value)} type="text" value={xThreadCtaText} /></label><label className="publish-dialog__editor"><span>CTA URL</span><input disabled={busy} onChange={(event) => setXThreadCtaUrl(event.target.value)} type="url" value={xThreadCtaUrl} /></label></section>}
             {destination === "x" && selectedXAccounts.length === 2 && <section className="publish-dialog__telegram-options"><label><input checked={sameXCaption} disabled={busy} onChange={(event) => setSameXCaption(event.target.checked)} type="checkbox" /> Use same caption for both accounts</label></section>}
             {!separateXCaptions && <><section><h3>Caption controls</h3><p>Generate image-aware captions with Caption Studio, or enter your own caption below.</p><div className="publish-dialog__actions">
               <button disabled={busy} onClick={() => generateCaptions(false)} type="button">Generate Captions</button>

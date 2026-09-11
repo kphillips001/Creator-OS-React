@@ -25,13 +25,15 @@ if "psycopg" not in sys.modules:
     sys.modules["psycopg.errors"] = errors
 
 from app.models.creative_director import PromptPlan
-from app.models.generation_engine import GenerationStatus
+from app.models.generation_engine import GenerationRequest, GenerationStatus
+from app.models.render_policy import RenderPolicy
 from app.providers.generation.base import GenerationProviderError, WaveSpeedProviderBase
 from app.providers.generation.nano_banana_provider import NanoBananaProvider
 from app.providers.generation.provider_registry import ProviderRegistry, create_default_registry
 from app.providers.generation.seedream_provider import Seedream45Provider, Seedream50ProProvider
 from app.providers.generation.wan_provider import WanImageEditProvider
 from app.services.generation_engine_service import GenerationEngineService
+from app.services.generation_request_diagnostic_service import GenerationRequestDiagnosticService
 
 
 class FakeResponse:
@@ -130,6 +132,179 @@ class GenerationProviderTests(unittest.TestCase):
         self.assertEqual(result.count("EXPLICIT EXPRESSION PROFILE"), 1)
         self.assertEqual(result.count("CANONICAL AVA FACIAL NATURALISM"), 1)
         self.assertNotIn("EXPLICIT EXPRESSION VARIATION:", result)
+
+    @staticmethod
+    def recreate_request(expression: str | None, *, trace_id: str | None = None):
+        expression_line = f"Expression: {expression}" if expression is not None else "Mood: intimate"
+        return GenerationRequest(
+            request_id="recreate_request", creator_profile_id=2,
+            prompt_plan_id="recreate_plan",
+            prompt_text=f"Scene: bedroom, {expression_line}, Camera Framing: medium",
+            reference_asset_id=93,
+            reference_asset_path="D:/Ava_CMS/vault/originals/images/93.png",
+            provider_id="seedream_5_0_pro", generation_type="IMAGE_TO_IMAGE",
+            media_type="IMAGE", image_count=1,
+            metadata={
+                "workflow_origin": "recreate_with_ava",
+                "recreate_source_expression_authoritative": expression is not None,
+                "render_policy": RenderPolicy.CONTENT_SPICY.value,
+                "canonical_reference_image_url": "https://cdn.test/asset-93.png",
+                "reference_image_url": "https://cdn.test/asset-93.png",
+                **({"diagnostic_trace_id": trace_id} if trace_id else {}),
+            },
+        )
+
+    def test_recreate_explicit_expressions_are_authoritative(self):
+        provider = Seedream50ProProvider(api_key="test-key", http_client=FakeHttpClient())
+        for expression in (
+            "subtle closed-mouth smile",
+            "parted lips",
+            "neutral expression",
+            "serious focused expression",
+        ):
+            with self.subTest(expression=expression):
+                rendered = provider._render_prompt_text(self.recreate_request(expression))
+                self.assertIn(f"Expression: {expression}", rendered)
+                self.assertNotIn("EXPLICIT EXPRESSION VARIATION:", rendered)
+
+    def test_recreate_without_explicit_expression_keeps_deterministic_fallback(self):
+        provider = Seedream50ProProvider(api_key="test-key", http_client=FakeHttpClient())
+        rendered = provider._render_prompt_text(self.recreate_request(None))
+        self.assertIn("EXPLICIT EXPRESSION VARIATION:", rendered)
+
+    @staticmethod
+    def autonomous_inspiration_request(
+        prompt: str, *, operator_guidance: str | None = None,
+        trace_id: str | None = None,
+    ):
+        metadata = {
+            "workflow_origin": "autonomous_inspiration",
+            "render_policy": RenderPolicy.CONTENT_SPICY.value,
+            "canonical_reference_image_url": "https://cdn.test/asset-93.png",
+            "reference_image_url": "https://cdn.test/asset-93.png",
+            **({"operator_guidance": operator_guidance} if operator_guidance else {}),
+            **({"diagnostic_trace_id": trace_id} if trace_id else {}),
+        }
+        return GenerationRequest(
+            request_id="inspire_request", creator_profile_id=2,
+            prompt_plan_id="inspire_plan", prompt_text=prompt,
+            reference_asset_id=93,
+            reference_asset_path="D:/Ava_CMS/vault/originals/images/93.png",
+            provider_id="seedream_5_0_pro", generation_type="IMAGE_TO_IMAGE",
+            media_type="IMAGE", image_count=6, metadata=metadata,
+        )
+
+    def test_inspire_me_uses_natural_expression_fallback(self):
+        provider = Seedream50ProProvider(api_key="test-key", http_client=FakeHttpClient())
+        rendered = provider._render_prompt_text(
+            self.autonomous_inspiration_request("Ava relaxes indoors in warm window light.")
+        )
+        self.assertIn("INSPIRE ME NATURAL EXPRESSION NUANCE:", rendered)
+        self.assertNotIn("EXPLICIT EXPRESSION VARIATION:", rendered)
+        self.assertIn(
+            "Preserve any expression, gaze direction, eye behavior, and mouth state already specified by the authoritative scene. "
+            "Use this expression profile only for details the scene leaves unspecified. The scene wins.",
+            rendered,
+        )
+        self.assertIn("CANONICAL AVA FACIAL NATURALISM - NON-NEGOTIABLE:", rendered)
+
+    def test_failed_inspire_batch_scene_expressions_remain_authoritative(self):
+        provider = Seedream50ProProvider(api_key="test-key", http_client=FakeHttpClient())
+        scenes = (
+            "Ava looks toward the horizon with a quietly engaged expression.",
+            "Ava turns in profile with an easy half-smile.",
+            "Ava rests by the window with a soft relaxed smile.",
+            "Ava gives a playful glance toward camera.",
+            "Ava stands casually with an unposed soft smile.",
+            "Ava watches the rain with a neutral expression.",
+        )
+        legacy_performance_terms = (
+            "lower-lip bite", "bedroom-alert", "salacious", "seductive eyes",
+            "teasing grin", "parted lips", "naughty facial performance",
+        )
+        for scene in scenes:
+            with self.subTest(scene=scene):
+                rendered = provider._render_prompt_text(self.autonomous_inspiration_request(scene))
+                self.assertIn(scene, rendered)
+                self.assertIn("The scene wins.", rendered)
+                self.assertNotIn("EXPLICIT EXPRESSION VARIATION:", rendered)
+                natural_profile = rendered.split("Natural profile: ", 1)[1].split(".\n", 1)[0].lower()
+                for term in legacy_performance_terms:
+                    self.assertNotIn(term, natural_profile)
+
+    def test_inspire_natural_expression_variety_is_deterministic_and_restrained(self):
+        directives = {
+            WaveSpeedProviderBase._autonomous_inspiration_expression_directive(
+                f"Ava explores a different naturally lit room {index}."
+            ).split("Natural profile: ", 1)[1].split(".\n", 1)[0]
+            for index in range(24)
+        }
+        bank = {profile for _weight, profile in WaveSpeedProviderBase.AUTONOMOUS_INSPIRATION_EXPRESSION_PROFILES}
+        self.assertGreaterEqual(len(directives), 2)
+        self.assertTrue(directives.issubset(bank))
+
+    def test_guidance_does_not_change_inspire_expression_routing(self):
+        provider = Seedream50ProProvider(api_key="test-key", http_client=FakeHttpClient())
+        prompt = "Ava smiles softly on a warm balcony in tight daisy duke shorts."
+        unguided = provider._render_prompt_text(self.autonomous_inspiration_request(prompt))
+        guided = provider._render_prompt_text(
+            self.autonomous_inspiration_request(prompt, operator_guidance="Still very warm weather")
+        )
+        self.assertEqual(guided, unguided)
+
+    def test_inspire_stage_12_keeps_provider_reference_policy_and_six_image_contract(self):
+        provider = Seedream50ProProvider(api_key="test-key", http_client=FakeHttpClient())
+        request = self.autonomous_inspiration_request(
+            "Ava gives an easy half-smile in a sunny kitchen.", trace_id="inspire-stage-12",
+        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            trace_path = Path(temp_dir) / "traces.json"
+            with patch.object(GenerationRequestDiagnosticService, "storage_path", trace_path):
+                payload = provider.build_payload(request)
+            traces = __import__("json").loads(trace_path.read_text(encoding="utf-8"))
+        events = traces["inspire-stage-12"]["events"]
+        stage_12 = next(event["value"] for event in events if event["stage"] == "12_final_provider_prompt")
+        self.assertEqual(request.metadata["render_policy"], RenderPolicy.CONTENT_SPICY.value)
+        self.assertEqual(request.reference_asset_id, 93)
+        self.assertEqual(request.image_count, 6)
+        self.assertEqual(provider.provider_id, "seedream_5_0_pro")
+        self.assertEqual(payload["images"], ["https://cdn.test/asset-93.png"])
+        self.assertEqual(payload["output_format"], "png")
+        self.assertIn("easy half-smile", stage_12)
+        self.assertIn("INSPIRE ME NATURAL EXPRESSION NUANCE:", stage_12)
+
+    def test_non_inspire_explicit_workflow_keeps_adult_expression_bank(self):
+        provider = Seedream50ProProvider(api_key="test-key", http_client=FakeHttpClient())
+        request = self.autonomous_inspiration_request("Ava poses in an explicit private scene.")
+        request = GenerationRequest(**{
+            **request.__dict__,
+            "metadata": {**dict(request.metadata), "workflow_origin": "explicit_content"},
+        })
+        rendered = provider._render_prompt_text(request)
+        self.assertIn("EXPLICIT EXPRESSION VARIATION:", rendered)
+        self.assertNotIn("INSPIRE ME NATURAL EXPRESSION NUANCE:", rendered)
+
+    def test_recreate_seedream_payload_has_only_asset_93_and_records_stages_11_and_13(self):
+        provider = Seedream50ProProvider(api_key="test-key", http_client=FakeHttpClient())
+        with tempfile.TemporaryDirectory() as temp_dir:
+            trace_path = Path(temp_dir) / "traces.json"
+            with patch.object(GenerationRequestDiagnosticService, "storage_path", trace_path):
+                payload = provider.build_payload(
+                    self.recreate_request("neutral expression", trace_id="recreate-trace"),
+                )
+            traces = __import__("json").loads(trace_path.read_text(encoding="utf-8"))
+        self.assertEqual(provider.provider_id, "seedream_5_0_pro")
+        self.assertEqual(self.recreate_request("neutral expression").reference_asset_id, 93)
+        self.assertEqual(payload["images"], ["https://cdn.test/asset-93.png"])
+        self.assertEqual(payload["output_format"], "png")
+        self.assertNotIn("inspiration", " ".join(payload["images"]).lower())
+        events = traces["recreate-trace"]["events"]
+        by_stage = {event["stage"]: event["value"] for event in events}
+        self.assertEqual(
+            by_stage["11_ordered_provider_reference_images"],
+            ["https://cdn.test/asset-93.png"],
+        )
+        self.assertEqual(by_stage["13_final_seedream_payload"], payload)
 
     def make_engine(self, registry):
         temp_dir = tempfile.TemporaryDirectory()

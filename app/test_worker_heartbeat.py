@@ -1,6 +1,7 @@
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from app.models.worker_heartbeat import WorkerHealthClassification, WorkerHeartbeatStatus
 from app.services.worker_heartbeat_service import WorkerHeartbeatService
@@ -62,6 +63,25 @@ def test_classification_requires_recent_heartbeat_and_honors_terminal_state():
     assert service.classify(replace(heartbeat, status=WorkerHeartbeatStatus.STOPPED), stale_threshold_seconds=60, now=NOW) == WorkerHealthClassification.STOPPED
     assert service.classify(replace(heartbeat, status=WorkerHeartbeatStatus.FAILED), stale_threshold_seconds=60, now=NOW) == WorkerHealthClassification.FAILED
     assert service.classify(None, stale_threshold_seconds=60, now=NOW) == WorkerHealthClassification.UNKNOWN
+
+
+def test_classification_accepts_aware_non_utc_and_legacy_naive_utc_heartbeats():
+    repo = MemoryRepository(); heartbeat = build(repo).register_startup()
+    chicago_last = NOW.astimezone(ZoneInfo("America/Chicago"))
+    aware = replace(heartbeat, status=WorkerHeartbeatStatus.RUNNING,
+                    last_heartbeat_at=chicago_last)
+    assert WorkerHeartbeatService.classify(
+        aware, stale_threshold_seconds=60, now=NOW,
+    ) == WorkerHealthClassification.HEALTHY
+    legacy = replace(heartbeat, status=WorkerHeartbeatStatus.RUNNING,
+                     last_heartbeat_at=NOW.replace(tzinfo=None))
+    assert WorkerHeartbeatService.classify(
+        legacy, stale_threshold_seconds=60, now=NOW,
+    ) == WorkerHealthClassification.HEALTHY
+    stale = replace(legacy, last_heartbeat_at=(NOW - timedelta(seconds=61)).replace(tzinfo=None))
+    assert WorkerHeartbeatService.classify(
+        stale, stale_threshold_seconds=60, now=NOW,
+    ) == WorkerHealthClassification.STALE
 
 
 def test_multiple_instances_latest_worker_and_account_isolation():

@@ -5,7 +5,7 @@ import unittest
 import os
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
 
 if "streamlit" not in sys.modules:
     streamlit = types.ModuleType("streamlit")
@@ -112,8 +112,9 @@ class FakeIngestionService:
 
 
 class FakeXProvider:
-    def __init__(self, *, fail=False):
+    def __init__(self, *, fail=False, reply_failures=0):
         self.fail = fail
+        self.reply_failures = reply_failures
         self.calls = []
 
     def account_names(self):
@@ -138,6 +139,45 @@ class FakeXProvider:
             message="Posted to X.",
         )
 
+    def publish_reply(self, *, caption, in_reply_to_tweet_id, account_name=None):
+        self.calls.append({
+            "caption": caption,
+            "in_reply_to_tweet_id": in_reply_to_tweet_id,
+            "account_name": account_name,
+        })
+        if self.reply_failures:
+            self.reply_failures -= 1
+            raise RuntimeError("X reply provider failed")
+        return XPublishResult(
+            success=True,
+            account_name=account_name or "AvaBlackthorne",
+            provider_post_id="tweet_cta_123",
+            provider_output_url="https://x.com/AvaBlackthorne/status/tweet_cta_123",
+            message="Posted reply to X.",
+        )
+
+
+class FakeXLinkAttributionRepository:
+    TOKEN = "test_attribution_token_1234567890"
+
+    def __init__(self, *, use_supplied_token=False):
+        self.records = {}
+        self.attached = []
+        self.use_supplied_token = use_supplied_token
+
+    def get_or_create_attribution(self, **values):
+        key = (values["publish_operation_id"], values["x_account_name"])
+        self.records.setdefault(key, {
+            **values,
+            "x_link_attribution_id": "11111111-1111-4111-8111-111111111111",
+            "attribution_token": (
+                values["attribution_token"] if self.use_supplied_token else self.TOKEN
+            ),
+        })
+        return self.records[key]
+
+    def attach_cta_post(self, attribution_id, cta_x_post_id):
+        self.attached.append((attribution_id, cta_x_post_id))
 
 class FakeTelegramProvider:
     def __init__(self, *, fail=False):
@@ -203,8 +243,12 @@ class FakeTweepy:
         def __init__(self, **kwargs):
             self.kwargs = kwargs
 
-        def create_tweet(self, *, text, media_ids):
-            return SimpleNamespace(data={"id": "tweet_456", "text": text, "media_ids": media_ids})
+        def create_tweet(self, *, text, media_ids=None, in_reply_to_tweet_id=None):
+            return SimpleNamespace(data={
+                "id": "tweet_reply_456" if in_reply_to_tweet_id else "tweet_456",
+                "text": text, "media_ids": media_ids,
+                "in_reply_to_tweet_id": in_reply_to_tweet_id,
+            })
 
 
 class FakeTelegramResponse:
@@ -228,7 +272,7 @@ class FakeTelegramHttp:
 
 
 class SocialPublishingTests(unittest.TestCase):
-    def make_services(self, *, x_provider=None, telegram_provider=None):
+    def make_services(self, *, x_provider=None, telegram_provider=None, x_link_repository=None):
         temp_dir = tempfile.TemporaryDirectory()
         self.addCleanup(temp_dir.cleanup)
         archive = ContentArchiveService(
@@ -245,6 +289,7 @@ class SocialPublishingTests(unittest.TestCase):
             storage_dir=Path(temp_dir.name) / "social",
             x_provider=x_provider,
             telegram_provider=telegram_provider,
+            x_link_attributions=x_link_repository or FakeXLinkAttributionRepository(),
         )
         return social_publishing, generation_library
 
@@ -267,6 +312,21 @@ class SocialPublishingTests(unittest.TestCase):
         self.assertEqual(item.generation_metadata["generation_job_id"], "generation_job_social")
         self.assertEqual(item.generation_metadata["provider_id"], "seedream_4_5")
 
+    def test_x_thread_caption_supports_optional_text_without_extra_whitespace(self):
+        self.assertEqual(
+            SocialPublishingService._x_thread_caption({
+                "x_thread_cta_text": "Optional custom text",
+                "x_thread_cta_url": "https://avablackthorne.com/me",
+            }),
+            "Optional custom text\nhttps://avablackthorne.com/me",
+        )
+        self.assertNotIn(
+            "Come hang out with me",
+            SocialPublishingService._x_thread_caption({
+                "x_thread_cta_text": "",
+                "x_thread_cta_url": "https://avablackthorne.com/me",
+            }),
+        )
     def test_queue_removal_archive_and_move_back(self):
         social_publishing, generation_library = self.make_services()
         item = social_publishing.create_queue_item(
@@ -358,6 +418,130 @@ class SocialPublishingTests(unittest.TestCase):
         self.assertEqual(history.status, SocialPublishStatus.POSTED.value)
         self.assertEqual(history.metadata["caption_id"], "caption_1")
 
+    @patch.object(SocialPublishingService, "_schedule_x_auto_callback")
+    def test_x_thread_cta_is_text_only_reply_and_persists_relationship(self, callback):
+        fake_x = FakeXProvider()
+        social, library = self.make_services(x_provider=fake_x)
+        item = social.create_queue_item(
+            generated_image_id="generated_image_social_1",
+            generation_library=library,
+            platform=SocialPlatform.X.value,
+        )
+
+        posted = social.publish_now(
+            item.queue_item_id,
+            caption_text="Primary caption",
+            account_name="AvaBlackthorne",
+            x_thread_cta_enabled=True,
+            x_thread_cta_text="",
+            x_thread_cta_url="https://avablackthorne.com/me",
+            publish_operation_id="operation-1",
+        )
+
+        self.assertEqual(posted.status, SocialPublishStatus.POSTED.value)
+        self.assertEqual(len(fake_x.calls), 2)
+        self.assertEqual(fake_x.calls[0]["image_reference"], "https://cdn.test/social.png")
+        self.assertNotIn("image_reference", fake_x.calls[1])
+        self.assertEqual(fake_x.calls[1]["in_reply_to_tweet_id"], "tweet_123")
+        self.assertEqual(
+            fake_x.calls[1]["caption"],
+            "https://avablackthorne.com/me?p=test_attribution_token_1234567890",
+        )
+        metadata = dict(social.list_publish_items()[0].metadata)
+        self.assertEqual(metadata["primary_x_post_id"], "tweet_123")
+        self.assertEqual(metadata["cta_x_post_id"], "tweet_cta_123")
+        self.assertEqual(metadata["cta_reply_to_x_post_id"], "tweet_123")
+        self.assertEqual(metadata["x_thread_cta_status"], "posted")
+        callback.assert_called_once()
+
+    @patch.object(SocialPublishingService, "_schedule_x_auto_callback")
+    def test_x_thread_cta_retry_and_replay_never_duplicate_primary_or_cta(self, _callback):
+        fake_x = FakeXProvider(reply_failures=1)
+        social, library = self.make_services(x_provider=fake_x)
+        item = social.create_queue_item(
+            generated_image_id="generated_image_social_1",
+            generation_library=library,
+            platform=SocialPlatform.X.value,
+        )
+        arguments = dict(
+            caption_text="Primary caption",
+            account_name="AvaBlackthorne",
+            x_thread_cta_enabled=True,
+            x_thread_cta_text="",
+            x_thread_cta_url="https://avablackthorne.com/me",
+            publish_operation_id="operation-retry",
+        )
+
+        first = social.publish_now(item.queue_item_id, **arguments)
+        second = social.publish_now(item.queue_item_id, **arguments)
+        replay = social.publish_now(item.queue_item_id, **arguments)
+
+        self.assertEqual(first.status, SocialPublishStatus.FAILED.value)
+        self.assertEqual(second.status, SocialPublishStatus.POSTED.value)
+        self.assertEqual(replay.status, SocialPublishStatus.POSTED.value)
+        primary_calls = [call for call in fake_x.calls if "image_reference" in call]
+        reply_calls = [call for call in fake_x.calls if "in_reply_to_tweet_id" in call]
+        self.assertEqual(len(primary_calls), 1)
+        self.assertEqual(len(reply_calls), 2)
+        self.assertEqual(reply_calls[0]["caption"], reply_calls[1]["caption"])
+        self.assertEqual(
+            social.list_publish_items()[0].metadata["cta_x_post_id"],
+            "tweet_cta_123",
+        )
+
+    @patch.object(SocialPublishingService, "_schedule_x_auto_callback")
+    @patch("app.services.social_publishing_service.secrets.token_urlsafe")
+    def test_x_thread_attribution_tokens_are_random_opaque_and_unique_per_operation(
+        self, token_urlsafe, _callback,
+    ):
+        token_urlsafe.side_effect = [
+            "random_opaque_token_A_1234567890",
+            "random_opaque_token_B_1234567890",
+        ]
+        repository = FakeXLinkAttributionRepository(use_supplied_token=True)
+        fake_x = FakeXProvider()
+        social, library = self.make_services(
+            x_provider=fake_x, x_link_repository=repository,
+        )
+        for operation in ("raw-operation-id-1", "raw-operation-id-2"):
+            item = social.create_queue_item(
+                generated_image_id="generated_image_social_1",
+                generation_library=library,
+                platform=SocialPlatform.X.value,
+            )
+            social.publish_now(
+                item.queue_item_id, caption_text="Primary caption",
+                account_name="AvaBlackthorne", x_thread_cta_enabled=True,
+                x_thread_cta_url="https://avablackthorne.com/me",
+                publish_operation_id=operation,
+            )
+        reply_captions = [
+            call["caption"] for call in fake_x.calls if "in_reply_to_tweet_id" in call
+        ]
+        self.assertEqual(len(set(reply_captions)), 2)
+        self.assertTrue(all(caption.startswith("https://avablackthorne.com/me?p=random_opaque_token_") for caption in reply_captions))
+        self.assertTrue(all("raw-operation-id" not in caption and "tweet_123" not in caption for caption in reply_captions))
+        self.assertEqual(token_urlsafe.call_args_list, [call(24), call(24)])
+
+    def test_primary_x_failure_never_attempts_thread_cta(self):
+        fake_x = FakeXProvider(fail=True)
+        social, library = self.make_services(x_provider=fake_x)
+        item = social.create_queue_item(
+            generated_image_id="generated_image_social_1",
+            generation_library=library,
+            platform=SocialPlatform.X.value,
+        )
+        failed = social.publish_now(
+            item.queue_item_id,
+            caption_text="Primary caption",
+            x_thread_cta_enabled=True,
+            x_thread_cta_text="CTA",
+            x_thread_cta_url="https://avablackthorne.com/me",
+            publish_operation_id="operation-primary-fail",
+        )
+        self.assertEqual(failed.status, SocialPublishStatus.FAILED.value)
+        self.assertEqual(len(fake_x.calls), 1)
+
     def test_x_provider_credential_lookup_and_dispatch(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             image_path = Path(temp_dir) / "source.png"
@@ -387,6 +571,20 @@ class SocialPublishingTests(unittest.TestCase):
         self.assertTrue(result.success)
         self.assertEqual(result.provider_post_id, "tweet_456")
         self.assertEqual(result.provider_media_id, "media_456")
+
+    def test_x_provider_reply_uses_reply_target_without_media(self):
+        env = {
+            "X_CONSUMER_KEY": "consumer", "X_CONSUMER_SECRET": "secret",
+            "X_ACCESS_TOKEN": "token", "X_ACCESS_TOKEN_SECRET": "token-secret",
+        }
+        with patch.dict(os.environ, env, clear=False):
+            result = XPublishingProvider(tweepy_module=FakeTweepy).publish_reply(
+                caption="CTA", in_reply_to_tweet_id="tweet_456",
+                account_name="AvaBlackthorne",
+            )
+        self.assertEqual(result.provider_post_id, "tweet_reply_456")
+        self.assertIsNone(result.provider_media_id)
+        self.assertEqual(result.metadata["in_reply_to_tweet_id"], "tweet_456")
 
     def test_x_provider_reports_runtime_python_when_tweepy_is_missing(self):
         provider = XPublishingProvider()

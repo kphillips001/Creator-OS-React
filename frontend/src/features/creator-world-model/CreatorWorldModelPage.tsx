@@ -42,7 +42,7 @@ function editable(
   };
 }
 
-export function CreatorWorldModelPage() {
+export function CreatorWorldModelPage({ embedded = false }: { embedded?: boolean } = {}) {
   const [document, setDocument] =
     useState<CreatorWorldModelDocument | null>(null);
   const [draft, setDraft] = useState<CreatorWorldModelUpdate | null>(null);
@@ -97,16 +97,17 @@ export function CreatorWorldModelPage() {
     JSON.stringify(editable(document)) !== JSON.stringify(draft)
   );
 
-  return <main className="world-model-page">
-    <PageHeader
+  const Root = embedded ? "section" : "main";
+  return <Root className="world-model-page">
+    {!embedded && <PageHeader
       title="World Model"
       description="Maintain the canonical description of Ava’s believable world."
-    />
+    />}
 
     <aside className="world-model-note">
       <AlertCircle size={18} />
       <span>This document defines Ava’s indoor and outdoor world, location privacy, travel range, and seasonal continuity.<br /><br />
-        It is separate from Personality, Lifestyle, Social Creative Direction, Visual Identity, and Prompt Generation.</span>
+        Creator-OS uses public-safe portions for conversation and creative planning; the internal home base remains private.</span>
     </aside>
 
     {loading && <div className="world-model-state">Loading World Model…</div>}
@@ -149,5 +150,5 @@ export function CreatorWorldModelPage() {
         </button>
       </footer>
     </form>}
-  </main>;
+  </Root>;
 }

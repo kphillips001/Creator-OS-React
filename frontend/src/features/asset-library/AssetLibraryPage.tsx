@@ -21,6 +21,7 @@ import {
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 
 import { PageHeader } from "../../shared/ui/PageHeader";
 import {
@@ -38,6 +39,7 @@ import {
   photoshootCommercialBadges,
 } from "./photoshootSalesClassification";
 import { StandaloneSalePreparationDialog } from "./StandaloneSalePreparationDialog";
+import { OfferingSellingControls } from "./OfferingSellingControls";
 import { isPostedToContentWall } from "./contentWallPublication";
 import type { AssetLibraryItem, AssetLibraryResponse, ContentVaultCaptionDraft, ContentVaultCaptionOption, ContentVaultCaptionTone, ContentVaultPublicationState, StandaloneSalePreparation } from "./types";
 import "./asset-library.css";
@@ -327,6 +329,10 @@ const SingleImageDetailPanel = ({ asset, onClose, onEdit, onReassign, onPreview,
         </div>
       </>}
     </section>
+    {preparation?.offeringId && <OfferingSellingControls
+      offeringId={preparation.offeringId}
+      onChanged={refreshPublication}
+    />}
     {isWallReady && <section className="content-vault-publishing" aria-labelledby="content-vault-publishing-title">
       <h3 id="content-vault-publishing-title">Content Vault Publishing</h3>
       {publication?.previewUrl && <ContainedMediaImage src={publication.previewUrl} alt="Content Vault publication preview" />}
@@ -1190,8 +1196,12 @@ const archiveAsset = async (asset: AssetLibraryItem) => {
     <section className="asset-library-page">
       <PageHeader
         title="Asset Library"
-        description="Curated generations and registered Creator Assets."
+        description="What content you have, and how it is sold."
       />
+      <div className="asset-library-advanced-link">
+        <span>Need arbitrary multi-asset composition or catalog diagnostics?</span>
+        <Link to="/commerce">Open Offering Catalog <ExternalLink size={14} /></Link>
+      </div>
 
       {!assetType && !salesDestination && (
         <section

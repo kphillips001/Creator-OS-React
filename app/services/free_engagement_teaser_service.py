@@ -140,6 +140,11 @@ class FreeEngagementTeaserService:
             current = self.repository.get(operation.operation_id)
             return FreeEngagementTeaserExecution(status=current.state.value, executed=False, operation=current)
         try:
+            identity_reader = getattr(self.repository, "telegram_user_id_for_customer", None)
+            telegram_user_id = identity_reader(
+                fanvue_account_id=claimed.fanvue_account_id,
+                fanvue_user_id=claimed.fanvue_user_id,
+            ) if callable(identity_reader) else None
             result = await self.delivery.execute_async({
                 "delivery_type": "FREE_ENGAGEMENT_TEASER",
                 "message_text": claimed.caption,
@@ -156,6 +161,7 @@ class FreeEngagementTeaserService:
             }, context={
                 "transport": transport,
                 "telegram_chat_id": claimed.telegram_chat_id,
+                "telegram_user_id": telegram_user_id,
                 "creator_profile_id": claimed.creator_profile_id,
                 "fanvue_account_id": claimed.fanvue_account_id,
                 "fanvue_user_id": claimed.fanvue_user_id,

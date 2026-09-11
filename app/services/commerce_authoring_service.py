@@ -127,6 +127,11 @@ class CommerceAuthoringService:
     def list_page(self, **filters):
         return self.reads.list_page(**filters)
 
+    def get_detail(self, offering_id, *, creator_profile_id: int):
+        return self.reads.get_detail(
+            offering_id, creator_profile_id=creator_profile_id,
+        )
+
     @staticmethod
     def _validate_price(price_minor, currency):
         if str(currency or "").upper() != "USD":

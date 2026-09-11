@@ -1,54 +1,14 @@
-export type CustomerSummaryMetrics = {
-  total: number;
-  active: number;
-  purchasers: number;
-  highValue: number;
-  atRisk: number;
-  activeSessions: number;
-};
-
+export type CustomerSummaryMetrics = { total:number; buyers:number; activeSubscribers:number; formerSubscribers:number; highValue:number; activeSessions:number };
+export type CustomerTransaction = { transactionId:string; type:"CONTENT"|"SUBSCRIPTION"|"RENEWAL"|"TIP"|"OTHER"; grossMinor:number; netMinor:number; occurredAt:string };
 export type CustomerWorkspaceItem = {
-  customerId: string;
-  displayName: string;
-  providerIdentities: Array<Record<string, unknown>>;
-  relationshipStatus: string;
-  relationshipStage: string;
-  buyerTier: string | null;
-  valueTier: string | null;
-  customerHealth: string;
-  lifecycleStage: string;
-  totalSpendCents: number;
-  purchaseCount: number;
-  lastActivityAt: string | null;
-  retentionRisk: string;
-  activeBuyerSession: boolean;
-  nextRecommendedAction: string;
-  isSubscriber: boolean;
-  isFollower: boolean;
-  identity?: Record<string, unknown>;
-  relationship?: Record<string, unknown>;
-  customerValue?: Record<string, unknown>;
-  journey?: Record<string, unknown>;
-  commerceAndOwnership?: Record<string, unknown>;
-  recommendationHistory?: Record<string, unknown>;
-  conversationSummary?: Record<string, unknown>;
-  buyerSession?: Record<string, unknown>;
-  salesSessions?: Record<string, unknown>[];
-  retentionAndGrowth?: Record<string, unknown>;
-  businessGuidance?: Record<string, unknown>;
-  customerIntelligenceProfile?: Record<string, unknown>;
-  interactionSafety?: {
-    safetyStatus: "NORMAL" | "UNDERAGE_BLOCKED"; decision: string;
-    policyEnabled: boolean; reason: string | null; effectiveAt: string | null;
-    history: Array<Record<string, unknown>>;
-  };
+  customerId:string; displayName:string; username:string|null; commercialStatuses:string[];
+  totalSpendMinor:number; transactionCount:number; contentPurchaseCount:number; lastActivityAt:string|null;
+  isBuyer:boolean; isHighValue:boolean; valueTier:string; attentionTier:string|null; retentionStatus:string;
+  subscriptionStatus:string; subscriptionPeriodEnd:string|null; activeSalesSession:boolean; activePurchaseIntent:boolean;
+  relationshipKey:string|null; hasTelegramRelationship:boolean; localFanvueUserId:number|null; identitySearchValues?:string[];
+  transactions?:CustomerTransaction[]; subscription?:{status:string;periodEnd:string|null;providerBacked:boolean};
+  customerValue?:Record<string,unknown>; commercialState?:Record<string,unknown>; ownership?:Record<string,unknown>[];
+  interactionSafety?:{safetyStatus:"NORMAL"|"UNDERAGE_BLOCKED";decision:string;policyEnabled:boolean;reason:string|null;effectiveAt:string|null;history:Array<Record<string,unknown>>};
+  abuseReview?:Record<string,unknown>|null;
 };
-
-export type CustomerListResponse = {
-  items: CustomerWorkspaceItem[];
-  summary: CustomerSummaryMetrics;
-  total: number;
-  page: number;
-  pageSize: number;
-  totalPages: number;
-};
+export type CustomerListResponse = {items:CustomerWorkspaceItem[];summary:CustomerSummaryMetrics;total:number;page:number;pageSize:number;totalPages:number};

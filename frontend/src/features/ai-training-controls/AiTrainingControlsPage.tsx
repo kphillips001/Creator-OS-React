@@ -10,7 +10,7 @@ const groups = [
   ["REQUIRES_IMPLEMENTATION", "Requires Implementation"], ["ARCHIVED", "Archived"],
 ] as const;
 
-export function AiTrainingControlsPage() {
+export function AiTrainingControlsPage({ workspace = false }: { workspace?: boolean }) {
   const [items, setItems] = useState<TrainingInstruction[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -26,7 +26,7 @@ export function AiTrainingControlsPage() {
   const load = useCallback(async () => {
     setLoading(true); setError("");
     try { setItems((await aiTrainingControlsApi.list()).items); }
-    catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to load AI Training."); }
+    catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to load Ava Rules."); }
     finally { setLoading(false); }
   }, []);
   useEffect(() => { void load(); }, [load]);
@@ -52,8 +52,8 @@ export function AiTrainingControlsPage() {
         throw new Error("Safety policy was not recognized by runtime enforcement.");
       }
       setSuccess(saved.instructionType === "SAFETY_HARD_STOP"
-        ? "Training Activated ✓ Underage Customer Hard Stop is now ACTIVE. Backend enforced · Global policy · UNDERAGE_BLOCKED customers only · Other customers unaffected."
-        : `Training ${editing ? "updated" : "activated"} ✓`);
+        ? "Rule Activated ✓ Underage Customer Hard Stop is now ACTIVE. Backend enforced · Global policy · UNDERAGE_BLOCKED customers only · Other customers unaffected."
+        : `Rule ${editing ? "updated" : "activated"} ✓`);
       reset(); await load();
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to save instruction."); }
     finally { setBusy(false); }
@@ -64,20 +64,21 @@ export function AiTrainingControlsPage() {
     catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to update instruction."); }
   };
 
-  return <main className="training-controls-page">
-    <PageHeader title="AI Training" description="Create and control global conversation guidance used by Creator-OS AI." />
+  const content = <>
+    {!workspace && <PageHeader title="Ava Rules" description="Manage the rules and policies that shape Ava's live behavior." />}
     <section className="training-controls-heading">
-      <div><span>GLOBAL TRAINING</span><p>Conversation preferences apply account-wide. Safety, sales, commerce, ownership, and delivery remain backend-authoritative.</p></div>
-      <button onClick={beginCreate} type="button">+ New Global Training</button>
+      <div><span>{workspace ? "GLOBAL TRAINING" : "AVA RULES"}</span><p>{workspace ? "This is what Ava is currently trained to do account-wide." : "Conversation preferences apply account-wide. Safety, sales, commerce, ownership, and delivery remain backend-authoritative."}</p></div>
+      {!workspace && <button onClick={beginCreate} type="button">+ New Ava Rule</button>}
     </section>
     {error && <div className="training-controls-alert" role="alert">{error}</div>}
     {success && <div className="training-controls-alert" role="status">{success}</div>}
-    {loading && <div className="training-controls-state">Loading global training…</div>}
+    {loading && <div className="training-controls-state">Loading Ava rules…</div>}
     {!loading && groups.map(([status, label]) => <section className="training-controls-group" key={status}>
       <header><h2>{label}</h2><span>{byStatus[status]?.length ?? 0}</span></header>
       {!byStatus[status]?.length && <p className="training-controls-empty">No {label.toLowerCase()} instructions.</p>}
-      <div className="training-controls-grid">{byStatus[status]?.map((item) => <article className="training-control-card" key={item.instructionId}>
+      <div className="training-controls-grid">{byStatus[status]?.map((item) => <article className="training-control-card" id={`training-${item.instructionId}`} key={item.instructionId}>
         <div className="training-control-meta"><span>{item.instructionType === "SAFETY_HARD_STOP" ? "SAFETY / HARD STOP" : item.instructionType.replaceAll("_", " ")}</span>{item.enforcementMode === "BACKEND" && <><span>BACKEND ENFORCED</span><span>GLOBAL POLICY</span></>}<span>{item.status}</span><span>Priority {item.priority}</span><span>v{item.version}</span></div>
+        {item.implementationStatus&&<strong className={item.implementationStatus.implemented?"implementation-status implementation-status--ready":"implementation-status"}>{item.implementationStatus.implemented?"✓ ":""}{item.implementationStatus.label}</strong>}
         <p>{item.normalizedInstruction}</p>
         {item.policyKey === "UNDERAGE_CUSTOMER" && <aside><strong>Underage Customer Hard Stop</strong>Only customers deliberately marked UNDERAGE_BLOCKED are prevented from autonomous interaction. Other customers are unaffected. Disabling this policy does not restore marked customers.</aside>}
         {item.status === "REQUIRES_IMPLEMENTATION" && <aside><strong>Requires Backend Enforcement</strong>{item.classificationReason}</aside>}
@@ -90,8 +91,8 @@ export function AiTrainingControlsPage() {
       </article>)}</div>
     </section>)}
     {open && <div className="training-control-dialog" role="dialog" aria-modal="true" aria-labelledby="training-dialog-title"><form onSubmit={(event) => { event.preventDefault(); preview ? void save() : void inspect(); }}>
-      <header><div><span>GLOBAL CONVERSATION RULE</span><h2 id="training-dialog-title">{editing ? "Edit training instruction" : "New training instruction"}</h2></div><button aria-label="Close" onClick={reset} type="button"><X size={18} /></button></header>
-      <label>Instruction<textarea autoFocus maxLength={2000} onChange={(event) => { setText(event.target.value); setPreview(null); }} rows={6} value={text} /></label>
+      <header><div><span>GLOBAL TRAINING</span><h2 id="training-dialog-title">{editing ? "Edit training" : workspace ? "New training" : "New Ava rule"}</h2></div><button aria-label="Close" onClick={reset} type="button"><X size={18} /></button></header>
+      <label>{workspace ? "What should Ava learn or do differently?" : "Instruction"}<textarea autoFocus maxLength={2000} onChange={(event) => { setText(event.target.value); setPreview(null); }} rows={6} value={text} /></label>
       <label>Priority<input min={0} max={1000} onChange={(event) => setPriority(Number(event.target.value))} type="number" value={priority} /></label>
       {preview?.instructionType === "ENGAGEMENT_RULE" && <fieldset className="engagement-policy-fields"><legend>Engagement frequency</legend>{([
         ["dormant_inactivity_days", "Dormant inactivity threshold (days)"], ["reengagement_cooldown_days", "Re-engagement cooldown (days)"],
@@ -106,5 +107,6 @@ export function AiTrainingControlsPage() {
       {preview && <section className="training-control-preview"><span>GLOBAL · {preview.instructionType === "SAFETY_HARD_STOP" ? "SAFETY / HARD STOP" : preview.instructionType.replaceAll("_", " ")}</span>{preview.instructionType === "ENGAGEMENT_RULE" ? <><h3>Intelligent Free Engagement Teasers</h3><p>Purposes: Warm up new/newer customers · Re-engage dormant customers · Occasionally reward good subscribers</p><p>Captions: Generated by Ava using customer context + Asset Intelligence</p><p>Duplicate policy: Same Teaser → Same Customer = NEVER</p><p>Paid sales: Does not advance paid sales · Active offers and Sessions suppressed</p><p>Safety: Backend enforced · Frequency controlled and occasional</p></> : <dl><div><dt>Original</dt><dd>{preview.originalOperatorText}</dd></div><div><dt>Creator-OS understood</dt><dd>{preview.normalizedInstruction}</dd></div><div><dt>Enforcement</dt><dd>{preview.enforcementMode === "BACKEND" ? "Backend enforced" : preview.runtimeEligible ? "GPT conversation context" : "Requires implementation"}</dd></div><div><dt>Applies to</dt><dd>{preview.policyKey === "UNDERAGE_CUSTOMER" ? "All customers as a global policy" : "All customers"}</dd></div>{preview.policyKey === "UNDERAGE_CUSTOMER" && <><div><dt>Effect</dt><dd>Only customers marked UNDERAGE_BLOCKED are prevented from autonomous interaction.</dd></div><div><dt>Other customers</dt><dd>Unaffected.</dd></div><div><dt>Age determination</dt><dd>This rule does not automatically determine or mark customers underage.</dd></div></>}</dl>}<small>{preview.classificationReason}</small></section>}
       <footer><button className="secondary" onClick={reset} type="button">Cancel</button><button disabled={busy || !text.trim()} type="submit">{preview ? <><Check size={15} />{editing ? "Save Changes" : preview.runtimeEligible ? "Activate" : "Save for Review"}</> : "Preview Instruction"}</button></footer>
     </form></div>}
-  </main>;
+  </>;
+  return workspace ? <div className="training-controls-page training-controls-page--vertical">{content}</div> : <main className="training-controls-page">{content}</main>;
 }

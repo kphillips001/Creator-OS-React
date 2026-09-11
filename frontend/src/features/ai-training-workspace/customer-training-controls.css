@@ -1,0 +1,41 @@
+.customer-training-editor {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 95px auto;
+  align-items: end;
+  gap: 0.65rem;
+  margin-top: 1rem;
+}
+.customer-training-editor label { display: grid; gap: 0.35rem; color: var(--color-text-secondary); font-size: 0.68rem; }
+.customer-training-editor textarea,
+.customer-training-editor input,
+.customer-training-editor select { box-sizing: border-box; width: 100%; padding: 0.65rem; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-surface-inset); color: var(--color-text-primary); font: inherit; }
+.customer-training-editor select { min-height: 38px; cursor: pointer; color-scheme: dark; }
+.customer-training-editor select:hover { border-color: var(--color-border-strong); }
+.customer-training-editor select:focus-visible { outline: 2px solid var(--color-accent-border); outline-offset: 1px; border-color: var(--color-accent); }
+.customer-training-editor select:disabled { cursor: not-allowed; opacity: 0.55; }
+.customer-training-editor select option { background: var(--color-surface-inset); color: var(--color-text-primary); }
+.customer-training-editor textarea { min-height: 74px; resize: vertical; }
+.customer-training-editor button,
+.customer-training-preview button,
+.customer-training-rules button { padding: 0.55rem 0.7rem; border: 1px solid var(--color-accent-border); border-radius: 7px; background: var(--color-accent-surface); color: var(--color-accent); cursor: pointer; }
+.customer-training-preview { margin-top: 1rem; padding: 1rem; border: 1px solid var(--color-accent-border); border-radius: 9px; }
+.customer-training-preview > span { font-size: 0.62rem; color: var(--color-accent); }
+.customer-training-preview h4 { margin: 0.25rem 0; }
+.customer-training-rules { display: grid; gap: 0.6rem; margin-top: 1rem; }
+.customer-training-rules article { display: grid; gap: 0.55rem; padding: 0.8rem; border: 1px solid var(--color-border); border-radius: 9px; }
+.customer-training-rules article > div { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+.customer-training-rules span,
+.customer-training-rules time { font-size: 0.62rem; color: var(--color-text-tertiary); }
+@media (max-width: 760px) { .customer-training-editor { grid-template-columns: 1fr; } }
+.customer-treatment { display: grid; gap: 0.65rem; margin-top: 1.25rem; padding-top: 1.1rem; border-top: 1px solid var(--color-border); }
+.customer-treatment > button,
+.customer-treatment-review button { justify-self: start; padding: 0.55rem 0.75rem; border: 1px solid var(--color-accent-border); border-radius: 7px; background: var(--color-accent-surface); color: var(--color-accent); cursor: pointer; }
+.treatment-choice { display: grid; gap: 0.35rem; margin: 0; padding: 0.7rem; border: 1px solid var(--color-border); border-radius: 9px; }
+.treatment-choice legend { padding: 0 0.25rem; font-size: 0.7rem; font-weight: 700; }
+.treatment-choice p { margin: 0; }
+.treatment-choice > div { display: flex; gap: 0.35rem; flex-wrap: wrap; }
+.treatment-choice button { padding: 0.4rem 0.6rem; border: 1px solid var(--color-border); border-radius: 999px; background: transparent; color: inherit; cursor: pointer; font-size: 0.65rem; }
+.treatment-choice button[aria-pressed="true"] { border-color: var(--color-accent-border); background: var(--color-accent-surface); color: var(--color-accent); }
+.customer-treatment-review { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.65rem; padding: 0.9rem; border: 1px solid var(--color-accent-border); border-radius: 9px; }
+.customer-treatment-review > p,
+.customer-treatment-review > button { grid-column: 1 / -1; }

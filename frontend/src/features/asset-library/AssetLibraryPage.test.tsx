@@ -1,12 +1,16 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import type { ReactElement } from "react";
 
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render as renderLibrary, screen, waitFor, within } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AssetLibraryPage } from "./AssetLibraryPage";
 import { StandaloneSalePreparationDialog } from "./StandaloneSalePreparationDialog";
 import type { AssetLibraryItem, ContentVaultCaptionDraft } from "./types";
+
+const render = (ui: ReactElement) => renderLibrary(<MemoryRouter>{ui}</MemoryRouter>);
 
 const stylesheetText = readFileSync(resolve("src/features/asset-library/asset-library.css"), "utf8");
 const sharedStylesheetText = readFileSync(resolve("src/shared/ui/shared-ui.css"), "utf8");

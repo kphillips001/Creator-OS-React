@@ -24,6 +24,7 @@ describe("CommercePage",()=>{
       return json(list);
     }));
     render(<CommercePage/>);
+    expect(screen.getByRole("heading",{name:"Offering Catalog"})).toBeInTheDocument();
     expect(await screen.findByText("Beach Set")).toBeInTheDocument();
     expect(screen.getByText("$9.99")).toBeInTheDocument();
     expect(screen.getByText("4")).toBeInTheDocument();

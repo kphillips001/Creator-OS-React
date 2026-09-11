@@ -302,7 +302,9 @@ def list_webhook_events_for_account(
         SELECT
             id, internal_event_id, external_event_id, event_type,
             fanvue_account_id, fanvue_user_id, status, received_at,
-            processed_at, failed_at, retry_count, next_retry_at,
+            processed_at,
+            failed_at AT TIME ZONE current_setting('TimeZone') AS failed_at,
+            retry_count, next_retry_at,
             last_error, processing_attempts
             , worker_instance_id, claimed_at, lease_expires_at
         FROM webhook_events

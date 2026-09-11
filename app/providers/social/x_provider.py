@@ -234,6 +234,53 @@ class XPublishingProvider:
             metadata={"tweet_data": getattr(tweet, "data", None) or {}},
         )
 
+    def publish_reply(
+        self,
+        *,
+        caption: str,
+        in_reply_to_tweet_id: str,
+        account_name: str | None = None,
+    ) -> XPublishResult:
+        """Publish a text-only reply to an existing X post."""
+        account = self.get_account(account_name)
+        text = str(caption or "").strip()
+        reply_target = str(in_reply_to_tweet_id or "").strip()
+        if not text:
+            raise XPublishError("X reply text is required.")
+        if not reply_target:
+            raise XPublishError("X reply target is required.")
+        credentials = self.credentials_for(account.account_name)
+        tweepy = self._load_tweepy()
+        try:
+            client = tweepy.Client(
+                consumer_key=credentials["consumer_key"],
+                consumer_secret=credentials["consumer_secret"],
+                access_token=credentials["access_token"],
+                access_token_secret=credentials["access_token_secret"],
+            )
+            tweet = client.create_tweet(
+                text=text[:280], in_reply_to_tweet_id=reply_target
+            )
+        except Exception as exc:
+            raise XPublishError(
+                f"{account.account_name} X reply failed: {self._error_details(exc)}"
+            ) from exc
+        post_id = self._tweet_id(tweet)
+        return XPublishResult(
+            success=True,
+            account_name=account.account_name,
+            provider_post_id=post_id,
+            provider_output_url=(
+                f"https://x.com/{account.account_name}/status/{post_id}"
+                if post_id else None
+            ),
+            message="Posted reply to X.",
+            metadata={
+                "tweet_data": getattr(tweet, "data", None) or {},
+                "in_reply_to_tweet_id": reply_target,
+            },
+        )
+
     def _load_tweepy(self):
         if self._tweepy is not None:
             return self._tweepy

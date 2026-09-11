@@ -1,97 +1,36 @@
-from pathlib import Path
-
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-
 from app.api import customers
 
-
-def customer_payload(**overrides):
-    payload = {
-        "customerId": "7:42",
-        "displayName": "Avery",
-        "providerIdentities": [{"provider": "fanvue", "username": "avery"}],
-        "relationshipStatus": "subscriber",
-        "relationshipStage": "engaged",
-        "buyerTier": "warm",
-        "valueTier": "HIGH_VALUE",
-        "customerHealth": "HEALTHY",
-        "lifecycleStage": "ACTIVE_RELATIONSHIP",
-        "totalSpendCents": 4200,
-        "purchaseCount": 2,
-        "lastActivityAt": "2026-07-19T10:00:00Z",
-        "retentionRisk": "HEALTHY",
-        "activeBuyerSession": True,
-        "nextRecommendedAction": "Continue relationship building",
-        "isSubscriber": True,
-        "isFollower": True,
-    }
-    payload.update(overrides)
-    return payload
-
+def item(**overrides):
+    value={"customerId":"commerce:00000000-0000-0000-0000-000000000042","displayName":"Avery","username":"avery","isBuyer":True,"subscriptionStatus":"ACTIVE","isHighValue":False,"activeSalesSession":False,"totalSpendMinor":4200,"hasTelegramRelationship":False,"localFanvueUserId":None}
+    value.update(overrides); return value
 
 class Workspace:
-    def __init__(self):
-        self.list_calls = []
-        self.detail_calls = []
-
-    def list_customers(self, **kwargs):
-        self.list_calls.append(kwargs)
-        return (
-            customer_payload(),
-            customer_payload(customerId="7:43", displayName="Morgan", relationshipStage="dormant", valueTier="NEW", customerHealth="AT_RISK", activeBuyerSession=False),
-        )
-
-    def get_customer(self, customer_id, **kwargs):
-        self.detail_calls.append((customer_id, kwargs))
-        if customer_id != "7:42":
-            return None
-        return customer_payload(identity={"customer_id": "7:42"}, relationship={"stage": "engaged"}, customerValue={"tier": "HIGH_VALUE"})
-
-    def summarize(self, items):
-        values = tuple(items)
-        return {"total": len(values), "active": sum(item["relationshipStage"] == "engaged" for item in values)}
-
+    def list_customers(self,**_): return (item(),item(customerId="commerce:00000000-0000-0000-0000-000000000043",displayName="Morgan",isBuyer=False,subscriptionStatus="NONE"))
+    def get_customer(self,customer_id,**_): return item() if customer_id.endswith("42") else None
+    def customer_identity(self,*_args,**_kwargs): return None
+    def summarize(self,values):
+        values=tuple(values); return {"total":len(values),"buyers":sum(v["isBuyer"] for v in values),"activeSubscribers":sum(v["subscriptionStatus"]=="ACTIVE" for v in values),"formerSubscribers":0,"highValue":0,"activeSessions":0}
 
 def client(monkeypatch):
-    workspace = Workspace()
-    monkeypatch.setattr(customers, "_current_account_id", lambda: 7)
-    monkeypatch.setattr(customers, "_workspace_service", lambda: workspace)
-    app = FastAPI()
-    app.include_router(customers.router)
-    return TestClient(app), workspace
+    workspace=Workspace(); monkeypatch.setattr(customers,"_current_account_id",lambda:7); monkeypatch.setattr(customers,"_workspace_service",lambda:workspace)
+    app=FastAPI(); app.include_router(customers.router); return TestClient(app)
 
+def test_lists_verified_customers_with_search_and_buyer_filter(monkeypatch):
+    response=client(monkeypatch).get("/api/v1/customers?search=avery&filter=buyers")
+    assert response.status_code==200
+    assert [row["displayName"] for row in response.json()["items"]]==["Avery"]
 
-def test_lists_creator_scoped_customer_projections_with_filters(monkeypatch):
-    api, workspace = client(monkeypatch)
-    response = api.get("/api/v1/customers?search=avery&relationship_stage=engaged&active_session=true")
-    assert response.status_code == 200
-    body = response.json()
-    assert [item["customerId"] for item in body["items"]] == ["7:42"]
-    assert body["summary"] == {"total": 1, "active": 1}
-    assert workspace.list_calls == [{"fanvue_account_id": 7, "limit": 5000}]
+def test_subscriber_filter(monkeypatch):
+    response=client(monkeypatch).get("/api/v1/customers?filter=subscribers")
+    assert response.status_code==200
+    assert [row["displayName"] for row in response.json()["items"]]==["Avery"]
 
+def test_returns_json_detail_and_not_found(monkeypatch):
+    api=client(monkeypatch)
+    assert api.get("/api/v1/customers/commerce:00000000-0000-0000-0000-000000000042").status_code==200
+    assert api.get("/api/v1/customers/commerce:00000000-0000-0000-0000-000000000099").status_code==404
 
-def test_returns_read_only_customer_detail(monkeypatch):
-    api, workspace = client(monkeypatch)
-    response = api.get("/api/v1/customers/7:42")
-    assert response.status_code == 200
-    assert response.json()["customerValue"]["tier"] == "HIGH_VALUE"
-    assert workspace.detail_calls == [("7:42", {"fanvue_account_id": 7})]
-
-
-def test_returns_not_found_without_cross_creator_fallback(monkeypatch):
-    api, _ = client(monkeypatch)
-    response = api.get("/api/v1/customers/8:42")
-    assert response.status_code == 404
-    assert response.json()["detail"] == "Customer not found."
-
-
-def test_router_exposes_get_operations_only():
-    assert {method for route in customers.router.routes for method in route.methods} == {"GET"}
-
-
-def test_customer_presentation_does_not_reference_execution_boundaries():
-    source = Path("app/services/customer_workspace_service.py").read_text(encoding="utf-8")
-    for forbidden in ("ConversationGateway", "TelegramTransport", "FanvueTransport", "MemoryService", "update_user_memory", "fulfill(", "send_message"):
-        assert forbidden not in source
+def test_rejects_unknown_filter(monkeypatch):
+    assert client(monkeypatch).get("/api/v1/customers?filter=test-identities").status_code==422

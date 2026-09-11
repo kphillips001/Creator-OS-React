@@ -174,7 +174,7 @@ def test_engine_exception_preserves_developer_traceback(monkeypatch):
 def test_scenario_api_is_a_thin_runner_wrapper(monkeypatch):
     class Runner:
         def prepare(self, scenario_id): return {"prepared": scenario_id}
-        def turn(self, message, *, language_mode): return {
+        def turn(self, message, *, language_mode, require_language_mode=False): return {
             "customer": message, "telegramSent": False,
             "languageMode": language_mode,
         }

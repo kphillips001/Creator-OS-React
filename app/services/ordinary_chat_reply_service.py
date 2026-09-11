@@ -124,6 +124,10 @@ class OrdinaryChatReplyService:
         return self.repository.suppress(operation.operation_id,
             reason="commercial_delivery_namespace")
 
+    def suppress_relationship_control(self, operation):
+        return self.repository.suppress(operation.operation_id,
+            reason="RELATIONSHIP_HUMAN_OPERATOR_ACTIVE")
+
     def enrich_commercial(self, operation, result, intent):
         """Bind unmapped commercial bootstrap state to its durable send record."""
         diagnostics = result.diagnostic_metadata

@@ -120,6 +120,22 @@ def list_commerce(
             "pageSize": page_size, "totalPages": max(1, (total + page_size - 1) // page_size)}
 
 
+@router.get("/{offering_id}")
+def commerce_detail(offering_id: UUID):
+    creator_profile_id = int(_creator_profile()["id"])
+    item = _service().get_detail(
+        offering_id, creator_profile_id=creator_profile_id,
+    )
+    if item is None:
+        raise HTTPException(status_code=404, detail="Commercial Offering not found.")
+    return _row(
+        item,
+        _telegram_service().status(
+            offering_id, creator_profile_id=creator_profile_id,
+        ),
+    )
+
+
 @router.post("", status_code=201)
 def create_commerce(request: CreateAuthoringOfferingRequest):
     try:

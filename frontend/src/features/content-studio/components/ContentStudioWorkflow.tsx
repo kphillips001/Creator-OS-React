@@ -84,6 +84,7 @@ export function ContentStudioWorkflow({ context, error, loading }: ContentStudio
   const [creativeStudioOpen, setCreativeStudioOpen] = useState(false);
   const [inspirationPending, setInspirationPending] = useState(false);
   const [inspirationActivated, setInspirationActivated] = useState(false);
+  const [inspirationGuidance, setInspirationGuidance] = useState("");
   const [manualGenerationActivated, setManualGenerationActivated] = useState(false);
   const [manualWorkflowPending, setManualWorkflowPending] = useState(false);
   const [manualWorkflowError, setManualWorkflowError] = useState("");
@@ -245,7 +246,10 @@ export function ContentStudioWorkflow({ context, error, loading }: ContentStudio
     setInspirationActivated(true);
     setInspirationPending(true);
     try {
-      await inspirationRef.current?.inspire();
+      await inspirationRef.current?.inspire(
+        inspirationGuidance,
+        () => setInspirationGuidance(""),
+      );
     } finally {
       setInspirationPending(false);
     }
@@ -331,13 +335,23 @@ export function ContentStudioWorkflow({ context, error, loading }: ContentStudio
                 Let Creator_OS automatically create today&apos;s best content for Ava using
                 Creator Intelligence and Creative Intelligence.
               </p>
-              <button
-                disabled={ideaGenerationDisabled || inspirationPending}
-                onClick={() => void startInspiration()}
-                type="button"
-              >
-                {inspirationPending ? "Inspiring…" : "✨ Inspire Me"}
-              </button>
+              <div className="inspire-workspace__controls">
+                <button
+                  disabled={ideaGenerationDisabled || inspirationPending}
+                  onClick={() => void startInspiration()}
+                  type="button"
+                >
+                  {inspirationPending ? "Inspiring…" : "✨ Inspire Me"}
+                </button>
+                <input
+                  aria-label="Optional Inspire Me guidance"
+                  disabled={inspirationPending}
+                  onChange={(event) => setInspirationGuidance(event.target.value)}
+                  placeholder="Optional guidance..."
+                  type="text"
+                  value={inspirationGuidance}
+                />
+              </div>
             </div>
             <div className={inspirationActivated
               ? "workflow-live-preview workflow-live-preview--inspire"

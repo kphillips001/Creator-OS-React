@@ -19,6 +19,9 @@ BOT_API_ALLOWED_UPDATES = (
     "channel_post",
     "my_chat_member",
     "business_connection",
+    "business_message",
+    "edited_business_message",
+    "deleted_business_messages",
 )
 
 
@@ -40,6 +43,18 @@ class TelegramBusinessConnectionEvent:
     rights: Mapping[str, bool]
 
 
+@dataclass(frozen=True)
+class TelegramBusinessPeerEvent:
+    update_id: int
+    event_type: str
+    business_connection_id: str
+    telegram_peer_user_id: int
+    telegram_chat_id: int
+    telegram_message_id: int
+    provider_timestamp: int | None
+    sender_telegram_user_id: int | None
+
+
 class TelegramBusinessConnectionCapture:
     """Peek at connection events without acknowledging or routing updates."""
 
@@ -51,7 +66,9 @@ class TelegramBusinessConnectionCapture:
         )
         self._session = session or requests.Session()
 
-    def configure_and_peek(self) -> tuple[TelegramBusinessConnectionEvent, ...]:
+    def configure_and_peek(self) -> tuple[
+        TelegramBusinessConnectionEvent | TelegramBusinessPeerEvent, ...
+    ]:
         try:
             response = self._session.get(
                 self._endpoint,
@@ -79,10 +96,27 @@ class TelegramBusinessConnectionCapture:
             )
         captured = []
         for update in updates:
-            event = self._parse(update)
-            if event is not None:
-                captured.append(event)
+            captured.extend(self.parse(update))
         return tuple(captured)
+
+    @classmethod
+    def parse(cls, update: Any) -> tuple[
+        TelegramBusinessConnectionEvent | TelegramBusinessPeerEvent, ...
+    ]:
+        connection = cls._parse(update)
+        if connection is not None:
+            return (connection,)
+        if not isinstance(update, Mapping):
+            return ()
+        for event_type in ("business_message", "edited_business_message"):
+            message = update.get(event_type)
+            if isinstance(message, Mapping):
+                event = cls._parse_peer_message(update, event_type, message)
+                return (event,) if event is not None else ()
+        deleted = update.get("deleted_business_messages")
+        if isinstance(deleted, Mapping):
+            return cls._parse_deleted_peer_messages(update, deleted)
+        return ()
 
     @staticmethod
     def _parse(update: Any) -> TelegramBusinessConnectionEvent | None:
@@ -110,3 +144,59 @@ class TelegramBusinessConnectionCapture:
             )
         except (KeyError, TypeError, ValueError):
             return None
+
+    @staticmethod
+    def _parse_peer_message(update, event_type, message):
+        chat = message.get("chat")
+        sender = message.get("from")
+        if not isinstance(chat, Mapping):
+            return None
+        try:
+            chat_id = int(chat["id"])
+            if chat_id <= 0 or str(chat.get("type") or "private") != "private":
+                return None
+            timestamp = message.get("edit_date") or message.get("date")
+            return TelegramBusinessPeerEvent(
+                update_id=int(update["update_id"]),
+                event_type=event_type,
+                business_connection_id=str(message["business_connection_id"]),
+                telegram_peer_user_id=chat_id,
+                telegram_chat_id=chat_id,
+                telegram_message_id=int(message["message_id"]),
+                provider_timestamp=int(timestamp) if timestamp is not None else None,
+                sender_telegram_user_id=(
+                    int(sender["id"]) if isinstance(sender, Mapping)
+                    and sender.get("id") is not None else None
+                ),
+            )
+        except (KeyError, TypeError, ValueError):
+            return None
+
+    @staticmethod
+    def _parse_deleted_peer_messages(update, deleted):
+        chat = deleted.get("chat")
+        message_ids = deleted.get("message_ids")
+        if not isinstance(chat, Mapping) or not isinstance(message_ids, list):
+            return ()
+        try:
+            chat_id = int(chat["id"])
+            connection_id = str(deleted["business_connection_id"])
+            update_id = int(update["update_id"])
+            if chat_id <= 0 or not connection_id:
+                return ()
+            return tuple(
+                TelegramBusinessPeerEvent(
+                    update_id=update_id,
+                    event_type="deleted_business_messages",
+                    business_connection_id=connection_id,
+                    telegram_peer_user_id=chat_id,
+                    telegram_chat_id=chat_id,
+                    telegram_message_id=int(message_id),
+                    provider_timestamp=None,
+                    sender_telegram_user_id=None,
+                )
+                for message_id in message_ids
+                if isinstance(message_id, int) and not isinstance(message_id, bool)
+            )
+        except (KeyError, TypeError, ValueError):
+            return ()

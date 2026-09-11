@@ -13,7 +13,7 @@ from uuid import uuid4
 
 from fastapi import APIRouter, BackgroundTasks, File, Form, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.dashboard.config import load_dashboard_config
 from app.config import settings
@@ -121,6 +121,13 @@ class GenerationSubmissionRequest(BaseModel):
 
 class AutonomousInspirationRequest(BaseModel):
     provider: str
+    guidance: str | None = None
+
+    @field_validator("guidance", mode="before")
+    @classmethod
+    def normalize_guidance(cls, value):
+        normalized = str(value or "").strip()
+        return normalized or None
 
 
 class ExplicitBatchStartRequest(BaseModel):
@@ -370,6 +377,8 @@ def _enhance_tags(request: TransformTagsRequest) -> dict:
             fanvue_account_id=account_id,
             creative_concept=tags,
             include_canonical_ava=False,
+            diagnostic_trace_id=request.diagnosticTraceId,
+            workflow_origin="recreate_with_ava",
         )
     else:
         enhanced_tags = creative_director.enhance_premium_tags(
@@ -818,7 +827,8 @@ def _execute_autonomous_inspiration(
             )
         update(status="planning", message="Building creative direction")
         directions = directions_override or AutonomousInspirationEngine().create_directions(
-            fanvue_account_id=account_id, diagnostic_trace_id=run_id)
+            fanvue_account_id=account_id, diagnostic_trace_id=run_id,
+            guidance=request.guidance)
         update(status="planning", message="Creating prompt plan",
                inspirationDirections=list(directions))
         generation_request = GenerationSubmissionRequest(
@@ -1402,7 +1412,7 @@ async def submit_autonomous_inspiration(
         stage_message="Preparing inspiration",
         result_location="/studio/content", cancellation_supported=False,
         metadata={
-            "request": request.model_dump(),
+            "request": request.model_dump(exclude_none=True),
             "provider": request.provider,
             "imageCount": AutonomousInspirationEngine.IMAGE_COUNT,
             "contentMode": "social",

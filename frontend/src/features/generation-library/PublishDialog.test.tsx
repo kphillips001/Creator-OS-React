@@ -41,6 +41,9 @@ describe("PublishDialog", () => {
     expect(screen.getByLabelText("@avablackthorne")).toBeChecked();
     expect(screen.queryByLabelText("@avablackthorneX")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Enable X-AUTO replies")).toBeChecked();
+    expect(screen.getByLabelText("Add Telegram CTA as thread")).toBeChecked();
+    expect(screen.getByLabelText("CTA text")).toHaveValue("");
+    expect(screen.getByLabelText("CTA URL")).toHaveValue("https://avablackthorne.com/me");
     expect(screen.getByLabelText("Telegram Broadcast")).toBeInTheDocument();
     expect(screen.getByLabelText("Instagram")).toBeInTheDocument();
     expect(screen.queryByText("Telegram Chat")).not.toBeInTheDocument();
@@ -186,14 +189,43 @@ describe("PublishDialog", () => {
     expect(await screen.findByLabelText("@avablackthorne")).toBeChecked();
     expect(screen.queryByLabelText("@avablackthorneX")).not.toBeInTheDocument();
     fireEvent.click(screen.getByLabelText("Enable X-AUTO replies"));
+    fireEvent.click(screen.getByLabelText("Add Telegram CTA as thread"));
+    expect(screen.queryByLabelText("CTA text")).not.toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Enter Your Own Caption"), { target: { value: "Shared caption" } });
     fireEvent.click(screen.getByRole("button", { name: "Publish to X" }));
     await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
     const payload = JSON.parse(String((fetch.mock.calls[1]![1] as RequestInit).body));
     expect(payload.xAutoRepliesEnabled).toBe(false);
+    expect(payload.xThreadCtaEnabled).toBe(false);
+    expect(payload.publishOperationId).toEqual(expect.any(String));
     expect(payload.xTargets).toEqual([
       expect.objectContaining({ accountName: "AvaBlackthorne", caption: "Shared caption" }),
     ]);
+    fetch.mockRestore();
+  });
+
+  it("submits the enabled URL-only Thread CTA defaults", async () => {
+    const fetch = vi.spyOn(globalThis, "fetch");
+    fetch.mockImplementationOnce(() => jsonResponse({
+      success: true, generatedImageId: "generated-1", defaultDestination: "x",
+      destinations: [{ value: "x", label: "X", available: true }],
+      xAccounts: [{ accountName: "AvaBlackthorne", label: "@avablackthorne" }],
+    }));
+    fetch.mockImplementationOnce(() => jsonResponse({ success: true, message: "Published to X." }));
+    render(<PublishDialog record={record} onClose={vi.fn()} onPublished={vi.fn()} />);
+
+    fireEvent.change(await screen.findByLabelText("Enter Your Own Caption"), {
+      target: { value: "Primary caption" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Publish to X" }));
+
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+    const payload = JSON.parse(String((fetch.mock.calls[1]![1] as RequestInit).body));
+    expect(payload).toMatchObject({
+      xThreadCtaEnabled: true,
+      xThreadCtaText: "",
+      xThreadCtaUrl: "https://avablackthorne.com/me",
+    });
     fetch.mockRestore();
   });
 

@@ -4,6 +4,10 @@
 .customer-metrics span, .customer-row small, .customer-detail small { display: block; color: var(--color-text-tertiary); font-size: .66rem; letter-spacing: .05em; text-transform: uppercase; }
 .customer-metrics strong { display: block; margin-top: .25rem; font-size: 1.35rem; }
 .customer-toolbar { display: grid; grid-template-columns: minmax(240px, 1fr) repeat(4, minmax(125px, .35fr)); gap: .7rem; padding: .8rem; border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-surface-raised); }
+.customer-toolbar--verified { grid-template-columns: minmax(240px, .8fr) 1.4fr; align-items: end; }
+.customer-filters { display:flex; flex-wrap:wrap; gap:.45rem; }
+.customer-filters button { min-height:38px; padding:0 .75rem; border:1px solid var(--color-border); border-radius:999px; color:var(--color-text-secondary); background:var(--color-surface); cursor:pointer; }
+.customer-filters button[aria-pressed="true"] { border-color:var(--color-accent-border); color:var(--color-accent); background:var(--color-accent-surface); }
 .customer-toolbar label { display: grid; gap: .3rem; color: var(--color-text-tertiary); font-size: .68rem; }
 .customer-toolbar input, .customer-toolbar select { min-height: 38px; padding: 0 .7rem; border: 1px solid var(--color-border); border-radius: 8px; color: var(--color-text-primary); background: var(--color-surface); }
 .customer-search { position: relative; align-self: end; }
@@ -14,6 +18,8 @@
 .customer-state--error { min-height: auto; justify-content: flex-start; border-style: solid; border-color: rgba(239,68,68,.4); color: #fca5a5; }
 .customer-inventory { display: grid; gap: .55rem; }
 .customer-row { display: grid; grid-template-columns: 48px minmax(160px, 1.1fr) minmax(115px, .7fr) minmax(135px, .75fr) minmax(110px, .65fr) minmax(145px, .85fr) minmax(180px, 1fr) auto; align-items: center; gap: .8rem; padding: .7rem; border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-surface-raised); }
+.customer-row--verified { grid-template-columns:48px minmax(180px,1.2fr) repeat(3,minmax(145px,.8fr)) auto; }
+.customer-badges { display:flex; flex-wrap:wrap; gap:.3rem; }
 .customer-avatar { width: 44px; height: 44px; display: grid; place-items: center; border: 1px solid var(--color-border); border-radius: 50%; color: var(--color-text-secondary); background: var(--color-surface); font-size: .9rem; }
 .customer-row__identity h2 { margin: .15rem 0; overflow: hidden; font-size: .84rem; text-overflow: ellipsis; white-space: nowrap; }
 .customer-row > div > span, .customer-row__action span { display: block; margin-top: .2rem; color: var(--color-text-secondary); font-size: .68rem; }
@@ -35,6 +41,9 @@
 .customer-detail__section dl div { display: grid; grid-template-columns: minmax(130px, .75fr) 1.4fr; gap: .7rem; font-size: .7rem; }
 .customer-detail__section dt { color: var(--color-text-tertiary); }
 .customer-detail__section dd { margin: 0; overflow-wrap: anywhere; color: var(--color-text-secondary); }
+.view-conversation { display:flex; justify-content:center; padding:.7rem; border:1px solid var(--color-accent-border); border-radius:9px; color:var(--color-accent); background:var(--color-accent-surface); text-decoration:none; }
+.transaction-history { display:grid; gap:.45rem; }
+.transaction-history article { display:grid; grid-template-columns:1fr auto auto; gap:.7rem; padding:.55rem; border:1px solid var(--color-border); border-radius:8px; color:var(--color-text-secondary); font-size:.72rem; }
 @media (max-width: 1250px) { .customer-metrics { grid-template-columns: repeat(3, 1fr); } .customer-row { grid-template-columns: 48px 1.2fr repeat(3, .8fr); } .customer-row__action, .customer-detail-button { grid-column: auto; } }
 @media (max-width: 850px) { .customer-toolbar { grid-template-columns: 1fr 1fr; } .customer-search { grid-column: 1 / -1; } .customer-row { grid-template-columns: 48px 1fr; } .customer-row > div:not(.customer-avatar):not(.customer-row__identity), .customer-detail-button { grid-column: 1 / -1; } }
 @media (max-width: 600px) { .customer-metrics { grid-template-columns: repeat(2, 1fr); } }

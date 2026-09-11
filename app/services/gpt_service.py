@@ -3859,11 +3859,40 @@ OWNERSHIP RULES:
         )
         creator_profile_id = int(creator_profile.get("id") or 0)
         global_operator_training = ""
+        customer_operator_training = ""
+        operator_training_diagnostics = {
+            "global": {"applied": [], "appliedToPrompt": False, "skipReason": "NOT_LOADED"},
+            "customer": {"applied": [], "appliedToPrompt": False, "skipReason": "NO_CANONICAL_MAPPED_CUSTOMER"},
+        }
         if creator_profile_id > 0 and fanvue_account_id:
-            global_operator_training = self.global_training_service.runtime_prompt_block(
-                creator_profile_id=creator_profile_id,
-                fanvue_account_id=int(fanvue_account_id),
+            global_projector = getattr(self.global_training_service, "global_runtime_projection", None)
+            global_projection = global_projector(
+                creator_profile_id=creator_profile_id, fanvue_account_id=int(fanvue_account_id)
+            ) if global_projector else None
+            global_operator_training = (global_projection or {}).get("promptBlock") or self.global_training_service.runtime_prompt_block(
+                creator_profile_id=creator_profile_id, fanvue_account_id=int(fanvue_account_id))
+            customer_projector = getattr(
+                self.global_training_service, "customer_runtime_projection", None
             )
+            customer_projection = customer_projector(
+                    creator_profile_id=creator_profile_id,
+                    fanvue_account_id=int(fanvue_account_id),
+                    customer_fanvue_user_id=(
+                        int(mapped_fanvue_user_id)
+                        if mapped_fanvue_user_id is not None else None
+                    ),
+                ) if customer_projector else {
+                    "promptBlock": "", "applied": [], "appliedToPrompt": False,
+                    "scope": "CUSTOMER", "skipReason": "PROJECTOR_UNAVAILABLE",
+                }
+            customer_operator_training = customer_projection["promptBlock"]
+            operator_training_diagnostics["global"] = ({key: value for key, value in global_projection.items() if key != "promptBlock"} if global_projection else {
+                "appliedToPrompt": bool(global_operator_training), "skipReason": None if global_operator_training else "NO_ENABLED_GLOBAL_GUIDANCE"})
+            operator_training_diagnostics["customer"] = {
+                key: value for key, value in customer_projection.items()
+                if key != "promptBlock"
+            }
+        memory_diagnostics["operatorTraining"] = operator_training_diagnostics
 
         buyer_tier = user_memory.get("buyer_tier", "none")
         intent_score = user_memory.get("intent_score", 0)
@@ -5188,6 +5217,8 @@ RELEVANT CONVERSATIONAL MEMORY
 {runtime_offer_escalation_instruction}
 
 {global_operator_training}
+
+{customer_operator_training}
 
 {long_term_stability_instruction}
 

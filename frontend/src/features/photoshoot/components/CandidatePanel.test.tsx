@@ -31,7 +31,7 @@ describe("CandidatePanel image preview", () => {
 
     fireEvent.click(screen.getByRole("button", { name: `Preview ${label}` }));
     expect(screen.getByRole("dialog", { name: `${label} fullscreen preview` })).toBeInTheDocument();
-    expect(screen.getByAltText(`${label} full-size preview`)).toHaveAttribute("src", `/api/v1/generation-library/${id}/media`);
+    expect(screen.getByAltText(`${label} preview`)).toHaveAttribute("src", `/api/v1/generation-library/${id}/preview`);
     expect(fetch).not.toHaveBeenCalled();
     for (const callback of Object.values(callbacks)) expect(callback).not.toHaveBeenCalled();
   });

@@ -117,16 +117,31 @@ class DeveloperAgentExecutionService:
             raise ValueError("Developer Agent task was not found.")
         if task["status"] != "APPROVED" or task["approved_at"] is None:
             raise PermissionError("Task approval is required before execution.")
+        lookup = getattr(self.repository, "latest_execution_for_task", None)
+        existing = lookup(task_id) if lookup else None
+        if existing is not None:
+            return existing
         self._validate_repository(task)
         health = self.readiness()
         if health["overallReadiness"] != "READY":
             raise RuntimeError(f"Developer Agent unavailable: {health['reason']}")
-        execution = self.repository.create_execution(
-            task_id=task_id,
-            initial_git_status=self._git("status", "--short"),
-            initial_branch=self._git("branch", "--show-current"),
-            initial_head=self._git("rev-parse", "HEAD"),
-        )
+        reserve = getattr(self.repository, "create_or_get_execution", None)
+        if reserve:
+            execution, reused = reserve(
+                task_id=task_id,
+                initial_git_status=self._git("status", "--short"),
+                initial_branch=self._git("branch", "--show-current"),
+                initial_head=self._git("rev-parse", "HEAD"),
+            )
+            if reused:
+                return execution
+        else:
+            execution = self.repository.create_execution(
+                task_id=task_id,
+                initial_git_status=self._git("status", "--short"),
+                initial_branch=self._git("branch", "--show-current"),
+                initial_head=self._git("rev-parse", "HEAD"),
+            )
         execution_id = UUID(str(execution["execution_id"]))
         self._record_event(
             execution_id, "EXECUTION_ACCEPTED",

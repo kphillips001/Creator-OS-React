@@ -8,6 +8,7 @@ import requests
 from app.models.generation_engine import GenerationRequest
 from app.providers.generation.base import SafeTransportError, WaveSpeedSubmissionAmbiguousError
 from app.providers.generation.seedream_provider import Seedream50ProProvider
+from app.repositories.hosted_asset_reference_repository import HostedAssetReferenceRepository
 from app.services.hosted_asset_reference_service import HostedAssetReferenceError, HostedAssetReferenceService
 
 
@@ -43,6 +44,7 @@ class SequencedHttp:
 def test_reuses_recent_checksum_matched_reference_without_network(tmp_path):
     source = tmp_path / "canonical.png"; source.write_bytes(b"canonical")
     record = SimpleNamespace(reference_id="hosted-1", hosted_url="https://cdn.test/canonical.png",
+                             created_at=datetime.now(timezone.utc) - timedelta(minutes=3),
                              verified_at=datetime.now(timezone.utc) - timedelta(minutes=2))
     repository = FakeRepository(record)
     http = SequencedHttp()
@@ -50,6 +52,33 @@ def test_reuses_recent_checksum_matched_reference_without_network(tmp_path):
     assert service.resolve(asset_id=93, source_path=str(source), host_name="imgbb", uploader=lambda _: pytest.fail("upload")) == record.hosted_url
     assert repository.used == ["hosted-1"]
     assert http.calls == []
+
+
+def test_save_ready_refreshes_created_at_when_replacing_hosted_url():
+    class Cursor:
+        def __init__(self): self.statements = []
+        def __enter__(self): return self
+        def __exit__(self, *_): return False
+        def execute(self, statement, _parameters=None): self.statements.append(statement)
+        def fetchone(self): return None
+
+    class Connection:
+        def __init__(self): self.cursor_instance = Cursor()
+        def __enter__(self): return self
+        def __exit__(self, *_): return False
+        def cursor(self): return self.cursor_instance
+
+    connection = Connection()
+    repository = HostedAssetReferenceRepository(connection_factory=lambda: connection)
+    repository.save_ready(
+        asset_id=93,
+        host_name="wavespeed_media",
+        hosted_url="https://cdn.test/replacement.png",
+        source_checksum="ABC",
+        source_path="canonical.png",
+    )
+    upsert = next(statement for statement in connection.cursor_instance.statements if "ON CONFLICT" in statement)
+    assert "created_at=now()" in upsert
 
 
 def test_checksum_change_hosts_verifies_and_persists_once(tmp_path):
@@ -65,6 +94,20 @@ def test_checksum_change_hosts_verifies_and_persists_once(tmp_path):
     assert repository.saved[0]["asset_id"] == 94
     assert repository.saved[0]["source_checksum"] == service.checksum(source)
 
+    repository.current = SimpleNamespace(
+        reference_id="hosted-new",
+        hosted_url=url,
+        created_at=datetime.now(timezone.utc),
+        verified_at=datetime.now(timezone.utc),
+    )
+    assert service.resolve(
+        asset_id=94,
+        source_path=str(source),
+        host_name="imgbb",
+        uploader=lambda _: pytest.fail("replacement upload"),
+    ) == url
+    assert len(uploads) == len(repository.saved) == 1
+
 
 def test_verification_retries_connection_resets_then_succeeds():
     http = SequencedHttp(gets=[requests.ConnectionError("reset"), requests.ConnectionError("reset"), Response(206)])
@@ -73,6 +116,42 @@ def test_verification_retries_connection_resets_then_succeeds():
     service.verify("https://cdn.test/canonical.png", asset_id=93)
     assert len(http.calls) == 3
     assert sleeps == [2.0, 5.0]
+
+
+@pytest.mark.parametrize("success_status", [200, 206])
+def test_verification_retries_initial_416_then_valid_image_success(success_status):
+    http = SequencedHttp(gets=[
+        Response(416),
+        Response(success_status, headers={"Content-Type": "image/png", "Content-Length": "1"}),
+    ])
+    sleeps = []
+    service = HostedAssetReferenceService(repository=FakeRepository(), http_client=http, sleep=sleeps.append)
+    service.verify("https://cdn.test/canonical.png", asset_id=93)
+    assert len(http.calls) == 2
+    assert sleeps == [2.0]
+
+
+def test_persistent_416_exhausts_bounded_retries_without_becoming_success():
+    http = SequencedHttp(gets=[Response(416), Response(416), Response(416)])
+    service = HostedAssetReferenceService(repository=FakeRepository(), http_client=http, sleep=lambda _: None)
+    with pytest.raises(HostedAssetReferenceError, match="could not be verified after 3 attempts"):
+        service.verify("https://cdn.test/canonical.png", asset_id=93)
+    assert len(http.calls) == 3
+
+
+@pytest.mark.parametrize("status", [200, 206])
+def test_valid_image_verification_does_not_require_accept_ranges(status):
+    http = SequencedHttp(gets=[Response(status, headers={"Content-Type": "image/png", "Content-Length": "1"})])
+    service = HostedAssetReferenceService(repository=FakeRepository(), http_client=http, sleep=lambda _: None)
+    service.verify("https://cdn.test/canonical.png", asset_id=93)
+    assert len(http.calls) == 1
+
+
+def test_zero_length_provider_reference_is_rejected():
+    http = SequencedHttp(gets=[Response(200, headers={"Content-Type": "image/png", "Content-Length": "0"})])
+    service = HostedAssetReferenceService(repository=FakeRepository(), http_client=http, sleep=lambda _: None)
+    with pytest.raises(HostedAssetReferenceError, match="empty image payload"):
+        service.verify("https://cdn.test/canonical.png", asset_id=93)
 
 
 def test_three_verification_resets_produce_clear_retryable_failure():

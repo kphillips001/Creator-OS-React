@@ -35,7 +35,7 @@ describe("SocialCreativeDirectionPage", () => {
     expect(screen.getByLabelText(/Seasonal Guidance/)).toHaveValue(document.seasonal_guidance);
     expect(screen.getByLabelText(/Things To Avoid/)).toHaveValue(document.things_to_avoid);
     expect(screen.getAllByRole("textbox")).toHaveLength(5);
-    expect(screen.getByText(/It is separate from Personality, Visual Identity, and Prompt Generation/)).toBeInTheDocument();
+    expect(screen.getByText(/uses it when planning public-facing concepts and generation prompts/)).toBeInTheDocument();
   });
 
   it("saves only the five document fields and shows the persisted response", async () => {

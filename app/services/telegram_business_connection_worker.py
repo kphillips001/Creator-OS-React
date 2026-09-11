@@ -11,14 +11,18 @@ import requests
 from app.integrations.telegram.business_connection_capture import (
     BOT_API_ALLOWED_UPDATES,
     TelegramBusinessConnectionCapture,
+    TelegramBusinessConnectionEvent,
+    TelegramBusinessPeerEvent,
 )
 
 
 class TelegramBusinessConnectionWorker:
-    def __init__(self, *, bot_token, lifecycle_service, session=None,
+    def __init__(self, *, bot_token, lifecycle_service,
+                 peer_observation_service=None, session=None,
                  timeout_seconds=20):
         self.endpoint = f"https://api.telegram.org/bot{str(bot_token).strip()}/getUpdates"
         self.lifecycle_service = lifecycle_service
+        self.peer_observation_service = peer_observation_service
         self.session = session or requests.Session()
         self.timeout_seconds = int(timeout_seconds)
         self.offset = None
@@ -46,9 +50,15 @@ class TelegramBusinessConnectionWorker:
             update_id = update.get("update_id")
             if isinstance(update_id, int):
                 self.offset = max(self.offset or 0, update_id + 1)
-            event = TelegramBusinessConnectionCapture._parse(update)
-            if event is not None:
-                captured.append(self.lifecycle_service.capture(event))
+            for event in TelegramBusinessConnectionCapture.parse(update):
+                result = None
+                if isinstance(event, TelegramBusinessConnectionEvent):
+                    result = self.lifecycle_service.capture(event)
+                elif (isinstance(event, TelegramBusinessPeerEvent)
+                      and self.peer_observation_service is not None):
+                    result = self.peer_observation_service.capture(event)
+                if result is not None:
+                    captured.append(result)
         return tuple(captured)
 
     def run_forever(self, *, stop_requested=lambda: False):

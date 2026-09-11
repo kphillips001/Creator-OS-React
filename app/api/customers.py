@@ -8,6 +8,7 @@ from app.api.content_studio import _current_account_id
 from app.services.customer_workspace_service import CustomerWorkspaceService
 from app.repositories.creator_profile_repository import get_active_creator_profile
 from app.services.customer_interaction_safety_service import CustomerInteractionSafetyService
+from app.repositories.customer_abuse_review_repository import CustomerAbuseReviewRepository
 
 
 router = APIRouter(prefix="/api/v1/customers", tags=["customers"])
@@ -26,12 +27,9 @@ def _account_id() -> int:
 
 def _customer_identity(customer_id: str):
     account_id = _account_id()
-    try:
-        parsed_account, user_id = (int(value) for value in str(customer_id).split(":", 1))
-    except (TypeError, ValueError) as error:
-        raise HTTPException(status_code=404, detail="Customer not found.") from error
-    if parsed_account != account_id:
-        raise HTTPException(status_code=404, detail="Customer not found.")
+    user_id = _workspace_service().customer_identity(customer_id, fanvue_account_id=account_id)
+    if user_id is None:
+        raise HTTPException(status_code=409, detail="This verified customer has no local interaction identity.")
     profile = get_active_creator_profile(str(account_id)) or {}
     if not profile.get("id"):
         raise HTTPException(status_code=409, detail="Active creator profile is required.")
@@ -51,37 +49,32 @@ class AbuseReviewResolution(BaseModel):
 @router.get("")
 def list_customers(
     search: str | None = None,
-    relationship_stage: str | None = None,
-    buyer_tier: str | None = None,
-    value_tier: str | None = None,
-    customer_health: str | None = None,
-    lifecycle: str | None = None,
-    retention_risk: str | None = None,
-    active_session: bool | None = None,
+    filter: str | None = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(24, ge=1, le=100),
 ):
     service = _workspace_service()
     customers = list(service.list_customers(fanvue_account_id=_account_id(), limit=5000))
     needle = str(search or "").strip().lower()
-    expected = {
-        "relationshipStage": relationship_stage,
-        "buyerTier": buyer_tier,
-        "valueTier": value_tier,
-        "customerHealth": customer_health,
-        "lifecycleStage": lifecycle,
-        "retentionRisk": retention_risk,
+    selected_filter = str(filter or "all").lower()
+    predicates = {
+        "all": lambda customer: True,
+        "buyers": lambda customer: customer["isBuyer"],
+        "subscribers": lambda customer: customer["subscriptionStatus"] in {"ACTIVE", "CANCELED_ACCESS_REMAINING"},
+        "active-sessions": lambda customer: customer["activeSalesSession"],
     }
+    if selected_filter not in predicates:
+        raise HTTPException(status_code=422, detail="Unsupported customer filter.")
     customers = [
         customer for customer in customers
         if (
             not needle
             or needle in str(customer.get("displayName") or "").lower()
             or needle in str(customer.get("customerId") or "").lower()
-            or any(needle in str(identity.get("username") or "").lower() for identity in customer.get("providerIdentities") or ())
+            or needle in str(customer.get("username") or "").lower()
+            or any(needle in str(value).lower() for value in customer.get("identitySearchValues") or ())
         )
-        and all(not value or str(customer.get(key) or "").lower() == str(value).lower() for key, value in expected.items())
-        and (active_session is None or bool(customer.get("activeBuyerSession")) is active_session)
+        and predicates[selected_filter](customer)
     ]
     total = len(customers)
     total_pages = max(1, (total + page_size - 1) // page_size)
@@ -105,20 +98,17 @@ def customer_details(customer_id: str):
         customer = None
     if customer is None:
         raise HTTPException(status_code=404, detail="Customer not found.")
-    creator_id, account_id, user_id = _customer_identity(customer_id)
-    safety = CustomerInteractionSafetyService()
-    state = safety.repository.get(creator_profile_id=creator_id,
-        fanvue_account_id=account_id, fanvue_user_id=user_id)
-    decision = safety.decide(creator_profile_id=creator_id,
-        fanvue_account_id=account_id, fanvue_user_id=user_id)
-    customer["interactionSafety"] = {
-        "safetyStatus": decision.safety_status, "decision": decision.code,
-        "policyEnabled": decision.policy_enabled,
-        "reason": (state or {}).get("reason"),
-        "effectiveAt": (state or {}).get("effective_at"),
-        "history": safety.repository.history(creator_profile_id=creator_id,
-            fanvue_account_id=account_id, fanvue_user_id=user_id),
-    }
+    if customer.get("localFanvueUserId") is not None:
+        creator_id, account_id, user_id = _customer_identity(customer_id)
+        safety = CustomerInteractionSafetyService()
+        state = safety.repository.get(creator_profile_id=creator_id, fanvue_account_id=account_id, fanvue_user_id=user_id)
+        decision = safety.decide(creator_profile_id=creator_id, fanvue_account_id=account_id, fanvue_user_id=user_id)
+        customer["interactionSafety"] = {"safetyStatus": decision.safety_status, "decision": decision.code,
+            "policyEnabled": decision.policy_enabled, "reason": (state or {}).get("reason"),
+            "effectiveAt": (state or {}).get("effective_at"),
+            "history": safety.repository.history(creator_profile_id=creator_id, fanvue_account_id=account_id, fanvue_user_id=user_id)}
+        customer["abuseReview"] = CustomerAbuseReviewRepository().active_for_customer(
+            creator_profile_id=creator_id, fanvue_account_id=account_id, fanvue_user_id=user_id)
     return jsonable_encoder(customer)
 
 

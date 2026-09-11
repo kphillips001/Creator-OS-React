@@ -352,12 +352,14 @@ class TelethonRuntime:
         )
         if not replies_enabled:
             self._logger.info(
-                "[TELEGRAM PAUSED] inbound message suppressed "
+                "[TELEGRAM PAUSED] inbound message observed without automation "
                 "chat_id=%s user_id=%s",
                 payload.telegram_chat_id,
                 payload.telegram_user_id,
             )
-            return None
+            return await asyncio.to_thread(
+                self._inbound_adapter.execute, payload, observe_only=True,
+            )
 
         global_result = self._global_safety_service.check_global_safety()
         controlled_result = self._controlled_autonomy.decide(
@@ -366,10 +368,12 @@ class TelethonRuntime:
         )
         if not global_result.get("allowed", False) and not controlled_result.allowed:
             self._logger.info(
-                "[TELEGRAM AUTONOMY BLOCKED] chat_id=%s reason=%s",
+                "[TELEGRAM AUTONOMY BLOCKED] inbound observed chat_id=%s reason=%s",
                 payload.telegram_chat_id, global_result.get("reason"),
             )
-            return None
+            return await asyncio.to_thread(
+                self._inbound_adapter.execute, payload, observe_only=True,
+            )
 
         if not global_result.get("allowed", False):
             with self._controlled_autonomy.scope(
@@ -459,6 +463,13 @@ class TelethonRuntime:
                             self._ordinary_replies.generated,
                             ordinary_operation, result,
                         )
+                if result.error_code == "RELATIONSHIP_HUMAN_OPERATOR_ACTIVE":
+                    if ordinary_operation is not None and self._ordinary_replies is not None:
+                        await asyncio.to_thread(self._ordinary_replies.suppress_relationship_control,
+                                                ordinary_operation)
+                    self._logger.info("event=telegram_reply_held relationship_control=HUMAN_OPERATOR chat_id=%s",
+                                      payload.telegram_chat_id)
+                    return result
                 if self._engagement_teasers is not None:
                     engagement = await self._engagement_teasers.handle_active_inbound(
                         result=result, payload=payload, transport=self._transport)
@@ -570,6 +581,7 @@ class TelethonRuntime:
                             delivery_payload,
                             context={
                                 "chat_id": payload.telegram_chat_id,
+                                "telegram_user_id": payload.telegram_user_id,
                                 "correlation_id": (
                                     claimed_ordinary.correlation_id
                                     if claimed_ordinary is not None
@@ -579,6 +591,8 @@ class TelethonRuntime:
                                 "creator_profile_id": result.diagnostic_metadata.get("creator_profile_id"),
                                 "fanvue_account_id": result.diagnostic_metadata.get("fanvue_account_id"),
                                 "fanvue_user_id": result.diagnostic_metadata.get("fanvue_user_id"),
+                                "relationship_control_version": result.diagnostic_metadata.get(
+                                    "relationship_control_version", 0),
                                 "fallback_message_text": (
                                     operation.response_text
                                     if operation is not None
@@ -1143,6 +1157,15 @@ def build_default_runtime_from_environment() -> TelethonRuntime:
         logger=logging.getLogger("telegram-decision-engine"),
     )
     global_safety = GlobalAutomationSafetyService()
+    from app.services.global_selling_permissions_service import (
+        GlobalSellingPermissionsService,
+    )
+    global_selling_permissions = GlobalSellingPermissionsService()
+    from app.services.customer_effective_permissions_service import (
+        CustomerEffectivePermissionsService,
+    )
+    customer_effective_permissions = CustomerEffectivePermissionsService(
+        global_selling_permissions=global_selling_permissions)
     telegram_prospects = UnmappedTelegramProspectService()
     creator_profile = get_active_creator_profile(str(engine_account_id)) or {}
     creator_profile_id = int(creator_profile.get("id") or 0)
@@ -1154,10 +1177,14 @@ def build_default_runtime_from_environment() -> TelethonRuntime:
         ),
         customer_sales_brain_service=CustomerSalesBrainService(
             unmapped_telegram_prospect_service=telegram_prospects,
+            global_selling_permissions_service=global_selling_permissions,
+            customer_effective_permissions_service=customer_effective_permissions,
         ),
         creator_profile_id=creator_profile_id or None,
         runtime_control_service=RuntimeControlService(),
         global_automation_safety_service=global_safety,
+        global_selling_permissions_service=global_selling_permissions,
+        customer_effective_permissions_service=customer_effective_permissions,
         commercial_presentation_copy_generator=lambda **kwargs: (
             gpt_service.generate_paid_presentation_copy(
                 **kwargs,
@@ -1187,6 +1214,8 @@ def build_default_runtime_from_environment() -> TelethonRuntime:
     from app.services.autonomous_engagement_teaser_service import AutonomousEngagementTeaserService
     from app.services.ordinary_chat_reply_service import OrdinaryChatReplyService
     from app.services.buyer_memory_priority_service import BuyerMemoryPriorityService
+    from app.services.telegram_relationship_control_service import TelegramRelationshipControlService
+    relationship_controls = TelegramRelationshipControlService()
     engagement_repository = FreeEngagementTeaserRepository()
     engagement_policy_repository = EngagementTeaserPolicyRepository()
     engagement_teasers = AutonomousEngagementTeaserService(
@@ -1196,6 +1225,17 @@ def build_default_runtime_from_environment() -> TelethonRuntime:
         policy_repository=engagement_policy_repository,
     )
     ordinary_replies = OrdinaryChatReplyService()
+    from app.repositories.telegram_operator_message_repository import TelegramOperatorMessageRepository
+    operator_messages = TelegramOperatorMessageRepository()
+    def recent_telegram_history(**scope):
+        ordinary = ordinary_replies.recent_confirmed_history(**scope)
+        manual = operator_messages.recent_confirmed_history(
+            creator_profile_id=scope["creator_profile_id"],
+            fanvue_account_id=scope["fanvue_account_id"],
+            telegram_user_id=scope["telegram_user_id"],
+            telegram_chat_id=scope["telegram_chat_id"],
+        )
+        return [*ordinary,*manual][-10:]
     buyer_memory_priority = BuyerMemoryPriorityService()
     inbound_adapter = TelegramInboundAdapter(
         identity_adapter=TelegramIdentityAdapter(
@@ -1212,9 +1252,7 @@ def build_default_runtime_from_environment() -> TelethonRuntime:
         conversation_thread_resolver=get_or_create_chat_thread,
         conversation_message_saver=save_chat_message,
         conversation_history_loader=get_recent_messages_for_gpt,
-        unmapped_conversation_history_loader=(
-            ordinary_replies.recent_confirmed_history
-        ),
+        unmapped_conversation_history_loader=recent_telegram_history,
         engagement_outcome_tracker=engagement_repository,
         conversational_memory_service=ConversationalMemoryService(),
         buyer_memory_priority_resolver=buyer_memory_priority.resolve,
@@ -1223,6 +1261,7 @@ def build_default_runtime_from_environment() -> TelethonRuntime:
         abuse_policy_service=CustomerAbusePolicyService(
             prospect_service=telegram_prospects,
         ),
+        relationship_control_service=relationship_controls,
     )
     client = TelegramClient(session_path, api_id, api_hash)
     transport = TelethonUserTransport(client=client)
@@ -1233,6 +1272,7 @@ def build_default_runtime_from_environment() -> TelethonRuntime:
     delivery_executor = TelegramDeliveryExecutor(
         global_safety_service=global_safety,
         business_commercial_transport=business_transport,
+        relationship_control_service=relationship_controls,
     )
     business_connection_worker = None
     if os.getenv(
@@ -1244,6 +1284,9 @@ def build_default_runtime_from_environment() -> TelethonRuntime:
         from app.services.telegram_business_connection_worker import (
             TelegramBusinessConnectionWorker,
         )
+        from app.services.telegram_business_peer_observation_service import (
+            TelegramBusinessPeerObservationService,
+        )
         if not business_transport.bot_id:
             raise TelethonRuntimeError("TELEGRAM_BUSINESS_BOT_ID is required.")
         business_connection_worker = TelegramBusinessConnectionWorker(
@@ -1251,6 +1294,7 @@ def build_default_runtime_from_environment() -> TelethonRuntime:
             lifecycle_service=TelegramBusinessConnectionService(
                 bot_telegram_user_id=business_transport.bot_id,
             ),
+            peer_observation_service=TelegramBusinessPeerObservationService(),
         )
     sales_deliveries = (
         TelegramSalesDeliveryService(

@@ -191,6 +191,73 @@ def test_empty_editorial_memory_preserves_canonical_inspiration_fallback():
     assert "No analyzed retained-image patterns are available yet" in captured[0]
 
 
+def test_blank_guidance_leaves_the_unguided_brief_unchanged():
+    values = dict(
+        personality={"persona_name": "Ava"},
+        lifestyle={"home": "coastal"},
+        social_creative_direction={"purpose": "social"},
+        world_model={"public_location_description": "coast"},
+        creative_intelligence_profile={},
+        month="September",
+        season="fall",
+    )
+
+    baseline = AutonomousInspirationEngine._build_brief(**values)
+
+    assert AutonomousInspirationEngine._build_brief(**values, guidance=None) == baseline
+    assert AutonomousInspirationEngine._build_brief(**values, guidance="") == baseline
+    assert AutonomousInspirationEngine._build_brief(**values, guidance="   \n ") == baseline
+    assert "OPERATOR GUIDANCE FOR THIS INSPIRE ME RUN" not in baseline
+
+
+@pytest.mark.parametrize(
+    "guidance",
+    (
+        "warm summer weather",
+        "yellow shirt",
+        "warm summer weather, yellow shirt, outdoors",
+    ),
+)
+def test_guidance_reaches_all_six_direction_planning_with_explicit_precedence(guidance):
+    brief = AutonomousInspirationEngine._build_brief(
+        personality={"persona_name": "Ava"},
+        lifestyle={"home": "coastal"},
+        social_creative_direction={"purpose": "social"},
+        world_model={"public_location_description": "coast"},
+        creative_intelligence_profile={},
+        month="September",
+        season="fall",
+        guidance=f"  {guidance}  ",
+    )
+
+    assert f"OPERATOR GUIDANCE FOR THIS INSPIRE ME RUN:\n{guidance}" in brief
+    assert "Apply every applicable requirement across all six directions" in brief
+    assert "It overrides conflicting soft seasonal or autonomous preferences" in brief
+    assert "It does not override safety, canonical Ava identity, render locks" in brief
+    assert "September (fall)" in brief
+    assert brief.index("OPERATOR GUIDANCE FOR THIS INSPIRE ME RUN") < brief.index("CREATIVE PRIORITY")
+
+
+def test_guidance_is_per_call_and_never_leaks_into_a_later_unguided_run():
+    captured = []
+    engine = AutonomousInspirationEngine(
+        creator_intelligence=Intelligence(),
+        creative_intelligence=CreativeProfile(),
+        world_model_repository=WorldRepository({"public_location_description": "coast"}),
+        creator_profile_loader=lambda _: {"id": 20},
+        text_generator=lambda prompt: captured.append(prompt) or "\n".join(
+            f"Fresh direction {index}" for index in range(6)
+        ),
+        now=lambda: datetime(2026, 9, 10),
+    )
+
+    engine.create_directions(fanvue_account_id=2, guidance="yellow shirt")
+    engine.create_directions(fanvue_account_id=2)
+
+    assert "yellow shirt" in captured[0]
+    assert "OPERATOR GUIDANCE FOR THIS INSPIRE ME RUN" not in captured[1]
+
+
 def test_wardrobe_color_guidance_contains_no_deterministic_seasonal_palette():
     from pathlib import Path
 

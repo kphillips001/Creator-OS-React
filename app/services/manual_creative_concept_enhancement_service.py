@@ -38,16 +38,17 @@ class ManualCreativeConceptEnhancementService:
         creative_concept: str,
         include_canonical_ava: bool = True,
         diagnostic_trace_id: str | None = None,
+        workflow_origin: str = "manual_creative_concept",
     ) -> str:
         concept = str(creative_concept or "").strip()
         if not concept:
             raise ValueError("Creative Concept is required.")
         diagnostic = GenerationRequestDiagnosticService()
         diagnostic.record(trace_id=diagnostic_trace_id,
-                          workflow_origin="manual_creative_concept",
-                          stage="1_workflow_origin", value="manual_creative_concept")
+                          workflow_origin=workflow_origin,
+                          stage="1_workflow_origin", value=workflow_origin)
         diagnostic.record(trace_id=diagnostic_trace_id,
-                          workflow_origin="manual_creative_concept",
+                          workflow_origin=workflow_origin,
                           stage="2_initial_creative_input", value=concept)
         identity_context = (
             f"""\nCANONICAL AVA — IDENTITY AUTHORITY:\n{self.canonical_ava.prompt_context()}\n
@@ -82,7 +83,7 @@ Return only the enhanced creative direction. Do not include headings,
 analysis, bullets, hidden context, or internal reasoning.""",
         )
         diagnostic.record(
-            trace_id=diagnostic_trace_id, workflow_origin="manual_creative_concept",
+            trace_id=diagnostic_trace_id, workflow_origin=workflow_origin,
             stage="3_ava_creator_context_supplied",
             value={"canonicalAvaInjected": include_canonical_ava,
                    "canonicalAvaBlock": identity_context,
@@ -90,6 +91,6 @@ analysis, bullets, hidden context, or internal reasoning.""",
         )
         enhanced = str(self.text_generator(private_brief) or "").strip()
         diagnostic.record(trace_id=diagnostic_trace_id,
-                          workflow_origin="manual_creative_concept",
+                          workflow_origin=workflow_origin,
                           stage="4_enhanced_creative_intent", value=enhanced or concept)
         return enhanced or concept

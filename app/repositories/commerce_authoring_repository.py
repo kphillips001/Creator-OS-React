@@ -25,6 +25,40 @@ class CommerceAuthoringRepository:
                 )
                 return cursor.fetchone()
 
+    def get_detail(self, offering_id, *, creator_profile_id: int):
+        """Return the catalog projection for one creator-owned offering."""
+        with self.connection_factory() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """SELECT offering.*,
+                        COUNT(member.asset_id) AS asset_count,
+                        publication.publication_id,
+                        publication.status AS publication_status,
+                        publication.provider,
+                        COALESCE(publication.provider_resource_status,'UNVERIFIED')
+                          AS provider_resource_status,
+                        publication.last_reconciled_at,
+                        publication.reconciliation_result,
+                        publication.last_error,
+                        publication.published_at,
+                        CASE WHEN publication.status='LIVE'
+                              AND publication.provider_resource_status='PRESENT'
+                              AND offering.status<>'ARCHIVED'
+                             THEN publication.publication_metadata#>>'{media_link,url}'
+                             ELSE NULL END AS delivery_url
+                       FROM public.commercial_offerings offering
+                       LEFT JOIN public.commercial_publications publication
+                         ON publication.commercial_offering_id=offering.offering_id
+                        AND publication.provider='FANVUE'
+                       LEFT JOIN public.commercial_offering_assets member
+                         ON member.offering_id=offering.offering_id
+                       WHERE offering.creator_profile_id=%s
+                         AND offering.offering_id=%s
+                       GROUP BY offering.offering_id,publication.publication_id""",
+                    (creator_profile_id, offering_id),
+                )
+                return cursor.fetchone()
+
     def list_page(
         self, *, creator_profile_id: int, search=None, status=None,
         offering_type=None, channel=None, publication_status=None,

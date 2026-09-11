@@ -73,12 +73,46 @@
   line-height: 1.6;
 }
 
-.inspire-workspace__intro button {
+.inspire-workspace__controls {
+  display: flex;
+  width: min(100%, 680px);
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.inspire-workspace__controls button {
+  flex: 0 0 auto;
   min-height: 42px;
   padding: 0 var(--space-5);
   border-color: var(--color-accent);
   background: var(--color-accent);
   color: #090909;
+}
+
+.inspire-workspace__controls input {
+  flex: 1 1 20rem;
+  min-width: 12rem;
+  min-height: 42px;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-inset);
+  color: var(--color-text-primary);
+}
+
+.inspire-workspace__controls input::placeholder {
+  color: var(--color-text-tertiary);
+}
+
+.inspire-workspace__controls input:focus {
+  border-color: var(--color-accent);
+  outline: none;
+  box-shadow: 0 0 0 1px var(--color-accent);
+}
+
+@media (max-width: 520px) {
+  .inspire-workspace__controls { flex-wrap: wrap; }
+  .inspire-workspace__controls input { flex-basis: 100%; }
 }
 
 .workflow-live-preview {

@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from app.api.customers import _account_id
 from app.services.operations_workspace_service import OperationsWorkspaceService
 from app.services.module_switches_service import ModuleSwitchesService
+from app.services.ava_bot_control_service import AvaBotControlService
 from app.services.purchase_attribution_recovery_service import PurchaseAttributionRecoveryService
 from app.repositories.creator_profile_repository import get_active_creator_profile
 from app.services.telegram_identity_service import (
@@ -27,8 +28,16 @@ def _module_switches_service() -> ModuleSwitchesService:
     return ModuleSwitchesService()
 
 
+def _global_controls_service() -> AvaBotControlService:
+    return AvaBotControlService()
+
+
 class ModuleSwitchUpdate(BaseModel):
     value: bool | str
+
+
+class GlobalPermissionUpdate(BaseModel):
+    value: bool
 
 
 class ManualAttributionRequest(BaseModel):
@@ -92,6 +101,45 @@ def update_operations_module_switch(module: str, payload: ModuleSwitchUpdate):
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
     return jsonable_encoder(result)
+
+
+@router.get("/global-controls")
+def read_global_controls():
+    return jsonable_encoder(
+        _global_controls_service().read(creator_profile_id=_account_id())
+    )
+
+
+@router.post("/global-controls/ava-bot/turn-on")
+def turn_ava_bot_on():
+    try:
+        result = _global_controls_service().turn_on(
+            creator_profile_id=_account_id())
+    except RuntimeError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    return jsonable_encoder(result)
+
+
+@router.post("/global-controls/ava-bot/turn-off")
+def turn_ava_bot_off():
+    try:
+        result = _global_controls_service().turn_off(
+            creator_profile_id=_account_id())
+    except RuntimeError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    return jsonable_encoder(result)
+
+
+@router.patch("/global-controls/content-selling")
+def set_global_content_selling(payload: GlobalPermissionUpdate):
+    return jsonable_encoder(_global_controls_service().set_content_selling(
+        payload.value, creator_profile_id=_account_id()))
+
+
+@router.patch("/global-controls/session-selling")
+def set_global_session_selling(payload: GlobalPermissionUpdate):
+    return jsonable_encoder(_global_controls_service().set_session_selling(
+        payload.value, creator_profile_id=_account_id()))
 
 
 @router.get("/purchase-recovery")

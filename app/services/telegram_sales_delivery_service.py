@@ -185,6 +185,7 @@ class TelegramSalesDeliveryService:
                 "session_asset_id": delivery_metadata.get("session_asset_id"),
                 "message_purpose": delivery_metadata.get("message_purpose"),
                 "purchase_kind": delivery_metadata.get("purchase_kind"),
+                "presentation_origin": delivery_metadata.get("presentation_origin"),
                 "attached_media_kind": (
                     "BUNDLE_PROMOTIONAL_TEASER"
                     if delivery_metadata.get("bundle_teaser_delivery")

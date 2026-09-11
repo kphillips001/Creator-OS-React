@@ -1,11 +1,20 @@
 """PostgreSQL certification for durable purchase acknowledgement ordering."""
+import os
 from datetime import datetime, timezone
 from uuid import uuid4
+
+import pytest
 
 from app.models.telegram_sales_delivery_operation import TelegramSalesDeliveryState
 from app.repositories.telegram_sales_delivery_repository import TelegramSalesDeliveryRepository
 from app.services.telegram_sales_delivery_service import TelegramSalesDeliveryService
 from app.test_private_chat_settlement_postgres import connection_factory, fixture
+
+
+pytestmark = pytest.mark.skipif(
+    not os.getenv("TEST_DATABASE_URL"),
+    reason="TEST_DATABASE_URL required",
+)
 
 
 def acknowledgement_operation(*, state="TELEGRAM_ACCEPTED"):

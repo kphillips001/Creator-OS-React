@@ -5,6 +5,12 @@ from uuid import uuid4
 from app.models.conversation_gateway import (
     ConversationBrainContext, ConversationGatewayInput, ConversationGatewayOutput,
 )
+from app.models.customer_sales_decision import (
+    CustomerBuyerStage,
+    CustomerSalesDecision,
+    CustomerSalesDecisionType,
+    CustomerSalesReasonCode,
+)
 from app.models.ordinary_chat_reply_operation import OrdinaryChatReplyState
 from app.models.telegram_inbound import TelegramInboundPayload
 from app.services.conversation_gateway import ConversationGateway
@@ -63,6 +69,10 @@ def test_recent_prospect_history_is_confirmed_chronological_bounded_and_deduped(
     )
 
     assert history == [
+        {"role": "user", "content": "customer 1"},
+        {"role": "assistant", "content": "ava 1"},
+        {"role": "user", "content": "customer 2"},
+        {"role": "assistant", "content": "ava 2"},
         {"role": "user", "content": "customer 3"},
         {"role": "assistant", "content": "ava 3"},
         {"role": "user", "content": "customer 4"},
@@ -76,7 +86,7 @@ def test_recent_prospect_history_is_confirmed_chronological_bounded_and_deduped(
         "creator_profile_id": 3, "fanvue_account_id": 2,
         "telegram_user_id": 123, "telegram_chat_id": 123,
         "account_scope": "AVA_TELETHON_PRIVATE",
-        "exclude_inbound_message_id": 99, "limit": 4,
+        "exclude_inbound_message_id": 99, "limit": 6,
     }
 
 
@@ -220,9 +230,22 @@ def test_sales_brain_receives_recent_customer_requests_from_gateway_history(monk
     monkeypatch.setenv("CONTROLLED_AUTONOMY_TEST_ENABLED", "false")
     captured = []
     brain = SimpleNamespace(evaluate_for_telegram_user=lambda **values: (
-        captured.append(values) or SimpleNamespace(
-            decision=SimpleNamespace(value="NO_SALE"),
-            reason_code=SimpleNamespace(value="NO_ELIGIBLE_OFFERING"),
+        captured.append(values) or CustomerSalesDecision(
+            creator_profile_id=3, fanvue_account_id=2,
+            external_fanvue_buyer_uuid=None, telegram_user_id=123,
+            identity_resolved=False,
+            decision=CustomerSalesDecisionType.NO_SALE,
+            reason_code=CustomerSalesReasonCode.NO_ELIGIBLE_OFFERING,
+            reason_summary="No eligible offering.",
+            buyer_stage=CustomerBuyerStage.PROSPECT,
+            commerce_signal={}, active_purchase_intent_id=None,
+            active_offering_id=None, active_offer_status=None,
+            active_offer_conversion_state="NONE",
+            recommended_offering_id=None, recommended_publication_id=None,
+            recommended_delivery_url=None, sell_allowed=False,
+            nudge_allowed=False, upsell_allowed=False,
+            cross_sell_allowed=False, congratulate_allowed=False,
+            cooldown_until=None, evaluated_at=NOW, decision_metadata={},
         )
     ))
     gateway = ConversationGateway.__new__(ConversationGateway)

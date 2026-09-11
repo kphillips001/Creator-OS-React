@@ -101,6 +101,44 @@ class DeveloperAgentExecutionRepository:
             )
         return dict(row)
 
+    def create_or_get_execution(
+        self, *, task_id: UUID, initial_git_status: str,
+        initial_branch: str, initial_head: str,
+    ) -> tuple[dict[str, Any], bool]:
+        """Atomically reserve the sole execution for one approved task snapshot."""
+        with self.connection_factory() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",
+                (str(task_id),),
+            )
+            cursor.execute(
+                """SELECT * FROM public.developer_agent_executions
+                   WHERE task_id=%s ORDER BY created_at DESC LIMIT 1""",
+                (task_id,),
+            )
+            existing = cursor.fetchone()
+            if existing is not None:
+                return dict(existing), True
+            execution_id = uuid4()
+            cursor.execute(
+                """INSERT INTO public.developer_agent_executions(
+                    execution_id,task_id,status,initial_git_status,
+                    initial_branch,initial_head
+                ) VALUES(%s,%s,'QUEUED',%s,%s,%s) RETURNING *""",
+                sanitize_developer_agent_value((
+                    execution_id, task_id, initial_git_status,
+                    initial_branch, initial_head,
+                )),
+            )
+            row = cursor.fetchone()
+            cursor.execute(
+                """INSERT INTO public.developer_agent_reviews(
+                    review_id,execution_id,status
+                ) VALUES(%s,%s,'PENDING')""",
+                (uuid4(), execution_id),
+            )
+        return dict(row), False
+
     def get_execution(self, execution_id: UUID) -> dict[str, Any] | None:
         return self._one(
             """SELECT execution.*,task.issue_identifier,task.implementation_task,
@@ -112,6 +150,20 @@ class DeveloperAgentExecutionRepository:
                  ON review.execution_id=execution.execution_id
                WHERE execution.execution_id=%s""",
             (execution_id,),
+        )
+
+    def latest_execution_for_task(self, task_id: UUID) -> dict[str, Any] | None:
+        return self._one(
+            """SELECT execution.*,task.issue_identifier,task.implementation_task,
+                      task.repository_path,task.expected_branch,
+                      review.status AS review_status
+               FROM public.developer_agent_executions execution
+               JOIN public.developer_agent_tasks task USING(task_id)
+               LEFT JOIN public.developer_agent_reviews review
+                 ON review.execution_id=execution.execution_id
+               WHERE execution.task_id=%s
+               ORDER BY execution.created_at DESC LIMIT 1""",
+            (task_id,),
         )
 
     def list_executions(self, limit: int = 20) -> list[dict[str, Any]]:

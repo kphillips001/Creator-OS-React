@@ -27,7 +27,7 @@ export function RecreateWithAvaWorkflowSection({
   const [runtime, setRuntime] = useState<RecreateRuntimeState | null>(null);
   const blocked = context.status === "reference_missing" || !creativeMode || !provider;
 
-  const generate = async (source: string, enhanced: string) => {
+  const generate = async (source: string, enhanced: string, diagnosticTraceId: string) => {
     if (inFlightRef.current || blocked || pending) return;
     inFlightRef.current = true;
     setActivated(true);
@@ -40,7 +40,15 @@ export function RecreateWithAvaWorkflowSection({
       ].join(" ");
       let preview;
       try {
-        preview = await createPromptPreview(creativeMode, promptInput, 1);
+        preview = await createPromptPreview(
+          creativeMode,
+          promptInput,
+          1,
+          undefined,
+          "social",
+          undefined,
+          { origin: "recreate_with_ava", diagnosticTraceId },
+        );
       } catch {
         throw new Error("Failed while creating canonical prompt.");
       }
@@ -52,6 +60,7 @@ export function RecreateWithAvaWorkflowSection({
         promptSource: promptInput,
         promptSourceLabel: "Enhanced Tags",
         provider,
+        diagnosticTraceId,
       });
       if (!result) {
         throw new Error("Generation submission was blocked because the generation runtime was unavailable.");

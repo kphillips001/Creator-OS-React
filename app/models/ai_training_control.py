@@ -13,6 +13,7 @@ class AiTrainingInstructionType(str, Enum):
     HARD_STOP = "HARD_STOP"
     KNOWLEDGE = "KNOWLEDGE"
     ENGAGEMENT_RULE = "ENGAGEMENT_RULE"
+    CUSTOMER_TREATMENT_POLICY = "CUSTOMER_TREATMENT_POLICY"
 
 
 class AiTrainingInstructionStatus(str, Enum):
@@ -29,6 +30,7 @@ class AiTrainingInstruction:
     creator_profile_id: int
     fanvue_account_id: int
     scope: str
+    customer_fanvue_user_id: int | None
     instruction_type: AiTrainingInstructionType
     original_operator_text: str
     normalized_instruction: str
@@ -54,6 +56,7 @@ class AiTrainingInstruction:
             creator_profile_id=int(value["creator_profile_id"]),
             fanvue_account_id=int(value["fanvue_account_id"]),
             scope=value["scope"],
+            customer_fanvue_user_id=(int(value["customer_fanvue_user_id"]) if value.get("customer_fanvue_user_id") is not None else None),
             instruction_type=AiTrainingInstructionType(value["instruction_type"]),
             original_operator_text=value["original_operator_text"],
             normalized_instruction=value["normalized_instruction"],

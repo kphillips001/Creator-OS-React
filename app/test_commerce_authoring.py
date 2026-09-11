@@ -178,6 +178,23 @@ def test_publish_reuses_existing_record_and_prevents_duplicate_creation():
     assert publications.created == 0
 
 
+def test_catalog_detail_uses_creator_scoped_read_projection():
+    offering_id = uuid4()
+    row = {"offering_id": offering_id, "title": "Catalog detail"}
+
+    class Reads:
+        def get_detail(self, requested_id, *, creator_profile_id):
+            assert requested_id == offering_id
+            assert creator_profile_id == 2
+            return row
+
+    service = CommerceAuthoringService(
+        offerings=OfferingDomain(), publications=Publications(),
+        read_repository=Reads(),
+    )
+    assert service.get_detail(offering_id, creator_profile_id=2) is row
+
+
 def test_creation_repository_is_transactional_and_ordered():
     source = open(
         "app/repositories/commercial_offering_repository.py", encoding="utf-8"
@@ -185,3 +202,22 @@ def test_creation_repository_is_transactional_and_ordered():
     assert "with self._connection_factory() as connection" in source
     assert "enumerate(asset_ids, 1)" in source
     assert "price_minor,currency" in source
+
+
+def test_asset_library_detail_reuses_creator_scoped_catalog_projection():
+    class Reads:
+        def __init__(self):
+            self.request = None
+
+        def get_detail(self, offering_id, **values):
+            self.request = (offering_id, values)
+            return {"offering_id": offering_id, "title": "Canonical"}
+
+    reads = Reads()
+    offering_id = uuid4()
+    result = CommerceAuthoringService(
+        offerings=OfferingDomain(), publications=Publications(),
+        read_repository=reads,
+    ).get_detail(offering_id, creator_profile_id=7)
+    assert result["title"] == "Canonical"
+    assert reads.request == (offering_id, {"creator_profile_id": 7})

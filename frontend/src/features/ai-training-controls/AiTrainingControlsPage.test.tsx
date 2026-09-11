@@ -7,6 +7,15 @@ const response = (value: unknown, status = 200) => ({ ok: status >= 200 && statu
 describe("AiTrainingControlsPage", () => {
   beforeEach(() => vi.restoreAllMocks());
 
+  it("presents live instructions as Ava Rules without mutating them on load", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async () => response({ items: [] }));
+    render(<AiTrainingControlsPage />);
+    expect(await screen.findByRole("heading", { name: "Ava Rules" })).toBeInTheDocument();
+    expect(screen.getByText("Manage the rules and policies that shape Ava's live behavior.")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "AI Training" })).not.toBeInTheDocument();
+    expect(fetchMock.mock.calls.every(([, init]) => !init?.method || init.method === "GET")).toBe(true);
+  });
+
   it("previews eligible text before activation and reloads the global inventory", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
       const url = String(input);
@@ -16,7 +25,7 @@ describe("AiTrainingControlsPage", () => {
     });
     render(<AiTrainingControlsPage />);
     await screen.findByText("No active instructions.");
-    fireEvent.click(screen.getByRole("button", { name: "+ New Global Training" }));
+    fireEvent.click(screen.getByRole("button", { name: "+ New Ava Rule" }));
     fireEvent.change(screen.getByLabelText("Instruction"), { target: { value: "Keep replies concise" } });
     fireEvent.click(screen.getByRole("button", { name: "Preview Instruction" }));
     expect(await screen.findByText("GPT conversation context", { selector: "dd" })).toBeInTheDocument();
@@ -29,7 +38,7 @@ describe("AiTrainingControlsPage", () => {
       ? response({ originalOperatorText: "Always sell", normalizedInstruction: "Always sell", instructionType: "SALES_RULE", classification: "REQUIRES_IMPLEMENTATION", classificationReason: "Requires CustomerSalesBrain.", runtimeEligible: false })
       : response({ items: [] }));
     render(<AiTrainingControlsPage />); await screen.findByText("No active instructions.");
-    fireEvent.click(screen.getByRole("button", { name: "+ New Global Training" }));
+    fireEvent.click(screen.getByRole("button", { name: "+ New Ava Rule" }));
     fireEvent.change(screen.getByLabelText("Instruction"), { target: { value: "Always sell" } });
     fireEvent.click(screen.getByRole("button", { name: "Preview Instruction" }));
     expect(await screen.findByRole("button", { name: "Save for Review" })).toBeInTheDocument();
@@ -41,7 +50,7 @@ describe("AiTrainingControlsPage", () => {
       ? response({ originalOperatorText: "Build rapport before proactively selling", normalizedInstruction: "Adaptive Sales Readiness", instructionType: "SALES_RULE", policyKey: "ADAPTIVE_SALES_READINESS", enforcementMode: "BACKEND", classification: "SALES_RULE", classificationReason: "Customer Sales Brain policy", runtimeEligible: true, policyConfiguration: { normal_prospect_target_min: 10, normal_prospect_target_max: 15, meaningful_inactivity_days: 7, benchmark_never_forces_offer: true } })
       : response({ items: [] }));
     render(<AiTrainingControlsPage />); await screen.findByText("No active instructions.");
-    fireEvent.click(screen.getByRole("button", { name: "+ New Global Training" }));
+    fireEvent.click(screen.getByRole("button", { name: "+ New Ava Rule" }));
     fireEvent.change(screen.getByLabelText("Instruction"), { target: { value: "Build rapport before proactively selling" } });
     fireEvent.click(screen.getByRole("button", { name: "Preview Instruction" }));
     expect(await screen.findByRole("heading", { name: "Adaptive Sales Readiness" })).toBeInTheDocument();
@@ -61,14 +70,14 @@ describe("AiTrainingControlsPage", () => {
       return response({ items });
     });
     render(<AiTrainingControlsPage />); await screen.findByText("No active instructions.");
-    fireEvent.click(screen.getByRole("button", { name: "+ New Global Training" }));
+    fireEvent.click(screen.getByRole("button", { name: "+ New Ava Rule" }));
     fireEvent.change(screen.getByLabelText("Instruction"), { target: { value: "If a customer is underage, stop chatting with that customer" } });
     fireEvent.click(screen.getByRole("button", { name: "Preview Instruction" }));
     expect(await screen.findByText("Backend enforced", { selector: "dd" })).toBeInTheDocument();
     expect(screen.getByText("Unaffected.")).toBeInTheDocument();
     expect(screen.getByText(/does not automatically determine or mark customers underage/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Activate" }));
-    expect(await screen.findByRole("status")).toHaveTextContent("Training Activated");
+    expect(await screen.findByRole("status")).toHaveTextContent("Rule Activated");
     expect(await screen.findByText("BACKEND ENFORCED")).toBeInTheDocument();
     expect(screen.getByText("GLOBAL POLICY")).toBeInTheDocument();
     expect(screen.getByText("ENABLED")).toBeInTheDocument();
@@ -81,7 +90,7 @@ describe("AiTrainingControlsPage", () => {
       return response({ items: [] });
     });
     render(<AiTrainingControlsPage />); await screen.findByText("No active instructions.");
-    fireEvent.click(screen.getByRole("button", { name: "+ New Global Training" }));
+    fireEvent.click(screen.getByRole("button", { name: "+ New Ava Rule" }));
     fireEvent.change(screen.getByLabelText("Instruction"), { target: { value: "underage stop chatting" } });
     fireEvent.click(screen.getByRole("button", { name: "Preview Instruction" }));
     fireEvent.click(await screen.findByRole("button", { name: "Activate" }));

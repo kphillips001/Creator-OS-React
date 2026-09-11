@@ -1,4 +1,8 @@
+import json
 from types import SimpleNamespace
+from unittest.mock import patch
+
+import pytest
 
 from app.models.creative_director import PromptPlan
 from app.models.generation_engine import GenerationRequest
@@ -14,6 +18,7 @@ from app.services.content_studio_generation_service import (
     ContentStudioGenerationService,
 )
 from app.services.creative_director_service import CreativeDirectorService
+from app.services.generation_request_diagnostic_service import GenerationRequestDiagnosticService
 from app.services.seedream_premium_render_locks import (
     enforce_premium_render_body_lock,
 )
@@ -200,3 +205,120 @@ def test_seedream_receives_exact_provider_ready_preview_prompt():
 
     assert payload["prompt"] == preview_prompt
     assert enforce_premium_render_body_lock(payload["prompt"]) == preview_prompt
+
+
+@pytest.mark.parametrize(
+    "expression",
+    (
+        "Direct over-the-shoulder glance with a calm, mildly inviting closed-mouth look",
+        "Neutral direct gaze",
+        "Soft parted-lips expression",
+        "Serious focused expression",
+    ),
+)
+def test_live_recreate_provider_ready_path_preserves_source_expression_authority(
+    expression, tmp_path,
+):
+    director = ProviderReadyDirector()
+    engine = Engine()
+    service = ContentStudioGenerationService(
+        creative_director=director,
+        generation_engine=engine,
+        generation_library=SimpleNamespace(),
+        reference_service=SimpleNamespace(),
+    )
+    structured_source = (
+        "[ORIGINAL USER TAGS — mandatory: Scene: bright living room, "
+        f"Expression: {expression}, Camera Framing: medium close]"
+    )
+    provider_ready_prompt = (
+        "Ava kneels on a cream sofa and looks over her shoulder with "
+        f"{expression}."
+    )
+
+    plan, _job = service.queue(
+        creator_profile={"id": 2},
+        creative_tags=structured_source,
+        creative_mode="premium_teaser",
+        prompt_count=1,
+        provider_id="seedream_5_0_pro",
+        prompt_batch=(provider_ready_prompt,),
+        origin="recreate_with_ava",
+        diagnostic_trace_id="live-recreate-stage-12",
+    )
+    queued = engine.calls[0]
+    assert queued["metadata"]["render_policy"] == "CONTENT_SPICY"
+    assert queued["metadata"]["workflow_origin"] == "recreate_with_ava"
+    assert queued["metadata"]["recreate_source_expression_authoritative"] is True
+
+    request = GenerationRequest(
+        request_id="live-recreate-request",
+        creator_profile_id=2,
+        prompt_plan_id=plan.plan_id,
+        prompt_text=plan.prompt_text,
+        reference_asset_id=93,
+        reference_asset_path="https://cdn.test/asset-93.png",
+        provider_id="seedream_5_0_pro",
+        generation_type="image_to_image",
+        media_type="image",
+        image_count=1,
+        metadata={
+            **queued["metadata"],
+            "canonical_reference_image_url": "https://cdn.test/asset-93.png",
+            "reference_image_url": "https://cdn.test/asset-93.png",
+            "diagnostic_trace_id": "live-recreate-stage-12",
+        },
+    )
+    trace_path = tmp_path / "traces.json"
+    with patch.object(GenerationRequestDiagnosticService, "storage_path", trace_path):
+        payload = Seedream50ProProvider(api_key="test-key", http_client=SimpleNamespace()).build_payload(request)
+    stage_12 = next(
+        event["value"]
+        for event in json.loads(trace_path.read_text(encoding="utf-8"))["live-recreate-stage-12"]["events"]
+        if event["stage"] == "12_final_provider_prompt"
+    )
+    assert expression in stage_12
+    assert "CANONICAL AVA FACIAL NATURALISM - NON-NEGOTIABLE:" in stage_12
+    assert "EXPLICIT EXPRESSION VARIATION:" not in stage_12
+    assert "teasing coy smirk, fully open seductive eyes, alluring private appeal" not in stage_12
+    assert payload["prompt"] == stage_12
+
+
+def test_live_recreate_provider_ready_path_without_expression_keeps_fallback():
+    director = ProviderReadyDirector()
+    engine = Engine()
+    service = ContentStudioGenerationService(
+        creative_director=director,
+        generation_engine=engine,
+        generation_library=SimpleNamespace(),
+        reference_service=SimpleNamespace(),
+    )
+    plan, _job = service.queue(
+        creator_profile={"id": 2},
+        creative_tags="[ORIGINAL USER TAGS — mandatory: Scene: bright living room, Mood: calm]",
+        creative_mode="premium_teaser",
+        prompt_count=1,
+        provider_id="seedream_5_0_pro",
+        prompt_batch=("Ava sits calmly in a bright living room.",),
+        origin="recreate_with_ava",
+    )
+    queued = engine.calls[0]
+    assert queued["metadata"]["recreate_source_expression_authoritative"] is False
+    request = GenerationRequest(
+        request_id="recreate-no-expression",
+        creator_profile_id=2,
+        prompt_plan_id=plan.plan_id,
+        prompt_text=plan.prompt_text,
+        reference_asset_id=93,
+        reference_asset_path="https://cdn.test/asset-93.png",
+        provider_id="seedream_5_0_pro",
+        generation_type="image_to_image",
+        media_type="image",
+        image_count=1,
+        metadata={
+            **queued["metadata"],
+            "canonical_reference_image_url": "https://cdn.test/asset-93.png",
+        },
+    )
+    rendered = Seedream50ProProvider(api_key="test-key", http_client=SimpleNamespace())._render_prompt_text(request)
+    assert "EXPLICIT EXPRESSION VARIATION:" in rendered

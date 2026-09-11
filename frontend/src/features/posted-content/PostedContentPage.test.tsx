@@ -16,9 +16,9 @@ const items = [
 afterEach(() => vi.restoreAllMocks());
 
 describe("PostedContentPage", () => {
-  it("is removed from Publishing navigation", () => {
+  it("has no Publishing navigation group", () => {
     const publishing = navigationGroups.find((group) => group.label === "Publishing");
-    expect(publishing?.items.map((item) => item.label)).toEqual(["Publishing"]);
+    expect(publishing).toBeUndefined();
   });
 
   it("renders existing images and opens the metadata preview", async () => {

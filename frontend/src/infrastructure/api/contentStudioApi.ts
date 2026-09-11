@@ -212,7 +212,7 @@ export async function createPromptPreview(
   lane: "social" | "explicit" = "social",
   explicitInput?: ExplicitGenerationInput,
   diagnostic?: {
-    origin: "canonical_planner" | "manual_creative_concept";
+    origin: "canonical_planner" | "manual_creative_concept" | "recreate_with_ava";
     diagnosticTraceId: string;
   },
 ): Promise<PromptPreview> {
@@ -380,7 +380,10 @@ export async function submitContentStudioGeneration(request: GenerationSubmissio
 
 export async function submitAutonomousInspiration(
   provider: string,
+  guidance?: string | null,
 ): Promise<string> {
+  const normalizedGuidance = String(guidance ?? "").trim();
+  const body = normalizedGuidance ? { provider, guidance: normalizedGuidance } : { provider };
   const result = await readJsonResponse<{
     success: boolean;
     error: string | null;
@@ -388,7 +391,7 @@ export async function submitAutonomousInspiration(
   }>(await fetch(
     `${environment.apiBaseUrl}/content-studio/inspire`,
     {
-      body: JSON.stringify({ provider }),
+      body: JSON.stringify(body),
       headers: { "Content-Type": "application/json" },
       method: "POST",
     },

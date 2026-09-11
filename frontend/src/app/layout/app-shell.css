@@ -117,6 +117,65 @@
   gap: 2px;
 }
 
+.sidebar__group--developer {
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.sidebar__developer-toggle {
+  display: flex;
+  width: 100%;
+  min-height: 26px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  font-size: 0.52rem;
+  font-weight: 720;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.sidebar__developer-toggle:hover,
+.sidebar__developer-toggle--active {
+  background: var(--color-surface-hover);
+  color: var(--color-text-secondary);
+}
+
+.sidebar__group--developer .sidebar__links {
+  gap: 1px;
+  margin-top: 2px;
+}
+
+.sidebar__group--developer .sidebar__link {
+  min-height: 31px;
+  gap: 9px;
+  color: var(--color-text-tertiary);
+  font-size: 0.68rem;
+}
+
+.sidebar__group--developer .sidebar__link svg {
+  width: 15px;
+  height: 15px;
+}
+
+.sidebar__group--developer .sidebar__link--active {
+  color: var(--color-text-primary);
+}
+
+.sidebar--collapsed .sidebar__developer-toggle {
+  justify-content: center;
+  padding: 0;
+}
+
+.sidebar--collapsed .sidebar__developer-toggle span {
+  display: none;
+}
+
 .sidebar__link {
   position: relative;
   display: flex;

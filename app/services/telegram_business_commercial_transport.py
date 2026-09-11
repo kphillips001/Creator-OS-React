@@ -49,7 +49,8 @@ class TelegramBusinessCommercialTransport:
             else os.getenv("TELEGRAM_BOT_TOKEN_AVA", "")
         )
 
-    def send_text(self, *, chat_id, message_text, button_label, button_url):
+    def send_text(self, *, chat_id, message_text, button_label, button_url,
+                  expected_business_connection_id=None):
         if not self.enabled:
             raise TelegramBusinessTransportError(
                 "Telegram Business commercial transport is disabled."
@@ -87,7 +88,14 @@ class TelegramBusinessCommercialTransport:
             raise TelegramBusinessTransportError(
                 "No active Telegram Business connection is available."
             )
-        if button_label != self.BUTTON_LABEL:
+        if (expected_business_connection_id is not None and
+                active_connection.business_connection_id != expected_business_connection_id):
+            raise TelegramBusinessTransportError(
+                "The prepared Telegram Business connection is no longer active."
+            )
+        if (button_label is None) != (button_url is None):
+            raise ValueError("Telegram button label and URL must be supplied together.")
+        if button_label is not None and button_label != self.BUTTON_LABEL:
             raise ValueError("Private-chat commercial button label is not canonical.")
         sender = self.sender or TelegramBotApiSender(bot_token=self.bot_token)
         return sender.send_text(

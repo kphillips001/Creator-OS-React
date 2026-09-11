@@ -35,7 +35,7 @@ function editable(document: CreatorLifestyleDocument): CreatorLifestyleUpdate {
   };
 }
 
-export function CreatorLifestylePage() {
+export function CreatorLifestylePage({ embedded = false }: { embedded?: boolean } = {}) {
   const [document, setDocument] =
     useState<CreatorLifestyleDocument | null>(null);
   const [draft, setDraft] = useState<CreatorLifestyleUpdate | null>(null);
@@ -90,17 +90,18 @@ export function CreatorLifestylePage() {
     JSON.stringify(editable(document)) !== JSON.stringify(draft)
   );
 
-  return <main className="lifestyle-page">
-    <PageHeader
+  const Root = embedded ? "section" : "main";
+  return <Root className="lifestyle-page">
+    {!embedded && <PageHeader
       title="Lifestyle"
       description="Maintain the canonical description of how Ava naturally lives."
-    />
+    />}
 
     <aside className="lifestyle-note">
       <AlertCircle size={18} />
       <span>This document defines how Ava naturally lives.<br /><br />
         It is used to inspire authentic moments from her life.<br /><br />
-        It is separate from Personality, Social Creative Direction, World knowledge, and Prompt Generation.</span>
+        Creator-OS uses it for conversational grounding and authentic content planning.</span>
     </aside>
 
     {loading && <div className="lifestyle-state">Loading Lifestyle…</div>}
@@ -143,5 +144,5 @@ export function CreatorLifestylePage() {
         </button>
       </footer>
     </form>}
-  </main>;
+  </Root>;
 }

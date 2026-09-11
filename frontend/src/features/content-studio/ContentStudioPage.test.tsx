@@ -443,7 +443,9 @@ describe("ContentStudioPage", () => {
     );
     expect(JSON.parse(String(previewCall?.[1]?.body))).toEqual(expect.objectContaining({
       creativeMode: "premium_teaser",
+      diagnosticTraceId: expect.any(String),
       lane: "social",
+      origin: "recreate_with_ava",
       promptCount: 1,
     }));
     const previewPayload = JSON.parse(String(previewCall?.[1]?.body)) as {
@@ -455,15 +457,20 @@ describe("ContentStudioPage", () => {
       ([url, options]) => String(url).endsWith("/generations") && options?.method === "POST",
     );
     const generationPayload = JSON.parse(String(generationCall?.[1]?.body)) as {
+      diagnosticTraceId?: string;
       lane?: string;
     };
     expect(generationPayload).toEqual(expect.objectContaining({
       creativeMode: "premium_teaser",
+      diagnosticTraceId: expect.any(String),
       origin: "recreate_with_ava",
       promptBatch: ["preview prompt one", "preview prompt two"],
       promptCount: 1,
       provider: "seedream_5_0_pro",
     }));
+    expect(generationPayload.diagnosticTraceId).toBe(
+      JSON.parse(String(previewCall?.[1]?.body)).diagnosticTraceId,
+    );
     expect(generationPayload.lane ?? "social").toBe("social");
   });
 
@@ -841,7 +848,11 @@ describe("ContentStudioPage", () => {
 
     const concept = await screen.findByLabelText("Creative Concept");
     const inspire = screen.getByRole("button", { name: "✨ Inspire Me" });
+    const guidance = screen.getByRole("textbox", { name: "Optional Inspire Me guidance" });
     await waitFor(() => expect(inspire).toBeEnabled());
+    expect(guidance).toHaveAttribute("placeholder", "Optional guidance...");
+    expect(guidance.parentElement).toHaveClass("inspire-workspace__controls");
+    expect(guidance.parentElement?.firstElementChild).toBe(inspire);
     expect(screen.queryByText("Inspire Today's Post")).not.toBeInTheDocument();
 
     fireEvent.click(inspire);
@@ -860,6 +871,48 @@ describe("ContentStudioPage", () => {
     expect(JSON.parse(String(call?.[1]?.body))).toEqual({
       provider: "seedream_5_0_pro",
     });
+  });
+
+  it("submits trimmed per-run guidance and clears it when the operation is accepted", async () => {
+    render(<ContentStudioPage />);
+    const inspire = await screen.findByRole("button", { name: "✨ Inspire Me" });
+    const guidance = screen.getByRole("textbox", { name: "Optional Inspire Me guidance" });
+    await waitFor(() => expect(inspire).toBeEnabled());
+
+    fireEvent.change(guidance, { target: { value: "  warm summer weather, yellow shirt, outdoors  " } });
+    fireEvent.click(inspire);
+
+    await waitFor(() => expect(guidance).toHaveValue(""));
+    const call = vi.mocked(fetch).mock.calls.find(
+      ([url]) => String(url).endsWith("/content-studio/inspire"),
+    );
+    expect(JSON.parse(String(call?.[1]?.body))).toEqual({
+      provider: "seedream_5_0_pro",
+      guidance: "warm summer weather, yellow shirt, outdoors",
+    });
+  });
+
+  it("retains guidance when the Inspire Me submission is not accepted", async () => {
+    const normalFetch = vi.mocked(fetch).getMockImplementation()!;
+    vi.mocked(fetch).mockImplementation((url, options) => {
+      if (String(url).endsWith("/content-studio/inspire")) {
+        return Promise.resolve(new Response(
+          JSON.stringify({ success: false, error: "Submission rejected" }),
+          { headers: { "content-type": "application/json" }, status: 503 },
+        ));
+      }
+      return normalFetch(url, options);
+    });
+    render(<ContentStudioPage />);
+    const inspire = await screen.findByRole("button", { name: "✨ Inspire Me" });
+    const guidance = screen.getByRole("textbox", { name: "Optional Inspire Me guidance" });
+    await waitFor(() => expect(inspire).toBeEnabled());
+
+    fireEvent.change(guidance, { target: { value: "yellow shirt" } });
+    fireEvent.click(inspire);
+
+    await waitFor(() => expect(screen.getByText("Submission rejected")).toBeInTheDocument());
+    expect(guidance).toHaveValue("yellow shirt");
   });
 
   it("removes Surprise Me and the ordinary Prompt Preview workflow", async () => {

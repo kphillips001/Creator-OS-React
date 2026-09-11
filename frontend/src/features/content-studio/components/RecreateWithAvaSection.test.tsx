@@ -13,7 +13,7 @@ describe("RecreateWithAvaSection one-click workflow", () => {
   });
 
   it("shows one primary action, hides analysis, and automatically analyzes, enhances, and generates", async () => {
-    const generate = vi.fn<(source: string, enhanced: string) => Promise<void>>().mockResolvedValue(undefined);
+    const generate = vi.fn<(source: string, enhanced: string, diagnosticTraceId: string) => Promise<void>>().mockResolvedValue(undefined);
     const callbacks = runtime(); render(<RecreateWithAvaSection disabled={false} onGenerate={generate} {...callbacks} />);
     const action = screen.getByRole("button", { name: "Recreate With Ava" });
     expect(action).toBeDisabled();
@@ -27,6 +27,12 @@ describe("RecreateWithAvaSection one-click workflow", () => {
     expect(generate.mock.calls[0]?.[0]).toContain("Pose: Seated");
     expect(generate.mock.calls[0]?.[0]).not.toContain("source.webp");
     expect(generate.mock.calls[0]?.[1]).toBe("Enhanced scene");
+    const enhancementCall = vi.mocked(fetch).mock.calls.find(
+      ([url]) => String(url).includes("creative-tags/enhance"),
+    );
+    const enhancementPayload = JSON.parse(String(enhancementCall?.[1]?.body)) as { diagnosticTraceId: string };
+    expect(enhancementPayload.diagnosticTraceId).toEqual(expect.any(String));
+    expect(generate.mock.calls[0]?.[2]).toBe(enhancementPayload.diagnosticTraceId);
     expect(screen.queryByText("Scene")).not.toBeInTheDocument();
     expect(await screen.findByText("More Options")).toBeInTheDocument();
   });

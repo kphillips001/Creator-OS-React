@@ -43,7 +43,7 @@ export type PlannerBatchProgress = {
 export type GenerationWorkflowHandle = {
   generate: (overrides?: Partial<Omit<GenerationSubmission, "creatorContext">> & { batchItemId?: string }) => Promise<boolean>;
   generateWithResult: (overrides?: Partial<Omit<GenerationSubmission, "creatorContext">> & { batchItemId?: string }) => Promise<GenerationAttemptResult>;
-  inspire: () => Promise<boolean>;
+  inspire: (guidance?: string | null, onAccepted?: () => void) => Promise<boolean>;
   reset: () => void;
 };
 
@@ -233,7 +233,7 @@ export const GenerationWorkflowSections = forwardRef<GenerationWorkflowHandle, G
     return (await generateWithResult(overrides)).status === "completed";
   }
 
-  async function inspire() {
+  async function inspire(guidance?: string | null, onAccepted?: () => void) {
     if (submitting || !request.provider) return false;
     onRunStart?.();
     const completion = new Promise<GenerationAttemptResult>((resolve) => {
@@ -248,8 +248,9 @@ export const GenerationWorkflowSections = forwardRef<GenerationWorkflowHandle, G
     setGeneration(null);
     setError("");
     try {
-      const nextRunId = await submitAutonomousInspiration(request.provider);
+      const nextRunId = await submitAutonomousInspiration(request.provider, guidance);
       setRunId(nextRunId);
+      onAccepted?.();
       void backgroundOperations.refresh();
     } catch (reason) {
       setError(reason instanceof Error

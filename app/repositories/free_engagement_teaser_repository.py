@@ -15,6 +15,15 @@ class FreeEngagementTeaserRepository:
     def __init__(self, connection_factory=get_db_connection):
         self.connection_factory = connection_factory
 
+    def telegram_user_id_for_customer(self, *, fanvue_account_id, fanvue_user_id):
+        with self.connection_factory() as connection, connection.cursor() as cursor:
+            cursor.execute("""SELECT telegram_user_id FROM public.telegram_identity_map
+                WHERE fanvue_account_id=%s AND local_fanvue_user_id=%s
+                  AND is_active=TRUE AND verification_status='VERIFIED' LIMIT 1""",
+                (fanvue_account_id,fanvue_user_id))
+            row=cursor.fetchone()
+        return int(row["telegram_user_id"]) if row else None
+
     def reserve_next(self, *, creator_profile_id: int, fanvue_account_id: int,
                      fanvue_user_id: int, conversation_thread_id: int,
                      telegram_chat_id: int, correlation_id: str,

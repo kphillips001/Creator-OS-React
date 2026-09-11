@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { BundleSellingReadiness, ContentVaultCaptionOption, SessionSellingReadiness } from "./types";
 import { readinessBadge } from "./photoshootSalePreparationStatus";
 import { BundlePromotionalTeaser } from "./BundleTeaserEditor";
+import { OfferingSellingControls } from "./OfferingSellingControls";
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, { cache: "no-store", ...options });
@@ -425,6 +426,7 @@ export function BundleSellingPanel({ deliverableId, salesChannel = "CHAT", onRea
         {readiness.status === "READY" && readiness.deliveryUrl && <a href={readiness.deliveryUrl} rel="noreferrer" target="_blank"><ExternalLink size={14} />Open Fanvue Media Link</a>}
       </div>
       {readiness.status === "READY" && <p>Fanvue Media Link ready · {readiness.currency} {bundlePrice(readiness.priceMinor)}</p>}
+      {readiness.offeringId && <OfferingSellingControls offeringId={readiness.offeringId} onChanged={load} />}
       {readiness.promotionalTeaser && <BundlePromotionalTeaser deliverableId={deliverableId} initial={readiness.promotionalTeaser} onChanged={(promotionalTeaser) => {
         setReadiness((current) => current ? { ...current, promotionalTeaser } : current);
         void load();

@@ -39,7 +39,7 @@ describe("CreatorLifestylePage", () => {
     expect(screen.getByLabelText(/Outdoor Lifestyle/)).toHaveValue(document.outdoor_lifestyle);
     expect(screen.getByLabelText(/Personal Style/)).toHaveValue(document.personal_style);
     expect(screen.getAllByRole("textbox")).toHaveLength(7);
-    expect(screen.getByText(/It is separate from Personality, Social Creative Direction, World knowledge, and Prompt Generation/)).toBeInTheDocument();
+    expect(screen.getByText(/uses it for conversational grounding and authentic content planning/)).toBeInTheDocument();
   });
 
   it("saves only lifestyle document fields and renders persisted edits", async () => {

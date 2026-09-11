@@ -453,7 +453,7 @@ class TelethonRuntimeTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(result.offer_authorized)
         self.assertEqual(transport.sent, [(123456789, "hello")])
 
-    async def test_disabled_replies_return_before_gateway_and_send(self):
+    async def test_disabled_replies_observe_inbound_without_gateway_or_send(self):
         runtime, transport, engine = self.build_runtime()
         payload = TelegramInboundPayload(
             telegram_user_id=123456789,
@@ -468,22 +468,52 @@ class TelethonRuntimeTests(unittest.IsolatedAsyncioTestCase):
                 {"TELEGRAM_REPLIES_ENABLED": "false"},
                 clear=False,
             ),
-            patch(
-                "app.integrations.telegram.telethon_runtime.asyncio.to_thread"
-            ) as to_thread,
             self.assertLogs("telethon-runtime", level="INFO") as logs,
         ):
             result = await runtime.handle_payload(payload)
 
-        self.assertIsNone(result)
-        to_thread.assert_not_called()
+        self.assertTrue(result.blocked)
+        self.assertEqual(result.error_code, "GLOBAL_AUTOMATION_DISABLED")
+        self.assertTrue(result.diagnostic_metadata["observation_only"])
+        self.assertEqual(result.diagnostic_metadata["ai_generation_count"], 0)
         self.assertEqual(engine.calls, [])
         self.assertEqual(transport.sent, [])
         self.assertIn(
-            "[TELEGRAM PAUSED] inbound message suppressed "
+            "[TELEGRAM PAUSED] inbound message observed without automation "
             "chat_id=123456789 user_id=123456789",
             "\n".join(logs.output),
         )
+
+    async def test_global_automation_off_observes_once_without_generation_or_send(self):
+        runtime, transport, engine = self.build_runtime()
+        class Prospects:
+            def __init__(self): self.calls = []
+            def observe(self, **values):
+                self.calls.append(values)
+                return type("Prospect", (), {"relationship_state": {}})()
+        prospects = Prospects()
+        runtime._inbound_adapter._creator_profile_id = 2
+        runtime._inbound_adapter._fanvue_account_id = 7
+        runtime._inbound_adapter._unmapped_prospects = prospects
+        runtime._global_safety_service = type(
+            "BlockedSafety", (), {"check_global_safety": lambda self: {
+                "allowed": False, "reason": "global_automation_disabled"}}
+        )()
+        payload = TelegramInboundPayload(
+            telegram_user_id=123456789, telegram_chat_id=123456789,
+            message_text="observe me", message_id=43,
+        )
+        with patch.dict("os.environ", {
+            "TELEGRAM_REPLIES_ENABLED": "true",
+            "CONTROLLED_AUTONOMY_TEST_ENABLED": "false",
+        }, clear=False):
+            result = await runtime.handle_payload(payload)
+        self.assertTrue(result.diagnostic_metadata["durable_inbound_observed"])
+        self.assertEqual(len(prospects.calls), 1)
+        self.assertEqual(result.diagnostic_metadata["ai_generation_count"], 0)
+        self.assertEqual(result.diagnostic_metadata["commercial_execution_count"], 0)
+        self.assertEqual(engine.calls, [])
+        self.assertEqual(transport.sent, [])
 
     async def test_offer_metadata_is_never_appended_to_response(self):
         class OfferEngine(EchoDecisionEngine):

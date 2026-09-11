@@ -33,7 +33,7 @@ function editable(
   };
 }
 
-export function SocialCreativeDirectionPage() {
+export function SocialCreativeDirectionPage({ embedded = false }: { embedded?: boolean } = {}) {
   const [document, setDocument] =
     useState<SocialCreativeDirectionDocument | null>(null);
   const [draft, setDraft] =
@@ -89,16 +89,17 @@ export function SocialCreativeDirectionPage() {
     JSON.stringify(editable(document)) !== JSON.stringify(draft)
   );
 
-  return <main className="social-direction-page">
-    <PageHeader
+  const Root = embedded ? "section" : "main";
+  return <Root className="social-direction-page">
+    {!embedded && <PageHeader
       title="Social Creative Direction"
       description="Maintain the canonical creative vision for Ava's public social content."
-    />
+    />}
 
     <aside className="social-direction-note">
       <AlertCircle size={18} />
       <span>This document defines how Ava should be visually presented on public social platforms.<br />
-        It is separate from Personality, Visual Identity, and Prompt Generation.</span>
+        Creator-OS uses it when planning public-facing concepts and generation prompts.</span>
     </aside>
 
     {loading && <div className="social-direction-state">Loading Social Creative Direction…</div>}
@@ -141,5 +142,5 @@ export function SocialCreativeDirectionPage() {
         </button>
       </footer>
     </form>}
-  </main>;
+  </Root>;
 }

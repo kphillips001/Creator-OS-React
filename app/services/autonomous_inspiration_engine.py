@@ -56,6 +56,7 @@ class AutonomousInspirationEngine:
         *,
         fanvue_account_id: int | str,
         diagnostic_trace_id: str | None = None,
+        guidance: str | None = None,
     ) -> tuple[str, ...]:
         account_id = str(fanvue_account_id)
         intelligence = self.creator_intelligence.get_for_account(
@@ -90,6 +91,7 @@ class AutonomousInspirationEngine:
             creative_intelligence_profile=dict(creative_profile),
             month=calendar.month_name[current.month],
             season=self._season(current.month),
+            guidance=guidance,
         )
         from app.services.generation_request_diagnostic_service import GenerationRequestDiagnosticService
         diagnostic = GenerationRequestDiagnosticService()
@@ -127,6 +129,7 @@ class AutonomousInspirationEngine:
         creative_intelligence_profile: dict,
         month: str,
         season: str,
+        guidance: str | None = None,
     ) -> str:
         def section(name: str, values: dict) -> str:
             body = "\n".join(
@@ -144,7 +147,7 @@ class AutonomousInspirationEngine:
             creative_intelligence_profile
         )
 
-        return f"""You are the private Creator_OS Autonomous Inspiration Engine.
+        brief = f"""You are the private Creator_OS Autonomous Inspiration Engine.
 
 Answer internally:
 "What six images is Kevin most likely to keep and eventually publish while still giving him fresh ideas?"
@@ -237,6 +240,22 @@ OUTPUT:
 Exactly {cls.IMAGE_COUNT} lines, one private creative direction per line.
 No numbering, bullets, headings, markdown, or explanation.
 """.strip()
+        normalized_guidance = str(guidance or "").strip()
+        if not normalized_guidance:
+            return brief
+        guidance_section = f"""OPERATOR GUIDANCE FOR THIS INSPIRE ME RUN:
+{normalized_guidance}
+
+This is an explicit per-request creative constraint.
+Apply every applicable requirement across all six directions.
+It overrides conflicting soft seasonal or autonomous preferences.
+It does not override safety, canonical Ava identity, render locks, provider requirements, or other hard system constraints.
+Determine all unspecified creative dimensions autonomously."""
+        return brief.replace(
+            "CREATIVE PRIORITY:",
+            f"{guidance_section}\n\nCREATIVE PRIORITY:",
+            1,
+        )
 
     @staticmethod
     def _editorial_memory_guidance(profile: dict) -> str:

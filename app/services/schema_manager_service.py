@@ -144,6 +144,28 @@ class SchemaManagerService:
             "dashboard": ("Developer Notes",),
             "columns": ("subnote_id", "creator_profile_id", "todo_id", "title", "content", "migrated_from_parent_note", "is_completed", "created_at", "updated_at"),
         },
+        "ai_training_work_items": {
+            "owner": "AI Training Queue",
+            "migration": "20260910_109_ai_training_work_queue.sql",
+            "repository": "AiTrainingWorkItemRepository",
+            "service": "AiTrainingWorkQueueService",
+            "dashboard": ("AI Training Queue",),
+            "columns": ("work_item_id","creator_profile_id","fanvue_account_id","scope",
+                "customer_fanvue_user_id","original_request_text","status","classification",
+                "classification_rationale","analysis","linked_instruction_id",
+                "linked_future_task_id","created_at","updated_at","completed_at"),
+        },
+        "ai_training_implementation_attempts": {
+            "owner": "AI Training Queue Implementation Attempts",
+            "migration": "20260910_112_ai_training_implementation_attempts.sql",
+            "repository": "AiTrainingImplementationAttemptRepository",
+            "service": "AiTrainingWorkQueueService",
+            "dashboard": ("AI Training Queue",),
+            "columns": ("attempt_id","work_item_id","attempt_number",
+                "implementation_brief_version","developer_agent_task_id",
+                "developer_agent_execution_id","status","approved_at","started_at",
+                "completed_at","verified_at","created_at","updated_at"),
+        },
         "ai_training_notes": {
             "owner": "AI Training",
             "migration": "20260820_074_ai_training_notes.sql",
@@ -542,6 +564,22 @@ class SchemaManagerService:
             "service": "AiTrainingControlService",
             "dashboard": ("AI Training",),
             "columns": ("revision_id", "instruction_id", "version", "action", "original_operator_text", "normalized_instruction", "instruction_type", "status", "priority", "source", "evidence", "created_at"),
+        },
+        "ai_training_history_baselines": {
+            "owner": "AI Training Operator History",
+            "migration": "20260910_110_ai_training_history_baseline.sql",
+            "repository": "AiTrainingHistoryBaselineRepository",
+            "service": "AiTrainingHistoryService",
+            "dashboard": ("AI Training",),
+            "columns": ("baseline_id", "creator_profile_id", "fanvue_account_id", "baseline_at", "created_at", "updated_at"),
+        },
+        "ai_training_history_baseline_retained_instructions": {
+            "owner": "AI Training Operator History Retention",
+            "migration": "20260910_110_ai_training_history_baseline.sql",
+            "repository": "AiTrainingHistoryBaselineRepository",
+            "service": "AiTrainingHistoryService",
+            "dashboard": ("AI Training",),
+            "columns": ("baseline_id", "instruction_id"),
         },
         "customer_interaction_safety_states": {
             "owner": "Customer Interaction Safety",
@@ -1038,9 +1076,169 @@ class SchemaManagerService:
                 "created_at", "updated_at",
             ),
         },
+        "telegram_business_peer_observations": {
+            "owner": "Telegram Business Peer Observability",
+            "migration": "20260909_106_telegram_business_peer_observations.sql",
+            "repository": "TelegramBusinessPeerObservationRepository",
+            "service": "TelegramBusinessPeerObservationService",
+            "dashboard": ("Business Relationships",),
+            "columns": (
+                "observation_id", "business_connection_id",
+                "telegram_peer_user_id", "telegram_chat_id",
+                "telegram_message_id", "bot_api_update_id", "event_type",
+                "provider_timestamp", "observed_at",
+                "last_business_inbound_at", "sender_telegram_user_id",
+            ),
+        },
+        "x_link_attributions": {
+            "owner": "X Link Performance Attribution",
+            "migration": "20260908_104_x_link_performance.sql",
+            "repository": "XLinkPerformanceRepository",
+            "service": "XLinkPerformanceService",
+            "dashboard": ("Business Overview",),
+            "columns": (
+                "x_link_attribution_id", "attribution_token",
+                "creator_profile_id", "fanvue_account_id",
+                "publish_operation_id", "social_queue_item_id",
+                "generation_image_id", "primary_x_post_id",
+                "cta_x_post_id", "x_account_name", "primary_caption",
+                "primary_published_at", "status", "created_at", "updated_at",
+            ),
+        },
+        "x_link_click_events": {
+            "owner": "X Link Performance Accepted Click Events",
+            "migration": "20260908_104_x_link_performance.sql",
+            "repository": "XLinkPerformanceRepository",
+            "service": "XLinkPerformanceService",
+            "dashboard": ("Business Overview",),
+            "columns": (
+                "event_id", "x_link_attribution_id", "occurred_at",
+                "received_at", "event_type", "classification",
+                "classification_reason", "schema_version",
+            ),
+        },
+        "telegram_relationship_controls": {
+            "owner": "Relationships Manual Control", "migration": "20260909_105_relationship_manual_control.sql",
+            "repository": "TelegramRelationshipControlRepository", "service": "TelegramRelationshipControlService",
+            "dashboard": ("Business Relationships",),
+            "columns": ("relationship_control_id","creator_profile_id","fanvue_account_id","telegram_user_id",
+                "telegram_chat_id","mode","control_version","changed_at","changed_by","reason",
+                "last_manual_activity_at","content_selling_enabled","session_selling_enabled",
+                "created_at","updated_at"),
+        },
+        "telegram_operator_message_operations": {
+            "owner": "Relationships Operator Messaging", "migration": "20260909_105_relationship_manual_control.sql",
+            "repository": "TelegramOperatorMessageRepository", "service": "TelegramOperatorMessageService",
+            "dashboard": ("Business Relationships",),
+            "columns": ("operation_id","creator_profile_id","fanvue_account_id","telegram_user_id",
+                "telegram_chat_id","idempotency_key","message_text","message_sha256",
+                "relationship_control_version","origin","state","outbound_telegram_message_id",
+                "send_attempt_count","changed_by","created_at","updated_at"),
+        },
+        "telegram_manual_offer_operations": {
+            "owner": "Relationships Manual Offers", "migration": "20260909_107_relationship_manual_offers.sql",
+            "repository": "TelegramManualOfferRepository", "service": "RelationshipManualOfferService",
+            "dashboard": ("Business Relationships",),
+            "columns": ("operation_id","creator_profile_id","fanvue_account_id","telegram_user_id",
+                "commercial_offering_id","commercial_publication_id","business_connection_id",
+                "idempotency_key","relationship_control_version","origin","state",
+                "purchase_intent_id","sales_delivery_operation_id","outbound_telegram_message_id",
+                "created_at","updated_at"),
+        },
+        "telegram_business_peer_observations": {
+            "owner": "Telegram Business Peer Observability",
+            "migration": "20260909_106_telegram_business_peer_observations.sql",
+            "repository": "TelegramBusinessPeerObservationRepository",
+            "service": "TelegramBusinessPeerObservationService",
+            "dashboard": ("Business Relationships",),
+            "columns": (
+                "observation_id","business_connection_id","telegram_peer_user_id",
+                "telegram_chat_id","telegram_message_id","bot_api_update_id",
+                "event_type","provider_timestamp","observed_at",
+                "last_business_inbound_at","sender_telegram_user_id",
+            ),
+        },
     }
 
     MIGRATION_SCHEMA_REQUIREMENTS: Mapping[str, Mapping[str, tuple[str, ...]]] = {
+        "20260911_113_customer_automation_selling_controls.sql": {
+            "telegram_relationship_controls": (
+                "content_selling_enabled", "session_selling_enabled",
+            ),
+        },
+        "20260910_112_ai_training_implementation_attempts.sql": {
+            "ai_training_implementation_attempts": ("attempt_id","work_item_id",
+                "attempt_number","implementation_brief_version","developer_agent_task_id",
+                "developer_agent_execution_id","status","approved_at","started_at",
+                "completed_at","verified_at","created_at","updated_at"),
+            "developer_agent_executions": ("execution_id","task_id"),
+        },
+        "20260910_111_ai_training_implementation_handoff.sql": {
+            "ai_training_work_items": ("work_item_id", "linked_future_task_id"),
+            "developer_agent_tasks": ("task_id",),
+        },
+        "20260910_110_ai_training_history_baseline.sql": {
+            "ai_training_history_baselines": ("baseline_id","creator_profile_id","fanvue_account_id","baseline_at","created_at","updated_at"),
+            "ai_training_history_baseline_retained_instructions": ("baseline_id","instruction_id"),
+        },
+        "20260910_109_ai_training_work_queue.sql": {
+            "ai_training_work_items": ("work_item_id","creator_profile_id","fanvue_account_id",
+                "scope","customer_fanvue_user_id","original_request_text","status",
+                "classification","classification_rationale","analysis","linked_instruction_id",
+                "created_at","updated_at","completed_at"),
+        },
+        "20260910_108_customer_treatment_policy.sql": {
+            "ai_runtime_instructions": ("instruction_id","creator_profile_id",
+                "fanvue_account_id","scope","customer_fanvue_user_id","instruction_type",
+                "status","version","policy_key","enforcement_mode","policy_configuration"),
+            "ai_runtime_instruction_revisions": ("revision_id","instruction_id",
+                "version","action","policy_key","enforcement_mode","policy_configuration"),
+        },
+        "20260909_107_relationship_manual_offers.sql": {
+            "telegram_manual_offer_operations": ("operation_id","creator_profile_id","fanvue_account_id",
+                "telegram_user_id","commercial_offering_id","commercial_publication_id",
+                "business_connection_id","idempotency_key","relationship_control_version","origin",
+                "state","purchase_intent_id","sales_delivery_operation_id"),
+        },
+        "20260909_106_telegram_business_peer_observations.sql": {
+            "telegram_business_peer_observations": (
+                "observation_id", "business_connection_id",
+                "telegram_peer_user_id", "telegram_chat_id",
+                "telegram_message_id", "bot_api_update_id", "event_type",
+                "provider_timestamp", "observed_at",
+                "last_business_inbound_at", "sender_telegram_user_id",
+            ),
+        },
+        "20260909_106_telegram_business_peer_observations.sql": {
+            "telegram_business_peer_observations": (
+                "observation_id","business_connection_id","telegram_peer_user_id",
+                "telegram_chat_id","telegram_message_id","bot_api_update_id",
+                "event_type","provider_timestamp","observed_at",
+                "last_business_inbound_at","sender_telegram_user_id",
+            ),
+        },
+        "20260909_105_relationship_manual_control.sql": {
+            "telegram_relationship_controls": ("relationship_control_id","creator_profile_id",
+                "fanvue_account_id","telegram_user_id","telegram_chat_id","mode","control_version"),
+            "telegram_operator_message_operations": ("operation_id","creator_profile_id",
+                "fanvue_account_id","telegram_user_id","telegram_chat_id","idempotency_key",
+                "relationship_control_version","state"),
+        },
+        "20260908_104_x_link_performance.sql": {
+            "x_link_attributions": (
+                "x_link_attribution_id", "attribution_token",
+                "creator_profile_id", "fanvue_account_id",
+                "publish_operation_id", "social_queue_item_id",
+                "generation_image_id", "primary_x_post_id",
+                "cta_x_post_id", "x_account_name", "primary_caption",
+                "primary_published_at", "status", "created_at", "updated_at",
+            ),
+            "x_link_click_events": (
+                "event_id", "x_link_attribution_id", "occurred_at",
+                "received_at", "event_type", "classification",
+                "classification_reason", "schema_version",
+            ),
+        },
         "20260830_100_customer_contact_reservations.sql": {
             "customer_contact_reservations": (
                 "reservation_id", "fanvue_account_id", "customer_scope",
@@ -1526,6 +1724,32 @@ class SchemaManagerService:
             },
         },
     }
+
+    MIGRATION_EFFECT_ATTESTATIONS: Mapping[str, Mapping[str, Any]] = {
+        "20260910_111_ai_training_implementation_handoff.sql": {
+            "schema": "public", "table": "ai_training_work_items",
+            "checks": {
+                "ai_training_work_items_status_check": (
+                    "status", (
+                        "TODO", "READY_TO_APPLY", "REQUIRES_IMPLEMENTATION",
+                        "READY_FOR_IMPLEMENTATION", "IMPLEMENTING",
+                        "NEEDS_VERIFICATION", "IMPLEMENTATION_FAILED",
+                        "IMPLEMENTED", "REJECTED", "CLOSED", "SUPERSEDED",
+                    ),
+                ),
+            },
+            "foreign_keys": {
+                "ai_training_work_items_linked_future_task_id_fkey": (
+                    "FOREIGN KEY (linked_future_task_id)",
+                    "REFERENCES developer_agent_tasks(task_id)",
+                ),
+            },
+        },
+    }
+
+    REPAIRABLE_FALSE_HISTORY_MIGRATIONS = frozenset(
+        MIGRATION_EFFECT_ATTESTATIONS
+    )
 
     TABLE_OWNERSHIP: Mapping[str, Mapping[str, Any]] = {
         **REQUIRED_TABLES,
@@ -2183,6 +2407,30 @@ class SchemaManagerService:
     }
 
     REQUIRED_INDEXES: Mapping[str, tuple[str, ...]] = {
+        "ai_training_implementation_attempts": (
+            "ai_training_implementation_attempts_work_number_key",
+            "ai_training_implementation_attempts_task_key",
+            "ai_training_implementation_attempts_execution_key",
+            "ai_training_implementation_attempts_work_created_idx",
+        ),
+        "telegram_business_peer_observations": (
+            "telegram_business_peer_inbound_message_unique",
+            "idx_telegram_business_peer_connection_chat",
+            "idx_telegram_business_peer_recent_inbound",
+        ),
+        "telegram_business_peer_observations": (
+            "telegram_business_peer_inbound_message_unique",
+            "idx_telegram_business_peer_connection_chat",
+            "idx_telegram_business_peer_recent_inbound",
+        ),
+        "x_link_attributions": (
+            "idx_x_link_attributions_scope_published",
+            "idx_x_link_attributions_queue_item",
+        ),
+        "x_link_click_events": (
+            "idx_x_link_click_events_attribution_occurred",
+            "idx_x_link_click_events_occurred",
+        ),
         "customer_contact_reservations": (
             "customer_contact_one_active_scope_idx",
             "customer_contact_expiration_idx",
@@ -2260,6 +2508,23 @@ class SchemaManagerService:
     }
 
     CRITICAL_FOREIGN_KEYS: Mapping[str, tuple[str, ...]] = {
+        "ai_training_implementation_attempts": (
+            "ai_training_attempts_work_item_fkey",
+            "ai_training_attempts_task_fkey",
+            "ai_training_implementation_attempts_execution_task_fkey",
+        ),
+        "ai_training_work_items": (
+            "ai_training_work_items_linked_future_task_id_fkey",
+        ),
+        "telegram_business_peer_observations": (
+            "telegram_business_peer_connection_fkey",
+        ),
+        "telegram_business_peer_observations": (
+            "telegram_business_peer_connection_fkey",
+        ),
+        "x_link_click_events": (
+            "x_link_click_events_x_link_attribution_id_fkey",
+        ),
         "generation_recipes": (
             "generation_recipes_source_recipe_id_fkey",
             "generation_recipes_regeneration_operation_id_fkey",
@@ -2470,6 +2735,43 @@ class SchemaManagerService:
             migrations_recorded=tuple(recorded_names),
         )
 
+    def repair_false_history_and_reconcile_one(
+        self, migration_name: str,
+    ) -> SchemaCertificationReport:
+        """Transactionally reapply one allowlisted, falsely attested migration."""
+        if migration_name not in self.REPAIRABLE_FALSE_HISTORY_MIGRATIONS:
+            raise PermissionError(
+                "Migration is not allowlisted for false-history repair."
+            )
+        migration = next((item for item in self.load_forward_migrations()
+                          if item.name == migration_name), None)
+        if migration is None:
+            raise LookupError(f"Migration was not found: {migration_name}")
+        with self._connection_factory() as connection:
+            self.ensure_history_table(connection)
+            recorded = self.applied_migrations(connection).get(migration_name)
+            if recorded != migration.checksum:
+                raise ValueError(
+                    "False-history repair requires the exact recorded checksum."
+                )
+            if self._migration_schema_already_present(connection, migration_name):
+                raise RuntimeError(
+                    "Migration effects are already present; history repair refused."
+                )
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "DELETE FROM public.schema_migrations "
+                    "WHERE migration_name=%s AND checksum=%s",
+                    (migration.name, migration.checksum),
+                )
+                if cursor.rowcount != 1:
+                    raise RuntimeError(
+                        "The bounded migration-history record was not removed."
+                    )
+                cursor.execute(migration.sql)
+            self._record_migration(connection, migration)
+        return self.certify(migrations_applied=(migration.name,))
+
     def certify(
         self,
         *,
@@ -2663,6 +2965,10 @@ class SchemaManagerService:
                     return False
                 if not all(column in columns for column in required_columns):
                     return False
+        exact = self.MIGRATION_EFFECT_ATTESTATIONS.get(migration_name)
+        if exact is not None:
+            snapshot = self._read_schema_attestation(connection, exact)
+            return self._schema_attestation_matches(exact, snapshot)
         exact = self.HISTORY_ONLY_SCHEMA_ATTESTATIONS.get(migration_name)
         if exact is not None:
             snapshot = self._read_schema_attestation(connection, exact)
@@ -2720,6 +3026,19 @@ class SchemaManagerService:
                 row["indexname"]: row["indexdef"]
                 for row in cursor.fetchall()
             }
+            cursor.execute(
+                """SELECT c.conname AS constraint_name,
+                          pg_get_constraintdef(c.oid) AS definition
+                   FROM pg_constraint c
+                   JOIN pg_class t ON t.oid=c.conrelid
+                   JOIN pg_namespace n ON n.oid=t.relnamespace
+                   WHERE n.nspname=%s AND t.relname=%s AND c.contype='f'""",
+                (schema_name, table_name),
+            )
+            foreign_keys = {
+                row["constraint_name"]: row["definition"]
+                for row in cursor.fetchall()
+            }
             invalid_values = {}
             for column_name, allowed in requirement.get(
                 "allowed_values", {}
@@ -2736,6 +3055,7 @@ class SchemaManagerService:
                 )
         return {
             "columns": columns, "checks": checks, "indexes": indexes,
+            "foreign_keys": foreign_keys,
             "invalid_values": invalid_values,
         }
 
@@ -2764,6 +3084,18 @@ class SchemaManagerService:
             )
             expected = "(" + ", ".join(expected_columns).lower() + ")"
             if expected not in definition:
+                return False
+        foreign_keys = snapshot.get("foreign_keys", {})
+        for constraint_name, fragments in requirement.get(
+            "foreign_keys", {}
+        ).items():
+            definition = " ".join(
+                str(foreign_keys.get(constraint_name) or "").lower().split()
+            )
+            if any(
+                " ".join(str(fragment).lower().split()) not in definition
+                for fragment in fragments
+            ):
                 return False
         if any(
             int(snapshot.get("invalid_values", {}).get(column_name, -1)) != 0

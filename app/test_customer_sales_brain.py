@@ -504,6 +504,44 @@ def evaluate(service, context=None):
     )
 
 
+def test_customer_treatment_reduced_defers_only_discretionary_offer(monkeypatch):
+    from app.services.ai_training_control_service import AiTrainingControlService
+    monkeypatch.setattr(AiTrainingControlService,"runtime_treatment",lambda self,**kwargs:{
+        "policyId":"policy-1","version":2,"customerFanvueUserId":88,"active":True,
+        "configuration":{"sales_pressure":"REDUCED","free_engagement":"NORMAL","response_length":"NORMAL"},
+        "consumedDimensions":[],"effects":{}})
+    service=brain(customer=profile(),commerce_signal=signal())
+    common=dict(creator_profile_id=2,fanvue_account_id=7,buyer_uuid=BUYER,
+        telegram_user_id=22,identity_resolved=True,reason=CustomerSalesReasonCode.NO_ACTIVE_OFFER,
+        summary="candidate",stage=CustomerBuyerStage.PROSPECT,
+        progression_context={"fanvue_user_id":88,"latest_message":"hey"})
+    reduced=service._finish(0.0,NOW,decision=CustomerSalesDecisionType.PRESENT_OFFER,
+                            sell_allowed=True,**common)
+    assert reduced.decision is CustomerSalesDecisionType.CONTINUE_CONVERSATION
+    assert reduced.sell_allowed is False
+    assert reduced.decision_metadata["customerTreatment"]["effects"]["sales_pressure"] == "MARGINAL_COMMERCIAL_PROGRESSION_DEFERRED"
+    explicit=service._finish(0.0,NOW,decision=CustomerSalesDecisionType.PRESENT_OFFER,
+        sell_allowed=True,**{**common,"progression_context":{"fanvue_user_id":88,"latest_message":"what private content do you have?","commercial_receptiveness":{"freshDirectIntentDetected":True,"commercialInterestType":"DIRECT_CONTENT_INTENT"}}})
+    assert explicit.decision is CustomerSalesDecisionType.PRESENT_OFFER
+    assert explicit.sell_allowed is True
+
+
+def test_customer_treatment_increased_never_creates_commercial_action(monkeypatch):
+    from app.services.ai_training_control_service import AiTrainingControlService
+    monkeypatch.setattr(AiTrainingControlService,"runtime_treatment",lambda self,**kwargs:{
+        "policyId":"policy-2","version":1,"customerFanvueUserId":88,"active":True,
+        "configuration":{"sales_pressure":"INCREASED","free_engagement":"MORE_FLEXIBLE","response_length":"NORMAL"},
+        "consumedDimensions":[],"effects":{}})
+    service=brain(customer=profile(),commerce_signal=signal())
+    result=service._finish(0.0,NOW,creator_profile_id=2,fanvue_account_id=7,buyer_uuid=BUYER,
+        telegram_user_id=22,identity_resolved=True,decision=CustomerSalesDecisionType.CONTINUE_CONVERSATION,
+        reason=CustomerSalesReasonCode.CONVERSATION_ONLY,summary="chat",stage=CustomerBuyerStage.PROSPECT,
+        progression_context={"fanvue_user_id":88,"latest_message":"hello"})
+    assert result.decision is CustomerSalesDecisionType.CONTINUE_CONVERSATION
+    assert result.sell_allowed is False
+    assert result.decision_metadata["customerTreatment"]["effects"]["sales_pressure"] == "NO_ELIGIBLE_OPPORTUNITY_NO_ACTION_CREATED"
+
+
 def test_active_session_preserves_canonical_candidate_without_presentation():
     step_three = offering()
     customer = profile(

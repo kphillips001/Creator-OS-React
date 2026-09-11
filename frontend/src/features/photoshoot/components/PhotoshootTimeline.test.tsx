@@ -31,7 +31,10 @@ describe("PhotoshootTimeline image preview", () => {
     fireEvent.click(screen.getByRole("button", { name: "Select Shot 2" }));
 
     const dialog = screen.getByRole("dialog", { name: "Approved Photoshoot image fullscreen preview" });
-    expect(screen.getByAltText("Approved Photoshoot image full-size preview")).toHaveAttribute("src", image.image_url);
+    expect(screen.getByAltText("Approved Photoshoot image preview")).toHaveAttribute(
+      "src",
+      "/api/v1/generation-library/approved-2/preview",
+    );
     expect(screen.getByRole("button", { name: "Replace Shot" })).toBeInTheDocument();
     expect(fetch).not.toHaveBeenCalled();
 

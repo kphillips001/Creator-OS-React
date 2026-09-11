@@ -125,6 +125,11 @@ class GenerationLibraryPublishingService:
         selected_ctas: tuple[str, ...] | None = None,
         x_targets: tuple[Mapping[str, Any], ...] | None = None,
         x_auto_replies_enabled: bool = True,
+        x_thread_cta_enabled: bool = False,
+        x_thread_cta_text: str = "",
+        x_thread_cta_url: str = "https://avablackthorne.com/me",
+        publish_operation_id: str | None = None,
+        fanvue_account_id: int | None = None,
     ) -> dict[str, Any]:
         platform, telegram_post_to = self.validate_destination(destination)
         if platform == "instagram":
@@ -134,6 +139,11 @@ class GenerationLibraryPublishingService:
                 generated_image_id=generated_image_id,
                 targets=x_targets,
                 x_auto_replies_enabled=x_auto_replies_enabled,
+                x_thread_cta_enabled=x_thread_cta_enabled,
+                x_thread_cta_text=x_thread_cta_text,
+                x_thread_cta_url=x_thread_cta_url,
+                publish_operation_id=publish_operation_id,
+                fanvue_account_id=fanvue_account_id,
             )
         selected_caption = str(caption or "").strip()
         if not selected_caption:
@@ -224,6 +234,14 @@ class GenerationLibraryPublishingService:
                 else None
             ),
         )
+        if platform == "x":
+            publish_arguments.update(
+                x_thread_cta_enabled=bool(x_thread_cta_enabled),
+                x_thread_cta_text=str(x_thread_cta_text or ""),
+                x_thread_cta_url=str(x_thread_cta_url or ""),
+                publish_operation_id=(str(publish_operation_id or "").strip() or None),
+                fanvue_account_id=fanvue_account_id,
+            )
         if semantic_buttons is not None:
             publish_arguments["telegram_cta_buttons"] = semantic_buttons
         updated = self.social_publishing.publish_now(item.queue_item_id, **publish_arguments)
@@ -283,6 +301,11 @@ class GenerationLibraryPublishingService:
         generated_image_id: str,
         targets: tuple[Mapping[str, Any], ...],
         x_auto_replies_enabled: bool = True,
+        x_thread_cta_enabled: bool = False,
+        x_thread_cta_text: str = "",
+        x_thread_cta_url: str = "https://avablackthorne.com/me",
+        publish_operation_id: str | None = None,
+        fanvue_account_id: int | None = None,
     ) -> dict[str, Any]:
         available_accounts = set(self.social_publishing.x_account_options())
         if not targets:
@@ -340,6 +363,14 @@ class GenerationLibraryPublishingService:
                     "x_auto_replies_enabled": bool(x_auto_replies_enabled),
                     "x_auto_callback_status": "pending",
                 },
+                x_thread_cta_enabled=bool(x_thread_cta_enabled),
+                x_thread_cta_text=str(x_thread_cta_text or ""),
+                x_thread_cta_url=str(x_thread_cta_url or ""),
+                publish_operation_id=(
+                    f"{publish_operation_id}:{account_name}"
+                    if publish_operation_id else None
+                ),
+                fanvue_account_id=fanvue_account_id,
             )
             if updated.status == "posted":
                 successful.append((account_name, selected_caption, caption_id, selected_generated))
@@ -349,7 +380,7 @@ class GenerationLibraryPublishingService:
                     (
                         entry for entry in self.social_publishing.list_history()
                         if entry.queue_item_id == item.queue_item_id
-                        and entry.status == "failed"
+                        and entry.status in {"failed", "partial", "reconciliation_required"}
                         and entry.metadata.get("account_name") == account_name
                     ),
                     None,

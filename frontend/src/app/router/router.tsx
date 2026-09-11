@@ -18,6 +18,9 @@ import { BusinessAssetsPage } from "../../features/business-assets/BusinessAsset
 import { BusinessProductsPage } from "../../features/business-products/BusinessProductsPage";
 import { BusinessCustomersPage } from "../../features/business-customers/BusinessCustomersPage";
 import { BusinessSalesPage } from "../../features/business-sales/BusinessSalesPage";
+import { RelationshipsPage } from "../../features/relationships/RelationshipsPage";
+import { AskCreatorOsPage } from "../../features/ask-creator-os/AskCreatorOsPage";
+import { BusinessControlsPage } from "../../features/business-controls/BusinessControlsPage";
 import { BusinessOperationsPage } from "../../features/business-operations/BusinessOperationsPage";
 import { AvailableInventoryPage } from "../../features/available-inventory/AvailableInventoryPage";
 import { CommercialOfferingsPage } from "../../features/commercial-offerings/CommercialOfferingsPage";
@@ -41,10 +44,12 @@ import { CreatorWorldModelPage } from "../../features/creator-world-model/Creato
 import { AvaCoachPage } from "../../features/ava-coach/AvaCoachPage";
 import { NotFoundPage } from "../../features/not-found/NotFoundPage";
 import { AdministrationPage } from "../../features/administration/AdministrationPage";
+import { AvaConfigurationPage } from "../../features/ava-configuration/AvaConfigurationPage";
 import { ProviderConnectionsPage } from "../../features/administration/ProviderConnectionsPage";
 import { DeveloperNotesPage } from "../../features/developer-notes/DeveloperNotesPage";
 import { AiTrainingPage } from "../../features/ai-training/AiTrainingPage";
 import { AiTrainingControlsPage } from "../../features/ai-training-controls/AiTrainingControlsPage";
+import { AiTrainingWorkspacePage } from "../../features/ai-training-workspace/AiTrainingWorkspacePage";
 import { VideoStudioPage } from "../../features/video-studio/VideoStudioPage";
 import { VideoGalleryPage } from "../../features/video-gallery/VideoGalleryPage";
 import { RegenerationStudioPage } from "../../features/regeneration-studio/RegenerationStudioPage";
@@ -103,13 +108,19 @@ export const router = createBrowserRouter([
             item.path !== "/business/products" &&
             item.path !== "/business/customers" &&
             item.path !== "/business/sales" &&
+            item.path !== "/business/relationships" &&
+            item.path !== "/business/controls" &&
+            item.path !== "/business/ask" &&
             item.path !== "/business/operations" &&
             item.path !== "/administration" &&
+            item.path !== "/administration/ava" &&
+            item.path !== "/administration/providers" &&
             item.path !== "/administration/developer-notes" &&
             item.path !== "/tools/x-intelligence" &&
             item.path !== "/tools/ig-intelligence" &&
             item.path !== "/tools/ai-training" &&
             item.path !== "/agents/ai-training" &&
+            item.path !== "/training/ai-training" &&
             item.path !== "/agents/ava-coach",
         )
         .map((item) => ({
@@ -121,6 +132,51 @@ export const router = createBrowserRouter([
             />
           ),
         })),
+      {
+        path: "/publishing",
+        element: (
+          <PlaceholderPage
+            title="Publishing"
+            description="Publication history and distribution across every platform."
+          />
+        ),
+      },
+      {
+        path: "/settings",
+        element: (
+          <PlaceholderPage
+            title="Settings"
+            description="Configure Creator_OS preferences, accounts, and connections."
+          />
+        ),
+      },
+      {
+        path: "/diagnostics",
+        element: (
+          <PlaceholderPage
+            title="Diagnostics"
+            description="Review system health, jobs, providers, and operational signals."
+          />
+        ),
+      },
+      {
+        path: "/agents/creator",
+        element: (
+          <PlaceholderPage
+            title="Creator Agent"
+            description="Collaborate with the operational intelligence for creator work."
+          />
+        ),
+      },
+      {
+        path: "/agents/developer",
+        element: (
+          <PlaceholderPage
+            title="Developer Agent"
+            description="Explore architecture and system behavior through a read-only agent."
+          />
+        ),
+      },
       {
         path: "/home",
         element: <CreatorIntelligencePage />,
@@ -234,6 +290,18 @@ export const router = createBrowserRouter([
         element: <BusinessSalesPage />,
       },
       {
+        path: "/business/relationships",
+        element: <RelationshipsPage />,
+      },
+      {
+        path: "/business/controls",
+        element: <BusinessControlsPage />,
+      },
+      {
+        path: "/business/ask",
+        element: <AskCreatorOsPage />,
+      },
+      {
         path: "/business/operations",
         element: <BusinessOperationsPage />,
       },
@@ -282,6 +350,10 @@ export const router = createBrowserRouter([
         element: <AdministrationPage />,
       },
       {
+        path: "/administration/ava",
+        element: <AvaConfigurationPage />,
+      },
+      {
         path: "/administration/providers",
         element: <ProviderConnectionsPage />,
       },
@@ -292,6 +364,10 @@ export const router = createBrowserRouter([
       {
         path: "/agents/ai-training",
         element: <AiTrainingControlsPage />,
+      },
+      {
+        path: "/training/ai-training",
+        element: <AiTrainingWorkspacePage />,
       },
       {
         path: "/tools/ai-training",

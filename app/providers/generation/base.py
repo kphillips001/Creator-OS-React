@@ -206,6 +206,15 @@ Do not render a landing strip, stubble, trimmed pubic hair, shadow hair, peach f
         (5, "relaxed natural smile, authentic creator smile, subtle warmth, natural eye contact"),
         (3, "looking away thoughtfully with a coy private smile, candid intimate moment"),
     )
+    AUTONOMOUS_INSPIRATION_EXPRESSION_PROFILES = (
+        (20, "when mouth state is unspecified, a relaxed closed-mouth smile with natural facial muscle tension"),
+        (18, "when smile character is unspecified, a subtle playful smile with relaxed, believable features"),
+        (17, "when expression is unspecified, a neutral confident look with natural facial asymmetry"),
+        (15, "when smile character is unspecified, a soft genuine smile without forced or performative intensity"),
+        (12, "when gaze is unspecified, a relaxed direct gaze with calm eyes and facial muscles"),
+        (10, "when mouth state is unspecified, a slight natural smirk with understated playful warmth"),
+        (8, "when gaze is unspecified, a thoughtful off-camera glance with understated emotional detail"),
+    )
     EXPLICIT_TERMS = ("explicit", "nude", "naked", "topless", "bare breasts", "visible nipples", "masturbation", "touching her vagina", "vulva", "clit", "pussy", "dildo", "toy", "insertion")
     TOPLESS_TERMS = ("topless", "bare breasts", "bare breast", "no bra", "no bikini top", "no upper-body clothing", "upper body uncovered")
     NUDE_LOWER_TERMS = ("nude", "naked", "fully nude", "completely nude", "bare body", "pubic area", "vulva", "clit", "pussy", "touching her vagina")
@@ -680,18 +689,40 @@ Do not render a landing strip, stubble, trimmed pubic hair, shadow hair, peach f
             RenderPolicy.PHOTOSHOOT_PREMIUM,
         }:
             rendered = enforce_premium_render_body_lock(prompt)
-            return self._with_expression_directive(rendered, prompt)
+            if self._recreate_has_explicit_expression(request, prompt):
+                return ensure_canonical_facial_naturalism(rendered)
+            return self._with_expression_directive(rendered, prompt, request=request)
         if policy in {
             RenderPolicy.CONTENT_EXPLICIT,
             RenderPolicy.PHOTOSHOOT_EXPLICIT,
         }:
             rendered = enforce_explicit_render_lock(prompt)
-            return self._with_expression_directive(rendered, prompt)
+            if self._recreate_has_explicit_expression(request, prompt):
+                return ensure_canonical_facial_naturalism(rendered)
+            return self._with_expression_directive(rendered, prompt, request=request)
         if policy == RenderPolicy.PHOTOSHOOT_SAFE:
             return enforce_photoshoot_safe_render_lock(prompt)
         if policy == RenderPolicy.EDIT:
             return prompt
         raise GenerationProviderError(f"Unhandled render policy: {policy.value}")
+
+    @staticmethod
+    def _recreate_has_explicit_expression(
+        request: GenerationRequest, prompt: str,
+    ) -> bool:
+        metadata = request.metadata or {}
+        if str(metadata.get("workflow_origin") or "") != "recreate_with_ava":
+            return False
+        if "recreate_source_expression_authoritative" in metadata:
+            return metadata.get("recreate_source_expression_authoritative") is True
+        # Compatibility for requests created before structured Recreate
+        # expression provenance was persisted.
+        match = re.search(
+            r"(?:^|[\[\n,])\s*Expression\s*:\s*([^,\]\n]*)",
+            str(prompt or ""),
+            flags=re.IGNORECASE,
+        )
+        return bool(match and match.group(1).strip())
 
     @staticmethod
     def _is_trusted_final_prompt(request: GenerationRequest, prompt: str | None = None) -> bool:
@@ -723,12 +754,19 @@ Do not render a landing strip, stubble, trimmed pubic hair, shadow hair, peach f
             ) from error
 
     @classmethod
-    def _with_expression_directive(cls, rendered: str, identity: str) -> str:
+    def _with_expression_directive(
+        cls, rendered: str, identity: str,
+        *, request: GenerationRequest | None = None,
+    ) -> str:
         if (
             "EXPLICIT EXPRESSION VARIATION:" in rendered
             or "EXPLICIT EXPRESSION PROFILE" in rendered
         ):
             return ensure_canonical_facial_naturalism(rendered)
+        if str((request.metadata if request else {}).get("workflow_origin") or "") == "autonomous_inspiration":
+            return ensure_canonical_facial_naturalism(
+                f"{rendered}\n\n{cls._autonomous_inspiration_expression_directive(identity)}"
+            )
         return ensure_canonical_facial_naturalism(
             f"{rendered}\n\n{cls._explicit_expression_directive(identity)}"
         )
@@ -860,6 +898,27 @@ Do not render a landing strip, stubble, trimmed pubic hair, shadow hair, peach f
             "EXPLICIT HAIR SHAPE LOCK:\n"
             "Hair must be worn down naturally with a smooth flat natural top and loose dark hair flowing around her face, "
             "over her shoulders, or down her back. No bun, topknot, ponytail, updo, tied-up hair, messy crown, or tall hair shape."
+        )
+
+    @classmethod
+    def _autonomous_inspiration_expression_directive(cls, prompt: str) -> str:
+        digest = hashlib.sha256(str(prompt or "").strip().encode("utf-8")).digest()
+        bucket = int.from_bytes(digest[:8], "big") % 100
+        running = 0
+        selected = cls.AUTONOMOUS_INSPIRATION_EXPRESSION_PROFILES[-1][1]
+        for weight, profile in cls.AUTONOMOUS_INSPIRATION_EXPRESSION_PROFILES:
+            running += weight
+            if bucket < running:
+                selected = profile
+                break
+        return (
+            "INSPIRE ME NATURAL EXPRESSION NUANCE:\n"
+            "Preserve any expression, gaze direction, eye behavior, and mouth state already specified by the authoritative scene. "
+            "Use this expression profile only for details the scene leaves unspecified. The scene wins.\n"
+            f"Natural profile: {selected}.\n"
+            "Keep the result restrained, attractive, candid, and anatomically natural. Do not add lip biting, tongue display, "
+            "bedroom-alert eyes, salacious eye contact, exaggerated seductive eyes, a forced teasing grin, exaggerated parted lips, "
+            "or naughty facial performance unless the authoritative scene explicitly requires that exact expression behavior."
         )
 
     def _api_key(self) -> str:

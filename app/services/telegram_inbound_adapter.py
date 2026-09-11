@@ -58,6 +58,7 @@ class TelegramInboundAdapter:
         buyer_memory_priority_resolver=None,
         customer_behavior_evidence_repository=None,
         abuse_policy_service=None,
+        relationship_control_service=None,
     ) -> None:
         if identity_adapter is None:
             raise ValueError("identity_adapter is required")
@@ -87,10 +88,13 @@ class TelegramInboundAdapter:
         self._buyer_memory_priority_resolver = buyer_memory_priority_resolver
         self._customer_behavior_evidence = customer_behavior_evidence_repository
         self._abuse_policy = abuse_policy_service
+        self._relationship_controls = relationship_control_service
 
     def execute(
         self,
         payload: TelegramInboundPayload,
+        *,
+        observe_only: bool = False,
     ) -> TelegramInboundResult:
         self._validate_payload(payload)
 
@@ -115,6 +119,7 @@ class TelegramInboundAdapter:
 
         canonical_identity = None
         canonical_thread = None
+        durable_inbound_observed = False
         if self._telegram_identities is not None:
             self._telegram_identities.observe(
                 telegram_user_id=payload.telegram_user_id,
@@ -202,6 +207,7 @@ class TelegramInboundAdapter:
                 telegram_user_id=int(payload.telegram_user_id),
                 telegram_chat_id=int(payload.telegram_chat_id),
             )
+            durable_inbound_observed = telegram_prospect is not None
             if explicit_ack_continuation:
                 from app.services.session_escalation_decision_service import (
                     SessionEscalationDecisionService,
@@ -364,6 +370,7 @@ class TelegramInboundAdapter:
                     "reply_to_telegram_message_id": payload.reply_to_message_id,
                 },
             )
+            durable_inbound_observed = True
             if self._engagement_outcomes is not None and self._creator_profile_id:
                 self._engagement_outcomes.record_next_inbound(
                     creator_profile_id=int(self._creator_profile_id),
@@ -372,6 +379,59 @@ class TelegramInboundAdapter:
                     telegram_message_id=payload.message_id,
                     reply_to_message_id=payload.reply_to_message_id,
                 )
+
+        relationship_control = None
+        if (self._relationship_controls is not None and self._creator_profile_id
+                and self._fanvue_account_id):
+            allowed, control = self._relationship_controls.autonomous_allowed(
+                creator_profile_id=int(self._creator_profile_id),
+                fanvue_account_id=int(self._fanvue_account_id),
+                telegram_user_id=int(payload.telegram_user_id),
+                telegram_chat_id=int(payload.telegram_chat_id),
+            )
+            relationship_control = control
+            if not allowed:
+                return TelegramInboundResult(
+                    correlation_id=correlation_id,
+                    telegram_chat_id=payload.telegram_chat_id,
+                    telegram_user_id=payload.telegram_user_id,
+                    message_id=payload.message_id,
+                    engine_user_id=(getattr(canonical_identity, "engine_user_id", None)
+                                    or identity.engine_user_id),
+                    response_text="", offer_authorized=False, offer_link=None,
+                    blocked=True, error_code=self._relationship_controls.HOLD_REASON,
+                    delivery_requires_payment=False, delivery_payload={},
+                    diagnostic_metadata={
+                        "relationship_control_mode": control.mode.value,
+                        "relationship_control_version": control.control_version,
+                        "held_reason": self._relationship_controls.HOLD_REASON,
+                        "ai_generation_count": 0,
+                    },
+                )
+
+        # Observation is part of the canonical inbound path and precedes any
+        # AI or Sales Brain execution. AVA BOT OFF uses this boundary so the
+        # message, identity, relationship and memory evidence remain durable
+        # without creating a reply, presentation, or PurchaseIntent.
+        if observe_only:
+            return TelegramInboundResult(
+                correlation_id=correlation_id,
+                telegram_chat_id=payload.telegram_chat_id,
+                telegram_user_id=payload.telegram_user_id,
+                message_id=payload.message_id,
+                engine_user_id=(getattr(canonical_identity, "engine_user_id", None)
+                                or identity.engine_user_id),
+                response_text="", offer_authorized=False, offer_link=None,
+                blocked=True, error_code="GLOBAL_AUTOMATION_DISABLED",
+                delivery_requires_payment=False, delivery_payload={},
+                diagnostic_metadata={
+                    "observation_only": True,
+                    "durable_inbound_observed": durable_inbound_observed,
+                    "ai_generation_count": 0,
+                    "commercial_execution_count": 0,
+                    "automatic_send_count": 0,
+                },
+            )
 
         effective_engine_user_id = (
             getattr(canonical_identity, "engine_user_id", None)
@@ -428,6 +488,14 @@ class TelegramInboundAdapter:
             "recentHistorySource": recent_history_source,
             "recentHistoryTurnCount": len(chat_history) // 2,
         })
+        if relationship_control is not None:
+            diagnostics.update({
+                "relationship_control_mode": relationship_control.mode.value,
+                "relationship_control_version": relationship_control.control_version,
+            })
+        if self._creator_profile_id and self._fanvue_account_id:
+            diagnostics.update({"creator_profile_id":int(self._creator_profile_id),
+                                "fanvue_account_id":int(self._fanvue_account_id)})
         if self._telegram_identities is not None:
             diagnostics["telegram_identity_eligibility"] = (
                 "VERIFIED" if canonical_identity is not None else "UNMAPPED"

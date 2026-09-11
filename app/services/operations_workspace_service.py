@@ -14,6 +14,7 @@ from app.repositories.outreach_queue_repository import fetch_outreach_queue_dash
 from app.repositories.publishing_repository import PublishingRepository
 from app.repositories.webhook_event_repository import list_webhook_events_for_account
 from app.repositories.worker_heartbeat_repository import WorkerHeartbeatRepository
+from app.repositories.commercial_operations_repository import CommercialOperationsRepository
 from app.services.delayed_messages_dashboard_service import DelayedMessagesDashboardService
 from app.services.global_automation_safety_service import GlobalAutomationSafetyService
 from app.services.mass_ppv_dashboard_service import MassPPVDashboardService
@@ -44,6 +45,7 @@ class OperationsWorkspaceService:
         webhook_reader: Any = list_webhook_events_for_account,
         delivery_repository: Any | None = None,
         heartbeat_repository: Any | None = None,
+        commercial_operations_repository: Any | None = None,
         launcher_state_path: str | Path | None = None,
         now: Any | None = None,
     ) -> None:
@@ -59,6 +61,7 @@ class OperationsWorkspaceService:
         self.webhook_reader = webhook_reader
         self.delivery_repository = delivery_repository or ChatCommerceDeliveryRepository()
         self.heartbeat_repository = heartbeat_repository or WorkerHeartbeatRepository()
+        self.commercial_operations = commercial_operations_repository or CommercialOperationsRepository()
         self.launcher_state_path = Path(launcher_state_path) if launcher_state_path else Path("logs/runtime/launcher_state.json")
         self.now = now or (lambda: datetime.now(timezone.utc))
 
@@ -254,6 +257,10 @@ class OperationsWorkspaceService:
             if not self._belongs(payload, account_id) or str(payload.get("status") or payload.get("delivery_status") or "").lower() not in {"failed", "error", "blocked"}:
                 continue
             failures.append(self._failure("Delivery", payload, str(payload.get("status") or "failed"), payload.get("error") or payload.get("reason")))
+        for incident in self.commercial_operations.incidents(fanvue_account_id=account_id):
+            failures.append({"id":incident["id"],"source":incident["source"],"status":incident["status"],
+                             "error":incident["error"],"timestamp":incident["timestamp"],"retryCount":incident["retry_count"],
+                             "related":incident["related"],"evidence":{"canonicalLifecycle":True}})
         health = self._health()
         for warning in health["providerWarnings"]:
             failures.append({"id": f"provider-{warning['name']}", "source": "Provider", "status": warning["status"],
@@ -342,7 +349,8 @@ class OperationsWorkspaceService:
 
     def _row_time(self, row: Mapping[str, Any]) -> Any:
         for key in ("updated_at", "completed_at", "processed_at", "failed_at", "received_at", "created_at", "scheduled_for"):
-            if row.get(key) is not None: return row.get(key)
+            if row.get(key) is not None:
+                return self._date(row.get(key))
         return None
 
     @staticmethod

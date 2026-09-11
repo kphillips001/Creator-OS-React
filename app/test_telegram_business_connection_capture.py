@@ -28,7 +28,7 @@ class Session:
         return Response(self.payload)
 
 
-def test_capture_filter_adds_only_business_connection_lifecycle():
+def test_capture_filter_includes_business_peer_observability_updates():
     session = Session({"ok": True, "result": []})
     capture = TelegramBusinessConnectionCapture(bot_token="token", session=session)
 
@@ -37,9 +37,51 @@ def test_capture_filter_adds_only_business_connection_lifecycle():
     allowed = json.loads(session.calls[0][1]["params"]["allowed_updates"])
     assert allowed == list(BOT_API_ALLOWED_UPDATES)
     assert "business_connection" in allowed
-    assert "business_message" not in allowed
-    assert "edited_business_message" not in allowed
-    assert "deleted_business_messages" not in allowed
+    assert "business_message" in allowed
+    assert "edited_business_message" in allowed
+    assert "deleted_business_messages" in allowed
+
+
+def test_business_message_metadata_is_captured_without_content_routing():
+    events = TelegramBusinessConnectionCapture.parse({
+        "update_id": 101,
+        "business_message": {
+            "business_connection_id": "bc-1", "message_id": 700,
+            "date": 1700000000, "text": "must not be persisted here",
+            "from": {"id": 789}, "chat": {"id": 789, "type": "private"},
+        },
+    })
+    assert len(events) == 1
+    event = events[0]
+    assert event.business_connection_id == "bc-1"
+    assert event.telegram_peer_user_id == 789
+    assert event.telegram_chat_id == 789
+    assert event.telegram_message_id == 700
+    assert event.provider_timestamp == 1700000000
+    assert event.sender_telegram_user_id == 789
+    assert not hasattr(event, "text")
+
+
+def test_edited_and_deleted_business_message_metadata_is_captured():
+    edited = TelegramBusinessConnectionCapture.parse({
+        "update_id": 102,
+        "edited_business_message": {
+            "business_connection_id": "bc-1", "message_id": 700,
+            "date": 1700000000, "edit_date": 1700000100,
+            "from": {"id": 789}, "chat": {"id": 789, "type": "private"},
+        },
+    })
+    deleted = TelegramBusinessConnectionCapture.parse({
+        "update_id": 103,
+        "deleted_business_messages": {
+            "business_connection_id": "bc-1",
+            "chat": {"id": 789}, "message_ids": [700, 701],
+        },
+    })
+    assert edited[0].event_type == "edited_business_message"
+    assert edited[0].provider_timestamp == 1700000100
+    assert [event.telegram_message_id for event in deleted] == [700, 701]
+    assert all(event.event_type == "deleted_business_messages" for event in deleted)
 
 
 def test_connection_event_is_safely_captured_without_message_routing():

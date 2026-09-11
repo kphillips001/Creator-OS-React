@@ -51,6 +51,31 @@ def test_inspire_endpoint_creates_durable_idempotent_operation(monkeypatch):
         content_studio.submit_autonomous_inspiration).parameters
 
 
+def test_inspire_guidance_is_normalized_and_persisted_without_changing_idempotency(monkeypatch):
+    captured = {}
+    durable = SimpleNamespace(operation_id=uuid4())
+    class Service:
+        def create(self, **values): captured.update(values); return durable, True
+    monkeypatch.setattr("app.services.background_operation_service.BackgroundOperationService", Service)
+    monkeypatch.setattr(content_studio, "_current_account_id", lambda: 3)
+    monkeypatch.setattr(content_studio, "get_active_creator_profile", lambda account: {"id": 2})
+
+    request = content_studio.AutonomousInspirationRequest(
+        provider="seedream_5_0_pro", guidance="  warm summer weather  ")
+    asyncio.run(content_studio.submit_autonomous_inspiration(request))
+
+    assert captured["metadata"]["request"] == {
+        "provider": "seedream_5_0_pro", "guidance": "warm summer weather"}
+    assert captured["idempotency_key"] == "content-studio-autonomous-inspiration:2:3"
+
+
+def test_inspire_request_normalizes_blank_guidance_to_absent_semantics():
+    for value in (None, "", "   \n"):
+        request = content_studio.AutonomousInspirationRequest(
+            provider="seedream_5_0_pro", guidance=value)
+        assert request.guidance is None
+
+
 def test_autonomous_executor_persists_stages_job_and_terminal_result(monkeypatch):
     def execute(run_id, request, **kwargs):
         callback = kwargs["state_callback"]
@@ -71,6 +96,27 @@ def test_autonomous_executor_persists_stages_job_and_terminal_result(monkeypatch
         "PLANNING", "PROVIDER_QUEUED", "GENERATING"]
     assert operations.progress_values[1]["result_reference"] == "job-1"
     assert operations.succeeded and not operations.failed
+
+
+def test_autonomous_executor_reconstructs_meaningful_guidance(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(
+        content_studio, "_execute_autonomous_inspiration",
+        lambda run_id, request, **kwargs: captured.update(request=request) or {
+            "status": "succeeded", "message": "Complete", "completedCount": 6,
+            "failedCount": 0, "processedCount": 6, "progress": 100,
+            "outputReferences": []})
+    operations = Operations()
+    ContentStudioAutonomousBackgroundExecutor().execute(
+        operation(metadata={
+            "request": {"provider": "seedream_5_0_pro", "guidance": "yellow shirt"},
+            "imageCount": 6,
+        }),
+        operations,
+        worker_id="worker-guided",
+    )
+
+    assert captured["request"].guidance == "yellow shirt"
 
 
 def test_provider_submitted_stale_operation_never_calls_autonomous_pipeline(monkeypatch):

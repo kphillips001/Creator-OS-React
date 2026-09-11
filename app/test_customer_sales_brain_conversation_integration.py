@@ -332,6 +332,10 @@ def execute(
     engine_diagnostics=None,
     conversational_memory=None,
 ):
+    class EnabledSellingPermissions:
+        def content_allowed(self): return True
+        def session_allowed(self): return True
+
     engine = Brain(
         send_offer=engine_send_offer, response_text=response_text,
         commerce_readiness=commerce_readiness,
@@ -352,6 +356,7 @@ def execute(
         purchase_acknowledgement_copy_generator=acknowledgement_generator,
         commerce_mode_service=commerce_mode or LiveCommerceMode(),
         relationship_mode_service=relationship_mode,
+        global_selling_permissions_service=EnabledSellingPermissions(),
     )
     output = gateway.execute(ConversationGatewayInput(
         engine_user_id="4:-123", message_text=message_text,

@@ -125,7 +125,7 @@ function editableProfile(profile: CreatorPersonality): CreatorPersonalityUpdate 
   ) as CreatorPersonalityUpdate;
 }
 
-export function CreatorPersonalityPage() {
+export function CreatorPersonalityPage({ embedded = false }: { embedded?: boolean } = {}) {
   const [profile, setProfile] = useState<CreatorPersonality | null>(null);
   const [draft, setDraft] = useState<CreatorPersonalityUpdate | null>(null);
   const [loading, setLoading] = useState(true);
@@ -180,11 +180,12 @@ export function CreatorPersonalityPage() {
     JSON.stringify(editableProfile(profile)) !== JSON.stringify(draft)
   );
 
-  return <main className="creator-personality-page">
-    <PageHeader
+  const Root = embedded ? "section" : "main";
+  return <Root className="creator-personality-page">
+    {!embedded && <PageHeader
       title="Personality"
       description="Review and edit the canonical creator personality stored for the active creator account."
-    />
+    />}
 
     <aside className="creator-personality-note">
       <AlertCircle size={18} />
@@ -239,7 +240,7 @@ export function CreatorPersonalityPage() {
         <button disabled={!dirty || saving} type="submit"><Save size={16} />{saving ? "Saving…" : "Save Personality"}</button>
       </footer>
     </form>}
-  </main>;
+  </Root>;
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {

@@ -109,6 +109,14 @@ def test_business_transport_preserves_unicode_and_authoritative_values():
     }]
     assert "https://" not in sender.calls[0]["message_text"]
 
+def test_business_transport_rejects_a_different_prepared_connection():
+    candidate,sender=transport(connection(connection_id="bc-current"))
+    with pytest.raises(TelegramBusinessTransportError,match="prepared"):
+        candidate.send_text(chat_id=7857064998,message_text="offer",
+            button_label="ðŸ”“ Unlock",button_url="https://creator.example/unlock/opaque",
+            expected_business_connection_id="bc-prepared")
+    assert sender.calls == []
+
 
 class Response:
     def __init__(self, payload, status=200): self.payload=payload; self.status_code=status
@@ -146,6 +154,31 @@ def test_bot_api_returns_and_verifies_business_provider_receipt():
     assert receipt.id == 701
     assert receipt.provider_markup_verified is True
     assert http.calls[0][1]["json"]["reply_markup"]["inline_keyboard"][0][0]["text"] == "🔓 Unlock"
+
+
+def test_bot_api_verifies_plain_business_text_without_reply_markup():
+    payload=provider_result()
+    payload["result"].pop("reply_markup")
+    http=Http(Response(payload))
+    receipt=TelegramBotApiSender(bot_token="token",session=http).send_text(
+        business_connection_id="bc-1",chat_id=7857064998,
+        message_text="Natural Ava offer",expected_business_owner_user_id=6432023689,
+        expected_business_bot_id=8214690576)
+    assert "reply_markup" not in http.calls[0][1]["json"]
+    assert receipt.attachment_mode == "TELEGRAM_BUSINESS_TEXT"
+    assert receipt.actionable_destination_attached is False
+
+
+def test_bot_api_preserves_sanitized_provider_rejection_diagnostics():
+    http=Http(Response({"ok":False,"error_code":400,
+                        "description":"Bad Request: chat not found"},400))
+    sender=TelegramBotApiSender(bot_token="secret-token",session=http)
+    with pytest.raises(Exception) as caught:
+        sender.send_text(chat_id=7857064998,message_text="hello")
+    assert "HTTP 400" in str(caught.value)
+    assert "error_code 400" in str(caught.value)
+    assert "chat not found" in str(caught.value)
+    assert "secret-token" not in str(caught.value)
 
 
 def test_peer_usage_missing_is_explicit_and_never_retried():
@@ -218,10 +251,14 @@ class GetSession:
         self.calls.append((url,kwargs)); return Response({"ok":True,"result":self.updates})
 
 
-def test_lifecycle_worker_ignores_business_messages_and_captures_connection_only():
+def test_lifecycle_worker_observes_business_messages_without_conversation_routing():
     lifecycle=Lifecycle()
+    peer=Lifecycle()
     session=GetSession([
-        {"update_id":1,"business_message":{"text":"do not route"}},
+        {"update_id":1,"business_message":{
+            "business_connection_id":"bc-2","message_id":90,"date":1700000001,
+            "from":{"id":7857064998},
+            "chat":{"id":7857064998,"type":"private"},"text":"do not route"}},
         {"update_id":2,"business_connection":{
             "id":"bc-2","user":{"id":6432023689,"first_name":"Ava"},
             "user_chat_id":6432023689,"date":1700000000,"is_enabled":True,
@@ -229,10 +266,13 @@ def test_lifecycle_worker_ignores_business_messages_and_captures_connection_only
         }},
     ])
     worker=TelegramBusinessConnectionWorker(
-        bot_token="token",lifecycle_service=lifecycle,session=session,timeout_seconds=0,
+        bot_token="token",lifecycle_service=lifecycle,
+        peer_observation_service=peer,session=session,timeout_seconds=0,
     )
-    assert len(worker.poll_once()) == 1
+    assert len(worker.poll_once()) == 2
     assert len(lifecycle.events) == 1
+    assert len(peer.events) == 1
+    assert peer.events[0].telegram_message_id == 90
     assert worker.offset == 3
 
 

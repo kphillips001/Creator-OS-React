@@ -141,6 +141,8 @@ class CustomerSalesBrainService:
         customer_value_attention_service=None,
         unmapped_telegram_prospect_service=None,
         provisional_sales_session_service=None,
+        global_selling_permissions_service=None,
+        customer_effective_permissions_service=None,
         clock=lambda: datetime.now(timezone.utc),
     ):
         self.customers = customer_repository or CustomerCommerceRepository()
@@ -171,6 +173,8 @@ class CustomerSalesBrainService:
         )
         self.unmapped_prospects = unmapped_telegram_prospect_service
         self.provisional_sales_sessions = provisional_sales_session_service
+        self.global_selling_permissions = global_selling_permissions_service
+        self.customer_effective_permissions = customer_effective_permissions_service
         if telegram_sales_delivery_repository is None:
             from app.repositories.telegram_sales_delivery_repository import TelegramSalesDeliveryRepository
             telegram_sales_delivery_repository = TelegramSalesDeliveryRepository()
@@ -476,7 +480,16 @@ class CustomerSalesBrainService:
                 str(context.get("latest_message") or "")
             )
         )
-        if explicit_teaser_request and active is None:
+        if (
+            explicit_teaser_request
+            and active is None
+            and self._session_selling_allowed(
+                creator_profile_id=creator_profile_id,
+                fanvue_account_id=int(context.get("fanvue_account_id") or 0),
+                telegram_user_id=telegram_user_id,
+                telegram_chat_id=context.get("telegram_chat_id"),
+            )
+        ):
             repository = self.progression_repository
             if repository is None:
                 from app.repositories.autonomous_sales_progression_repository import (
@@ -563,6 +576,7 @@ class CustomerSalesBrainService:
                 decision, sell_allowed=False, nudge_allowed=False,
                 decision_metadata=immutable_mapping(metadata),
             )
+
         proactive_readiness = self._deterministic_proactive_tease_readiness(context)
         if (
             proactive_readiness["authorized"]
@@ -725,6 +739,22 @@ class CustomerSalesBrainService:
         if recovery:
             return self._decorate_recovery(decision, objection, selection)
         return self.conversational_progression.refine(decision, context)
+
+    def _session_selling_allowed(self, *, creator_profile_id,
+                                 fanvue_account_id, telegram_user_id,
+                                 telegram_chat_id=None):
+        if self.customer_effective_permissions is not None and fanvue_account_id:
+            state = self.customer_effective_permissions.read(
+                creator_profile_id=int(creator_profile_id),
+                fanvue_account_id=int(fanvue_account_id),
+                telegram_user_id=int(telegram_user_id),
+                telegram_chat_id=telegram_chat_id,
+            )
+            return bool(state["effective"]["sessionSellingAllowed"])
+        return (
+            self.global_selling_permissions is None
+            or self.global_selling_permissions.session_allowed()
+        )
 
     @staticmethod
     def _deterministic_proactive_tease_readiness(context: dict) -> dict:
@@ -3552,6 +3582,61 @@ class CustomerSalesBrainService:
         fresh_direct_intent = bool(
             commercial_receptiveness.get("freshDirectIntentDetected")
         )
+        treatment = None
+        treatment_effects = {}
+        treatment_consumed = []
+        customer_id = progression_context.get("fanvue_user_id")
+        if customer_id is not None and creator_profile_id and fanvue_account_id:
+            try:
+                from app.services.ai_training_control_service import AiTrainingControlService
+                treatment = AiTrainingControlService().runtime_treatment(
+                    creator_profile_id=int(creator_profile_id),
+                    fanvue_account_id=int(fanvue_account_id),
+                    customer_fanvue_user_id=int(customer_id),
+                )
+            except Exception as error:
+                logger.warning("event=customer_treatment_unavailable error_type=%s", type(error).__name__)
+        if treatment is None:
+            from app.services.ai_training_control_service import AiTrainingControlService
+            treatment = AiTrainingControlService._treatment_evidence(
+                None, AiTrainingControlService.TREATMENT_DEFAULTS, [],
+                {"all": "NO_ENABLED_TREATMENT"},
+            )
+        treatment_values = dict(treatment.get("configuration") or {})
+        sales_pressure = treatment_values.get("sales_pressure", "NORMAL")
+        protected_commercial_state = bool(
+            fresh_direct_intent or active is not None
+            or commercial_receptiveness.get("commercialInterestType") in {
+                "PURCHASE_ACCEPTANCE", "SEND_OR_LINK_REQUEST", "PRICE_REQUEST",
+                "DIRECT_CONTENT_INTENT", "SPECIFIC_CONTENT_REQUEST",
+            }
+            or progression_context.get("sales_session_id")
+            or progression_context.get("active_session_context")
+            or progression_context.get("purchase_acknowledgement_pending")
+            or progression_context.get("purchase_cooldown_active")
+            or objection_summary.get("recoveryAttemptCount")
+        )
+        discretionary_actions = {
+            CustomerSalesDecisionType.PRESENT_OFFER,
+            CustomerSalesDecisionType.UPSELL,
+            CustomerSalesDecisionType.CROSS_SELL,
+            CustomerSalesDecisionType.PRESENT_ALTERNATIVE_OFFER,
+        }
+        if sales_pressure != "NORMAL":
+            treatment_consumed.append("SALES_PRESSURE")
+        if sales_pressure == "REDUCED" and decision in discretionary_actions:
+            if protected_commercial_state:
+                treatment_effects["sales_pressure"] = "HIGHER_AUTHORITY_COMMERCIAL_STATE_PRESERVED"
+            else:
+                decision = CustomerSalesDecisionType.CONTINUE_CONVERSATION
+                sell_allowed = upsell_allowed = cross_sell_allowed = False
+                treatment_effects["sales_pressure"] = "MARGINAL_COMMERCIAL_PROGRESSION_DEFERRED"
+        elif sales_pressure == "INCREASED":
+            treatment_effects["sales_pressure"] = (
+                "EXISTING_AUTHORIZED_PROGRESSION_PRESERVED" if decision in discretionary_actions
+                else "NO_ELIGIBLE_OPPORTUNITY_NO_ACTION_CREATED")
+        else:
+            treatment_effects["sales_pressure"] = "NORMAL_NO_OVERRIDE"
         value_attention = self.customer_value_attention.project(
             commerce_memory=memory_summary,
             behavior={
@@ -3619,12 +3704,32 @@ class CustomerSalesBrainService:
             )
             and not fresh_direct_intent
         )
+        free_engagement = treatment_values.get("free_engagement", "NORMAL")
+        if free_engagement != "NORMAL":
+            treatment_consumed.append("FREE_ENGAGEMENT")
+        if free_engagement == "MORE_LIMITED" and value_attention.low_cost_nurture_active:
+            suppress_optional_nurture_reply = bool(not fresh_direct_intent and active is None
+                                                   and not progression_context.get("sales_session_id"))
+            treatment_effects["free_engagement"] = (
+                "OPTIONAL_LOW_COST_NURTURE_NARROWED" if suppress_optional_nurture_reply
+                else "HIGHER_AUTHORITY_COMMERCIAL_STATE_PRESERVED")
+        elif free_engagement == "MORE_FLEXIBLE":
+            treatment_effects["free_engagement"] = (
+                "GLOBAL_HARD_LIMIT_PRESERVED" if value_attention.optional_ordinary_reply_suppressed
+                else "RELATIONSHIP_BUILDING_ALLOWED_WITHIN_GLOBAL_ENVELOPE")
+        else:
+            treatment_effects["free_engagement"] = "NORMAL_NO_OVERRIDE"
+        treatment = {**treatment, "consumedDimensions": treatment_consumed,
+                     "effects": treatment_effects}
         outbound_suppressed = bool(
             suppress_repeated_abuse or suppress_optional_nurture_reply
         )
         outbound_suppression_reason = (
             "REPEATED_HOSTILITY_AFTER_BACK_OFF"
             if suppress_repeated_abuse
+            else "CUSTOMER_TREATMENT_MORE_LIMITED_FREE_ENGAGEMENT"
+            if (suppress_optional_nurture_reply
+                and treatment_effects.get("free_engagement") == "OPTIONAL_LOW_COST_NURTURE_NARROWED")
             else "LOW_COST_NURTURE_DAILY_BUDGET_CONSUMED"
             if suppress_optional_nurture_reply
             else None
@@ -3835,6 +3940,7 @@ class CustomerSalesBrainService:
                     "generationProjection": "CUSTOMER_VALUE_ATTENTION_SERVICE",
                     "projectionConsistent": True,
                 },
+                "customerTreatment": treatment,
                 "commercialReceptiveness": dict(
                     progression_context.get("commercial_receptiveness") or {}
                 ),

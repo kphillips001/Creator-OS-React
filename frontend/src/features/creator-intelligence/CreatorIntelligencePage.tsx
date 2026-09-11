@@ -10,8 +10,7 @@ import {
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 
-import { operationsApi } from "../business-operations/api";
-import type { OperationsModuleSwitches } from "../business-operations/types";
+import { controlsApi, type GlobalControls } from "../business-controls/api";
 import {
   useDeveloperAgentExecutions,
   type AutonomousResolution,
@@ -19,13 +18,14 @@ import {
   type DeveloperExecution,
 } from "../developer-agent/DeveloperAgentExecutionContext";
 import { loadCreatorIntelligence } from "./api";
+import { PerformanceSnapshot } from "./PerformanceSnapshot";
+import { XLinkPerformance } from "./XLinkPerformance";
 import type {
   CreatorIntelligence,
   HealthStatus,
 } from "./types";
 import "./creator-intelligence.css";
 
-type CommerceMode = "OFF" | "RELATIONSHIP" | "LIVE";
 type DiagnosticIssue = {
   component: string;
   status: string;
@@ -78,35 +78,6 @@ export function localDate(now = new Date()) {
     day: "numeric",
     year: "numeric",
   }).format(now);
-}
-
-const commerceLabel = (mode: CommerceMode) =>
-  mode === "RELATIONSHIP"
-    ? "🌱 Relationship Mode"
-    : mode === "LIVE"
-      ? "💰 Commerce Live"
-      : "OFF";
-
-function operatingState(mode: CommerceMode, runtime: string) {
-  if (runtime === "OFFLINE" || mode === "OFF") {
-    return {
-      status: "Maintenance",
-      focus: "Maintenance",
-      explanation: "Commerce is off while Creator_OS remains available for operational review.",
-    };
-  }
-  if (mode === "LIVE") {
-    return {
-      status: "Commerce Enabled",
-      focus: "Commerce Live",
-      explanation: "Approved offerings may be presented when the Sales Brain authorizes them.",
-    };
-  }
-  return {
-    status: "Relationship Building",
-    focus: "Relationship Building",
-    explanation: "Ava is learning from conversations while commercial offers remain suppressed.",
-  };
 }
 
 function observedOpportunities(data: CreatorIntelligence) {
@@ -244,21 +215,19 @@ export function CreatorIntelligencePage() {
     recentResolutions, recheck,
   } = useDeveloperAgentExecutions();
   const [data, setData] = useState<CreatorIntelligence | null>(null);
-  const [controls, setControls] = useState<OperationsModuleSwitches | null>(null);
-  const [pendingMode, setPendingMode] = useState<CommerceMode | null>(null);
+  const [controls, setControls] = useState<GlobalControls | null>(null);
   const [selectedIssue, setSelectedIssue] = useState<DiagnosticIssue | null>(null);
   const [reopenedExecution, setReopenedExecution] = useState<DeveloperExecution | null>(null);
   const [reopenedResolution, setReopenedResolution] = useState<AutonomousResolution | null>(null);
   const [resolution, setResolution] = useState<{
     executionId: string; resolvedAt: string;
   } | null>(null);
-  const [savingMode, setSavingMode] = useState(false);
   const [error, setError] = useState("");
 
   const refreshDashboard = useCallback(async () => {
     const [intelligence, operations] = await Promise.all([
       loadCreatorIntelligence(),
-      operationsApi.module_switches(),
+      controlsApi.global(),
     ]);
     setData(intelligence);
     setControls(operations);
@@ -285,9 +254,6 @@ export function CreatorIntelligencePage() {
     return <main className="intelligence-page"><div className="intelligence-state">Loading operational intelligence…</div></main>;
   }
 
-  const commerceMode = controls?.commerceMode.configuredMode ?? data.relationshipMode.mode;
-  const runtimeMode = controls?.runtime.effectiveMode ?? "Unavailable";
-  const state = operatingState(commerceMode, runtimeMode);
   const opportunities = observedOpportunities(data);
   const relationshipPulse: Array<[string, string | number]> = [
     ["New conversations", data.today.activeConversations ?? "Untracked"],
@@ -299,20 +265,6 @@ export function CreatorIntelligencePage() {
     ["Relationship trend", data.commerceLearning.trend || "Untracked"],
   ];
 
-  const confirmMode = async () => {
-    if (!pendingMode) return;
-    setSavingMode(true);
-    setError("");
-    try {
-      setControls(await operationsApi.updateModuleSwitch("commerce_mode", pendingMode));
-      setPendingMode(null);
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Unable to update Commerce Mode.");
-    } finally {
-      setSavingMode(false);
-    }
-  };
-
   return <main className="intelligence-page">
     <header className="intelligence-hero">
       <div className="intelligence-hero__heading">
@@ -321,22 +273,16 @@ export function CreatorIntelligencePage() {
         <time>{localDate()}</time>
       </div>
       <div className="intelligence-hero__status">
-        <Status label="Runtime" value={runtimeMode} className={`mode-badge--${runtimeMode.toLowerCase()}`} />
-        <Status label="Commerce" value={commerceLabel(commerceMode)} className={`mode-badge--${commerceMode.toLowerCase()}`} />
-        <Status label="Status" value={state.status} />
-      </div>
-      <div className="intelligence-hero__focus">
-        <span>Current Focus</span>
-        <strong>{state.focus}</strong>
-        <p>{state.explanation}</p>
-      </div>
-      <div className="intelligence-hero__modes" role="group" aria-label="Switch Commerce Mode">
-        {(["OFF", "RELATIONSHIP", "LIVE"] as const).map((mode) =>
-          <button className={commerceMode === mode ? "is-active" : ""} disabled={savingMode || commerceMode === mode} key={mode} onClick={() => setPendingMode(mode)} type="button">{commerceLabel(mode)}</button>,
-        )}
+        <Status label="AVA BOT" value={controls?.avaBot.effective ?? "ATTENTION"} className={`mode-badge--${(controls?.avaBot.effective ?? "ATTENTION").toLowerCase()}`} />
+        <Link className="manage-controls-link" to="/business/controls">Manage Controls <ArrowRight size={14} /></Link>
       </div>
     </header>
 
+    <CompactSystemStatus items={data.systemHealth} />
+    <PerformanceSnapshot />
+    <XLinkPerformance />
+
+    {false && ((legacyData: CreatorIntelligence) => { const data = legacyData; return <>
     <div className="intelligence-primary-grid">
       <section aria-labelledby="pulse-heading">
         <Heading icon={<Radar />} id="pulse-heading" title="Relationship Pulse" />
@@ -374,9 +320,9 @@ export function CreatorIntelligencePage() {
         <Heading id="coach-summary-heading" title="🤖 Ava Coach" />
         {data.avaCoachSummary?.latest_analysis_at
           ? <div className="compact-list">
-              <Stat label="Latest analysis" value={new Date(data.avaCoachSummary.latest_analysis_at).toLocaleString()} />
-              <Stat label="Pending recommendations" value={data.avaCoachSummary.pending_recommendations} />
-              <Stat label="Approved for version" value={data.avaCoachSummary.approved_for_version} />
+              <Stat label="Latest analysis" value={new Date(data.avaCoachSummary!.latest_analysis_at!).toLocaleString()} />
+              <Stat label="Pending recommendations" value={data.avaCoachSummary!.pending_recommendations} />
+              <Stat label="Approved for version" value={data.avaCoachSummary!.approved_for_version} />
             </div>
           : <div className="intelligence-empty">
               No coaching analysis has been run yet.<br />
@@ -479,7 +425,8 @@ export function CreatorIntelligencePage() {
         )}</div>}
     </section>
 
-    {pendingMode && <CommerceModeConfirmation mode={pendingMode} busy={savingMode} close={() => setPendingMode(null)} confirm={() => void confirmMode()} />}
+    </>; })(data!)}
+
     {selectedIssue && <DiagnosticDrawer
       issue={selectedIssue}
       resolution={resolution}
@@ -504,13 +451,20 @@ function Status({ label, value, className = "" }: { label: string; value: string
   return <div><span>{label}</span><strong className={`mode-badge ${className}`}>{value}</strong></div>;
 }
 
-function CommerceModeConfirmation({ mode, busy, close, confirm }: { mode: CommerceMode; busy: boolean; close: () => void; confirm: () => void }) {
-  const content = mode === "RELATIONSHIP"
-    ? { title: "Enable Relationship Mode?", detail: <><p>Ava will:</p><ul><li>✓ Chat naturally</li><li>✓ Learn</li><li>✓ Build customer intelligence</li><li>✓ Suppress commercial offers</li></ul><p>No products or purchase links will be presented.</p></> }
-    : mode === "LIVE"
-      ? { title: "Enable Commerce Live?", detail: <p>Commercial offers will begin appearing whenever the Sales Brain determines an offer is appropriate.</p> }
-      : { title: "Disable customer conversations?", detail: <p>Conversation processing will stop until Runtime is restored.</p> };
-  return <div className="commerce-mode-dialog" role="dialog" aria-modal="true" aria-labelledby="commerce-mode-dialog-title"><div><header><h2 id="commerce-mode-dialog-title">{content.title}</h2><button aria-label="Close mode confirmation" disabled={busy} onClick={close} type="button"><X /></button></header>{content.detail}<footer><button disabled={busy} onClick={close} type="button">Cancel</button><button disabled={busy} onClick={confirm} type="button">{busy ? "Saving…" : "Confirm"}</button></footer></div></div>;
+function CompactSystemStatus({ items }: { items: CreatorIntelligence["systemHealth"] }) {
+  const assertedLabels = new Set(["frontend", "recommendation engine", "commerce learning"]);
+  const operational = items.filter((item) => !assertedLabels.has(item.label.toLowerCase()));
+  const critical = operational.filter((item) => item.status === "Offline" || item.status === "Needs Attention").length;
+  const warnings = operational.filter((item) => item.status === "Warning").length;
+  const label = critical ? "Critical" : warnings ? "Warning" : "Healthy";
+  const detail = critical
+    ? `${critical} operational ${critical === 1 ? "service needs" : "services need"} attention.`
+    : warnings ? `${warnings} operational ${warnings === 1 ? "warning" : "warnings"}.` : "Core operational checks are healthy.";
+  return <section className="compact-system-status" aria-labelledby="compact-system-status-heading">
+    <div><span>Operations</span><h2 id="compact-system-status-heading">System Status</h2><p>{detail}</p></div>
+    <strong className={label === "Healthy" ? "is-healthy" : label === "Warning" ? "is-warning" : "needs-attention"}>{label}</strong>
+    <Link to="/business/operations">View Operations <ArrowRight size={14} /></Link>
+  </section>;
 }
 
 function Heading({ title: text, id, icon }: { title: string; id?: string; icon?: React.ReactNode }) {

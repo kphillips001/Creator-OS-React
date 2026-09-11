@@ -1,6 +1,7 @@
 """HTTP-safe Content Studio generation orchestration using existing domain services."""
 
 from dataclasses import replace
+import re
 from typing import Callable
 
 from app.models.creative_director import PromptPlan
@@ -24,6 +25,20 @@ def plan_with_prompt_batch(plan: PromptPlan, prompts: tuple[str, ...]) -> Prompt
     )
 
 
+def recreate_source_expression_is_authoritative(
+    *, origin: str | None, creative_tags: str,
+) -> bool:
+    """Capture Recreate expression provenance before provider-ready flattening."""
+    if origin != "recreate_with_ava":
+        return False
+    match = re.search(
+        r"(?:^|[\[\n,])\s*Expression\s*:\s*([^,\]\n]*)",
+        str(creative_tags or ""),
+        flags=re.IGNORECASE,
+    )
+    return bool(match and match.group(1).strip())
+
+
 class ContentStudioGenerationService:
     def __init__(self, *, creative_director, generation_engine, generation_library, reference_service):
         self.creative_director = creative_director
@@ -41,8 +56,16 @@ class ContentStudioGenerationService:
     ):
         lineage = dict(planner_lineage or {})
         input_contract = dict(explicit_input or {})
+        recreate_expression_authoritative = recreate_source_expression_is_authoritative(
+            origin=origin,
+            creative_tags=creative_tags,
+        )
         metadata = {
             **({"workflow_origin": origin} if origin else {}),
+            **(
+                {"recreate_source_expression_authoritative": recreate_expression_authoritative}
+                if origin == "recreate_with_ava" else {}
+            ),
             **({"planner_lineage": lineage} if lineage else {}),
             **({"explicit_input": input_contract} if input_contract else {}),
         }
@@ -122,6 +145,10 @@ class ContentStudioGenerationService:
                 "prompt_variations": variations,
                 "prompt_batch_count": len(variations) or prompt_count,
                 **({"workflow_origin": origin} if origin else {}),
+                **(
+                    {"recreate_source_expression_authoritative": recreate_expression_authoritative}
+                    if origin == "recreate_with_ava" else {}
+                ),
                 **({"planner_lineage": lineage} if lineage else {}),
                 **({"explicit_input": input_contract} if input_contract else {}),
                 **({"diagnostic_trace_id": diagnostic_trace_id} if diagnostic_trace_id else {}),

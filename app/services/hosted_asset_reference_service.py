@@ -179,7 +179,11 @@ class HostedAssetReferenceService:
 
     @staticmethod
     def _retryable_status(status: int) -> bool:
-        return status in {408, 429, 502, 503, 504}
+        # A freshly uploaded provider asset can briefly reject the one-byte
+        # verification range while its CDN representation becomes available.
+        # Keep 416 a failure, but allow the existing bounded verification
+        # schedule to retry it. Other permanent 4xx responses remain terminal.
+        return status in {408, 416, 429, 502, 503, 504}
 
     @staticmethod
     def _retryable_exception(exc: Exception) -> bool:

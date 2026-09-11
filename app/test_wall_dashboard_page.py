@@ -1,3 +1,11 @@
+import pytest
+
+
+pytest.importorskip(
+    "pandas",
+    reason="Legacy Streamlit wall-dashboard import smoke requires the optional pandas UI dependency.",
+)
+
 from app.dashboard.pages.wall_scheduler_dashboard import (
     render_wall_scheduler_dashboard,
 )

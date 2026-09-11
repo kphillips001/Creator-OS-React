@@ -1,6 +1,10 @@
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import type { ReactElement } from "react";
+import { act, fireEvent, render as renderLibrary, screen, waitFor, within } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { BundleSellingPanel, PrepareForSaleDialog, SessionSellingPanel } from "./PhotoshootSalePreparation";
+
+const render = (ui: ReactElement) => renderLibrary(<MemoryRouter>{ui}</MemoryRouter>);
 
 const response = (body: unknown, ok = true) => Promise.resolve({
   ok, status: ok ? 200 : 409, json: () => Promise.resolve(body),

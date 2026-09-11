@@ -12,7 +12,9 @@ from typing import Any, Mapping
 class GenerationRequestDiagnosticService:
     """Persist ordered runtime stages for the two in-scope workflows only."""
 
-    SUPPORTED_ORIGINS = {"autonomous_inspiration", "manual_creative_concept"}
+    SUPPORTED_ORIGINS = {
+        "autonomous_inspiration", "manual_creative_concept", "recreate_with_ava",
+    }
     REDACTED_KEYS = {
         "api_key", "apikey", "authorization", "cookie", "password",
         "secret", "token", "access_token", "refresh_token",

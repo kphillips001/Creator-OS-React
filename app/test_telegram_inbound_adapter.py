@@ -270,6 +270,42 @@ class TelegramInboundAdapterTests(unittest.TestCase):
             gateway_two.calls[0].brain_context.conversation_thread_id, 77
         )
 
+    def test_customer_chat_off_preserves_identity_and_transcript_but_skips_generation(self):
+        gateway = RecordingConversationGateway()
+        observed, persisted = [], []
+        canonical = SimpleNamespace(
+            engine_user_id="2:9", fanvue_account_id=2, local_fanvue_user_id=9,
+            external_fanvue_user_uuid="00000000-0000-0000-0000-000000000009",
+        )
+        identities = SimpleNamespace(
+            observe=lambda **values: observed.append(values),
+            resolve_telegram_identity=lambda _user_id: canonical,
+        )
+        controls = SimpleNamespace(
+            HOLD_REASON="RELATIONSHIP_HUMAN_OPERATOR_ACTIVE",
+            autonomous_allowed=lambda **_values: (
+                False, SimpleNamespace(mode=SimpleNamespace(value="HUMAN_OPERATOR"),
+                                       control_version=4)),
+        )
+        adapter = TelegramInboundAdapter(
+            identity_adapter=RecordingIdentityAdapter(), conversation_gateway=gateway,
+            creator_profile_id=3, fanvue_account_id=2,
+            telegram_identity_service=identities,
+            conversation_thread_resolver=lambda **_values: {"id": 77},
+            conversation_message_saver=lambda **values: persisted.append(values),
+            conversation_history_loader=lambda **_values: [],
+            customer_safety_service=SimpleNamespace(decide=lambda **_values:
+                SimpleNamespace(allowed=True)),
+            relationship_control_service=controls,
+        )
+        result = adapter.execute(inbound_payload(message_id=91))
+        self.assertEqual(len(observed), 1)
+        self.assertEqual(len(persisted), 1)
+        self.assertEqual(persisted[0]["direction"], "inbound")
+        self.assertEqual(gateway.calls, [])
+        self.assertTrue(result.blocked)
+        self.assertEqual(result.diagnostic_metadata["ai_generation_count"], 0)
+
     def build_adapter(self, *, gateway_output=None):
         identity_adapter = RecordingIdentityAdapter()
         gateway = RecordingConversationGateway(gateway_output)

@@ -723,3 +723,45 @@
 .caption-chooser__manual > button { justify-self:end; }
 .caption-chooser__divider { display:flex; align-items:center; gap:.65rem; color:var(--color-text-muted); font-size:.7rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; }
 .caption-chooser__divider::before,.caption-chooser__divider::after { content:""; flex:1; border-top:1px solid var(--color-border); }
+.asset-library-advanced-link {
+  align-items: center;
+  background: color-mix(in srgb, var(--color-surface, #17171c) 92%, transparent);
+  border: 1px solid var(--color-border, #34343d);
+  border-radius: 12px;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  margin: 0 0 18px;
+  padding: 11px 14px;
+}
+
+.asset-library-advanced-link span { color: var(--color-text-muted, #aaa); font-size: .85rem; }
+.asset-library-advanced-link a,
+.asset-offering-controls header a { align-items: center; display: inline-flex; gap: 5px; white-space: nowrap; }
+
+.asset-offering-controls {
+  border: 1px solid var(--color-border, #34343d);
+  border-radius: 12px;
+  display: grid;
+  gap: 14px;
+  margin-top: 16px;
+  padding: 16px;
+}
+
+.asset-offering-controls > header { align-items: center; display: flex; justify-content: space-between; }
+.asset-offering-controls > header small { color: var(--color-text-muted, #aaa); text-transform: uppercase; }
+.asset-offering-controls > header h3 { margin: 3px 0 0; }
+.asset-offering-controls dl { display: grid; gap: 9px; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 0; }
+.asset-offering-controls dl div { display: grid; gap: 3px; }
+.asset-offering-controls dt { color: var(--color-text-muted, #aaa); font-size: .75rem; text-transform: uppercase; }
+.asset-offering-controls dd { margin: 0; overflow-wrap: anywhere; }
+.asset-offering-actions, .asset-offering-editor > div { display: flex; flex-wrap: wrap; gap: 8px; }
+.asset-offering-actions button { align-items: center; display: inline-flex; gap: 6px; }
+.asset-offering-editor { display: grid; gap: 11px; }
+.asset-offering-editor label { display: grid; gap: 5px; }
+.asset-offering-editor input, .asset-offering-editor textarea { width: 100%; }
+
+@media (max-width: 720px) {
+  .asset-library-advanced-link { align-items: flex-start; flex-direction: column; }
+  .asset-offering-controls dl { grid-template-columns: 1fr; }
+}

@@ -45,6 +45,8 @@ from app.api.customers import router as customers_router
 from app.api.sales import router as sales_router
 from app.api.operations import router as operations_router
 from app.api.creator_intelligence import router as creator_intelligence_router
+from app.api.relationships import router as relationships_router
+from app.api.x_link_analytics import router as x_link_analytics_router
 from app.api.creator_personality import router as creator_personality_router
 from app.api.social_creative_direction import (
     router as social_creative_direction_router,
@@ -78,6 +80,7 @@ from app.api.video_gallery import router as video_gallery_router
 from app.api.developer_notes import router as developer_notes_router
 from app.api.ai_training import router as ai_training_router
 from app.api.ai_training_controls import router as ai_training_controls_router
+from app.api.ask_creator_os import router as ask_creator_os_router
 from app.api.regeneration import router as regeneration_router
 from app.api.x_competitor_intelligence import router as x_competitor_intelligence_router
 from app.api.ig_competitor_intelligence import router as ig_competitor_intelligence_router
@@ -204,6 +207,8 @@ app.include_router(customers_router)
 app.include_router(sales_router)
 app.include_router(operations_router)
 app.include_router(creator_intelligence_router)
+app.include_router(relationships_router)
+app.include_router(x_link_analytics_router)
 app.include_router(creator_personality_router)
 app.include_router(social_creative_direction_router)
 app.include_router(creator_lifestyle_router)
@@ -226,6 +231,7 @@ app.include_router(video_gallery_router)
 app.include_router(developer_notes_router)
 app.include_router(ai_training_router)
 app.include_router(ai_training_controls_router)
+app.include_router(ask_creator_os_router)
 app.include_router(regeneration_router)
 app.include_router(x_competitor_intelligence_router)
 app.include_router(ig_competitor_intelligence_router)

@@ -39,3 +39,71 @@ export type CreatorIntelligence = {
     diagnostic?: HealthItem;
   }>;
 };
+
+export type SnapshotPeriod = "TODAY" | "YESTERDAY" | "LAST_7_DAYS" | "LAST_30_DAYS" | "THIS_MONTH" | "ALL_TIME";
+export type SnapshotMetricValue = {
+  status: "AVAILABLE" | "UNAVAILABLE";
+  value: number | null;
+  recordIds?: string[];
+  reason?: string | null;
+};
+export type SnapshotPeriodMetadata = {
+  key: SnapshotPeriod;
+  timezone: string;
+  start: string | null;
+  end: string;
+  generatedAt: string;
+  interval: string;
+};
+export type PerformanceSnapshot = {
+  period: SnapshotPeriodMetadata;
+  commerce: {
+    totalVerifiedRevenueMinor: SnapshotMetricValue;
+    contentMediaRevenueMinor: SnapshotMetricValue;
+    tipsRevenueMinor: SnapshotMetricValue;
+    subscriptionRenewalRevenueMinor: SnapshotMetricValue;
+    unclassifiedRevenueMinor: SnapshotMetricValue;
+    qualifyingPurchases: SnapshotMetricValue;
+    uniqueBuyers: SnapshotMetricValue;
+    newBuyers: SnapshotMetricValue;
+    repeatBuyers: SnapshotMetricValue;
+    averagePurchaseValueMinor: SnapshotMetricValue;
+    offersPresented: SnapshotMetricValue;
+    offersPurchased: SnapshotMetricValue;
+    offerConversion: SnapshotMetricValue;
+    wouldHaveSold: SnapshotMetricValue;
+  };
+  peopleActivity: {
+    activePeople: SnapshotMetricValue;
+    newPeople: SnapshotMetricValue;
+    returningPeople: SnapshotMetricValue;
+    customerMessages: SnapshotMetricValue;
+    avaMessages: SnapshotMetricValue;
+  };
+  dataQuality: Record<string, unknown>;
+};
+export type SnapshotDrillDown = {
+  period: SnapshotPeriodMetadata;
+  metric: string;
+  count: number;
+  amountMinor: number | null;
+  items: Array<Record<string, unknown>>;
+};
+export type CurrentSalesStatus = { activeSalesSessions:number; activePurchaseIntents:number; commercialFailures:number; asOf:"CURRENT" };
+
+export type XLinkTrackingState = "TRACKED" | "TRACKING_UNAVAILABLE" | "NO_CTA" | "FAILED_CTA";
+export type XLinkPerformanceItem = {
+  primaryPostId: string;
+  ctaPostId: string | null;
+  accountName: string;
+  caption: string;
+  thumbnailUrl: string;
+  publishedAt: string;
+  trackingState: XLinkTrackingState;
+  linkClicks: number | null;
+};
+export type XLinkPerformance = {
+  period: SnapshotPeriodMetadata;
+  items: XLinkPerformanceItem[];
+  historicalBoundary: string;
+};

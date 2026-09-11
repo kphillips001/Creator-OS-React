@@ -1,0 +1,85 @@
+.implementation-detail {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0.35rem 0;
+  padding: 0.8rem;
+  border: 1px solid var(--color-accent-border);
+  border-radius: 9px;
+  background: var(--color-surface);
+}
+
+.implementation-detail h3,
+.implementation-detail h4,
+.implementation-detail ul {
+  margin: 0.15rem 0;
+}
+
+.implementation-detail h4 {
+  color: var(--color-accent);
+  font-size: 0.68rem;
+  text-transform: uppercase;
+}
+
+.implementation-detail li {
+  color: var(--color-text-secondary);
+  font-size: 0.7rem;
+}
+
+.implementation-verification-notice {
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--color-accent-border);
+  border-radius: 8px;
+  background: var(--color-accent-surface);
+  color: var(--color-accent);
+  font-weight: 700;
+}
+
+.implementation-failure {
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--color-danger, #8d403d);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--color-danger, #8d403d) 12%, var(--color-surface));
+}
+
+.implementation-failure p {
+  margin: 0.2rem 0 0;
+  color: var(--color-text-primary);
+  font-weight: 650;
+}
+
+.implementation-result {
+  display: grid;
+  gap: 0.35rem;
+  padding-top: 0.45rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.implementation-check.pass { color: var(--color-success, #86c995); }
+.implementation-check.fail { color: var(--color-danger, #e98d85); font-weight: 700; }
+.implementation-check.unknown { color: var(--color-text-tertiary); }
+.implementation-warnings { color: var(--color-warning, #d8ae68); }
+
+.implementation-attempts {
+  margin-top: 0.45rem;
+  border-top: 1px solid var(--color-border);
+  padding-top: 0.55rem;
+}
+
+.implementation-attempts > summary {
+  cursor: pointer;
+  color: var(--color-accent);
+  font-weight: 700;
+}
+
+.implementation-attempts article {
+  display: grid;
+  gap: 0.2rem;
+  margin-top: 0.45rem;
+  padding: 0.55rem;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface-raised, var(--color-surface));
+}
+
+.implementation-attempts article.current { border-color: var(--color-accent-border); }
+.implementation-attempts article > span { color: var(--color-accent); font-size: 0.65rem; text-transform: uppercase; }

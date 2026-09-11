@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import json
+from zoneinfo import ZoneInfo
 from types import SimpleNamespace
 
 from fastapi import FastAPI
@@ -82,6 +83,41 @@ def test_read_projections_report_unknown_heartbeats_and_persisted_failures():
     assert overview["globalSends"] is False and overview["runtimeMode"] == "observe"
 
 
+def test_operational_timestamps_normalize_to_aware_utc_before_ordering():
+    workspace = service()
+    chicago = ZoneInfo("America/Chicago")
+    rows = (
+        {"processed_at": datetime(2026, 7, 25, 11, 18, 40, tzinfo=chicago)},
+        {"failed_at": datetime(2026, 7, 25, 16, 18, 39)},
+        {"received_at": "2026-07-25T16:18:38Z"},
+    )
+    values = [workspace._row_time(row) for row in rows]
+    assert all(value is not None and value.tzinfo is timezone.utc for value in values)
+    assert workspace._latest(rows) == datetime(
+        2026, 7, 25, 16, 18, 40, tzinfo=timezone.utc)
+    assert workspace._oldest(rows) == datetime(
+        2026, 7, 25, 16, 18, 38, tzinfo=timezone.utc)
+
+
+def test_legacy_naive_operational_timestamp_is_explicitly_treated_as_utc():
+    value = OperationsWorkspaceService._date(datetime(2026, 7, 25, 16, 18, 39))
+    assert value == datetime(2026, 7, 25, 16, 18, 39, tzinfo=timezone.utc)
+    assert value.tzinfo is timezone.utc
+
+
+def test_invalid_or_missing_operational_timestamp_remains_missing():
+    workspace = service()
+    assert workspace._row_time({"received_at": None}) is None
+    assert workspace._row_time({"received_at": "not-a-timestamp"}) is None
+    assert workspace._latest(({"received_at": None},)) is None
+
+
+def test_webhook_repository_normalizes_legacy_failed_at_in_database_timezone():
+    source = Path("app/repositories/webhook_event_repository.py").read_text(
+        encoding="utf-8")
+    assert "failed_at AT TIME ZONE current_setting('TimeZone') AS failed_at" in source
+
+
 def test_operations_api_is_get_only_and_exposes_six_sections(monkeypatch):
     app = FastAPI(); app.include_router(api.router)
     monkeypatch.setattr(api, "_workspace_service", service); monkeypatch.setattr(api, "_account_id", lambda: 7)
@@ -137,6 +173,38 @@ def test_telegram_identity_readiness_and_verified_mapping_api(monkeypatch):
         "local_fanvue_user_id": 42,
         "verification_note": "Compared both provider IDs.",
     }]
+
+
+def test_global_controls_api_uses_bounded_commands_and_returns_post_write_state(monkeypatch):
+    calls = []
+    class Controls:
+        def read(self, **values):
+            return {"avaBot": {"desired": "OFF", "effective": "OFF"},
+                    "contentSellingEnabled": False, "sessionSellingEnabled": False}
+        def turn_on(self, **values): calls.append(("on", values)); return {"success": True}
+        def turn_off(self, **values): calls.append(("off", values)); return {"success": True}
+        def set_content_selling(self, value, **values):
+            calls.append(("content", value, values)); return {"state": {"contentSellingEnabled": value}}
+        def set_session_selling(self, value, **values):
+            calls.append(("session", value, values)); return {"state": {"sessionSellingEnabled": value}}
+    controls = Controls()
+    app = FastAPI(); app.include_router(api.router)
+    monkeypatch.setattr(api, "_global_controls_service", lambda: controls)
+    monkeypatch.setattr(api, "_account_id", lambda: 7)
+    client = TestClient(app)
+    assert client.get("/api/v1/operations/global-controls").status_code == 200
+    assert client.post("/api/v1/operations/global-controls/ava-bot/turn-on").status_code == 200
+    assert client.post("/api/v1/operations/global-controls/ava-bot/turn-off").status_code == 200
+    assert client.patch("/api/v1/operations/global-controls/content-selling",
+                        json={"value": True}).status_code == 200
+    assert client.patch("/api/v1/operations/global-controls/session-selling",
+                        json={"value": True}).status_code == 200
+    assert calls == [
+        ("on", {"creator_profile_id": 7}),
+        ("off", {"creator_profile_id": 7}),
+        ("content", True, {"creator_profile_id": 7}),
+        ("session", True, {"creator_profile_id": 7}),
+    ]
 
 
 def test_operations_sources_do_not_import_execution_or_mutation_services():

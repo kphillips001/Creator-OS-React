@@ -1,25 +1,18 @@
 import {
   Aperture,
   Archive,
-  Bot,
   BookOpen,
   Camera,
   Clapperboard,
   Film,
   CircleGauge,
-  Code2,
   MessagesSquare,
   Image,
   Library,
   Paintbrush,
-  Send,
-  Settings,
   Sparkles,
-  Users,
-  BadgeDollarSign,
   Activity,
   ShoppingBasket,
-  ShieldCheck,
   ScanSearch,
   RadioTower,
   RotateCw,
@@ -29,8 +22,8 @@ import {
   BrainCircuit,
   GraduationCap,
   ChartNoAxesCombined,
-  Instagram,
   ListFilter,
+  SlidersHorizontal,
   type LucideIcon,
 } from "lucide-react";
 
@@ -131,30 +124,64 @@ export const navigationGroups: NavigationGroup[] = [
           "Operational priorities, opportunities, and evidence in one executive console.",
       },
       {
-        label: "Commerce",
-        path: "/commerce",
-        icon: BadgeDollarSign,
-        description:
-          "Author, manage, and publish AI Chat commercial offerings.",
+        label: "Chat",
+        path: "/business/relationships",
+        icon: MessagesSquare,
+        description: "Read Ava's Telegram conversations in one operator inbox.",
       },
       {
-        label: "Customers",
-        path: "/business/customers",
-        icon: Users,
-        description:
-          "Understand customer relationships, ownership, and buying history.",
+        label: "Controls",
+        path: "/business/controls",
+        icon: SlidersHorizontal,
+        description: "Control when Ava chats and what she is allowed to sell.",
       },
       {
-        label: "Sales",
-        path: "/business/sales",
-        icon: BadgeDollarSign,
+        label: "Ask Creator_OS",
+        path: "/business/ask",
+        icon: Sparkles,
+        description: "Ask read-only questions about Ava's business.",
+      },
+      {
+        label: "Archive",
+        path: "/system/archive",
+        icon: Archive,
         description:
-          "Review sales activity, recommendations, and commercial outcomes.",
+          "Browse Creator_OS history and previously published content.",
       },
     ],
   },
   {
-    label: "Advanced",
+    label: "Tools",
+    items: [
+      {
+        label: "X Competitor Intelligence",
+        path: "/tools/x-intelligence",
+        icon: ChartNoAxesCombined,
+        description:
+          "Track competitors, audience growth, and X market intelligence over time.",
+      },
+    ],
+  },
+  {
+    label: "Training",
+    items: [{
+      label: "AI Training",
+      path: "/training/ai-training",
+      icon: GraduationCap,
+      description: "Refine how Ava responds globally and with individual customers.",
+    }],
+  },
+  {
+    label: "Administration",
+    items: [
+      { label: "Ava Configuration", path: "/administration/ava", icon: UserRound, description: "Manage Ava's identity, creative direction, lifestyle, and world." },
+      { label: "Ava Rules", path: "/agents/ai-training", icon: GraduationCap, description: "Manage the rules and policies that shape Ava's live behavior." },
+      { label: "Provider Connections", path: "/administration/providers", icon: RadioTower, description: "Inspect and authorize account-scoped provider connections." },
+      { label: "Developer Notes", path: "/administration/developer-notes", icon: BookOpen, description: "Track Creator_OS coding and implementation work." },
+    ],
+  },
+  {
+    label: "Developer Tools",
     items: [
       {
         label: "Operations",
@@ -163,63 +190,6 @@ export const navigationGroups: NavigationGroup[] = [
         description:
           "Monitor business workflows, fulfillment, and items needing attention.",
       },
-      {
-        label: "Commercial Administration",
-        path: "/commercial-administration",
-        icon: ShieldCheck,
-        description:
-          "Operate the creator-scoped commercial platform from one supported workspace.",
-      },
-    ],
-  },
-  {
-    label: "Publishing",
-    items: [
-      {
-        label: "Publishing",
-        path: "/publishing",
-        icon: Send,
-        description:
-          "Publication history and distribution across every platform.",
-      },
-    ],
-  },
-  {
-    label: "AI",
-    items: [
-      {
-        label: "Ava Coach",
-        path: "/agents/ava-coach",
-        icon: Sparkles,
-        description:
-          "Evidence-based conversation coaching for operator review.",
-      },
-      {
-        label: "Creator Agent",
-        path: "/agents/creator",
-        icon: Bot,
-        description:
-          "Collaborate with the operational intelligence for creator work.",
-      },
-      {
-        label: "Developer Agent",
-        path: "/agents/developer",
-        icon: Code2,
-        description:
-          "Explore architecture and system behavior through a read-only agent.",
-      },
-      {
-        label: "AI Training",
-        path: "/agents/ai-training",
-        icon: GraduationCap,
-        description:
-          "Control account-wide conversational guidance used by Creator_OS AI.",
-      },
-    ],
-  },
-  {
-    label: "Developer Tools",
-    items: [
       {
         label: "Test Chat",
         path: "/developer/test-chat",
@@ -287,104 +257,6 @@ export const navigationGroups: NavigationGroup[] = [
         icon: ListFilter,
         description:
           "Inspect deterministic offering eligibility, exclusions, and selection.",
-      },
-    ],
-  },
-  {
-    label: "Administration",
-    items: [
-      {
-        label: "Administration",
-        path: "/administration",
-        icon: ShieldCheck,
-        description:
-          "Manage provider connections and operational configuration.",
-      },
-      {
-        label: "Personality",
-        path: "/creator/personality",
-        icon: UserRound,
-        description: "Review and edit the canonical creator personality.",
-      },
-      {
-        label: "Social Creative Direction",
-        path: "/creator/social-creative-direction",
-        icon: Paintbrush,
-        description:
-          "Maintain the canonical creative vision for public social content.",
-      },
-      {
-        label: "Lifestyle",
-        path: "/creator/lifestyle",
-        icon: BookOpen,
-        description:
-          "Maintain the canonical description of the creator's everyday life.",
-      },
-      {
-        label: "World Model",
-        path: "/creator/world-model",
-        icon: CircleGauge,
-        description:
-          "Maintain canonical environments, location privacy, and seasonal context.",
-      },
-      {
-        label: "Developer Notes",
-        path: "/administration/developer-notes",
-        icon: BookOpen,
-        description:
-          "Review architecture decisions, migrations, and technical debt.",
-      },
-    ],
-  },
-  {
-    label: "Tools",
-    items: [
-      {
-        label: "AI Developer Notes",
-        path: "/tools/ai-training",
-        icon: GraduationCap,
-        description:
-          "Capture implementation notes and ideas for future Creator_OS AI improvements.",
-      },
-      {
-        label: "X Competitor Intelligence",
-        path: "/tools/x-intelligence",
-        icon: ChartNoAxesCombined,
-        description:
-          "Track competitors, audience growth, and X market intelligence over time.",
-      },
-      {
-        label: "IG Competitor Intelligence",
-        path: "/tools/ig-intelligence",
-        icon: Instagram,
-        description:
-          "Track Instagram competitors and build durable market intelligence over time.",
-      },
-    ],
-  },
-  {
-    label: "System",
-    items: [
-      {
-        label: "Settings",
-        path: "/settings",
-        icon: Settings,
-        description:
-          "Configure Creator_OS preferences, accounts, and connections.",
-      },
-      {
-        label: "Diagnostics",
-        path: "/diagnostics",
-        icon: CircleGauge,
-        description:
-          "Review system health, jobs, providers, and operational signals.",
-      },
-      {
-        label: "Archive",
-        path: "/system/archive",
-        icon: Archive,
-        description:
-          "Browse Creator_OS history and previously published content.",
       },
     ],
   },

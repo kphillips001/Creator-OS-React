@@ -400,30 +400,10 @@ class CustomerContentPresentationValidator:
             return PaidPresentationValidation(
                 False, "PAID_PRESENTATION_CONVERSATIONAL_PRICE"
             )
-        if self._DEFERRED_OFFER.search(text):
-            return PaidPresentationValidation(False, "PAID_PRESENTATION_DEFERRED")
-        if self._PERMISSION_TO_SEND.search(text):
-            return PaidPresentationValidation(
-                False, "PAID_PRESENTATION_PERMISSION_GATE"
-            )
-        lifecycle = dict(context.get("lifecycle") or {})
-        if lifecycle.get("messagePurpose") == "NUDGE":
-            original = self._normalize_comparison(lifecycle.get("originalPresentation"))
-            candidate = self._normalize_comparison(text)
-            if original and candidate and (
-                candidate == original
-                or SequenceMatcher(None, candidate, original).ratio() >= 0.90
-            ):
-                return PaidPresentationValidation(
-                    False, "PAID_PRESENTATION_REPEATS_ORIGINAL"
-                )
-        if (
-            lifecycle.get("messagePurpose") != "NUDGE"
-            and not self._IMMEDIATE_OFFER.search(text)
-        ):
-            return PaidPresentationValidation(False, "PAID_PRESENTATION_NOT_AN_OFFER")
-        if len(text) > 320:
-            return PaidPresentationValidation(False, "PAID_PRESENTATION_NOT_CONCISE")
+        # Structured bundle/session authority is more specific than generic
+        # language-shape failures.  Validate contradictions first so rejected
+        # work retains the exact fail-closed diagnostic at every downstream
+        # boundary.
         bundle = dict(context.get("bundle") or {})
         bundle_offer = dict(bundle.get("bundleOffer") or {})
         member_count = bundle_offer.get("paidMemberCount")
@@ -448,6 +428,30 @@ class CustomerContentPresentationValidator:
             return PaidPresentationValidation(
                 False, "PAID_PRESENTATION_FALSE_SESSION_HISTORY"
             )
+        if self._DEFERRED_OFFER.search(text):
+            return PaidPresentationValidation(False, "PAID_PRESENTATION_DEFERRED")
+        if self._PERMISSION_TO_SEND.search(text):
+            return PaidPresentationValidation(
+                False, "PAID_PRESENTATION_PERMISSION_GATE"
+            )
+        lifecycle = dict(context.get("lifecycle") or {})
+        if lifecycle.get("messagePurpose") == "NUDGE":
+            original = self._normalize_comparison(lifecycle.get("originalPresentation"))
+            candidate = self._normalize_comparison(text)
+            if original and candidate and (
+                candidate == original
+                or SequenceMatcher(None, candidate, original).ratio() >= 0.90
+            ):
+                return PaidPresentationValidation(
+                    False, "PAID_PRESENTATION_REPEATS_ORIGINAL"
+                )
+        if (
+            lifecycle.get("messagePurpose") != "NUDGE"
+            and not self._IMMEDIATE_OFFER.search(text)
+        ):
+            return PaidPresentationValidation(False, "PAID_PRESENTATION_NOT_AN_OFFER")
+        if len(text) > 320:
+            return PaidPresentationValidation(False, "PAID_PRESENTATION_NOT_CONCISE")
         if lifecycle.get("purchaseKind") == "SESSION_FINALE_PURCHASE" and self._FINALE_CONTINUATION.search(text):
             return PaidPresentationValidation(False, "PURCHASE_ACKNOWLEDGEMENT_FINALE_CONTINUATION_CLAIM")
         return PaidPresentationValidation(True, presentation=text)

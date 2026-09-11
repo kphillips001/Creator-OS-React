@@ -117,6 +117,11 @@ class GenerationLibraryPublishingServiceTests(unittest.TestCase):
                 "x_auto_replies_enabled": True,
                 "x_auto_callback_status": "pending",
             },
+            x_thread_cta_enabled=False,
+            x_thread_cta_text="",
+            x_thread_cta_url="https://avablackthorne.com/me",
+            publish_operation_id=None,
+            fanvue_account_id=None,
         )
         self.library.mark_published.assert_called_once()
         metadata = self.library.mark_published.call_args.kwargs["metadata"]
@@ -451,6 +456,27 @@ class GenerationLibraryPublishingServiceTests(unittest.TestCase):
                 "x_auto_callback_status": "pending",
             },
         )
+
+    def test_x_thread_cta_flows_independently_from_x_auto(self):
+        self.social.create_queue_item.return_value = SimpleNamespace(queue_item_id="queue-cta")
+        self.social.publish_now.return_value = SimpleNamespace(status="posted")
+
+        self.service.publish(
+            generated_image_id="generated-1", destination="x", caption="",
+            x_auto_replies_enabled=False,
+            x_thread_cta_enabled=True,
+            x_thread_cta_text="Optional custom text",
+            x_thread_cta_url="https://avablackthorne.com/me",
+            publish_operation_id="operation-cta",
+            x_targets=({"accountName": "AvaBlackthorne", "caption": "Primary"},),
+        )
+
+        arguments = self.social.publish_now.call_args.kwargs
+        self.assertFalse(arguments["audit_metadata"]["x_auto_replies_enabled"])
+        self.assertTrue(arguments["x_thread_cta_enabled"])
+        self.assertEqual(arguments["x_thread_cta_text"], "Optional custom text")
+        self.assertEqual(arguments["x_thread_cta_url"], "https://avablackthorne.com/me")
+        self.assertEqual(arguments["publish_operation_id"], "operation-cta:AvaBlackthorne")
 
     def test_publish_x_targets_rejects_unknown_accounts(self):
         with self.assertRaisesRegex(ValueError, "Unknown X account"):

@@ -44,6 +44,10 @@ class PublishRequest(BaseModel):
     selectedCtas: list[str] | None = None
     xTargets: list[XPublishTarget] | None = None
     xAutoRepliesEnabled: bool = True
+    xThreadCtaEnabled: bool = True
+    xThreadCtaText: str = ""
+    xThreadCtaUrl: str = "https://avablackthorne.com/me"
+    publishOperationId: str | None = None
 
 
 class InstagramHandoffRequest(BaseModel):
@@ -120,6 +124,11 @@ def publish(generated_image_id: str, request: PublishRequest):
                 else None
             ),
             x_auto_replies_enabled=request.xAutoRepliesEnabled,
+            x_thread_cta_enabled=request.xThreadCtaEnabled,
+            x_thread_cta_text=request.xThreadCtaText,
+            x_thread_cta_url=request.xThreadCtaUrl,
+            publish_operation_id=request.publishOperationId,
+            fanvue_account_id=int(_current_account_id() or 0),
         )
         return {"success": True, **result}
     except (KeyError, ValueError, RuntimeError) as error:

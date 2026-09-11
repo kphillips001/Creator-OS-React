@@ -170,6 +170,8 @@ class ConversationGateway:
         purchase_acknowledgement_copy_generator: Any | None = None,
         ava_persona_runtime_service: Any | None = None,
         conversation_quality_watch_service: Any | None = None,
+        global_selling_permissions_service: Any | None = None,
+        customer_effective_permissions_service: Any | None = None,
     ) -> None:
         if decision_engine is None:
             raise ValueError("decision_engine is required")
@@ -217,6 +219,13 @@ class ConversationGateway:
             )
             conversation_quality_watch_service = ConversationQualityWatchService()
         self._conversation_quality_watch_service = conversation_quality_watch_service
+        if global_selling_permissions_service is None:
+            from app.services.global_selling_permissions_service import (
+                GlobalSellingPermissionsService,
+            )
+            global_selling_permissions_service = GlobalSellingPermissionsService()
+        self._global_selling_permissions = global_selling_permissions_service
+        self._customer_effective_permissions = customer_effective_permissions_service
         if photoshoot_conversation_context_builder is None:
             from app.services.photoshoot_session_conversation_context_builder import (
                 PhotoshootSessionConversationContextBuilder,
@@ -307,6 +316,10 @@ class ConversationGateway:
             )
         customer_sales_decision = self._evaluate_customer_sales_brain(
             gateway_input, sales_session=sales_session,
+        )
+        customer_sales_decision = self._apply_global_selling_ceiling(
+            customer_sales_decision, sales_session=sales_session,
+            gateway_input=gateway_input,
         )
         if customer_sales_decision is not None:
             metadata = dict(customer_sales_decision.decision_metadata or {})
@@ -1726,6 +1739,105 @@ class ConversationGateway:
             "diagnostics": commerce_diagnostics,
             "offering": decision.offering,
         }
+
+    def _apply_global_selling_ceiling(self, decision, *, sales_session=None,
+                                      gateway_input=None):
+        """Narrow new commercial actions while preserving existing obligations."""
+        if decision is None:
+            return None
+        action = decision.decision
+        new_commercial_actions = {
+            CustomerSalesDecisionType.TEASE,
+            CustomerSalesDecisionType.BUILD_INTEREST,
+            CustomerSalesDecisionType.PRESENT_OFFER,
+            CustomerSalesDecisionType.PRESENT_ALTERNATIVE_OFFER,
+            CustomerSalesDecisionType.UPSELL,
+            CustomerSalesDecisionType.CROSS_SELL,
+            CustomerSalesDecisionType.PROPOSE_SESSION,
+        }
+        if action not in new_commercial_actions:
+            return decision
+        product = dict(decision.recommended_product_context or {})
+        metadata = dict(decision.decision_metadata or {})
+        selling_mode = str(
+            product.get("sellingMode")
+            or product.get("selling_mode")
+            or metadata.get("sellingMode")
+            or ""
+        ).upper()
+        session_action = bool(
+            action is CustomerSalesDecisionType.PROPOSE_SESSION
+            or selling_mode == "SESSION"
+            or (sales_session is not None and action in {
+                CustomerSalesDecisionType.TEASE,
+                CustomerSalesDecisionType.BUILD_INTEREST,
+                CustomerSalesDecisionType.PRESENT_OFFER,
+            })
+        )
+        customer_permissions = None
+        context = getattr(gateway_input, "brain_context", None)
+        if (
+            getattr(self, "_customer_effective_permissions", None) is not None
+            and context is not None
+            and context.creator_profile_id
+            and context.fanvue_account_id
+            and context.telegram_user_id
+        ):
+            customer_permissions = self._customer_effective_permissions.read(
+                creator_profile_id=int(context.creator_profile_id),
+                fanvue_account_id=int(context.fanvue_account_id),
+                telegram_user_id=int(context.telegram_user_id),
+                telegram_chat_id=getattr(context, "telegram_chat_id", None),
+            )
+        if customer_permissions is not None:
+            effective = customer_permissions["effective"]
+            allowed = effective[
+                "sessionSellingAllowed" if session_action
+                else "contentSellingAllowed"
+            ]
+            blocked_reason = effective[
+                "sessionSellingReason" if session_action
+                else "contentSellingReason"
+            ]
+        else:
+            allowed = (
+                self._global_selling_permissions.session_allowed()
+                if session_action else
+                self._global_selling_permissions.content_allowed()
+            )
+            blocked_reason = (
+                "GLOBAL_SESSION_SELLING_DISABLED"
+                if session_action else "GLOBAL_CONTENT_SELLING_DISABLED"
+            )
+        if allowed:
+            return decision
+        reason = blocked_reason
+        metadata["globalSellingPermission"] = {
+            "allowed": False, "reason": reason,
+            "sellingModel": "SESSION" if session_action else "CONTENT",
+            "existingObligationsPreserved": True,
+        }
+        return replace(
+            decision,
+            decision=CustomerSalesDecisionType.CONTINUE_CONVERSATION,
+            reason_code=CustomerSalesReasonCode.CONVERSATION_ONLY,
+            reason_summary=(
+                "Conversation continues; the global operator permission blocks "
+                "a new commercial presentation."
+            ),
+            recommended_offering_id=None,
+            recommended_publication_id=None,
+            recommended_delivery_url=None,
+            recommended_offering_title=None,
+            recommended_offering_short_description=None,
+            recommended_offering_price_minor=None,
+            recommended_offering_currency=None,
+            sell_allowed=False,
+            nudge_allowed=False,
+            upsell_allowed=False,
+            cross_sell_allowed=False,
+            decision_metadata=immutable_mapping(metadata),
+        )
 
     def _preserve_paid_presentation_authority(
         self, presentation_text: str, *, offering, price_neutral: bool,

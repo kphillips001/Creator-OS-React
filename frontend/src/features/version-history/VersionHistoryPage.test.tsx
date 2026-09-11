@@ -57,11 +57,10 @@ function mockHistory(archived = true, restoreStatus = 200) {
 afterEach(() => vi.restoreAllMocks());
 
 describe("VersionHistoryPage", () => {
-  it("is consolidated beneath Archive in System navigation", () => {
-    const system = navigationGroups.find((group) => group.label === "System");
-    expect(system?.items.map((item) => item.label)).toEqual([
-      "Settings", "Diagnostics", "Archive",
-    ]);
+  it("keeps Archive in Business navigation after sidebar consolidation", () => {
+    const business = navigationGroups.find((group) => group.label === "Business");
+    expect(business?.items.some((item) => item.label === "Archive" && item.path === "/system/archive")).toBe(true);
+    expect(navigationGroups.some((group) => group.label === "System")).toBe(false);
   });
 
   it("renders the current asset and archived timeline newest to oldest", async () => {

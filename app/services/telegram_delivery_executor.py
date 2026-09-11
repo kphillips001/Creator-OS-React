@@ -28,6 +28,26 @@ class TelegramCommercialDestinationError(ValueError):
             else "INVALID_CUSTOMER_FACING_DESTINATION"
         )
 
+class TelegramRelationshipControlBlockedError(RuntimeError):
+    code = "RELATIONSHIP_HUMAN_OPERATOR_ACTIVE"
+
+class _RelationshipGuardedSender:
+    def __init__(self,sender,service,scope): self.sender=sender;self.service=service;self.scope=scope
+    def __getattr__(self,name): return getattr(self.sender,name)
+    def _call(self,name,**values):
+        method=getattr(self.sender,name)
+        if inspect.iscoroutinefunction(method):
+            async def guarded():
+                with self.service.autonomous_send_guard(**self.scope) as (allowed,_control):
+                    if not allowed: raise TelegramRelationshipControlBlockedError(self.service.HOLD_REASON)
+                    return await method(**values)
+            return guarded()
+        with self.service.autonomous_send_guard(**self.scope) as (allowed,_control):
+            if not allowed: raise TelegramRelationshipControlBlockedError(self.service.HOLD_REASON)
+            return method(**values)
+    def send_text(self,**values): return self._call("send_text",**values)
+    def send_asset(self,**values): return self._call("send_asset",**values)
+
 
 @dataclass(frozen=True)
 class TelegramDeliveryExecutionResult:
@@ -58,7 +78,8 @@ class TelegramDeliveryExecutor:
 
     def __init__(self, *, global_safety_service: Any | None = None,
                  customer_safety_service: Any | None = None,
-                 business_commercial_transport: Any | None = None) -> None:
+                 business_commercial_transport: Any | None = None,
+                 relationship_control_service: Any | None = None) -> None:
         if global_safety_service is None:
             from app.services.global_automation_safety_service import GlobalAutomationSafetyService
             global_safety_service = GlobalAutomationSafetyService()
@@ -73,6 +94,7 @@ class TelegramDeliveryExecutor:
             )
             business_commercial_transport = TelegramBusinessCommercialTransport()
         self._business_commercial_transport = business_commercial_transport
+        self._relationship_control_service = relationship_control_service
 
     def execute(
         self,
@@ -84,7 +106,14 @@ class TelegramDeliveryExecutor:
         metadata = self._metadata(normalized, context)
         message_text = self._message_text(normalized, context)
         sender = self._sender(context)
+        if self._private_unlock_button(normalized):
+            sender = self._business_commercial_transport
+        sender = self._guarded_sender(sender,context)
         chat_id = self._chat_id(context)
+
+        relationship_block = self._relationship_block(context)
+        if relationship_block is not None:
+            return self._relationship_blocked_result(normalized, metadata, relationship_block)
 
         customer_block = self._customer_block(context)
         if customer_block is not None:
@@ -124,7 +153,14 @@ class TelegramDeliveryExecutor:
         metadata = self._metadata(normalized, context)
         message_text = self._message_text(normalized, context)
         sender = self._sender(context)
+        if self._private_unlock_button(normalized):
+            sender = self._business_commercial_transport
+        sender = self._guarded_sender(sender,context)
         chat_id = self._chat_id(context)
+
+        relationship_block = self._relationship_block(context)
+        if relationship_block is not None:
+            return self._relationship_blocked_result(normalized, metadata, relationship_block)
 
         customer_block = self._customer_block(context)
         if customer_block is not None:
@@ -167,11 +203,11 @@ class TelegramDeliveryExecutor:
         try:
             button = self._private_unlock_button(payload)
             self._validate_commercial_destination(metadata, button)
-            if button:
-                sender = self._business_commercial_transport
             sent = sender.send_text(
                 chat_id=chat_id, message_text=message_text, **button,
             )
+        except TelegramRelationshipControlBlockedError as error:
+            return self._relationship_blocked_result(payload,metadata,error.code)
         except Exception as error:
             if raise_on_failure:
                 raise
@@ -208,13 +244,13 @@ class TelegramDeliveryExecutor:
         try:
             button = self._private_unlock_button(payload)
             self._validate_commercial_destination(metadata, button)
-            if button:
-                sender = self._business_commercial_transport
             result = sender.send_text(
                 chat_id=chat_id, message_text=message_text, **button,
             )
             if inspect.isawaitable(result):
                 result = await result
+        except TelegramRelationshipControlBlockedError as error:
+            return self._relationship_blocked_result(payload,metadata,error.code)
         except Exception as error:
             if raise_on_failure:
                 raise
@@ -269,6 +305,48 @@ class TelegramDeliveryExecutor:
             delivery_method=payload.delivery_method,
             metadata=metadata,
         )
+
+    def _relationship_block(self, context: Mapping[str, Any] | None) -> str | None:
+        if not context or context.get("origin") == "HUMAN_OPERATOR":
+            return None
+        required = ("creator_profile_id", "fanvue_account_id", "telegram_user_id")
+        if any(context.get(key) is None for key in required):
+            return None
+        service = self._relationship_control_service
+        if service is None:
+            from app.services.telegram_relationship_control_service import TelegramRelationshipControlService
+            service = TelegramRelationshipControlService()
+        allowed, _control = service.autonomous_allowed(
+            creator_profile_id=int(context["creator_profile_id"]),
+            fanvue_account_id=int(context["fanvue_account_id"]),
+            telegram_user_id=int(context["telegram_user_id"]),
+            telegram_chat_id=int(context.get("telegram_chat_id") or context.get("chat_id")
+                                 or context["telegram_user_id"]),
+            captured_version=(int(context["relationship_control_version"])
+                              if context.get("relationship_control_version") is not None else None),
+        )
+        return None if allowed else service.HOLD_REASON
+
+    def _guarded_sender(self,sender,context):
+        if sender is None or not context or context.get("origin")=="HUMAN_OPERATOR": return sender
+        if any(context.get(key) is None for key in ("creator_profile_id","fanvue_account_id","telegram_user_id")): return sender
+        service=self._relationship_control_service
+        if service is None:
+            from app.services.telegram_relationship_control_service import TelegramRelationshipControlService
+            service=TelegramRelationshipControlService()
+        if not callable(getattr(service,"autonomous_send_guard",None)): return sender
+        return _RelationshipGuardedSender(sender,service,{
+            "creator_profile_id":int(context["creator_profile_id"]),
+            "fanvue_account_id":int(context["fanvue_account_id"]),
+            "telegram_user_id":int(context["telegram_user_id"]),
+            "telegram_chat_id":int(context.get("telegram_chat_id") or context.get("chat_id") or context["telegram_user_id"]),
+            "captured_version":int(context["relationship_control_version"]) if context.get("relationship_control_version") is not None else None})
+
+    @staticmethod
+    def _relationship_blocked_result(payload, metadata, reason):
+        metadata.update({"execution_state":"blocked","relationship_control":reason})
+        return TelegramDeliveryExecutionResult(status="blocked",executed=False,
+            delivery_method=payload.delivery_method,blocking_reason=reason,metadata=metadata)
 
     @staticmethod
     def _apply_send_receipt(metadata: dict[str, Any], receipt: Any) -> None:
@@ -337,6 +415,8 @@ class TelegramDeliveryExecutor:
             return self._deferred_result(payload, metadata)
         try:
             sent = method(chat_id=chat_id, asset_path=asset_path, message_text=message_text)
+        except TelegramRelationshipControlBlockedError as error:
+            return self._relationship_blocked_result(payload,metadata,error.code)
         except Exception as error:
             if raise_on_failure:
                 raise
@@ -355,6 +435,8 @@ class TelegramDeliveryExecutor:
             sent = method(chat_id=chat_id, asset_path=asset_path, message_text=message_text)
             if inspect.isawaitable(sent):
                 sent = await sent
+        except TelegramRelationshipControlBlockedError as error:
+            return self._relationship_blocked_result(payload,metadata,error.code)
         except Exception as error:
             if raise_on_failure:
                 raise
@@ -550,5 +632,6 @@ class TelegramDeliveryExecutor:
             str(key): value
             for key, value in context.items()
             if key in {"correlation_id", "engine_user_id", "chat_id", "telegram_chat_id",
-                       "creator_profile_id", "fanvue_account_id", "fanvue_user_id"}
+                       "telegram_user_id", "creator_profile_id", "fanvue_account_id",
+                       "fanvue_user_id", "relationship_control_version", "origin"}
         }

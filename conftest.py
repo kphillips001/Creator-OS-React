@@ -8,3 +8,10 @@ combined collection run.
 """
 
 import psycopg  # noqa: F401
+
+
+# This is a manual data-seeding utility for the retired/non-launch Mass PPV
+# surface, not an automated test module. Its historical repository API no
+# longer exists, so importing it during pytest collection is intentionally
+# excluded rather than restoring obsolete production behavior.
+collect_ignore = ["app/test_seed_mass_ppv_content.py"]

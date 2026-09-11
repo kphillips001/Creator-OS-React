@@ -46,7 +46,7 @@ class HostedAssetReferenceRepository:
                        ON CONFLICT (asset_id,host_name,source_checksum) DO UPDATE SET
                          hosted_url=EXCLUDED.hosted_url,source_path=EXCLUDED.source_path,
                          status='READY',is_current=TRUE,verified_at=now(),last_used_at=now(),
-                         last_error_code=NULL,last_error_message=NULL,updated_at=now()
+                         last_error_code=NULL,last_error_message=NULL,created_at=now(),updated_at=now()
                        RETURNING *""",
                     (f"hosted_reference_{uuid4().hex}", int(asset_id), host_name, hosted_url,
                      source_checksum, source_path),
@@ -79,4 +79,3 @@ class HostedAssetReferenceRepository:
                        last_error_code=%s,last_error_message=%s,updated_at=now() WHERE reference_id=%s""",
                     (error_code, error_message, reference_id),
                 )
-
