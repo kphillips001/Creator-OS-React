@@ -213,6 +213,47 @@ def test_operations_sources_do_not_import_execution_or_mutation_services():
     assert all(token not in source for token in forbidden)
 
 
+def test_customer_snapshot_api_requires_one_stable_key_and_uses_read_service(monkeypatch):
+    calls = []
+    class Snapshots:
+        def for_customer(self, **values):
+            calls.append(("customer", values)); return {"mapping_state": "MAPPED_VERIFIED", "sections": {}}
+        def for_prospect(self, **values):
+            calls.append(("prospect", values)); return {"mapping_state": "TELEGRAM_PROSPECT_NOT_MAPPED", "sections": {}}
+    app = FastAPI(); app.include_router(api.router)
+    monkeypatch.setattr(api, "CustomerSnapshotService", Snapshots)
+    monkeypatch.setattr(api, "_creator_profile_id", lambda: 2)
+    monkeypatch.setattr(api, "_account_id", lambda: 7)
+    client = TestClient(app)
+    assert client.get("/api/v1/operations/customer-snapshot").status_code == 422
+    assert client.get("/api/v1/operations/customer-snapshot?customer_id=44&telegram_user_id=1").status_code == 422
+    assert client.get("/api/v1/operations/customer-snapshot?customer_id=44").json()["mapping_state"] == "MAPPED_VERIFIED"
+    assert client.get("/api/v1/operations/customer-snapshot?telegram_user_id=1").json()["mapping_state"] == "TELEGRAM_PROSPECT_NOT_MAPPED"
+    assert calls == [
+        ("customer", {"creator_profile_id": 2, "fanvue_account_id": 7, "customer_id": 44}),
+        ("prospect", {"creator_profile_id": 2, "fanvue_account_id": 7, "telegram_user_id": 1}),
+    ]
+
+
+def test_natural_language_intelligence_endpoints_separate_preview_and_explicit_apply(monkeypatch):
+    calls=[]
+    class Natural:
+        def preview(self, **values):
+            calls.append(("preview",values));return {"mutationPerformed":False,"proposals":[]}
+        def apply(self, **values):
+            calls.append(("apply",values));return {"success":True,"createdCount":1}
+    app=FastAPI();app.include_router(api.router)
+    monkeypatch.setattr(api,"NaturalLanguageIntelligenceService",Natural)
+    monkeypatch.setattr(api,"_creator_profile_id",lambda:2)
+    monkeypatch.setattr(api,"_account_id",lambda:7)
+    client=TestClient(app);base={"customerId":44,"customerName":"Alex","text":"She lives in Denver.","sourceType":"OPERATOR_VERIFIED"}
+    assert client.post("/api/v1/operations/intelligence/natural-language/preview",json=base).json()["mutationPerformed"] is False
+    assert client.post("/api/v1/operations/intelligence/natural-language/apply",json={**base,"selectedProposalIds":["p1"],"silentProposalIds":[]}).json()["createdCount"]==1
+    assert calls[0]==("preview",{"creator_profile_id":2,"fanvue_account_id":7,"customer_id":44,"customer_name":"Alex","text":"She lives in Denver.","source_type":"OPERATOR_VERIFIED"})
+    assert calls[1][0]=="apply" and calls[1][1]["selected_proposal_ids"]==["p1"]
+    assert client.post("/api/v1/operations/intelligence/natural-language/apply",json=base).status_code==422
+
+
 def test_worker_projection_includes_read_only_launcher_state(tmp_path):
     state = tmp_path / "launcher_state.json"
     state.write_text(json.dumps({"outreach": {"workerName": "Outreach", "launcherEnabled": True,

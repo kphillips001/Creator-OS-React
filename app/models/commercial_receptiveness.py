@@ -31,6 +31,10 @@ class CommercialReceptiveness:
     current_commercial_interest: bool = False
     future_commercial_reentry_allowed: bool = True
     temporal_commercial_qualifier: str | None = None
+    commercial_referent_present: bool = False
+    commercial_referent_type: str = "NONE"
+    acceptance_grounded: bool = False
+    nurture_bypassed: bool = False
 
     def to_mapping(self) -> Mapping[str, Any]:
         return MappingProxyType({
@@ -50,4 +54,8 @@ class CommercialReceptiveness:
             "currentCommercialInterest": self.current_commercial_interest,
             "futureCommercialReentryAllowed": self.future_commercial_reentry_allowed,
             "temporalCommercialQualifier": self.temporal_commercial_qualifier,
+            "commercialReferentPresent": self.commercial_referent_present,
+            "commercialReferentType": self.commercial_referent_type,
+            "acceptanceGrounded": self.acceptance_grounded,
+            "nurtureBypassed": self.nurture_bypassed,
         })

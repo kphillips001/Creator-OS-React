@@ -17,10 +17,15 @@ class TelegramSalesProspectRepository:
             with connection.cursor() as cursor:
                 cursor.execute(
                     """WITH authoritative_inbound AS (
-                           SELECT COUNT(*)::BIGINT AS count
-                           FROM public.ordinary_chat_reply_operations
-                           WHERE telegram_account_scope='AVA_TELETHON_PRIVATE'
-                             AND inbound_sender_telegram_user_id=%s
+                           SELECT (
+                             (SELECT COUNT(*) FROM public.ordinary_chat_reply_operations
+                              WHERE telegram_account_scope='AVA_TELETHON_PRIVATE'
+                                AND inbound_sender_telegram_user_id=%s)
+                             +
+                             (SELECT COUNT(*) FROM public.telegram_inbound_media_operations
+                              WHERE creator_profile_id=%s AND fanvue_account_id=%s
+                                AND telegram_user_id=%s)
+                           )::BIGINT AS count
                        )
                        INSERT INTO public.telegram_sales_prospects (
                            telegram_sales_prospect_id,creator_profile_id,
@@ -35,7 +40,8 @@ class TelegramSalesProspectRepository:
                                ELSE telegram_sales_prospects.inbound_message_count
                            END,
                            last_observed_at=NOW() RETURNING *""",
-                    (telegram_user_id, uuid4(), creator_profile_id, fanvue_account_id,
+                    (telegram_user_id, creator_profile_id, fanvue_account_id,
+                     telegram_user_id, uuid4(), creator_profile_id, fanvue_account_id,
                      telegram_user_id, telegram_chat_id),
                 )
                 return self._model(cursor.fetchone())

@@ -35,6 +35,8 @@ class ConversationGatewayInput:
     chat_history: list[Any]
     correlation_id: str
     brain_context: ConversationBrainContext | None = None
+    current_turn_visual_context: dict[str, Any] = field(default_factory=dict)
+    quality_correction_context: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

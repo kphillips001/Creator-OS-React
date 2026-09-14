@@ -7,6 +7,7 @@ import logging
 import os
 import random
 import signal
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, TYPE_CHECKING
@@ -93,6 +94,12 @@ class TelethonRuntime:
         response_pacing_service=None,
         business_connection_worker=None,
         sleep_service=None,
+        inbound_media_service=None,
+        inbound_image_safety_service=None,
+        media_processing_scope_service=None,
+        media_cleanup_interval_seconds=None,
+        availability_service=None,
+        private_inbound_backlog_service=None,
     ) -> None:
         if transport is None:
             raise ValueError("transport is required")
@@ -111,6 +118,13 @@ class TelethonRuntime:
             )
             controlled_autonomy_service = ControlledAutonomyTestService()
         self._controlled_autonomy = controlled_autonomy_service
+        if media_processing_scope_service is None:
+            from app.services.customer_media_processing_scope_service import (
+                CustomerMediaProcessingScopeService,
+            )
+            media_processing_scope_service = CustomerMediaProcessingScopeService()
+        self._media_processing_scope = media_processing_scope_service
+        self._blocked_media_groups: set[tuple[int, str]] = set()
         if response_pacing_service is None:
             from app.services.telegram_response_pacing_service import TelegramResponsePacingService
             response_pacing_service = TelegramResponsePacingService()
@@ -136,6 +150,25 @@ class TelethonRuntime:
                 orchestrator=engagement_teaser_service)
         self._scheduled_engagement_worker = scheduled_engagement_worker
         self._ordinary_replies = ordinary_reply_service
+        self._availability = availability_service
+        self._private_inbound_backlog = private_inbound_backlog_service
+        if inbound_media_service is None:
+            from app.services.telegram_inbound_media_service import TelegramInboundMediaService
+            inbound_media_service = TelegramInboundMediaService()
+        self._inbound_media = inbound_media_service
+        if (inbound_image_safety_service is None and
+                os.getenv("TELEGRAM_CUSTOMER_IMAGE_SAFETY_ENABLED", "false").lower()
+                in {"1", "true", "yes", "on"}):
+            from app.services.customer_inbound_image_safety_service import CustomerInboundImageSafetyService
+            inbound_image_safety_service = CustomerInboundImageSafetyService()
+        self._inbound_image_safety = inbound_image_safety_service
+        self._media_cleanup_interval=max(60.0,float(
+            media_cleanup_interval_seconds or
+            os.getenv("TELEGRAM_CUSTOMER_MEDIA_CLEANUP_INTERVAL_SECONDS",3600)))
+        self._image_response_enabled = (
+            os.getenv("TELEGRAM_CUSTOMER_IMAGE_RESPONSE_ENABLED", "false")
+            .strip().lower() in {"1", "true", "yes", "on"}
+        )
         self._ownership = ownership_service
         self._reconnect_initial = max(0.01, float(reconnect_initial_seconds))
         self._reconnect_max = max(self._reconnect_initial, float(reconnect_max_seconds))
@@ -160,11 +193,132 @@ class TelethonRuntime:
             "last_inbound_event_time": self._heartbeat.now().isoformat(),
             "last_inbound_chat_id": payload.telegram_chat_id,
         }))
-        result = await self.handle_payload(payload)
+        if self._private_inbound_backlog is not None:
+            self._global_safety_service.refresh()
+            configured = getattr(self._global_safety_service, "behavior_config", {}) or {}
+            await asyncio.to_thread(
+                self._private_inbound_backlog.capture, payload,
+                account_scope=self.ACCOUNT_SCOPE,
+                automation_state=("ON" if configured.get("global_automation_enabled") else "OFF"),
+                creator_profile_id=getattr(self._inbound_adapter, "_creator_profile_id", None),
+                fanvue_account_id=getattr(self._inbound_adapter, "_fanvue_account_id", None),
+            )
+        controls = getattr(self._inbound_adapter, "_relationship_controls", None)
+        creator_id = getattr(self._inbound_adapter, "_creator_profile_id", None)
+        account_id = getattr(self._inbound_adapter, "_fanvue_account_id", None)
+        if controls is not None and creator_id and account_id:
+            _allowed, relationship_control = await asyncio.to_thread(
+                controls.autonomous_allowed, creator_profile_id=int(creator_id),
+                fanvue_account_id=int(account_id),
+                telegram_user_id=int(payload.telegram_user_id),
+                telegram_chat_id=int(payload.telegram_chat_id))
+            if getattr(relationship_control, "ignored", False):
+                if self._ordinary_replies is not None:
+                    operation, _created = await asyncio.to_thread(
+                        self._ordinary_replies.begin, payload)
+                    await asyncio.to_thread(
+                        self._ordinary_replies.suppress_ignored, operation)
+                self._logger.info(
+                    "event=telegram_inbound_relationship_ignored chat_id=%s reason=RELATIONSHIP_IGNORED ai_generation_count=0",
+                    self._safe_telegram_identifier(payload.telegram_chat_id))
+                return None
+        if payload.attachments:
+            scope = self._media_processing_scope.decide(
+                telegram_user_id=payload.telegram_user_id,
+                telegram_chat_id=payload.telegram_chat_id,
+            )
+            if not scope.allowed:
+                grouped_id = next((item.grouped_id for item in payload.attachments if item.grouped_id), None)
+                group_key = (payload.telegram_chat_id, str(grouped_id)) if grouped_id else None
+                if group_key is None or group_key not in self._blocked_media_groups:
+                    self._logger.info(
+                        "event=telegram_customer_media_scope status=blocked reason=%s "
+                        "mode=%s chat_id=%s user_id=%s grouped=%s",
+                        scope.reason, scope.mode,
+                        self._safe_telegram_identifier(payload.telegram_chat_id),
+                        self._safe_telegram_identifier(payload.telegram_user_id),
+                        bool(grouped_id),
+                    )
+                if group_key is not None:
+                    if len(self._blocked_media_groups) >= 1024:
+                        self._blocked_media_groups.clear()
+                    self._blocked_media_groups.add(group_key)
+                # Preserve the historical text path for a genuine caption, but
+                # remove attachments so no downstream image authority exists.
+                if payload.message_text.strip():
+                    return await self.handle_payload(replace(payload, attachments=()))
+                return None
+            media_operation = await self._inbound_media.process(
+                creator_profile_id=int(self._inbound_adapter._creator_profile_id),
+                fanvue_account_id=int(self._inbound_adapter._fanvue_account_id),
+                payload=payload,
+                downloader=self._transport.download_inbound_attachment,
+            )
+            if self._inbound_image_safety is not None:
+                image_policy = await self._inbound_image_safety.process_operation(
+                    media_operation, immediate_messages=payload.chat_history,
+                )
+            else:
+                image_policy = None
+            if image_policy is not None and self._image_response_enabled:
+                visual_context = await self._inbound_image_safety.response_context(
+                    media_operation,image_policy)
+                canonical_message_id=min(
+                    item.telegram_message_id for item in payload.attachments)
+                payload=replace(payload,message_id=canonical_message_id,
+                    current_turn_visual_context=visual_context)
+                result=await self.handle_payload(payload)
+            else:
+                result = await asyncio.to_thread(
+                    self._inbound_adapter.execute, payload, observe_only=True,
+                )
+        else:
+            result = await self.handle_payload(payload)
         await asyncio.to_thread(record_heartbeat_safely, self._logger, "inbound_success", lambda: self._heartbeat.heartbeat(metadata={
             "last_successful_inbound_handling_time": self._heartbeat.now().isoformat(),
         }))
         return result
+
+    async def _wait_with_typing(
+        self, *, chat_id: int, decision: Any,
+        telegram_user_id: int | None = None,
+        correlation_id: str | None = None,
+    ) -> None:
+        """Overlay native typing and its narrow UX floor on certified pacing."""
+
+        show_typing_while = getattr(self._transport, "show_typing_while", None)
+        if not callable(show_typing_while) or decision.applied_delay_ms <= 0:
+            await self._response_pacing.wait(decision)
+            return
+        # This is a presentation floor, not a second pacing algorithm. The
+        # calculated/persisted pacing decision and its 9-second ceiling remain
+        # unchanged; only a short customer-visible typing wait is extended.
+        visible_delay_ms = max(2000, int(decision.applied_delay_ms))
+        visible_decision = replace(decision, applied_delay_ms=visible_delay_ms)
+        self._logger.info(
+            "event=telegram_typing_window correlation_id=%s chat_id=%s "
+            "certified_delay_ms=%s visible_delay_ms=%s",
+            correlation_id or "unknown",
+            self._safe_telegram_identifier(chat_id),
+            decision.applied_delay_ms, visible_delay_ms,
+        )
+        await show_typing_while(
+            chat_id=chat_id,
+            telegram_user_id=telegram_user_id,
+            correlation_id=correlation_id,
+            operation=self._response_pacing.wait(visible_decision),
+        )
+
+    @staticmethod
+    def _safe_telegram_identifier(value: int) -> str:
+        text = str(value)
+        return text if len(text) <= 6 else f"{text[:4]}...{text[-4:]}"
+
+    @staticmethod
+    def _safe_correlation_id(value: str) -> str:
+        """Keep a joinable fingerprint without leaking embedded Telegram IDs."""
+        import hashlib
+        return f"sha256:{hashlib.sha256(str(value).encode()).hexdigest()[:16]}"
 
     async def run(self) -> None:
         await asyncio.to_thread(record_heartbeat_safely, self._logger, "startup", self._heartbeat.register_startup)
@@ -172,6 +326,8 @@ class TelethonRuntime:
         engagement_task = None
         business_connection_task = None
         sleep_wake_task = None
+        availability_task = None
+        media_cleanup_task = None
         failed = False
         try:
             if self._ownership is not None and not await asyncio.to_thread(self._ownership.acquire):
@@ -189,6 +345,8 @@ class TelethonRuntime:
             if self._engagement_teasers is not None:
                 await asyncio.to_thread(self._engagement_teasers.delivery.recover_startup)
             heartbeat_task = asyncio.create_task(self._heartbeat_loop())
+            if self._inbound_image_safety is not None:
+                media_cleanup_task = asyncio.create_task(self._media_cleanup_loop())
             if self._scheduled_engagement_worker is not None:
                 engagement_task = asyncio.create_task(self._scheduled_engagement_loop())
             if self._business_connection_worker is not None:
@@ -197,6 +355,8 @@ class TelethonRuntime:
                 )
             if self._ordinary_replies is not None:
                 sleep_wake_task = asyncio.create_task(self._sleep_wake_loop())
+                if self._availability is not None:
+                    availability_task = asyncio.create_task(self._availability_loop())
             await self._connection_loop()
             if self._fatal_background_error is not None:
                 raise self._fatal_background_error
@@ -233,6 +393,18 @@ class TelethonRuntime:
                     await sleep_wake_task
                 except asyncio.CancelledError:
                     pass
+            if availability_task is not None:
+                availability_task.cancel()
+                try:
+                    await availability_task
+                except asyncio.CancelledError:
+                    pass
+            if media_cleanup_task is not None:
+                media_cleanup_task.cancel()
+                try:
+                    await media_cleanup_task
+                except asyncio.CancelledError:
+                    pass
             await self._transport.disconnect()
             if self._ownership is not None:
                 await asyncio.to_thread(self._ownership.release)
@@ -266,7 +438,25 @@ class TelethonRuntime:
                     "next_retry_at": None, "next_retry_at_epoch": None,
                     "reconnect_attempt_count": self._reconnect_attempts,
                     **self._controlled_autonomy.audit_metadata(),
+                    **self._media_processing_scope.audit_metadata(),
                 }))
+                if self._image_response_enabled and self._inbound_image_safety is not None:
+                    recovery_payloads=await self._inbound_image_safety.recovery_payloads()
+                    for recovery_payload in recovery_payloads:
+                        scope = self._media_processing_scope.decide(
+                            telegram_user_id=recovery_payload.telegram_user_id,
+                            telegram_chat_id=recovery_payload.telegram_chat_id,
+                        )
+                        if scope.allowed:
+                            await self.handle_payload(recovery_payload)
+                        else:
+                            self._logger.info(
+                                "event=telegram_customer_media_recovery_scope status=blocked "
+                                "reason=%s mode=%s chat_id=%s user_id=%s",
+                                scope.reason, scope.mode,
+                                self._safe_telegram_identifier(recovery_payload.telegram_chat_id),
+                                self._safe_telegram_identifier(recovery_payload.telegram_user_id),
+                            )
                 await self._transport.run_until_disconnected()
                 if self._shutdown.is_set():
                     return
@@ -322,6 +512,20 @@ class TelethonRuntime:
                 await self._scheduled_engagement_worker.process_one(transport=self._transport)
             await asyncio.sleep(60)
 
+    async def _media_cleanup_loop(self) -> None:
+        """Bounded cleanup in the existing worker; failures never stop Telegram."""
+        while True:
+            try:
+                removed=await asyncio.to_thread(self._inbound_media.cleanup_expired)
+                if removed:
+                    self._logger.info(
+                        "event=telegram_media_cleanup status=success removed=%s",removed)
+            except Exception as error:
+                self._logger.warning(
+                    "event=telegram_media_cleanup status=failure error_type=%s",
+                    type(error).__name__)
+            await asyncio.sleep(self._media_cleanup_interval)
+
     async def _business_connection_loop(self) -> None:
         """Poll provider configuration only; never enter conversation logic."""
         while True:
@@ -339,6 +543,50 @@ class TelethonRuntime:
                 for payload in payloads:
                     await self.handle_payload(payload)
             await asyncio.sleep(60)
+
+    async def _availability_loop(self) -> None:
+        """Release due chats independently after their durable quiet window."""
+        while True:
+            if self._transport_connected:
+                self._global_safety_service.refresh()
+                raw_config = getattr(self._global_safety_service, "behavior_config", {}) or {}
+                if (raw_config.get("global_automation_enabled") is True
+                        and raw_config.get("global_sends_enabled") is True):
+                    pending = await asyncio.to_thread(
+                        self._ordinary_replies.pending_backlog_payloads,
+                    )
+                    for payload in pending:
+                        asyncio.create_task(self._handle_authorized_payload(payload))
+                payloads = await asyncio.to_thread(
+                    self._ordinary_replies.due_availability_payloads,
+                    now=self._heartbeat.now(),
+                )
+                for payload in payloads:
+                    asyncio.create_task(self._resume_available_payload(payload))
+                generated_retries = await asyncio.to_thread(
+                    self._ordinary_replies.due_generated_send_payloads,
+                    now=self._heartbeat.now(),
+                )
+                for payload in generated_retries:
+                    asyncio.create_task(self._resume_available_payload(payload))
+            await asyncio.sleep(1)
+
+    async def _resume_available_payload(self, payload):
+        """Re-evaluate live authority when a durable availability wait expires."""
+        global_result = self._global_safety_service.check_global_safety()
+        controlled = self._controlled_autonomy.decide(
+            telegram_user_id=payload.telegram_user_id,
+            telegram_chat_id=payload.telegram_chat_id,
+        )
+        if not global_result.get("allowed", False) and not controlled.allowed:
+            return None
+        if not global_result.get("allowed", False):
+            with self._controlled_autonomy.scope(
+                telegram_user_id=payload.telegram_user_id,
+                telegram_chat_id=payload.telegram_chat_id,
+            ):
+                return await self._handle_authorized_payload(payload, availability_released=True)
+        return await self._handle_authorized_payload(payload, availability_released=True)
 
     async def handle_payload(
         self,
@@ -384,7 +632,7 @@ class TelethonRuntime:
         return await self._handle_authorized_payload(payload)
 
     async def _handle_authorized_payload(
-        self, payload: TelegramInboundPayload,
+        self, payload: TelegramInboundPayload, *, availability_released: bool = False,
     ) -> TelegramInboundResult | None:
 
         lock = self._chat_locks.setdefault(payload.telegram_chat_id, asyncio.Lock())
@@ -407,6 +655,47 @@ class TelethonRuntime:
                             ordinary_operation.operation_id,
                             ordinary_operation.state.value,
                         )
+                    ignored_reader = getattr(
+                        self._ordinary_replies, "relationship_ignored", None)
+                    if (callable(ignored_reader) and await asyncio.to_thread(
+                            ignored_reader, ordinary_operation)):
+                        await asyncio.to_thread(
+                            self._ordinary_replies.suppress_ignored, ordinary_operation)
+                        self._logger.info(
+                            "event=telegram_reply_ignored operation_id=%s reason=RELATIONSHIP_IGNORED ai_generation_count=0",
+                            ordinary_operation.operation_id)
+                        return None
+                    if (self._availability is not None
+                            and ordinary_operation.state.value == "PENDING_GENERATION"):
+                        profile_reader = getattr(
+                            self._ordinary_replies, "relationship_scheduling_profile", None)
+                        if callable(profile_reader):
+                            profile = await asyncio.to_thread(profile_reader,
+                                creator_profile_id=int(self._inbound_adapter._creator_profile_id),
+                                fanvue_account_id=int(self._inbound_adapter._fanvue_account_id),
+                                telegram_user_id=payload.telegram_user_id,
+                                telegram_chat_id=payload.telegram_chat_id)
+                        else:
+                            profile = {"market_tier": "UNCLASSIFIED",
+                                       "high_value_prospect": False}
+                        availability = self._availability.calculate(
+                            inbound_text=payload.message_text,
+                            received_at=payload.received_at,
+                            high_value_prospect=profile["high_value_prospect"],
+                            market_tier=profile["market_tier"],
+                        )
+                        unavailable = availability.category in {"BUSY", "AWAY", "SLEEPING"}
+                        if not availability_released or unavailable:
+                            await asyncio.to_thread(
+                                self._ordinary_replies.defer_for_availability,
+                                ordinary_operation, availability,
+                            )
+                            self._logger.info(
+                                "event=telegram_reply_availability_scheduled operation_id=%s category=%s available_at=%s session_id=%s",
+                                ordinary_operation.operation_id, availability.category,
+                                availability.available_at.isoformat(), availability.session_id,
+                            )
+                            return None
                     sleep_context_reader = getattr(
                         self._ordinary_replies, "sleep_context", None,
                     )
@@ -433,6 +722,20 @@ class TelethonRuntime:
                         payload, sleep_context=sleep_decision.diagnostics(),
                     )
                     result = self._ordinary_replies.result(ordinary_operation)
+                    if result is not None:
+                        suppress_if_stale = getattr(
+                            self._ordinary_replies, "suppress_if_stale", None,
+                        )
+                        stale = (
+                            await asyncio.to_thread(suppress_if_stale, ordinary_operation)
+                            if callable(suppress_if_stale) else None
+                        )
+                        if stale is not None:
+                            self._logger.info(
+                                "event=ordinary_reply_stale_blocked operation_id=%s disposition=BLOCKED_BEFORE_DELIVERY",
+                                ordinary_operation.operation_id,
+                            )
+                            return result
                     if result is None:
                         ordinary_operation = await asyncio.to_thread(
                             self._ordinary_replies.claim_generation, ordinary_operation,
@@ -444,11 +747,16 @@ class TelethonRuntime:
                                 self._inbound_adapter.execute, payload,
                             )
                         except Exception as error:
-                            await asyncio.to_thread(
-                                self._ordinary_replies.generation_failed,
-                                ordinary_operation, error,
+                            fallback_factory = getattr(
+                                self._ordinary_replies, "exception_fallback", None,
                             )
-                            raise
+                            if not callable(fallback_factory):
+                                await asyncio.to_thread(
+                                    self._ordinary_replies.generation_failed,
+                                    ordinary_operation, error,
+                                )
+                                raise
+                            result = fallback_factory(ordinary_operation, payload, error)
                         pacing = self._response_pacing.calculate(
                             inbound_text=payload.message_text,
                             reply_text=result.response_text,
@@ -463,10 +771,24 @@ class TelethonRuntime:
                             self._ordinary_replies.generated,
                             ordinary_operation, result,
                         )
-                if result.error_code == "RELATIONSHIP_HUMAN_OPERATOR_ACTIVE":
+                        if (ordinary_operation is not None and callable(ignored_reader)
+                                and await asyncio.to_thread(
+                                    ignored_reader, ordinary_operation)):
+                            await asyncio.to_thread(
+                                self._ordinary_replies.suppress_ignored,
+                                ordinary_operation)
+                            self._logger.info(
+                                "event=ordinary_reply_generation_ignored operation_id=%s disposition=BLOCKED_BEFORE_DELIVERY",
+                                ordinary_operation.operation_id)
+                            return result
+                if result.error_code in {"RELATIONSHIP_HUMAN_OPERATOR_ACTIVE",
+                                          "RELATIONSHIP_IGNORED"}:
                     if ordinary_operation is not None and self._ordinary_replies is not None:
-                        await asyncio.to_thread(self._ordinary_replies.suppress_relationship_control,
-                                                ordinary_operation)
+                        suppressor = (self._ordinary_replies.suppress_ignored
+                            if result.error_code == "RELATIONSHIP_IGNORED"
+                            and hasattr(self._ordinary_replies,"suppress_ignored")
+                            else self._ordinary_replies.suppress_relationship_control)
+                        await asyncio.to_thread(suppressor, ordinary_operation)
                     self._logger.info("event=telegram_reply_held relationship_control=HUMAN_OPERATOR chat_id=%s",
                                       payload.telegram_chat_id)
                     return result
@@ -538,7 +860,15 @@ class TelethonRuntime:
                     pacing_data = dict(result.diagnostic_metadata.get("response_pacing") or {})
                     if pacing_data:
                         from app.services.telegram_response_pacing_service import TelegramResponsePacingDecision
-                        await self._response_pacing.wait(TelegramResponsePacingDecision(
+                        await self._wait_with_typing(
+                            chat_id=payload.telegram_chat_id,
+                            telegram_user_id=payload.telegram_user_id,
+                            correlation_id=(
+                                str(ordinary_operation.operation_id)
+                                if ordinary_operation is not None
+                                else self._safe_correlation_id(result.correlation_id)
+                            ),
+                            decision=TelegramResponsePacingDecision(
                             mode=str(pacing_data["mode"]), policy=str(pacing_data["policy"]),
                             calculated_delay_ms=int(pacing_data["calculatedDelayMs"]),
                             applied_delay_ms=int(pacing_data["appliedDelayMs"]),
@@ -553,8 +883,35 @@ class TelethonRuntime:
                         if claimed_operation is None:
                             return result
                     if operation is None and ordinary_operation is not None:
+                        suppress_if_stale = getattr(
+                            self._ordinary_replies, "suppress_if_stale", None,
+                        )
+                        stale = (
+                            await asyncio.to_thread(suppress_if_stale, ordinary_operation)
+                            if callable(suppress_if_stale) else None
+                        )
+                        if stale is not None:
+                            self._logger.info(
+                                "event=ordinary_reply_stale_blocked operation_id=%s disposition=BLOCKED_BEFORE_DELIVERY",
+                                ordinary_operation.operation_id,
+                            )
+                            return result
+                        if (callable(ignored_reader) and await asyncio.to_thread(
+                                ignored_reader, ordinary_operation)):
+                            await asyncio.to_thread(
+                                self._ordinary_replies.suppress_ignored,
+                                ordinary_operation)
+                            self._logger.info(
+                                "event=ordinary_reply_send_ignored operation_id=%s disposition=BLOCKED_BEFORE_DELIVERY",
+                                ordinary_operation.operation_id)
+                            return result
                         state = ordinary_operation.state.value
                         if state == "SENT_CONFIRMED":
+                            finalize_confirmed=getattr(
+                                self._ordinary_replies,'finalize_confirmed',None)
+                            if callable(finalize_confirmed):
+                                await asyncio.to_thread(
+                                    finalize_confirmed,ordinary_operation)
                             self._record_confirmed_ordinary_transcript(
                                 ordinary_operation, result,
                             )
@@ -1115,6 +1472,7 @@ def build_default_runtime_from_environment() -> TelethonRuntime:
         UnmappedTelegramProspectService,
     )
     from app.services.customer_abuse_policy_service import CustomerAbusePolicyService
+    from app.services.customer_media_multimodal_decision_engine import CustomerMediaMultimodalDecisionEngine
     from app.services.timing_engine import TimingEngine
     from app.services.user_value_service import UserValueService
     from app.repositories.creator_profile_repository import (
@@ -1198,6 +1556,7 @@ def build_default_runtime_from_environment() -> TelethonRuntime:
             )
         ),
         ava_persona_runtime_service=gpt_service.persona_runtime_service,
+        visual_decision_engine=CustomerMediaMultimodalDecisionEngine(),
     )
     purchase_intents = (
         TelegramPurchaseIntentService(
@@ -1224,7 +1583,10 @@ def build_default_runtime_from_environment() -> TelethonRuntime:
         caption_service=FreeEngagementTeaserCaptionService(gpt_service=gpt_service),
         policy_repository=engagement_policy_repository,
     )
-    ordinary_replies = OrdinaryChatReplyService()
+    ordinary_replies = OrdinaryChatReplyService(
+        creator_profile_id=creator_profile_id or None,
+        fanvue_account_id=engine_account_id,
+    )
     from app.repositories.telegram_operator_message_repository import TelegramOperatorMessageRepository
     operator_messages = TelegramOperatorMessageRepository()
     def recent_telegram_history(**scope):
@@ -1237,6 +1599,10 @@ def build_default_runtime_from_environment() -> TelethonRuntime:
         )
         return [*ordinary,*manual][-10:]
     buyer_memory_priority = BuyerMemoryPriorityService()
+    private_inbound_backlog = __import__(
+        "app.services.telegram_private_inbound_backlog_service",
+        fromlist=["TelegramPrivateInboundBacklogService"],
+    ).TelegramPrivateInboundBacklogService()
     inbound_adapter = TelegramInboundAdapter(
         identity_adapter=TelegramIdentityAdapter(
             engine_account_id=engine_account_id,
@@ -1262,6 +1628,7 @@ def build_default_runtime_from_environment() -> TelethonRuntime:
             prospect_service=telegram_prospects,
         ),
         relationship_control_service=relationship_controls,
+        private_inbound_backlog_service=private_inbound_backlog,
     )
     client = TelegramClient(session_path, api_id, api_hash)
     transport = TelethonUserTransport(client=client)
@@ -1273,6 +1640,7 @@ def build_default_runtime_from_environment() -> TelethonRuntime:
         global_safety_service=global_safety,
         business_commercial_transport=business_transport,
         relationship_control_service=relationship_controls,
+        customer_effective_permissions_service=customer_effective_permissions,
     )
     business_connection_worker = None
     if os.getenv(
@@ -1308,6 +1676,7 @@ def build_default_runtime_from_environment() -> TelethonRuntime:
         delivery_executor=delivery_executor,
         heartbeat_service=WorkerHeartbeatService(
             worker_name="Telegram", worker_type="transport_runtime",
+            creator_profile_id=creator_profile_id or None,
             account_id=engine_account_id, poll_interval_seconds=30,
         ),
         global_safety_service=global_safety,
@@ -1316,6 +1685,11 @@ def build_default_runtime_from_environment() -> TelethonRuntime:
         sales_delivery_service=sales_deliveries,
         engagement_teaser_service=engagement_teasers,
         ordinary_reply_service=ordinary_replies,
+        availability_service=__import__(
+            "app.services.ava_human_availability_service",
+            fromlist=["AvaHumanAvailabilityService"],
+        ).AvaHumanAvailabilityService(),
+        private_inbound_backlog_service=private_inbound_backlog,
         ownership_service=TelegramWorkerOwnershipService(),
         business_connection_worker=business_connection_worker,
     )

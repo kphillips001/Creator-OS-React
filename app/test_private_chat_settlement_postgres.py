@@ -12,7 +12,7 @@ from psycopg.rows import dict_row
 
 from app.services.private_chat_purchase_settlement_service import PrivateChatPurchaseSettlementService
 from app.repositories.purchase_intent_repository import PurchaseIntentRepository
-from app.testing.postgres_safety import require_isolated_test_database_url
+from app.testing.postgres_safety import require_current_telegram_test_schema
 
 
 TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL")
@@ -21,7 +21,7 @@ pytestmark = pytest.mark.skipif(not TEST_DATABASE_URL, reason="TEST_DATABASE_URL
 
 @contextmanager
 def connection_factory():
-    guarded_url = require_isolated_test_database_url(
+    guarded_url = require_current_telegram_test_schema(
         TEST_DATABASE_URL,
         os.getenv("CREATOR_OS_PRODUCTION_DATABASE_URL")
         or os.getenv("DATABASE_URL"),
@@ -56,8 +56,11 @@ def fixture(*, session=False, offering_type="SINGLE_IMAGE", free_teaser=False):
             (publication_id, offering_id))
         c.execute("""INSERT INTO commercial_offering_assets(offering_id,asset_id,position)
             VALUES (%s,%s,1)""", (offering_id, asset))
-        c.execute("INSERT INTO telegram_identity_observations(telegram_user_id,telegram_chat_id) VALUES (%s,%s)",
-                  (telegram, telegram))
+        c.execute("""INSERT INTO telegram_identity_observations(
+            telegram_user_id,telegram_chat_id,observation_sources,
+            private_chat_id,private_chat_observed_at)
+            VALUES (%s,%s,ARRAY['PRIVATE_CHAT'],%s,NOW())""",
+            (telegram, telegram, telegram))
         c.execute("""INSERT INTO telegram_sales_prospects(telegram_sales_prospect_id,
             creator_profile_id,fanvue_account_id,telegram_user_id,telegram_chat_id,
             relationship_state,preference_state) VALUES (%s,%s,%s,%s,%s,

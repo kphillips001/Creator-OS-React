@@ -38,12 +38,14 @@ class _RelationshipGuardedSender:
         method=getattr(self.sender,name)
         if inspect.iscoroutinefunction(method):
             async def guarded():
-                with self.service.autonomous_send_guard(**self.scope) as (allowed,_control):
-                    if not allowed: raise TelegramRelationshipControlBlockedError(self.service.HOLD_REASON)
+                with self.service.autonomous_send_guard(**self.scope) as (allowed,control):
+                    if not allowed: raise TelegramRelationshipControlBlockedError(
+                        self.service.block_reason(control) if hasattr(self.service,"block_reason") else self.service.HOLD_REASON)
                     return await method(**values)
             return guarded()
-        with self.service.autonomous_send_guard(**self.scope) as (allowed,_control):
-            if not allowed: raise TelegramRelationshipControlBlockedError(self.service.HOLD_REASON)
+        with self.service.autonomous_send_guard(**self.scope) as (allowed,control):
+            if not allowed: raise TelegramRelationshipControlBlockedError(
+                self.service.block_reason(control) if hasattr(self.service,"block_reason") else self.service.HOLD_REASON)
             return method(**values)
     def send_text(self,**values): return self._call("send_text",**values)
     def send_asset(self,**values): return self._call("send_asset",**values)
@@ -79,7 +81,8 @@ class TelegramDeliveryExecutor:
     def __init__(self, *, global_safety_service: Any | None = None,
                  customer_safety_service: Any | None = None,
                  business_commercial_transport: Any | None = None,
-                 relationship_control_service: Any | None = None) -> None:
+                 relationship_control_service: Any | None = None,
+                 customer_effective_permissions_service: Any | None = None) -> None:
         if global_safety_service is None:
             from app.services.global_automation_safety_service import GlobalAutomationSafetyService
             global_safety_service = GlobalAutomationSafetyService()
@@ -95,6 +98,7 @@ class TelegramDeliveryExecutor:
             business_commercial_transport = TelegramBusinessCommercialTransport()
         self._business_commercial_transport = business_commercial_transport
         self._relationship_control_service = relationship_control_service
+        self._customer_effective_permissions_service = customer_effective_permissions_service
 
     def execute(
         self,
@@ -106,10 +110,14 @@ class TelegramDeliveryExecutor:
         metadata = self._metadata(normalized, context)
         message_text = self._message_text(normalized, context)
         sender = self._sender(context)
-        if self._private_unlock_button(normalized):
+        if self._private_unlock_button(normalized) and sender is None:
             sender = self._business_commercial_transport
         sender = self._guarded_sender(sender,context)
         chat_id = self._chat_id(context)
+
+        permission_block = self._effective_permission_block(normalized, context)
+        if permission_block is not None:
+            return self._relationship_blocked_result(normalized, metadata, permission_block)
 
         relationship_block = self._relationship_block(context)
         if relationship_block is not None:
@@ -153,10 +161,14 @@ class TelegramDeliveryExecutor:
         metadata = self._metadata(normalized, context)
         message_text = self._message_text(normalized, context)
         sender = self._sender(context)
-        if self._private_unlock_button(normalized):
+        if self._private_unlock_button(normalized) and sender is None:
             sender = self._business_commercial_transport
         sender = self._guarded_sender(sender,context)
         chat_id = self._chat_id(context)
+
+        permission_block = self._effective_permission_block(normalized, context)
+        if permission_block is not None:
+            return self._relationship_blocked_result(normalized, metadata, permission_block)
 
         relationship_block = self._relationship_block(context)
         if relationship_block is not None:
@@ -316,7 +328,7 @@ class TelegramDeliveryExecutor:
         if service is None:
             from app.services.telegram_relationship_control_service import TelegramRelationshipControlService
             service = TelegramRelationshipControlService()
-        allowed, _control = service.autonomous_allowed(
+        allowed, control = service.autonomous_allowed(
             creator_profile_id=int(context["creator_profile_id"]),
             fanvue_account_id=int(context["fanvue_account_id"]),
             telegram_user_id=int(context["telegram_user_id"]),
@@ -325,7 +337,31 @@ class TelegramDeliveryExecutor:
             captured_version=(int(context["relationship_control_version"])
                               if context.get("relationship_control_version") is not None else None),
         )
-        return None if allowed else service.HOLD_REASON
+        return None if allowed else (service.block_reason(control)
+                                     if hasattr(service,"block_reason") else service.HOLD_REASON)
+
+    def _effective_permission_block(self, payload, context):
+        if not context or context.get("origin") == "HUMAN_OPERATOR":
+            return None
+        service = self._customer_effective_permissions_service
+        required = ("creator_profile_id", "fanvue_account_id", "telegram_user_id")
+        if service is None or any(context.get(key) is None for key in required):
+            return None
+        permissions = service.read(
+            creator_profile_id=int(context["creator_profile_id"]),
+            fanvue_account_id=int(context["fanvue_account_id"]),
+            telegram_user_id=int(context["telegram_user_id"]),
+            telegram_chat_id=int(context.get("telegram_chat_id") or context.get("chat_id")
+                                 or context["telegram_user_id"]),
+        )
+        effective = dict(permissions.get("effective") or {})
+        if effective.get("chatAllowed") is not True:
+            return str(effective.get("chatReason") or "CUSTOMER_AVA_CHAT_DISABLED")
+        if self._private_unlock_button(payload) and effective.get(
+                "contentSellingAllowed") is not True:
+            return str(effective.get("contentSellingReason")
+                       or "CUSTOMER_CONTENT_SELLING_DISABLED")
+        return None
 
     def _guarded_sender(self,sender,context):
         if sender is None or not context or context.get("origin")=="HUMAN_OPERATOR": return sender

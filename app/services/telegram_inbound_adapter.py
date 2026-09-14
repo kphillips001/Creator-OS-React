@@ -59,6 +59,7 @@ class TelegramInboundAdapter:
         customer_behavior_evidence_repository=None,
         abuse_policy_service=None,
         relationship_control_service=None,
+        private_inbound_backlog_service=None,
     ) -> None:
         if identity_adapter is None:
             raise ValueError("identity_adapter is required")
@@ -89,6 +90,7 @@ class TelegramInboundAdapter:
         self._customer_behavior_evidence = customer_behavior_evidence_repository
         self._abuse_policy = abuse_policy_service
         self._relationship_controls = relationship_control_service
+        self._private_inbound_backlog = private_inbound_backlog_service
 
     def execute(
         self,
@@ -145,7 +147,7 @@ class TelegramInboundAdapter:
                     identity_repository.get_by_telegram_user_id(payload.telegram_user_id)
                 )
         conversational_memory = {}
-        if (self._conversational_memory is not None and self._creator_profile_id
+        if (payload.message_text and self._conversational_memory is not None and self._creator_profile_id
                 and self._fanvue_account_id):
             memory_priority = "STANDARD"
             if (canonical_identity is not None
@@ -243,6 +245,13 @@ class TelegramInboundAdapter:
             )
             conversational_memory["supporterAttentionBoundary"] = dict(
                 relationship.get("supporterAttentionBoundary") or {}
+            )
+        if self._private_inbound_backlog is not None:
+            self._private_inbound_backlog.correlate(
+                payload, account_scope="AVA_TELETHON_PRIVATE",
+                mapped_customer_id=(getattr(canonical_identity, "local_fanvue_user_id", None)
+                    if canonical_identity is not None else None),
+                prospect_id=getattr(telegram_prospect, "prospect_id", None),
             )
 
         if (self._abuse_policy is not None and self._creator_profile_id
@@ -354,7 +363,8 @@ class TelegramInboundAdapter:
                     or identity.engine_user_id,
                     abuse.code, abuse.diagnostics,
                 )
-        if canonical_thread is not None and self._conversation_message_saver is not None:
+        if (payload.message_text and canonical_thread is not None
+                and self._conversation_message_saver is not None):
             self._conversation_message_saver(
                 fanvue_account_id=canonical_identity.fanvue_account_id,
                 thread_id=int(canonical_thread["id"]),
@@ -391,6 +401,10 @@ class TelegramInboundAdapter:
             )
             relationship_control = control
             if not allowed:
+                hold_reason = (
+                    self._relationship_controls.block_reason(control)
+                    if hasattr(self._relationship_controls,"block_reason")
+                    else self._relationship_controls.HOLD_REASON)
                 return TelegramInboundResult(
                     correlation_id=correlation_id,
                     telegram_chat_id=payload.telegram_chat_id,
@@ -399,12 +413,12 @@ class TelegramInboundAdapter:
                     engine_user_id=(getattr(canonical_identity, "engine_user_id", None)
                                     or identity.engine_user_id),
                     response_text="", offer_authorized=False, offer_link=None,
-                    blocked=True, error_code=self._relationship_controls.HOLD_REASON,
+                    blocked=True, error_code=hold_reason,
                     delivery_requires_payment=False, delivery_payload={},
                     diagnostic_metadata={
                         "relationship_control_mode": control.mode.value,
                         "relationship_control_version": control.control_version,
-                        "held_reason": self._relationship_controls.HOLD_REASON,
+                        "held_reason": hold_reason,
                         "ai_generation_count": 0,
                     },
                 )
@@ -445,6 +459,12 @@ class TelegramInboundAdapter:
                 message_text=payload.message_text,
                 chat_history=chat_history,
                 correlation_id=correlation_id,
+                current_turn_visual_context=dict(
+                    payload.current_turn_visual_context or {}
+                ),
+                quality_correction_context=dict(
+                    payload.quality_correction_context or {}
+                ),
                 brain_context=ConversationBrainContext(
                     creator_profile_id=self._creator_profile_id,
                     customer_identifier=effective_engine_user_id,
@@ -634,7 +654,7 @@ class TelegramInboundAdapter:
             )
         if (
             not isinstance(payload.message_text, str)
-            or not payload.message_text.strip()
+            or (not payload.message_text.strip() and not payload.attachments)
         ):
             raise InvalidTelegramInboundError(
                 "message_text must be a non-empty string."

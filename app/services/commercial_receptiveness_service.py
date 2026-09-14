@@ -76,8 +76,14 @@ class CommercialReceptivenessService:
         ("SEND_OR_LINK_REQUEST", ACTIVE_OFFER_CONTINUATION_PATTERNS[1][1]),
         ("PRICE_REQUEST", ACTIVE_OFFER_CONTINUATION_PATTERNS[0][1]),
         ("DIRECT_CONTENT_INTENT", re.compile(
-            r"\b(?:show me (?:your|the|what)|want to see|let me see|"
-            r"what (?:content|pics|videos|sets) do you have|unlock something|"
+            r"\b(?:show me(?:\s+(?:your|the|what|something|more))?|"
+            r"want to see|let me see|can i see (?:more|something)|"
+            r"can you (?:send|show)(?: me)? (?:something|a pic|a photo)|"
+            r"do i get (?:a |something )?(?:special |private )?(?:pic|photo|image)|"
+            r"do you have (?:any |some)?(?:private |special )?(?:content|pics?|photos?|videos?)|"
+            r"what (?:private )?(?:content|pics|photos|videos|sets) do you have|"
+            r"what do you have available|unlock something|"
+            r"how much (?:is |for )?(?:a |the )?(?:pic|photo|video|set)|"
             r"i(?:'m| am) looking to buy something|"
             r"i(?:'m| am) ready for (?:the )?(?:finale|final (?:part|step)))\b",
             re.I)),
@@ -105,6 +111,10 @@ class CommercialReceptivenessService:
         r"|used\s+to|previously|last\s+(?:week|month|year)"
         r")\b",
         re.I,
+    )
+    PERSONAL_DESIRE_PATTERN = re.compile(
+        r"\b(?:i\s+want\s+you|i(?:'ll|\s+will)\s+take\s+you|"
+        r"you\s+want\s+me|make\s+love\s+to\s+me|fuck\s+me)\b", re.I,
     )
     TEMPORAL_DEFERMENT_PATTERNS = (
         ("ANOTHER_TIME", re.compile(r"\b(?:another|some\s+other)\s+time\b", re.I)),
@@ -229,10 +239,38 @@ class CommercialReceptivenessService:
         values = dict(context or {})
         flags = dict(readiness or {})
         message = str(values.get("latest_message") or "")
+        classifier = dict(values.get("classifier_result") or {})
         temporal = self.temporal_commercial_deferment(message)
         commercial_boundary = self.commercial_boundary_type(message)
         commercial_interest_type = self.commercial_interest_type(message)
-        direct = bool(self.direct_intent_detector(message))
+        raw_acceptance = commercial_interest_type == "PURCHASE_ACCEPTANCE"
+        referent_type = (
+            "ACTIVE_OFFER" if active_offer else
+            "RECENT_PAID_PRESENTATION" if values.get("recent_paid_presentation") else
+            "PURCHASE_INTENT" if values.get("active_purchase_intent") else
+            commercial_interest_type if commercial_interest_type in {
+                "DIRECT_CONTENT_INTENT", "OFFERING_AVAILABILITY_INQUIRY",
+                "PRICE_REQUEST", "SEND_OR_LINK_REQUEST",
+            } else "NONE"
+        )
+        referent_present = referent_type != "NONE"
+        acceptance_grounded = bool(raw_acceptance and referent_present)
+        if raw_acceptance and not acceptance_grounded:
+            commercial_interest_type = "NONE"
+        detector_direct = bool(self.direct_intent_detector(message))
+        personal_desire = bool(self.PERSONAL_DESIRE_PATTERN.search(message))
+        if (detector_direct and not personal_desire and not raw_acceptance
+                and not referent_present):
+            referent_present = True
+            referent_type = "DIRECT_BUYING_REQUEST"
+        direct = detector_direct
+        if raw_acceptance:
+            direct = acceptance_grounded
+        if personal_desire:
+            direct = False
+            commercial_interest_type = "NONE"
+        elif commercial_interest_type == "NONE" and not referent_present:
+            direct = False
         # The canonical receptiveness taxonomy owns current offering-
         # availability semantics.  Treating this category as direct prevents
         # the independent phrase matcher from becoming a second authority for
@@ -246,6 +284,37 @@ class CommercialReceptivenessService:
             if active_offer else None
         )
         direct = direct or active_offer_continuation is not None
+        # The primary classifier is authoritative when it explicitly rejects
+        # both buying and monetization intent. A broad phrase matcher (for
+        # example, "I want to ... you") must not convert sexual enthusiasm
+        # into a purchase request. Canonical price/content/unlock semantics or
+        # an existing commercial referent remain independently authoritative.
+        classifier_rejects_commerce = bool(
+            classifier.get("buying_intent") is False
+            and classifier.get("monetization_intent") is False
+            and classifier.get("purchase_language_present") is False
+        )
+        canonical_turn_commerce = bool(
+            commercial_interest_type in {
+                "OFFERING_AVAILABILITY_INQUIRY", "PURCHASE_ACCEPTANCE",
+                "SEND_OR_LINK_REQUEST", "PRICE_REQUEST", "DIRECT_CONTENT_INTENT",
+            }
+            or active_offer_continuation is not None
+            or active_offer
+            or values.get("recent_paid_presentation")
+            or values.get("active_purchase_intent")
+            or (
+                detector_direct
+                and re.search(
+                    r"\b(?:buy|purchase|pay|price|unlock|paid|content|photo|video|set|bundle|link)\b",
+                    message, re.I,
+                )
+            )
+        )
+        if classifier_rejects_commerce and not canonical_turn_commerce:
+            direct = False
+            referent_present = False
+            referent_type = "NONE"
         continuation = self.explicit_continuation_detected(message)
         deferred = dict(values.get("deferred_continuation") or {})
         deferred_ready = bool(
@@ -266,11 +335,14 @@ class CommercialReceptivenessService:
         # content. It only inherits direct continuation authority inside a
         # verified post-purchase buying window; deterministic direct/link/price
         # patterns remain authoritative everywhere.
-        direct = direct or (continuation and recent_purchase) or bool(
+        provider_direct = bool(not personal_desire and (
             flags.get("current_buying_intent") is True
             or flags.get("classifier_buying_intent") is True
             or flags.get("classifier_close_ready") is True
             or action == "PRESENT_OFFER"
+        ))
+        direct = direct or (continuation and recent_purchase) or bool(
+            provider_direct and referent_present
         )
         if temporal["deferredCommercialInterest"]:
             direct = False
@@ -378,6 +450,10 @@ class CommercialReceptivenessService:
             current_commercial_interest=bool(direct),
             future_commercial_reentry_allowed=True,
             temporal_commercial_qualifier=temporal["temporalCommercialQualifier"],
+            commercial_referent_present=referent_present,
+            commercial_referent_type=referent_type,
+            acceptance_grounded=acceptance_grounded,
+            nurture_bypassed=bool(direct),
         )
 
     @classmethod
@@ -442,9 +518,12 @@ class CommercialReceptivenessService:
                 result.get("resistanceEvidence") or ()
             )
         )
+        referent_present = bool(result.get("commercialReferentPresent"))
         direct = bool(
             result.get("freshDirectIntentDetected")
             or (
+                referent_present
+                and
                 result.get("commercialInterestType") != "COMMERCIAL_CURIOSITY"
                 and (
                     flags.get("current_buying_intent") is True

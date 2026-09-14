@@ -1261,6 +1261,27 @@ def test_sexuality_without_commercial_evidence_does_not_open_buying_window():
     ] is False
 
 
+def test_primary_classifier_negative_blocks_stu_style_false_offer():
+    result = evaluate(brain(
+        customer=profile(), commerce_signal=signal(), eligible=offering(),
+    ), {
+        "latest_message": "I want to squeeze you because you're so hot",
+        "classifier_result": {
+            "buying_intent": False, "monetization_intent": False,
+            "purchase_language_present": False, "sexual_engagement": True,
+            "explicit_without_buying_intent": True,
+        },
+        "sexual_engagement_only": True,
+        "sexual_engagement_count": 1,
+        "inbound_message_count": 7,
+    })
+    receptiveness=result.decision_metadata["commercialReceptiveness"]
+    assert receptiveness["freshDirectIntentDetected"] is False
+    assert receptiveness["commercialReferentType"] == "NONE"
+    assert result.decision is not CustomerSalesDecisionType.PRESENT_OFFER
+    assert result.sell_allowed is False
+
+
 def test_recent_purchase_no_novel_inventory_never_repeats_or_invents_offer():
     result = evaluate(brain(
         customer=profile(purchases=2, last_purchase=NOW - timedelta(hours=1)),

@@ -16,15 +16,42 @@ def test_active_session_continuation_phrase_is_detected_semantically():
 
 
 def evaluate(message, *, recent=False, cooldown=False, readiness=None,
-             active_offer=False):
+             active_offer=False, classifier=None):
     service = CommercialReceptivenessService(
         ConversationalSalesProgressionService().has_direct_purchase_intent
     )
     return service.evaluate(
-        context={"latest_message": message}, recent_purchase=recent,
+        context={"latest_message": message, "classifier_result": classifier or {}}, recent_purchase=recent,
         cooldown_active=cooldown, readiness=readiness,
         active_offer=active_offer,
     )
+
+
+def test_primary_classifier_blocks_sexual_desire_from_becoming_buying_intent():
+    result = evaluate(
+        "I want to squeeze you because you're so hot",
+        classifier={"buying_intent": False, "monetization_intent": False,
+                    "purchase_language_present": False,
+                    "sexual_engagement": True,
+                    "explicit_without_buying_intent": True},
+    )
+    assert result.fresh_direct_intent is False
+    assert result.commercial_referent_type == "NONE"
+    assert "FRESH_DIRECT_BUYING_INTENT" not in result.positive_evidence
+    assert result.state is not CommercialReceptivenessState.HOT
+
+
+@pytest.mark.parametrize("message", [
+    "what private content do you have?", "how much is that set?",
+    "how do I unlock it?", "I want to buy that set",
+])
+def test_authoritative_commercial_language_survives_classifier_negative(message):
+    result = evaluate(message, classifier={
+        "buying_intent": False, "monetization_intent": False,
+        "purchase_language_present": False,
+    })
+    assert result.fresh_direct_intent is True
+    assert result.commercial_referent_type != "NONE"
 
 
 def test_cold_turn_has_no_continuation_authority():

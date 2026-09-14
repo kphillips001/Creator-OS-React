@@ -73,12 +73,14 @@ def inbox_service(): return RelationshipsService(people_repository=PeopleRepo(),
 
 def test_inbox_summary_and_deterministic_attention_use_confirmed_timestamps():
  result=inbox_service().list(creator_profile_id=7,fanvue_account_id=8)
- assert result["summary"]=={"total":3,"needsAttention":2,"buyers":1,"prospects":2,"manual":1}
- assert next(row for row in result["items"] if row["telegramUserId"]==1)["needsAttention"] is True
+ assert result["summary"]=={"total":3,"needsAttention":1,"buyers":1,"prospects":2,"manual":1,
+                            "highValueProspects":0,"replyScheduled":0,"ignored":0}
+ assert next(row for row in result["items"] if row["telegramUserId"]==1)["needsAttention"] is False
  assert next(row for row in result["items"] if row["telegramUserId"]==2)["needsAttention"] is False
+ assert next(row for row in result["items"] if row["telegramUserId"]==3)["needsAttention"] is True
 
 @pytest.mark.parametrize("selected,expected",[
- ("NEEDS_ATTENTION",{1,3}),("BUYERS",{2}),("PROSPECTS",{1,3}),
+ ("NEEDS_ATTENTION",{3}),("BUYERS",{2}),("PROSPECTS",{1,3}),
  ("MANUAL",{1}),("ACTIVE_SESSION",{2}),("ACTIVE_INTENT",{2})])
 def test_inbox_filters_compose_with_canonical_projection(selected,expected):
  result=inbox_service().list(creator_profile_id=7,fanvue_account_id=8,filter=selected)
@@ -88,6 +90,39 @@ def test_search_sort_and_filter_compose():
  result=inbox_service().list(creator_profile_id=7,fanvue_account_id=8,
   search="alex",sort="LIFETIME_SPEND",filter="MANUAL")
  assert [row["telegramUserId"] for row in result["items"]]==[1]
+
+
+class IgnoredInboxRepo(InboxRepo):
+ def inbox_state(self,**kwargs):
+  state=super().inbox_state(**kwargs)
+  state[3]={**state[3],"communication_disposition":"IGNORED",
+            "operator_classification":"HIGH_VALUE_PROSPECT","market_tier":"HIGH"}
+  return state
+
+def ignored_inbox_service():
+ return RelationshipsService(people_repository=PeopleRepo(),messages_repository=IgnoredInboxRepo())
+
+def test_ignored_relationship_is_excluded_from_every_active_filter_and_counter():
+ service=ignored_inbox_service()
+ assert {row["telegramUserId"] for row in service.list(
+  creator_profile_id=7,fanvue_account_id=8)["items"]}=={1,2}
+ for selected in ("PROSPECTS","BUYERS","NEEDS_ATTENTION","MANUAL",
+                  "ACTIVE_SESSION","ACTIVE_INTENT","HIGH_VALUE_PROSPECT"):
+  assert all(not row["ignored"] for row in service.list(
+   creator_profile_id=7,fanvue_account_id=8,filter=selected)["items"])
+ summary=service.list(creator_profile_id=7,fanvue_account_id=8)["summary"]
+ assert summary["total"]==2 and summary["ignored"]==1
+ assert summary["prospects"]==1 and summary["needsAttention"]==0
+
+def test_ignored_filter_search_sort_and_pagination_are_scoped_to_ignored_only():
+ service=ignored_inbox_service()
+ result=service.list(creator_profile_id=7,fanvue_account_id=8,filter="IGNORED",
+                     search="maybe",sort="LATEST_ACTIVITY",limit=1)
+ assert [row["telegramUserId"] for row in result["items"]]==[3]
+ assert result["items"][0]["marketTier"]=="HIGH"
+ assert result["items"][0]["highValueProspect"] is True
+ assert service.list(creator_profile_id=7,fanvue_account_id=8,
+                     filter="IGNORED",search="alex")["items"]==[]
 
 
 def test_transcript_loads_latest_then_eventually_reaches_first_in_order():

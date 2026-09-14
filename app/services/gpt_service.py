@@ -3665,6 +3665,25 @@ BEHAVIOR CONTRACT:
         if chat_history is None:
             chat_history = []
         runtime_injection = dict(user_memory.get("runtime_injection") or {})
+        quality_correction = dict(
+            runtime_injection.get("quality_correction_context") or {}
+        )
+        quality_correction_instruction = ""
+        if quality_correction.get("required") is True:
+            reasons = ", ".join(
+                str(item)
+                for item in quality_correction.get("blockingReasons") or ()
+            )
+            quality_correction_instruction = f"""
+CORRECTIVE RESPONSE REQUIREMENT
+- The previous draft was rejected before delivery because it did not satisfy
+  the customer's current required turn obligations: {reasons or "required response obligations"}.
+- Generate a new replacement response that directly answers the customer's
+  current question and satisfies every required turn obligation.
+- Preserve Ava's persona, style, safety, relationship, and sales constraints.
+- Do not mention drafts, retries, quality gates, internal systems, or errors.
+- Stay concise and natural; do not add filler merely to satisfy this requirement.
+"""
         canonical_attention = dict(
             user_memory.get("customer_value_attention")
             or runtime_injection.get("customer_value_attention")
@@ -4950,15 +4969,10 @@ ABSOLUTE RULES:
 - Do NOT imply paid content is waiting.
 - Do NOT create a CTA.
 
-You must continue the conversation only.
-
-Correct behavior:
-- build tension
-- stay immersive
-- tease naturally
-- respond seductively
-- keep the fantasy alive
-- invite another reply
+Match or slightly underplay the customer's energy. Acknowledge safely without
+creating a new explicit fantasy, romantic premise, or engagement hook. A short
+statement, affectionate reaction, or natural ending is valid. Ordinary free chat
+must not become sustained explicit sexting.
 
 This is NOT a sales turn.
 """
@@ -4980,16 +4994,17 @@ manufactured intrigue, or forced teasing. Keep it simple and everyday.
             mode_override = """
 SYSTEM OVERRIDE:
 You are in FLIRTY MODE.
-Be playful, teasing, and engaging.
-Create curiosity and invite a response.
+Be warm and lightly playful when the current context supports it. Match energy by
+default. Teasing and questions are optional; do not create curiosity or a new
+premise merely to invite another response.
 """
 
         elif subscriber_engagement_mode == "tension":
             mode_override = """
 SYSTEM OVERRIDE:
 You are in TENSION MODE.
-Be controlled, slower, and more seductive.
-Use fewer words and increase intrigue.
+Be controlled and concise. Do not increase intrigue or sexual intensity unless
+the current inbound and authoritative context genuinely support escalation.
 """
 
         # 🔥 7F — SOFT TRANSITION TO SELLING
@@ -5005,10 +5020,9 @@ STRICT RULES:
 - Do NOT say buy, purchase, unlock, PPV, or offer.
 - Do NOT ask "do you want this?"
 - Do NOT directly ask for confirmation yet.
-- Build curiosity and tension.
-- Hint that there is something more personal or exclusive.
-- Make the user want to ask for it.
-- Keep the response short, teasing, and natural.
+- Preserve only the already-authorized commercial referent.
+- Do not invent a new romantic, sexual, or curiosity premise.
+- Keep the response short and natural; ending the turn is valid.
 
 STYLE EXAMPLES:
 - "I probably shouldn’t show you this one..."
@@ -5175,6 +5189,8 @@ AVA CONVERSATIONAL AVAILABILITY
 - If state is OVERRIDE_HOT_COMMERCIAL, faithfully execute the authoritative
   Commerce decision and do not insert a bedtime goodbye.
 
+{quality_correction_instruction}
+
 RELEVANT CONVERSATIONAL MEMORY
 {json.dumps(conversation_facts, indent=2, ensure_ascii=False) if conversation_facts else "NONE"}
 - Use these facts subtly only when relevant. Never mention memory systems.
@@ -5229,13 +5245,12 @@ SMOOTH INTIMACY ESCALATION
 {smooth_escalation_instruction}
 
 IMPORTANT:
-- escalation must feel gradual
-- emotional progression must feel earned
-- never abruptly jump into explicit intensity
-- preserve seductive pacing
-- preserve emotional realism
-- premium escalation should unfold naturally
-- avoid sudden intensity spikes
+- MATCH_ENERGY is the ordinary-chat default.
+- ESCALATE_ENERGY requires current-turn authority; prior flirt alone is insufficient.
+- Never imply a reciprocal relationship without explicit canonical relationship authority.
+- Never turn short acknowledgments or emoji into a new romantic or sexual premise.
+- Natural plateau, cooling, pause, and turn ending are valid outcomes.
+- Premium escalation rules apply only when premium authority is explicitly present.
 
 {persona_prompt}
 
@@ -5281,15 +5296,15 @@ ENGAGEMENT MODE SYSTEM
 - This should feel like normal conversation, not flirting.
 
 [FLIRTY MODE]
-- Playful, teasing, and engaging.
-- Light suggestiveness is okay, but do not go heavy.
-- Use playful curiosity or a small challenge only when it fits; do not manufacture reply-bait.
-- Keep it fun, interactive, and natural.
+- Warm and lightly playful when supported by the current turn.
+- Match energy rather than automatically raising it.
+- Light suggestiveness may acknowledge existing context, but must not begin a new arc.
+- A concise statement, reaction, or natural ending is valid.
 
 [TENSION MODE]
 - Controlled, slower, seductive, and intentional.
 - Use fewer words with more meaning.
-- Build anticipation and intrigue.
+- Preserve only already-authorized anticipation; do not manufacture intrigue.
 - Stay suggestive, not explicit.
 - Do not over-explain.
 
@@ -5315,13 +5330,12 @@ IF mode = casual:
 - Make it sound like Ava's normal everyday texting.
 
 IF mode = flirty:
-- Include at least one playful or teasing element.
-- Invite a response naturally.
+- Playfulness is optional, not mandatory.
+- Do not add a question, hook, tease, or new premise solely to obtain another reply.
 
 IF mode = tension:
 - Reduce word count.
-- Increase intrigue.
-- Make the tone controlled and intentional.
+- Keep the tone controlled and intentional without automatically escalating.
 
 IF soft_transition = True:
 - Do NOT sell.

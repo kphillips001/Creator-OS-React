@@ -332,6 +332,10 @@ def execute(
     engine_diagnostics=None,
     conversational_memory=None,
 ):
+    class NoopQualityWatch:
+        def observe(self, **_values):
+            return {}
+
     class EnabledSellingPermissions:
         def content_allowed(self): return True
         def session_allowed(self): return True
@@ -357,6 +361,7 @@ def execute(
         commerce_mode_service=commerce_mode or LiveCommerceMode(),
         relationship_mode_service=relationship_mode,
         global_selling_permissions_service=EnabledSellingPermissions(),
+        conversation_quality_watch_service=NoopQualityWatch(),
     )
     output = gateway.execute(ConversationGatewayInput(
         engine_user_id="4:-123", message_text=message_text,

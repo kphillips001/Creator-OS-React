@@ -6,6 +6,24 @@ from typing import Any
 
 
 @dataclass(frozen=True)
+class TelegramInboundAttachment:
+    attachment_id: str
+    telegram_message_id: int
+    telegram_chat_id: int
+    telegram_user_id: int
+    media_kind: str
+    telegram_media_id: str
+    mime_type: str | None = None
+    original_filename: str | None = None
+    reported_size_bytes: int | None = None
+    width: int | None = None
+    height: int | None = None
+    grouped_id: str | None = None
+    has_caption: bool = False
+    received_at: datetime | None = None
+
+
+@dataclass(frozen=True)
 class TelegramInboundPayload:
     telegram_user_id: int
     telegram_chat_id: int
@@ -18,6 +36,9 @@ class TelegramInboundPayload:
     reply_to_message_id: int | None = None
     received_at: datetime | None = None
     sleep_context: dict[str, Any] = field(default_factory=dict)
+    attachments: tuple[TelegramInboundAttachment, ...] = ()
+    current_turn_visual_context: dict[str, Any] = field(default_factory=dict)
+    quality_correction_context: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

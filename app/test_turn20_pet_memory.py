@@ -9,11 +9,11 @@ TURN_20 = "I've got a golden retriever named Charlie. He pretty much owns the ho
 
 
 @pytest.mark.parametrize("message, expected", (
-    (TURN_20, {"pet_name": "Charlie", "pet_breed": "golden retriever"}),
+    (TURN_20, {"pet_name": "Charlie", "pet_type": "dog", "pet_breed": "golden retriever"}),
     ("I have a dog named Charlie.", {"pet_name": "Charlie", "pet_type": "dog"}),
-    ("My dog Charlie is a golden retriever.", {"pet_name": "Charlie", "pet_breed": "golden retriever"}),
-    ("Charlie is my golden retriever.", {"pet_name": "Charlie", "pet_breed": "golden retriever"}),
-    ("I have a golden retriever. His name is Charlie.", {"pet_name": "Charlie", "pet_breed": "golden retriever"}),
+    ("My dog Charlie is a golden retriever.", {"pet_name": "Charlie", "pet_type": "dog", "pet_breed": "golden retriever"}),
+    ("Charlie is my golden retriever.", {"pet_name": "Charlie", "pet_type": "dog", "pet_breed": "golden retriever"}),
+    ("I have a golden retriever. His name is Charlie.", {"pet_name": "Charlie", "pet_type": "dog", "pet_breed": "golden retriever"}),
 ))
 def test_bounded_pet_extraction(message, expected):
     records = ConversationalMemoryService.extract_records(message)
@@ -84,7 +84,7 @@ def test_pet_corrections_supersede_prior_values():
 
     current = {record["key"]: record["value"] for record in state["records"]
                if record["status"] == "current" and record["category"] == "pet"}
-    assert current == {"pet_name": "Max", "pet_breed": "lab"}
+    assert current == {"pet_name": "Max", "pet_type": "dog", "pet_breed": "lab"}
     assert {(record["key"], record["value"]) for record in state["records"]
             if record["status"] == "superseded" and record["category"] == "pet"} >= {
         ("pet_name", "Charlie"), ("pet_breed", "golden retriever"),
@@ -119,7 +119,7 @@ def test_exact_turn20_learning_reports_two_persisted_facts_without_corruption():
     assert diagnostics["extractedThisTurn"] >= 2
     assert diagnostics["persistedThisTurn"] >= 2
     assert repository.state["pet"] == {
-        "name": "Charlie", "breed": "golden retriever",
+        "name": "Charlie", "type": "dog", "breed": "golden retriever",
     }
     assert repository.state["location"] == "Chicago"
     assert repository.state["timezone"] == "America/Chicago"

@@ -1,14 +1,21 @@
 """Telethon user-account transport for private plain-text messages."""
 
 import logging
+import asyncio
+import time
+import io
+from uuid import NAMESPACE_URL, uuid5
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from collections.abc import Awaitable, Callable
 from typing import Any
 
 from telethon import Button, events
+from telethon.tl import functions, types
 
 from app.models.telegram_inbound import TelegramInboundPayload
+from app.models.telegram_inbound import TelegramInboundAttachment
 from app.services.telegram_image_normalization_service import TelegramImageNormalizationService
 
 
@@ -106,6 +113,114 @@ class TelethonUserTransport:
             await self._client.disconnect()
         except Exception as error:
             self._log_error("disconnect", error)
+
+    async def show_typing_while(
+        self, *, chat_id: int, operation: Awaitable[None],
+        telegram_user_id: int | None = None,
+        correlation_id: str | None = None,
+    ) -> None:
+        """Publish and refresh native typing while an authoritative wait runs.
+
+        The first MTProto request is awaited, unlike Telethon's ``action``
+        context which schedules it in a background task. Typing remains
+        ephemeral, best-effort UX and grants no delivery authority.
+        """
+
+        if isinstance(chat_id, bool) or not isinstance(chat_id, int) or chat_id <= 0:
+            raise ValueError("chat_id must be a positive private-chat identifier")
+        safe_chat_id = self._safe_identifier(chat_id)
+        safe_user_id = self._safe_identifier(telegram_user_id)
+        started_at = datetime.now(timezone.utc)
+        started_monotonic = time.monotonic()
+        peer = None
+        refresh_task = None
+        published = False
+        try:
+            peer = await self._client.get_input_entity(chat_id)
+            peer_type = type(peer).__name__
+            self._logger.info(
+                "event=telegram_typing_request correlation_id=%s chat_id=%s "
+                "user_id=%s peer_type=%s request_started_at=%s status=started",
+                correlation_id or "unknown", safe_chat_id, safe_user_id,
+                peer_type, started_at.isoformat(),
+            )
+            await self._client(functions.messages.SetTypingRequest(
+                peer, types.SendMessageTypingAction(),
+            ))
+            published = True
+            completed_at = datetime.now(timezone.utc)
+            self._logger.info(
+                "event=telegram_typing_request correlation_id=%s chat_id=%s "
+                "user_id=%s peer_type=%s request_started_at=%s "
+                "request_completed_at=%s status=success",
+                correlation_id or "unknown", safe_chat_id, safe_user_id,
+                peer_type, started_at.isoformat(), completed_at.isoformat(),
+            )
+            refresh_task = asyncio.create_task(self._refresh_typing(peer))
+        except Exception as error:
+            self._logger.warning(
+                "event=telegram_typing_request correlation_id=%s chat_id=%s "
+                "user_id=%s peer_type=%s request_started_at=%s "
+                "request_completed_at=%s status=failure exception_category=%s",
+                correlation_id or "unknown", safe_chat_id, safe_user_id,
+                type(peer).__name__ if peer is not None else "unresolved",
+                started_at.isoformat(), datetime.now(timezone.utc).isoformat(),
+                type(error).__name__,
+            )
+        try:
+            await operation
+        finally:
+            if refresh_task is not None:
+                refresh_task.cancel()
+                try:
+                    await refresh_task
+                except asyncio.CancelledError:
+                    pass
+                except Exception as error:
+                    self._logger.warning(
+                        "event=telegram_typing_refresh correlation_id=%s chat_id=%s "
+                        "status=failure exception_category=%s",
+                        correlation_id or "unknown", safe_chat_id,
+                        type(error).__name__,
+                    )
+            cancelled_at = datetime.now(timezone.utc)
+            try:
+                if published and peer is not None:
+                    await self._client(functions.messages.SetTypingRequest(
+                        peer, types.SendMessageCancelAction(),
+                    ))
+                self._logger.info(
+                    "event=telegram_typing_complete correlation_id=%s chat_id=%s "
+                    "user_id=%s peer_type=%s status=%s active_duration_ms=%s "
+                    "cancellation_at=%s",
+                    correlation_id or "unknown", safe_chat_id, safe_user_id,
+                    type(peer).__name__ if peer is not None else "unresolved",
+                    "cancelled" if published else "not_published",
+                    round((time.monotonic() - started_monotonic) * 1000),
+                    cancelled_at.isoformat(),
+                )
+            except Exception as error:
+                self._logger.warning(
+                    "event=telegram_typing_complete correlation_id=%s chat_id=%s "
+                    "user_id=%s peer_type=%s status=cancel_failed "
+                    "active_duration_ms=%s cancellation_at=%s exception_category=%s",
+                    correlation_id or "unknown", safe_chat_id, safe_user_id,
+                    type(peer).__name__ if peer is not None else "unresolved",
+                    round((time.monotonic() - started_monotonic) * 1000),
+                    cancelled_at.isoformat(), type(error).__name__,
+                )
+
+    async def _refresh_typing(self, peer: Any, *, interval_seconds: float = 4.0) -> None:
+        while True:
+            await asyncio.sleep(interval_seconds)
+            await self._client(functions.messages.SetTypingRequest(
+                peer, types.SendMessageTypingAction(),
+            ))
+
+    @staticmethod
+    def _safe_identifier(value: int | None) -> str:
+        text = str(value or "unknown")
+        return text if len(text) <= 6 else f"{text[:4]}...{text[-4:]}"
 
     async def send_text(
         self, *, chat_id: int, message_text: str,
@@ -223,7 +338,7 @@ class TelethonUserTransport:
 
     @staticmethod
     async def normalize_event(event: Any) -> TelegramInboundPayload | None:
-        """Normalize one incoming private Telethon text event."""
+        """Normalize one incoming private text and/or supported media event."""
 
         if event is None:
             return None
@@ -231,8 +346,7 @@ class TelethonUserTransport:
             return None
 
         message_text = getattr(event, "raw_text", None)
-        if not isinstance(message_text, str) or not message_text.strip():
-            return None
+        message_text = message_text.strip() if isinstance(message_text, str) else ""
 
         sender = await event.get_sender()
         if sender is None or getattr(sender, "bot", False):
@@ -247,10 +361,18 @@ class TelethonUserTransport:
         ):
             return None
 
+        attachment = TelethonUserTransport._attachment_from_event(
+            event, telegram_user_id=telegram_user_id,
+            telegram_chat_id=telegram_chat_id, message_id=message_id,
+            caption=message_text,
+        )
+        if not message_text and attachment is None:
+            return None
+
         return TelegramInboundPayload(
             telegram_user_id=telegram_user_id,
             telegram_chat_id=telegram_chat_id,
-            message_text=message_text.strip(),
+            message_text=message_text,
             message_id=message_id,
             telegram_username=(str(getattr(sender, "username", "") or "").strip() or None),
             telegram_display_name=(" ".join(filter(None, (
@@ -263,7 +385,68 @@ class TelethonUserTransport:
                 else None
             ),
             received_at=getattr(event, "date", None),
+            attachments=(attachment,) if attachment is not None else (),
         )
+
+    @staticmethod
+    def _attachment_from_event(event, *, telegram_user_id, telegram_chat_id,
+                               message_id, caption):
+        message = getattr(event, "message", None) or event
+        photo = getattr(event, "photo", None) or getattr(message, "photo", None)
+        document = getattr(event, "document", None) or getattr(message, "document", None)
+        media = photo or document
+        if media is None:
+            return None
+        kind = "PHOTO" if photo is not None else "IMAGE_DOCUMENT"
+        mime = getattr(document, "mime_type", None)
+        attributes = list(getattr(document, "attributes", None) or ())
+        filename = next((getattr(item, "file_name", None) for item in attributes
+                         if getattr(item, "file_name", None)), None)
+        width = getattr(media, "w", None)
+        height = getattr(media, "h", None)
+        if photo is not None:
+            sizes = list(getattr(photo, "sizes", None) or ())
+            width = max((getattr(item, "w", 0) or 0 for item in sizes), default=0) or None
+            height = max((getattr(item, "h", 0) or 0 for item in sizes), default=0) or None
+        grouped = getattr(message, "grouped_id", None) or getattr(event, "grouped_id", None)
+        media_id = getattr(media, "id", None)
+        if not isinstance(media_id, int):
+            return None
+        stable = uuid5(NAMESPACE_URL, f"telegram-media:{telegram_chat_id}:{message_id}:{media_id}")
+        return TelegramInboundAttachment(
+            attachment_id=str(stable), telegram_message_id=message_id,
+            telegram_chat_id=telegram_chat_id, telegram_user_id=telegram_user_id,
+            media_kind=kind, telegram_media_id=str(media_id),
+            mime_type=str(mime) if mime else ("image/jpeg" if photo is not None else None),
+            original_filename=str(filename) if filename else None,
+            reported_size_bytes=getattr(document, "size", None),
+            width=width, height=height,
+            grouped_id=str(grouped) if grouped is not None else None,
+            has_caption=bool(caption), received_at=getattr(event, "date", None),
+        )
+
+    async def download_inbound_attachment(self, attachment, *, maximum_bytes, timeout_seconds):
+        class BoundedBuffer(io.BytesIO):
+            def write(self, value):
+                if self.tell() + len(value) > maximum_bytes:
+                    raise ValueError("actual media size exceeds configured limit")
+                return super().write(value)
+        message = await self._client.get_messages(
+            attachment.telegram_chat_id, ids=attachment.telegram_message_id,
+        )
+        if message is None:
+            raise FileNotFoundError("originating Telegram media is unavailable")
+        target = BoundedBuffer()
+        result = await asyncio.wait_for(
+            self._client.download_media(message, file=target),
+            timeout=timeout_seconds,
+        )
+        data = target.getvalue()
+        if not data and isinstance(result, (bytes, bytearray)):
+            data = bytes(result)
+        if not data:
+            raise FileNotFoundError("originating Telegram media returned no bytes")
+        return data
 
     def _log_error(
         self,

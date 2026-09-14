@@ -35,13 +35,36 @@ class ConversationQualityWatchService:
             reasons.append("NUMERIC_PAID_PRICE_IN_AVA_PROSE")
         if dict(summary.get("offeringCopySafety") or {}).get("internalOfferingMetadataExposedToGeneration") is True:
             reasons.append("INTERNAL_OFFERING_METADATA_EXPOSED")
+        receptiveness = dict(
+            diagnostics.get("commercial_receptiveness")
+            or diagnostics.get("commercialReceptiveness") or {}
+        )
+        recommendation = dict(
+            diagnostics.get("recommendation_diagnostics")
+            or diagnostics.get("recommendationDiagnostics") or {}
+        )
+        direct = bool(receptiveness.get("freshDirectIntentDetected"))
+        eligible = bool(
+            recommendation.get("selectedOfferingId")
+            or recommendation.get("inventoryEligible") is True
+        )
+        decision = str(
+            diagnostics.get("customer_sales_decision")
+            or diagnostics.get("customerSalesDecision") or ""
+        ).upper()
+        blocking = bool(
+            diagnostics.get("outbound_suppression")
+            or diagnostics.get("blocked") is True
+        )
+        if direct and eligible and not blocking and decision != "PRESENT_OFFER":
+            reasons.append("MISSED_COMMERCIAL_OPPORTUNITY")
         return list(dict.fromkeys(reasons))
 
     def observe(self, *, response_text, customer_message, diagnostics,
                 creator_profile_id=None, fanvue_account_id=None,
                 telegram_user_id=None, telegram_chat_id=None,
                 correlation_id=None, buyer_context=None, username=None,
-                recent_history=()):
+                recent_history=(), disposition="OBSERVATIONAL"):
         reasons = self.material_reasons(response_text, diagnostics)
         result = {"conversationQualityWatchTriggered": bool(reasons),
                   "conversationQualitySeverity": None,
@@ -77,7 +100,9 @@ class ConversationQualityWatchService:
             "Context:\n" + "\n".join(context_lines) + "\n\n"
             if context_lines else ""
         )
+        blocked_before_delivery = disposition == "BLOCKED_BEFORE_DELIVERY"
         text = ("⚠️ Ava Conversation Review\n\n"
+                f"Disposition: {disposition}\n"
                 f"Severity: {severity}\nReason: {reason}\n\nCustomer: {customer}\n"
                 f"Mapped: {'YES' if fanvue_account_id else 'NO'}\n"
                 f"Buyer Stage: {buyer.get('buyerStage') or 'UNKNOWN'}\n"
@@ -87,7 +112,9 @@ class ConversationQualityWatchService:
                 f"Customer:\n\"{str(customer_message or '')[:300]}\"\n\n"
                 f"Ava:\n\"{str(response_text or '')[:300]}\"\n\n"
                 f"Sales Brain:\n{decision.get('decision') or 'UNKNOWN'}\n\n"
-                "Conversation continued normally.\nReview when convenient.")
+                + ("Response was blocked before customer delivery."
+                   if blocked_before_delivery
+                   else "Conversation continued normally.\nReview when convenient."))
         operation = self.alerts.authorize_and_attempt(
             text=text, notification_type="AVA_CONVERSATION_REVIEW",
             correlation_id=f"quality:{digest}", context={

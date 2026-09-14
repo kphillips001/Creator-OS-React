@@ -6,6 +6,7 @@ from unittest.mock import Mock
 from uuid import UUID
 
 from app.models.telegram_inbound import TelegramInboundResult
+from app.models.ordinary_chat_reply_operation import OrdinaryChatReplyState
 from app.services.ordinary_chat_reply_service import (
     OrdinaryChatReplyService,
     durable_plain_data,
@@ -65,9 +66,9 @@ def test_blocked_empty_generation_is_terminal_suppression_with_reason():
     ] == "PAID_PRESENTATION_UNMAPPED_EXPLICIT_PRICE"
 
 
-def test_empty_unblocked_result_is_generation_failure_not_send_ready_or_suppression():
+def test_empty_unblocked_result_uses_bounded_sendable_fallback():
     repository = Mock()
-    repository.fail_empty_generation.return_value = "retryable"
+    repository.store_generated.return_value = "generated"
     service = OrdinaryChatReplyService(repository=repository, worker_id="worker")
 
     stored = service.generated(
@@ -75,12 +76,11 @@ def test_empty_unblocked_result_is_generation_failure_not_send_ready_or_suppress
         inbound_result(text="", blocked=False),
     )
 
-    assert stored == "retryable"
-    repository.fail_empty_generation.assert_called_once_with(
-        "operation", owner="worker",
-        reason="EmptyOrdinaryReply: unblocked generation produced no text",
-    )
-    repository.store_generated.assert_not_called()
+    assert stored == "generated"
+    repository.fail_empty_generation.assert_not_called()
+    assert repository.store_generated.call_args.kwargs["response_text"]
+    assert repository.store_generated.call_args.kwargs["response_payload"][
+        "diagnostic_metadata"]["generation_fallback"]["reason"] == "EMPTY_GENERATION"
     repository.store_suppressed_generation.assert_not_called()
 
 
@@ -212,3 +212,48 @@ def test_suppressed_generation_accepts_nested_immutable_diagnostics():
     assert payload["diagnostic_metadata"]["commercial_summary"] == {
         "outboundSuppression": {"suppressed": True},
     }
+
+
+def test_image_boundary_is_recorded_only_after_confirmed_delivery():
+    repository=Mock();boundary=Mock()
+    confirmed=SimpleNamespace(
+        state=OrdinaryChatReplyState.SENT_CONFIRMED,
+        sent_confirmed_at=datetime.now(timezone.utc),
+        response_payload={'diagnostic_metadata':{'current_turn_visual_context':{
+            'operation_id':'00000000-0000-0000-0000-000000000001',
+            'creator_profile_id':1,'fanvue_account_id':2,'telegram_user_id':3,
+            'response_policy':'POLITE_EXPLICIT_BOUNDARY'}}})
+    repository.confirm_sent.return_value=confirmed
+    service=OrdinaryChatReplyService(repository=repository,worker_id='worker',
+        image_boundary_repository=boundary)
+    assert service.confirmed(SimpleNamespace(operation_id='reply'),9001) is confirmed
+    boundary.record_boundary_delivered.assert_called_once_with(
+        operation_id='00000000-0000-0000-0000-000000000001',
+        creator_profile_id=1,fanvue_account_id=2,telegram_user_id=3,
+        policy='POLITE_EXPLICIT_BOUNDARY',delivered_at=confirmed.sent_confirmed_at)
+
+
+def test_unconfirmed_media_reply_never_records_boundary():
+    repository=Mock();boundary=Mock()
+    service=OrdinaryChatReplyService(repository=repository,worker_id='worker',
+        image_boundary_repository=boundary)
+    service.generation_failed(SimpleNamespace(operation_id='reply'),TimeoutError())
+    boundary.record_boundary_delivered.assert_not_called()
+
+
+def test_visual_attestation_survives_durable_response_serialization_without_raw_observations():
+    repository=Mock();repository.store_generated.return_value="generated"
+    service=OrdinaryChatReplyService(repository=repository,worker_id="worker")
+    result=inbound_result(text="Nice smile.")
+    result.diagnostic_metadata["visual_analysis"]={
+        "status":"READY","visual_attestation":{
+            "structured_schema_valid":True,"attachment_correlation_valid":True,
+            "provider_status_completed":True,"person_visible":True,
+            "smiling_visible":True,"person_count_bucket":"ONE",
+            "self_presentation_authority":True,"customer_presented_self_image":True,
+            "visual_response_policy":"SELFIE_COMPLIMENT_ELIGIBLE",
+            "visual_evidence_class":"EPHEMERAL_VISUAL_CONTEXT"}}
+    service.generated(SimpleNamespace(operation_id="operation"),result)
+    payload=repository.store_generated.call_args.kwargs["response_payload"]
+    assert payload["diagnostic_metadata"]["visual_analysis"]["visual_attestation"]["person_visible"] is True
+    assert "observations" not in str(payload).lower()

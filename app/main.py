@@ -33,6 +33,8 @@ from app.repositories.ppv_broadcast_repository import (
     log_broadcast_send,
     get_recent_broadcasts_for_user,
 )
+from app import database
+from app.testing.postgres_safety import require_isolated_test_database_url
 
 logger = get_logger()
 
@@ -92,6 +94,7 @@ decision_engine = LazyDecisionEngine()
 
 
 def start_app():
+    require_isolated_test_database_url(database.DATABASE_URL, None)
     logger.info("Fanvue Chatbot is starting...")
     logger.info(f"Default persona: {settings.DEFAULT_PERSONA}")
 

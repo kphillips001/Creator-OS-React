@@ -142,6 +142,10 @@ class ConversationGateway:
         "legacy_offer_requested",
         "commerce_offer_authorized",
         "final_offer_authorized",
+        "current_turn_visual_context",
+        "visual_analysis",
+        "visual_provider_call_count",
+        "visual_provider_usage",
     )
 
     def __init__(
@@ -172,6 +176,8 @@ class ConversationGateway:
         conversation_quality_watch_service: Any | None = None,
         global_selling_permissions_service: Any | None = None,
         customer_effective_permissions_service: Any | None = None,
+        relationship_fact_service: Any | None = None,
+        visual_decision_engine: Any | None = None,
     ) -> None:
         if decision_engine is None:
             raise ValueError("decision_engine is required")
@@ -226,6 +232,11 @@ class ConversationGateway:
             global_selling_permissions_service = GlobalSellingPermissionsService()
         self._global_selling_permissions = global_selling_permissions_service
         self._customer_effective_permissions = customer_effective_permissions_service
+        if relationship_fact_service is None:
+            from app.services.canonical_relationship_fact_service import CanonicalRelationshipFactService
+            relationship_fact_service = CanonicalRelationshipFactService()
+        self._relationship_facts = relationship_fact_service
+        self._visual_decision_engine = visual_decision_engine
         if photoshoot_conversation_context_builder is None:
             from app.services.photoshoot_session_conversation_context_builder import (
                 PhotoshootSessionConversationContextBuilder,
@@ -271,6 +282,18 @@ class ConversationGateway:
                 correlation_id=gateway_input.correlation_id,
                 runtime_decision=runtime_decision,
             )
+
+        context = gateway_input.brain_context
+        if (context is not None and context.creator_profile_id is not None
+                and context.fanvue_account_id is not None and context.fanvue_user_id is not None):
+            relationship_projection = self._relationship_facts.retrieve(
+                creator_profile_id=int(context.creator_profile_id),
+                fanvue_account_id=int(context.fanvue_account_id),
+                customer_id=int(context.fanvue_user_id),message=gateway_input.message_text)
+            memory=dict(context.conversational_memory or {})
+            memory['canonical_relationship_context']=relationship_projection
+            gateway_input=replace(gateway_input,brain_context=replace(
+                context,conversational_memory=memory))
 
         if self._global_automation_safety_service is not None:
             global_result = self._global_automation_safety_service.check_global_safety()
@@ -432,6 +455,22 @@ class ConversationGateway:
                 gateway_input.correlation_id,
             )
         engine_runtime_injection = dict(commerce_runtime_injection)
+        if gateway_input.current_turn_visual_context:
+            engine_runtime_injection["current_turn_visual_context"] = dict(
+                gateway_input.current_turn_visual_context
+            )
+        if gateway_input.quality_correction_context:
+            engine_runtime_injection["quality_correction_context"] = dict(
+                gateway_input.quality_correction_context
+            )
+        visual_policy=str(gateway_input.current_turn_visual_context.get(
+            'response_policy') or '')
+        visual_safety_override=visual_policy in {
+            'POLITE_EXPLICIT_BOUNDARY','FIRM_EXPLICIT_BOUNDARY',
+            'AMBIGUOUS_SAFE_RESPONSE','UNCLASSIFIABLE_SAFE_RESPONSE'}
+        if visual_safety_override:
+            engine_runtime_injection['commerce_execution_policy']=(
+                CommerceExecutionPolicy.DISABLED_FOR_TURN.value)
         brain_context = self._brain_context(gateway_input)
         if customer_sales_decision is not None:
             from app.services.customer_sales_brain_service import CustomerSalesBrainService
@@ -625,6 +664,8 @@ class ConversationGateway:
         )
         if commerce_mode is not CommerceMode.LIVE and not controlled_test_active:
             commerce_offer_allowed = False
+        if visual_safety_override:
+            commerce_offer_allowed = False
         offer_authorized = (
             not blocked and commerce_offer_allowed
             if customer_sales_decision is not None
@@ -659,6 +700,15 @@ class ConversationGateway:
                 error_code = "decision_engine_blocked"
 
         diagnostics = self._diagnostics(engine_result)
+        if "current_turn_visual_context" in diagnostics:
+            from app.services.customer_visual_evidence_policy import (
+                CustomerVisualEvidencePolicy,
+            )
+            diagnostics["current_turn_visual_context"] = (
+                CustomerVisualEvidencePolicy.minimum_persisted_result(
+                    diagnostics["current_turn_visual_context"]
+                )
+            )
         if persona_projection is not None:
             diagnostics["avaPersonaRuntime"] = persona_projection.diagnostics()
         diagnostics["time_context"] = dict(engine_runtime_injection["time_context"])
@@ -1450,7 +1500,22 @@ class ConversationGateway:
                 diagnostic_metadata=diagnostics,
             )
 
+        quality_disposition = "OBSERVATIONAL"
         if not blocked and response_text:
+            from types import SimpleNamespace
+            from app.services.ordinary_reply_delivery_quality_gate import OrdinaryReplyDeliveryQualityGate
+            quality_gate = OrdinaryReplyDeliveryQualityGate().evaluate(
+                SimpleNamespace(
+                    diagnostic_metadata=diagnostics,
+                    response_text=response_text,
+                )
+            )
+            diagnostics["delivery_quality_gate"] = {
+                "authority": "OrdinaryReplyDeliveryQualityGate",
+                "disposition": quality_gate.disposition,
+                "blockingReasons": list(quality_gate.reasons),
+            }
+            quality_disposition = quality_gate.disposition
             try:
                 context = self._brain_context(gateway_input)
                 diagnostics.update(self._conversation_quality_watch_service.observe(
@@ -1464,6 +1529,7 @@ class ConversationGateway:
                     correlation_id=gateway_input.correlation_id,
                     buyer_context=diagnostics.get("customer_value_attention") or {},
                     recent_history=gateway_input.chat_history,
+                    disposition=quality_disposition,
                 ))
             except Exception:
                 logger.exception("[QUALITY WATCH ERROR] observational alert failed")
@@ -1476,6 +1542,11 @@ class ConversationGateway:
                     "conversationQualityAlertConfirmed": False,
                     "conversationQualityAlertFailed": True,
                 })
+            if not quality_gate.allowed:
+                diagnostics["conversationQualityDisposition"] = "BLOCKED_BEFORE_DELIVERY"
+                response_text = ""
+                blocked = True
+                error_code = "quality_blocked_before_delivery"
 
         self._record_live_turn(
             has_offer=offer_authorized,
@@ -2315,6 +2386,9 @@ class ConversationGateway:
                 and str(item.get("role") or "").lower() == "user"
                 and str(item.get("content") or "").strip()
             )[-3:],
+            "canonical_relationship_context": dict(
+                context.conversational_memory.get("canonical_relationship_context") or {}
+            ),
         }
         assistant_turns = tuple(
             str(item.get("content") or "")
@@ -3258,7 +3332,13 @@ class ConversationGateway:
         self, user_id: str, message: str, *, chat_history,
         runtime_injection: dict[str, Any],
     ):
-        process = self._decision_engine.process_message
+        engine = (
+            self._visual_decision_engine
+            if runtime_injection.get("current_turn_visual_context")
+            and self._visual_decision_engine is not None
+            else self._decision_engine
+        )
+        process = engine.process_message
         parameters = inspect.signature(process).parameters
         if "runtime_injection" in parameters:
             return process(
@@ -3435,7 +3515,8 @@ class ConversationGateway:
             return "invalid_engine_user_id"
         if not isinstance(gateway_input.message_text, str):
             return "invalid_message_text"
-        if not gateway_input.message_text.strip():
+        if (not gateway_input.message_text.strip()
+                and not gateway_input.current_turn_visual_context):
             return "invalid_message_text"
         if not isinstance(gateway_input.chat_history, list):
             return "invalid_chat_history"

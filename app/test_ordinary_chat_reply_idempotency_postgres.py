@@ -196,7 +196,7 @@ def test_definitely_not_sent_retries_same_generated_reply_once():
     assert adapter.calls==1 and first.calls==retry.calls==1
 
 
-def test_generation_failure_is_bounded_and_never_sends():
+def test_generation_exception_fallback_send_failure_is_bounded():
     item=payload(); sends=0
     for attempt in range(5):
         replies=service(f"generation-{attempt}")
@@ -205,10 +205,10 @@ def test_generation_failure_is_bounded_and_never_sends():
         with connection_factory() as c:
             c.execute("UPDATE ordinary_chat_reply_operations SET next_retry_at=NOW()-INTERVAL '1 second'")
     with connection_factory() as c: row=c.execute("SELECT state,generation_attempt_count,send_attempt_count FROM ordinary_chat_reply_operations").fetchone()
-    assert row=={"state":"TERMINAL_FAILED","generation_attempt_count":5,"send_attempt_count":0}
+    assert row=={"state":"TERMINAL_FAILED","generation_attempt_count":1,"send_attempt_count":5}
 
 
-def test_generation_provider_recovers_before_max_with_one_eventual_reply():
+def test_generated_exception_fallback_recovers_with_one_eventual_reply():
     item=payload(); first=Delivery([])
     asyncio.run(runtime(Adapter(result(item),error=RuntimeError("temporary provider failure")),
                         first,service("generation-fail")).handle_payload(item))
@@ -217,26 +217,26 @@ def test_generation_provider_recovers_before_max_with_one_eventual_reply():
     recovered_adapter=Adapter(result(item)); delivery=Delivery([execution(9060)])
     asyncio.run(runtime(recovered_adapter,delivery,service("generation-recovered")).handle_payload(item))
     with connection_factory() as c: row=c.execute("SELECT state,generation_attempt_count,send_attempt_count FROM ordinary_chat_reply_operations").fetchone()
-    assert row=={"state":"SENT_CONFIRMED","generation_attempt_count":2,"send_attempt_count":1}
-    assert recovered_adapter.calls==delivery.calls==1
+    assert row=={"state":"SENT_CONFIRMED","generation_attempt_count":1,"send_attempt_count":2}
+    assert recovered_adapter.calls==0 and delivery.calls==1
 
 
 def test_empty_unsent_generation_can_be_safely_requeued_once():
     item=payload(); replies=service("empty-recovery"); operation,_=replies.begin(item)
     empty=replace(result(item), response_text="", delivery_payload={})
     stored=replies.generated(replies.claim_generation(operation),empty)
-    assert stored is not None and stored.state.value=="RETRYABLE"
+    assert stored is not None and stored.state.value=="GENERATED"
     recovered=replies.requeue_empty_generation(
         stored, reason="generation_runtime_encoding_failure",
     )
-    # Empty unblocked output now enters RETRYABLE atomically at the generation
-    # boundary; the legacy recovery call remains a safe no-op.
+    # Empty unblocked output receives the Session 1 bounded fallback; the
+    # legacy recovery call remains a safe no-op.
     assert recovered is None
     delivery=Delivery([execution(9061)])
     asyncio.run(runtime(Adapter(result(item)),delivery,service("empty-retry")).handle_payload(item))
     with connection_factory() as c:
         row=c.execute("SELECT state,generation_attempt_count,send_attempt_count FROM ordinary_chat_reply_operations").fetchone()
-    assert row=={"state":"SENT_CONFIRMED","generation_attempt_count":2,"send_attempt_count":1}
+    assert row=={"state":"SENT_CONFIRMED","generation_attempt_count":1,"send_attempt_count":1}
 
 
 def test_empty_engine_exception_suppression_can_be_guardedly_retried_once():
@@ -244,22 +244,20 @@ def test_empty_engine_exception_suppression_can_be_guardedly_retried_once():
     blocked=replace(result(item), response_text="", delivery_payload={}, blocked=True,
                     error_code="decision_engine_exception")
     stored=replies.generated(replies.claim_generation(operation), blocked)
-    assert stored.state.value=="SUPPRESSED"
+    assert stored.state.value=="GENERATED"
     recovered=replies.requeue_suppressed_engine_exception(
         stored, reason="repaired_customer_value_durable_memory_boundary",
     )
-    assert recovered is not None and recovered.state.value=="RETRYABLE"
-    retry_payload=replies.retry_payload(recovered)
-    assert retry_payload.message_id==item.message_id
-    assert retry_payload.message_text==item.message_text
+    assert recovered is None
+    retry_payload=replies.retry_payload(stored)
     assert replies.requeue_suppressed_engine_exception(
-        recovered, reason="duplicate_release",
+        stored, reason="duplicate_release",
     ) is None
     delivery=Delivery([execution(9062)])
     asyncio.run(runtime(Adapter(result(item)),delivery,service("engine-exception-retry")).handle_payload(retry_payload))
     with connection_factory() as c:
         row=c.execute("SELECT state,generation_attempt_count,send_attempt_count FROM ordinary_chat_reply_operations").fetchone()
-    assert row=={"state":"SENT_CONFIRMED","generation_attempt_count":2,"send_attempt_count":1}
+    assert row=={"state":"SENT_CONFIRMED","generation_attempt_count":1,"send_attempt_count":1}
 
 
 def test_blocked_empty_generation_is_terminal_suppressed_and_never_replayed():

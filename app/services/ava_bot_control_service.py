@@ -181,10 +181,10 @@ class AvaBotControlService:
 
     @staticmethod
     def _default_worker_readiness(creator_profile_id):
-        from app.services.operations_workspace_service import OperationsWorkspaceService
+        from app.services.telegram_worker_readiness_service import TelegramWorkerReadinessService
         try:
-            workers = OperationsWorkspaceService().workers(
-                account_id=int(creator_profile_id))
+            return TelegramWorkerReadinessService().read(
+                creator_profile_id=creator_profile_id)
         except Exception as error:
             logger.warning(
                 "event=ava_bot_worker_readiness_unavailable error=%s",
@@ -194,14 +194,6 @@ class AvaBotControlService:
                 "ready": False,
                 "reason": "Worker readiness could not be verified.",
             }
-        item = next((entry for entry in workers.get("items", [])
-                     if entry.get("name") == "Telegram"), None)
-        ready = bool(item and item.get("heartbeatStatus") in {"healthy", "idle"}
-                     and item.get("processRunning") is not False
-                     and item.get("authorized") is True
-                     and item.get("databaseHealthy") is not False
-                     and item.get("connectionState") == "CONNECTED")
-        return {"ready": ready, "reason": None if ready else "Telegram worker is absent or unhealthy."}
 
     @staticmethod
     def _default_transport_readiness():

@@ -47,10 +47,12 @@ class ConversationalMemoryService:
         superseded_before = sum(
             record.get("status") == "superseded" for record in state["records"]
         )
+        extraction_diagnostics = {}
         records = self.extract_records(
             message_text, observed_at=at, customer_timezone=state.get("timezone"),
             active_records=[record for record in state["records"]
                             if record.get("status") == "current"],
+            diagnostics=extraction_diagnostics,
         )
         disclosure = self.classify_customer_self_disclosure(message_text)
         invalid_capture_rejected = self._invalid_preference_capture_rejected(
@@ -79,6 +81,7 @@ class ConversationalMemoryService:
             } if location_record else None),
             "eventsExtracted": [record.get("value") for record in records
                                 if record.get("category") == "event"],
+            "validationRejected": extraction_diagnostics.get("validationRejected", []),
             "eventPersistence": self._event_persistence_diagnostic(
                 message_text, records,
             ),
@@ -113,15 +116,17 @@ class ConversationalMemoryService:
 
     @classmethod
     def extract_records(cls, text, *, observed_at=None, customer_timezone=None,
-                        active_records=()):
+                        active_records=(), diagnostics=None):
         at = observed_at or datetime.now(timezone.utc)
         message = str(text or "").strip()
         normalized = message.replace("’", "'")
         normalized = cls._normalize_apostrophes(normalized)
         lowered = normalized.lower()
+        interest_text = cls._without_relationship_affection(normalized)
+        interest_lowered = interest_text.lower()
         records = []
 
-        disclosure = cls.classify_customer_self_disclosure(normalized)
+        disclosure = cls.classify_customer_self_disclosure(interest_text)
         if (disclosure["detected"]
                 and disclosure["persistenceDecision"] == "PERSIST"):
             for item in disclosure["memoryCandidates"]:
@@ -198,15 +203,18 @@ class ConversationalMemoryService:
                 records.append(cls._record("routine", f"walk_{name.lower()}",
                                            f"walks {name}", message, at))
 
+        music_records = cls._extract_music_records(interest_text, message, at)
+        records.extend(music_records)
+
         preference_domain = None
-        preference = re.search(r"(?<!what )(?<!things )(?<!stuff )\b(?:i(?:'m| am)\s+(?:mostly\s+)?into|i\s+(?:love|like|enjoy|prefer))\s+"
-                               r"(.+?)(?=\.|!|\?|\banyway\b|$)", lowered)
+        preference = re.search(r"(?<!what )(?<!things )(?<!stuff )\b(?:i(?:'m| am)\s+(?:mostly\s+)?into|i\s+(?:really\s+love|love|like|enjoy|prefer))\s+"
+                               r"(.+?)(?=\.|!|\?|\banyway\b|$)", interest_lowered)
         if preference is None:
             preference = re.search(r"\bi(?:'m| am)\s+more of (?:a|an)\s+"
-                                   r"(.+?)(?=\s+person\b|[.!?]|$)", lowered)
+                                   r"(.+?)(?=\s+person\b|[.!?]|$)", interest_lowered)
             if preference is not None:
                 preference_domain = "leisure_activity"
-        if preference and not any(
+        if preference and not music_records and not any(
             record.get("category") == "preference"
             and record.get("source") == "customer_self_disclosure"
             for record in records
@@ -226,18 +234,6 @@ class ConversationalMemoryService:
                 records.append(cls._record(
                     "preference", cls._slug(value), value, message, at, .9, metadata,
                 ))
-        listening = re.search(r"\b(?:i(?:'ve| have)\s+been|been)\s+listening to\s+(?:a lot of\s+)?"
-                              r"(.+?)(?=\s+lately\b|[.!?]|$)", normalized, re.I)
-        if listening:
-            artist = listening.group(1).strip(" ,")
-            records.append(cls._record("preference", "music_artist_" + cls._slug(artist),
-                artist, message, at, .92, {"domain": "music", "kind": "artist"}))
-            # Co-occurring preferences in the same customer statement inherit
-            # the subject domain without encoding a particular genre or artist.
-            for record in records:
-                if record.get("category") == "preference":
-                    record.setdefault("metadata", {}).setdefault("domain", "music")
-
         event = re.search(r"\b(?:i(?:'m| am)\s+)?(?:actually\s+)?(?:taking|going with|bringing)\s+"
                           r"(.+?)\s+(?:to|for)\s+(.+?)\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b",
                           normalized, re.I)
@@ -268,7 +264,10 @@ class ConversationalMemoryService:
                     in preference_values):
                 continue
             unique.setdefault((record.get("category"), record.get("key")), record)
-        return list(unique.values())
+        valid, rejected = cls._validate_extracted_records(list(unique.values()))
+        if diagnostics is not None:
+            diagnostics["validationRejected"] = rejected
+        return valid
 
     @classmethod
     def classify_customer_self_disclosure(cls, text):
@@ -298,7 +297,7 @@ class ConversationalMemoryService:
             re.search(r"\bi(?:'m| am)\s+(?:kinda |kind of |really )?(?:an? )?outdoors person\b", lowered)
             or re.search(r"\bi(?:'m| am)\s+more of (?:a|an)\s+[^.!?]+\s+person\b", lowered)
             or re.search(r"\bi(?:'m| am)\s+(?:(?:really|big)\s+)?into\s+[^.!?]+", lowered)
-            or re.search(r"\bi\s+(?:love|enjoy|play)\s+[^.!?]+", lowered)
+            or re.search(r"\bi\s+(?:really\s+)?(?:love|enjoy|play)\s+[^.!?]+", lowered)
             or re.search(r"\bi\s+(?:usually|normally|often)\s+fish\b", lowered)
             or re.search(r"\b[^.!?]+\s+is probably my favorite thing\b", lowered)
             or re.search(r"\bweekends?\s+are\s+usually\s+[^.!?]+", lowered)
@@ -323,7 +322,7 @@ class ConversationalMemoryService:
                 ))
             if not facts:
                 generic = re.search(
-                    r"\bi\s+(?:love|enjoy|play)\s+(.+?)(?=[.!?]|$)|"
+                    r"\bi\s+(?:really\s+)?(?:love|enjoy|play)\s+(.+?)(?=[.!?]|$)|"
                     r"\bi(?:'m| am)\s+(?:(?:really|big)\s+)?into\s+(.+?)(?=[.!?]|$)|"
                     r"\b(.+?)\s+is probably my favorite thing\b",
                     lowered,
@@ -348,7 +347,10 @@ class ConversationalMemoryService:
         elif re.search(r"\bi have (?:a|an) .+? (?:named|called) [a-z]", lowered):
             domain, significance, evidence = "PERSONAL_CONTEXT", "DURABLE", ["NAMED_PET_OR_ENTITY"]
         else:
-            favorite_band = re.search(r"\b(.+?)\s+(?:are|is) probably my favorite band\b", lowered)
+            favorite_band = re.search(
+                r"\b(.+?)\s+(?:are|is)\s+(?:still\s+)?(?:probably\s+)?my favorite band\b",
+                lowered,
+            )
             late_work = re.search(r"\bi work late (?:most nights|usually|a lot)\b", lowered)
             dislike = re.search(r"\bi (?:really\s+)?hate\s+(.+?)(?=[.!?]|$)", lowered)
             if favorite_band:
@@ -546,6 +548,17 @@ class ConversationalMemoryService:
                     return []
             else:
                 subject = raw_subject.title()
+        if subject is None:
+            named_pet_appointment = re.search(
+                rf"\b([A-Z][a-zA-Z-]{{1,30}})'s\s+(.+?)\s+is\s+"
+                rf"({temporal_pattern})\b",
+                normalized, re.I,
+            )
+            if named_pet_appointment and known_pet:
+                candidate = named_pet_appointment.group(1).title()
+                if candidate == known_pet:
+                    subject = known_pet
+                    activity = named_pet_appointment.group(2)
         if subject is None:
             direct_pet = re.search(
                 rf"\bmy\s+(dog|cat|puppy|kitten)\s+"
@@ -759,7 +772,39 @@ class ConversationalMemoryService:
         pet_kind = r"dog|cat|puppy|kitten|golden retriever|labrador retriever|labrador|lab"
         breed = name = pet_type = None
 
-        match = re.search(
+        possessive = re.search(
+            r"\bmy\s+(dog|cat|puppy|kitten)'s\s+name\s+is\s+"
+            r"([A-Z][a-zA-Z'-]{1,30})\b",
+            normalized, re.I,
+        ) or re.search(
+            r"\bmy\s+(dog|cat|puppy|kitten)\s+is\s+(?:named|called)\s+"
+            r"([A-Z][a-zA-Z'-]{1,30})\b",
+            normalized, re.I,
+        )
+        if possessive:
+            pet_type = cls._pet_kind(possessive.group(1).lower())[0]
+            name = possessive.group(2).title()
+            continuation = re.search(
+                rf"(?:\band\s+|;\s*)(?:he|she|they)(?:'s|\s+is)\s+"
+                rf"(?:a|an)\s+({pet_kind})\b",
+                normalized[possessive.end():], re.I,
+            )
+            if continuation:
+                continuation_type, breed = cls._pet_kind(continuation.group(1))
+                pet_type = continuation_type or pet_type
+
+        # Customer-authored image captions commonly introduce a pet this way.
+        # The explicit "my" supplies ownership authority; the image does not.
+        presented = None if name else re.search(
+            r"\bthis\s+is\s+my\s+(dog|cat|puppy|kitten)\s+"
+            r"([A-Z][a-zA-Z'-]{1,30})\b",
+            normalized, re.I,
+        )
+        if presented:
+            pet_type = cls._pet_kind(presented.group(1).lower())[0]
+            name = presented.group(2).title()
+
+        match = None if name else re.search(
             rf"\bi(?:'ve| have)\s+got\s+(?:a|an)\s+({pet_kind})\s+"
             r"(?:named|called)\s+([A-Z][a-zA-Z'-]{1,30})\b",
             normalized, re.I,
@@ -771,7 +816,7 @@ class ConversationalMemoryService:
         if match:
             kind, name = match.group(1).lower(), match.group(2).title()
             pet_type, breed = cls._pet_kind(kind)
-        else:
+        elif name is None:
             match = re.search(
                 rf"\bmy\s+(dog|cat|puppy|kitten)\s+([A-Z][a-zA-Z'-]{{1,30}})\s+"
                 rf"(?:is|is actually|'s actually)\s+(?:a|an)\s+({pet_kind})\b",
@@ -814,13 +859,25 @@ class ConversationalMemoryService:
         if correction_breed:
             pet_type, breed = cls._pet_kind(correction_breed.group(1).lower())
 
+        ownership_cessation = re.search(
+            r"\bmy\s+dog\s+is(?:n't|\s+not)\s+([A-Z][a-zA-Z'-]{1,30})\b.*?"
+            r"\b\1\s+is\s+my\s+(?:brother|sister|friend|neighbor|neighbour)'s\s+dog\b",
+            normalized, re.I,
+        )
+        if ownership_cessation:
+            return [cls._record(
+                "ownership_correction", "pet_owner_" + cls._slug(ownership_cessation.group(1)),
+                ownership_cessation.group(1).title(), evidence, at, .99,
+                {"action": "RETIRE_CUSTOMER_PET_OWNERSHIP"},
+            )]
+
         result = []
         if name:
             result.append(cls._record("pet", "pet_name", name, evidence, at, .98))
+        if pet_type:
+            result.append(cls._record("pet", "pet_type", pet_type, evidence, at, .98))
         if breed:
             result.append(cls._record("pet", "pet_breed", breed, evidence, at, .97))
-        elif pet_type:
-            result.append(cls._record("pet", "pet_type", pet_type, evidence, at, .97))
         if name and (pet_type or breed) and not correction_breed:
             value = {"name": name, "type": pet_type or "pet",
                      "relationship": "customer's " + (pet_type or "pet")}
@@ -829,6 +886,110 @@ class ConversationalMemoryService:
             result.append(cls._record("entity", name.lower(), value, evidence, at, .96,
                                       {"domain": "pet", "compatibilityProjection": True}))
         return result
+
+    @classmethod
+    def _extract_music_records(cls, normalized, evidence, at):
+        """Extract explicit named music preferences and bounded cessations."""
+        artist_pattern = r"[A-Z][A-Za-z0-9&'’-]*(?:\s+[A-Z][A-Za-z0-9&'’-]*){0,5}"
+        ceased = re.search(
+            rf"\b[Ii]\s+(?:do not|don't)\s+(?:really\s+)?listen\s+to\s+"
+            rf"({artist_pattern})\s+anymore\b", normalized,
+        )
+        if ceased:
+            artist = ceased.group(1).strip()
+            return [cls._record(
+                "preference", "music_artist_" + cls._slug(artist), artist,
+                evidence, at, .98, {"domain": "music", "kind": "artist",
+                                    "action": "CEASE_PREFERENCE"},
+            )]
+        patterns = (
+            rf"\b[Ii](?:'m| am|'ve been| have been)\s+on\s+(?:a\s+)?({artist_pattern})\s+kick\b",
+            rf"\b[Ii](?:'ve| have)\s+been\s+listening\s+to\s+(?:a\s+lot\s+of\s+)?({artist_pattern})"
+            r"(?=\s+(?:way\s+too\s+much|a\s+lot|lately)\b|[.!?]|\s*[^\w\s]|$)",
+            rf"\b[Bb]een\s+listening\s+to\s+(?:a\s+lot\s+of\s+)?({artist_pattern})"
+            r"(?=\s+(?:way\s+too\s+much|a\s+lot|lately)\b|[.!?]|\s*[^\w\s]|$)",
+            rf"\b[Ii]\s+love\s+({artist_pattern})(?=[.!?]|\s*[^\w\s]|$)",
+            rf"\b({artist_pattern})\s+(?:are|is)\s+(?:still\s+)?(?:probably\s+)?my\s+favorite\s+band\b",
+            rf"\b[Mm]y\s+favorite\s+band\s+is\s+({artist_pattern})(?=[.!?]|$)",
+            rf"\b[Ii](?:'m| am)\s+really\s+into\s+({artist_pattern})(?=\s+lately\b|[.!?]|$)",
+        )
+        for pattern in patterns:
+            match = re.search(pattern, normalized)
+            if match:
+                artist = match.group(1).strip()
+                return [cls._record(
+                    "preference", "music_artist_" + cls._slug(artist), artist,
+                    evidence, at, .95,
+                    {"domain": "music", "kind": "artist"},
+                )]
+        return []
+
+    @classmethod
+    def _validate_extracted_records(cls, records):
+        """Fail closed on malformed scalar memory before merge/persistence."""
+        valid, rejected = [], []
+        for record in records:
+            value = record.get("value")
+            if not isinstance(value, str) or record.get("category") in {
+                "event", "entity",
+            }:
+                valid.append(record)
+                continue
+            cleaned = re.sub(r"\s+", " ", value).strip(" ,.;:!?-—–")
+            reason = cls.validate_persisted_record({**record, "value": cleaned})
+            if reason:
+                rejected.append({"category": record.get("category"),
+                                 "key": record.get("key"), "reason": reason})
+            else:
+                record["value"] = cleaned
+                valid.append(record)
+        return valid, rejected
+
+    @classmethod
+    def validate_persisted_record(cls, record):
+        """Return the bounded reason a durable scalar record is invalid."""
+        value = record.get("value")
+        if not isinstance(value, str) or record.get("category") in {"event", "entity"}:
+            return None
+        cleaned = re.sub(r"\s+", " ", value).strip(" ,.;:!?-â€”â€“")
+        lowered = cleaned.lower().replace("_", " ")
+        words = re.findall(r"[A-Za-z0-9]+", cleaned)
+        if not words:
+            return "NO_ALPHANUMERIC_VALUE"
+        if lowered in {
+            "it", "that", "this", "them", "those", "those guys", "one",
+            "way too much", "them way too much", "now", "then", "lately",
+        }:
+            return "ANAPHORIC_OR_TRAILING_FRAGMENT"
+        if record.get("category") in {"interest", "hobby"} and (
+            lowered in {"you", "u", "you so much", "everything about you",
+                        "so much", "you babe", "love you", "love you babe"}
+            or re.fullmatch(r"(?:everything\s+)?about\s+(?:you|u)(?:\s+babe)?", lowered)
+            or re.fullmatch(r"(?:you|u)(?:\s+so\s+much|\s+babe)?", lowered)
+        ):
+            return "RELATIONSHIP_DIRECTED_AFFECTION"
+        if record.get("metadata", {}).get("kind") == "artist" and (
+            words[0].lower() in {"it", "that", "this", "them", "those"}
+            or "way too much" in lowered
+        ):
+            return "INVALID_ARTIST_FRAGMENT"
+        if not cls._slug(cleaned):
+            return "PARSER_ARTIFACT"
+        return None
+
+    @classmethod
+    def _without_relationship_affection(cls, value):
+        """Remove Ava-directed affection but retain independent fact clauses."""
+        text = cls._normalize_apostrophes(value)
+        for pattern in (
+            r"\bi\s+love\s+everything\s+about\s+(?:you|u)(?:\s+babe)?\b",
+            r"\bi\s+(?:really\s+)?(?:love|adore|like)\s+(?:you|u)(?:\s+so\s+much|\s+babe)?\b",
+            r"\b(?:love|adore)\s+(?:you|u)(?:\s+babe)?\b",
+            r"\bi(?:'m|\s+am)\s+crazy\s+about\s+(?:you|u)\b",
+            r"\beverything\s+about\s+(?:you|u)\b",
+        ):
+            text = re.sub(pattern, " ", text, flags=re.I)
+        return re.sub(r"^[\s,]*(?:and|but)\s+", "", text, flags=re.I).strip(" ,")
 
     @staticmethod
     def _pet_kind(kind):
@@ -868,6 +1029,7 @@ class ConversationalMemoryService:
             cls._normalize_apostrophes(message_text).lower(),
         ))
         active = [r for r in state["records"] if r.get("status") == "current"
+                  and cls.validate_persisted_record(r) is None
                   and not (r.get("category") == "event"
                            and (r.get("value") or {}).get("status") == "cancelled")]
         classification = ConversationalMemoryDomainClassifier.classify(
@@ -1220,6 +1382,31 @@ class ConversationalMemoryService:
     def _merge_records(cls, state, records):
         written = []
         for incoming in records:
+            action = dict(incoming.get("metadata") or {}).get("action")
+            if action == "CEASE_PREFERENCE":
+                for existing in state["records"]:
+                    if (existing.get("category"), existing.get("key")) == (
+                        "preference", incoming.get("key")
+                    ) and existing.get("status") == "current":
+                        existing.update(status="superseded",
+                                        supersededAt=incoming["observedAt"])
+                written.append({"category": "preference", "key": incoming["key"],
+                                "action": action})
+                continue
+            if action == "RETIRE_CUSTOMER_PET_OWNERSHIP":
+                retired_name = str(incoming.get("value") or "").lower()
+                for existing in state["records"]:
+                    value = existing.get("value")
+                    owned_entity = (existing.get("category") == "entity"
+                                    and str((value or {}).get("name") or "").lower()
+                                    == retired_name)
+                    pet_fact = existing.get("category") == "pet"
+                    if existing.get("status") == "current" and (owned_entity or pet_fact):
+                        existing.update(status="superseded",
+                                        supersededAt=incoming["observedAt"])
+                written.append({"category": "ownership_correction",
+                                "key": incoming["key"], "action": action})
+                continue
             # Canonical pet corrections also retire the legacy composite
             # entity projection so stale names/breeds cannot be retrieved.
             if incoming.get("category") == "pet" and incoming.get("key") in {
@@ -1270,6 +1457,7 @@ class ConversationalMemoryService:
         result = {}
         for record in state.get("records", []):
             if record.get("status") != "current": continue
+            if cls.validate_persisted_record(record) is not None: continue
             category, key, value = record.get("category"), record.get("key"), record.get("value")
             if category == "fact" and key in {"location", "timezone"}: result[key] = value
             elif category == "preference" and key == "favorite_color": result["favoriteColor"] = value

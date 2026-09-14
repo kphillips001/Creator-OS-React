@@ -24,6 +24,7 @@ from app.repositories.chat_message_repository import get_thread_messages_for_use
 from app.repositories.content_ownership_repository import get_owned_content_tags
 from app.repositories.memory_repository import get_user_memory_row
 from app.repositories.telegram_identity_repository import TelegramIdentityRepository
+from app.repositories.canonical_customer_identity_repository import CanonicalCustomerIdentityRepository
 from app.repositories.user_repository import (
     get_user_by_account_and_fanvue_uuid,
     get_user_by_account_and_id,
@@ -56,6 +57,7 @@ class CustomerRepository:
         fanvue_users_fetcher: Callable[[int, int], Sequence[Mapping[str, Any]]]
         = list_users_for_account,
         telegram_identity_repository: Any | None = None,
+        external_identity_repository: Any | None = None,
     ):
         self._fanvue_user_by_id_fetcher = fanvue_user_by_id_fetcher
         self._fanvue_user_by_uuid_fetcher = fanvue_user_by_uuid_fetcher
@@ -65,6 +67,9 @@ class CustomerRepository:
         self._fanvue_users_fetcher = fanvue_users_fetcher
         self._telegram_identity_repository = (
             telegram_identity_repository or TelegramIdentityRepository()
+        )
+        self._external_identity_repository = (
+            external_identity_repository or CanonicalCustomerIdentityRepository()
         )
 
     def list_by_fanvue_account(
@@ -253,6 +258,17 @@ class CustomerRepository:
                     },
                 )
             )
+        links = self._external_identity_repository.active_for_customer(
+            fanvue_account_id=int(_get(fanvue_user,"fanvue_account_id")),
+            local_fanvue_user_id=int(_get(fanvue_user,"id")))
+        for link in links:
+            identities.append(CustomerProviderIdentity(
+                provider=str(link["platform"]).lower(),
+                provider_customer_id=str(link["external_numeric_id"]),
+                provider_account_id=str(link["creator_profile_id"]),channel="x",
+                username=link.get("observed_username"),display_name=link.get("observed_display_name"),
+                is_active=True,metadata={"verification_method":link["verification_method"],
+                                         "verified_at":link["verified_at"].isoformat()}))
 
         return tuple(identities)
 

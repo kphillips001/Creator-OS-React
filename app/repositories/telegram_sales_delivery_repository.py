@@ -58,7 +58,18 @@ class TelegramSalesDeliveryRepository:
         return self._one(
             """UPDATE public.telegram_sales_delivery_operations
                SET state='SENDING',sending_at=NOW(),updated_at=NOW()
-               WHERE operation_id=%s AND state IN ('CREATED','RETRYABLE') RETURNING *""", (operation_id,),
+               WHERE operation_id=%s AND state IN ('CREATED','RETRYABLE')
+                 AND NOT EXISTS (
+                   SELECT 1 FROM telegram_identity_map mapping
+                   JOIN telegram_relationship_controls control
+                     ON control.creator_profile_id=telegram_sales_delivery_operations.creator_profile_id
+                    AND control.fanvue_account_id=telegram_sales_delivery_operations.fanvue_account_id
+                    AND control.telegram_user_id=mapping.telegram_user_id
+                  WHERE mapping.fanvue_account_id=telegram_sales_delivery_operations.fanvue_account_id
+                    AND mapping.local_fanvue_user_id=telegram_sales_delivery_operations.fanvue_user_id
+                    AND mapping.is_active=TRUE
+                    AND control.communication_disposition='IGNORED')
+               RETURNING *""", (operation_id,),
         )
 
     def mark_accepted(self, operation_id: UUID, message_id: int):

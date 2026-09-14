@@ -422,10 +422,10 @@ def test_supervised_runtime_applies_pacing_before_durable_send_claim():
     assert source.index("response_deferred") < source.index(
         "self._response_pacing.calculate"
     )
-    assert source.index("self._response_pacing.wait") < source.index(
+    assert source.index("self._wait_with_typing") < source.index(
         "self._sales_deliveries.claim"
     )
-    assert source.index("self._response_pacing.wait") < source.index(
+    assert source.index("self._wait_with_typing") < source.index(
         "self._ordinary_replies.claim_send"
     )
 

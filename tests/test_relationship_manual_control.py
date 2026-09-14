@@ -72,3 +72,41 @@ def test_final_send_blocks_manual_and_stale_autonomous_work():
     auto=TelegramDeliveryExecutor(global_safety_service=SimpleNamespace(check_global_safety=lambda:{"allowed":True}),relationship_control_service=Controls(control(TelegramRelationshipMode.AVA_AUTO,4)),business_commercial_transport=sender)
     stale=auto.execute({"message_text":"reply","delivery_method":"text"},context=context)
     assert not stale.executed
+
+
+def test_private_unlock_uses_supplied_canonical_private_chat_transport():
+    class PrivateTransport:
+        def __init__(self): self.calls=[]
+        def send_text(self, **values): self.calls.append(values); return 88
+    private=PrivateTransport()
+    legacy=SimpleNamespace(send_text=lambda **_values: pytest.fail(
+        "legacy business sender must not own a Telethon private chat"))
+    executor=TelegramDeliveryExecutor(
+        global_safety_service=SimpleNamespace(check_global_safety=lambda:{"allowed":True}),
+        relationship_control_service=Controls(control(TelegramRelationshipMode.AVA_AUTO,3)),
+        customer_effective_permissions_service=SimpleNamespace(read=lambda **_:{
+            "effective":{"chatAllowed":True,"contentSellingAllowed":True}}),
+        business_commercial_transport=legacy,
+    )
+    result=executor.execute({"message_text":"offer","delivery_method":"text",
+        "metadata":{"private_chat_unlock_button":{"label":"Unlock","url":"https://example.test/u/1"}}},
+        context={**scope(),"transport":private,"relationship_control_version":3})
+    assert result.executed is True
+    assert len(private.calls) == 1
+    assert private.calls[0]["button_url"] == "https://example.test/u/1"
+
+
+def test_generated_commercial_send_rechecks_current_customer_permission():
+    private=SimpleNamespace(send_text=lambda **_values: pytest.fail("must not send"))
+    executor=TelegramDeliveryExecutor(
+        global_safety_service=SimpleNamespace(check_global_safety=lambda:{"allowed":True}),
+        relationship_control_service=Controls(control(TelegramRelationshipMode.AVA_AUTO,3)),
+        customer_effective_permissions_service=SimpleNamespace(read=lambda **_:{
+            "effective":{"chatAllowed":True,"contentSellingAllowed":False,
+                         "contentSellingReason":"CUSTOMER_CONTENT_SELLING_DISABLED"}}),
+    )
+    result=executor.execute({"message_text":"offer","delivery_method":"text",
+        "metadata":{"private_chat_unlock_button":{"label":"Unlock","url":"https://example.test/u/1"}}},
+        context={**scope(),"transport":private,"relationship_control_version":3})
+    assert result.executed is False
+    assert result.blocking_reason == "CUSTOMER_CONTENT_SELLING_DISABLED"

@@ -1,9 +1,12 @@
 import uuid
 
+from app import database
 from app.repositories.user_repository import get_or_create_user_with_memory
+from app.testing.postgres_safety import require_isolated_test_database_url
 
 
 def test_user_repository():
+    require_isolated_test_database_url(database.DATABASE_URL, None)
     fanvue_user_uuid = str(uuid.uuid4())
 
     result = get_or_create_user_with_memory(

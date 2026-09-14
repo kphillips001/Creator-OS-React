@@ -14,6 +14,7 @@ class TelegramSalesDeliveryState(str, Enum):
     CONFIRMED = "CONFIRMED"
     FAILED = "FAILED"
     AMBIGUOUS = "AMBIGUOUS"
+    SUPPRESSED = "SUPPRESSED"
 
 
 @dataclass(frozen=True)

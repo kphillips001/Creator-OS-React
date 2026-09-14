@@ -162,7 +162,7 @@ def test_turn_off_only_changes_global_automation(monkeypatch):
 
 def test_worker_diagnostic_failure_is_fail_closed_attention(monkeypatch):
     monkeypatch.setattr(
-        "app.services.operations_workspace_service.OperationsWorkspaceService.workers",
+        "app.services.telegram_worker_readiness_service.TelegramWorkerReadinessService.read",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(
             TypeError("mixed diagnostic timestamps")),
     )

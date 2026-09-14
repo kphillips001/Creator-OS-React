@@ -25,6 +25,9 @@ class TelegramOperatorMessageService:
         control=self.controls.get(creator_profile_id=context["creator_profile_id"],
             fanvue_account_id=context["fanvue_account_id"],telegram_user_id=context["telegram_user_id"],
             telegram_chat_id=context["telegram_chat_id"])
+        if getattr(control,"ignored",False):
+            raise TelegramOperatorMessageError(
+                "Unignore this relationship before sending a manual message.")
         if not control.manual: raise TelegramOperatorMessageError("Manual Mode is not active.")
         if control.control_version!=int(expected_control_version):
             raise TelegramOperatorMessageError("Relationship control version is stale.")

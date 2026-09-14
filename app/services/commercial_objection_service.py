@@ -79,16 +79,25 @@ class CommercialObjectionService:
         from app.services.commercial_receptiveness_service import (
             CommercialReceptivenessService,
         )
-        if CommercialReceptivenessService.temporal_commercial_deferment(
-            text
-        )["deferredCommercialInterest"]:
+        previous = dict(values.get("sales_progression") or {})
+        active_offer_hesitation = bool(
+            previous.get("offeringId")
+            and str(previous.get("phase") or "") == "PRESENT_OFFER"
+            and self.HESITATION.search(text)
+            and self.COMMERCIAL_HESITATION_LINK.search(text)
+        )
+        if (
+            CommercialReceptivenessService.temporal_commercial_deferment(
+                text
+            )["deferredCommercialInterest"]
+            and not active_offer_hesitation
+        ):
             return self._result(
                 CommercialObjectionType.NONE, strength="NONE",
                 current=False, selling=False, authoritative=True,
                 alternative=False, pressure=False,
                 evidence=("DEFERRED_FUTURE_COMMERCIAL_INTEREST",),
             )
-        previous = dict(values.get("sales_progression") or {})
         prior_attempts = int(previous.get("recoveryAttemptCount") or 0)
         active_offer_continuation = dict(
             values.get("active_offer_continuation") or {}
