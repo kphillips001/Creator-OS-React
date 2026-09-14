@@ -3,7 +3,7 @@ from uuid import uuid4
 import pytest
 from app.services.conversation_repair_executor_service import ConversationRepairExecutorService,WORKFLOWS
 
-BASE='5'*40;SCOPE={'creator_profile_id':1,'fanvue_account_id':2,'telegram_user_id':3,'telegram_chat_id':3,'relationship_key':'telegram:1:2:3'}
+BASE='56ddbff52ba6136673dbeb82ab8c1f322f47b867';SCOPE={'creator_profile_id':1,'fanvue_account_id':2,'telegram_user_id':3,'telegram_chat_id':3,'relationship_key':'telegram:1:2:3'}
 class Gate:
  def require_enabled(self):pass
 class Auths:
