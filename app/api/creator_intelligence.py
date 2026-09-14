@@ -55,13 +55,14 @@ def performance_snapshot(period: ReportingPeriodKey = ReportingPeriodKey.TODAY):
 @router.get("/snapshot/drill-down")
 def performance_snapshot_drill_down(
     metric: str, period: ReportingPeriodKey = ReportingPeriodKey.TODAY,
+    page: int = 1, page_size: int = 50,
 ):
     from fastapi import HTTPException
     creator_profile_id, account_id = _snapshot_scope()
     try:
         result = PerformanceSnapshotService().drill_down(
             creator_profile_id=creator_profile_id, fanvue_account_id=account_id,
-            period=period.value, metric=metric)
+            period=period.value, metric=metric, page=page, page_size=page_size)
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
     return jsonable_encoder(result)

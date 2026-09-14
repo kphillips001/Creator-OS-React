@@ -3,7 +3,7 @@ import { ArrowRight, RefreshCw, X } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { loadCurrentSalesStatus, loadPerformanceSnapshot, loadSnapshotDrillDown } from "./api";
-import type { CurrentSalesStatus, PerformanceSnapshot as Snapshot, SnapshotDrillDown, SnapshotMetricValue, SnapshotPeriod } from "./types";
+import type { CurrentSalesStatus, PerformanceSnapshot as Snapshot, SnapshotDrillDown, SnapshotDrillDownItem, SnapshotMetricValue, SnapshotPeriod } from "./types";
 
 const PERIODS: Array<[SnapshotPeriod, string]> = [
   ["TODAY", "Today"], ["YESTERDAY", "Yesterday"], ["LAST_7_DAYS", "7 Days"],
@@ -13,6 +13,7 @@ const PERIODS: Array<[SnapshotPeriod, string]> = [
 type Metric = { label: string; key: string; drillKey?: string; value: SnapshotMetricValue; money?: boolean; percent?: boolean; optional?: boolean; description?: string };
 
 const money = (minor: number) => new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" }).format(minor / 100);
+const when = (value: string | null) => value ? new Date(value).toLocaleString(undefined, { dateStyle:"medium", timeStyle:"short" }) : null;
 const format = (metric: Metric) => metric.value.status !== "AVAILABLE" || metric.value.value == null
   ? metric.percent ? "—" : "Unavailable"
   : metric.money ? money(metric.value.value) : metric.percent ? `${metric.value.value.toFixed(1)}%` : new Intl.NumberFormat().format(metric.value.value);
@@ -75,13 +76,13 @@ export function PerformanceSnapshot() {
       { label: "Content Revenue", key: "content_revenue", drillKey: "CONTENT_REVENUE", value: snapshot.commerce.contentMediaRevenueMinor, money: true },
       { label: "Tips", key: "tips", drillKey: "TIPS", value: snapshot.commerce.tipsRevenueMinor, money: true },
       { label: "Average Purchase", key: "average_purchase_value_minor", value: snapshot.commerce.averagePurchaseValueMinor, money: true },
-      { label: "Subscriptions & Renewals", key: "subscription_renewal_revenue_minor", value: snapshot.commerce.subscriptionRenewalRevenueMinor, money: true, optional: true },
+      { label: "Subscriptions & Renewals", key: "subscription_renewal_revenue_minor", drillKey:"SUBSCRIPTIONS_RENEWALS", value: snapshot.commerce.subscriptionRenewalRevenueMinor, money: true, optional: true },
       { label: "Unclassified Revenue", key: "unclassified_revenue_minor", value: snapshot.commerce.unclassifiedRevenueMinor, money: true, optional: true },
     ]],
     ["People", [
       { label: "People Chatted", key: "active_people", drillKey: "ACTIVE_PEOPLE", value: snapshot.peopleActivity.activePeople, description: "Unique people who chatted with Ava during this period." },
       { label: "New", key: "new_people", drillKey: "NEW_PEOPLE", value: snapshot.peopleActivity.newPeople },
-      { label: "Returning", key: "returning_people", drillKey: "RETURNING_PEOPLE", value: snapshot.peopleActivity.returningPeople },
+      { label: "Returning Customers", key: "returning_people", drillKey: "RETURNING_PEOPLE", value: snapshot.peopleActivity.returningPeople, description:"People active in this period whose first observed conversation occurred earlier." },
       { label: "Unique Buyers", key: "unique_buyers", drillKey: "UNIQUE_BUYERS", value: snapshot.commerce.uniqueBuyers },
     ]],
     ["Sales", [
@@ -93,8 +94,8 @@ export function PerformanceSnapshot() {
       { label: "Repeat Buyers", key: "repeat_buyers", drillKey: "REPEAT_BUYERS", value: snapshot.commerce.repeatBuyers },
     ]],
     ["Ava", [
-      { label: "Customer Messages", key: "customer_messages", value: snapshot.peopleActivity.customerMessages },
-      { label: "Ava Messages", key: "ava_messages", value: snapshot.peopleActivity.avaMessages },
+      { label: "Customer Messages", key: "customer_messages", drillKey:"CUSTOMER_MESSAGES", value: snapshot.peopleActivity.customerMessages },
+      { label: "Ava Messages", key: "ava_messages", drillKey:"AVA_MESSAGES", value: snapshot.peopleActivity.avaMessages },
     ]],
   ] as Array<[string, Metric[]]> : [];
 
@@ -106,22 +107,31 @@ export function PerformanceSnapshot() {
     {loading && !snapshot && <div className="snapshot-state" role="status">Loading performance…</div>}
     {error && <div className="snapshot-state snapshot-state--error" role="alert"><span>{error}</span><button onClick={() => setRefreshKey((value) => value + 1)} type="button">Retry</button></div>}
     {snapshot && <div className={loading ? "snapshot-groups is-refreshing" : "snapshot-groups"}>{groups.map(([name, metrics]) => <MetricGroup key={name} metrics={metrics} open={open} title={name} />)}</div>}
-    {salesStatus && <section className="snapshot-current-sales" aria-label="Current sales state"><h3>Current Sales State</h3><div><Link to="/business/relationships?filter=active-sessions"><span>Active Sales Sessions</span><strong>{salesStatus.activeSalesSessions}</strong></Link><Link to="/business/relationships?filter=active-intents"><span>Active PurchaseIntents</span><strong>{salesStatus.activePurchaseIntents}</strong></Link><Link to="/business/operations?tab=failures"><span>Commercial Failures</span><strong>{salesStatus.commercialFailures}</strong></Link></div></section>}
+    {salesStatus && <section className="snapshot-current-sales" aria-label="Current sales state"><h3>Current Sales State</h3><div><Link to="/business/relationships?filter=active-sessions"><span>Active Sales Sessions</span><strong>{salesStatus.activeSalesSessions}</strong></Link><Link to="/business/relationships?filter=active-intents"><span>Active Offers</span><strong>{salesStatus.activePurchaseIntents}</strong></Link><Link to="/business/operations?tab=failures"><span>Commercial Failures</span><strong>{salesStatus.commercialFailures}</strong></Link></div></section>}
     <nav className="snapshot-customer-links" aria-label="Customer directories"><Link to="/business/customers">Customers</Link><Link to="/business/customers?filter=buyers">Buyers</Link><Link to="/business/customers?filter=subscribers">Active Subscribers</Link><Link to="/business/sales?tab=offers">Offer Activity</Link></nav>
     {selected && <DrillDownDrawer close={() => setSelected(null)} details={details} error={detailsError} metric={selected} />}
   </section>;
 }
 
-function itemTitle(item: Record<string, unknown>, index: number) {
-  return String(item.displayName ?? item.username ?? item.commercial_offering_id ?? item.transaction_order_id ?? item.record_id ?? `Record ${index + 1}`);
+function BusinessRow({ item }: { item:SnapshotDrillDownItem }) {
+  const handle=item.customer.handle ? `@${item.customer.handle.replace(/^@/,"")}` : null;
+  const customerPath=item.navigation.customerKey ? `/business/controls?tab=customers&relationship=${encodeURIComponent(item.navigation.customerKey)}&section=commerce` : null;
+  const conversationPath=item.navigation.conversationKey ? `/business/relationships?relationship=${encodeURIComponent(item.navigation.conversationKey)}` : null;
+  const conversion=item.event.presented != null;
+  return <li className="snapshot-business-row"><div className="snapshot-business-row__heading"><div><strong>{item.customer.displayName}</strong>{handle&&<span>{handle}</span>}<small>{item.customer.platform} · {item.customer.buyerStatus.replaceAll("_"," ").toLowerCase()}</small></div>{item.event.grossMinor!=null&&<b>{money(item.event.grossMinor)}</b>}</div>
+    {conversion ? <div className="snapshot-conversion"><span>Presented <strong>{item.event.presented}</strong></span><span>Purchased <strong>{item.event.purchased}</strong></span><span>Conversion Rate <strong>{item.event.conversionRate?.toFixed(1) ?? "—"}%</strong></span></div> : <div className="snapshot-event"><strong>{item.event.label || item.event.type}</strong>{item.event.occurredAt&&<span>{when(item.event.occurredAt)}</span>}{item.event.netMinor!=null&&<span>You received {money(item.event.netMinor)}</span>}{item.event.messageCount!=null&&<span>{item.event.messageCount} {item.event.messageCount===1?"message":"messages"}</span>}{item.event.purchaseType&&<span>{item.event.purchaseType}</span>}{item.event.attributionState&&<em>{item.event.attributionState}</em>}<small>{item.event.status}</small></div>}
+    {!conversion&&<div className="snapshot-customer-context"><span>Lifetime {money(item.context.lifetimeGrossMinor)}</span><span>{item.context.transactionCount} {item.context.transactionCount===1?"transaction":"transactions"}</span>{item.context.firstPurchaseAt&&<span>First purchase {when(item.context.firstPurchaseAt)}</span>}{item.context.latestPurchaseAt&&<span>Latest purchase {when(item.context.latestPurchaseAt)}</span>}</div>}
+    {(customerPath||conversationPath)&&<div className="snapshot-row-actions">{customerPath&&<Link to={customerPath}>View Customer</Link>}{conversationPath&&<Link to={conversationPath}>View Conversation</Link>}</div>}
+    {!!Object.keys(item.developerDetails).length&&<details><summary>Developer Details</summary><dl>{Object.entries(item.developerDetails).map(([key,value])=><div key={key}><dt>{key.replaceAll("_"," ")}</dt><dd>{value}</dd></div>)}</dl></details>}
+  </li>;
 }
 function DrillDownDrawer({ metric, details, error, close }: { metric: Metric; details: SnapshotDrillDown | null; error: string; close: () => void }) {
   return <div className="snapshot-drawer-backdrop" role="presentation" onMouseDown={(event) => { if (event.currentTarget === event.target) close(); }}><aside className="snapshot-drawer" role="dialog" aria-modal="true" aria-labelledby="snapshot-detail-title">
     <header><div><span>Performance detail</span><h2 id="snapshot-detail-title">{metric.label}</h2></div><button aria-label="Close metric details" onClick={close} type="button"><X /></button></header>
     {error && <p role="alert">{error}</p>}
     {!error && !details && <p role="status">Loading details…</p>}
-    {details && <><div className="snapshot-detail-summary"><span>{details.count} records</span>{details.amountMinor != null && <strong>{money(details.amountMinor)}</strong>}</div>
-      {!details.items.length ? <p>No matching records for this period.</p> : <ol>{details.items.map((item, index) => <li key={String(item.record_id ?? item.personKey ?? item.customerCommerceProfileId ?? index)}><strong>{itemTitle(item, index)}</strong><dl>{Object.entries(item).filter(([, value]) => value != null && typeof value !== "object").slice(0, 12).map(([key, value]) => <div key={key}><dt>{key.replaceAll("_", " ")}</dt><dd>{typeof value === "boolean" ? (value ? "Yes" : "No") : String(value)}</dd></div>)}</dl></li>)}</ol>}
+    {details && <><div className="snapshot-detail-summary"><span>{details.count} {details.count===1?"event":"events"}</span>{details.amountMinor != null && <strong>{money(details.amountMinor)} total</strong>}</div>
+      {!details.items.length ? <p>No matching activity for this period.</p> : <ol>{details.items.map((item) => <BusinessRow item={item} key={item.rowKey} />)}</ol>}
     </>}
   </aside></div>;
 }

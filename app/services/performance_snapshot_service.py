@@ -14,6 +14,7 @@ class PerformanceSnapshotService:
         "TOTAL_REVENUE", "CONTENT_REVENUE", "TIPS", "PURCHASES",
         "UNIQUE_BUYERS", "NEW_BUYERS", "REPEAT_BUYERS", "OFFERS_PRESENTED",
         "OFFERS_PURCHASED", "OFFER_CONVERSION",
+        "SUBSCRIPTIONS_RENEWALS", "CUSTOMER_MESSAGES", "AVA_MESSAGES",
         "WOULD_HAVE_SOLD", "ACTIVE_PEOPLE", "NEW_PEOPLE", "RETURNING_PEOPLE",
     })
 
@@ -82,7 +83,7 @@ class PerformanceSnapshotService:
         }
 
     def drill_down(self, *, creator_profile_id: int, fanvue_account_id: int,
-                   period: str, metric: str) -> dict:
+                   period: str, metric: str, page: int = 1, page_size: int = 50) -> dict:
         selected = str(metric).upper()
         if selected not in self.DRILLDOWNS:
             raise ValueError(f"Unsupported Snapshot drill-down metric: {metric}")
@@ -95,18 +96,36 @@ class PerformanceSnapshotService:
             "OFFER_CONVERSION": data["offers"], "WOULD_HAVE_SOLD": data["would_have_sold"],
             "ACTIVE_PEOPLE": data["active_people"], "NEW_PEOPLE": data["new_people"],
             "RETURNING_PEOPLE": data["returning_people"],
+            "SUBSCRIPTIONS_RENEWALS": data["subscriptions"],
+            "CUSTOMER_MESSAGES": data["message_people"],
+            "AVA_MESSAGES": data["ava_message_people"],
         }
         if selected in {"UNIQUE_BUYERS", "NEW_BUYERS", "REPEAT_BUYERS"}:
             key = {"UNIQUE_BUYERS":"unique_buyers","NEW_BUYERS":"new_buyers",
                    "REPEAT_BUYERS":"repeat_buyers"}[selected]
             wanted = set(data[key])
             rows = [data["buyer_rows"][buyer] for buyer in sorted(wanted)]
+        elif selected == "OFFER_CONVERSION":
+            rows = [{"presented":len(data["offers"]),"purchased":len(data["purchased_offers"]),
+                     "conversionRate":round(len(data["purchased_offers"])/len(data["offers"])*100,1) if data["offers"] else None}]
         else:
             rows = mapping[selected]
-        amount = sum(int(r.get("gross_minor") or r.get("realized_amount_minor") or 0)
-                     for r in rows)
+        amount = (None if selected in {"OFFER_CONVERSION","UNIQUE_BUYERS","NEW_BUYERS",
+                  "REPEAT_BUYERS","ACTIVE_PEOPLE","NEW_PEOPLE","RETURNING_PEOPLE",
+                  "CUSTOMER_MESSAGES","AVA_MESSAGES"} else
+                  sum(int(r.get("gross_minor") or r.get("realized_amount_minor") or 0) for r in rows))
+        page=max(1,int(page));page_size=max(1,min(int(page_size),100));total_rows=len(rows)
+        paged_rows=rows[(page-1)*page_size:page*page_size]
+        contexts=self._contexts(creator_profile_id=creator_profile_id,fanvue_account_id=fanvue_account_id)
+        items=[self._business_row(selected,row,contexts,creator_profile_id,fanvue_account_id) for row in paged_rows]
         return {"period": resolved.as_dict(), "metric": selected,
-                "count": len(rows), "amountMinor": amount, "items": rows}
+                "count": (len(data["period_inbound"]) if selected=="CUSTOMER_MESSAGES" else
+                          len(data["period_ava"]) if selected=="AVA_MESSAGES" else
+                          len(data["offers"]) if selected=="OFFER_CONVERSION" else len(rows)),
+                "amountMinor": amount, "items": items,
+                "pagination":{"page":page,"pageSize":page_size,"totalRows":total_rows,
+                              "hasMore":page*page_size<total_rows},
+                "presentation":"BUSINESS_FACING","developerDetailsCollapsed":True}
 
     def people_projection(self, *, creator_profile_id: int, fanvue_account_id: int) -> list[dict]:
         people = self.repository.people(creator_profile_id=creator_profile_id,
@@ -160,6 +179,10 @@ class PerformanceSnapshotService:
         repeat_buyers = sorted(b for b in unique_buyers
             if before_count.get(b, 0)>0 or period_count.get(b, 0)>=2)
         buyer_rows = {}
+        buyer_history: dict[str, list[dict]] = {}
+        for row in successful:
+            if self._classify(row) == "content":
+                buyer_history.setdefault(str(row["customer_commerce_profile_id"]), []).append(row)
         for row in purchases:
             buyer = str(row["customer_commerce_profile_id"])
             buyer_rows.setdefault(buyer, {
@@ -169,6 +192,13 @@ class PerformanceSnapshotService:
                 "qualifyingRevenueMinorInPeriod": 0,
             })
             buyer_rows[buyer]["qualifyingRevenueMinorInPeriod"] += int(row.get("gross_minor") or 0)
+        for buyer, summary in buyer_rows.items():
+            history = sorted(buyer_history[buyer], key=lambda item: item["payment_timestamp"])
+            summary.update({"firstPurchaseAt": history[0]["payment_timestamp"],
+                "firstPurchaseAmountMinor": int(history[0].get("gross_minor") or 0),
+                "latestPurchaseAt": history[-1]["payment_timestamp"],
+                "latestPurchaseAmountMinor": int(history[-1].get("gross_minor") or 0),
+                "latestPurchaseType": history[-1].get("purchase_source")})
         offers_by_id = {}
         for row in self.repository.offers(creator_profile_id=creator_profile_id,
                 fanvue_account_id=fanvue_account_id):
@@ -181,9 +211,20 @@ class PerformanceSnapshotService:
         would = [r for r in self.repository.would_have_sold(
             creator_profile_id=creator_profile_id, fanvue_account_id=fanvue_account_id)
             if resolved.contains(r["observed_at"])]
+        people_by_id={int(person['telegramUserId']):person for person in people_all}
+        def aggregate(events):
+            result={}
+            for event in events:
+                key=int(event['telegram_user_id']); person=people_by_id.get(key,{})
+                current=result.setdefault(key,{"telegramUserId":key,"messageCount":0,"latestActivityAt":event['occurred_at'],
+                    "lastChatAt":event['occurred_at'],"displayName":person.get('displayName'),"username":person.get('username'),
+                    "fanvueUserId":person.get('fanvueUserId'),"buyerStatus":person.get('buyerStatus')})
+                current['messageCount']+=1;current['latestActivityAt']=max(current['latestActivityAt'],event['occurred_at'])
+            return list(result.values())
         return resolved, {"people_all": people_all, "active_people": active,
             "new_people": new, "returning_people": returning,
             "period_inbound": period_inbound, "period_ava": period_ava,
+            "message_people":aggregate(period_inbound),"ava_message_people":aggregate(period_ava),
             "transactions": transactions, "content": classified["content"],
             "tips": classified["tip"], "subscriptions": classified["subscription"],
             "unclassified": classified["unclassified"], "purchases": purchases,
@@ -191,6 +232,44 @@ class PerformanceSnapshotService:
             "repeat_buyers": repeat_buyers, "buyer_rows": buyer_rows, "offers": offers,
             "purchased_offers": purchased_offers,
             "would_have_sold": would, "excluded_test_count": len(excluded)}
+
+    def _contexts(self,*,creator_profile_id,fanvue_account_id):
+        reader=getattr(self.repository,'business_customer_contexts',None)
+        rows=reader(creator_profile_id=creator_profile_id,fanvue_account_id=fanvue_account_id) if callable(reader) else []
+        result={}
+        for row in rows:
+            for key in (str(row.get('customer_commerce_profile_id') or ''),str(row.get('external_fanvue_user_uuid') or ''),f"telegram:{row.get('telegram_user_id')}"):
+                if key and key!='telegram:None':result[key]=row
+        return result
+
+    @staticmethod
+    def _business_row(metric,row,contexts,creator_profile_id,fanvue_account_id):
+        profile=str(row.get('customer_commerce_profile_id') or row.get('customerCommerceProfileId') or '')
+        external=str(row.get('external_fanvue_user_uuid') or row.get('externalFanvueUserUuid') or '')
+        telegram=row.get('telegram_user_id') or row.get('telegramUserId')
+        context=contexts.get(profile) or contexts.get(external) or contexts.get(f'telegram:{telegram}') or {}
+        customer_id=context.get('local_fanvue_user_id') or row.get('fanvueUserId')
+        display=context.get('canonical_display_name') or context.get('canonical_username') or context.get('provider_display_name') or context.get('provider_handle') or row.get('displayName') or row.get('username') or 'Unresolved Customer'
+        handle=context.get('canonical_username') or context.get('provider_handle') or row.get('username')
+        has_conversation=bool(context.get('has_conversation')) or bool(row.get('lastChatAt'))
+        customer_key=f'customer:{creator_profile_id}:{fanvue_account_id}:{customer_id}' if customer_id else None
+        conversation_key=f'telegram:{creator_profile_id}:{fanvue_account_id}:{telegram}' if telegram and has_conversation else None
+        event_types={'TIPS':'Tip','PURCHASES':'Content Purchase','CONTENT_REVENUE':'Content Purchase','TOTAL_REVENUE':'Payment','SUBSCRIPTIONS_RENEWALS':'Subscription / Renewal','OFFERS_PRESENTED':'Offer Presented','OFFERS_PURCHASED':'Offer Purchased','NEW_BUYERS':'New Buyer','REPEAT_BUYERS':'Repeat Buyer','UNIQUE_BUYERS':'Unique Buyer','ACTIVE_PEOPLE':'Customer Activity','NEW_PEOPLE':'New Conversation','RETURNING_PEOPLE':'Returning Customer','CUSTOMER_MESSAGES':'Customer Messages','AVA_MESSAGES':'Ava Messages','OFFER_CONVERSION':'Offer Conversion'}
+        gross=row.get('gross_minor') if row.get('gross_minor') is not None else row.get('realized_amount_minor')
+        occurred=(row.get('latestPurchaseAt') if metric=='REPEAT_BUYERS' else
+                  row.get('firstPurchaseAt') if metric=='NEW_BUYERS' else
+                  row.get('payment_timestamp') or row.get('presented_at') or row.get('latestActivityAt') or row.get('lastChatAt'))
+        status=row.get('offerConversionStatus') or row.get('payment_status') or row.get('status') or ('Resolved' if customer_id else 'Needs Identity Review')
+        source=str(row.get('purchase_source') or '')
+        attribution=('ATTRIBUTED' if int(row.get('attributed_asset_count') or 0)>0 else
+                     'UNATTRIBUTED') if metric in {'PURCHASES','CONTENT_REVENUE'} else None
+        event_label=row.get('offering_title') or event_types.get(metric,metric.replace('_',' ').title())
+        return {'rowKey':str(row.get('record_id') or row.get('personKey') or profile or f'{metric}:{telegram}'),
+          'customer':{'resolved':bool(customer_id),'rowKey':customer_key,'displayName':display,'handle':handle,'platform':'FANVUE' if profile or external else 'TELEGRAM','buyerStatus':context.get('profile_state') or row.get('buyerStatus') or 'PROSPECT'},
+          'event':{'type':event_types.get(metric,metric.replace('_',' ').title()),'label':event_label,'grossMinor':int(gross) if gross is not None else row.get('firstPurchaseAmountMinor') if metric=='NEW_BUYERS' else row.get('latestPurchaseAmountMinor') if metric=='REPEAT_BUYERS' else None,'netMinor':int(row['net_minor']) if row.get('net_minor') is not None else None,'occurredAt':occurred or row.get('firstPurchaseAt') or row.get('latestPurchaseAt'),'status':str(status).replace('_',' ').title(),'purchaseType':(source or str(row.get('latestPurchaseType') or '')).replace('_',' ').replace('mediaLink','Media Link').title(),'attributionState':attribution,'messageCount':row.get('messageCount'),'presented':row.get('presented'),'purchased':row.get('purchased'),'conversionRate':row.get('conversionRate')},
+          'context':{'lifetimeGrossMinor':int(context.get('lifetime_gross_minor') or row.get('qualifyingRevenueMinorInPeriod') or 0),'transactionCount':int(context.get('purchase_count') or row.get('qualifyingPurchaseCountInPeriod') or 0),'firstPurchaseAt':context.get('first_purchase_at') or row.get('firstPurchaseAt'),'latestPurchaseAt':context.get('last_purchase_at') or row.get('latestPurchaseAt'),'repeatBuyer':int(context.get('purchase_count') or row.get('qualifyingPurchaseCountInPeriod') or 0)>1},
+          'navigation':{'customerKey':customer_key,'conversationKey':conversation_key},
+          'developerDetails':{k:str(v) for k,v in row.items() if k in {'record_id','transaction_order_id','customer_commerce_profile_id','external_fanvue_user_uuid','purchase_intent_id','commercial_offering_id'} and v is not None}}
 
     @staticmethod
     def _project_person(row, events, current, creator_profile_id, fanvue_account_id):

@@ -22,6 +22,12 @@ const snapshot = {
   dataQuality: {},
 };
 const response = (body: unknown, status = 200) => Promise.resolve(new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } }));
+const businessItem = {
+  rowKey:"event-1", customer:{resolved:true,rowKey:"customer:2:2:44",displayName:"Jordan",handle:"jordan",platform:"FANVUE",buyerStatus:"REPEAT_BUYER"},
+  event:{type:"Tip",label:"Tip",grossMinor:5000,netMinor:4000,occurredAt:"2026-09-06T14:00:00Z",status:"Paid",purchaseType:"Tip",attributionState:null,messageCount:null},
+  context:{lifetimeGrossMinor:11996,transactionCount:5,firstPurchaseAt:"2026-08-07T14:00:00Z",latestPurchaseAt:"2026-09-06T14:00:00Z",repeatBuyer:true},
+  navigation:{customerKey:"customer:2:2:44",conversationKey:null},developerDetails:{record_id:"private-id"},
+};
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -51,7 +57,7 @@ describe("Performance Snapshot", () => {
       ["Active Subscribers", "/business/customers?filter=subscribers"],
       ["Offer Activity", "/business/sales?tab=offers"],
       ["Active Sales Sessions", "/business/relationships?filter=active-sessions"],
-      ["Active PurchaseIntents", "/business/relationships?filter=active-intents"],
+      ["Active Offers", "/business/relationships?filter=active-intents"],
       ["Commercial Failures", "/business/operations?tab=failures"],
     ];
     for (const [name, expected] of links) {
@@ -71,7 +77,7 @@ describe("Performance Snapshot", () => {
 
   it("opens authoritative drill-down records for a metric", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation((input) => String(input).includes("drill-down")
-      ? response({ period: snapshot.period, metric: "active_people", count: 1, amountMinor: null, items: [{ personKey: "telegram:42", displayName: "Jordan", buyerStatus: "NONBUYER" }] })
+      ? response({ period: snapshot.period, metric: "active_people", count: 1, amountMinor: null, items: [businessItem] })
       : response(snapshot));
     render(<PerformanceSnapshot />);
     const peopleChatted = await screen.findByRole("button", { name: /People Chatted 1/ });
@@ -83,14 +89,14 @@ describe("Performance Snapshot", () => {
 
   it("renders the offer funnel separately from paid-period purchases", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation((input) => String(input).includes("drill-down")
-      ? response({ period: snapshot.period, metric: "OFFERS_PURCHASED", count: 1, amountMinor: 5000, items: [{ record_id: "intent-1", offerConversionStatus: "PURCHASED" }] })
+      ? response({ period: snapshot.period, metric: "OFFERS_PURCHASED", count: 1, amountMinor: 5000, items: [{...businessItem,rowKey:"intent-1",event:{...businessItem.event,type:"Offer Purchased",label:"Summer Set",status:"Purchased"}}] })
       : response(snapshot));
     render(<PerformanceSnapshot />);
     expect(await screen.findByRole("button", { name: /Offers Purchased 1/ })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Offer Conversion 33\.3%/ })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Purchases 2/ })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Offers Purchased 1/ }));
-    expect(await screen.findByRole("dialog", { name: "Offers Purchased" })).toHaveTextContent("intent-1");
+    expect(await screen.findByRole("dialog", { name: "Offers Purchased" })).toHaveTextContent("Summer Set");
     expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("metric=OFFERS_PURCHASED"), expect.anything());
   });
 
@@ -123,8 +129,22 @@ describe("Performance Snapshot", () => {
     render(<PerformanceSnapshot/>);
     expect(await screen.findByRole("region",{name:"Current sales state"})).toHaveTextContent("Active Sales Sessions2");
     expect(screen.getByRole("link",{name:/Active Sales Sessions/})).toHaveAttribute("href","/business/relationships?filter=active-sessions");
-    expect(screen.getByRole("link",{name:/Active PurchaseIntents/})).toHaveAttribute("href","/business/relationships?filter=active-intents");
+    expect(screen.getByRole("link",{name:/Active Offers/})).toHaveAttribute("href","/business/relationships?filter=active-intents");
     expect(screen.getByRole("link",{name:/Commercial Failures/})).toHaveAttribute("href","/business/operations?tab=failures");
     expect(screen.getByRole("link",{name:"Offer Activity"})).toHaveAttribute("href","/business/sales?tab=offers");
+  });
+  it("renders human-readable money, customer navigation, and collapsed developer details",async()=>{
+    vi.spyOn(globalThis,"fetch").mockImplementation(input=>String(input).includes("drill-down")?response({period:snapshot.period,metric:"TIPS",count:1,amountMinor:5000,items:[businessItem]}):response(snapshot));
+    render(<PerformanceSnapshot/>);fireEvent.click(await screen.findByRole("button",{name:/Tips \$0\.00/}));
+    const drawer=await screen.findByRole("dialog",{name:"Tips"});
+    expect(drawer).toHaveTextContent("Jordan");expect(drawer).toHaveTextContent("You received $40.00");expect(drawer).toHaveTextContent("Lifetime $119.96");
+    expect(screen.getByRole("link",{name:"View Customer"})).toHaveAttribute("href","/business/controls?tab=customers&relationship=customer%3A2%3A2%3A44&section=commerce");
+    const developer=screen.getByText("Developer Details").closest("details");expect(developer).not.toHaveAttribute("open");expect(developer).toHaveTextContent("private-id");
+  });
+  it("only offers conversation navigation for a real conversation",async()=>{
+    const conversational={...businessItem,navigation:{...businessItem.navigation,conversationKey:"telegram:2:2:42"}};
+    vi.spyOn(globalThis,"fetch").mockImplementation(input=>String(input).includes("drill-down")?response({period:snapshot.period,metric:"CUSTOMER_MESSAGES",count:8,amountMinor:null,items:[conversational]}):response(snapshot));
+    render(<PerformanceSnapshot/>);fireEvent.click(await screen.findByRole("button",{name:/Customer Messages 8/}));
+    expect(await screen.findByRole("link",{name:"View Conversation"})).toHaveAttribute("href","/business/relationships?relationship=telegram%3A2%3A2%3A42");
   });
 });

@@ -241,8 +241,14 @@ def test_offer_cohort_drill_down_reconciles_and_shows_conversion_state(metric, c
     detail = cohort_service().drill_down(creator_profile_id=2, fanvue_account_id=2,
         period="TODAY", metric=metric)
     assert detail["count"] == count
-    assert all(row["offerConversionStatus"] in {"PURCHASED", "NOT_PURCHASED"}
-               for row in detail["items"])
+    assert detail["presentation"] == "BUSINESS_FACING"
+    if metric == "OFFER_CONVERSION":
+        assert detail["items"][0]["event"]["presented"] == 5
+        assert detail["items"][0]["event"]["purchased"] == 2
+        assert detail["items"][0]["event"]["conversionRate"] == 40.0
+    else:
+        assert all(row["event"]["status"] in {"Purchased", "Not Purchased"}
+                   for row in detail["items"])
 
 
 def test_offer_conversion_without_denominator_is_unavailable():
@@ -253,6 +259,28 @@ def test_offer_conversion_without_denominator_is_unavailable():
     conversion = result["commerce"]["offerConversion"]
     assert conversion["status"] == "UNAVAILABLE"
     assert conversion["value"] is None
+
+
+def test_business_projection_resolves_customer_and_keeps_technical_ids_collapsed():
+    row = {"record_id":"private","transaction_order_id":"order","gross_minor":5000,
+           "net_minor":4000,"purchase_source":"tip","payment_status":"succeeded",
+           "payment_timestamp":utc("2026-09-06T10:00:00Z"),
+           "customer_commerce_profile_id":"profile"}
+    contexts = {"profile":{"local_fanvue_user_id":44,"canonical_display_name":"Wally",
+        "canonical_username":"papi80","lifetime_gross_minor":11996,"purchase_count":5}}
+    item = PerformanceSnapshotService._business_row("TIPS",row,contexts,2,2)
+    assert item["customer"]["displayName"] == "Wally"
+    assert item["event"]["grossMinor"] == 5000 and item["event"]["netMinor"] == 4000
+    assert item["navigation"]["customerKey"] == "customer:2:2:44"
+    assert item["navigation"]["conversationKey"] is None
+    assert item["developerDetails"]["record_id"] == "private"
+
+
+def test_drill_down_pagination_is_bounded_without_changing_reconciled_total():
+    detail = cohort_service().drill_down(creator_profile_id=2,fanvue_account_id=2,
+        period="TODAY",metric="OFFERS_PRESENTED",page=2,page_size=2)
+    assert detail["count"] == 5 and len(detail["items"]) == 2
+    assert detail["pagination"] == {"page":2,"pageSize":2,"totalRows":5,"hasMore":True}
 
 
 def test_api_functions_delegate_to_read_only_snapshot_service(monkeypatch):

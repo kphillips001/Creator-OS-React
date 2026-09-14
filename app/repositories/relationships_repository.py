@@ -1,5 +1,7 @@
 """Read-only Telegram relationship transcript queries."""
 
+from uuid import uuid4
+
 from app.database import get_db_connection
 
 
@@ -72,7 +74,8 @@ class RelationshipsRepository:
             cursor.execute("""
                 WITH inbound AS (
                   SELECT inbound_sender_telegram_user_id telegram_user_id,
-                         MAX(inbound_received_at) last_customer_inbound_at
+                         MAX(inbound_received_at) last_customer_inbound_at,
+                         MAX(inbound_telegram_message_id) last_inbound_message_id
                     FROM ordinary_chat_reply_operations
                    WHERE telegram_account_scope='AVA_TELETHON_PRIVATE'
                      AND inbound_received_at IS NOT NULL
@@ -102,9 +105,38 @@ class RelationshipsRepository:
                          AND delivery.outbound_telegram_message_id IS NOT NULL
                     ) visible GROUP BY telegram_user_id
                 )
-                SELECT prospect.telegram_user_id,
+                SELECT prospect.telegram_user_id,prospect.telegram_chat_id,
                        COALESCE(control.mode,'AVA_AUTO') control_mode,
-                       inbound.last_customer_inbound_at,outbound.last_visible_outbound_at
+                       COALESCE(control.communication_disposition,'ACTIVE') communication_disposition,
+                       (SELECT value_override.classification
+                          FROM telegram_relationship_value_overrides value_override
+                         WHERE value_override.creator_profile_id=prospect.creator_profile_id
+                           AND value_override.fanvue_account_id=prospect.fanvue_account_id
+                           AND value_override.telegram_user_id=prospect.telegram_user_id
+                           AND value_override.telegram_chat_id=prospect.telegram_chat_id
+                           AND value_override.removed_at IS NULL LIMIT 1
+                       ) operator_classification,
+                       (SELECT tier.market_tier
+                          FROM telegram_relationship_market_tiers tier
+                         WHERE tier.creator_profile_id=prospect.creator_profile_id
+                           AND tier.fanvue_account_id=prospect.fanvue_account_id
+                           AND tier.telegram_user_id=prospect.telegram_user_id
+                           AND tier.telegram_chat_id=prospect.telegram_chat_id
+                           AND tier.removed_at IS NULL LIMIT 1
+                       ) market_tier,
+                       inbound.last_customer_inbound_at,inbound.last_inbound_message_id,
+                       outbound.last_visible_outbound_at,NOW() database_now,
+                       operation.operation_id,operation.state operation_state,
+                       operation.last_error operation_last_error,
+                       operation.next_retry_at,operation.response_payload IS NOT NULL has_response_payload,
+                       operation.generation_attempt_count,operation.max_generation_attempts,
+                       operation.send_attempt_count,operation.max_send_attempts,
+                       operation.claim_owner,operation.claimed_at,operation.lease_expires_at,
+                       operation.outbound_telegram_message_id,
+                       operation.delivery_payload,
+                       acknowledgement.acknowledged_at,
+                       acknowledgement.acknowledged_by,
+                       acknowledgement.occurrence_id acknowledged_occurrence_id
                   FROM telegram_sales_prospects prospect
                   LEFT JOIN telegram_relationship_controls control
                     ON control.creator_profile_id=prospect.creator_profile_id
@@ -112,10 +144,73 @@ class RelationshipsRepository:
                    AND control.telegram_user_id=prospect.telegram_user_id
                   LEFT JOIN inbound ON inbound.telegram_user_id=prospect.telegram_user_id
                   LEFT JOIN outbound ON outbound.telegram_user_id=prospect.telegram_user_id
+                  LEFT JOIN LATERAL (
+                    SELECT candidate.*
+                      FROM ordinary_chat_reply_operations candidate
+                     WHERE candidate.telegram_account_scope='AVA_TELETHON_PRIVATE'
+                       AND candidate.telegram_chat_id=prospect.telegram_chat_id
+                       AND candidate.inbound_sender_telegram_user_id=prospect.telegram_user_id
+                       AND (outbound.last_visible_outbound_at IS NULL
+                            OR candidate.inbound_received_at>outbound.last_visible_outbound_at)
+                     ORDER BY
+                       CASE
+                         WHEN candidate.state IN ('RETRYABLE','PENDING_GENERATION','GENERATING','GENERATED','SENDING') THEN 0
+                         WHEN candidate.state IN ('SEND_UNCERTAIN','TERMINAL_FAILED') THEN 1
+                         WHEN candidate.state='SUPPRESSED' AND (
+                           candidate.last_error LIKE 'quality_corrective_retry_exhausted:%%'
+                           OR candidate.last_error LIKE 'quality_blocked_before_delivery:CUSTOMER_QUESTION_UNANSWERED%%'
+                           OR candidate.last_error LIKE 'quality_blocked_before_delivery:TURN_OBLIGATIONS_UNSATISFIED%%'
+                           OR candidate.last_error LIKE 'quality_blocked_before_delivery:%%CUSTOMER_QUESTION_UNANSWERED%%'
+                           OR candidate.last_error LIKE 'quality_blocked_before_delivery:%%TURN_OBLIGATIONS_UNSATISFIED%%'
+                         ) THEN 1 ELSE 2 END,
+                       candidate.inbound_telegram_message_id DESC
+                     LIMIT 1
+                  ) operation ON TRUE
+                  LEFT JOIN LATERAL (
+                    SELECT ack.occurrence_id,ack.acknowledged_at,ack.acknowledged_by
+                      FROM conversation_attention_acknowledgements ack
+                     WHERE ack.creator_profile_id=prospect.creator_profile_id
+                       AND ack.fanvue_account_id=prospect.fanvue_account_id
+                       AND ack.telegram_user_id=prospect.telegram_user_id
+                       AND ack.triggering_inbound_message_id=inbound.last_inbound_message_id
+                       AND ack.revoked_at IS NULL
+                     ORDER BY ack.acknowledged_at DESC LIMIT 1
+                  ) acknowledgement ON TRUE
                  WHERE prospect.creator_profile_id=%s AND prospect.fanvue_account_id=%s
             """, (creator_profile_id, fanvue_account_id, creator_profile_id,
                     fanvue_account_id, creator_profile_id, fanvue_account_id))
             return {int(row["telegram_user_id"]): dict(row) for row in cursor.fetchall()}
+
+    def acknowledge_attention(
+        self, *, occurrence_id, creator_profile_id, fanvue_account_id,
+        telegram_user_id, telegram_chat_id, triggering_inbound_message_id,
+        causal_operation_id, attention_reason, predicate_version,
+        acknowledged_by,
+    ):
+        """Idempotently acknowledge one validated occurrence without touching chat state."""
+        with self.connection_factory() as connection, connection.cursor() as cursor:
+            cursor.execute("""INSERT INTO conversation_attention_acknowledgements(
+                acknowledgement_id,occurrence_id,creator_profile_id,fanvue_account_id,
+                telegram_account_scope,telegram_chat_id,telegram_user_id,
+                triggering_inbound_message_id,causal_operation_id,attention_reason,
+                predicate_version,acknowledged_by)
+                VALUES (%s,%s,%s,%s,'AVA_TELETHON_PRIVATE',%s,%s,%s,%s,%s,%s,%s)
+                ON CONFLICT(occurrence_id) DO UPDATE SET
+                  occurrence_id=EXCLUDED.occurrence_id
+                WHERE conversation_attention_acknowledgements.creator_profile_id=EXCLUDED.creator_profile_id
+                  AND conversation_attention_acknowledgements.fanvue_account_id=EXCLUDED.fanvue_account_id
+                  AND conversation_attention_acknowledgements.telegram_chat_id=EXCLUDED.telegram_chat_id
+                  AND conversation_attention_acknowledgements.telegram_user_id=EXCLUDED.telegram_user_id
+                  AND conversation_attention_acknowledgements.triggering_inbound_message_id=EXCLUDED.triggering_inbound_message_id
+                  AND conversation_attention_acknowledgements.attention_reason=EXCLUDED.attention_reason
+                RETURNING *""", (
+                uuid4(), occurrence_id, creator_profile_id, fanvue_account_id,
+                telegram_chat_id, telegram_user_id, triggering_inbound_message_id,
+                causal_operation_id, attention_reason, predicate_version,
+                acknowledged_by,
+            ))
+            row = cursor.fetchone()
+        return dict(row) if row else None
 
     def messages(self, *, creator_profile_id: int, fanvue_account_id: int,
                  telegram_user_id: int):
@@ -130,6 +225,15 @@ class RelationshipsRepository:
                    WHERE o.inbound_sender_telegram_user_id=%s
                      AND o.telegram_account_scope='AVA_TELETHON_PRIVATE'
                      AND o.inbound_received_at IS NOT NULL AND BTRIM(COALESCE(o.inbound_message_text,''))<>''
+                  UNION ALL
+                  SELECT 'telegram:'||i.telegram_chat_id||':'||i.telegram_message_id,
+                         'CUSTOMER',CASE WHEN BTRIM(i.customer_text)<>'' THEN i.customer_text
+                           WHEN i.has_media THEN '[Media received]' ELSE '' END,
+                         i.received_at,i.telegram_message_id,'INBOUND_MEDIA',2,NULL::uuid
+                    FROM telegram_private_inbound_messages i
+                   WHERE i.creator_profile_id=%s AND i.fanvue_account_id=%s
+                     AND i.telegram_user_id=%s
+                     AND (BTRIM(i.customer_text)<>'' OR i.has_media=TRUE)
                   UNION ALL
                   SELECT COALESCE('telegram:'||(cm.raw_payload->>'telegram_chat_id')||':'||
                            (cm.raw_payload->>'telegram_message_id'),'chat-message:'||cm.id),
@@ -180,7 +284,8 @@ class RelationshipsRepository:
                          message_type,purchase_intent_id
                     FROM deduped WHERE rank=1
                    ORDER BY occurred_at,event_key
-            """, (telegram_user_id, telegram_user_id, fanvue_account_id,
+            """, (telegram_user_id, creator_profile_id, fanvue_account_id,
+                  telegram_user_id, telegram_user_id, fanvue_account_id,
                   telegram_user_id, creator_profile_id, fanvue_account_id,
                   telegram_user_id, creator_profile_id, fanvue_account_id,
                   telegram_user_id))
@@ -328,5 +433,17 @@ class RelationshipsRepository:
             )
             row = cursor.fetchone()
             prospect = dict(row) if row else {}
+            cursor.execute("""SELECT response_payload->'diagnostic_metadata'
+                                      ->'customer_value_attention' AS value_attention
+                FROM ordinary_chat_reply_operations
+                WHERE telegram_account_scope='AVA_TELETHON_PRIVATE'
+                  AND inbound_sender_telegram_user_id=%s
+                  AND response_payload->'diagnostic_metadata'
+                        ->'customer_value_attention'->>'schemaVersion'
+                        ='customer_value_attention_v1'
+                ORDER BY inbound_received_at DESC LIMIT 1""", (telegram_user_id,))
+            row = cursor.fetchone()
+            latest_value_attention = dict(row["value_attention"] or {}) if row else {}
         return {"profile": identity, "intents": intents, "purchases": purchases,
-                "active_session": session, "prospect": prospect}
+                "active_session": session, "prospect": prospect,
+                "latest_value_attention": latest_value_attention}

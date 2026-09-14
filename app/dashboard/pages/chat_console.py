@@ -1,4 +1,6 @@
 import streamlit as st
+from app import database
+from app.testing.postgres_safety import require_isolated_test_database_url
 
 from app.main import (
     decision_engine,
@@ -21,6 +23,8 @@ from app.repositories.chat_message_repository import (
 
 
 def _get_simulator_context():
+
+    require_isolated_test_database_url(database.DATABASE_URL, None)
 
     active_account = (
         st.session_state.get(

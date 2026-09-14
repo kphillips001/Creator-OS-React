@@ -9,6 +9,32 @@ class PerformanceSnapshotRepository:
     def __init__(self, connection_factory=get_db_connection):
         self.connection_factory = connection_factory
 
+    def business_customer_contexts(self, *, creator_profile_id: int, fanvue_account_id: int):
+        """One bounded identity/commerce projection shared by every drill-down row."""
+        with self.connection_factory() as connection, connection.cursor() as cursor:
+            cursor.execute("""
+                SELECT profile.customer_commerce_profile_id,profile.external_fanvue_user_uuid,
+                       profile.display_name provider_display_name,profile.handle provider_handle,
+                       profile.profile_state,profile.lifetime_gross_minor,profile.purchase_count,
+                       profile.first_purchase_at,profile.last_purchase_at,
+                       customer.id local_fanvue_user_id,customer.display_name canonical_display_name,
+                       customer.username canonical_username,mapping.telegram_user_id,
+                       observation.telegram_chat_id,
+                       EXISTS(SELECT 1 FROM telegram_sales_prospects prospect
+                         WHERE prospect.creator_profile_id=%s AND prospect.fanvue_account_id=%s
+                           AND prospect.telegram_user_id=mapping.telegram_user_id) has_conversation
+                  FROM customer_commerce_profiles profile
+                  LEFT JOIN fanvue_users customer ON customer.fanvue_account_id=profile.fanvue_account_id
+                   AND customer.fanvue_user_uuid=profile.external_fanvue_user_uuid
+                  LEFT JOIN telegram_identity_map mapping ON mapping.fanvue_account_id=profile.fanvue_account_id
+                   AND mapping.external_fanvue_user_uuid=profile.external_fanvue_user_uuid
+                   AND mapping.is_active AND mapping.verification_status='VERIFIED'
+                  LEFT JOIN telegram_identity_observations observation
+                    ON observation.telegram_user_id=mapping.telegram_user_id
+                 WHERE profile.creator_profile_id=%s AND profile.fanvue_account_id=%s
+            """,(creator_profile_id,fanvue_account_id,creator_profile_id,fanvue_account_id))
+            return [dict(row) for row in cursor.fetchall()]
+
     def people(self, *, creator_profile_id: int, fanvue_account_id: int):
         with self.connection_factory() as connection, connection.cursor() as cursor:
             cursor.execute(
@@ -146,6 +172,7 @@ class PerformanceSnapshotRepository:
                        profile.customer_commerce_profile_id,
                        profile.external_fanvue_user_uuid,
                        intent.purchase_intent_id,
+                       COALESCE(ownership.attributed_asset_count,0) AS attributed_asset_count,
                        COALESCE((publication.publication_metadata->>'test_specific')::boolean,FALSE)
                          OR COALESCE(publication.publication_metadata->>'purpose','') ILIKE 'controlled_smoke_test%%'
                          OR COALESCE(intent.created_metadata#>>'{recommendation_trace,strategy}','')
@@ -158,6 +185,12 @@ class PerformanceSnapshotRepository:
                    AND intent.fanvue_account_id=transaction.fanvue_account_id
                   LEFT JOIN commercial_publications publication
                     ON publication.publication_id=intent.commercial_publication_id
+                  LEFT JOIN LATERAL (
+                    SELECT COUNT(DISTINCT owned.content_item_id) AS attributed_asset_count
+                      FROM provider_purchase_asset_ownership owned
+                     WHERE owned.fanvue_account_id=transaction.fanvue_account_id
+                       AND owned.provider_transaction_id=transaction.transaction_order_id
+                  ) ownership ON TRUE
                  WHERE profile.creator_profile_id=%s AND transaction.fanvue_account_id=%s
                  ORDER BY transaction.payment_timestamp,transaction.transaction_order_id
                 """,
@@ -172,6 +205,7 @@ class PerformanceSnapshotRepository:
                 SELECT intent.purchase_intent_id AS record_id,intent.telegram_user_id,
                        intent.external_fanvue_user_uuid,intent.commercial_offering_id,
                        intent.expected_price_minor,intent.status,intent.presented_at,
+                       offering.title AS offering_title,offering.offering_type,
                        settlement.purchased_at,settlement.realized_amount_minor,
                        settlement.customer_commerce_transaction_id,
                        COALESCE((publication.publication_metadata->>'test_specific')::boolean,FALSE)
@@ -181,6 +215,8 @@ class PerformanceSnapshotRepository:
                   FROM purchase_intents intent
                   JOIN commercial_publications publication
                     ON publication.publication_id=intent.commercial_publication_id
+                  JOIN commercial_offerings offering
+                    ON offering.offering_id=intent.commercial_offering_id
                   LEFT JOIN LATERAL (
                     SELECT transaction.payment_timestamp AS purchased_at,
                            transaction.gross_minor AS realized_amount_minor,

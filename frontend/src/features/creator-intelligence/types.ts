@@ -87,7 +87,18 @@ export type SnapshotDrillDown = {
   metric: string;
   count: number;
   amountMinor: number | null;
-  items: Array<Record<string, unknown>>;
+  presentation?: "BUSINESS_FACING";
+  developerDetailsCollapsed?: boolean;
+  pagination?: { page:number; pageSize:number; totalRows:number; hasMore:boolean };
+  items: SnapshotDrillDownItem[];
+};
+export type SnapshotDrillDownItem = {
+  rowKey: string;
+  customer: { resolved:boolean; rowKey:string|null; displayName:string; handle:string|null; platform:string; buyerStatus:string };
+  event: { type:string; label?:string|null; grossMinor:number|null; netMinor:number|null; occurredAt:string|null; status:string; purchaseType:string|null; attributionState:string|null; messageCount:number|null; presented?:number|null; purchased?:number|null; conversionRate?:number|null };
+  context: { lifetimeGrossMinor:number; transactionCount:number; firstPurchaseAt:string|null; latestPurchaseAt:string|null; repeatBuyer:boolean };
+  navigation: { customerKey:string|null; conversationKey:string|null };
+  developerDetails: Record<string,string>;
 };
 export type CurrentSalesStatus = { activeSalesSessions:number; activePurchaseIntents:number; commercialFailures:number; asOf:"CURRENT" };
 

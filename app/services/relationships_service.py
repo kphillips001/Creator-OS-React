@@ -1,7 +1,8 @@
 """Account-scoped read model for the Telegram operator inbox."""
 
 import base64
-from datetime import datetime
+import hashlib
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 
 from app.repositories.performance_snapshot_repository import PerformanceSnapshotRepository
@@ -23,9 +24,13 @@ class RelationshipFilter(str, Enum):
     MANUAL = "MANUAL"
     ACTIVE_SESSION = "ACTIVE_SESSION"
     ACTIVE_INTENT = "ACTIVE_INTENT"
+    HIGH_VALUE_PROSPECT = "HIGH_VALUE_PROSPECT"
+    IGNORED = "IGNORED"
 
 
 class RelationshipsService:
+    OPERATIONAL_PREDICATE_VERSION = "CHAT_OPERATIONAL_STATUS_V1"
+    OVERDUE_GRACE = timedelta(minutes=2)
     def __init__(self, *, people_repository=None, messages_repository=None,
                  value_attention_service=None):
         self.people_repository = people_repository or PerformanceSnapshotRepository()
@@ -54,26 +59,41 @@ class RelationshipsService:
                             latest["occurred_at"] if latest else None) if value is not None)
             inbound_at = inbox.get("last_customer_inbound_at")
             outbound_at = inbox.get("last_visible_outbound_at")
-            needs_attention = bool(inbound_at and (not outbound_at or inbound_at > outbound_at))
+            operational = self._operational_projection(inbox)
+            needs_attention = operational["operationalStatus"] == "NEEDS_ATTENTION"
             buyer = bool(person.get("identityStatus") == "MAPPED_VERIFIED" and
                          int(person.get("qualifyingPurchaseCount") or 0) > 0)
             rows.append({**person,"latestActivityAt": latest_at,
                          "latestMessagePreview": (latest.get("content") if latest else None),
                          "latestSpeaker": (latest.get("direction") if latest else None),
                          "controlMode": inbox.get("control_mode") or "AVA_AUTO",
+                         "communicationDisposition": inbox.get("communication_disposition") or "ACTIVE",
+                         "ignored": inbox.get("communication_disposition") == "IGNORED",
+                         "operatorClassification": inbox.get("operator_classification"),
+                         "highValueProspect": inbox.get("operator_classification") == "HIGH_VALUE_PROSPECT",
+                         "marketTier": inbox.get("market_tier") or "UNCLASSIFIED",
+                         "effectiveAttentionPriority": "PRIORITIZED" if inbox.get("operator_classification") == "HIGH_VALUE_PROSPECT" else "AUTOMATIC",
                          "lastCustomerInboundAt": inbound_at,
                          "lastVisibleOutboundAt": outbound_at,
                          "needsAttention": needs_attention,
+                         **operational,
                          "isBuyer": buyer})
         term = search.strip().casefold()
-        if term:
-            rows = [r for r in rows if term in " ".join(str(r.get(k) or "") for k in
-                    ("displayName","username","telegramUserId")).casefold()]
-        counts = {"total": len(rows),
-                  "needsAttention": sum(bool(r["needsAttention"]) for r in rows),
-                  "buyers": sum(bool(r["isBuyer"]) for r in rows),
-                  "prospects": sum(not bool(r["isBuyer"]) for r in rows),
-                  "manual": sum(r["controlMode"] == "HUMAN_OPERATOR" for r in rows)}
+        matches_search = lambda row: (not term or term in " ".join(
+            str(row.get(key) or "") for key in
+            ("displayName", "username", "telegramUserId")).casefold())
+        active_rows = [row for row in rows if not row["ignored"] and matches_search(row)]
+        ignored_rows = [row for row in rows if row["ignored"] and matches_search(row)]
+        counts = {"total": len(active_rows),
+                  "needsAttention": sum(bool(r["needsAttention"]) for r in active_rows),
+                  "buyers": sum(bool(r["isBuyer"]) for r in active_rows),
+                  "prospects": sum(not bool(r["isBuyer"]) for r in active_rows),
+                  "manual": sum(r["controlMode"] == "HUMAN_OPERATOR" for r in active_rows)}
+        counts["highValueProspects"] = sum(bool(r["highValueProspect"]) for r in active_rows)
+        counts["replyScheduled"] = sum(
+            r["operationalStatus"] == "REPLY_SCHEDULED" for r in active_rows
+        )
+        counts["ignored"] = len(ignored_rows)
         predicates = {
             RelationshipFilter.ALL: lambda r: True,
             RelationshipFilter.NEEDS_ATTENTION: lambda r: r["needsAttention"],
@@ -82,7 +102,10 @@ class RelationshipsService:
             RelationshipFilter.MANUAL: lambda r: r["controlMode"] == "HUMAN_OPERATOR",
             RelationshipFilter.ACTIVE_SESSION: lambda r: bool(r.get("activeSalesSession")),
             RelationshipFilter.ACTIVE_INTENT: lambda r: bool(r.get("activePurchaseIntent")),
+            RelationshipFilter.HIGH_VALUE_PROSPECT: lambda r: bool(r.get("highValueProspect")),
+            RelationshipFilter.IGNORED: lambda r: True,
         }
+        rows = ignored_rows if selected_filter is RelationshipFilter.IGNORED else active_rows
         rows = [row for row in rows if predicates[selected_filter](row)]
         if selected_sort is RelationshipSort.LIFETIME_SPEND:
             rows.sort(key=lambda r: (int(r.get("lifetimeVerifiedRevenueMinor") or 0),
@@ -94,6 +117,189 @@ class RelationshipsService:
         next_cursor = self._cursor(offset+len(page)) if offset+len(page)<len(rows) else None
         return {"items":page,"nextCursor":next_cursor,"hasMore":next_cursor is not None,
                 "sort":selected_sort.value,"filter":selected_filter.value,"summary":counts}
+
+    def acknowledge_attention(
+        self, *, creator_profile_id: int, fanvue_account_id: int,
+        telegram_user_id: int, occurrence_id: str,
+        acknowledged_by: str = "CREATOR_OS_OPERATOR",
+    ):
+        self._person(creator_profile_id, fanvue_account_id, telegram_user_id)
+        inbox = self.messages_repository.inbox_state(
+            creator_profile_id=creator_profile_id,
+            fanvue_account_id=fanvue_account_id,
+        ).get(telegram_user_id)
+        if not inbox:
+            raise LookupError("Relationship not found.")
+        projection = self._operational_projection(inbox)
+        if (projection["operationalStatus"] != "NEEDS_ATTENTION"
+                or projection["attentionOccurrenceId"] != occurrence_id):
+            raise ValueError("Attention occurrence is no longer active.")
+        acknowledged = self.messages_repository.acknowledge_attention(
+            occurrence_id=occurrence_id,
+            creator_profile_id=creator_profile_id,
+            fanvue_account_id=fanvue_account_id,
+            telegram_user_id=telegram_user_id,
+            telegram_chat_id=int(inbox["telegram_chat_id"]),
+            triggering_inbound_message_id=int(inbox["last_inbound_message_id"]),
+            causal_operation_id=inbox.get("operation_id"),
+            attention_reason=str(projection["operationalStatusReason"]),
+            predicate_version=self.OPERATIONAL_PREDICATE_VERSION,
+            acknowledged_by=acknowledged_by,
+        )
+        if acknowledged is None:
+            raise ValueError("Attention occurrence does not belong to this relationship.")
+        refreshed = dict(inbox)
+        refreshed.update({
+            "acknowledged_occurrence_id": occurrence_id,
+            "acknowledged_at": acknowledged["acknowledged_at"],
+            "acknowledged_by": acknowledged["acknowledged_by"],
+        })
+        return self._operational_projection(refreshed)
+
+    @classmethod
+    def _operational_projection(cls, inbox):
+        mode = str(inbox.get("control_mode") or "AVA_AUTO")
+        inbound = inbox.get("last_customer_inbound_at")
+        outbound = inbox.get("last_visible_outbound_at")
+        unanswered = bool(inbound and (not outbound or inbound > outbound))
+        base = {
+            "operationalStatus": "NONE",
+            "operationalStatusReason": None,
+            "nextAutomaticAttemptAt": None,
+            "overdueSince": None,
+            "operationState": inbox.get("operation_state"),
+            "generationAttempts": int(inbox.get("generation_attempt_count") or 0),
+            "sendAttempts": int(inbox.get("send_attempt_count") or 0),
+            "hasActiveClaim": False,
+            "attentionOccurrenceId": None,
+            "attentionAcknowledgedAt": inbox.get("acknowledged_at"),
+            "attentionAcknowledgedBy": inbox.get("acknowledged_by"),
+        }
+        if mode == "HUMAN_OPERATOR":
+            if str(inbox.get("communication_disposition") or "ACTIVE") == "IGNORED":
+                return {**base, "operationalStatus": "IGNORED",
+                        "operationalStatusReason": "Automatic communication disabled for this relationship."}
+            return {**base, "operationalStatus": "MANUAL_MODE",
+                    "operationalStatusReason": "Operator controls this conversation."}
+        if str(inbox.get("communication_disposition") or "ACTIVE") == "IGNORED":
+            return {**base, "operationalStatus": "IGNORED",
+                    "operationalStatusReason": "Automatic communication disabled for this relationship."}
+        if not unanswered:
+            return base
+        state = str(inbox.get("operation_state") or "")
+        error = str(inbox.get("operation_last_error") or "")
+        if state == "SUPPRESSED" and error in {
+                "MEDIUM_MARKET_DAILY_REPLY_BUDGET_EXHAUSTED",
+                "LOW_MARKET_DAILY_REPLY_BUDGET_EXHAUSTED"}:
+            policy=dict(dict(inbox.get("delivery_payload") or {}).get(
+                "marketResourcePolicy") or {})
+            return {**base,
+                "operationalStatus": "MEDIUM_MARKET_LIMIT" if error.startswith("MEDIUM") else "LOW_MARKET_LIMIT",
+                "operationalStatusReason": error,
+                "repliesUsedToday": policy.get("replies_used_today"),
+                "dailyReplyBudget": policy.get("daily_reply_budget"),
+                "nextResetAt": policy.get("next_reset_at"),
+                "effectiveMarketTier": policy.get("market_tier")}
+        now = inbox.get("database_now") or datetime.now(timezone.utc)
+        lease = inbox.get("lease_expires_at")
+        active_claim = bool(inbox.get("claim_owner") and lease and lease > now)
+        base["hasActiveClaim"] = active_claim
+        if (state == "GENERATING" and not active_claim
+                and lease and lease <= now
+                and not inbox.get("has_response_payload")
+                and int(inbox.get("send_attempt_count") or 0) == 0
+                and int(inbox.get("generation_attempt_count") or 0)
+                    >= int(inbox.get("max_generation_attempts") or 0)):
+            reason = "Generation was interrupted and automatic recovery is exhausted."
+            return {**base,"operationalStatus":"NEEDS_ATTENTION",
+                    "operationalStatusReason":reason,
+                    "attentionOccurrenceId":cls._occurrence_id(inbox,reason)}
+        scheduled_reason = error in {
+            "availability_deferred", "quality_corrective_retry_scheduled",
+        }
+        next_attempt = inbox.get("next_retry_at")
+        scheduled = bool(
+            state == "RETRYABLE" and not inbox.get("has_response_payload")
+            and scheduled_reason and next_attempt
+            and int(inbox.get("generation_attempt_count") or 0)
+                < int(inbox.get("max_generation_attempts") or 0)
+            and int(inbox.get("send_attempt_count") or 0) == 0
+            and not active_claim
+        )
+        delivery_retry = bool(
+            state == "RETRYABLE" and inbox.get("has_response_payload")
+            and next_attempt
+            and int(inbox.get("send_attempt_count") or 0)
+                < int(inbox.get("max_send_attempts") or 0)
+            and not active_claim
+        )
+        if delivery_retry:
+            base["nextAutomaticAttemptAt"] = next_attempt
+            reason = "Delivery retry scheduled."
+            if next_attempt <= now - cls.OVERDUE_GRACE:
+                return {**base, "operationalStatus": "OVERDUE",
+                        "operationalStatusReason": reason,
+                        "overdueSince": next_attempt + cls.OVERDUE_GRACE}
+            return {**base, "operationalStatus": "REPLY_SCHEDULED",
+                    "operationalStatusReason": reason}
+        if scheduled:
+            base["nextAutomaticAttemptAt"] = next_attempt
+            reason = (
+                "Corrective response scheduled."
+                if error == "quality_corrective_retry_scheduled"
+                else "Waiting for Ava availability."
+            )
+            if next_attempt <= now - cls.OVERDUE_GRACE:
+                return {**base, "operationalStatus": "OVERDUE",
+                        "operationalStatusReason": reason,
+                        "overdueSince": next_attempt + cls.OVERDUE_GRACE}
+            return {**base, "operationalStatus": "REPLY_SCHEDULED",
+                    "operationalStatusReason": reason}
+        if state in {"PENDING_GENERATION", "GENERATED", "SENT_CONFIRMED"}:
+            return base
+        if state in {"GENERATING", "SENDING"} and active_claim:
+            return base
+        attention_reason = None
+        if state == "SEND_UNCERTAIN":
+            attention_reason = "Telegram delivery could not be confirmed."
+        elif state == "TERMINAL_FAILED":
+            attention_reason = "Automatic reply processing exhausted its retry limit."
+        elif state == "SUPPRESSED" and (
+                error.startswith("quality_corrective_retry_exhausted:")
+                or (error.startswith("quality_blocked_before_delivery:") and any(
+                    reason in error for reason in cls.CORRECTABLE_REASONS
+                ))):
+            attention_reason = "A required response could not pass the final quality check."
+        elif state == "RETRYABLE" and not next_attempt:
+            attention_reason = "Automatic reply work has no scheduled recovery time."
+        elif not state:
+            attention_reason = "This inbound has no automatic reply operation."
+        if not attention_reason:
+            return base
+        occurrence = cls._occurrence_id(inbox, attention_reason)
+        base.update({
+            "attentionOccurrenceId": occurrence,
+            "operationalStatusReason": attention_reason,
+        })
+        if inbox.get("acknowledged_occurrence_id") == occurrence:
+            return base
+        return {**base, "operationalStatus": "NEEDS_ATTENTION"}
+
+    CORRECTABLE_REASONS = (
+        "CUSTOMER_QUESTION_UNANSWERED", "TURN_OBLIGATIONS_UNSATISFIED",
+    )
+
+    @classmethod
+    def _occurrence_id(cls, inbox, reason):
+        material = "|".join((
+            cls.OPERATIONAL_PREDICATE_VERSION,
+            "AVA_TELETHON_PRIVATE",
+            str(inbox.get("telegram_chat_id") or ""),
+            str(inbox.get("last_inbound_message_id") or ""),
+            reason,
+            str(inbox.get("operation_id") or ""),
+        ))
+        return hashlib.sha256(material.encode()).hexdigest()
 
     def messages(self, *, creator_profile_id: int, fanvue_account_id: int,
                  telegram_user_id: int, cursor: str | None = None, limit: int = 50):
@@ -153,21 +359,43 @@ class RelationshipsService:
             } if mapped else {}, behavior=behavior,
             legacy=(source.get("prospect") or {}).get("relationship_state") or {},
         )
+        automatic = dict(source.get("latest_value_attention") or {})
+        if automatic.get("schemaVersion") != "customer_value_attention_v1":
+            automatic = dict(value.to_mapping())
         latest_offer = presented[0] if presented else None
         latest_purchase = purchases[0] if purchases else None
         memory = self._memory_projection(
             (source.get("prospect") or {}).get("preference_state") or {})
+        context = self.control_context(
+            creator_profile_id=creator_profile_id, fanvue_account_id=fanvue_account_id,
+            telegram_user_id=telegram_user_id)
+        from app.services.relationship_value_override_service import RelationshipValueOverrideService
+        override = RelationshipValueOverrideService().active(
+            creator_profile_id=creator_profile_id, fanvue_account_id=fanvue_account_id,
+            telegram_user_id=telegram_user_id,
+            telegram_chat_id=context["telegram_chat_id"])
         return {
             "person": person,
             "mappingStatus": "VERIFIED" if mapped else "UNMAPPED",
             "customerValue": {
                 "buyerStatus": value.buyer_status if mapped else "UNMAPPED_PROSPECT",
-                "valueTier": value.value_tier if mapped else None,
-                "attentionTier": value.attention_tier if mapped else None,
+                "valueTier": automatic.get("valueTier", value.value_tier),
+                "attentionTier": automatic.get("attentionTier", value.attention_tier),
                 "lifetimeSpendMinor": value.lifetime_spend_minor if mapped else None,
                 "purchaseCount": value.purchase_count if mapped else None,
                 "repeatBuyer": value.purchase_count >= 2 if mapped else False,
                 "relationshipLifecycle": value.retention_lifecycle if mapped else "PROSPECT",
+                "relationshipInvestment": automatic.get("relationshipInvestment", value.relationship_investment),
+                "continuationValue": automatic.get("conversationContinuationValue", value.conversation_continuation_value),
+                "timeWasterRisk": automatic.get("timeWasterRisk", value.time_waster_risk),
+                "retention": automatic.get("retentionPriority", value.retention_priority),
+            },
+            "operatorClassification": override["classification"] if override else None,
+            "effectiveAttentionPriority": "PRIORITIZED" if override else automatic.get("attentionTier", value.attention_tier),
+            "behavioralIntelligence": {
+                "buyingIntent": "DIRECT" if automatic.get("freshCommercialIntentDetected", value.fresh_commercial_intent_detected) else "NONE",
+                "currentSignal": automatic.get("commercialInterestType", value.commercial_interest_type),
+                "salesStage": automatic.get("buyerStage", value.buyer_stage),
             },
             "salesPerformance": {
                 "offersPresented": len(presented),
