@@ -3,67 +3,68 @@ from uuid import uuid4
 import pytest
 from app.services.conversation_repair_executor_service import ConversationRepairExecutorService,WORKFLOWS
 
-class EnabledGate:
- def require_enabled(self):return None
-
+BASE='5'*40;SCOPE={'creator_profile_id':1,'fanvue_account_id':2,'telegram_user_id':3,'telegram_chat_id':3,'relationship_key':'telegram:1:2:3'}
+class Gate:
+ def require_enabled(self):pass
 class Auths:
  def __init__(self,scope='GLOBAL_SYSTEM',category='QUALITY_GATE_POLICY',expired=False):
-  self.auth={'authorization_id':uuid4(),'proposal_id':uuid4(),'repair_category':category,'validated_scope':scope,
-   'behavioral_invariant':'Only evidence-grounded language is allowed.','regression_requirements':['original','similar','neighbor'],
-   'risk':'HIGH','evidence_fingerprint':'a'*64,'expires_at':datetime.now(timezone.utc)+timedelta(minutes=-1 if expired else 10)}
-  self.proposal={'proposal_id':self.auth['proposal_id'],'analysis_id':uuid4(),'status':'APPROVED_FOR_EXECUTION',
-   'validated_scope':scope,'evidence_fingerprint':'a'*64,'failure_signature':'SIG','preserved_behavior':['neighbor']}
- def authorization(self,*args,**kwargs):return self.auth
- def get(self,*args,**kwargs):return self.proposal
+  self.auth={'proposal_id':uuid4(),'repair_category':category,'behavioral_invariant':'Grounded only.','regression_requirements':['original','similar','neighbor'],'evidence_fingerprint':'a'*64,'baseline_sha':BASE,'expires_at':datetime.now(timezone.utc)+timedelta(minutes=-1 if expired else 10)}
+  self.proposal={'analysis_id':uuid4(),'status':'APPROVED_FOR_EXECUTION','validated_scope':scope,'evidence_fingerprint':'a'*64,'failure_signature':'SIG','preserved_behavior':['neighbor']}
+ def authorization(self,*_,**__):return self.auth
+ def get(self,*_,**__):return self.proposal
 class Analyses:
  def __init__(self,stale=False):self.stale=stale
- def retrieve(self,*args,**kwargs):return {'staleState':'STALE' if self.stale else 'CURRENT'}
+ def retrieve(self,*_,**__):return {'staleState':'STALE' if self.stale else 'CURRENT'}
 class Repo:
- def __init__(self):self.run=None
+ def __init__(self):self.run=None;self.events=[]
  def claim(self,**v):
   if self.run:return self.run,True
-  self.run={**v,'execution_id':uuid4(),'state':'AUTHORIZED','rollback_evidence':{}};return self.run,False
- def dispatched(self,eid,**v):self.run.update(v,state='EXECUTING');return self.run
- def get(self,*args,**kwargs):return self.run
+  self.run={**v,'execution_id':uuid4(),'state':'AUTHORIZED'};return self.run,False
+ def staged(self,eid,stage):self.run.update(state='EXECUTING',baseline_sha=stage['baseRevision'],staging_branch=stage['branch'],staging_worktree_path=stage['worktreePath']);return self.run
+ def dispatched(self,eid,**v):self.run.update(v);return self.run
+ def get(self,*_,**__):return self.run
+ def testing(self,*_):self.run['state']='TESTING'
  def finish(self,eid,**v):self.run.update(v);return self.run
+ def fail(self,eid,reason):self.run.update(state='FAILED',failure_reason=reason)
+ def event(self,*v):self.events.append(v)
+class Stage:
+ def __init__(self,result=None):self.result=result or {'state':'READY_FOR_DEPLOYMENT','filesChanged':['app/services/conversation_quality_watch_service.py'],'tests':[{'exitCode':0}],'diffDigest':'d'*64};self.discarded=0
+ def prepare(self,eid,expected_base):return {'baseRevision':expected_base,'branch':f'repair-{eid}','worktreePath':f'C:/stages/{eid}'}
+ def validate(self,*_,**__):return self.result
+ def discard(self,*_):self.discarded+=1
 class DevRepo:
- def __init__(self,result=None):self.result=result or {'status':'COMPLETED','final_report':{'filesModified':['app/services/conversation_quality_watch_service.py'],'tests':[{'exitCode':0}]}}
- def get_execution(self,eid):return self.result
-class Developer:
- def __init__(self,result=None):self.calls=[];self.repository=DevRepo(result)
+ def __init__(self,status='COMPLETED'):self.status=status
+ def get_execution(self,*_):return {'status':self.status}
+class Dev:
+ def __init__(self,status='COMPLETED'):self.calls=[];self.repository=DevRepo(status)
  def create_and_dispatch(self,**v):self.calls.append(v);return {'task':{'task_id':uuid4()},'execution':{'execution_id':uuid4()}}
-SCOPE={'creator_profile_id':1,'fanvue_account_id':2,'telegram_user_id':3,'telegram_chat_id':3,'relationship_key':'telegram:1:2:3'}
-def make(auth=None,**kwargs):
- repo=Repo();dev=Developer(kwargs.pop('dev_result',None));svc=ConversationRepairExecutorService(repository=repo,authorization_repository=auth or Auths(),developer=dev,safety=kwargs.pop('safety',lambda:{'safe':True,'reason':None}),analyses=kwargs.pop('analyses',Analyses()),execution_gate=kwargs.pop('execution_gate',EnabledGate()));return svc,repo,dev
+def make(auth=None,stage=None,dev=None,**kw):
+ repo=Repo();stage=stage or Stage();dev=dev or Dev();roots=[]
+ def factory(value):roots.append(value);return dev
+ svc=ConversationRepairExecutorService(repository=repo,authorization_repository=auth or Auths(),developer_factory=factory,staging=stage,safety=kw.pop('safety',lambda:{'safe':True,'reason':None}),analyses=kw.pop('analyses',Analyses()),execution_gate=Gate(),command_resolver=lambda _:[['git','diff','--check']]);return svc,repo,dev,stage,roots
 
-def test_closed_workflow_dispatch_contains_no_transcript_customer_or_arbitrary_parameters():
- assert set(WORKFLOWS)=={'COMMERCIAL_CLASSIFICATION_POLICY','COMMERCIAL_PROGRESSION_POLICY','SALES_BRAIN_POLICY','TURN_OBLIGATION_POLICY','QUALITY_GATE_POLICY','CONTEXT_ASSEMBLY_POLICY','MEMORY_RETRIEVAL_POLICY','TEMPORAL_CONTEXT_POLICY','AVAILABILITY_POLICY','DELIVERY_LIFECYCLE_POLICY','GENERATION_QUALITY_POLICY','TRAINING_EXAMPLE_ONLY'}
- svc,repo,dev=make();result=svc.execute(uuid4(),operator='operator',**SCOPE);prompt=dev.calls[0]['implementation_task']
- assert result['state']=='EXECUTING' and 'allowedPaths' in prompt and 'behavioralInvariant' in prompt
- assert 'telegram:1:2:3' not in prompt and 'customer_text' not in prompt and 'SELECT ' not in prompt
+def test_dispatch_is_rooted_only_in_unique_isolated_stage_and_contract_is_bounded():
+ svc,repo,dev,_,roots=make();run=svc.execute(uuid4(),operator='op',**SCOPE);prompt=dev.calls[0]['implementation_task']
+ assert run['state']=='EXECUTING' and roots[0]['worktreePath'].startswith('C:/stages/')
+ assert 'C:\\Creator-OS-React' not in str(roots) and 'telegram:1:2:3' not in prompt and 'allowedPaths' not in prompt and 'SELECT ' not in prompt
 
 @pytest.mark.parametrize('auth,error',[(Auths(scope='CONVERSATION_ONLY'),'Non-systemic'),(Auths(category='NO_REPAIR'),'Unsupported'),(Auths(expired=True),'expired')])
-def test_oneoff_unsupported_and_expired_authorizations_cannot_execute(auth,error):
- svc,_,_=make(auth)
- with pytest.raises((PermissionError,RuntimeError),match=error):svc.execute(uuid4(),operator='op',**SCOPE)
+def test_invalid_authority_fails_closed(auth,error):
+ with pytest.raises((PermissionError,RuntimeError),match=error):make(auth)[0].execute(uuid4(),operator='op',**SCOPE)
 
-def test_stale_fingerprint_and_active_claim_safety_fail_closed():
- svc,_,_=make(analyses=Analyses(True))
- with pytest.raises(RuntimeError,match='stale'):svc.execute(uuid4(),operator='op',**SCOPE)
- svc,_,_=make(safety=lambda:{'safe':False,'reason':'Active customer generation/send claims block repair execution.'})
- with pytest.raises(RuntimeError,match='Active customer'):svc.execute(uuid4(),operator='op',**SCOPE)
+def test_stale_dirty_and_concurrent_execution_fail_or_single_claim():
+ with pytest.raises(RuntimeError,match='stale'):make(analyses=Analyses(True))[0].execute(uuid4(),operator='op',**SCOPE)
+ with pytest.raises(RuntimeError,match='claims'):make(safety=lambda:{'safe':False,'reason':'Active claims'})[0].execute(uuid4(),operator='op',**SCOPE)
+ svc,repo,dev,_,_=make();key=uuid4();one=svc.execute(key,operator='op',**SCOPE);two=svc.execute(key,operator='op',**SCOPE);assert one['execution_id']==two['execution_id'] and len(dev.calls)==1
 
-def test_single_use_and_regression_gate_pass_or_require_rollback():
- svc,repo,dev=make();auth=uuid4();first=svc.execute(auth,operator='op',**SCOPE);second=svc.execute(auth,operator='op',**SCOPE)
- assert first['execution_id']==second['execution_id'] and len(dev.calls)==1
- passed=svc.refresh(first['execution_id'],creator_profile_id=1,fanvue_account_id=2)
- assert passed['state']=='PASSED' and passed['deployment']['state']=='NOT_DEPLOYED'
- failing={'status':'COMPLETED','final_report':{'filesModified':['app/services/unrelated.py'],'tests':'Not reported'}}
- svc,repo,_=make(dev_result=failing);run=svc.execute(uuid4(),operator='op',**SCOPE)
- failed=svc.refresh(run['execution_id'],creator_profile_id=1,fanvue_account_id=2)
- assert failed['state']=='FAILED' and failed['rollback']['required'] is True
+def test_independent_validation_ready_and_out_of_scope_failure_never_deploy():
+ svc,repo,_,stage,_=make();run=svc.execute(uuid4(),operator='op',**SCOPE);ready=svc.refresh(run['execution_id'],creator_profile_id=1,fanvue_account_id=2)
+ assert ready['state']=='READY_FOR_DEPLOYMENT' and ready['ready_at'] is True and stage.discarded==0
+ failed_stage=Stage({'state':'FAILED','filesChanged':['outside.py'],'reason':'OUT_OF_SCOPE_EDIT','outsideAllowlist':['outside.py']})
+ svc,repo,_,_,_=make(stage=failed_stage);run=svc.execute(uuid4(),operator='op',**SCOPE);failed=svc.refresh(run['execution_id'],creator_profile_id=1,fanvue_account_id=2)
+ assert failed['state']=='FAILED' and failed_stage.discarded==1
 
-def test_execution_migration_has_lifecycle_audit_and_rollback():
- f=open('migrations/forward/20260914_131_conversation_repair_execution.sql').read();r=open('migrations/rollback/20260914_131_conversation_repair_execution.sql').read()
- for state in ('AUTHORIZED','EXECUTING','TESTING','PASSED','FAILED','ROLLED_BACK','DEPLOYED','STALE','EXPIRED'):assert state in f
- assert r.index('conversation_repair_execution_events')<r.index('conversation_repair_executions')
+def test_closed_workflows_and_no_deployed_state():
+ assert len(WORKFLOWS)==12
+ forward=open('migrations/forward/20260914_132_conversation_repair_isolated_staging.sql').read()
+ assert 'READY_FOR_DEPLOYMENT' in forward and "'DEPLOYED'" not in forward

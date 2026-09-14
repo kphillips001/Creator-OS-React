@@ -19,7 +19,8 @@ def test_unique_isolated_worktree_and_live_untouched_until_second_gate(repo):
  assert Path(live,'app/services/policy.py').read_text()=='VALUE = "bad"\n'
  ready=svc.validate(one,allowed_paths=('app/services/policy.py','tests/'),commands=[['git','diff','--check']])
  assert ready['state']=='READY_FOR_DEPLOYMENT' and Path(live,'app/services/policy.py').read_text()=='VALUE = "bad"\n'
- deployed=svc.deploy(one,ready);assert deployed['state']=='DEPLOYED' and 'good' in Path(live,'app/services/policy.py').read_text()
+ with pytest.raises(PermissionError,match='deployment is not enabled'):svc.deploy(one,ready)
+ assert 'bad' in Path(live,'app/services/policy.py').read_text()
  svc.discard(one);svc.discard(two)
 
 def test_dirty_out_of_scope_failure_and_health_rollback(repo):
@@ -29,5 +30,9 @@ def test_dirty_out_of_scope_failure_and_health_rollback(repo):
  Path(live,'dirty.txt').unlink();stage=svc.prepare(uuid4(),expected_base=base);Path(stage['worktreePath'],'outside.py').write_text('bad')
  failed=svc.validate(stage,allowed_paths=('app/services/',),commands=[]);assert failed['state']=='FAILED' and not Path(live,'outside.py').exists();svc.discard(stage)
  stage=svc.prepare(uuid4(),expected_base=base);Path(stage['worktreePath'],'app/services/policy.py').write_text('VALUE = "good"\n')
- ready=svc.validate(stage,allowed_paths=('app/services/',),commands=[['git','diff','--check']]);svc.health=lambda:{'healthy':False}
- rolled=svc.deploy(stage,ready);assert rolled['state']=='ROLLED_BACK' and 'bad' in Path(live,'app/services/policy.py').read_text();svc.discard(stage)
+ ready=svc.validate(stage,allowed_paths=('app/services/',),commands=[['git','diff','--check']])
+ assert ready['state']=='READY_FOR_DEPLOYMENT' and 'bad' in Path(live,'app/services/policy.py').read_text();svc.discard(stage)
+
+def test_missing_regression_gate_fails_closed(repo):
+ live,stages=repo;svc=ConversationRepairStagingService(live,stages);base=git(live,'rev-parse','HEAD');stage=svc.prepare(uuid4(),expected_base=base);Path(stage['worktreePath'],'app/services/policy.py').write_text('VALUE = "good"\n')
+ assert svc.validate(stage,allowed_paths=('app/services/',),commands=[])['reason']=='MISSING_REGRESSION_GATE';svc.discard(stage)

@@ -21,32 +21,23 @@ class ConversationRepairStagingService:
   tracked=[x for x in self._git(path,'diff','--name-only',base).splitlines() if x]
   untracked=[x for x in self._git(path,'ls-files','--others','--exclude-standard').splitlines() if x]
   files=sorted(set(tracked+untracked))
+  if not files:return {'state':'FAILED','filesChanged':[],'reason':'NO_STAGED_CHANGES','liveTouched':False}
   outside=[x for x in files if not any(x==p or x.startswith(p.rstrip('/')+'/') for p in allowed_paths)]
   results=[]
   if outside:return {'state':'FAILED','filesChanged':files,'reason':'OUT_OF_SCOPE_EDIT','outsideAllowlist':outside,'liveTouched':False}
+  if not commands:return {'state':'FAILED','filesChanged':files,'reason':'MISSING_REGRESSION_GATE','liveTouched':False}
   for command in commands:
    result=self.runner(command,path);results.append({'command':command,'exitCode':result.returncode})
    if result.returncode:return {'state':'FAILED','filesChanged':files,'reason':'REGRESSION_OR_BUILD_FAILURE','tests':results,'liveTouched':False}
   self._git(path,'add','--',*files)
   patch=self._git_raw(path,'diff','--cached','--binary',base);digest=hashlib.sha256(patch.encode()).hexdigest()
   self._git(path,'commit','-m',f'Certified conversation repair {stage["branch"]}')
+  if self._git(self.live,'status','--porcelain') or self._git(self.live,'rev-parse','HEAD')!=base:
+   return {'state':'STALE','filesChanged':files,'reason':'LIVE_BASELINE_DIVERGED','tests':results,'liveTouched':True}
   return {'state':'READY_FOR_DEPLOYMENT','filesChanged':files,'tests':results,'diffDigest':digest,
           'stagedRevision':self._git(path,'rev-parse','HEAD'),'baseRevision':base,'liveTouched':False}
- def deploy(self,stage,result):
-  if result['state']!='READY_FOR_DEPLOYMENT':raise RuntimeError('Execution is not ready for deployment.')
-  if self.claims():raise RuntimeError('Active customer claims block deployment.')
-  if self._git(self.live,'status','--porcelain') or self._git(self.live,'rev-parse','HEAD')!=result['baseRevision']:raise RuntimeError('Live source diverged; restaging is required.')
-  path=Path(stage['worktreePath']);patch=self._git_raw(path,'diff','--binary',result['baseRevision'],result['stagedRevision'])
-  if hashlib.sha256(patch.encode()).hexdigest()!=result['diffDigest']:raise RuntimeError('Staged repair changed after certification.')
-  applied=self.runner(['git','apply','-'],self.live,input_text=patch)
-  if applied.returncode:raise RuntimeError(f'Certified staged patch could not be applied cleanly: {(applied.stderr or applied.stdout).strip()}')
-  self._git(self.live,'add','--',*result['filesChanged'])
-  deployed=self._git(self.live,'write-tree')
-  health=self.health()
-  if not health.get('healthy'):
-   self.runner(['git','apply','-R','-'],self.live,input_text=patch);self._git(self.live,'reset','--mixed',result['baseRevision'])
-   return {'state':'ROLLED_BACK','rollbackRevision':result['baseRevision'],'rollbackReason':'POST_DEPLOYMENT_HEALTH_FAILED','health':health}
-  return {'state':'DEPLOYED','preDeploymentRevision':result['baseRevision'],'stagedRevision':result['stagedRevision'],'deployedRevision':deployed,'health':health}
+ def deploy(self,*_args,**_kwargs):
+  raise PermissionError('Conversation repair deployment is not enabled.')
  def discard(self,stage):
   path=Path(stage['worktreePath']).resolve();self._git(self.live,'worktree','remove','--force',str(path));self._git(self.live,'branch','-D',stage['branch']);return {'state':'DISCARDED'}
  @staticmethod

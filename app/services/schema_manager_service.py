@@ -1179,13 +1179,13 @@ class SchemaManagerService:
         "conversation_repair_execution_authorizations": {
             "owner":"Conversation Repair Authorization","migration":"20260914_130_conversation_repair_planning.sql",
             "repository":"ConversationRepairProposalRepository","service":"ConversationRepairPlanningService",
-            "dashboard":("Business Chat",),"columns":("authorization_id","proposal_id","repair_category","validated_scope","behavioral_invariant","regression_requirements","risk","evidence_fingerprint","approved_by","approved_at","expires_at","consumed_at")},
+            "dashboard":("Business Chat",),"columns":("authorization_id","proposal_id","repair_category","validated_scope","behavioral_invariant","regression_requirements","risk","evidence_fingerprint","baseline_sha","approved_by","approved_at","expires_at","consumed_at")},
         "conversation_repair_events": {
             "owner":"Conversation Repair Governance Audit","migration":"20260914_130_conversation_repair_planning.sql",
             "repository":"ConversationRepairProposalRepository","service":"ConversationRepairPlanningService",
             "dashboard":("Business Chat",),"columns":("event_id","proposal_id","authorization_id","event_type","event_data","created_at")},
         "conversation_repair_executions": {
-            "owner":"Governed Conversation Repair Execution","migration":"20260914_131_conversation_repair_execution.sql","repository":"ConversationRepairExecutionRepository","service":"ConversationRepairExecutorService","dashboard":("Business Chat",),"columns":("execution_id","authorization_id","proposal_id","creator_profile_id","fanvue_account_id","state","workflow","executor_identity","developer_task_id","developer_execution_id","files_changed","tests_result","rollback_evidence","deployment_evidence","started_at","completed_at","created_at")},
+            "owner":"Governed Conversation Repair Execution","migration":"20260914_132_conversation_repair_isolated_staging.sql","repository":"ConversationRepairExecutionRepository","service":"ConversationRepairExecutorService","dashboard":("Business Chat",),"columns":("execution_id","authorization_id","proposal_id","creator_profile_id","fanvue_account_id","state","workflow","executor_identity","developer_task_id","developer_execution_id","files_changed","tests_result","rollback_evidence","deployment_evidence","baseline_sha","staging_branch","staging_worktree_identity","staging_worktree_path","staged_diff_digest","failure_reason","ready_for_deployment_at","started_at","completed_at","created_at")},
         "conversation_repair_execution_events": {
             "owner":"Governed Conversation Repair Execution Audit","migration":"20260914_131_conversation_repair_execution.sql","repository":"ConversationRepairExecutionRepository","service":"ConversationRepairExecutorService","dashboard":("Business Chat",),"columns":("event_id","execution_id","event_type","event_data","created_at")},
         "telegram_operator_message_operations": {
@@ -1223,6 +1223,10 @@ class SchemaManagerService:
     }
 
     MIGRATION_SCHEMA_REQUIREMENTS: Mapping[str, Mapping[str, tuple[str, ...]]] = {
+        "20260914_132_conversation_repair_isolated_staging.sql": {
+            "conversation_repair_execution_authorizations": ("baseline_sha",),
+            "conversation_repair_executions": ("baseline_sha","staging_branch","staging_worktree_identity","staging_worktree_path","staged_diff_digest","failure_reason","ready_for_deployment_at"),
+        },
         "20260914_131_conversation_repair_execution.sql": {
             "conversation_repair_executions": ("execution_id","authorization_id","proposal_id","creator_profile_id","fanvue_account_id","state","workflow","executor_identity","developer_task_id","developer_execution_id","files_changed","tests_result","rollback_evidence","deployment_evidence","started_at","completed_at","created_at"),
             "conversation_repair_execution_events": ("event_id","execution_id","event_type","event_data","created_at"),

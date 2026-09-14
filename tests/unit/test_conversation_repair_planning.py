@@ -33,7 +33,7 @@ class Repo:
   self.rows[str(v['proposal_id'])]=row;return row
  def event(self,*args,**kwargs):self.events.append((args,kwargs))
  def get(self,pid,**kwargs):return self.rows.get(str(pid))
- def approve(self,pid,*,current,operator,**kwargs):
+ def approve(self,pid,*,current,operator,baseline_sha,**kwargs):
   row=self.rows[str(pid)]
   if str(pid) in self.authorizations:return self.authorizations[str(pid)],True
   if any(row[k]!=current[k] for k in ('evidence_fingerprint','failure_signature','validated_scope','signature')) or current['similar_case_count']<row['affected_relationship_count']-1:
@@ -41,13 +41,13 @@ class Repo:
   auth={'authorization_id':uuid4(),'proposal_id':pid,'repair_category':row['repair_category'],
    'validated_scope':row['validated_scope'],'behavioral_invariant':row['proposed_invariant'],
    'regression_requirements':row['regression_requirements'],'risk':row['risk'],
-   'evidence_fingerprint':row['evidence_fingerprint'],'approved_by':operator,'approved_at':datetime.now(timezone.utc),
+   'evidence_fingerprint':row['evidence_fingerprint'],'baseline_sha':baseline_sha,'approved_by':operator,'approved_at':datetime.now(timezone.utc),
    'expires_at':row['expires_at'],'consumed_at':None}
   self.authorizations[str(pid)]=auth;return auth,False
 
 def service(value,count=0,repo=None):
  return ConversationRepairPlanningService(analyses=Analyses(value),analysis_repository=AnalysisRepo(count),
-  repository=repo or Repo(),secret='test-secret')
+  repository=repo or Repo(),secret='test-secret',baseline_reader=lambda:'5'*40)
 
 @pytest.mark.parametrize('scope,reason',[
  ('CONVERSATION_ONLY','No structural evidence'),('OBSOLETE','superseded'),('AMBIGUOUS','Manual review')])
@@ -96,18 +96,19 @@ def test_source_finding_and_fingerprint_are_frozen_not_client_parameters():
 
 def test_approval_is_idempotent_and_authorization_contains_only_frozen_fields():
  repo=Repo();analyses=Analyses(analysis('GLOBAL_SYSTEM'));ar=AnalysisRepo(3)
- svc=ConversationRepairPlanningService(analyses=analyses,analysis_repository=ar,repository=repo,secret='test-secret')
+ svc=ConversationRepairPlanningService(analyses=analyses,analysis_repository=ar,repository=repo,secret='test-secret',baseline_reader=lambda:'5'*40)
  planned=svc.plan(uuid4(),finding_id='finding-1',operator='op',**SCOPE);pid=planned['proposal']['proposal_id']
  first=svc.approve(pid,operator='operator',**SCOPE);second=svc.approve(pid,operator='operator',**SCOPE)
  assert first['status']=='APPROVED_FOR_EXECUTION' and first['idempotentReplay'] is False
  assert second['idempotentReplay'] is True
  assert first['authorization']==second['authorization']
+ assert first['authorization']['baseline_sha']=='5'*40
  assert 'violated_invariant' not in first['authorization'] and 'relationship_key' not in first['authorization']
 
 @pytest.mark.parametrize('change',('fingerprint','signature','scope','threshold'))
 def test_approval_revalidates_every_frozen_authority(change):
  repo=Repo();value=analysis('GLOBAL_SYSTEM');analyses=Analyses(value);ar=AnalysisRepo(3)
- svc=ConversationRepairPlanningService(analyses=analyses,analysis_repository=ar,repository=repo,secret='test-secret')
+ svc=ConversationRepairPlanningService(analyses=analyses,analysis_repository=ar,repository=repo,secret='test-secret',baseline_reader=lambda:'5'*40)
  pid=svc.plan(uuid4(),finding_id='finding-1',operator='op',**SCOPE)['proposal']['proposal_id']
  if change=='fingerprint':ar.fingerprint='d'*64
  elif change=='signature':value['findings'][0]['authoritativeEvidenceSummary']='CHANGED'

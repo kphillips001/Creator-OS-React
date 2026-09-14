@@ -44,7 +44,7 @@ def test_direct_service_rejects_before_repository_safety_or_developer_activity(g
 
     service = ConversationRepairExecutorService(
         repository=Repository(), authorization_repository=Authorizations(),
-        developer=Developer(), safety=safety, analyses=object(),
+        developer_factory=lambda _stage: Developer(), safety=safety, analyses=object(),
         execution_gate=ConversationRepairExecutionGate({}),
     )
     with pytest.raises(ConversationRepairExecutionDisabled):

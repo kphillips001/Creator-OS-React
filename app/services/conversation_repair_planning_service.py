@@ -1,6 +1,7 @@
 """Frozen repair planning and approval; deliberately contains no executor."""
 from __future__ import annotations
-import hashlib,hmac,json,os
+import hashlib,hmac,json,os,subprocess
+from pathlib import Path
 from uuid import UUID,uuid4
 
 from app.models.conversation_repair_proposal import ROOT_CAUSE_REPAIR_CATEGORY,RepairCategory
@@ -11,12 +12,13 @@ from app.services.conversation_analysis_service import ConversationAnalysisServi
 
 class ConversationRepairPlanningService:
  COMMERCIAL=frozenset({'COMMERCIAL_CLASSIFICATION_POLICY','COMMERCIAL_PROGRESSION_POLICY','SALES_BRAIN_POLICY'})
- def __init__(self,*,analyses=None,analysis_repository=None,repository=None,secret=None):
+ def __init__(self,*,analyses=None,analysis_repository=None,repository=None,secret=None,baseline_reader=None):
   self.analyses=analyses or ConversationAnalysisService()
   self.analysis_repository=analysis_repository or ConversationAnalysisRepository()
   self.repository=repository or ConversationRepairProposalRepository()
   self.secret=(secret or os.getenv('CONVERSATION_REPAIR_PROPOSAL_SECRET') or
                os.getenv('CONVERSATION_RESOLUTION_PLAN_SECRET') or '').encode()
+  self.baseline_reader=baseline_reader or self._certified_baseline
 
  def plan(self,analysis_id,*,finding_id,operator,**scope):
   analysis=self.analyses.retrieve(analysis_id,**scope)
@@ -92,7 +94,7 @@ class ConversationRepairPlanningService:
     'similar_case_count':similar,'signature':self._sign(frozen)}
   authorization,reused=self.repository.approve(proposal_id,
     creator_profile_id=scope['creator_profile_id'],fanvue_account_id=scope['fanvue_account_id'],
-    operator=operator,current=current)
+    operator=operator,current=current,baseline_sha=self.baseline_reader())
   return {'authorization':self._safe_authorization(authorization),'idempotentReplay':reused,
           'status':'APPROVED_FOR_EXECUTION'}
 
@@ -146,4 +148,12 @@ class ConversationRepairPlanningService:
   return {k:row.get(k) for k in ('proposal_id','analysis_id','finding_id','validated_scope','root_cause_category','failure_signature','affected_relationship_count','violated_invariant','proposed_invariant','expected_effect','preserved_behavior','known_risks','regression_requirements','repair_category','evidence_fingerprint','risk','created_at','expires_at','status','approved_by','approved_at','rejected_by','rejected_at','stale_reason')}
  @staticmethod
  def _safe_authorization(row):
-  return {k:row.get(k) for k in ('authorization_id','proposal_id','repair_category','validated_scope','behavioral_invariant','regression_requirements','risk','evidence_fingerprint','approved_by','approved_at','expires_at','consumed_at')}
+  return {k:row.get(k) for k in ('authorization_id','proposal_id','repair_category','validated_scope','behavioral_invariant','regression_requirements','risk','evidence_fingerprint','baseline_sha','approved_by','approved_at','expires_at','consumed_at')}
+ @staticmethod
+ def _certified_baseline():
+  root=Path(r'C:\Creator-OS-React')
+  status=subprocess.run(['git','status','--porcelain'],cwd=root,capture_output=True,text=True,check=False)
+  if status.returncode or status.stdout.strip():raise RuntimeError('Clean certified baseline is required for repair authorization.')
+  head=subprocess.run(['git','rev-parse','HEAD'],cwd=root,capture_output=True,text=True,check=False)
+  if head.returncode:raise RuntimeError('Certified baseline revision is unavailable.')
+  return head.stdout.strip()

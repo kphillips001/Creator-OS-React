@@ -29,17 +29,23 @@ class DeveloperAgentExecutionService:
         self, repository: DeveloperAgentExecutionRepository | None = None,
         adapter: CodexDeveloperAgentAdapter | None = None,
         repository_path: Path = REPOSITORY_PATH,
+        expected_branch: str = EXPECTED_BRANCH,
+        isolated_repository: bool = False,
     ) -> None:
         self.repository = repository or DeveloperAgentExecutionRepository()
         self.adapter = adapter or CodexDeveloperAgentAdapter()
-        self.repository_path = repository_path
+        self.repository_path = Path(repository_path).resolve()
+        self.expected_branch = expected_branch
+        self.isolated_repository = isolated_repository
         self._telemetry_degraded: set[UUID] = set()
 
     def readiness(self) -> dict[str, Any]:
         repository_ok = (
-            self.repository_path.resolve() == REPOSITORY_PATH.resolve()
-            and self.repository_path.is_dir()
+            self.repository_path.is_dir()
             and self._is_git_repository()
+            and (not self.isolated_repository
+                 or REPOSITORY_PATH.resolve() not in self.repository_path.parents
+                 and self.repository_path != REPOSITORY_PATH.resolve())
         )
         branch = self._git("branch", "--show-current") if repository_ok else ""
         try:
@@ -53,14 +59,14 @@ class DeveloperAgentExecutionService:
         }
         worker = not self._executor._shutdown
         ready = (
-            repository_ok and branch == EXPECTED_BRANCH and worker and persistence
+            repository_ok and branch == self.expected_branch and worker and persistence
             and adapter["cliDetected"] and adapter["sdkDetected"]
             and adapter["authenticationAvailable"] and adapter["appServerReachable"]
         )
         return {
             **adapter,
             "repositoryAccessible": repository_ok,
-            "expectedBranchActive": branch == EXPECTED_BRANCH,
+            "expectedBranchActive": branch == self.expected_branch,
             "currentBranch": branch or None,
             "executionWorkerAvailable": worker,
             "persistenceAvailable": persistence,
@@ -86,8 +92,8 @@ class DeveloperAgentExecutionService:
             issue_identifier=issue_identifier.strip(),
             investigation_package=investigation_package,
             implementation_task=implementation_task,
-            repository_path=str(REPOSITORY_PATH),
-            expected_branch=EXPECTED_BRANCH,
+            repository_path=str(self.repository_path),
+            expected_branch=self.expected_branch,
         )
 
     def approve_task(self, task_id: UUID) -> dict[str, Any]:
@@ -360,16 +366,19 @@ class DeveloperAgentExecutionService:
         }
 
     def _validate_repository(self, task: dict[str, Any]) -> None:
-        expected = REPOSITORY_PATH.resolve()
+        expected = self.repository_path.resolve()
         supplied = Path(task["repository_path"]).resolve()
-        if supplied != expected or self.repository_path.resolve() != expected:
+        live = REPOSITORY_PATH.resolve()
+        root_allowed = (expected != live and live not in expected.parents
+                        if self.isolated_repository else expected == live)
+        if supplied != expected or not root_allowed:
             raise PermissionError("Repository is not on the Developer Agent allowlist.")
         if not self._is_git_repository():
             raise RuntimeError("Configured repository is not a git repository.")
         branch = self._git("branch", "--show-current")
-        if task["expected_branch"] != EXPECTED_BRANCH or branch != EXPECTED_BRANCH:
+        if task["expected_branch"] != self.expected_branch or branch != self.expected_branch:
             raise RuntimeError(
-                f"Expected branch {EXPECTED_BRANCH}; current branch is {branch or 'unknown'}."
+                f"Expected branch {self.expected_branch}; current branch is {branch or 'unknown'}."
             )
 
     def _git(self, *args: str) -> str:

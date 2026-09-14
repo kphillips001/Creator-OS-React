@@ -33,7 +33,7 @@ class ConversationRepairProposalRepository:
    AND status='PROPOSED' RETURNING *""",(operator,proposal_id,creator_profile_id,fanvue_account_id))
   if row:self.event('REJECTED',proposal_id=proposal_id,data={'operator':operator})
   return row
- def approve(self,proposal_id,*,creator_profile_id,fanvue_account_id,operator,current):
+ def approve(self,proposal_id,*,creator_profile_id,fanvue_account_id,operator,current,baseline_sha):
   """One transaction and uniqueness constraint make duplicate/concurrent approval single-use."""
   with self.connection_factory() as connection,connection.cursor() as cursor:
    cursor.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s,0))",(str(proposal_id),))
@@ -60,11 +60,11 @@ class ConversationRepairProposalRepository:
    authorization_id=uuid4()
    cursor.execute("""INSERT INTO conversation_repair_execution_authorizations(
     authorization_id,proposal_id,repair_category,validated_scope,behavioral_invariant,
-    regression_requirements,risk,evidence_fingerprint,approved_by,expires_at)
-    VALUES(%s,%s,%s,%s,%s,%s::jsonb,%s,%s,%s,LEAST(%s,NOW()+INTERVAL '20 minutes')) RETURNING *""",
+    regression_requirements,risk,evidence_fingerprint,baseline_sha,approved_by,expires_at)
+    VALUES(%s,%s,%s,%s,%s,%s::jsonb,%s,%s,%s,%s,LEAST(%s,NOW()+INTERVAL '20 minutes')) RETURNING *""",
     (authorization_id,proposal_id,proposal['repair_category'],proposal['validated_scope'],
      proposal['proposed_invariant'],json.dumps(proposal['regression_requirements']),proposal['risk'],
-     proposal['evidence_fingerprint'],operator,proposal['expires_at']))
+     proposal['evidence_fingerprint'],baseline_sha,operator,proposal['expires_at']))
    authorization=cursor.fetchone()
    cursor.execute("""UPDATE conversation_repair_proposals SET status='APPROVED_FOR_EXECUTION',
     approved_by=%s,approved_at=NOW() WHERE proposal_id=%s""",(operator,proposal_id))
