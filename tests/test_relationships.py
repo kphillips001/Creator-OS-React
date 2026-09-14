@@ -2,6 +2,7 @@ from datetime import datetime,timezone,timedelta
 
 import pytest
 from fastapi import HTTPException
+from unittest.mock import patch
 from app.api import relationships as relationships_api
 from app.services.relationships_service import RelationshipsService
 
@@ -137,6 +138,15 @@ def test_unknown_account_scoped_person_is_rejected():
  with pytest.raises(LookupError): service().messages(creator_profile_id=7,fanvue_account_id=8,telegram_user_id=99)
 
 class IntelligenceRepo(MessageRepo):
+ def control_context(self,telegram_user_id,**_):
+  return {"telegram_chat_id":telegram_user_id,
+          "telegram_identity_mapping_id":2 if telegram_user_id==2 else None,
+          "local_fanvue_user_id":4 if telegram_user_id==2 else None,
+          "external_fanvue_user_uuid":"buyer" if telegram_user_id==2 else None,
+          "conversation_thread_id":None,
+          "latest_inbound_telegram_message_id":5,
+          "active_purchase_intent":telegram_user_id==2,
+          "active_sales_session":telegram_user_id==2}
  def intelligence(self,telegram_user_id,**_):
   if telegram_user_id==1:
    return {"intents":[],"purchases":[],"active_session":None,
@@ -157,7 +167,8 @@ class IntelligenceRepo(MessageRepo):
 def intelligence_service():
  return RelationshipsService(people_repository=PeopleRepo(),messages_repository=IntelligenceRepo())
 
-def test_verified_intelligence_uses_canonical_value_and_strict_offer_lifecycle():
+@patch("app.services.relationship_value_override_service.RelationshipValueOverrideService.active",return_value=None)
+def test_verified_intelligence_uses_canonical_value_and_strict_offer_lifecycle(_active):
  result=intelligence_service().intelligence(creator_profile_id=7,fanvue_account_id=8,telegram_user_id=2)
  assert result["customerValue"]["valueTier"]=="REPEAT_BUYER"
  assert result["customerValue"]["purchaseCount"]==2
@@ -171,12 +182,14 @@ def test_verified_intelligence_uses_canonical_value_and_strict_offer_lifecycle()
  assert result["purchaseHistory"][1]["ownershipStatus"] is None
  assert result["commercialState"]["activeSalesSession"]["state"]=="CONTINUING"
 
-def test_historical_purchase_without_presented_intent_is_not_conversion_numerator():
+@patch("app.services.relationship_value_override_service.RelationshipValueOverrideService.active",return_value=None)
+def test_historical_purchase_without_presented_intent_is_not_conversion_numerator(_active):
  result=intelligence_service().intelligence(creator_profile_id=7,fanvue_account_id=8,telegram_user_id=2)
  assert len(result["purchaseHistory"])==2
  assert result["salesPerformance"]["offersPurchased"]==1
 
-def test_unmapped_prospect_returns_partial_memory_and_no_invented_value():
+@patch("app.services.relationship_value_override_service.RelationshipValueOverrideService.active",return_value=None)
+def test_unmapped_prospect_returns_partial_memory_and_no_invented_value(_active):
  result=intelligence_service().intelligence(creator_profile_id=7,fanvue_account_id=8,telegram_user_id=1)
  assert result["partial"] is True
  assert result["customerValue"]["valueTier"] is None

@@ -379,8 +379,12 @@ class RelationshipsService:
             "mappingStatus": "VERIFIED" if mapped else "UNMAPPED",
             "customerValue": {
                 "buyerStatus": value.buyer_status if mapped else "UNMAPPED_PROSPECT",
-                "valueTier": automatic.get("valueTier", value.value_tier),
-                "attentionTier": automatic.get("attentionTier", value.attention_tier),
+                "valueTier": (
+                    automatic.get("valueTier", value.value_tier) if mapped else None
+                ),
+                "attentionTier": (
+                    automatic.get("attentionTier", value.attention_tier) if mapped else None
+                ),
                 "lifetimeSpendMinor": value.lifetime_spend_minor if mapped else None,
                 "purchaseCount": value.purchase_count if mapped else None,
                 "repeatBuyer": value.purchase_count >= 2 if mapped else False,

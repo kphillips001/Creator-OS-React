@@ -617,7 +617,9 @@ def test_actual_generation_prompt_receives_canonical_time_memory_and_style_contr
         def create(self, **kwargs):
             captured["messages"] = kwargs["messages"]
             return type("Completion", (), {"choices": [type("Choice", (), {
-                "message": type("Message", (), {"content": "Still afternoon for me."})()
+                    "message": type("Message", (), {
+                        "content": "It's still afternoon for me, but I'm doing pretty good."
+                    })()
             })()]})()
     captured = {}
     service = GPTService(api_key="test", global_training_service=Training())
@@ -634,7 +636,7 @@ def test_actual_generation_prompt_receives_canonical_time_memory_and_style_contr
         "creator_profile": {"id": 2, "persona_name": "Ava", "system_prompt": "Stay natural."},
     }, False, chat_history=[])
     prompt = captured["messages"][0]["content"]
-    assert result == "Still afternoon for me."
+    assert result == "It's still afternoon for me, but I'm doing pretty good."
     assert '"avaDaypart": "afternoon"' in prompt
     assert '"name": "Charlie"' in prompt
     assert "customer saying \"night\" does not make it night for Ava" in prompt

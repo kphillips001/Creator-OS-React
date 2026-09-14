@@ -214,7 +214,7 @@ class ConversationalMemoryService:
                                    r"(.+?)(?=\s+person\b|[.!?]|$)", interest_lowered)
             if preference is not None:
                 preference_domain = "leisure_activity"
-        if preference and not music_records and not any(
+        if preference and not any(
             record.get("category") == "preference"
             and record.get("source") == "customer_self_disclosure"
             for record in records
@@ -229,8 +229,8 @@ class ConversationalMemoryService:
                     "tonight", "lately",
                 }:
                     continue
-                metadata = ({"domain": preference_domain}
-                            if preference_domain is not None else None)
+                domain = "music" if music_records else preference_domain
+                metadata = ({"domain": domain} if domain is not None else None)
                 records.append(cls._record(
                     "preference", cls._slug(value), value, message, at, .9, metadata,
                 ))
