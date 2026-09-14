@@ -230,14 +230,19 @@ class TelegramIdentityRepository:
             with conn.cursor() as cursor:
                 cursor.execute(
                     """INSERT INTO public.telegram_identity_observations (
-                           telegram_user_id,telegram_chat_id,username,display_name)
-                       VALUES (%s,%s,%s,%s)
+                           telegram_user_id,telegram_chat_id,username,display_name,
+                           observation_sources,private_chat_id,private_chat_observed_at)
+                       VALUES (%s,%s,%s,%s,ARRAY['PRIVATE_CHAT'],%s,NOW())
                        ON CONFLICT (telegram_user_id) DO UPDATE SET
                            telegram_chat_id=EXCLUDED.telegram_chat_id,
+                           private_chat_id=EXCLUDED.private_chat_id,
+                           private_chat_observed_at=NOW(),
+                           observation_sources=(SELECT ARRAY(SELECT DISTINCT value FROM
+                             unnest(telegram_identity_observations.observation_sources||ARRAY['PRIVATE_CHAT']) value)),
                            username=COALESCE(EXCLUDED.username,telegram_identity_observations.username),
                            display_name=COALESCE(EXCLUDED.display_name,telegram_identity_observations.display_name),
                            last_observed_at=NOW() RETURNING *""",
-                    (telegram_user_id, telegram_chat_id, username, display_name),
+                    (telegram_user_id, telegram_chat_id, username, display_name, telegram_chat_id),
                 )
                 observation = dict(cursor.fetchone())
                 cursor.execute(
@@ -251,6 +256,24 @@ class TelegramIdentityRepository:
                 )
                 mapping = cursor.fetchone()
         return observation, self._to_mapping(mapping)
+
+    def observe_broadcast_member(self, *, telegram_user_id: int, source_channel_id: int,
+                                 username=None, display_name=None, participant_status=None):
+        """Persist numeric channel evidence only; never creates relationship state."""
+        with self._connection_factory() as conn, conn.cursor() as cursor:
+            cursor.execute("""INSERT INTO public.telegram_identity_observations(
+                telegram_user_id,telegram_chat_id,username,display_name,observation_sources,
+                source_channel_id,participant_status)
+                VALUES(%s,NULL,%s,%s,ARRAY['BROADCAST_MEMBER'],%s,%s)
+                ON CONFLICT(telegram_user_id) DO UPDATE SET
+                  observation_sources=(SELECT ARRAY(SELECT DISTINCT value FROM
+                    unnest(telegram_identity_observations.observation_sources||ARRAY['BROADCAST_MEMBER']) value)),
+                  source_channel_id=EXCLUDED.source_channel_id,
+                  username=COALESCE(EXCLUDED.username,telegram_identity_observations.username),
+                  display_name=COALESCE(EXCLUDED.display_name,telegram_identity_observations.display_name),
+                  participant_status=EXCLUDED.participant_status,last_observed_at=NOW()
+                RETURNING *""",(telegram_user_id,username,display_name,source_channel_id,participant_status))
+            return dict(cursor.fetchone())
 
     def create_verified_mapping(
         self, *, telegram_user_id: int, fanvue_account_id: int,
@@ -305,7 +328,7 @@ class TelegramIdentityRepository:
                            last_observed_username,last_observed_display_name)
                        VALUES (%s,%s,%s,%s,%s,'VERIFIED',%s,NOW(),%s,%s::jsonb,%s,%s)
                        RETURNING *""",
-                    (telegram_user_id, observation["telegram_chat_id"],
+                    (telegram_user_id, observation.get("private_chat_id"),
                      fanvue_account_id, local_fanvue_user_id,
                      user["fanvue_user_uuid"], verification_method,
                      operator_source, json.dumps(evidence),
@@ -344,8 +367,11 @@ class TelegramIdentityRepository:
                 counts = dict(cursor.fetchone())
                 cursor.execute(
                     """SELECT observation.telegram_user_id,
-                              observation.telegram_chat_id,
+                              observation.telegram_chat_id,observation.observation_sources,
+                              observation.source_channel_id,observation.private_chat_id,
+                              observation.private_chat_observed_at,observation.participant_status,
                               observation.username,observation.display_name,
+                              observation.first_observed_at,
                               observation.last_observed_at,
                               map.id AS mapping_id,map.verification_status,map.is_active,
                               map.local_fanvue_user_id

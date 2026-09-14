@@ -92,6 +92,10 @@ class TelegramIdentityService:
             username=self._metadata(username), display_name=self._metadata(display_name),
         )
 
+    def observe_broadcast_member(self, **values):
+        from app.services.telegram_broadcast_observation_service import TelegramBroadcastObservationService
+        return TelegramBroadcastObservationService(self.repository).persist(**values)
+
     def verify_operator_mapping(
         self, *, telegram_user_id: int, fanvue_account_id: int,
         local_fanvue_user_id: int, verification_note: str,
@@ -119,6 +123,31 @@ class TelegramIdentityService:
         except TelegramIdentityIntegrityError as error:
             raise InvalidTelegramIdentityError(str(error)) from error
 
+    def preview_operator_mapping(self, *, telegram_user_id: int, fanvue_account_id: int,
+                                 local_fanvue_user_id: int):
+        self._require_positive_integer("telegram_user_id", telegram_user_id)
+        self._require_positive_integer("local_fanvue_user_id", local_fanvue_user_id)
+        counts, observations = self.repository.readiness(fanvue_account_id=fanvue_account_id)
+        observation = next((row for row in observations if int(row["telegram_user_id"]) == telegram_user_id), None)
+        customer = next((row for row in self.repository.list_fanvue_candidates(fanvue_account_id=fanvue_account_id)
+                         if int(row["id"]) == local_fanvue_user_id), None)
+        if observation is None: raise InvalidTelegramIdentityError("An observed numeric Telegram identity is required.")
+        if observation.get("mapping_id") is not None:
+            exact = int(observation.get("local_fanvue_user_id") or -1) == local_fanvue_user_id
+            if not exact: raise DuplicateTelegramIdentityError("Telegram identity is mapped to another customer.")
+        if customer is None and observation.get("mapping_id") is None:
+            raise InvalidTelegramIdentityError("Canonical Fanvue customer is unavailable for mapping.")
+        return {"status":"READY_FOR_EXPLICIT_VERIFICATION","mutationPerformed":False,
+                "telegramUserIdMasked":self._mask(telegram_user_id),"localFanvueUserId":local_fanvue_user_id,
+                "observationSources":list(observation.get("observation_sources") or []),
+                "source":"BROADCAST_SUBSCRIBER" if "BROADCAST_MEMBER" in (observation.get("observation_sources") or []) else "PRIVATE_CHAT",
+                "privateChatEvidence":"OBSERVED" if observation.get("private_chat_id") is not None else "NOT_ESTABLISHED",
+                "privateChatEstablished":observation.get("private_chat_id") is not None,
+                "existingMapping":"NONE" if observation.get("mapping_id") is None else observation.get("verification_status"),
+                "conflict":"NONE",
+                "displayName":observation.get("display_name"),
+                "username":observation.get("username"),"lastObservedAt":observation.get("last_observed_at")}
+
     def readiness(self, *, fanvue_account_id: int):
         counts, rows = self.repository.readiness(
             fanvue_account_id=fanvue_account_id
@@ -129,6 +158,8 @@ class TelegramIdentityService:
                 "telegramUserIdMasked": self._mask(row["telegram_user_id"]),
                 "telegramUserId": str(row["telegram_user_id"]),
                 "displayName": row.get("display_name") or row.get("username") or "Telegram customer",
+                "username": row.get("username"),
+                "firstObservedAt": row.get("first_observed_at"),
                 "status": (
                     "UNMAPPED" if row.get("mapping_id") is None
                     else "MAPPED" if row.get("verification_status") == "VERIFIED" and row.get("is_active")
@@ -136,6 +167,10 @@ class TelegramIdentityService:
                     else "INCOMPLETE"
                 ),
                 "lastObservedAt": row.get("last_observed_at"),
+                "observationSources": list(row.get("observation_sources") or []),
+                "source": "BROADCAST_SUBSCRIBER" if "BROADCAST_MEMBER" in (row.get("observation_sources") or []) else "PRIVATE_CHAT",
+                "privateChatEstablished": row.get("private_chat_id") is not None,
+                "participantStatus": row.get("participant_status"),
             } for row in rows],
             "fanvueCandidates": [{
                 "localFanvueUserId": int(row["id"]),
@@ -285,15 +320,13 @@ class TelegramIdentityService:
     def validate_mapping(
         mapping: TelegramIdentityMapping,
     ) -> None:
-        normalized_uuid = TelegramIdentityService._validate_values(
-            telegram_user_id=mapping.telegram_user_id,
-            telegram_chat_id=mapping.telegram_chat_id,
-            fanvue_account_id=mapping.fanvue_account_id,
-            local_fanvue_user_id=mapping.local_fanvue_user_id,
-            external_fanvue_user_uuid=(
-                mapping.external_fanvue_user_uuid
-            ),
-        )
+        TelegramIdentityService._require_positive_integer("telegram_user_id",mapping.telegram_user_id)
+        if mapping.telegram_chat_id is not None:
+            TelegramIdentityService._require_nonzero_integer("telegram_chat_id",mapping.telegram_chat_id)
+        TelegramIdentityService._require_positive_integer("fanvue_account_id",mapping.fanvue_account_id)
+        TelegramIdentityService._require_positive_integer("local_fanvue_user_id",mapping.local_fanvue_user_id)
+        try: normalized_uuid=UUID(str(mapping.external_fanvue_user_uuid))
+        except (TypeError,ValueError,AttributeError) as error:raise InvalidTelegramIdentityError("external_fanvue_user_uuid must be a UUID.") from error
 
         expected_engine_user_id = (
             f"{mapping.fanvue_account_id}:"

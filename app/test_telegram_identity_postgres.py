@@ -16,6 +16,7 @@ from app.services.telegram_identity_service import (
     InvalidTelegramIdentityError,
     TelegramIdentityService,
 )
+from app.testing.postgres_safety import require_current_telegram_test_schema
 
 
 TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL")
@@ -28,10 +29,16 @@ TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL")
 class TelegramIdentityPostgresTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        guarded_url = require_current_telegram_test_schema(
+            TEST_DATABASE_URL,
+            os.getenv("CREATOR_OS_PRODUCTION_DATABASE_URL")
+            or os.getenv("DATABASE_URL"),
+        )
+
         @contextmanager
         def connection_factory():
             with connect(
-                TEST_DATABASE_URL,
+                guarded_url,
                 row_factory=dict_row,
             ) as connection:
                 yield connection

@@ -25,7 +25,7 @@ class TelegramIdentityMapping:
 
     id: int | None
     telegram_user_id: int
-    telegram_chat_id: int
+    telegram_chat_id: int | None
     fanvue_account_id: int
     local_fanvue_user_id: int
     external_fanvue_user_uuid: UUID
@@ -54,7 +54,7 @@ class TelegramIdentityMapping:
         return cls(
             id=row.get("id"),
             telegram_user_id=int(row["telegram_user_id"]),
-            telegram_chat_id=int(row["telegram_chat_id"]),
+            telegram_chat_id=(int(row["telegram_chat_id"]) if row.get("telegram_chat_id") is not None else None),
             fanvue_account_id=int(row["fanvue_account_id"]),
             local_fanvue_user_id=int(
                 row["local_fanvue_user_id"]
@@ -78,7 +78,7 @@ class CanonicalTelegramIdentity:
     """Validated identity contract consumed by a future transport layer."""
 
     telegram_user_id: int
-    telegram_chat_id: int
+    telegram_chat_id: int | None
     fanvue_account_id: int
     local_fanvue_user_id: int
     external_fanvue_user_uuid: UUID
