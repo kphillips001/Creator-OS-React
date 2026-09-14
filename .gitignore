@@ -32,3 +32,34 @@ Thumbs.db
 
 logs/
 *.log
+
+# Local build and provider caches
+.vite/
+.wrangler/
+
+# Private backups and bounded operational evidence
+backups/
+data/backlog_imports/
+data/one_off_telegram/
+
+# Local generated-media workspaces
+data/regeneration_workspace/
+
+# Operator-local context and live mutable runtime authorities
+CONTEXT.md
+data/config/behavior_config.json
+data/caption_studio/caption_history.json
+data/caption_studio/caption_items.json
+data/caption_studio/caption_results.json
+data/caption_studio/caption_sessions.json
+data/content_archive/content_archive.json
+data/content_commerce_learning/learning_history.json
+data/creative_director/creative_sessions.json
+data/developer_diagnostics/generation_request_traces.json
+data/edit_studio/edit_items.json
+data/edit_studio/edit_sessions.json
+data/generation_engine/generation_jobs.json
+data/generation_library/reviewed_edit_outputs.json
+data/social_publishing/social_history.json
+data/social_publishing/social_publish_items.json
+data/social_publishing/social_queue.json
