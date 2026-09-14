@@ -33,9 +33,11 @@ class CustomerEffectivePermissionsService:
         ava = self.ava.read(creator_profile_id=creator_profile_id)["avaBot"]
         global_permissions = self.global_selling.read()
         configured_chat = control.mode is TelegramRelationshipMode.AVA_AUTO
-        chat_allowed = ava["effective"] == "ON" and configured_chat
+        ignored = bool(getattr(control,"ignored",False))
+        chat_allowed = ava["effective"] == "ON" and configured_chat and not ignored
         chat_reason = (
             None if chat_allowed else
+            "RELATIONSHIP_IGNORED" if ignored else
             "CUSTOMER_AVA_CHAT_DISABLED" if not configured_chat else
             "GLOBAL_AVA_BOT_DISABLED" if ava["desired"] == "OFF" else
             "GLOBAL_AVA_BOT_ATTENTION"
@@ -75,6 +77,14 @@ class CustomerEffectivePermissionsService:
                 "sessionSellingEnabled": control.session_selling_enabled,
                 "relationshipMode": control.mode.value,
                 "controlVersion": control.control_version,
+            },
+            "communication": {
+                "disposition": getattr(
+                    getattr(control,"communication_disposition","ACTIVE"),"value","ACTIVE"),
+                "ignored": ignored,
+                "ignoreVersion": getattr(control,"ignore_version",0),
+                "resumeAfterInboundMessageId": getattr(
+                    control,"resume_after_inbound_message_id",None),
             },
             "effective": {
                 "chatAllowed": chat_allowed,

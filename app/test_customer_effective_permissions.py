@@ -62,6 +62,15 @@ def scope():
                 telegram_user_id=3, telegram_chat_id=3)
 
 
+def test_new_customer_control_defaults_all_customer_permissions_on():
+    control = TelegramRelationshipControl(
+        None, 1, 2, 3, 3, TelegramRelationshipMode.AVA_AUTO, 0,
+    )
+    assert control.mode is TelegramRelationshipMode.AVA_AUTO
+    assert control.content_selling_enabled is True
+    assert control.session_selling_enabled is True
+
+
 def test_global_off_cannot_be_overridden_by_customer_on():
     relationships = Relationships(content=True, session=True)
     state = service(relationships, ava=Ava("OFF", "OFF"),
