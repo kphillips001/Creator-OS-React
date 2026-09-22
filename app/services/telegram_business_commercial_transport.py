@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from app.models.telegram_transport_contract import validate_local_payload
+
 import os
+from app.models.telegram_transport_contract import TelegramReachability, TelegramPreflightError, TelegramPeerUnavailableError
 
 from app.integrations.telegram.bot_api_sender import TelegramBotApiSender
 from app.services.telegram_business_connection_service import (
@@ -11,6 +14,7 @@ from app.services.telegram_business_connection_service import (
 
 
 class TelegramBusinessTransportError(RuntimeError):
+    health_scope = "RECIPIENT_REACHABILITY"
     code = "BUSINESS_CONNECTION_UNAVAILABLE"
 
 
@@ -27,8 +31,10 @@ class TelegramBusinessCommercialTransport:
 
     BUTTON_LABEL = "🔓 Unlock"
 
+    validate_delivery = staticmethod(validate_local_payload)
+
     def __init__(self, *, enabled=None, owner_user_id=None, bot_id=None,
-                 connection_service=None, sender=None, bot_token=None):
+                 connection_service=None, sender=None, bot_token=None, peer_observations=None):
         self.enabled = (
             str(os.getenv("TELEGRAM_BUSINESS_COMMERCIAL_TRANSPORT_ENABLED", "false"))
             .strip().lower() == "true"
@@ -42,6 +48,7 @@ class TelegramBusinessCommercialTransport:
             bot_id if bot_id is not None
             else os.getenv("TELEGRAM_BUSINESS_BOT_ID", "")
         )
+        self.peer_observations = peer_observations
         self.connection_service = connection_service
         self.sender = sender
         self.bot_token = (
@@ -49,8 +56,50 @@ class TelegramBusinessCommercialTransport:
             else os.getenv("TELEGRAM_BOT_TOKEN_AVA", "")
         )
 
+    def prepare_delivery(self, *, chat_id, requirements):
+        connection = self._active_connection()
+        from app.repositories.telegram_business_peer_observation_repository import TelegramBusinessPeerObservationRepository
+        peers = self.peer_observations or TelegramBusinessPeerObservationRepository()
+        evidence = peers.evidence(business_connection_id=connection.business_connection_id,
+            telegram_peer_user_id=int(chat_id), telegram_chat_id=int(chat_id))
+        if not evidence or not evidence.get("last_business_inbound_at") or not evidence.get("is_enabled") or not evidence.get("can_reply"):
+            raise TelegramPeerUnavailableError("No current Business peer reply evidence.")
+        result = TelegramReachability("TELEGRAM_BUSINESS", f"business:{self.owner_user_id}:bot:{self.bot_id}", int(chat_id),
+            "BUSINESS_INBOUND", evidence["last_business_inbound_at"], connection.business_connection_id,
+            sender_id=self.owner_user_id)
+        result.validate(requirements)
+        return result
+
     def send_text(self, *, chat_id, message_text, button_label, button_url,
-                  expected_business_connection_id=None):
+                  expected_business_connection_id=None, disable_link_preview=True):
+        active_connection = self._active_connection(expected_business_connection_id)
+        self._validate_button(button_label, button_url)
+        sender = self.sender or TelegramBotApiSender(bot_token=self.bot_token)
+        return sender.send_text(
+            business_connection_id=active_connection.business_connection_id,
+            chat_id=int(chat_id), message_text=message_text,
+            button_label=button_label, button_url=button_url,
+            disable_link_preview=disable_link_preview,
+            expected_business_owner_user_id=self.owner_user_id,
+            expected_business_bot_id=self.bot_id,
+        )
+
+    def send_asset(self, *, chat_id, asset_path, message_text,
+                   button_label, button_url,
+                   expected_business_connection_id=None, disable_link_preview=True):
+        active_connection = self._active_connection(expected_business_connection_id)
+        self._validate_button(button_label, button_url)
+        sender = self.sender or TelegramBotApiSender(bot_token=self.bot_token)
+        return sender.send_asset(
+            business_connection_id=active_connection.business_connection_id,
+            chat_id=int(chat_id), asset_path=asset_path,
+            message_text=message_text, button_label=button_label,
+            button_url=button_url, disable_link_preview=disable_link_preview,
+            expected_business_owner_user_id=self.owner_user_id,
+            expected_business_bot_id=self.bot_id,
+        )
+
+    def _active_connection(self, expected_business_connection_id=None):
         if not self.enabled:
             raise TelegramBusinessTransportError(
                 "Telegram Business commercial transport is disabled."
@@ -93,18 +142,13 @@ class TelegramBusinessCommercialTransport:
             raise TelegramBusinessTransportError(
                 "The prepared Telegram Business connection is no longer active."
             )
+        return active_connection
+
+    def _validate_button(self, button_label, button_url):
         if (button_label is None) != (button_url is None):
             raise ValueError("Telegram button label and URL must be supplied together.")
-        if button_label is not None and button_label != self.BUTTON_LABEL:
-            raise ValueError("Private-chat commercial button label is not canonical.")
-        sender = self.sender or TelegramBotApiSender(bot_token=self.bot_token)
-        return sender.send_text(
-            business_connection_id=active_connection.business_connection_id,
-            chat_id=int(chat_id), message_text=message_text,
-            button_label=button_label, button_url=button_url,
-            expected_business_owner_user_id=self.owner_user_id,
-            expected_business_bot_id=self.bot_id,
-        )
+        from app.models.telegram_transport_contract import TelegramRequirements
+        TelegramRequirements.from_send(button_label=button_label, button_url=button_url)
 
     @staticmethod
     def _positive_id(value):

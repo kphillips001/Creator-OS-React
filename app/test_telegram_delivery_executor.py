@@ -1,3 +1,4 @@
+from app.testing.telegram_transport_fixtures import ReachableTestSender
 import asyncio
 import unittest
 from pathlib import Path
@@ -15,7 +16,7 @@ class AllowingSafetyService:
         return {"allowed": True, "reason": None, "source": "isolated_test"}
 
 
-class RecordingTextSender:
+class RecordingTextSender(ReachableTestSender):
     def __init__(self):
         self.calls = []
 
@@ -23,7 +24,7 @@ class RecordingTextSender:
         self.calls.append({"chat_id": chat_id, "message_text": message_text})
 
 
-class AsyncRecordingTextSender:
+class AsyncRecordingTextSender(ReachableTestSender):
     def __init__(self):
         self.calls = []
 
@@ -31,7 +32,7 @@ class AsyncRecordingTextSender:
         self.calls.append({"chat_id": chat_id, "message_text": message_text})
 
 
-class AsyncRecordingAssetSender:
+class AsyncRecordingAssetSender(ReachableTestSender):
     def __init__(self):
         self.calls = []
 
@@ -42,7 +43,7 @@ class AsyncRecordingAssetSender:
         return 778
 
 
-class VerifiedCommercialSender:
+class VerifiedCommercialSender(ReachableTestSender):
     async def send_text(self, **kwargs):
         return type("Receipt", (), {
             "id": 779,
@@ -66,7 +67,7 @@ class TelegramDeliveryExecutorTests(unittest.TestCase):
                 asset_path="C:/vault/free.jpg",
                 delivery_method="free_asset",
             ),
-            context={
+            context={"record_transport_evidence": lambda evidence: evidence, 
                 "correlation_id": "telegram:1:2",
                 "engine_user_id": "7:-123456789",
                 "token": "must-not-leak",
@@ -97,7 +98,7 @@ class TelegramDeliveryExecutorTests(unittest.TestCase):
                 message_text="Brain result sent",
                 delivery_method="text",
             ),
-            context={
+            context={"record_transport_evidence": lambda evidence: evidence, 
                 "chat_id": 123456789,
                 "text_sender": sender,
             },
@@ -124,7 +125,7 @@ class TelegramDeliveryExecutorTests(unittest.TestCase):
                     delivery_method="text",
                 ),
             ),
-            context={
+            context={"record_transport_evidence": lambda evidence: evidence, 
                 "chat_id": 123456789,
                 "text_sender": sender,
             },
@@ -150,7 +151,7 @@ class TelegramDeliveryExecutorTests(unittest.TestCase):
                     message_text="Async brain result",
                     delivery_method="text",
                 ),
-                context={
+                context={"record_transport_evidence": lambda evidence: evidence, 
                     "chat_id": 123456789,
                     "transport": sender,
                 },
@@ -176,7 +177,7 @@ class TelegramDeliveryExecutorTests(unittest.TestCase):
                     delivery_type="FREE", message_text="A little preview for you",
                     asset_path="C:/vault/teaser.jpg", delivery_method="free_asset",
                 ),
-                context={"chat_id": 123456789, "transport": sender},
+                context={"record_transport_evidence": lambda evidence: evidence, "chat_id": 123456789, "transport": sender},
             )
             return result, sender
 
@@ -202,7 +203,8 @@ class TelegramDeliveryExecutorTests(unittest.TestCase):
                         "url": "https://creator.example/unlock/opaque",
                     }},
                 ),
-                context={"chat_id": 123456789, "transport": VerifiedCommercialSender()},
+                context={"record_transport_evidence": lambda evidence: evidence, "chat_id": 123456789, "transport": VerifiedCommercialSender(),
+                         "origin": "HUMAN_OPERATOR"},
             )
 
         result = asyncio.run(run())
@@ -229,7 +231,7 @@ class TelegramDeliveryExecutorTests(unittest.TestCase):
                     "label": "Unlock", "url": "http://127.0.0.1:8001/unlock/x",
                 }},
             ),
-            context={"chat_id": 123456789, "text_sender": sender},
+            context={"record_transport_evidence": lambda evidence: evidence, "chat_id": 123456789, "text_sender": sender},
         )
         self.assertFalse(result.executed)
         self.assertEqual(sender.calls, [])

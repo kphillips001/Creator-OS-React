@@ -109,7 +109,17 @@ class PurchaseIntentService:
         self, intent_id: UUID, *, failed_at: datetime | None = None,
     ) -> PurchaseIntent:
         """Release a technically failed delivery without fabricating rejection."""
+        finalizer = getattr(self.repository, "finalize_delivery_failed", None)
+        if callable(finalizer):
+            result, changed = finalizer(
+                intent_id, at=failed_at or self.clock(),
+            )
+            if changed:
+                self.observe(result, "DELIVERY_FAILED")
+            return result
         intent = self._require(intent_id)
+        if intent.status is PurchaseIntentStatus.ABANDONED:
+            return intent
         self._require_transition(intent.status, PurchaseIntentStatus.ABANDONED)
         result = self.repository.mark_abandoned(
             intent_id, at=failed_at or self.clock(),
@@ -128,6 +138,30 @@ class PurchaseIntentService:
             return intent
         self._require_transition(intent.status, PurchaseIntentStatus.CLICKED)
         result = self.repository.mark_clicked(
+            intent_id, at=clicked_at or self.clock(),
+        )
+        if result.status is PurchaseIntentStatus.CLICKED:
+            self.observe(result, "OPENED")
+        return result
+
+    def record_unlock_click(
+        self, intent_id: UUID, *, clicked_at: datetime | None = None,
+    ) -> PurchaseIntent:
+        """Record a click backed by a valid, scoped durable unlock grant."""
+        intent = self._require(intent_id)
+        if intent.status in {
+            PurchaseIntentStatus.CLICKED,
+            PurchaseIntentStatus.PURCHASED,
+        }:
+            return intent
+        if intent.status not in {
+            PurchaseIntentStatus.CREATED,
+            PurchaseIntentStatus.PRESENTED,
+        }:
+            raise ValueError(
+                f"Invalid Purchase Intent unlock transition: {intent.status}."
+            )
+        result = self.repository.mark_clicked_from_unlock(
             intent_id, at=clicked_at or self.clock(),
         )
         if result.status is PurchaseIntentStatus.CLICKED:

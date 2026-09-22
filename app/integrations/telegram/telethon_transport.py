@@ -1,5 +1,7 @@
 """Telethon user-account transport for private plain-text messages."""
 
+from app.models.telegram_transport_contract import validate_local_payload
+
 import logging
 import asyncio
 import time
@@ -11,7 +13,11 @@ from pathlib import Path
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from telethon import Button, events
+from app.models.telegram_transport_contract import (DeliveryCertainty, TelegramPreflightError, TelegramReachability)
+from app.services.telegram_transport_boundary import capture_acknowledgement, TelegramAcknowledgementPersistenceError
+
+from telethon import events
+from telethon.errors import RPCError
 from telethon.tl import functions, types
 
 from app.models.telegram_inbound import TelegramInboundPayload
@@ -23,7 +29,8 @@ InboundHandler = Callable[[TelegramInboundPayload], Awaitable[None]]
 
 
 class TelethonTransportError(RuntimeError):
-    """A sanitized user-account transport failure."""
+    """A sanitized user-account transport failure after invocation."""
+    certainty = DeliveryCertainty.UNKNOWN
 
 
 class TelethonAuthorizationRequiredError(TelethonTransportError):
@@ -34,8 +41,20 @@ class TelethonTransientError(TelethonTransportError):
     """A connection failure that can be retried without operator intervention."""
 
 
+class TelethonProviderRejectedError(TelethonTransportError):
+    """Telegram synchronously rejected a request before acceptance."""
+    certainty = DeliveryCertainty.REJECTED
+    code = "PRIVATE_SEND_REJECTED"
+
+
 class TelethonCommercialVerificationError(ConnectionError, TelethonTransportError):
     """Telegram accepted a send whose commercial action could not be verified."""
+
+
+class TelethonCommercialCapabilityError(TelethonTransportError):
+    """A paid action reached a transport that cannot satisfy its UI contract."""
+    certainty = DeliveryCertainty.NOT_SENT
+    code = "BUSINESS_INLINE_BUTTON_REQUIRED"
 
 
 @dataclass(frozen=True)
@@ -52,6 +71,8 @@ class TelethonSendReceipt:
 class TelethonUserTransport:
     """Receive and send Telegram DMs through an authorized user session."""
 
+    validate_delivery = staticmethod(validate_local_payload)
+
     def __init__(
         self,
         *,
@@ -62,6 +83,7 @@ class TelethonUserTransport:
         if client is None:
             raise ValueError("client is required")
         self._client = client
+        self._authorized = False
         self._logger = logger or logging.getLogger("telethon-transport")
         self._inbound_handler: InboundHandler | None = None
         self._handler_registered = False
@@ -107,6 +129,43 @@ class TelethonUserTransport:
         except Exception as error:
             self._log_error("receive loop", error)
             raise TelethonTransientError("Telethon receive loop failed.") from error
+
+    async def bounded_private_inbound_history(
+        self, *, since: datetime, dialog_limit: int = 100,
+        per_dialog_limit: int = 100,
+    ) -> tuple[TelegramInboundPayload, ...]:
+        """Read a bounded private-inbound overlap using live-event eligibility."""
+        if since.tzinfo is None:
+            raise ValueError("since must be timezone-aware")
+        recovered = []
+        async for dialog in self._client.iter_dialogs(limit=max(1, dialog_limit)):
+            entity = getattr(dialog, "entity", None)
+            if entity is None or getattr(entity, "bot", False):
+                continue
+            latest_at = getattr(dialog, "date", None)
+            if latest_at is not None and latest_at < since:
+                continue
+            inspected = 0
+            async for message in self._client.iter_messages(
+                entity, limit=max(1, per_dialog_limit),
+            ):
+                inspected += 1
+                when = getattr(message, "date", None)
+                if when is None or when < since:
+                    break
+                payload = await self.normalize_event(message)
+                if payload is not None:
+                    recovered.append(payload)
+            if inspected >= per_dialog_limit:
+                oldest = getattr(message, "date", None)
+                if oldest is not None and oldest >= since:
+                    raise TelethonTransportError(
+                        "Bounded startup history limit was exhausted."
+                    )
+        return tuple(sorted(recovered, key=lambda item: (
+            item.received_at or datetime.min.replace(tzinfo=timezone.utc),
+            item.telegram_chat_id, item.message_id,
+        )))
 
     async def disconnect(self) -> None:
         try:
@@ -222,14 +281,31 @@ class TelethonUserTransport:
         text = str(value or "unknown")
         return text if len(text) <= 6 else f"{text[:4]}...{text[-4:]}"
 
+    async def prepare_delivery(self, *, chat_id, requirements):
+        if requirements.url_action:
+            raise TelegramPreflightError("User-account URL buttons are unsupported.")
+        if not self._client.is_connected() or not await self._client.is_user_authorized():
+            raise TelegramPreflightError("The canonical user session is not authorized and connected.")
+        try:
+            # Session cache lookup only: do not probe Telegram to discover peers.
+            self._client.session.get_input_entity(chat_id)
+        except (ValueError, KeyError, AttributeError) as error:
+            raise TelegramPreflightError("The canonical session cannot resolve this peer.") from error
+        evidence = TelegramReachability("TELETHON", "AVA_TELETHON_PRIVATE", chat_id,
+            "AUTHORIZED_SESSION_ENTITY", datetime.now(timezone.utc),
+            sender_id=getattr(self._client, "_self_id", None))
+        evidence.validate(requirements)
+        return evidence
+
     async def send_text(
         self, *, chat_id: int, message_text: str,
         button_label: str | None = None, button_url: str | None = None,
+        disable_link_preview: bool = False,
     ) -> int | TelethonSendReceipt | None:
         if isinstance(chat_id, bool) or not isinstance(chat_id, int) or chat_id <= 0:
             raise ValueError("chat_id must be a positive private-chat identifier")
-        if not isinstance(message_text, str) or not message_text.strip():
-            raise ValueError("message_text must be a non-empty string")
+        if not isinstance(message_text, str) or not message_text.strip() or len(message_text) > 4096:
+            raise ValueError("message_text must contain 1 to 4096 characters")
 
         self._logger.info(
             "[TELETHON SEND] chat_id=%s message_length=%s",
@@ -238,24 +314,21 @@ class TelethonUserTransport:
         )
         try:
             commercial = bool(button_label and button_url)
-            is_bot_method = getattr(self._client, "is_bot", None)
-            is_bot = bool(await is_bot_method()) if commercial and callable(is_bot_method) else False
+            if commercial:
+                raise TelethonCommercialCapabilityError(
+                    "Telegram Business inline-button delivery is required."
+                )
             final_text = message_text
             buttons = None
             attachment_mode = None
-            if commercial and is_bot:
-                buttons = [[Button.url(button_label, button_url)]]
-                attachment_mode = "INLINE_BUTTON"
-            elif commercial:
-                # Telegram user accounts cannot attach bot inline keyboards.
-                # Preserve zero-friction access with a visible, clickable URL.
-                final_text = f"{message_text.rstrip()}\n\n{button_label}: {button_url}"
-                attachment_mode = "VISIBLE_URL"
             send_options = {"buttons": buttons} if buttons is not None else {}
+            if disable_link_preview:
+                send_options["link_preview"] = False
             message = await self._client.send_message(
                 chat_id, final_text, **send_options,
             )
             message_id = getattr(message, "id", None)
+            capture_acknowledgement(message_id)
             if not isinstance(message_id, int):
                 return None
             if not commercial:
@@ -287,18 +360,37 @@ class TelethonUserTransport:
                 provider_markup_verified=(attachment_mode == "INLINE_BUTTON"),
                 attachment_mode=attachment_mode,
             )
+        except (TelegramAcknowledgementPersistenceError, TelethonCommercialVerificationError, TelethonCommercialCapabilityError):
+            # The provider may already have accepted the message. Preserve the
+            # ConnectionError subtype so durable handling becomes SEND_UNCERTAIN.
+            raise
+        except RPCError as error:
+            self._log_error("send", error, chat_id=chat_id)
+            if isinstance(getattr(error, "code", None), int) and 400 <= error.code < 500:
+                raise TelethonProviderRejectedError("Telegram rejected the private message.") from None
+            raise TelethonTransportError("Telegram RPC acceptance is unknown.") from None
         except Exception as error:
             self._log_error("send", error, chat_id=chat_id)
             raise TelethonTransportError("Telethon send failed.") from None
 
     async def send_asset(
-        self, *, chat_id: int, asset_path: str, message_text: str = "",
+        self, *, chat_id: int, asset_path: str, message_text: str = "", caption_entities=None,
     ) -> int | None:
         if isinstance(chat_id, bool) or not isinstance(chat_id, int) or chat_id <= 0:
             raise ValueError("chat_id must be a positive private-chat identifier")
+        if len(message_text) > 1024:
+            raise ValueError("Telegram photo captions must not exceed 1024 characters")
         path = Path(str(asset_path or ""))
         if not path.is_file():
             raise ValueError("asset_path must reference an existing file")
+        options = {}
+        if caption_entities is not None:
+            from app.models.telegram_unlock_action import validate_unlock_entities
+            from telethon.tl.types import MessageEntityTextUrl
+            validate_unlock_entities(message_text, caption_entities)
+            options = {"parse_mode": None, "formatting_entities": [
+                MessageEntityTextUrl(offset=e["offset"], length=e["length"], url=e["url"])
+                for e in caption_entities]}
         upload_path = (
             self._image_normalizer.normalize(path).path
             if self._image_normalizer.is_supported_image(path)
@@ -306,12 +398,26 @@ class TelethonUserTransport:
         )
         try:
             message = await self._client.send_file(
-                chat_id, str(upload_path), caption=message_text.strip() or None,
+                chat_id, str(upload_path), caption=(message_text if caption_entities is not None else message_text.strip()) or None, **options,
             )
             message_id = getattr(message, "id", None)
+            capture_acknowledgement(message_id)
+            if caption_entities is not None:
+                actual = [{'type':'text_url','offset':e.offset,'length':e.length,'url':e.url}
+                          for e in (getattr(message,'entities',None) or [])
+                          if isinstance(e,MessageEntityTextUrl)]
+                if actual != caption_entities or getattr(message,'message',None) != message_text:
+                    raise TelethonCommercialVerificationError('Accepted caption action could not be verified.')
+                capture_acknowledgement(message_id,caption_action_verified=True,
+                    caption=message_text,caption_entities=actual)
             return message_id if isinstance(message_id, int) else None
-        except TelethonCommercialVerificationError:
+        except (TelegramAcknowledgementPersistenceError, TelethonCommercialVerificationError):
             raise
+        except RPCError as error:
+            self._log_error("send_asset", error, chat_id=chat_id)
+            if isinstance(getattr(error, "code", None), int) and 400 <= error.code < 500:
+                raise TelethonProviderRejectedError("Telegram rejected the private media.") from None
+            raise TelethonTransportError("Telegram media RPC acceptance is unknown.") from None
         except Exception as error:
             self._log_error("send_asset", error, chat_id=chat_id)
             raise TelethonTransportError("Telethon Asset send failed.") from None

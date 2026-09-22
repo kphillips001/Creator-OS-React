@@ -216,6 +216,56 @@ def test_relevant_opportunity_teases_without_price_or_link_authorization():
     assert result.reason_code is CustomerSalesReasonCode.TEASE_RELEVANT_OPPORTUNITY
 
 
+def test_authorized_hot_opportunity_preserves_canonical_selected_offer():
+    result = ConversationalSalesProgressionService().refine(
+        decision(), {
+            "latest_message": "I know you will love it 😀",
+            "proactive_hot_opportunity": {
+                "proactiveHotOpportunityAuthorized": True,
+            },
+        },
+    )
+    metadata = dict(result.decision_metadata)
+    assert result.decision is CustomerSalesDecisionType.PRESENT_OFFER
+    assert result.sell_allowed is True
+    assert result.recommended_offering_id == OFFER
+    assert result.reason_code is CustomerSalesReasonCode.SUSTAINED_HOT_CONVERSATION
+    assert metadata["salesProgressionTransition"]["transitionSignal"] == (
+        "SUSTAINED_HOT_CONVERSATION"
+    )
+
+
+@pytest.mark.parametrize("message,reason", (
+    ("no, stop", CustomerSalesReasonCode.CUSTOMER_DECLINED),
+    ("too expensive", CustomerSalesReasonCode.CUSTOMER_HESITATION),
+))
+def test_hot_opportunity_does_not_override_rejection_or_hesitation(message, reason):
+    result = ConversationalSalesProgressionService().refine(
+        decision(), {
+            "latest_message": message,
+            "proactive_hot_opportunity": {
+                "proactiveHotOpportunityAuthorized": True,
+            },
+        },
+    )
+    assert result.decision is CustomerSalesDecisionType.BACK_OFF
+    assert result.sell_allowed is False
+    assert result.reason_code is reason
+
+
+def test_hot_authorization_without_selected_offering_cannot_present_offer():
+    result = ConversationalSalesProgressionService().refine(
+        decision(selected=False), {
+            "latest_message": "I know you will love it 😀",
+            "proactive_hot_opportunity": {
+                "proactiveHotOpportunityAuthorized": True,
+            },
+        },
+    )
+    assert result.decision is CustomerSalesDecisionType.NO_SALE
+    assert result.sell_allowed is False
+
+
 def test_positive_tease_response_builds_interest_then_presents():
     service = ConversationalSalesProgressionService()
     built = service.refine(

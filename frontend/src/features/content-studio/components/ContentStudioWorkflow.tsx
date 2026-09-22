@@ -19,6 +19,8 @@ import type {
   CreativeToolInputs,
   PromptSource,
 } from "../types/contentStudioCreativeTools";
+import type { ExplicitGenerationInput, GenerationSubmission } from "../types/generation";
+import type { PromptWorkshopLane } from "../types/promptWorkshop";
 import { type PlannerBatchItem, updatePlannerBatchItems } from "../types/plannerBatch";
 import type { CanonicalPlannerItem } from "../types/promptPlanner";
 
@@ -38,7 +40,13 @@ const EMPTY_CREATIVE_INPUTS: CreativeToolInputs = {
 const CREATIVE_STUDIO_RECONNECT_ORIGINS = [
   "canonical_planner",
   "manual_creative_concept",
+  "manual_prompt",
+  "prompt_workshop_premium",
+  "prompt_workshop_explicit",
 ];
+
+type PreparedPromptOrigin = Extract<GenerationSubmission["origin"],
+  "manual_prompt" | "prompt_workshop_premium" | "prompt_workshop_explicit">;
 
 function enhancedPromptInput(originalTags: string, enhancedTags: string) {
   return (
@@ -75,6 +83,7 @@ export function ContentStudioWorkflow({ context, error, loading }: ContentStudio
   const [creativeInputs, setCreativeInputs] = useState<CreativeToolInputs>(EMPTY_CREATIVE_INPUTS);
   const [promptSource, setPromptSource] = useState<PromptSource>("Original Tags");
   const [manualPrompt, setManualPrompt] = useState("");
+  const [manualPromptOrigin, setManualPromptOrigin] = useState<PreparedPromptOrigin>("manual_prompt");
   const [provider, setProvider] = useState<string | null>(null);
   const [, setWorkshopBatch] = useState({ prompts: [] as string[], source: "" });
   const [plannerBatchItems, setPlannerBatchItems] = useState<PlannerBatchItem[]>([]);
@@ -296,6 +305,58 @@ export function ContentStudioWorkflow({ context, error, loading }: ContentStudio
     }
   };
 
+  const createPreparedPromptImages = async () => {
+    const prompt = manualPrompt.trim();
+    if (manualWorkflowInFlight.current || generationDisabled || !prompt) return;
+    manualWorkflowInFlight.current = true;
+    setManualGenerationActivated(true);
+    setManualWorkflowPending(true);
+    setManualWorkflowError("");
+    try {
+      const diagnosticTraceId = crypto.randomUUID();
+      const explicit = manualPromptOrigin === "prompt_workshop_explicit";
+      const explicitInput: ExplicitGenerationInput | undefined = explicit ? {
+        sourceText: prompt,
+        originalSource: prompt,
+        sourceType: "operator_tags_or_prose",
+        origin: "explicit_tags",
+        requiredSemanticAttributes: {},
+        requestedImageCount: promptCount ?? 1,
+        lineage: { creativeStudioOrigin: manualPromptOrigin },
+      } : undefined;
+      const preview = await createPromptPreview(
+        explicit ? "explicit" : creativeMode ?? "",
+        prompt,
+        promptCount ?? 1,
+        undefined,
+        explicit ? "explicit" : "social",
+        explicitInput,
+        { origin: manualPromptOrigin, diagnosticTraceId },
+      );
+      const succeeded = await generationRef.current?.generate({
+        creativeMode: explicit ? "explicit" : creativeMode ?? "",
+        diagnosticTraceId,
+        explicitInput,
+        lane: explicit ? "explicit" : "social",
+        origin: manualPromptOrigin,
+        promptBatch: preview.prompts,
+        promptCount: promptCount ?? 1,
+        promptSource: prompt,
+        promptSourceLabel: manualPromptOrigin === "manual_prompt" ? "Manual Prompt" : "Prompt Workshop",
+      });
+      if (succeeded === false) setManualWorkflowError("Image generation did not complete successfully.");
+    } catch (reason) {
+      setManualWorkflowError(reason instanceof Error ? reason.message : "Creative Studio workflow failed");
+    } finally {
+      manualWorkflowInFlight.current = false;
+      setManualWorkflowPending(false);
+    }
+  };
+
+  const workshopOrigin = (lane: PromptWorkshopLane): PreparedPromptOrigin => (
+    lane === "explicit" ? "prompt_workshop_explicit" : "prompt_workshop_premium"
+  );
+
   const startNewGeneration = useCallback(() => {
     generationStartedIdeaId.current = null;
     plannerBatchInFlight.current = false;
@@ -426,16 +487,31 @@ export function ContentStudioWorkflow({ context, error, loading }: ContentStudio
               <PromptWorkshopSection
                 disabled={authoringDisabled}
                 onSelectPromptSource={() => setPromptSource("Prompt Workshop")}
-                onStoreBatch={(prompts, source) => {
+                onStoreBatch={(prompts, source, lane) => {
                   setWorkshopBatch({ prompts, source });
                   setManualPrompt(prompts[0] ?? "");
+                  setManualPromptOrigin(workshopOrigin(lane));
                 }}
-                onUsePrompt={setManualPrompt}
+                onUsePrompt={(prompt, lane) => {
+                  setManualPrompt(prompt);
+                  setManualPromptOrigin(workshopOrigin(lane));
+                }}
                 promptCount={promptCount ?? 1}
               />
               <ManualPromptSection
                 disabled={authoringDisabled}
-                onChange={setManualPrompt}
+                generating={manualWorkflowPending}
+                generationDisabled={generationDisabled}
+                onChange={(value) => {
+                  setManualPrompt(value);
+                  setManualPromptOrigin("manual_prompt");
+                }}
+                onGenerate={() => void createPreparedPromptImages()}
+                sourceDescription={manualPromptOrigin === "prompt_workshop_explicit"
+                  ? "Accepted from Prompt Workshop — Explicit. Generation uses the canonical Explicit pipeline."
+                  : manualPromptOrigin === "prompt_workshop_premium"
+                    ? "Accepted from Prompt Workshop — Premium."
+                    : "Direct Manual Prompt."}
                 value={manualPrompt}
               />
               <div className={manualGenerationActivated

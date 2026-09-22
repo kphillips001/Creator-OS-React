@@ -25,6 +25,7 @@ class ConversationalSalesProgressionService:
         r"\b(?:send|show|give)\s+me\s+(?:.{0,40}\s)?(?:pic|picture|photo|image|set)\b",
         r"^\s*(?:send|show|give)\s+me\s*[.!?]*$",
         r"\b(?:send|show|give)\s+me\s+(?:something|anything)\b",
+        r"\b(?:send|show|give)\s+me\s+(?:the\s+)?(?:private\s+|paid\s+)?content\b",
         r"\bshow\s+me\s+what\s+(?:you['\u2019]ve\s+got|you\s+(?:have|got))\b",
         r"\b(?:show|send|give)\s+me\s+(?:the\s+)?(?:private\s+one|good\s+stuff)\b",
         r"\bwhat\s+do\s+i\s+get\b",
@@ -312,6 +313,22 @@ class ConversationalSalesProgressionService:
                 CustomerSalesReasonCode.CUSTOMER_HESITATION,
                 "Customer hesitation requires reduced sales pressure.",
                 phase="BACK_OFF", tease_count=tease_count,
+            )
+        proactive_hot = dict(values.get("proactive_hot_opportunity") or {})
+        if proactive_hot.get("proactiveHotOpportunityAuthorized") is True:
+            return replace(
+                decision,
+                reason_code=CustomerSalesReasonCode.SUSTAINED_HOT_CONVERSATION,
+                reason_summary=(
+                    "A sustained current hot conversation plus canonical offering "
+                    "selection authorizes presenting the selected offer now."
+                ),
+                decision_metadata=self._metadata(
+                    decision, "PRESENT_OFFER", tease_count,
+                    CustomerSalesReasonCode.SUSTAINED_HOT_CONVERSATION.value,
+                    prior_phase=previous,
+                    transition_signal="SUSTAINED_HOT_CONVERSATION",
+                ),
             )
         customer_led_continuation = bool(dict(
             values.get("active_buying_window") or {}

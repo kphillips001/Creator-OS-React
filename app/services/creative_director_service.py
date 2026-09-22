@@ -8,6 +8,7 @@ import os
 import re
 from dataclasses import asdict
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, Callable, Mapping
 
 from app.config import GROK_VISION_MODEL
@@ -819,10 +820,18 @@ attributes precisely and put all uploaded-subject identity attributes in element
         creative_mode: str,
         prompt_count: int,
         metadata: Mapping[str, Any] | None = None,
+        canonical_identity=None,
     ) -> PromptPlan:
         creator_profile_id = int((creator_profile or {}).get("id"))
-        reference = self.reference_library.get_active_canonical_reference(
-            creator_profile_id=creator_profile_id,
+        reference = (
+            SimpleNamespace(
+                asset_id=canonical_identity.canonical_asset_id,
+                asset=SimpleNamespace(original_path=canonical_identity.canonical_local_path),
+            )
+            if canonical_identity is not None
+            else self.reference_library.get_active_canonical_reference(
+                creator_profile_id=creator_profile_id,
+            )
         )
         session = self.create_session(
             creator_profile_id=creator_profile_id,
@@ -846,14 +855,22 @@ attributes precisely and put all uploaded-subject identity attributes in element
         creative_mode: str,
         prompts: tuple[str, ...],
         metadata: Mapping[str, Any] | None = None,
+        canonical_identity=None,
     ) -> PromptPlan:
         """Persist an already reviewed provider batch without replanning it."""
         clean = tuple(str(prompt).strip() for prompt in prompts if str(prompt).strip())
         if not clean:
             raise ValueError("A provider-ready prompt batch is required.")
         creator_profile_id = int((creator_profile or {}).get("id"))
-        reference = self.reference_library.get_active_canonical_reference(
-            creator_profile_id=creator_profile_id,
+        reference = (
+            SimpleNamespace(
+                asset_id=canonical_identity.canonical_asset_id,
+                asset=SimpleNamespace(original_path=canonical_identity.canonical_local_path),
+            )
+            if canonical_identity is not None
+            else self.reference_library.get_active_canonical_reference(
+                creator_profile_id=creator_profile_id,
+            )
         )
         session_metadata = {
             "raw_creative_tags": creative_tags,

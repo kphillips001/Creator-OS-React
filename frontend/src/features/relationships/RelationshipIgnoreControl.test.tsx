@@ -18,7 +18,7 @@ it("confirms Ignore, projects IGNORED everywhere, and unignores without a backlo
  await waitFor(()=>expect(screen.getByText("IGNORED")).toBeInTheDocument());
  expect(screen.getAllByText("IGNORED").length).toBeGreaterThan(0);expect(screen.getByRole("region",{name:"Conversation operational status"})).toHaveTextContent("Automatic communication disabled for this relationship.");
  expect(screen.queryByRole("button",{name:/Fixture.*HVP/i})).not.toBeInTheDocument();
- fireEvent.change(screen.getByLabelText("More chat filters"),{target:{value:"IGNORED"}});
+ fireEvent.click(screen.getByRole("button",{name:"More chat filters"}));fireEvent.click(screen.getByRole("menuitemradio",{name:"Ignored"}));
  await waitFor(()=>expect(screen.getByRole("button",{name:/Fixture.*HVP/i})).toBeInTheDocument());
  fireEvent.click(screen.getByRole("button",{name:"Open Customer Intelligence"}));expect(await screen.findByText("Communication Status")).toBeInTheDocument();expect(screen.getAllByText("Ignored").length).toBeGreaterThan(0);
  fireEvent.click(screen.getByRole("button",{name:"Close Customer Intelligence"}));fireEvent.click(screen.getByRole("button",{name:"More conversation controls"}));fireEvent.click(screen.getByRole("menuitem",{name:"Unignore Relationship"}));const unignore=screen.getByRole("dialog");expect(unignore).toHaveTextContent("will not receive automatic responses");fireEvent.click(within(unignore).getByRole("button",{name:"Unignore"}));

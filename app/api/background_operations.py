@@ -56,7 +56,7 @@ def cancel_background_operation(operation_id: str):
     creator_id, _ = _context()
     service = BackgroundOperationService()
     try:
-        operation = service.repository.request_cancellation(
+        operation = service.request_generation_cancellation(
             operation_id, creator_profile_id=creator_id)
         # Client-orchestrated batches have no worker lease that could observe
         # CANCEL_REQUESTED. Finalize them immediately through the canonical

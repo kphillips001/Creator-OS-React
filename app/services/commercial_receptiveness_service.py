@@ -227,9 +227,10 @@ class CommercialReceptivenessService:
 
     @classmethod
     def inventory_existence_question(cls, message: str) -> bool:
+        from app.services.foreground_relevance_contract import ForegroundRelevanceContract
         value = str(message or "")
         return bool(
-            cls.INVENTORY_EXISTENCE_QUESTION_PATTERN.search(value)
+            ForegroundRelevanceContract.inventory_question(value)
             and not cls.INVENTORY_ACTION_OR_COMPARISON_PATTERN.search(value)
         )
 
@@ -469,6 +470,10 @@ class CommercialReceptivenessService:
         ):
             return "OFFERING_AVAILABILITY_INQUIRY"
         for interest_type, pattern in cls.INTEREST_PATTERNS:
+            if interest_type == 'PRICE_REQUEST':
+                from app.services.foreground_relevance_contract import ForegroundRelevanceContract
+                if not ForegroundRelevanceContract.pricing_question(text):
+                    continue
             if pattern.search(text):
                 return interest_type
         return "NONE"
@@ -485,6 +490,10 @@ class CommercialReceptivenessService:
         if cls.FRESH_COMPARATIVE_PRICE_PATTERN.search(text):
             return None
         for continuation_type, pattern in cls.ACTIVE_OFFER_CONTINUATION_PATTERNS:
+            if continuation_type == 'PRICE_REQUEST':
+                from app.services.foreground_relevance_contract import ForegroundRelevanceContract
+                if not ForegroundRelevanceContract.pricing_question(text):
+                    continue
             if pattern.search(text):
                 return continuation_type
         return None

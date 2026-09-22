@@ -34,6 +34,21 @@ class IntentRepository:
             )
         return self.item
 
+    def mark_clicked_from_unlock(self, _intent_id, *, at):
+        self.mark_calls.append(at)
+        if self.item.status in {
+            PurchaseIntentStatus.CREATED, PurchaseIntentStatus.PRESENTED,
+        }:
+            self.item = SimpleNamespace(
+                **{
+                    **vars(self.item),
+                    "status": PurchaseIntentStatus.CLICKED,
+                    "presented_at": getattr(self.item, "presented_at", None) or at,
+                    "clicked_at": self.item.clicked_at or at,
+                }
+            )
+        return self.item
+
 
 def lifecycle(repository):
     return PurchaseIntentService(
@@ -69,6 +84,34 @@ def test_purchased_intent_never_regresses_to_clicked():
     assert result.status is PurchaseIntentStatus.PURCHASED
     assert result.clicked_at == CLICKED_AT
     assert repository.mark_calls == []
+
+
+def test_valid_unlock_click_recovers_created_intent_without_weakening_normal_click():
+    repository = IntentRepository(PurchaseIntentStatus.CREATED)
+    service = lifecycle(repository)
+    with pytest.raises(ValueError, match="CREATED.*CLICKED"):
+        service.record_click(repository.item.purchase_intent_id, clicked_at=CLICKED_AT)
+    result = service.record_unlock_click(
+        repository.item.purchase_intent_id, clicked_at=CLICKED_AT,
+    )
+    assert result.status is PurchaseIntentStatus.CLICKED
+    assert result.presented_at == result.clicked_at == CLICKED_AT
+    assert repository.mark_calls == [CLICKED_AT]
+
+
+def test_duplicate_unlock_click_is_idempotent():
+    repository = IntentRepository(PurchaseIntentStatus.CREATED)
+    service = lifecycle(repository)
+    first = service.record_unlock_click(
+        repository.item.purchase_intent_id, clicked_at=CLICKED_AT,
+    )
+    second = service.record_unlock_click(
+        repository.item.purchase_intent_id,
+        clicked_at=CLICKED_AT.replace(second=55),
+    )
+    assert first.status is second.status is PurchaseIntentStatus.CLICKED
+    assert second.clicked_at == CLICKED_AT
+    assert repository.mark_calls == [CLICKED_AT]
 
 
 def evidence(*, complete=True, purchased=False):
@@ -164,4 +207,21 @@ def test_destination_failure_occurs_after_durable_valid_click(monkeypatch):
     monkeypatch.setenv("PRIVATE_CHAT_FINGERPRINT_IDENTITY_BOOTSTRAP_ENABLED", "true")
     with pytest.raises(UnlockUnavailableError):
         gateway.resolve("x" * 64)
+    assert calls == [(intent.purchase_intent_id, CLICKED_AT)]
+
+
+def test_gateway_prefers_unlock_specific_lifecycle_boundary():
+    calls = []
+    intent = SimpleNamespace(purchase_intent_id=uuid4())
+    gateway = PrivateChatUnlockGatewayService(
+        purchase_intent_lifecycle=SimpleNamespace(
+            record_unlock_click=lambda item_id, clicked_at: calls.append(
+                (item_id, clicked_at)
+            ) or intent,
+            record_click=lambda *_args, **_kwargs: pytest.fail(
+                "ordinary click boundary must not be used"
+            ),
+        ),
+    )
+    assert gateway._record_valid_click(intent, clicked_at=CLICKED_AT) is intent
     assert calls == [(intent.purchase_intent_id, CLICKED_AT)]

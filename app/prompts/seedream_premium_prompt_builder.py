@@ -1,13 +1,17 @@
 from app.prompts.shot_types import SHOT_TYPES
 from app.services.editorial_quality_guidance import editorial_quality_guidance
+from app.services.canonical_creator_identity_policy import canonical_creator_identity_policy
 
 
-PREMIUM_INTIMACY_PROMPT_RULES = """
+CANONICAL_AVA_IDENTITY_POLICY = canonical_creator_identity_policy(2)
+
+
+PREMIUM_INTIMACY_PROMPT_RULES = f"""
 PREMIUM INTIMACY RULES INHERITED FROM EXPLICIT PIPELINE:
 Use the explicit pipeline's polish for identity, framing, expression, body language, and realism, but do not use its hardcore sexual content.
 
 Every premium prompt should include:
-- exact reference identity preservation: same face, hair, body, bust size, same waist-to-hip proportions, same natural sun-kissed skin tone
+- exact reference identity preservation: {CANONICAL_AVA_IDENTITY_POLICY.planner_identity_summary}
 - hair continuity: long dark hair worn down, soft center part or natural side part, smooth flat natural top, loose flowing hair lying over her shoulders or down her back
 - scalp and hair shape continuity: natural low-profile scalp area, no lifted tied hairstyle, no tall hair shape, no piled hair shape above the scalp
 - mandatory medium-close creator framing: close-medium, waist-up, head-to-hips, head-to-upper-thigh, or upper-thigh crop unless the user explicitly requests a wide shot

@@ -9,6 +9,7 @@ from pathlib import Path
 
 from app.models.content_archive import ContentArchiveRecord
 from app.services.content_archive_service import ContentArchiveService
+from app.services.generation_library_service import GenerationLibraryService
 
 
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
@@ -27,13 +28,19 @@ class PostedContentItem:
     prompt: str
     file_location: str
     media_url: str
+    media_type: str
+    move_eligible: bool
 
 
 class PostedContentService:
-    """Discovers published files without moving or persisting anything."""
+    """Discovers publication history and delegates canonical library returns."""
 
-    def __init__(self, archive_service: ContentArchiveService | None = None):
+    def __init__(self, archive_service: ContentArchiveService | None = None,
+                 generation_library: GenerationLibraryService | None = None):
         self.archive_service = archive_service or ContentArchiveService()
+        self.generation_library = generation_library or GenerationLibraryService(
+            archive_service=self.archive_service
+        )
 
     def published_folders(self) -> tuple[tuple[str, Path], ...]:
         paths = self.archive_service.content_paths()
@@ -50,6 +57,7 @@ class PostedContentService:
             self._normalized_path(record.current_file_path): record
             for record in self.archive_service.list_records()
             if record.archive_type.startswith("published_")
+            and (record.metadata or {}).get("current_disposition") != "generation_library"
         }
         items: list[PostedContentItem] = []
         seen: set[str] = set()
@@ -70,7 +78,28 @@ class PostedContentService:
         for item in self.list_items():
             if item.content_id == content_id:
                 return item
+        record = next((item for item in self.archive_service.list_records()
+                       if item.archive_id == content_id
+                       and item.archive_type.startswith("published_")), None)
+        if record is not None and Path(record.current_file_path).is_file():
+            return self._item(Path(record.current_file_path), record.platform or "", record)
         raise KeyError(f"Posted content not found: {content_id}")
+
+    def move_to_generation_library(self, content_id: str) -> tuple[PostedContentItem, bool]:
+        record = next((item for item in self.archive_service.list_records()
+                       if item.archive_id == str(content_id)
+                       and item.archive_type.startswith("published_")), None)
+        if record is None:
+            raise KeyError(f"Posted content not found: {content_id}")
+        path = Path(record.current_file_path)
+        if path.suffix.lower() not in IMAGE_SUFFIXES:
+            raise ValueError("Only published images can move to Generation Library.")
+        if not self._move_eligible(record):
+            raise ValueError("Published image lacks canonical Generation Library lineage.")
+        restored, already_moved = self.generation_library.restore_published_archive(record)
+        updated = next(item for item in self.archive_service.list_records()
+                       if item.archive_id == record.archive_id)
+        return self._item(Path(restored.output_reference), updated.platform or "", updated), already_moved
 
     @staticmethod
     def _item(path: Path, platform: str, record: ContentArchiveRecord | None) -> PostedContentItem:
@@ -101,7 +130,16 @@ class PostedContentService:
             prompt=str(record.prompt_text or "") if record else "",
             file_location=str(path),
             media_url=f"/api/v1/posted-content/{content_id}/media",
+            media_type="image",
+            move_eligible=PostedContentService._move_eligible(record),
         )
+
+    @staticmethod
+    def _move_eligible(record: ContentArchiveRecord | None) -> bool:
+        if record is None:
+            return False
+        snapshot = dict(record.generation_record or {})
+        return bool(snapshot.get("image_id") and snapshot.get("creator_profile_id"))
 
     @staticmethod
     def _normalized_path(path: str | Path) -> str:

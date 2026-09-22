@@ -12,6 +12,8 @@ type PostedContentResponse = {
   prompt: string;
   file_location: string;
   media_url: string;
+  media_type: string;
+  move_eligible: boolean;
 };
 
 export async function getPostedContent(signal?: AbortSignal): Promise<PostedContentItem[]> {
@@ -30,5 +32,14 @@ export async function getPostedContent(signal?: AbortSignal): Promise<PostedCont
     prompt: item.prompt,
     fileLocation: item.file_location,
     mediaUrl: item.media_url,
+    mediaType: item.media_type,
+    moveEligible: item.move_eligible,
   }));
+}
+
+export async function movePostedContentToGeneration(contentId: string): Promise<{ message: string }> {
+  const response = await fetch(`/api/v1/posted-content/${encodeURIComponent(contentId)}/move-to-generation-library`, { method: "POST" });
+  const result = await response.json() as { message?: string; detail?: string };
+  if (!response.ok) throw new Error(result.detail || "Unable to move image to Generation Library.");
+  return { message: result.message || "Image moved to Generation Library." };
 }

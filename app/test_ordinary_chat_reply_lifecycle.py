@@ -1,3 +1,4 @@
+from dataclasses import replace
 from datetime import datetime, timezone
 from enum import Enum
 from types import MappingProxyType
@@ -5,7 +6,8 @@ from types import SimpleNamespace
 from unittest.mock import Mock
 from uuid import UUID
 
-from app.models.telegram_inbound import TelegramInboundResult
+from app.models.telegram_inbound import TelegramInboundPayload, TelegramInboundResult
+from app.integrations.telegram.bot_api_sender import TelegramOutboundSendError
 from app.models.ordinary_chat_reply_operation import OrdinaryChatReplyState
 from app.services.ordinary_chat_reply_service import (
     OrdinaryChatReplyService,
@@ -28,6 +30,86 @@ def inbound_result(*, text="Hi there", blocked=False, error_code=None):
     )
 
 
+def test_retry_payload_binds_resume_to_exact_recovery_operation():
+    operation = SimpleNamespace(
+        operation_id=UUID("00000000-0000-0000-0000-000000000123"),
+        inbound_sender_telegram_user_id=34, telegram_chat_id=12,
+        inbound_message_text="question", inbound_telegram_message_id=56,
+        inbound_received_at=datetime.now(timezone.utc), delivery_payload={},
+        telegram_account_scope="AVA_TELETHON_PRIVATE",
+    )
+    repository = Mock()
+    repository.get.return_value = operation
+    service = OrdinaryChatReplyService(repository=repository)
+
+    payload = service.retry_payload(operation)
+    rebound, created = service.begin(payload)
+
+    assert payload.ordinary_reply_operation_id == str(operation.operation_id)
+    assert rebound is operation
+    assert created is False
+    repository.get_or_create.assert_not_called()
+
+
+def test_bound_resume_rejects_operation_inbound_identity_mismatch():
+    repository = Mock()
+    repository.get.return_value = SimpleNamespace(
+        telegram_account_scope="AVA_TELETHON_PRIVATE", telegram_chat_id=99,
+        inbound_sender_telegram_user_id=34, inbound_telegram_message_id=56,
+        inbound_message_text="question",
+    )
+    service = OrdinaryChatReplyService(repository=repository)
+    payload = TelegramInboundPayload(
+        telegram_user_id=34, telegram_chat_id=12, message_text="question",
+        message_id=56, ordinary_reply_operation_id="bound-operation",
+    )
+
+    try:
+        service.begin(payload)
+    except PermissionError:
+        pass
+    else:
+        raise AssertionError("mismatched bound operation must fail closed")
+
+
+def test_peer_id_invalid_is_terminal_with_durable_provider_evidence():
+    repository = Mock()
+    repository.fail_send.return_value = "terminal"
+    service = OrdinaryChatReplyService(repository=repository, worker_id="worker")
+    error = TelegramOutboundSendError(
+        "Telegram rejected sendPhoto (HTTP 400, error_code 400): "
+        "Bad Request: PEER_ID_INVALID",
+        http_status=400, telegram_error_code=400,
+        telegram_description="Bad Request: PEER_ID_INVALID",
+    )
+
+    result = service.failed(
+        SimpleNamespace(operation_id="operation"), error,
+        definitive=True, terminal=True,
+    )
+
+    assert result == "terminal"
+    call = repository.fail_send.call_args
+    assert call.kwargs["ambiguous"] is False
+    assert call.kwargs["terminal"] is True
+    evidence = call.kwargs["evidence"]["telegramDefinitiveRejection"]
+    assert evidence["classification"] == "DEFINITIVE_NOT_DELIVERED"
+    assert evidence["telegramDescription"] == "Bad Request: PEER_ID_INVALID"
+    assert evidence["peerIdInvalid"] is True
+    assert evidence["automaticRetryAllowed"] is False
+
+
+def test_rate_limit_rejection_is_definitive_but_retryable():
+    error = TelegramOutboundSendError(
+        "Telegram rejected sendMessage (HTTP 429)", http_status=429,
+        telegram_error_code=429, telegram_description="Too Many Requests",
+    )
+
+    assert error.definitive_not_delivered is True
+    assert error.peer_id_invalid is False
+    assert error.non_retryable is False
+
+
 def test_nonempty_generation_remains_sendable_generated():
     repository = Mock()
     repository.store_generated.return_value = "generated"
@@ -38,6 +120,72 @@ def test_nonempty_generation_remains_sendable_generated():
     assert stored == "generated"
     repository.store_generated.assert_called_once()
     repository.store_suppressed_generation.assert_not_called()
+
+
+def test_commercial_media_requires_current_durable_commercial_authority():
+    repository = Mock()
+    repository.schedule_quality_correction.return_value = "correction_scheduled"
+    service = OrdinaryChatReplyService(repository=repository, worker_id="worker")
+    operation = SimpleNamespace(
+        operation_id="operation", inbound_message_text="how are you",
+        delivery_payload={"preGenerationCommercialDecision": {
+            "commercial_bypass_eligible": False,
+            "active_offer_reservation_authorized": False,
+        }},
+    )
+    base = inbound_result(text="Unlock this")
+    result = replace(base, delivery_requires_payment=True, delivery_payload={
+        **base.delivery_payload,
+        "asset_path": "private.jpg",
+        "private_chat_unlock_button": {
+            "label": "Unlock", "url": "https://example.invalid/unlock",
+        },
+    })
+
+    stored = service.generated(operation, result)
+
+    assert stored == "correction_scheduled"
+    repository.store_generated.assert_not_called()
+    call = repository.schedule_quality_correction.call_args.kwargs
+    assert call["reasons"] == ("COMMERCIAL_MEDIA_WITHOUT_CURRENT_AUTHORITY",)
+    repository.store_suppressed_generation.assert_not_called()
+    gate = call["response_payload"]["diagnostic_metadata"][
+        "commercialMediaAuthorityGate"]
+    assert gate["authorized"] is False
+
+
+def test_delivery_payload_text_is_canonical_for_future_persistence():
+    repository = Mock()
+    repository.store_generated.return_value = "generated"
+    service = OrdinaryChatReplyService(repository=repository, worker_id="worker")
+    result = inbound_result(text="stale intermediate")
+    result.delivery_payload["message_text"] = "actual customer-visible text"
+
+    service.generated(SimpleNamespace(operation_id="operation"), result)
+
+    call = repository.store_generated.call_args.kwargs
+    assert call["response_text"] == "actual customer-visible text"
+    assert call["response_payload"]["response_text"] == "actual customer-visible text"
+    assert call["response_payload"]["diagnostic_metadata"][
+        "customerVisibleTextNormalization"]["authority"] == (
+        "DELIVERY_PAYLOAD_MESSAGE_TEXT")
+
+
+def test_post_nudge_final_gate_repairs_sexual_provider_output_before_delivery():
+    repository = Mock()
+    repository.store_generated.return_value = "generated"
+    service = OrdinaryChatReplyService(repository=repository, worker_id="worker")
+    operation = SimpleNamespace(operation_id="operation", inbound_message_text="hello",
+        delivery_payload={"postNudgeConversationPolicy": {"active": True,
+            "responsePurpose": "CASUAL_BACKOFF_CONVERSATION",
+            "sexualAccessGated": True, "commercialReentry": False}})
+
+    service.generated(operation, inbound_result(text="I want to fuck you all night"))
+
+    persisted = repository.store_generated.call_args.kwargs["response_payload"]
+    assert persisted["response_text"] == "I'm keeping things casual here. How has your day been?"
+    assert persisted["diagnostic_metadata"]["postNudgeConversationQualityGate"][
+        "disposition"] == "REPAIRED_BEFORE_DELIVERY"
 
 
 def test_blocked_empty_generation_is_terminal_suppression_with_reason():
@@ -66,7 +214,7 @@ def test_blocked_empty_generation_is_terminal_suppression_with_reason():
     ] == "PAID_PRESENTATION_UNMAPPED_EXPLICIT_PRICE"
 
 
-def test_empty_unblocked_result_uses_bounded_sendable_fallback():
+def test_empty_unblocked_result_is_internal_failure_not_sendable():
     repository = Mock()
     repository.store_generated.return_value = "generated"
     service = OrdinaryChatReplyService(repository=repository, worker_id="worker")
@@ -76,11 +224,9 @@ def test_empty_unblocked_result_uses_bounded_sendable_fallback():
         inbound_result(text="", blocked=False),
     )
 
-    assert stored == "generated"
-    repository.fail_empty_generation.assert_not_called()
-    assert repository.store_generated.call_args.kwargs["response_text"]
-    assert repository.store_generated.call_args.kwargs["response_payload"][
-        "diagnostic_metadata"]["generation_fallback"]["reason"] == "EMPTY_GENERATION"
+    assert stored is repository.fail_empty_generation.return_value
+    repository.fail_empty_generation.assert_called_once()
+    repository.store_generated.assert_not_called()
     repository.store_suppressed_generation.assert_not_called()
 
 
@@ -96,7 +242,10 @@ def test_provider_failure_uses_generation_failure_not_policy_suppression():
 
     assert stored == "retryable"
     repository.fail_generation.assert_called_once_with(
-        "operation", owner="worker", reason="TimeoutError: provider timeout",
+        "operation", owner="worker",
+        reason="GENERATION_FAILURE:TimeoutError: provider timeout",
+        evidence={"generationFailurePolicy": {"version": "ORDINARY_RECOVERY_V1",
+            "fullPipelineRetry": False, "errorType": "TimeoutError"}},
     )
     repository.store_suppressed_generation.assert_not_called()
 

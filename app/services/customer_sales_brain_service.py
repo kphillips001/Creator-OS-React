@@ -44,6 +44,9 @@ from app.services.commercial_receptiveness_service import (
 from app.services.commercial_objection_service import CommercialObjectionService
 from app.models.commercial_objection import CommercialObjectionType
 from app.models.commercial_intelligence import StrategyConstraints
+from app.services.active_offer_follow_through_service import ActiveOfferFollowThroughService
+from app.services.sexual_sales_opportunity_service import SexualSalesOpportunityService
+from app.services.customer_heat_signal_service import CustomerHeatSignalService
 
 
 logger = logging.getLogger("customer-sales-brain")
@@ -92,6 +95,159 @@ class CustomerSalesBrainService:
     def _sustained_sexual_receptiveness(self, context: dict) -> bool:
         return bool(self._sustained_sexual_receptiveness_projection(context)["value"])
 
+    def _proactive_hot_opportunity_assessment(
+        self, context: dict, *, active_purchase_intent: bool,
+        active_sales_session: bool,
+    ) -> dict:
+        """Authorize evaluation, never offer presentation, from a current hot window."""
+        values = dict(context or {})
+        progression = dict(values.get("sales_progression") or {})
+        tone = dict(values.get("contextual_customer_tone") or {})
+        sustained = self._sustained_sexual_receptiveness_projection(values)
+        heat = dict(values.get("customer_heat_signal") or {})
+        heat_override = bool(
+            heat.get("detected") is True
+            and heat.get("initiationSource") in {
+                "CUSTOMER_INITIATED", "CUSTOMER_ESCALATED",
+            }
+            and heat.get("currentTurn") is True
+            and heat.get("strength") == "STRONG"
+            and heat.get("warmupOverrideEligible") is True
+        )
+        inbound = int(values.get("inbound_message_count") or 0)
+        sustained_conversation = inbound >= 6
+        current_hot_tone = tone.get("sexualOrProvocative") is True
+        sexual_policy = dict(values.get("sexual_sales_opportunity") or {})
+        signal_detected = bool(
+            (heat_override or (
+                sustained_conversation and sustained["value"] and current_hot_tone
+            ))
+            and (
+                not sexual_policy
+                or sexual_policy.get("sexualSalesOpportunityEligible") is True
+            )
+        )
+
+        blockers = []
+        if not sustained_conversation and not heat_override:
+            blockers.append("SUSTAINED_CONVERSATION_REQUIRED")
+        if not sustained["value"] and not heat_override:
+            blockers.append("SUSTAINED_SEXUAL_RECEPTIVENESS_REQUIRED")
+        if not current_hot_tone and not heat_override:
+            blockers.append("CURRENT_HOT_TONE_REQUIRED")
+        if (int(values.get("offer_exposure_count") or 0) != 0
+                and sexual_policy.get("sexualSalesOpportunityEligible") is not True):
+            blockers.append(str(
+                sexual_policy.get("sexualSalesSuppressionReason")
+                or "PRIOR_PAID_OFFER_EXPOSURE"
+            ))
+        elif (
+            heat_override and sexual_policy
+            and sexual_policy.get("sexualSalesOpportunityEligible") is not True
+        ):
+            blockers.append(str(
+                sexual_policy.get("sexualSalesSuppressionReason")
+                or "SEXUAL_SALES_POLICY_NOT_ELIGIBLE"
+            ))
+        if active_purchase_intent:
+            blockers.append("ACTIVE_PURCHASE_INTENT")
+        if active_sales_session:
+            blockers.append("ACTIVE_SALES_SESSION")
+        if int(values.get("rejection_count") or 0) != 0:
+            blockers.append("CUSTOMER_REJECTION")
+        if str(progression.get("phase") or "CONVERSATIONAL").upper() == "BACK_OFF":
+            blockers.append("BACK_OFF")
+        if (
+            int(progression.get("proactiveTeaseCooldownTurns") or 0) > 0
+            or values.get("purchase_cooldown_active") is True
+            or values.get("commercial_cooldown_active") is True
+        ):
+            blockers.append("COMMERCIAL_OR_PROACTIVE_COOLDOWN")
+        if str(values.get("relationship_control_mode") or "AVA_AUTO").upper() \
+                == "HUMAN_OPERATOR":
+            blockers.append("HUMAN_OPERATOR")
+        if (
+            values.get("relationship_ignored") is True
+            or str(values.get("communication_disposition") or "ACTIVE").upper()
+                == "IGNORED"
+        ):
+            blockers.append("RELATIONSHIP_IGNORED")
+        if values.get("effective_content_selling_allowed") is not True:
+            blockers.append("CONTENT_SELLING_NOT_ALLOWED")
+
+        authorized = bool(signal_detected and not blockers)
+        return {
+            "proactiveHotOpportunityDetected": signal_detected,
+            "proactiveHotOpportunityAuthorized": authorized,
+            "sustainedConversationSatisfied": sustained_conversation,
+            "sustainedConversationCount": inbound,
+            "sustainedConversationRequired": 6,
+            "sustainedSexualReceptiveness": bool(sustained["value"]),
+            "sexualEngagementCount": int(sustained["sexualEngagementCount"]),
+            "sexualEngagementRequired": (
+                self.config.sexual_receptiveness_min_engagements
+            ),
+            "currentHotToneQualified": current_hot_tone,
+            "customerHeatSignal": heat,
+            "warmupOverrideEligible": heat_override,
+            "warmupOverrideApplied": heat_override,
+            "warmupOverrideReason": (
+                "WARMUP_OVERRIDE_CUSTOMER_HEAT" if heat_override else None
+            ),
+            "noPriorPaidOfferExposure": (
+                int(values.get("offer_exposure_count") or 0) == 0
+            ),
+            "sexualSalesOpportunity": sexual_policy,
+            "commercialSafeguardsPassed": not blockers,
+            "hotOpportunityBlockers": tuple(dict.fromkeys(blockers)),
+            "commercialEvaluationReason": (
+                CustomerSalesReasonCode.SUSTAINED_HOT_CONVERSATION.value
+                if authorized else None
+            ),
+            "evaluationOnly": True,
+            "offerAuthorized": False,
+            "purchaseIntentCreated": False,
+            "authority": "CUSTOMER_SALES_BRAIN_CANONICAL_HOT_OPPORTUNITY",
+        }
+
+    def _relationship_commercial_permission_context(
+        self, *, creator_profile_id: int, fanvue_account_id: int,
+        telegram_user_id: int, telegram_chat_id: int | None,
+    ) -> dict:
+        """Read canonical relationship/global ceilings without changing them."""
+        if self.customer_effective_permissions is not None:
+            state = self.customer_effective_permissions.read(
+                creator_profile_id=int(creator_profile_id),
+                fanvue_account_id=int(fanvue_account_id),
+                telegram_user_id=int(telegram_user_id),
+                telegram_chat_id=telegram_chat_id,
+            )
+            configured = dict(state.get("configured") or {})
+            communication = dict(state.get("communication") or {})
+            effective = dict(state.get("effective") or {})
+            return {
+                "relationship_control_mode": configured.get(
+                    "relationshipMode", "AVA_AUTO"
+                ),
+                "communication_disposition": communication.get(
+                    "disposition", "ACTIVE"
+                ),
+                "relationship_ignored": communication.get("ignored") is True,
+                "effective_content_selling_allowed": (
+                    effective.get("contentSellingAllowed") is True
+                ),
+            }
+        allowed = bool(
+            self.global_selling_permissions is None
+            or self.global_selling_permissions.content_allowed()
+        )
+        return {
+            "relationship_control_mode": "AVA_AUTO",
+            "communication_disposition": "ACTIVE",
+            "relationship_ignored": False,
+            "effective_content_selling_allowed": allowed,
+        }
+
     def _commerce_selection_relevant(self, context: dict, *, objection=None) -> tuple[bool, str]:
         """Gate inventory work behind current commercial or persisted offer evidence."""
         message = str(context.get("latest_message") or "")
@@ -102,6 +258,8 @@ class CustomerSalesBrainService:
         phase = str(progression.get("phase") or "CONVERSATIONAL").upper()
         classifier = dict(context.get("classifier_result") or {})
         receptiveness = dict(context.get("commercial_receptiveness") or {})
+        hot_opportunity = dict(context.get("proactive_hot_opportunity") or {})
+        sexual_opportunity = dict(context.get("sexual_sales_opportunity") or {})
         relevant = bool(
             self.conversational_progression.has_direct_purchase_intent(message)
             or receptiveness.get("freshDirectIntentDetected") is True
@@ -111,12 +269,17 @@ class CustomerSalesBrainService:
             or classifier.get("buying_intent") is True
             or classifier.get("conversation_ready_for_offer") is True
             or bool(objection is not None and getattr(objection, "consider_alternative", False))
-            or self._sustained_sexual_receptiveness(context)
+            or hot_opportunity.get("proactiveHotOpportunityAuthorized") is True
+            or sexual_opportunity.get("sexualSalesOpportunityEligible") is True
         )
         if relevant:
             return True, (
                 "SUSTAINED_POSITIVE_SEXUAL_RECEPTIVENESS"
-                if self._sustained_sexual_receptiveness(context)
+                if hot_opportunity.get("proactiveHotOpportunityAuthorized") is True
+                and hot_opportunity.get("warmupOverrideApplied") is not True
+                else "WARMUP_OVERRIDE_CUSTOMER_HEAT"
+                if hot_opportunity.get("proactiveHotOpportunityAuthorized") is True
+                and hot_opportunity.get("warmupOverrideApplied") is True
                 else "CURRENT_COMMERCIAL_OR_OFFER_TRAJECTORY_EVIDENCE"
             )
         return False, "NO_CURRENT_COMMERCIAL_EVIDENCE"
@@ -143,6 +306,8 @@ class CustomerSalesBrainService:
         provisional_sales_session_service=None,
         global_selling_permissions_service=None,
         customer_effective_permissions_service=None,
+        active_offer_follow_through_service=None,
+        active_offer_meaningful_turn_service=None,
         clock=lambda: datetime.now(timezone.utc),
     ):
         self.customers = customer_repository or CustomerCommerceRepository()
@@ -175,6 +340,13 @@ class CustomerSalesBrainService:
         self.provisional_sales_sessions = provisional_sales_session_service
         self.global_selling_permissions = global_selling_permissions_service
         self.customer_effective_permissions = customer_effective_permissions_service
+        self.active_offer_follow_through = (
+            active_offer_follow_through_service or ActiveOfferFollowThroughService()
+        )
+        if active_offer_meaningful_turn_service is None:
+            from app.services.active_offer_meaningful_turn_service import ActiveOfferMeaningfulTurnService
+            active_offer_meaningful_turn_service=ActiveOfferMeaningfulTurnService()
+        self.active_offer_meaningful_turns=active_offer_meaningful_turn_service
         if telegram_sales_delivery_repository is None:
             from app.repositories.telegram_sales_delivery_repository import TelegramSalesDeliveryRepository
             telegram_sales_delivery_repository = TelegramSalesDeliveryRepository()
@@ -206,6 +378,45 @@ class CustomerSalesBrainService:
             from app.services.customer_interaction_safety_service import CustomerInteractionSafetyService
             customer_safety_service = CustomerInteractionSafetyService()
         self.customer_safety = customer_safety_service
+
+    def _apply_sexual_sales_opportunity(
+        self, context, *, creator_profile_id, fanvue_account_id,
+        telegram_user_id, now,
+    ):
+        receptiveness = dict(context.get("commercial_receptiveness") or {})
+        service = SexualSalesOpportunityService(
+            intents=self.intents,
+            cooldown=self.config.sexual_sales_cooldown,
+            max_opportunities=self.config.sexual_sales_max_opportunities,
+            episode_separation=self.config.sexual_sales_episode_separation,
+        )
+        context["sexual_sales_opportunity"] = service.project(
+            creator_profile_id=creator_profile_id,
+            fanvue_account_id=fanvue_account_id,
+            telegram_user_id=telegram_user_id,
+            latest_message=str(context.get("latest_message") or ""),
+            now=now,
+            tone=context.get("contextual_customer_tone"),
+            commercial_signal=bool(
+                receptiveness.get("freshDirectIntentDetected")
+                or receptiveness.get("currentCommercialInterest")
+            ),
+            ordinary_topic_after_last_offer=bool(
+                context.get("ordinary_topic_after_last_offer")
+            ),
+            customer_heat_signal=context.get("customer_heat_signal"),
+        )
+
+    @staticmethod
+    def _apply_customer_heat_signal(context: dict) -> None:
+        context["customer_heat_signal"] = CustomerHeatSignalService().project(
+            message=str(context.get("latest_message") or ""),
+            classifier_result=context.get("classifier_result"),
+            contextual_tone=context.get("contextual_customer_tone"),
+            recent_transcript=context.get("recent_transcript") or (),
+        )
+        from app.services.commercial_momentum_contract import CommercialMomentumContract
+        context["conversation_momentum"] = CommercialMomentumContract.current_evidence(context)
 
     def evaluate_for_telegram_user(
         self, *, creator_profile_id: int, telegram_user_id: int,
@@ -380,6 +591,12 @@ class CustomerSalesBrainService:
             ),
         }
         context["commercial_receptiveness"] = dict(receptiveness.to_mapping())
+        self._apply_customer_heat_signal(context)
+        self._apply_sexual_sales_opportunity(
+            context, creator_profile_id=creator_profile_id,
+            fanvue_account_id=account_id, telegram_user_id=telegram_user_id,
+            now=now,
+        )
         deferred = self._deferred_continuation(
             creator_profile_id=creator_profile_id,
             fanvue_account_id=account_id,
@@ -428,6 +645,23 @@ class CustomerSalesBrainService:
             signal={"identityState": "UNMAPPED_BOOTSTRAP",
                     "fanvueCommerceHistory": "UNKNOWN"},
             active=active, latest=latest, progression_context=context,
+        )
+        context.update(self._relationship_commercial_permission_context(
+            creator_profile_id=creator_profile_id,
+            fanvue_account_id=account_id,
+            telegram_user_id=telegram_user_id,
+            telegram_chat_id=context.get("telegram_chat_id"),
+        ))
+        context["proactive_hot_opportunity"] = (
+            self._proactive_hot_opportunity_assessment(
+                context,
+                active_purchase_intent=active is not None,
+                active_sales_session=bool(
+                    provisional is not None
+                    or context.get("sales_session_id")
+                    or context.get("active_session_context")
+                ),
+            )
         )
         if tone.get("explicitDisengagement") is True:
             return self._finish(
@@ -627,11 +861,17 @@ class CustomerSalesBrainService:
                 decision, sell_allowed=False, nudge_allowed=False,
                 decision_metadata=immutable_mapping(metadata),
             )
-        if (
-            active is not None
-            and active_offer_continuation_type
-            and not objection.consider_alternative
-        ):
+        turn_projection = self.active_offer_meaningful_turns.project(intent=active)
+        context["active_offer_turn_projection"] = turn_projection
+        follow_through = self.active_offer_follow_through.evaluate(
+            intent=active, now=now, nudge_delay=self.config.offer_nudge_delay,
+            contextual_continuation=active_offer_continuation_type,
+            fresh_direct_intent=receptiveness.fresh_direct_intent,
+            meaningful_turns_after_presentation=int(
+                turn_projection["meaningful_turns_since_presentation"]),
+            rejected=bool(context.get("offer_declined")),
+        )
+        if active is not None and follow_through.eligible and not objection.consider_alternative:
             selection = self.offering_selector.select(
                 creator_profile_id=creator_profile_id,
                 telegram_user_id=telegram_user_id,
@@ -645,12 +885,12 @@ class CustomerSalesBrainService:
             return self._finish(
                 started, now, **common,
                 decision=CustomerSalesDecisionType.NUDGE_ACTIVE_OFFER,
-                reason=(CustomerSalesReasonCode
-                        .CUSTOMER_INITIATED_ACTIVE_OFFER_CONTINUATION),
+                reason=(CustomerSalesReasonCode.CUSTOMER_INITIATED_ACTIVE_OFFER_CONTINUATION
+                        if follow_through.mode == "CONTEXTUAL"
+                        else CustomerSalesReasonCode.ACTIVE_OFFER_NUDGE_ELIGIBLE),
                 summary=(
-                    "The customer explicitly requested the current offer; "
-                    "reuse its structured presentation without applying "
-                    "the unsolicited-nudge cooldown."
+                    "The existing authoritative offer is eligible for bounded follow-through; "
+                    "reuse it without creating or automatically redelivering an offer."
                 ),
                 nudge_allowed=True,
                 recommendation=selection,
@@ -660,7 +900,8 @@ class CustomerSalesBrainService:
             return self._finish(
                 started, now, **common, decision=CustomerSalesDecisionType.WAIT,
                 reason=CustomerSalesReasonCode.ACTIVE_OFFER_NOT_YET_ELIGIBLE_FOR_NUDGE,
-                summary="One unresolved bootstrap offer is already active.")
+                summary="The active offer is still in its bounded waiting period.",
+                cooldown_until=follow_through.next_eligible_at)
         backoff = self.conversational_progression.back_off_reason(context)
         if backoff is not None:
             return self._finish(started, now, **common,
@@ -676,6 +917,7 @@ class CustomerSalesBrainService:
             context, objection=objection,
         )
         context["selector_invocation_reason"] = selector_reason
+        context["commercial_opportunity_evaluation_performed"] = bool(selector_relevant)
         if not selector_relevant:
             return self._finish(
                 started, now, **common,
@@ -706,6 +948,7 @@ class CustomerSalesBrainService:
                     provisional.photoshoot_reference
                 ),
             )
+        context["offering_selection_attempted"] = True
         selection = self.offering_selector.select(
             creator_profile_id=creator_profile_id,
             telegram_user_id=telegram_user_id,
@@ -1384,6 +1627,12 @@ class CustomerSalesBrainService:
             ),
         }
         context["commercial_receptiveness"] = dict(receptiveness.to_mapping())
+        self._apply_customer_heat_signal(context)
+        self._apply_sexual_sales_opportunity(
+            context, creator_profile_id=creator_profile_id,
+            fanvue_account_id=fanvue_account_id,
+            telegram_user_id=telegram_user_id, now=now,
+        )
         context["purchase_cooldown_active"] = cooldown_active
         context["purchase_cooldown_until"] = (
             cooldown_until.isoformat() if cooldown_until else None
@@ -1567,6 +1816,15 @@ class CustomerSalesBrainService:
         if active:
             presented = active.presented_at or active.created_at
             nudge_at = presented + self.config.offer_nudge_delay
+            turn_projection = self.active_offer_meaningful_turns.project(intent=active)
+            context["active_offer_turn_projection"] = turn_projection
+            follow_through = self.active_offer_follow_through.evaluate(
+                intent=active, now=now, nudge_delay=self.config.offer_nudge_delay,
+                contextual_continuation=active_offer_continuation_type,
+                fresh_direct_intent=receptiveness.fresh_direct_intent,
+                meaningful_turns_after_presentation=int(turn_projection["meaningful_turns_since_presentation"]),
+                rejected=bool(context.get("offer_declined")),
+            )
             if active_offer_continuation_type:
                 selection = self.offering_selector.select(
                     creator_profile_id=creator_profile_id,
@@ -1613,7 +1871,7 @@ class CustomerSalesBrainService:
                     nudge_allowed=True, recommendation=selection,
                     selector_result=selection,
                 )
-            if now < nudge_at:
+            if not follow_through.eligible:
                 return self._finish(
                     started, now, **common,
                     decision=CustomerSalesDecisionType.WAIT,
@@ -1622,7 +1880,7 @@ class CustomerSalesBrainService:
                         .ACTIVE_OFFER_NOT_YET_ELIGIBLE_FOR_NUDGE
                     ),
                     summary="The active offer is still in its waiting period.",
-                    cooldown_until=nudge_at,
+                    cooldown_until=follow_through.next_eligible_at or nudge_at,
                 )
             selection = self.offering_selector.select(
                 creator_profile_id=creator_profile_id,
@@ -1693,6 +1951,7 @@ class CustomerSalesBrainService:
             selector_relevant = True
             selector_reason = "SESSION_PROPOSAL_REACTION_PENDING"
         context["selector_invocation_reason"] = selector_reason
+        context["commercial_opportunity_evaluation_performed"] = bool(selector_relevant)
         if not selector_relevant:
             return self._finish(
                 started, now, **common,
@@ -1775,6 +2034,7 @@ class CustomerSalesBrainService:
             required_selling_modes=(),
             excluded_selling_modes=("SESSION",),
         )
+        context["offering_selection_attempted"] = True
         selection = self.offering_selector.select(
             creator_profile_id=creator_profile_id,
             telegram_user_id=telegram_user_id,
@@ -3853,9 +4113,80 @@ class CustomerSalesBrainService:
                     "sexualReceptivenessMinHistoryTurns": (
                         self.config.sexual_receptiveness_min_history_turns
                     ),
+                    "sexualSalesCooldownHours": int(
+                        self.config.sexual_sales_cooldown.total_seconds() // 3600
+                    ),
+                    "sexualSalesMaxOpportunities": (
+                        self.config.sexual_sales_max_opportunities
+                    ),
                 },
                 "sustainedSexualReceptiveness": sexual_receptiveness,
                 "sustainedSexualReceptivenessAuthority": sexual_receptiveness["authority"],
+                "proactiveHotOpportunity": dict(
+                    progression_context.get("proactive_hot_opportunity") or {}
+                ),
+                "sexualSalesOpportunity": dict(
+                    progression_context.get("sexual_sales_opportunity") or {}
+                ),
+                "customerHeatSignal": dict(
+                    progression_context.get("customer_heat_signal") or {}
+                ),
+                "customerHeatSignalDetected": bool(dict(
+                    progression_context.get("customer_heat_signal") or {}
+                ).get("detected")),
+                "customerHeatSignalType": dict(
+                    progression_context.get("customer_heat_signal") or {}
+                ).get("type"),
+                "customerHeatSignalStrength": dict(
+                    progression_context.get("customer_heat_signal") or {}
+                ).get("strength"),
+                "customerHeatSignalConfidence": dict(
+                    progression_context.get("customer_heat_signal") or {}
+                ).get("confidence"),
+                "customerHeatCustomerInitiated": bool(dict(
+                    progression_context.get("customer_heat_signal") or {}
+                ).get("customerInitiated")),
+                "customerHeatInitiationSource": dict(
+                    progression_context.get("customer_heat_signal") or {}
+                ).get("initiationSource"),
+                "customerHeatCurrentTurn": bool(dict(
+                    progression_context.get("customer_heat_signal") or {}
+                ).get("currentTurn")),
+                "customerHeatEvidence": tuple(dict(
+                    progression_context.get("customer_heat_signal") or {}
+                ).get("currentTurnEvidence") or ()),
+                "warmupState": (
+                    "OVERRIDDEN" if dict(progression_context.get(
+                        "proactive_hot_opportunity") or {}
+                    ).get("warmupOverrideApplied") else "CANONICAL_THRESHOLDS_APPLY"
+                ),
+                "warmupThresholds": {
+                    "conversationTurns": 6,
+                    "sexualEngagements": self.config.sexual_receptiveness_min_engagements,
+                    "sexualHistoryTurns": self.config.sexual_receptiveness_min_history_turns,
+                },
+                "warmupOverrideEligible": bool(dict(
+                    progression_context.get("customer_heat_signal") or {}
+                ).get("warmupOverrideEligible")),
+                "warmupOverrideApplied": bool(dict(
+                    progression_context.get("proactive_hot_opportunity") or {}
+                ).get("warmupOverrideApplied")),
+                "warmupOverrideReason": dict(
+                    progression_context.get("proactive_hot_opportunity") or {}
+                ).get("warmupOverrideReason"),
+                "commercialOpportunityEvaluationPerformed": bool(
+                    progression_context.get("commercial_opportunity_evaluation_performed")
+                ),
+                "sexualSalesEpisodeEvaluation": dict(
+                    progression_context.get("sexual_sales_opportunity") or {}
+                ),
+                "offeringSelectionAttempted": bool(
+                    progression_context.get("offering_selection_attempted")
+                ),
+                "finalSalesDecision": decision.value,
+                "actualCommercialBlockers": tuple(dict(
+                    progression_context.get("proactive_hot_opportunity") or {}
+                ).get("hotOpportunityBlockers") or ()),
                 "latestPurchaseIntentId": (
                     str(latest.purchase_intent_id) if latest else None
                 ),
@@ -4379,6 +4710,11 @@ class CustomerSalesBrainService:
                             result=replace(result,next_sales_action=action)
             except Exception as error:
                 logger.warning("event=autonomous_sales_progression_unavailable error_type=%s",type(error).__name__)
+        from app.services.commercial_momentum_contract import CommercialMomentumContract
+        result = replace(result, decision_metadata=immutable_mapping({
+            **dict(result.decision_metadata),
+            "currentTurnCommercialEvidence": CommercialMomentumContract.current_evidence(progression_context),
+        }))
         logger.info(
             "event=decision_generated decision=%s reason_code=%s buyer_stage=%s "
             "buyer_uuid=%s current_offer=%s purchase_state=%s timing_ms=%s",

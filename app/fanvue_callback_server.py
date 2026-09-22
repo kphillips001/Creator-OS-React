@@ -21,6 +21,7 @@ from app.repositories.webhook_event_repository import (
 from app.api.content_studio import router as content_studio_router
 from app.api.background_operations import router as background_operations_router
 from app.api.generation_library_publishing import router as generation_library_publishing_router
+from app.api.x_thread_cta_queue import router as x_thread_cta_queue_router
 from app.api.edit_studio import router as edit_studio_router
 from app.api.generation_library import router as generation_library_router
 from app.api.posted_content import router as posted_content_router
@@ -89,6 +90,7 @@ from app.api.private_chat_unlock import (
     router as private_chat_unlock_router,
     public_alias_router as private_chat_unlock_alias_router,
 )
+from app.api.api_balances import router as api_balances_router
 from app.api.bundle_studio import router as bundle_studio_router
 from app.services.fanvue_oauth_service import FanvueOAuthService
 from app.services.fanvue_webhook_monitor_service import fanvue_webhook_monitor
@@ -182,6 +184,7 @@ async def request_performance_summary(request: Request, call_next):
 app.include_router(content_studio_router)
 app.include_router(background_operations_router)
 app.include_router(generation_library_publishing_router)
+app.include_router(x_thread_cta_queue_router)
 app.include_router(edit_studio_router)
 app.include_router(generation_library_router)
 app.include_router(bundle_studio_router)
@@ -238,6 +241,7 @@ app.include_router(ig_competitor_intelligence_router)
 app.include_router(android_device_router)
 app.include_router(private_chat_unlock_router)
 app.include_router(private_chat_unlock_alias_router)
+app.include_router(api_balances_router)
 
 
 @app.get("/callback")

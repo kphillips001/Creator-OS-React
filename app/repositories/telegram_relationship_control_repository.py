@@ -231,6 +231,20 @@ class TelegramRelationshipControlRepository:
                                              int(captured_version)==control.control_version)
             yield allowed,control
 
+    @contextmanager
+    def manual_send_guard(self, *, creator_profile_id, fanvue_account_id,
+                          telegram_user_id, expected_version):
+        with self.connection_factory() as connection, connection.cursor() as cursor:
+            cursor.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s,0))",
+                (f"telegram-relationship:{creator_profile_id}:{fanvue_account_id}:{telegram_user_id}",))
+            cursor.execute("""SELECT * FROM telegram_relationship_controls
+                WHERE creator_profile_id=%s AND fanvue_account_id=%s AND telegram_user_id=%s""",
+                (creator_profile_id,fanvue_account_id,telegram_user_id))
+            row=cursor.fetchone()
+            if not row or row['mode']!='HUMAN_OPERATOR' or row['control_version']!=expected_version:
+                raise ValueError('Manual Mode/control version changed before delivery.')
+            yield self._model(row)
+
     def touch_manual_activity(self, control):
         with self.connection_factory() as connection, connection.cursor() as cursor:
             cursor.execute("""UPDATE public.telegram_relationship_controls SET

@@ -2,22 +2,19 @@
 
 from __future__ import annotations
 
-PREMIUM_RENDER_BODY_LOCK = """
+from app.services.canonical_creator_identity_policy import canonical_creator_identity_policy
+
+
+CANONICAL_AVA_IDENTITY_POLICY = canonical_creator_identity_policy(2)
+
+PREMIUM_RENDER_BODY_LOCK = f"""
 FINAL REFERENCE BODY LOCK - NON-NEGOTIABLE:
-Use the reference image as the identity, face, hair, skin-tone, body-size, body-shape, and bust-size source of truth only.
-Preserve the exact same woman, face, long dark loose hair, same natural sun-kissed skin tone as the reference image, body size, body weight, and recognizable silhouette from the reference image.
-Hair must be worn down: soft center part or natural side part, smooth flat natural top, loose flowing dark hair lying over her shoulders or down her back.
-Keep the scalp area natural and low-profile, with no lifted tied hairstyle and no tall hair shape.
-Do not create a bun, hairbun, topknot, ponytail, updo, tied-up hair, piled hair, messy crown, lifted hair knot, or any clump of hair above the scalp.
-The top of her hair must remain smooth, flat, natural, and low-profile, with no raised tied silhouette.
+{CANONICAL_AVA_IDENTITY_POLICY.premium_render_identity_opening}
 Do NOT copy the reference image's setting, location, background, water, boat, dock, railings, trees, cabin, rocks, room, furniture, props, lighting, outfit, pose, or camera angle unless the written prompt explicitly asks for those exact elements.
 The written prompt is the source of truth for the generated scene, wardrobe, nudity state, shower/pool/bedroom/hotel/indoor/outdoor setting, pose, lighting, and background.
 If the written prompt asks for a shower, bathroom, bedroom, hotel, couch, pool, or any non-boat scene, do not include a boat, lake, dock, marina, railing, cabin, natural-water background, or outdoor boat-deck elements from the reference image.
 If the written prompt asks for nude/topless/shower content, do not preserve clothing from the reference image.
-Her breasts must remain visibly large natural D-cup breasts in the generated image, with full D-cup breast volume, full upper and lower breast fullness, rounded natural breast shape, visible bust projection, and natural cleavage when clothing or framing allows it.
-Do not reduce breast size. Do not make her smaller-busted. Do not flatten her chest. Do not make her appear B-cup or small-chested.
-Preserve her feminine hourglass body, same waist-to-hip proportions, hip width, thigh proportions, shoulder width, and bust-to-waist ratio.
-Preserve the reference skin tone exactly across face, chest, arms, waist, hips, and legs when visible. Keep it natural, even, sun-kissed, and photorealistic without making her darker, changing undertone, changing ethnicity, or making her look like a different person.
+{CANONICAL_AVA_IDENTITY_POLICY.premium_render_body_identity}
 MANDATORY FRAMING LOCK FOR SEEDREAM 5.0 PRO:
 Use medium-close creator framing. The subject must be large in frame without being pressed against the image edges.
 Use close-medium, waist-up, head-to-hips, head-to-upper-thigh, upper-thigh, or intimate seated portrait framing.
@@ -33,7 +30,7 @@ Reject cropped-off forehead, missing top of head, face pressed against the top e
 Reject tall hair shapes, lifted tied hair, piled hair, knot-like hair silhouettes, or large hair clumps above the scalp.
 Do not crop out the body cues needed to preserve her D-cup bust, hourglass shape, reference skin tone, and recognizable facial identity.
 Do not use side/rear all-fours angles that hide or minimize the bust; if using side/rear body orientation, keep the chest, bust, face, and upper torso still visible and prominent.
-Preserve her exact facial identity, facial structure, eyes, nose, lips, jawline, cheekbones, and natural facial proportions from the reference image.
+{CANONICAL_AVA_IDENTITY_POLICY.facial_continuity}
 Keep the face photorealistic, natural, and anatomically correct while following the canonical Explicit Expression Profile when present.
 Avoid goofy, silly, cartoonish, distorted, uncanny, melted, asymmetrical, cross-eyed, or over-exaggerated facial expressions.
 Avoid distorted mouth shape, strange teeth, warped lips, oversized tongue, misplaced tongue, or unnatural tongue anatomy.

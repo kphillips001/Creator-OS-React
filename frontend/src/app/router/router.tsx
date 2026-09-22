@@ -22,6 +22,8 @@ import { RelationshipsPage } from "../../features/relationships/RelationshipsPag
 import { AskCreatorOsPage } from "../../features/ask-creator-os/AskCreatorOsPage";
 import { BusinessControlsPage } from "../../features/business-controls/BusinessControlsPage";
 import { BusinessOperationsPage } from "../../features/business-operations/BusinessOperationsPage";
+import { BusinessQueuePage } from "../../features/business-queue/BusinessQueuePage";
+import { ApiBalancesPage } from "../../features/api-balances/ApiBalancesPage";
 import { AvailableInventoryPage } from "../../features/available-inventory/AvailableInventoryPage";
 import { CommercialOfferingsPage } from "../../features/commercial-offerings/CommercialOfferingsPage";
 import { CommercialAdministrationPage } from "../../features/commercial-administration/CommercialAdministrationPage";
@@ -112,6 +114,8 @@ export const router = createBrowserRouter([
             item.path !== "/business/controls" &&
             item.path !== "/business/ask" &&
             item.path !== "/business/operations" &&
+            item.path !== "/business/queue" &&
+            item.path !== "/business/api-balances" &&
             item.path !== "/administration" &&
             item.path !== "/administration/ava" &&
             item.path !== "/administration/providers" &&
@@ -302,8 +306,16 @@ export const router = createBrowserRouter([
         element: <AskCreatorOsPage />,
       },
       {
+        path: "/business/queue",
+        element: <BusinessQueuePage />,
+      },
+      {
         path: "/business/operations",
         element: <BusinessOperationsPage />,
+      },
+      {
+        path: "/business/api-balances",
+        element: <ApiBalancesPage />,
       },
       {
         path: "/developer/test-chat",

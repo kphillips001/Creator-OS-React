@@ -1,6 +1,8 @@
 """Lease-based dispatcher for durable Background Operations."""
 from __future__ import annotations
 
+import os
+
 from app.services.background_operation_service import BackgroundOperationService
 from app.services.content_studio_background_executor import ContentStudioBackgroundExecutor
 from app.services.content_studio_autonomous_background_executor import ContentStudioAutonomousBackgroundExecutor
@@ -39,6 +41,20 @@ class BackgroundOperationWorkerService:
         })
 
     def process_one(self) -> dict:
+        expire = getattr(self.operations.repository, "expire_stale_content_generations", None)
+        expired = expire(
+            no_progress_seconds=int(os.getenv("CONTENT_STUDIO_NO_PROGRESS_TIMEOUT_SECONDS", "1800")),
+            max_age_seconds=int(os.getenv("CONTENT_STUDIO_BATCH_MAX_AGE_SECONDS", "14400")),
+        ) if expire else ()
+        if expired:
+            from app.services.generation_engine_service import GenerationEngineService
+            engine = GenerationEngineService()
+            for stale in expired:
+                if stale.result_reference:
+                    try:
+                        engine.cancel_job(stale.result_reference)
+                    except (KeyError, ValueError):
+                        pass
         operation = self.operations.repository.claim_next(self.worker_id, lease_seconds=120)
         if operation is None:
             return {"processed": False, "status": "IDLE"}
@@ -54,7 +70,9 @@ class BackgroundOperationWorkerService:
         try:
             executor.execute(operation, self.operations, worker_id=self.worker_id)
         except Exception as error:
-            self.operations.fail(operation.operation_id, error)
+            current = self.operations.repository._one_unscoped(operation.operation_id)
+            if current is not None and not current.terminal:
+                self.operations.fail(operation.operation_id, error)
         current = self.operations.repository._one_unscoped(operation.operation_id)
         return {"processed": True, "status": current.status,
                 "operation_id": str(operation.operation_id)}

@@ -368,3 +368,26 @@ def test_fanvue_mapping_conflict_rolls_back():
             payment_id="fanvue-conflict",event_id="fanvue-conflict",
             purchased_at=datetime.now(timezone.utc))
     assert state(second)["mappings"] == 0
+
+def test_evergreen_late_payment_preserves_predecessor_and_graduates_session_once():
+    from app.services.canonical_evergreen_unlock import snapshot
+    from app.repositories.private_chat_fingerprint_repository import PrivateChatFingerprintRepository
+    values=fixture(session=True,offering_type='PHOTOSET')
+    repo=PurchaseIntentRepository(connection_factory=connection_factory)
+    intent=repo.get(values['intent_id'])
+    grant=PrivateChatFingerprintRepository(connection_factory).create_grant(grant_id=uuid4(),token='synthetic-evergreen-token',intent=intent)
+    with connection_factory() as c:
+        row=c.execute('SELECT * FROM purchase_intents WHERE purchase_intent_id=%s',(intent.purchase_intent_id,)).fetchone()
+        c.execute('''INSERT INTO evergreen_offer_authorities(original_intent_id,unlock_grant_id,fingerprint_reservation_id,
+            configured_price_minor,final_price_minor,currency,binding,media_uuids)
+            VALUES(%s,%s,%s,1499,1497,'USD',%s::jsonb,'[]')''',
+            (intent.purchase_intent_id,grant.unlock_grant_id,values['reservation_id'],json.dumps(snapshot(row))))
+        c.execute("UPDATE purchase_intents SET status='EXPIRED' WHERE purchase_intent_id=%s",(intent.purchase_intent_id,))
+        before=c.execute('SELECT md5(to_jsonb(i)::text) digest FROM purchase_intents i WHERE purchase_intent_id=%s',(intent.purchase_intent_id,)).fetchone()['digest']
+    first=settle(values);second=settle(values)
+    assert first['intent']['purchase_intent_id']==second['intent']['purchase_intent_id']!=intent.purchase_intent_id
+    with connection_factory() as c:
+        assert c.execute('SELECT md5(to_jsonb(i)::text) digest FROM purchase_intents i WHERE purchase_intent_id=%s',(intent.purchase_intent_id,)).fetchone()['digest']==before
+        provisional=c.execute('SELECT * FROM telegram_provisional_sales_sessions WHERE provisional_session_id=%s',(values['provisional_id'],)).fetchone()
+        assert provisional['state']=='GRADUATED' and provisional['current_position']==2
+        assert c.execute('SELECT count(*) n FROM sales_sessions WHERE fanvue_user_id=%s',(values['user'],)).fetchone()['n']==1

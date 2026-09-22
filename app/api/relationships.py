@@ -5,10 +5,18 @@ from typing import Literal
 from uuid import UUID
 
 from app.api.developer_authorization import require_developer_authorization
-from app.api.creator_intelligence import _snapshot_scope
+from app.services.ava_runtime_scope_service import AvaRuntimeScopeService
 from app.services.relationships_service import RelationshipFilter, RelationshipSort, RelationshipsService
 
 router=APIRouter(prefix="/api/v1/relationships",tags=["relationships"])
+
+
+def _snapshot_scope():
+    """Keep every Chat endpoint on the same authority as the Ava runtime."""
+    try:
+        return AvaRuntimeScopeService.resolve()
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
 
 class ControlChange(BaseModel):
     reason: str | None = Field(default=None,max_length=500)
@@ -31,6 +39,10 @@ class RelationshipMarketTierChange(BaseModel):
 class ResolutionReview(BaseModel):
     """Approval identity is derived from the authenticated operator boundary."""
     pass
+
+class DeliveryResolutionPlanCreate(BaseModel):
+    outcome: Literal["CONFIRM_DELIVERED", "CONFIRM_NOT_DELIVERED"]
+    model_config = ConfigDict(extra="forbid")
 
 class ConversationAnalysisCreate(BaseModel):
     targetType: Literal["CONVERSATION", "TURN"] = "CONVERSATION"
@@ -56,10 +68,15 @@ class OperatorMessage(BaseModel):
     idempotencyKey: str = Field(min_length=8,max_length=200)
     expectedControlVersion: int = Field(ge=0)
 
+class CancelOrdinaryReply(BaseModel):
+    operationId: UUID
+    inboundMessageId: int = Field(gt=0)
+    model_config = ConfigDict(extra="forbid")
+
 class ManualOfferPrepare(BaseModel):
     offeringId: str
     expectedControlVersion: int = Field(ge=0)
-    businessConnectionId: str = Field(min_length=1,max_length=200)
+    businessConnectionId: str | None = Field(default=None,min_length=1,max_length=200)
 
 class ManualOfferSend(ManualOfferPrepare):
     text: str = Field(min_length=1,max_length=4096)
@@ -97,20 +114,23 @@ def _control_response(control,context):
 @router.get("")
 def relationships(search:str="",sort:RelationshipSort=RelationshipSort.LATEST_ACTIVITY,
                   filter:RelationshipFilter=RelationshipFilter.ALL,
+                  countryTier:list[str]=Query(default=[]),
                   cursor:str|None=None,limit:int=Query(50,ge=1,le=100)):
     creator,account=_snapshot_scope()
-    try: result=RelationshipsService().list(creator_profile_id=creator,fanvue_account_id=account,search=search,sort=sort,filter=filter,cursor=cursor,limit=limit)
+    try: result=RelationshipsService().list(creator_profile_id=creator,fanvue_account_id=account,search=search,sort=sort,filter=filter,country_tiers=countryTier,cursor=cursor,limit=limit)
     except ValueError as error: raise HTTPException(status_code=400,detail=str(error)) from error
     return jsonable_encoder(result)
 
 @router.get("/{projection_key}/messages")
-def relationship_messages(projection_key:str,cursor:str|None=None,limit:int=Query(50,ge=1,le=100)):
+def relationship_messages(projection_key:str,cursor:str|None=None,
+                          limit:int=Query(50,ge=1,le=100),includePerson:bool=True):
     creator,account=_snapshot_scope()
     try:
         prefix,expected_creator,expected_account,user_id=projection_key.split(":",3)
         if prefix!="telegram" or int(expected_creator)!=creator or int(expected_account)!=account: raise ValueError
         result=RelationshipsService().messages(creator_profile_id=creator,fanvue_account_id=account,
-            telegram_user_id=int(user_id),cursor=cursor,limit=limit)
+            telegram_user_id=int(user_id),cursor=cursor,limit=limit,
+            include_person=includePerson)
     except (ValueError,LookupError): raise HTTPException(status_code=404,detail="Relationship not found.")
     return jsonable_encoder(result)
 
@@ -197,10 +217,15 @@ def _market_tier_response(service,scope,high_value,buyer,result=None):
             **scope,business_date=business_date)
         budget=int(persisted["daily_reply_budget"]) if persisted else None
     exhausted=bool(budget is not None and usage["replies_used_today"]>=budget)
+    from app.services.active_sales_opportunity_service import ActiveSalesOpportunityService
+    opportunity=ActiveSalesOpportunityService().project(**scope)
+    sales_override=bool(exhausted and opportunity["active"] and not buyer)
     return {**projection,
         "repliesUsedToday":int(usage["replies_used_today"]),
         "dailyReplyBudget":"FULL" if tier=="HIGH" else budget,
         "budgetStatus":"EXHAUSTED" if exhausted else "AVAILABLE",
+        "effectiveResourceStatus":"BUYER_AUTHORITY" if buyer else "SALES_OVERRIDE" if sales_override else "NURTURE_LIMIT" if exhausted else "AVAILABLE",
+        "activeSalesOpportunity":opportunity,
         "nextBudgetResetAt":usage["next_reset_at"],
         "prospectReplyLimit":"NOT_APPLICABLE" if buyer else None}
 
@@ -330,6 +355,22 @@ def get_attention_similar_cases(projection_key: str, inspection_id: UUID):
         raise HTTPException(status_code=404,detail="Inspection was not found.")
     result=item["validated_result"]
     return {"items":result.get("similarCurrentCases",[]) if isinstance(result,dict) else []}
+
+@router.post("/{projection_key}/attention/inspections/{inspection_id}/delivery-plan",
+             dependencies=[Depends(require_developer_authorization)])
+def create_delivery_resolution_plan(projection_key: str, inspection_id: UUID,
+                                    body: DeliveryResolutionPlanCreate):
+    creator,account,_user,_context=_relationship_scope(projection_key)
+    try:
+        return jsonable_encoder(_resolution_service().create_delivery_plan(
+            inspection_id,creator_profile_id=creator,fanvue_account_id=account,
+            outcome=body.outcome))
+    except LookupError as error:
+        raise HTTPException(status_code=404,detail=str(error)) from error
+    except PermissionError as error:
+        raise HTTPException(status_code=403,detail=str(error)) from error
+    except (ValueError,RuntimeError) as error:
+        raise HTTPException(status_code=409,detail=str(error)) from error
 
 @router.get("/{projection_key}/attention/plans/{plan_id}",
             dependencies=[Depends(require_developer_authorization)])
@@ -478,6 +519,25 @@ def relationship_takeover(projection_key:str,body:ControlChange):
 @router.post("/{projection_key}/return-to-ava")
 def relationship_return(projection_key:str,body:ControlChange):
     return _change_control(projection_key,body,False)
+
+@router.post("/{projection_key}/cancel-reply")
+def relationship_cancel_reply(projection_key:str,body:CancelOrdinaryReply):
+    from app.services.ordinary_reply_cancellation_service import (
+        OrdinaryReplyCancellationError, OrdinaryReplyCancellationService,
+    )
+    _creator,_account,user_id,context=_relationship_scope(projection_key)
+    try:
+        operation,changed=OrdinaryReplyCancellationService().cancel(
+            operation_id=body.operationId,
+            telegram_chat_id=context["telegram_chat_id"],
+            telegram_user_id=user_id,
+            inbound_message_id=body.inboundMessageId,
+        )
+    except OrdinaryReplyCancellationError as error:
+        raise HTTPException(status_code=409,detail=str(error)) from error
+    return jsonable_encoder({"operationId":operation.operation_id,
+        "state":operation.state.value,"changed":changed,
+        "reason":operation.last_error})
 
 def _change_ignore(projection_key,body,ignored):
     from app.services.telegram_relationship_control_service import TelegramRelationshipControlService
@@ -628,7 +688,11 @@ def relationship_send(projection_key:str,body:OperatorMessage):
             expected_control_version=body.expectedControlVersion,
             changed_by="CREATOR_OS_OPERATOR")
     except (TelegramOperatorMessageError,ValueError) as error:
-        raise HTTPException(status_code=getattr(error,"status_code",409),detail=str(error)) from error
+        detail={"message":str(error),
+                "code":getattr(error,"code","MANUAL_TELEGRAM_SEND_FAILED"),
+                "deliveryCertainty":getattr(
+                    error,"delivery_certainty","DEFINITELY_NOT_SENT")}
+        raise HTTPException(status_code=getattr(error,"status_code",409),detail=detail) from error
     return jsonable_encoder({"state":operation["state"],
         "eventKey":f"telegram:{operation['telegram_chat_id']}:{operation['outbound_telegram_message_id']}",
         "direction":"AVA","content":operation["message_text"],
@@ -665,8 +729,31 @@ def relationship_offer_send(projection_key:str,body:ManualOfferSend):
         expected_control_version=body.expectedControlVersion,business_connection_id=body.businessConnectionId,
         idempotency_key=body.idempotencyKey,message_text=body.text)
     except (RelationshipManualOfferError,ValueError) as error:_offer_error(error)
-    return jsonable_encoder({"state":operation["state"],"direction":"AVA","content":operation["message_text"],
+    return _offer_operation_response(operation)
+
+
+def _offer_operation_response(operation):
+    from app.repositories.telegram_sales_delivery_repository import TelegramSalesDeliveryRepository
+    delivery = (TelegramSalesDeliveryRepository().get_by_purchase_intent(operation['purchase_intent_id'])
+                if operation.get('purchase_intent_id') else None)
+    payload = delivery.delivery_payload if delivery else {}
+    metadata = payload.get('metadata') or {}
+    return jsonable_encoder({"operationId":str(operation['operation_id']),
+        "state":operation["state"],"direction":"AVA",
+        "content":payload.get('message_text') or operation['message_text'],
         "timestamp":operation["confirmed_at"],"telegramMessageId":operation["outbound_telegram_message_id"],
         "eventKey":f"telegram:{operation['telegram_chat_id']}:{operation['outbound_telegram_message_id']}",
-        "messageType":"COMMERCIAL_OFFER","purchaseIntentId":str(operation["purchase_intent_id"]),
+        "messageType":"COMMERCIAL_OFFER","purchaseIntentId":str(operation["purchase_intent_id"]) if operation.get('purchase_intent_id') else None,
+        "priceMinor":metadata.get('price_minor'),"currency":metadata.get('currency'),
+        "error":operation.get('last_error') if operation['state'] in ('FAILED','AMBIGUOUS') else None,
         "origin":"HUMAN_OPERATOR"})
+
+
+@router.get("/{projection_key}/offers/{operation_id}")
+def relationship_offer_status(projection_key:str,operation_id:str):
+    from app.repositories.telegram_manual_offer_repository import TelegramManualOfferRepository
+    creator,account,user_id,context=_relationship_scope(projection_key)
+    operation=TelegramManualOfferRepository().get(operation_id)
+    if not operation or (operation['creator_profile_id'],operation['fanvue_account_id'],operation['telegram_user_id']) != (creator,account,user_id):
+        raise HTTPException(status_code=404,detail='Offer operation not found.')
+    return _offer_operation_response(operation)

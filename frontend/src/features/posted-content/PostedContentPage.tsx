@@ -1,7 +1,7 @@
-import { Search, X } from "lucide-react";
+import { Images, Search, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
-import { getPostedContent } from "../../infrastructure/api/postedContentApi";
+import { getPostedContent, movePostedContentToGeneration } from "../../infrastructure/api/postedContentApi";
 import { PageHeader } from "../../shared/ui/PageHeader";
 import { LibraryImage } from "../generation-library/LibraryImage";
 import type { PostedContentItem } from "./types";
@@ -22,6 +22,9 @@ export function PostedContentPage() {
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<"newest" | "oldest">("newest");
   const [preview, setPreview] = useState<PostedContentItem | null>(null);
+  const [moveTarget, setMoveTarget] = useState<PostedContentItem | null>(null);
+  const [moving, setMoving] = useState(false);
+  const [success, setSuccess] = useState("");
 
   useEffect(() => {
     const controller = new AbortController();
@@ -54,6 +57,19 @@ export function PostedContentPage() {
     return sort === "oldest" ? comparison : -comparison;
   }), [items, platform, search, sort]);
 
+  const moveToGeneration = async () => {
+    if (!moveTarget || moving) return;
+    setMoving(true); setError(""); setSuccess("");
+    try {
+      const result = await movePostedContentToGeneration(moveTarget.contentId);
+      setItems((current) => current.filter((item) => item.contentId !== moveTarget.contentId));
+      setPreview((current) => current?.contentId === moveTarget.contentId ? null : current);
+      setMoveTarget(null); setSuccess(result.message);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Unable to move image to Generation Library.");
+    } finally { setMoving(false); }
+  };
+
   return (
     <section className="posted-content">
       <PageHeader title="Published Content" description="Browse media previously published by Creator_OS." />
@@ -65,17 +81,19 @@ export function PostedContentPage() {
 
       {loading && <div className="posted-content__state" role="status">Loading Posted Content…</div>}
       {error && <div className="posted-content__state posted-content__state--error" role="alert">{error}</div>}
+      {success && <div className="posted-content__notice" role="status">{success}</div>}
       {!loading && !error && items.length === 0 && <div className="posted-content__state"><strong>No posted content yet.</strong><span>Images posted through Creator_OS will automatically appear here.</span></div>}
       {!loading && !error && items.length > 0 && filtered.length === 0 && <div className="posted-content__state">No posted content matches these filters.</div>}
 
       <div className="posted-content__grid">
         {filtered.map((item) => <article className="posted-card" key={item.contentId}>
           <button className="posted-card__preview" aria-label={`Preview ${item.platform} post`} onClick={() => setPreview(item)} type="button"><LibraryImage alt={`${item.platform} posted content`} src={item.mediaUrl} /></button>
-          <div className="posted-card__body"><div className="posted-card__meta"><strong>{item.platform}</strong><time>{dateLabel(item.postedAt)}</time></div><p>{item.caption || "No caption available."}</p><span>{item.creator}</span><details><summary>Developer details</summary><code>{item.generationLibraryId}</code></details></div>
+          <div className="posted-card__body"><div className="posted-card__meta"><strong>{item.platform}</strong><time>{dateLabel(item.postedAt)}</time></div><p>{item.caption || "No caption available."}</p><span>{item.creator}</span><details><summary>Developer details</summary><code>{item.generationLibraryId}</code></details>{item.mediaType === "image" && item.moveEligible && <button className="posted-card__move" disabled={moving} onClick={() => setMoveTarget(item)} type="button"><Images size={15} />Move to Generation Library</button>}</div>
         </article>)}
       </div>
 
       {preview && <div className="posted-preview" role="dialog" aria-modal="true" aria-label="Posted content preview" onMouseDown={(event) => { if (event.target === event.currentTarget) setPreview(null); }}><button className="posted-preview__close" aria-label="Close preview" onClick={() => setPreview(null)} type="button"><X /></button><div className="posted-preview__panel"><div className="posted-preview__image"><LibraryImage alt={`${preview.platform} posted content preview`} priority src={preview.mediaUrl} /></div><aside><h2>{preview.platform}</h2><dl><div><dt>Caption</dt><dd>{preview.caption || "No caption available."}</dd></div><div><dt>Posted</dt><dd>{dateLabel(preview.postedAt)}</dd></div><div><dt>Creator</dt><dd>{preview.creator}</dd></div><div><dt>Source Generation Library ID</dt><dd>{preview.generationLibraryId}</dd></div><div><dt>Provider</dt><dd>{providerLabel(preview.provider)}</dd></div></dl><details><summary>Prompt</summary><p>{preview.prompt || "Prompt unavailable."}</p></details><details><summary>Developer details</summary><code>{preview.fileLocation}</code></details></aside></div></div>}
+      {moveTarget && <div className="posted-move-modal" role="dialog" aria-modal="true" aria-labelledby="posted-move-title"><div className="posted-move-modal__panel"><h2 id="posted-move-title">Move back to Generation Library?</h2><p>The image will return to Generation Library. Its publication history will remain intact.</p><div><button disabled={moving} onClick={() => setMoveTarget(null)} type="button">Cancel</button><button disabled={moving} onClick={() => void moveToGeneration()} type="button">{moving ? "Moving…" : "Move"}</button></div></div></div>}
     </section>
   );
 }

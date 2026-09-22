@@ -195,7 +195,8 @@ class XCompetitorIntelligenceRepository:
             if row is None:raise RuntimeError("Combined competitor refresh is incomplete.")
             return dict(row)
 
-    def list_due_competitor_refreshes(self, *, due_before: datetime, retry_before: datetime, limit: int) -> list[Mapping[str, Any]]:
+    def list_due_competitor_refreshes(self, *, due_before: datetime, retry_before: datetime, limit: int,
+                                      exclude_competitor_ids: tuple[str, ...] = ()) -> list[Mapping[str, Any]]:
         with self.connection_factory() as connection, connection.cursor() as cursor:
             cursor.execute(f"""SELECT c.id,c.x_user_id,c.username,refresh.last_successful_refresh_at
                 FROM x_intelligence.competitors c
@@ -206,13 +207,14 @@ class XCompetitorIntelligenceRepository:
                   ORDER BY completed_at DESC NULLS LAST LIMIT 1
                 ) last_failure ON TRUE
                 WHERE c.tracking_enabled=TRUE AND c.archived_at IS NULL
+                  AND NOT (c.id::text=ANY(%s))
                   AND (refresh.last_successful_refresh_at IS NULL OR refresh.last_successful_refresh_at<=%s)
                   AND (last_failure.completed_at IS NULL OR last_failure.completed_at<=%s)
                   AND NOT EXISTS(SELECT 1 FROM x_intelligence.competitor_sync_runs active
                       WHERE active.competitor_id=c.id AND active.canonical_refresh=TRUE AND active.status='RUNNING'
                         AND active.started_at>%s)
                 ORDER BY refresh.last_successful_refresh_at ASC NULLS FIRST,c.created_at,c.id LIMIT %s""",
-                (due_before,retry_before,retry_before,max(1,int(limit))))
+                (list(exclude_competitor_ids),due_before,retry_before,retry_before,max(1,int(limit))))
             return [dict(row) for row in cursor.fetchall()]
 
     def persist_latest_activity(self, competitor_id: UUID | str, activity: Any) -> bool:

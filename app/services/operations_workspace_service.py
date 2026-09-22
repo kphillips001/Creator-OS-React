@@ -67,11 +67,15 @@ class OperationsWorkspaceService:
 
     def overview(self, *, account_id: int) -> dict[str, Any]:
         health = self._health()
-        runtime = self.runtime(account_id=account_id)
-        queues = self.queues(account_id=account_id)
+        evidence = self._evidence(account_id)
+        runtime = self.runtime(account_id=account_id, health=health)
+        queues = self.queues(account_id=account_id, evidence=evidence)
         publishing = self.publishing(account_id=account_id)
-        failures = self.failures(account_id=account_id)
-        workers = self.workers(account_id=account_id)
+        failures = self.failures(
+            account_id=account_id, evidence=evidence, health=health,
+            publishing=publishing,
+        )
+        workers = self.workers(account_id=account_id, evidence=evidence)
         worker_counts = workers["summary"]
         database = next((check for section in health["sections"] if section["name"] == "Database" for check in section["checks"] if check["name"] == "Database Connection"), None)
         return {
@@ -88,7 +92,24 @@ class OperationsWorkspaceService:
             "warnings": workers["warnings"],
         }
 
-    def runtime(self, *, account_id: int) -> dict[str, Any]:
+    def schema_certification(self) -> dict[str, Any]:
+        """Expose the canonical schema diagnostic in the Operations workspace."""
+        from app.services.explainable_diagnostic_service import ExplainableDiagnosticService
+        from app.services.schema_manager_service import SchemaManagerService
+
+        report = SchemaManagerService().certify()
+        return {
+            "status": report.status,
+            "diagnostic": ExplainableDiagnosticService.schema(report),
+            "missingMigrations": list(report.missing_migrations),
+            "drift": list(report.drift),
+            "evidence": dict(report.evidence),
+            "warnings": [
+                "Read-only schema certification evidence; no migration is applied from this view."
+            ],
+        }
+
+    def runtime(self, *, account_id: int, health: dict[str, Any] | None = None) -> dict[str, Any]:
         snapshot = self._plain(self.runtime_service.build_snapshot(creator_profile_id=account_id))
         config = dict(getattr(self.safety_service, "behavior_config", {}) or {})
         global_result = self.safety_service.check_global_safety()
@@ -107,12 +128,13 @@ class OperationsWorkspaceService:
             "globalSends": bool(config.get("global_sends_enabled", False)),
             "manualPause": bool(config.get("manual_pause_enabled", False)),
             "guards": [{"module": name, **value} for name, value in guards.items()],
-            "configurationWarnings": self._health()["configurationWarnings"],
+            "configurationWarnings": (health or self._health())["configurationWarnings"],
             "warnings": ["Runtime mode is configured state and does not prove that a worker or transport is running."],
         }
 
-    def workers(self, *, account_id: int) -> dict[str, Any]:
-        evidence = self._evidence(account_id)
+    def workers(self, *, account_id: int,
+                evidence: dict[str, list[dict[str, Any]]] | None = None) -> dict[str, Any]:
+        evidence = self._evidence(account_id) if evidence is None else evidence
         launcher_state = self._launcher_state()
         heartbeat_warning = None
         try:
@@ -189,8 +211,9 @@ class OperationsWorkspaceService:
         if classification == "stopped": return "The worker recorded a graceful shutdown."
         return None
 
-    def queues(self, *, account_id: int) -> dict[str, Any]:
-        evidence = self._evidence(account_id)
+    def queues(self, *, account_id: int,
+               evidence: dict[str, list[dict[str, Any]]] | None = None) -> dict[str, Any]:
+        evidence = self._evidence(account_id) if evidence is None else evidence
         definitions = (
             ("Outreach", evidence["outreach"], "queue_status", "completed", "error_message"),
             ("Delayed Messages", evidence["delayed"], "status", "completed", "last_error"),
@@ -231,8 +254,11 @@ class OperationsWorkspaceService:
             "failed": self._count(items, "status", "FAILED"), "attention": sum(bool(item["attention"]) for item in items),
         }, "warnings": []}
 
-    def failures(self, *, account_id: int) -> dict[str, Any]:
-        evidence = self._evidence(account_id)
+    def failures(self, *, account_id: int,
+                 evidence: dict[str, list[dict[str, Any]]] | None = None,
+                 health: dict[str, Any] | None = None,
+                 publishing: dict[str, Any] | None = None) -> dict[str, Any]:
+        evidence = self._evidence(account_id) if evidence is None else evidence
         failures: list[dict[str, Any]] = []
         definitions = (
             ("Outreach", evidence["outreach"], "queue_status", "error_message"),
@@ -247,7 +273,7 @@ class OperationsWorkspaceService:
                 error = row.get(error_key)
                 if status == "failed" or error:
                     failures.append(self._failure(source, row, status, error))
-        for item in self.publishing(account_id=account_id)["items"]:
+        for item in (publishing or self.publishing(account_id=account_id))["items"]:
             if item["failure"] or item["attention"]:
                 failures.append({"id": item["id"], "source": "Publishing", "status": item["status"],
                                  "error": item["failure"] or item["nextRecommendedAction"], "timestamp": item["updatedAt"],
@@ -261,7 +287,7 @@ class OperationsWorkspaceService:
             failures.append({"id":incident["id"],"source":incident["source"],"status":incident["status"],
                              "error":incident["error"],"timestamp":incident["timestamp"],"retryCount":incident["retry_count"],
                              "related":incident["related"],"evidence":{"canonicalLifecycle":True}})
-        health = self._health()
+        health = health or self._health()
         for warning in health["providerWarnings"]:
             failures.append({"id": f"provider-{warning['name']}", "source": "Provider", "status": warning["status"],
                              "error": warning["summary"], "timestamp": None, "retryCount": 0, "related": {}, "evidence": warning})

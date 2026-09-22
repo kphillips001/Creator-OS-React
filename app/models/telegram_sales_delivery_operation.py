@@ -23,10 +23,10 @@ class TelegramSalesDeliveryOperation:
     correlation_id: str
     creator_profile_id: int
     fanvue_account_id: int
-    conversation_thread_id: int
-    fanvue_user_id: int
+    conversation_thread_id: int | None
+    fanvue_user_id: int | None
     telegram_chat_id: int
-    inbound_telegram_message_id: int
+    inbound_telegram_message_id: int | None
     outbound_telegram_message_id: int | None
     purchase_intent_id: UUID
     commercial_offering_id: UUID
@@ -41,3 +41,5 @@ class TelegramSalesDeliveryOperation:
     confirmed_at: datetime | None
     failed_at: datetime | None
     updated_at: datetime
+
+    manual_offer_operation_id: UUID | None = None

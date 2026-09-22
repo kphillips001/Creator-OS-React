@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from enum import Enum
+import re
 from typing import Any, Mapping, Sequence
 
 
@@ -35,6 +36,26 @@ class CustomerVisualEvidencePolicy:
         "race:", "ethnicity:", "religion:", "sexual orientation:", "political",
         "diagnosed", "home address:", "gps:", "face embedding", "genital",
     )
+
+    @staticmethod
+    def self_presentation(message, history=()):
+        text = str(message or "").replace("’", "'")
+        # Explicit alternate identity / ambiguity overrides self wording.
+        if re.search(r"\b(?:not me|isn't me|is not me|my (?:friend|brother|sister|cousin)|celebrity|meme|someone else|random (?:guy|person)|could be me|might be me|pretend|joking|joke)\b", text, re.I):
+            return False
+        if re.search(r"\b(?:this is me|that'?s me|here'?s me|pic(?:ture)? of me|photo of me|selfie|my (?:ugly )?mug|here'?s what i look like|yours truly|putting a face to (?:the|a) name|see who (?:you(?:'re| are) (?:talking|chatting) to|is chatting you up))\b", text, re.I):
+            return True
+        return any(str((item.get('metadata') or {}).get('customer_image_solicitation') or '').upper() == 'NORMAL_IMAGE'
+                   and str(item.get('sender_type') or '').lower() in {'ava', 'assistant'}
+                   for item in list(history)[-3:] if isinstance(item, dict))
+
+    @staticmethod
+    def self_photo_established(context):
+        evidence = dict((context or {}).get('self_photo_evidence') or {})
+        return (evidence.get('version') == 'SELF_PHOTO_V1'
+                and evidence.get('personVisible') is True
+                and evidence.get('senderPresentation') is True
+                and evidence.get('validatedCurrentTurn') is True)
 
     @classmethod
     def classify(cls, *, source: str, field: str | None = None) -> VisualEvidenceClass:
@@ -88,6 +109,8 @@ class CustomerVisualEvidencePolicy:
             "partial_failure", "creator_profile_id", "fanvue_account_id", "telegram_user_id",
         )
         result = {key: context.get(key) for key in allowed if context.get(key) is not None}
+        if cls.self_photo_established(context):
+            result['self_photo_evidence'] = dict(context['self_photo_evidence'])
         result.update({
             "visual_evidence_scope": VisualEvidenceClass.EPHEMERAL_VISUAL_CONTEXT.value,
             "customer_identity_authority": False,

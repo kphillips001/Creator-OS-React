@@ -1,5 +1,7 @@
 [CmdletBinding()]
-param()
+param(
+    [ValidateSet("Full", "BackendOnly")][string]$ServiceScope = "Full"
+)
 
 $ErrorActionPreference = "Stop"
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
@@ -85,11 +87,11 @@ if (Test-Path -LiteralPath $Session5CertificationConfigPath) {
     }
 }
 
-# This launcher is the canonical local-development entry point. Direct
-# production/runtime module launches remain non-reloading by default.
+# Production launches are non-reloading by default. Development reload remains
+# an explicit opt-in and must never be inferred merely from using this launcher.
 $DevAutoReloadSwitch = "CREATOR_OS_DEV_AUTO_RELOAD"
 if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($DevAutoReloadSwitch))) {
-    [Environment]::SetEnvironmentVariable($DevAutoReloadSwitch, "true", "Process")
+    [Environment]::SetEnvironmentVariable($DevAutoReloadSwitch, "false", "Process")
 }
 $DevAutoReloadEnabled = [Environment]::GetEnvironmentVariable($DevAutoReloadSwitch) -match '^(?i:1|true|yes|on)$'
 if ($DevAutoReloadEnabled) {
@@ -413,6 +415,28 @@ try {
     Remove-Item -LiteralPath $LauncherFailureLog -Force -ErrorAction SilentlyContinue
     Write-LauncherEvent -Message "Creator_OS restart requested from $ProjectRoot."
     Write-LauncherEvent -Message "Development auto-reload enabled=$DevAutoReloadEnabled switch=$DevAutoReloadSwitch"
+
+    if ($ServiceScope -eq "BackendOnly") {
+        Set-LauncherStep -Name "stop-backend"
+        $previousBackendIds = @(Stop-CreatorService `
+            -Name "Backend" -ServiceType "Backend" -Port $BackendPort `
+            -HealthUrl $BackendHealthUrl -TimeoutSeconds $ProcessStopTimeoutSeconds)
+        Set-LauncherStep -Name "start-backend"
+        $backendIds = @(Start-CreatorService `
+            -Name "Backend" -ServiceType "Backend" -Port $BackendPort `
+            -HealthUrl $BackendHealthUrl -Command $BackendCommand `
+            -Arguments $BackendArguments -WorkingDirectory $ProjectRoot `
+            -StartupTimeoutSeconds $BackendStartupTimeoutSeconds `
+            -OutputLog $BackendOutputLog -ErrorLog $BackendErrorLog)
+        if ($previousBackendIds.Count -gt 0 -and
+                @($backendIds | Where-Object { $previousBackendIds -contains $_ }).Count -gt 0) {
+            throw "Backend restart reused a previous listener PID unexpectedly."
+        }
+        Set-LauncherStep -Name "backend-heartbeat"
+        Wait-ForFastApiHeartbeat -TimeoutSeconds $BackendStartupTimeoutSeconds
+        Write-LauncherEvent -Message "Backend-only replacement completed."
+        return
+    }
 
     Set-LauncherStep -Name "desktop-shortcut"
     try {

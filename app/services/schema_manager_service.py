@@ -52,6 +52,28 @@ class SchemaManagerService:
     """Owns Creator OS schema discovery, migration history, and reconciliation."""
 
     REQUIRED_TABLES: Mapping[str, Mapping[str, Any]] = {
+        'evergreen_offer_authorities': {'owner': 'Evergreen Checkout Lifecycle', 'migration': '20260921_151_evergreen_offer_authority.sql', 'repository': 'EvergreenCheckoutRepository', 'service': 'CanonicalUnlockAuthority', 'dashboard': (), 'columns': ('original_intent_id', 'unlock_grant_id', 'fingerprint_reservation_id', 'configured_price_minor', 'final_price_minor', 'currency', 'binding', 'media_uuids', 'created_at')},
+        'evergreen_provider_operations': {'owner': 'Evergreen Checkout Lifecycle', 'migration': '20260921_151_evergreen_offer_authority.sql', 'repository': 'EvergreenCheckoutRepository', 'service': 'CanonicalUnlockAuthority', 'dashboard': (), 'columns': ('original_intent_id', 'operation_id', 'state', 'attempt_count', 'provider_resource_id', 'provider_evidence', 'provider_url', 'reason_code', 'updated_at')},
+        "evergreen_checkout_lineage": {
+            "owner": "Evergreen Checkout Lifecycle",
+            "migration": "20260920_146_evergreen_checkout_lineage.sql",
+            "repository": "EvergreenCheckoutRepository",
+            "service": "EvergreenCheckoutService",
+            "dashboard": (),
+            "columns": ("namespace", "alias_id", "original_transaction_id", "generation",
+                        "predecessor_id", "successor_id", "refresh_reason", "refreshed_at",
+                        "predecessor_price_minor", "successor_price_minor", "currency",
+                        "eligibility_result", "runtime_state", "runtime_reason"),
+        },
+        "evergreen_checkout_resolution_events": {
+            "owner": "Evergreen Checkout Lifecycle",
+            "migration": "20260920_146_evergreen_checkout_lineage.sql",
+            "repository": "EvergreenCheckoutRepository",
+            "service": "EvergreenCheckoutService",
+            "dashboard": (),
+            "columns": ("event_id", "namespace", "alias_id", "original_transaction_id",
+                        "effective_transaction_id", "generation", "result", "reason_code", "occurred_at"),
+        },
         "ava_availability_sessions": {
             "owner": "Ava Persistent Availability Sessions",
             "migration": "20260913_119_ava_availability_and_private_inbound_backlog.sql",
@@ -1074,7 +1096,7 @@ class SchemaManagerService:
                 "operation_id", "correlation_id", "creator_profile_id",
                 "fanvue_account_id", "conversation_thread_id",
                 "fanvue_user_id", "telegram_chat_id",
-                "inbound_telegram_message_id",
+                "inbound_telegram_message_id", "manual_offer_operation_id",
                 "outbound_telegram_message_id", "purchase_intent_id",
                 "commercial_offering_id", "commercial_publication_id",
                 "response_text", "delivery_payload", "state",
@@ -1188,6 +1210,66 @@ class SchemaManagerService:
             "owner":"Governed Conversation Repair Execution","migration":"20260914_132_conversation_repair_isolated_staging.sql","repository":"ConversationRepairExecutionRepository","service":"ConversationRepairExecutorService","dashboard":("Business Chat",),"columns":("execution_id","authorization_id","proposal_id","creator_profile_id","fanvue_account_id","state","workflow","executor_identity","developer_task_id","developer_execution_id","files_changed","tests_result","rollback_evidence","deployment_evidence","baseline_sha","staging_branch","staging_worktree_identity","staging_worktree_path","staged_diff_digest","failure_reason","ready_for_deployment_at","started_at","completed_at","created_at")},
         "conversation_repair_execution_events": {
             "owner":"Governed Conversation Repair Execution Audit","migration":"20260914_131_conversation_repair_execution.sql","repository":"ConversationRepairExecutionRepository","service":"ConversationRepairExecutorService","dashboard":("Business Chat",),"columns":("event_id","execution_id","event_type","event_data","created_at")},
+        "x_thread_cta_jobs": {
+            "owner":"Business X CTA Queue","migration":"20260914_133_x_thread_cta_jobs.sql",
+            "repository":"XThreadCtaJobRepository","service":"XThreadCtaQueueService",
+            "dashboard":("Business Queue",),"columns":("job_id","creator_profile_id","fanvue_account_id","publish_operation_id","social_queue_item_id","generation_image_id","primary_x_post_id","primary_published_at","x_account_name","x_link_attribution_id","asset_reference","thumbnail_reference","caption_preview","cta_text","cta_url","sampled_delay_seconds","scheduled_at","state","attempt_count","claim_owner","claimed_at","lease_expires_at","resulting_x_reply_id","provider_output_url","sent_at","failure_reason","canceled_at","canceled_by","created_at","updated_at")},
+        "x_thread_cta_deliveries": {
+            "owner":"X Thread CTA Delivery Authority",
+            "migration":"20260916_138_x_thread_cta_deliveries.sql",
+            "repository":"XThreadCtaDeliveryRepository",
+            "service":"XThreadCtaPublisher",
+            "dashboard":("Business Queue",),
+            "columns":("delivery_id","creator_profile_id","fanvue_account_id",
+                "publish_operation_id","x_account_name","primary_x_post_id",
+                "x_link_attribution_id","timing","cta_text","cta_url","state",
+                "resulting_x_reply_id","provider_output_url","failure_reason",
+                "sent_at","created_at","updated_at")},
+        "active_offer_follow_through_events": {
+            "owner":"Active Offer Follow-Through","migration":"20260914_135_active_offer_follow_through.sql",
+            "repository":"ActiveOfferFollowThroughRepository","service":"ActiveOfferFollowThroughService",
+            "dashboard":("Business Chat Intelligence",),"columns":("event_id","purchase_intent_id","creator_profile_id","fanvue_account_id","telegram_user_id","telegram_chat_id","nudge_sequence","nudge_reason","eligible_at","authorized_at","operation_id","delivery_state","confirmed_at","outbound_telegram_message_id","customer_response_observed_at","purchase_observed_at","created_at","updated_at")},
+        "conversation_projection_events": {
+            "owner": "Conversation Operational Projection", "migration": "20260920_149_conversation_projection_history.sql",
+            "repository": "RelationshipsRepository", "service": "RelationshipsService", "dashboard": ("Business Chat",),
+            "columns": ("event_id","creator_profile_id","fanvue_account_id","telegram_user_id","telegram_chat_id",
+                        "projection_hash","projection","observed_at")},
+        "ordinary_generation_budgets": {
+            "owner": "Ordinary Reply Generation Budget", "migration": "20260920_148_ordinary_generation_budget.sql",
+            "repository": "OrdinaryGenerationBudgetRepository", "service": "OrdinaryReplyGenerationService", "dashboard": (),
+            "columns": ("operation_id","version","candidate_count","provider_attempt_count","initial_started",
+                        "correction_started","obligation","context_snapshot","result_snapshot","events","created_at","updated_at")},
+        "ordinary_generation_policy": {
+            "owner": "Ordinary Reply Generation Budget", "migration": "20260920_148_ordinary_generation_budget.sql",
+            "repository": "OrdinaryGenerationBudgetRepository", "service": "OrdinaryReplyGenerationService", "dashboard": (),
+            "columns": ("singleton","installed_at")},
+        "ordinary_reply_generation_attempts": {
+            "owner":"Ordinary Reply Generation Attempt Audit",
+            "migration":"20260915_136_ordinary_reply_generation_attempts.sql",
+            "repository":"OrdinaryChatReplyRepository",
+            "service":"OrdinaryChatReplyService",
+            "dashboard":("Business Chat Inspect and Resolve",),
+            "columns":("attempt_id","operation_id","attempt_number","creator_profile_id",
+                "fanvue_account_id","telegram_account_scope","telegram_chat_id",
+                "telegram_user_id","provider","candidate_text","quality_disposition",
+                "quality_reasons","turn_obligations","satisfied_obligations",
+                "unsatisfied_obligations","repair_outcome","sent_confirmed",
+                "outbound_telegram_message_id","attempted_at","sent_confirmed_at")},
+        "operator_delivery_resolutions": {
+            "owner":"Operator-Attested Commercial Delivery Resolution",
+            "migration":"20260915_137_operator_delivery_resolutions.sql",
+            "repository":"OperatorDeliveryResolutionRepository",
+            "service":"ConversationAttentionResolutionService",
+            "dashboard":("Business Chat Inspect and Resolve",),
+            "columns":("resolution_id","ordinary_operation_id","creator_profile_id",
+                "fanvue_account_id","relationship_key","telegram_user_id",
+                "telegram_chat_id","purchase_intent_id","outcome","provenance",
+                "original_operation_state","original_uncertainty_reason",
+                "presentation_mode","provider_acceptance_evidence",
+                "provider_readback_evidence","telegram_message_id",
+                "attested_presentation_at","resolved_by","resolved_at",
+                "prior_purchase_intent_state","corrected_purchase_intent_state",
+                "evidence","created_at","updated_at")},
         "telegram_operator_message_operations": {
             "owner": "Relationships Operator Messaging", "migration": "20260909_105_relationship_manual_control.sql",
             "repository": "TelegramOperatorMessageRepository", "service": "TelegramOperatorMessageService",
@@ -1195,7 +1277,7 @@ class SchemaManagerService:
             "columns": ("operation_id","creator_profile_id","fanvue_account_id","telegram_user_id",
                 "telegram_chat_id","idempotency_key","message_text","message_sha256",
                 "relationship_control_version","origin","state","outbound_telegram_message_id",
-                "send_attempt_count","changed_by","created_at","updated_at"),
+                "send_attempt_count","changed_by","created_at","updated_at","transport_evidence"),
         },
         "telegram_manual_offer_operations": {
             "owner": "Relationships Manual Offers", "migration": "20260909_107_relationship_manual_offers.sql",
@@ -1205,7 +1287,7 @@ class SchemaManagerService:
                 "commercial_offering_id","commercial_publication_id","business_connection_id",
                 "idempotency_key","relationship_control_version","origin","state",
                 "purchase_intent_id","sales_delivery_operation_id","outbound_telegram_message_id",
-                "created_at","updated_at"),
+                "created_at","updated_at","send_attempt_count"),
         },
         "telegram_business_peer_observations": {
             "owner": "Telegram Business Peer Observability",
@@ -1223,6 +1305,58 @@ class SchemaManagerService:
     }
 
     MIGRATION_SCHEMA_REQUIREMENTS: Mapping[str, Mapping[str, tuple[str, ...]]] = {
+        "20260921_152_manual_offer_delivery_anchor.sql": {"telegram_sales_delivery_operations": ("inbound_telegram_message_id","manual_offer_operation_id")},
+        "20260921_151_evergreen_offer_authority.sql": {'evergreen_offer_authorities': ('original_intent_id', 'unlock_grant_id', 'fingerprint_reservation_id', 'configured_price_minor', 'final_price_minor', 'currency', 'binding', 'media_uuids', 'created_at'), 'evergreen_provider_operations': ('original_intent_id', 'operation_id', 'state', 'attempt_count', 'provider_resource_id', 'provider_evidence', 'provider_url', 'reason_code', 'updated_at')},
+        "20260921_150_manual_prospect_offers.sql": {
+            "telegram_manual_offer_operations": ("operation_id","send_attempt_count"),
+            "telegram_sales_delivery_operations": ("operation_id","conversation_thread_id","fanvue_user_id")},
+        "20260920_149_conversation_projection_history.sql": {
+            "conversation_projection_events": ("event_id","creator_profile_id","fanvue_account_id","telegram_user_id",
+                "telegram_chat_id","projection_hash","projection","observed_at")},
+        "20260920_148_ordinary_generation_budget.sql": {
+            "ordinary_generation_policy": ("singleton","installed_at"),
+            "ordinary_generation_budgets": ("operation_id","version","candidate_count","provider_attempt_count",
+                "initial_started","correction_started","obligation","context_snapshot","result_snapshot","events","created_at","updated_at"),
+        },
+        "20260920_147_telegram_transport_invocations.sql": {
+            "telegram_operator_message_operations": ("transport_evidence",),
+        },
+        "20260916_138_x_thread_cta_deliveries.sql": {
+            "x_thread_cta_deliveries": ("delivery_id","creator_profile_id",
+                "fanvue_account_id","publish_operation_id","x_account_name",
+                "primary_x_post_id","x_link_attribution_id","timing","cta_text",
+                "cta_url","state","resulting_x_reply_id","provider_output_url",
+                "failure_reason","sent_at","created_at","updated_at"),
+        },
+        "20260915_137_operator_delivery_resolutions.sql": {
+            "operator_delivery_resolutions": ("resolution_id","ordinary_operation_id",
+                "creator_profile_id","fanvue_account_id","relationship_key",
+                "telegram_user_id","telegram_chat_id","purchase_intent_id",
+                "outcome","provenance","original_operation_state",
+                "original_uncertainty_reason","presentation_mode",
+                "provider_acceptance_evidence","provider_readback_evidence",
+                "telegram_message_id","attested_presentation_at","resolved_by",
+                "resolved_at","prior_purchase_intent_state",
+                "corrected_purchase_intent_state","evidence","created_at","updated_at"),
+        },
+        "20260915_136_ordinary_reply_generation_attempts.sql": {
+            "ordinary_reply_generation_attempts": ("attempt_id","operation_id",
+                "attempt_number","creator_profile_id","fanvue_account_id",
+                "telegram_account_scope","telegram_chat_id","telegram_user_id",
+                "provider","candidate_text","quality_disposition","quality_reasons",
+                "turn_obligations","satisfied_obligations","unsatisfied_obligations",
+                "repair_outcome","sent_confirmed","outbound_telegram_message_id",
+                "attempted_at","sent_confirmed_at"),
+        },
+        "20260914_135_active_offer_follow_through.sql": {
+            "active_offer_follow_through_events": ("event_id","purchase_intent_id","creator_profile_id","fanvue_account_id","telegram_user_id","telegram_chat_id","nudge_sequence","nudge_reason","operation_id","delivery_state","confirmed_at","outbound_telegram_message_id"),
+        },
+        "20260914_134_x_thread_cta_primary_published_at.sql": {
+            "x_thread_cta_jobs": ("primary_published_at",),
+        },
+        "20260914_133_x_thread_cta_jobs.sql": {
+            "x_thread_cta_jobs": ("job_id","creator_profile_id","fanvue_account_id","publish_operation_id","primary_x_post_id","x_link_attribution_id","cta_text","cta_url","sampled_delay_seconds","scheduled_at","state","attempt_count","created_at","updated_at"),
+        },
         "20260914_132_conversation_repair_isolated_staging.sql": {
             "conversation_repair_execution_authorizations": ("baseline_sha",),
             "conversation_repair_executions": ("baseline_sha","staging_branch","staging_worktree_identity","staging_worktree_path","staged_diff_digest","failure_reason","ready_for_deployment_at"),
@@ -1263,6 +1397,26 @@ class SchemaManagerService:
                 "telegram_user_id", "telegram_chat_id", "market_tier", "version",
                 "changed_by", "changed_at", "reason", "removed_by", "removed_at",
                 "replaced_by",
+            ),
+        },
+        "20260918_140_immutable_historical_reply_recovery.sql": {
+            "ordinary_chat_reply_operations": (
+                "operation_kind", "causal_operation_id",
+                "recovery_attention_occurrence_id",
+                "recovery_resolution_plan_id", "recovery_idempotency_key",
+            ),
+        },
+        "20260918_141_historical_corrective_followup_lineage.sql": {
+            "ordinary_chat_reply_operations": (
+                "recovery_parent_operation_id",
+            ),
+        },
+        "20260918_142_ordinary_reply_conversation_bursts.sql": {
+            "ordinary_chat_reply_operations": (
+                "conversation_burst_id", "burst_role",
+                "burst_survivor_operation_id",
+                "burst_freshness_telegram_message_id",
+                "burst_member_obligations", "burst_obligations",
             ),
         },
         "20260913_123_attention_inspection_reliability.sql": {
@@ -1313,6 +1467,25 @@ class SchemaManagerService:
                 "telegram_user_id", "telegram_chat_id", "telegram_message_id", "received_at",
                 "customer_text", "has_media", "media_types", "automation_state_at_receipt",
                 "reconciliation_state", "response_operation_id"),
+        },
+        "20260918_143_telegram_visual_turn_continuity.sql": {
+            "telegram_conversation_turn_reservations": (
+                "reservation_id","creator_profile_id","fanvue_account_id","telegram_chat_id",
+                "telegram_user_id","conversation_burst_id","opened_at","closes_at","state",
+                "member_inbound_ids","member_telegram_message_ids","member_roles",
+                "authoritative_response_operation_id","newest_message_freshness_watermark",
+                "version","updated_at"),
+            "telegram_inbound_media_turns": (
+                "media_turn_id","creator_profile_id","fanvue_account_id","telegram_chat_id",
+                "telegram_user_id","media_operation_id","conversation_burst_id",
+                "authoritative_response_operation_id","grouped_id","member_inbound_ids",
+                "member_telegram_message_ids","member_roles","newest_message_freshness_watermark","state"),
+            "telegram_inbound_visual_turn_summaries": (
+                "summary_id","creator_profile_id","fanvue_account_id","telegram_chat_id",
+                "telegram_user_id","media_turn_id","media_operation_id","conversation_burst_id",
+                "source_attachment_ids","schema_version","sanitized_summary","aggregate_confidence",
+                "identity_authority","sensitive_inference_authority","raw_provider_output_persisted",
+                "created_at","expires_at"),
         },
         "20260912_118_customer_inbound_image_safety.sql": {
             "telegram_inbound_media_operations": ("operation_id","state","album_finalize_after","finalized_at","safety_started_at","safety_classified_at","safety_state","solicitation_state","response_policy","partial_failure"),
@@ -1941,6 +2114,100 @@ class SchemaManagerService:
     )
 
     TABLE_OWNERSHIP: Mapping[str, Mapping[str, Any]] = {
+        "creator_content_publications": {
+            "owner": "Publishing",
+            "migration": "20260919_144_creator_content_publications.sql",
+            "repository": "CreatorContentPublicationRepository",
+            "service": "CreatorContentPublicationMemoryService",
+            "dashboard": (),
+            "legacy": "current",
+            "compatibility": "CANONICAL",
+            "columns": ('publication_id', 'creator_profile_id', 'platform', 'destination', 'telegram_channel_id', 'telegram_message_id', 'published_at', 'publication_status', 'generated_image_id', 'published_asset_id', 'caption_result_id', 'photoshoot_id', 'generation_lineage', 'media_identity', 'published_caption', 'cta_snapshot', 'provider_identifiers', 'factual_visual_summary', 'setting', 'clothing', 'pose', 'activity', 'expression', 'useful_objects', 'mood', 'themes', 'safety_snapshot', 'intelligence_source', 'intelligence_version', 'intelligence_provenance', 'search_document', 'created_at', 'updated_at'),
+        },
+        "creator_content_entry_attributions": {
+            "owner": "Publishing",
+            "migration": "20260919_145_creator_content_entry_attributions.sql",
+            "repository": "CreatorContentEntryAttributionRepository",
+            "service": "CreatorContentEntryAttributionService",
+            "dashboard": (),
+            "legacy": "current",
+            "compatibility": "CANONICAL",
+            "columns": ('attribution_id', 'creator_profile_id', 'publication_id', 'token_digest', 'source_platform', 'provenance_method', 'status', 'token_created_at', 'cta_attached_at', 'last_error_code', 'created_at', 'updated_at'),
+        },
+        "creator_content_entry_events": {
+            "owner": "Publishing",
+            "migration": "20260919_145_creator_content_entry_attributions.sql",
+            "repository": "CreatorContentEntryAttributionRepository",
+            "service": "CreatorContentEntryAttributionService",
+            "dashboard": (),
+            "legacy": "current",
+            "compatibility": "CANONICAL",
+            "columns": ('entry_event_id', 'attribution_id', 'creator_profile_id', 'publication_id', 'event_status', 'telegram_user_id', 'telegram_chat_id', 'inbound_telegram_message_id', 'observed_at', 'created_at'),
+        },
+        "x_thread_cta_deliveries": {
+            "owner":"X Thread CTA Delivery Authority",
+            "migration":"20260916_138_x_thread_cta_deliveries.sql",
+            "repository":"XThreadCtaDeliveryRepository",
+            "service":"XThreadCtaPublisher",
+            "dashboard":("Business Queue",),
+            "columns":("delivery_id","creator_profile_id","fanvue_account_id",
+                "publish_operation_id","x_account_name","primary_x_post_id",
+                "x_link_attribution_id","timing","cta_text","cta_url","state",
+                "resulting_x_reply_id","provider_output_url","failure_reason",
+                "sent_at","created_at","updated_at")},
+        "active_offer_follow_through_events": {
+            "owner":"Active Offer Follow-Through",
+            "migration":"20260914_135_active_offer_follow_through.sql",
+            "repository":"ActiveOfferFollowThroughRepository",
+            "service":"ActiveOfferFollowThroughService",
+            "dashboard":("Business Chat Intelligence",),
+            "columns":("event_id","purchase_intent_id","creator_profile_id",
+                "fanvue_account_id","telegram_user_id","telegram_chat_id",
+                "nudge_sequence","nudge_reason","eligible_at","authorized_at",
+                "operation_id","delivery_state","confirmed_at",
+                "outbound_telegram_message_id","customer_response_observed_at",
+                "purchase_observed_at","created_at","updated_at")},
+        "conversation_projection_events": {
+            "owner": "Conversation Operational Projection", "migration": "20260920_149_conversation_projection_history.sql",
+            "repository": "RelationshipsRepository", "service": "RelationshipsService", "dashboard": ("Business Chat",),
+            "columns": ("event_id","creator_profile_id","fanvue_account_id","telegram_user_id","telegram_chat_id",
+                        "projection_hash","projection","observed_at")},
+        "ordinary_generation_budgets": {
+            "owner": "Ordinary Reply Generation Budget", "migration": "20260920_148_ordinary_generation_budget.sql",
+            "repository": "OrdinaryGenerationBudgetRepository", "service": "OrdinaryReplyGenerationService", "dashboard": (),
+            "columns": ("operation_id","version","candidate_count","provider_attempt_count","initial_started",
+                        "correction_started","obligation","context_snapshot","result_snapshot","events","created_at","updated_at")},
+        "ordinary_generation_policy": {
+            "owner": "Ordinary Reply Generation Budget", "migration": "20260920_148_ordinary_generation_budget.sql",
+            "repository": "OrdinaryGenerationBudgetRepository", "service": "OrdinaryReplyGenerationService", "dashboard": (),
+            "columns": ("singleton","installed_at")},
+        "ordinary_reply_generation_attempts": {
+            "owner":"Ordinary Reply Generation Attempt Audit",
+            "migration":"20260915_136_ordinary_reply_generation_attempts.sql",
+            "repository":"OrdinaryChatReplyRepository",
+            "service":"OrdinaryChatReplyService",
+            "dashboard":("Business Chat Inspect and Resolve",),
+            "columns":("attempt_id","operation_id","attempt_number","creator_profile_id",
+                "fanvue_account_id","telegram_account_scope","telegram_chat_id",
+                "telegram_user_id","provider","candidate_text","quality_disposition",
+                "quality_reasons","turn_obligations","satisfied_obligations",
+                "unsatisfied_obligations","repair_outcome","sent_confirmed",
+                "outbound_telegram_message_id","attempted_at","sent_confirmed_at")},
+        "operator_delivery_resolutions": {
+            "owner":"Operator-Attested Commercial Delivery Resolution",
+            "migration":"20260915_137_operator_delivery_resolutions.sql",
+            "repository":"OperatorDeliveryResolutionRepository",
+            "service":"ConversationAttentionResolutionService",
+            "dashboard":("Business Chat Inspect and Resolve",),
+            "columns":("resolution_id","ordinary_operation_id","creator_profile_id",
+                "fanvue_account_id","relationship_key","telegram_user_id",
+                "telegram_chat_id","purchase_intent_id","outcome","provenance",
+                "original_operation_state","original_uncertainty_reason",
+                "presentation_mode","provider_acceptance_evidence",
+                "provider_readback_evidence","telegram_message_id",
+                "attested_presentation_at","resolved_by","resolved_at",
+                "prior_purchase_intent_state","corrected_purchase_intent_state",
+                "evidence","created_at","updated_at")},
         "market_tier_daily_budgets": {"owner":"Market Tier Daily Resource Budget","migration":"20260913_127_market_tier_daily_resource_gate.sql","repository":"MarketTierResourceGateRepository","service":"MarketTierResourceGateService","dashboard":(),"columns":("budget_id","creator_profile_id","fanvue_account_id","telegram_user_id","telegram_chat_id","business_date","market_tier","daily_reply_budget","business_day_start","business_day_end","created_at")},
         "market_tier_resource_policy_events": {"owner":"Market Tier Resource Policy Audit","migration":"20260913_127_market_tier_daily_resource_gate.sql","repository":"MarketTierResourceGateRepository","service":"MarketTierResourceGateService","dashboard":(),"columns":("event_id","idempotency_key","operation_id","creator_profile_id","fanvue_account_id","telegram_user_id","telegram_chat_id","event_type","evidence","created_at")},
         "market_tier_confirmed_reply_events": {
@@ -2094,7 +2361,15 @@ class SchemaManagerService:
                         "inbound_telegram_message_id", "correlation_id", "state",
                         "response_content_sha256", "outbound_telegram_message_id",
                         "generation_attempt_count", "send_attempt_count",
-                        "inbound_message_text", "inbound_received_at"),
+                        "inbound_message_text", "inbound_received_at",
+                        "operation_kind", "causal_operation_id",
+                        "recovery_parent_operation_id",
+                        "recovery_attention_occurrence_id",
+                        "recovery_resolution_plan_id", "recovery_idempotency_key",
+                        "conversation_burst_id", "burst_role",
+                        "burst_survivor_operation_id",
+                        "burst_freshness_telegram_message_id",
+                        "burst_member_obligations", "burst_obligations"),
         },
         "telegram_inbound_media_operations": {
             "owner": "Telegram Customer Media Foundation",
@@ -2107,6 +2382,45 @@ class SchemaManagerService:
                         "grouped_id","caption_text","state","failure_category",
                         "received_at","processing_started_at","ready_at",
                         "retention_expires_at","created_at","updated_at"),
+        },
+        "telegram_inbound_media_turns": {
+            "owner": "Telegram Customer Media Turn Authority",
+            "migration": "20260918_143_telegram_visual_turn_continuity.sql",
+            "repository": "TelegramVisualTurnRepository",
+            "service": "TelegramVisualTurnService",
+            "dashboard": (),
+            "columns": ("media_turn_id","creator_profile_id","fanvue_account_id",
+                        "telegram_chat_id","telegram_user_id","media_operation_id",
+                        "conversation_burst_id","authoritative_response_operation_id",
+                        "grouped_id","member_inbound_ids","member_telegram_message_ids",
+                        "member_roles","newest_message_freshness_watermark","state",
+                        "created_at","updated_at"),
+        },
+        "telegram_conversation_turn_reservations": {
+            "owner": "Telegram Conversation Turn Reservation Authority",
+            "migration": "20260918_143_telegram_visual_turn_continuity.sql",
+            "repository": "TelegramTurnReservationRepository",
+            "service": "TelegramTurnReservationService",
+            "dashboard": (),
+            "columns": ("reservation_id","creator_profile_id","fanvue_account_id",
+                        "telegram_chat_id","telegram_user_id","conversation_burst_id",
+                        "opened_at","closes_at","state","member_inbound_ids",
+                        "member_telegram_message_ids","member_roles",
+                        "authoritative_response_operation_id",
+                        "newest_message_freshness_watermark","version","updated_at"),
+        },
+        "telegram_inbound_visual_turn_summaries": {
+            "owner": "Bounded Telegram Visual Continuity",
+            "migration": "20260918_143_telegram_visual_turn_continuity.sql",
+            "repository": "TelegramVisualTurnRepository",
+            "service": "TelegramVisualTurnService",
+            "dashboard": (),
+            "columns": ("summary_id","creator_profile_id","fanvue_account_id",
+                        "telegram_chat_id","telegram_user_id","media_turn_id",
+                        "media_operation_id","conversation_burst_id","source_attachment_ids",
+                        "schema_version","sanitized_summary","aggregate_confidence",
+                        "identity_authority","sensitive_inference_authority",
+                        "raw_provider_output_persisted","created_at","expires_at"),
         },
         "telegram_inbound_media_attachments": {
             "owner": "Telegram Customer Media Foundation",
@@ -2785,6 +3099,21 @@ class SchemaManagerService:
     }
 
     REQUIRED_INDEXES: Mapping[str, tuple[str, ...]] = {
+        "telegram_operator_message_operations": ("telegram_operator_invocation_recovery_idx",),
+        "x_thread_cta_deliveries": (
+            "idx_x_thread_cta_deliveries_scope",
+        ),
+        "operator_delivery_resolutions": (
+            "operator_delivery_resolutions_ordinary_operation_id_key",
+            "operator_delivery_resolution_scope_idx",
+            "operator_delivery_resolution_purchase_intent_idx",
+        ),
+        "active_offer_follow_through_events": (
+            "active_offer_follow_through_scope_idx",
+        ),
+        "ordinary_reply_generation_attempts": (
+            "ordinary_reply_generation_attempt_scope_idx",
+        ),
         "ava_availability_sessions": (
             "uq_ava_availability_sessions_current", "idx_ava_availability_sessions_transition",
         ),
@@ -2904,6 +3233,13 @@ class SchemaManagerService:
     }
 
     CRITICAL_FOREIGN_KEYS: Mapping[str, tuple[str, ...]] = {
+        "x_thread_cta_deliveries": (
+            "x_thread_cta_deliveries_x_link_attribution_id_fkey",
+        ),
+        "operator_delivery_resolutions": (
+            "operator_delivery_resolutions_ordinary_operation_id_fkey",
+            "operator_delivery_resolutions_purchase_intent_id_fkey",
+        ),
         "ai_training_implementation_attempts": (
             "ai_training_attempts_work_item_fkey",
             "ai_training_attempts_task_fkey",
@@ -3044,6 +3380,39 @@ class SchemaManagerService:
                 }
         with self._connection_factory() as conn:
             return self.applied_migrations(conn)
+
+    def assert_migration_ready(
+        self, migration_name: str, *, table_name: str,
+        required_columns: tuple[str, ...], required_indexes: tuple[str, ...] = (),
+    ) -> None:
+        """Fail closed without applying schema when a runtime dependency is absent."""
+        with self._connection_factory() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT 1 FROM public.schema_migrations WHERE migration_name=%s",
+                (migration_name,),
+            )
+            migration_present = cursor.fetchone() is not None
+            cursor.execute(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_schema='public' AND table_name=%s",
+                (table_name,),
+            )
+            columns = {row["column_name"] for row in cursor.fetchall()}
+            cursor.execute(
+                "SELECT indexname FROM pg_indexes "
+                "WHERE schemaname='public' AND tablename=%s",
+                (table_name,),
+            )
+            indexes = {row["indexname"] for row in cursor.fetchall()}
+        missing_columns = sorted(set(required_columns) - columns)
+        missing_indexes = sorted(set(required_indexes) - indexes)
+        if not migration_present or missing_columns or missing_indexes:
+            raise RuntimeError(
+                "Required runtime schema is unavailable: "
+                f"migration={migration_name}, migration_present={migration_present}, "
+                f"missing_columns={missing_columns}, missing_indexes={missing_indexes}. "
+                "Apply the named migration through SchemaManagerService before startup."
+            )
 
     def reconcile(self) -> SchemaCertificationReport:
         migrations_applied: list[str] = []
@@ -3188,6 +3557,14 @@ class SchemaManagerService:
                 "Migration history is incomplete: "
                 + ", ".join(missing_history)
             )
+        evergreen_migration = "20260921_151_evergreen_offer_authority.sql"
+        if evergreen_migration in applied:
+            with self._connection_factory() as conn:
+                if not self._migration_schema_already_present(conn, evergreen_migration):
+                    drift.append("Evergreen immutable authority constraints/indexes/trigger drift")
+            expected = next((m.checksum for m in migrations if m.name == evergreen_migration), None)
+            if applied[evergreen_migration] != expected:
+                drift.append("Evergreen migration checksum differs")
         status = "PASS" if not drift else "FAIL"
         return SchemaCertificationReport(
             status=status,
@@ -3361,6 +3738,53 @@ class SchemaManagerService:
                     return False
                 if not all(column in columns for column in required_columns):
                     return False
+        if migration_name == "20260921_152_manual_offer_delivery_anchor.sql":
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT column_name,is_nullable FROM information_schema.columns WHERE table_schema='public' AND table_name='telegram_sales_delivery_operations' AND column_name IN ('inbound_telegram_message_id','manual_offer_operation_id')")
+                columns=cursor.fetchall()
+                if len(columns)!=2 or any(r['is_nullable']!='YES' for r in columns):return False
+                cursor.execute("SELECT conname,pg_get_constraintdef(oid) AS definition FROM pg_constraint WHERE conrelid='public.telegram_sales_delivery_operations'::regclass")
+                definitions={r['conname']:r['definition'] for r in cursor.fetchall()}
+                if 'UNIQUE (telegram_chat_id, inbound_telegram_message_id)' not in definitions.values():return False
+                if definitions.get('sales_delivery_manual_anchor_unique')!='UNIQUE (manual_offer_operation_id)':return False
+                check=definitions.get('sales_delivery_exactly_one_anchor','')
+                if 'inbound_telegram_message_id IS NOT NULL' not in check or 'manual_offer_operation_id IS NOT NULL' not in check:return False
+                if not any('FOREIGN KEY (manual_offer_operation_id) REFERENCES telegram_manual_offer_operations(operation_id)'==d for d in definitions.values()):return False
+                cursor.execute("SELECT 1 FROM pg_trigger WHERE tgrelid='public.telegram_sales_delivery_operations'::regclass AND tgname='guard_sales_delivery_anchor' AND tgenabled='O'")
+                if cursor.fetchone() is None:return False
+                expected=re.search(r'AS \$\$(.*?)\$\$;', (self.migration_dir/migration_name).read_text(encoding='utf-8'), re.S)
+                cursor.execute("SELECT prosrc FROM pg_proc WHERE oid='public.guard_sales_delivery_anchor()'::regprocedure")
+                actual=cursor.fetchone()
+                if not expected or not actual or actual['prosrc'].strip()!=expected.group(1).strip():return False
+        if migration_name == "20260921_151_evergreen_offer_authority.sql":
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT pg_get_constraintdef(oid) AS definition FROM pg_constraint WHERE conrelid='public.evergreen_checkout_lineage'::regclass AND conname='evergreen_price_immutable'")
+                price_guard=cursor.fetchone()
+                if not price_guard or 'predecessor_price_minor = successor_price_minor' not in price_guard['definition']:
+                    return False
+                cursor.execute("SELECT 1 FROM pg_trigger WHERE tgrelid='public.evergreen_offer_authorities'::regclass AND tgname='guard_evergreen_offer_authority' AND tgenabled='O'")
+                if cursor.fetchone() is None:return False
+                cursor.execute("SELECT to_regclass('public.idx_evergreen_provider_reconciliation') AS name")
+                if cursor.fetchone()['name'] is None:return False
+                migration_sql=(self.migration_dir / migration_name).read_text(encoding='utf-8')
+                for function in ('guard_evergreen_offer_authority','guard_evergreen_predecessor',
+                                 'guard_evergreen_fingerprint','guard_evergreen_provider_operation'):
+                    expected_body=re.search(r'CREATE FUNCTION public\.'+function+r'\(\).*?AS \$\$(.*?)\$\$;',migration_sql,re.S)
+                    cursor.execute("SELECT p.prosrc FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public' AND p.proname=%s",(function,))
+                    actual=cursor.fetchone()
+                    if not expected_body or not actual or actual['prosrc'].strip()!=expected_body.group(1).strip():return False
+                    cursor.execute("SELECT 1 FROM pg_trigger WHERE tgname=%s AND tgenabled='O'",(function,))
+                    if cursor.fetchone() is None:return False
+                cursor.execute("SELECT count(*) AS n FROM pg_constraint WHERE conrelid='public.evergreen_offer_authorities'::regclass AND contype='f'")
+                if cursor.fetchone()['n']!=3:return False
+        if migration_name == "20260921_150_manual_prospect_offers.sql":
+            with connection.cursor() as cursor:
+                cursor.execute("""SELECT table_name,column_name,is_nullable FROM information_schema.columns
+                    WHERE table_schema='public' AND ((table_name='telegram_manual_offer_operations'
+                    AND column_name IN ('telegram_identity_mapping_id','local_fanvue_user_id','conversation_thread_id','business_connection_id'))
+                    OR (table_name='telegram_sales_delivery_operations' AND column_name IN ('conversation_thread_id','fanvue_user_id')))""")
+                nullable=cursor.fetchall()
+                if len(nullable)!=6 or any(row['is_nullable']!='YES' for row in nullable):return False
         exact = self.MIGRATION_EFFECT_ATTESTATIONS.get(migration_name)
         if exact is not None:
             snapshot = self._read_schema_attestation(connection, exact)

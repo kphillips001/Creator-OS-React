@@ -309,6 +309,7 @@ class TelegramPublishingProvider:
             result = self.parse_telegram_response(response)
             message = ((result.get("response") or {}).get("result") or {})
             result["chat_id"] = (message.get("chat") or {}).get("id")
+            result["message_id"] = message.get("message_id")
             result["reply_markup"] = message.get("reply_markup")
             return result
         except Exception as error:

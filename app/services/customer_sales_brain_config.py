@@ -12,6 +12,10 @@ class CustomerSalesBrainConfig:
     photoshoot_objection_recovery_limit: int = 2
     sexual_receptiveness_min_engagements: int = 4
     sexual_receptiveness_min_history_turns: int = 3
+    sexual_sales_cooldown: timedelta = timedelta(hours=72)
+    sexual_sales_max_opportunities: int = 3
+    sexual_sales_episode_separation: timedelta = timedelta(hours=6)
+    time_waster_min_failed_presentations: int = 8
 
     @classmethod
     def from_environment(cls):
@@ -33,6 +37,18 @@ class CustomerSalesBrainConfig:
             ),
             sexual_receptiveness_min_history_turns=cls._positive_int(
                 "CUSTOMER_SALES_SEXUAL_RECEPTIVENESS_MIN_HISTORY_TURNS", 3
+            ),
+            sexual_sales_cooldown=timedelta(hours=cls._hours(
+                "CUSTOMER_SALES_SEXUAL_COOLDOWN_HOURS", 72
+            )),
+            sexual_sales_max_opportunities=cls._positive_int(
+                "CUSTOMER_SALES_SEXUAL_MAX_OPPORTUNITIES", 3
+            ),
+            sexual_sales_episode_separation=timedelta(hours=cls._hours(
+                "CUSTOMER_SALES_SEXUAL_EPISODE_SEPARATION_HOURS", 6
+            )),
+            time_waster_min_failed_presentations=cls._positive_int(
+                "CUSTOMER_SALES_TIME_WASTER_MIN_FAILED_PRESENTATIONS", 8
             ),
         )
 

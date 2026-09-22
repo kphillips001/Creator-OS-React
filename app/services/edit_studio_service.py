@@ -139,6 +139,7 @@ class EditStudioService:
                 "reference_asset_id": edit_item.reference_asset_id,
                 "references": reference_inputs,
                 "reference_image_url": source_records[0].output_reference,
+                "provider_reference_role": "EDIT_SOURCE",
                 "edit_source_output_reference": source_records[0].output_reference,
                 "edit_reference_output_reference": reference_record.output_reference if reference_record else None,
                 "generation_library_return": True,

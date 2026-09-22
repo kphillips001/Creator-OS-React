@@ -34,6 +34,8 @@ class ConversationAttentionResolutionService:
         ResolutionAction.ACKNOWLEDGE_ONLY: "RelationshipsService.acknowledge_attention",
         ResolutionAction.RESOLVE_AS_SUPERSEDED: "ConversationAttentionResolutionService.resolve_as_superseded",
         ResolutionAction.REQUEUE_CORRECTIVE_REPLY: "OrdinaryChatReplyRepository.requeue_historical_corrective",
+        ResolutionAction.CONFIRM_DELIVERED: "OperatorDeliveryResolutionRepository.resolve",
+        ResolutionAction.CONFIRM_NOT_DELIVERED: "OperatorDeliveryResolutionRepository.resolve",
     }
 
     def __init__(self, *, repository=None, evidence=None, provider=None,
@@ -64,6 +66,14 @@ class ConversationAttentionResolutionService:
         evidence=self.evidence.build(creator_profile_id=creator_profile_id,
             fanvue_account_id=fanvue_account_id,telegram_user_id=telegram_user_id,
             relationship_key=relationship_key,occurrence_id=occurrence_id)
+        eligibility = dict(evidence.get("recoveryEligibility") or {})
+        if eligibility.get("reason") == (
+                "HISTORICAL_CORRECTIVE_REJECTED_CANDIDATE_EVIDENCE_REQUIRED"):
+            raise RuntimeError(
+                "Historical repetition recovery is blocked: authoritative "
+                "rejected-candidate evidence is unavailable. No provider call "
+                "or recovery plan was created."
+            )
         request_id=UUID(str(request_id)) if request_id else uuid4()
         lock_key=f"{creator_profile_id}:{fanvue_account_id}:{request_id}"
         with _INSPECTION_LOCKS_GUARD:
@@ -77,6 +87,25 @@ class ConversationAttentionResolutionService:
                 return {"inspection":existing,"result":existing["validated_result"],
                         "plan":self.repository.get_plan_for_inspection(existing["inspection_id"])}
             inspection_id=uuid4(); now=datetime.now(timezone.utc).isoformat()
+            if (evidence["failureSignature"] == "SEND_UNCERTAIN"
+                    and not (evidence.get("recoveryEligibility") or {}).get("eligible")):
+                result=self._delivery_uncertain_result(evidence,inspection_id,now)
+                stored=self.repository.create_inspection(
+                    inspection_id=inspection_id,creator_profile_id=creator_profile_id,
+                    fanvue_account_id=fanvue_account_id,relationship_key=relationship_key,
+                    telegram_user_id=telegram_user_id,attention_occurrence_id=occurrence_id,
+                    evidence_digest=evidence["evidenceDigest"],
+                    state_fingerprint=evidence["stateFingerprint"],
+                    failure_signature=evidence["failureSignature"],
+                    root_cause_scope="CUSTOMER_ONLY",validated_result=result,
+                    evidence_references=result["evidenceReferences"],request_id=request_id,
+                    conflict_report=None)
+                self.repository.add_event("INSPECTION_VALIDATED",inspection_id=inspection_id,
+                    event_data={"evidenceDigest":evidence["evidenceDigest"],
+                                "failureSignature":"SEND_UNCERTAIN",
+                                "rootCauseScope":"CUSTOMER_ONLY",
+                                "deliveryEvidence":result["deliveryEvidence"]})
+                return {"inspection":stored,"result":result,"plan":None}
             candidate=self.provider.inspect({**evidence,"inspectionId":str(inspection_id),
                                              "inspectedAt":now})
             result,conflict=self._validate_candidate(candidate,evidence=evidence,
@@ -101,6 +130,91 @@ class ConversationAttentionResolutionService:
             if result.recommendedResolutionType in EXECUTABLE_ACTIONS:
                 plan=self._create_plan(stored=stored,result=result,evidence=evidence)
             return {"inspection":stored,"result":result.model_dump(mode="json"),"plan":plan}
+
+    def _delivery_uncertain_result(self,evidence,inspection_id,inspected_at):
+        delivery=dict(evidence.get("commercialDeliveryEvidence") or {})
+        qualifying=bool(delivery.get("qualifyingCommercialPresentation"))
+        return {
+          "schemaVersion":SCHEMA_VERSION,"inspectionId":str(inspection_id),
+          "relationshipKey":evidence["relationshipKey"],
+          "attentionOccurrenceId":evidence["attentionOccurrenceId"],
+          "inspectedAt":inspected_at,"stateFingerprint":evidence["stateFingerprint"],
+          "evidenceReferences":evidence["evidenceReferences"],
+          "failureSignature":"SEND_UNCERTAIN",
+          "whyFlagged":"Telegram delivery completed without durable provider-confirmed message identity.",
+          "currentImpact":"The commercial presentation outcome requires explicit operator resolution.",
+          "currentObligation":"Review delivery evidence and attest delivered or not delivered.",
+          "willAvaContinueAutomatically":False,"avaAutoState":self._automation_state(evidence),
+          "currentOperationState":"NO_FURTHER_AUTOMATIC_ATTEMPT",
+          "isConditionStillRelevant":True,"rootCauseScope":"CUSTOMER_ONLY",
+          "rootCauseSummary":"The original operation remains SEND_UNCERTAIN.",
+          "affectedCurrentCustomersCount":1,"similarCurrentCases":[],
+          "futureCustomersPotentiallyAffected":False,
+          "globalRepairAlreadyExists":True,
+          "recommendedResolutionType":"NO_AUTOMATED_RESOLUTION",
+          "recommendedResolutionSummary":"Choose an explicit delivery outcome.",
+          "operatorExplanation":"Operator attestation preserves SEND_UNCERTAIN history and never claims provider confirmation.",
+          "exactProposedActions":[],"customerVisibleSendPossible":False,
+          "providerGenerationPossible":False,"codeChangeRequired":False,
+          "databaseChangeRequired":True,"schemaChangeRequired":False,
+          "configChangeRequired":False,"runtimeRestartRequired":False,
+          "globalImpactPossible":False,"riskLevel":"LOW","approvalRequired":True,
+          "dispositionReason":None,"confidence":1.0,"unsupportedAssertions":[],
+          "inspectionWarnings":([] if qualifying else
+              ["Persisted evidence does not establish the known commercial presentation class."]),
+          "cannotSafelyResolveReason":None if qualifying else
+              "Commercial delivery evidence is incomplete.",
+          "deliveryEvidence":delivery,
+          "resolutionChoices":["CONFIRM_DELIVERED","CONFIRM_NOT_DELIVERED","LEAVE_UNRESOLVED"],
+        }
+
+    def create_delivery_plan(self, inspection_id, *, creator_profile_id,
+                             fanvue_account_id, outcome):
+        action=ResolutionAction(str(outcome))
+        if action not in {ResolutionAction.CONFIRM_DELIVERED,
+                          ResolutionAction.CONFIRM_NOT_DELIVERED}:
+            raise ValueError("Unsupported delivery resolution choice.")
+        stored=self.repository.get_inspection(inspection_id,
+            creator_profile_id=creator_profile_id,fanvue_account_id=fanvue_account_id)
+        if not stored or stored["failure_signature"] != "SEND_UNCERTAIN":
+            raise LookupError("Qualifying uncertain-delivery inspection was not found.")
+        evidence=self.evidence.build(creator_profile_id=creator_profile_id,
+            fanvue_account_id=fanvue_account_id,telegram_user_id=stored["telegram_user_id"],
+            relationship_key=stored["relationship_key"],
+            occurrence_id=stored["attention_occurrence_id"])
+        if evidence["stateFingerprint"] != stored["state_fingerprint"]:
+            raise RuntimeError("RESOLUTION PLAN OUT OF DATE: re-inspection required.")
+        delivery=dict(evidence.get("commercialDeliveryEvidence") or {})
+        if not delivery.get("qualifyingCommercialPresentation"):
+            raise PermissionError("Persisted evidence does not authorize delivery resolution.")
+        return self._create_delivery_plan(stored=stored,evidence=evidence,action=action)
+
+    def _create_delivery_plan(self, *, stored, evidence, action):
+        plan_id=uuid4(); idempotency=str(uuid4())
+        unsigned={"planId":str(plan_id),"inspectionId":str(stored["inspection_id"]),
+          "relationshipKey":stored["relationship_key"],
+          "attentionOccurrenceId":evidence["attentionOccurrenceId"],
+          "stateFingerprint":evidence["stateFingerprint"],"scope":"CUSTOMER_ONLY",
+          "targetOperationId":evidence["targetOperationId"],
+          "causalOperationId":evidence["causalOperationId"],
+          "action":action.value,"idempotencyKey":idempotency}
+        signature=self._sign(unsigned)
+        delivery=dict(evidence["commercialDeliveryEvidence"])
+        plan=self.repository.create_plan(plan_id=plan_id,inspection_id=stored["inspection_id"],
+          creator_profile_id=stored["creator_profile_id"],fanvue_account_id=stored["fanvue_account_id"],
+          relationship_key=stored["relationship_key"],telegram_user_id=stored["telegram_user_id"],
+          attention_occurrence_id=evidence["attentionOccurrenceId"],
+          state_fingerprint=evidence["stateFingerprint"],root_cause_scope="CUSTOMER_ONLY",
+          target_operation_id=evidence["targetOperationId"],
+          causal_operation_id=evidence["causalOperationId"],action_type=action.value,
+          parameters={"purchaseIntentId":delivery["purchaseIntentId"],
+                      "presentationMode":delivery["presentationMode"]},
+          expected_mutation_entities=["operator_delivery_resolutions","purchase_intents"],
+          provider_generation_possible=False,customer_visible_send_possible=False,
+          risk_level="LOW",signature=signature,idempotency_key=idempotency)
+        self.repository.add_event("PLAN_CREATED",inspection_id=stored["inspection_id"],
+            plan_id=plan_id,event_data={"action":action.value,"signature":signature})
+        return plan
 
     def _validate_candidate(self, candidate, *, evidence, inspection_id, inspected_at):
         try:
@@ -207,9 +321,21 @@ class ConversationAttentionResolutionService:
 
     @classmethod
     def _server_action(cls,evidence):
-        if evidence.get("failureSignature") == "REQUIRED_RESPONSE_QUALITY_FAILURE":
-            return (ResolutionAction.RESOLVE_AS_SUPERSEDED if cls._superseded(evidence)
-                    else ResolutionAction.REQUEUE_CORRECTIVE_REPLY)
+        eligibility=dict(evidence.get("recoveryEligibility") or {})
+        if (evidence.get("failureSignature") == "SEND_UNCERTAIN"
+                and eligibility.get("eligible") is True
+                and eligibility.get("category") in {
+                    "CANONICALLY_CONFIRMED_NOT_DELIVERED",
+                    "RECOVERY_CONSTRAINT_FAILURE_NOT_DELIVERED",
+                }):
+            return ResolutionAction.REQUEUE_CORRECTIVE_REPLY
+        if evidence.get("failureSignature") in {
+                "REQUIRED_RESPONSE_QUALITY_FAILURE", "FINAL_REPETITION_FAILURE",
+                "MANUFACTURED_ENGAGEMENT_QUESTION", "RETRY_EXHAUSTED"}:
+            if cls._superseded(evidence):
+                return ResolutionAction.RESOLVE_AS_SUPERSEDED
+            if (evidence.get("recoveryEligibility") or {}).get("eligible") is True:
+                return ResolutionAction.REQUEUE_CORRECTIVE_REPLY
         return ResolutionAction.NO_AUTOMATED_RESOLUTION
 
     @staticmethod
@@ -246,6 +372,12 @@ class ConversationAttentionResolutionService:
     def _server_scope(evidence):
         failure=evidence["failureSignature"]
         if failure == "UNKNOWN": return RootCauseScope.AMBIGUOUS
+        if (failure == "SEND_UNCERTAIN"
+                and (evidence.get("recoveryEligibility") or {}).get("eligible") is True
+                and (evidence.get("recoveryEligibility") or {}).get("category")
+                in {"CANONICALLY_CONFIRMED_NOT_DELIVERED",
+                    "RECOVERY_CONSTRAINT_FAILURE_NOT_DELIVERED"}):
+            return RootCauseScope.CUSTOMER_ONLY
         if evidence["similarCurrentCases"]: return RootCauseScope.MULTIPLE_CUSTOMERS
         if failure in {"SEND_UNCERTAIN"}: return RootCauseScope.AMBIGUOUS
         return RootCauseScope.CUSTOMER_ONLY
@@ -267,13 +399,15 @@ class ConversationAttentionResolutionService:
           "targetOperationId":evidence["targetOperationId"],"causalOperationId":evidence["causalOperationId"],
           "action":action.value,"idempotencyKey":idempotency}
         signature=self._sign(unsigned)
+        parameters=self.recovery_plan_parameters(
+            evidence, disposition_reason=result.dispositionReason)
         plan=self.repository.create_plan(plan_id=plan_id,inspection_id=stored["inspection_id"],
           creator_profile_id=stored["creator_profile_id"],fanvue_account_id=stored["fanvue_account_id"],
           relationship_key=stored["relationship_key"],telegram_user_id=stored["telegram_user_id"],
           attention_occurrence_id=evidence["attentionOccurrenceId"],state_fingerprint=evidence["stateFingerprint"],
           root_cause_scope=scope.value,target_operation_id=evidence["targetOperationId"],
           causal_operation_id=evidence["causalOperationId"],action_type=action.value,
-          parameters={"singleTarget":True,"dispositionReason":result.dispositionReason},
+          parameters=parameters,
           expected_mutation_entities=entities,
           provider_generation_possible=result.providerGenerationPossible,
           customer_visible_send_possible=result.customerVisibleSendPossible,
@@ -281,6 +415,20 @@ class ConversationAttentionResolutionService:
         self.repository.add_event("PLAN_CREATED",inspection_id=stored["inspection_id"],
             plan_id=plan_id,event_data={"action":action.value,"signature":signature})
         return plan
+
+    @staticmethod
+    def recovery_plan_parameters(evidence, *, disposition_reason=None):
+        """Pure planning projection; safe for read-only preflight and tests."""
+        parameters={"singleTarget":True,"dispositionReason":disposition_reason}
+        if ((evidence.get("recoveryEligibility") or {}).get("category")
+                in {"CANONICALLY_CONFIRMED_NOT_DELIVERED",
+                    "RECOVERY_CONSTRAINT_FAILURE_NOT_DELIVERED"}):
+            from app.services.recovery_execution_constraint_service import (
+                RecoveryExecutionConstraintService,
+            )
+            parameters["recoveryExecutionConstraint"]=(
+                RecoveryExecutionConstraintService.authority())
+        return parameters
 
     def approve(self, plan_id, *, creator_profile_id, fanvue_account_id, operator):
         plan=self.repository.approve(plan_id,creator_profile_id=creator_profile_id,
@@ -349,6 +497,37 @@ class ConversationAttentionResolutionService:
             raise
 
     def _execute_action(self, action, plan, evidence, operator):
+        if action in {ResolutionAction.CONFIRM_DELIVERED,
+                      ResolutionAction.CONFIRM_NOT_DELIVERED}:
+            from app.repositories.operator_delivery_resolution_repository import (
+                OperatorDeliveryResolutionRepository,
+            )
+            delivery=dict(evidence.get("commercialDeliveryEvidence") or {})
+            if not delivery.get("qualifyingCommercialPresentation"):
+                raise PermissionError("Current evidence no longer authorizes attestation.")
+            outcome=("DELIVERED" if action is ResolutionAction.CONFIRM_DELIVERED
+                     else "NOT_DELIVERED")
+            row,reused=OperatorDeliveryResolutionRepository(
+                self.repository.connection_factory).resolve(
+                operation_id=plan["target_operation_id"],
+                creator_profile_id=plan["creator_profile_id"],
+                fanvue_account_id=plan["fanvue_account_id"],
+                relationship_key=plan["relationship_key"],
+                telegram_user_id=plan["telegram_user_id"],
+                telegram_chat_id=int((evidence.get("currentAuthorityOperation") or
+                                      evidence.get("causalOperation"))["inboundMessageId"] and
+                                     self._chat_id_for_operation(plan["target_operation_id"])),
+                purchase_intent_id=UUID(delivery["purchaseIntentId"]),outcome=outcome,
+                presentation_mode=delivery["presentationMode"],
+                provider_acceptance_evidence=delivery["providerAcceptanceEvidence"],
+                provider_readback_evidence=delivery["providerReadbackEvidence"],
+                resolved_by=operator,evidence={"evidenceDigest":evidence["evidenceDigest"],
+                                               "legacyEvidenceClass":delivery["legacyEvidenceClass"]})
+            return {"action":action.value,"outcome":outcome,
+                    "provenance":"OPERATOR_ATTESTED","resolutionId":str(row["resolution_id"]),
+                    "idempotentReuse":reused,"providerConfirmed":False,
+                    "telegramMessageId":row["telegram_message_id"],
+                    "recordsChanged":["operator_delivery_resolutions","purchase_intents"]}
         if action is ResolutionAction.ACKNOWLEDGE_ONLY:
             value=self.relationships.acknowledge_attention(
               creator_profile_id=plan["creator_profile_id"],fanvue_account_id=plan["fanvue_account_id"],
@@ -371,12 +550,20 @@ class ConversationAttentionResolutionService:
           causal_operation_id=plan["causal_operation_id"],
           creator_profile_id=plan["creator_profile_id"],fanvue_account_id=plan["fanvue_account_id"],
           telegram_user_id=plan["telegram_user_id"],
-          occurrence_id=plan["attention_occurrence_id"],approved_by=operator,
-          idempotency_key=plan["idempotency_key"])
+          occurrence_id=plan["attention_occurrence_id"],
+          resolution_plan_id=plan["plan_id"],approved_by=operator,
+          idempotency_key=plan["idempotency_key"],
+          recovery_execution_constraint=dict(
+              (plan.get("parameters") or {}).get("recoveryExecutionConstraint") or {}))
         if not operation: raise RuntimeError("Historical corrective obligation was not requeued.")
         return {"action":action.value,"ordinaryReplyOperationId":str(operation.operation_id),
                 "state":operation.state.value,"providerCallPerformed":False,
                 "telegramSendPerformed":False,"recordsChanged":["ordinary_chat_reply_operations"]}
+
+    def _chat_id_for_operation(self, operation_id):
+        operation=self.ordinary.get(operation_id)
+        if not operation: raise LookupError("Ordinary reply operation was not found.")
+        return operation.telegram_chat_id
 
     @staticmethod
     def _superseded(evidence):

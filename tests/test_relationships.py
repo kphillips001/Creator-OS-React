@@ -68,17 +68,35 @@ class InboxRepo(MessageRepo):
  def inbox_state(self,**_): return {
   1:{"control_mode":"HUMAN_OPERATOR","last_customer_inbound_at":BASE+timedelta(minutes=2),"last_visible_outbound_at":BASE},
   2:{"control_mode":"AVA_AUTO","last_customer_inbound_at":BASE,"last_visible_outbound_at":BASE+timedelta(minutes=1)},
-  3:{"control_mode":"AVA_AUTO","last_customer_inbound_at":BASE,"last_visible_outbound_at":None}}
+  3:{"control_mode":"AVA_AUTO","last_customer_inbound_at":BASE,"last_visible_outbound_at":None,"latest_inbound_text":"Hey","operation_state":"SUPPRESSED"}}
 
 def inbox_service(): return RelationshipsService(people_repository=PeopleRepo(),messages_repository=InboxRepo())
 
 def test_inbox_summary_and_deterministic_attention_use_confirmed_timestamps():
  result=inbox_service().list(creator_profile_id=7,fanvue_account_id=8)
  assert result["summary"]=={"total":3,"needsAttention":1,"buyers":1,"prospects":2,"manual":1,
-                            "highValueProspects":0,"replyScheduled":0,"ignored":0}
+                            "highValueProspects":0,"replyScheduled":0,"ignored":0,
+                            "operationalCategories":{"HUMAN_ATTENTION_REQUIRED":1,"SYSTEM_INCIDENT":0,"DELIVERY_UNCERTAIN":0,"RECOVERY_PENDING":0,"NO_REPLY_REQUIRED":1}}
  assert next(row for row in result["items"] if row["telegramUserId"]==1)["needsAttention"] is False
  assert next(row for row in result["items"] if row["telegramUserId"]==2)["needsAttention"] is False
  assert next(row for row in result["items"] if row["telegramUserId"]==3)["needsAttention"] is True
+
+class TimeWasterInboxRepo(InboxRepo):
+ def commercial_attention_by_person(self,**_): return {
+  1:{"failed_presentation_count":8,"verified_purchase_count":0},
+  2:{"failed_presentation_count":12,"verified_purchase_count":2},
+  3:{"failed_presentation_count":7,"verified_purchase_count":0},
+ }
+
+def test_time_waster_projection_uses_distinct_failure_threshold_and_purchase_override():
+ result=RelationshipsService(people_repository=PeopleRepo(),messages_repository=TimeWasterInboxRepo()).list(
+  creator_profile_id=7,fanvue_account_id=8)
+ rows={row["telegramUserId"]:row for row in result["items"]}
+ assert rows[1]["timeWaster"] is True
+ assert rows[1]["failedPresentationCount"]==8
+ assert rows[2]["timeWaster"] is False
+ assert rows[2]["verifiedPurchaseCount"]==2
+ assert rows[3]["timeWaster"] is False
 
 @pytest.mark.parametrize("selected,expected",[
  ("NEEDS_ATTENTION",{3}),("BUYERS",{2}),("PROSPECTS",{1,3}),
@@ -91,6 +109,74 @@ def test_search_sort_and_filter_compose():
  result=inbox_service().list(creator_profile_id=7,fanvue_account_id=8,
   search="alex",sort="LIFETIME_SPEND",filter="MANUAL")
  assert [row["telegramUserId"] for row in result["items"]]==[1]
+
+
+class CountryTierPeopleRepo:
+ def people(self,**_): return [
+  {"telegram_user_id":user,"username":f"user{user}","display_name":name,
+   "mapping_id":user if buyer else None,"verification_status":"VERIFIED" if buyer else None,
+   "mapping_active":buyer,"local_fanvue_user_id":user if buyer else None,
+   "customer_commerce_profile_id":f"profile-{user}" if buyer else None,
+   "profile_state":"BUYER" if buyer else None,"lifetime_gross_minor":100 if buyer else None,
+   "purchase_count":1 if buyer else None,"relationship_state":{}}
+  for user,name,buyer in ((11,"High older",False),(12,"High newest",False),
+                          (13,"Medium",False),(14,"Low buyer",True),(15,"Unclassified",False))]
+ def inbound_events(self,**_): return [
+  {"telegram_user_id":user,"event_key":f"in-{user}","occurred_at":BASE+timedelta(minutes=minute),"source":"chat"}
+  for user,minute in ((11,1),(12,5),(13,4),(14,3),(15,6))]
+ def ava_events(self,**_): return []
+ def current_customer_state(self,**_): return {}
+
+class CountryTierMessageRepo(MessageRepo):
+ def latest_messages(self,**_): return {
+  user:{"event_key":f"in-{user}","direction":"CUSTOMER","content":f"message {user}",
+        "occurred_at":BASE+timedelta(minutes=minute),"telegram_message_id":user,
+        "message_type":"ORDINARY_CHAT","purchase_intent_id":None}
+  for user,minute in ((11,1),(12,5),(13,4),(14,3),(15,6))}
+ def inbox_state(self,**_): return {
+  11:{"telegram_chat_id":11,"market_tier":"HIGH"},
+  12:{"telegram_chat_id":12,"market_tier":"HIGH"},
+  13:{"telegram_chat_id":13,"market_tier":"MEDIUM",
+      "last_customer_inbound_at":BASE+timedelta(minutes=4),"last_visible_outbound_at":None,"latest_inbound_text":"Hey","operation_state":"SUPPRESSED"},
+  14:{"telegram_chat_id":14,"market_tier":"LOW","control_mode":"HUMAN_OPERATOR"},
+  15:{"telegram_chat_id":15}}
+
+def country_tier_service():
+ return RelationshipsService(people_repository=CountryTierPeopleRepo(),messages_repository=CountryTierMessageRepo())
+
+@pytest.mark.parametrize("selected_sort,expected",[
+ ("COUNTRY_TIER_HIGH_TO_LOW",[12,11,13,14,15]),
+ ("COUNTRY_TIER_LOW_TO_HIGH",[14,13,12,11,15])])
+def test_country_tier_sort_is_global_stable_and_unclassified_last(selected_sort,expected):
+ result=country_tier_service().list(creator_profile_id=7,fanvue_account_id=8,
+                                    sort=selected_sort,limit=2)
+ second=country_tier_service().list(creator_profile_id=7,fanvue_account_id=8,
+   sort=selected_sort,limit=10,cursor=result["nextCursor"])
+ assert [row["telegramUserId"] for row in result["items"]+second["items"]]==expected
+
+@pytest.mark.parametrize("tiers,expected",[
+ (["HIGH"],{11,12}),(["MEDIUM"],{13}),(["LOW"],{14}),
+ (["UNCLASSIFIED"],{15}),(["HIGH","MEDIUM"],{11,12,13})])
+def test_country_tier_filter_accepts_single_multiple_and_unclassified(tiers,expected):
+ result=country_tier_service().list(creator_profile_id=7,fanvue_account_id=8,
+                                    country_tiers=tiers)
+ assert {row["telegramUserId"] for row in result["items"]}==expected
+
+def test_country_tier_composes_with_search_buyer_prospect_and_manual_filters():
+ service=country_tier_service()
+ assert [r["telegramUserId"] for r in service.list(creator_profile_id=7,fanvue_account_id=8,
+  search="newest",filter="PROSPECTS",country_tiers=["HIGH"])["items"]]==[12]
+ assert [r["telegramUserId"] for r in service.list(creator_profile_id=7,fanvue_account_id=8,
+  filter="BUYERS",country_tiers=["LOW"])["items"]]==[14]
+ assert [r["telegramUserId"] for r in service.list(creator_profile_id=7,fanvue_account_id=8,
+  filter="MANUAL",country_tiers=["LOW"])["items"]]==[14]
+ assert [r["telegramUserId"] for r in service.list(creator_profile_id=7,fanvue_account_id=8,
+  filter="NEEDS_ATTENTION",country_tiers=["MEDIUM"])["items"]]==[13]
+
+def test_country_tier_filter_rejects_unknown_values():
+ with pytest.raises(ValueError,match="Country Tier"):
+  country_tier_service().list(creator_profile_id=7,fanvue_account_id=8,
+                              country_tiers=["PREMIUM"])
 
 
 class IgnoredInboxRepo(InboxRepo):
@@ -134,8 +220,51 @@ def test_transcript_loads_latest_then_eventually_reaches_first_in_order():
  assert [m["content"] for m in combined]==[f"message {i}" for i in range(6)]
  assert first["hasMoreOlder"] is False
 
+
+def test_keyset_transcript_pages_are_stable_without_duplicates_or_gaps():
+ class KeysetRepo(MessageRepo):
+  def relationship_exists(self,**_): return True
+  def messages(self,telegram_user_id,before_occurred_at=None,before_event_key=None,
+               limit=None,**_):
+   rows=super().messages(telegram_user_id)
+   rows[2]["occurred_at"]=rows[3]["occurred_at"]
+   rows=sorted(rows,key=lambda row:(row["occurred_at"],row["event_key"]))
+   if before_occurred_at is not None:
+    rows=[row for row in rows if (row["occurred_at"],row["event_key"])<
+          (before_occurred_at,before_event_key)]
+   rows=list(reversed(rows))[:limit]
+   return list(reversed(rows))
+ keyset=RelationshipsService(people_repository=PeopleRepo(),messages_repository=KeysetRepo())
+ pages=[]; cursor=None
+ while True:
+  page=keyset.messages(creator_profile_id=7,fanvue_account_id=8,
+                       telegram_user_id=1,limit=2,cursor=cursor,
+                       include_person=False)
+  pages.insert(0,page["items"]);cursor=page["olderCursor"]
+  if not cursor: break
+ combined=[item for page in pages for item in page]
+ assert len(combined)==6
+ assert len({item["eventKey"] for item in combined})==6
+ assert {item["content"] for item in combined}=={f"message {i}" for i in range(6)}
+ assert all("person" not in page for page in [keyset.messages(
+  creator_profile_id=7,fanvue_account_id=8,telegram_user_id=1,
+  include_person=False)])
+
 def test_unknown_account_scoped_person_is_rejected():
  with pytest.raises(LookupError): service().messages(creator_profile_id=7,fanvue_account_id=8,telegram_user_id=99)
+
+def test_verified_mapped_buyer_without_prospect_resolves_control_context():
+ class MappedBuyerRepo(MessageRepo):
+  def control_context(self,telegram_user_id,**_):
+   assert telegram_user_id==2
+   return {"telegram_chat_id":2,"telegram_identity_mapping_id":2,
+           "local_fanvue_user_id":4,"external_fanvue_user_uuid":"buyer",
+           "conversation_thread_id":None,"latest_inbound_telegram_message_id":5,
+           "active_purchase_intent":False,"active_sales_session":False}
+ mapped=RelationshipsService(people_repository=PeopleRepo(),messages_repository=MappedBuyerRepo())
+ context=mapped.control_context(creator_profile_id=7,fanvue_account_id=8,telegram_user_id=2)
+ assert context["telegram_identity_mapping_id"]==2
+ assert context["telegram_chat_id"]==2
 
 class IntelligenceRepo(MessageRepo):
  def control_context(self,telegram_user_id,**_):

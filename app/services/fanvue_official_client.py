@@ -117,9 +117,9 @@ class FanvueOfficialClient:
             "mediaUuids": list(media_uuids), "price": int(price_minor),
         }))
 
-    def list_media_links(self):
+    def list_media_links(self, *, page=1):
         self.require_media_link_scopes()
-        return self._body(self.request("GET", "/media-links"))
+        return self._body(self.request("GET", "/media-links", params={"page": page}))
 
     def delete_media_link(self, uuid):
         self.require_media_link_scopes()
@@ -127,6 +127,28 @@ class FanvueOfficialClient:
 
     def find_equivalent_media_link(self, media_uuids, price_minor):
         expected = tuple(sorted(media_uuids))
-        data = self.list_media_links().get("data", [])
-        return [item for item in data if int(item.get("price", -1)) == int(price_minor)
-                and tuple(sorted(item.get("mediaUuids") or [])) == expected]
+        matches = []
+        seen = set()
+        # A partial inventory is not evidence that a resource is absent. Scan
+        # through the terminal page before returning even an early match: later
+        # pages may contain conflicting resources. Bound broken provider paging.
+        for page in range(1, 101):
+            response = self.list_media_links(page=page)
+            data = response.get("data")
+            pagination = response.get("pagination")
+            if (not isinstance(data, list) or not isinstance(pagination, dict)
+                    or pagination.get("page") != page
+                    or not isinstance(pagination.get("hasMore"), bool)
+                    or (pagination["hasMore"] and not data)):
+                raise FanvueAPIError("Incomplete media-link inventory.")
+            for item in data:
+                resource_id = item.get("uuid")
+                if not resource_id or resource_id in seen:
+                    raise FanvueAPIError("Inconsistent media-link inventory.")
+                seen.add(resource_id)
+                if (item.get("price") == int(price_minor)
+                        and tuple(sorted(item.get("mediaUuids") or [])) == expected):
+                    matches.append(item)
+            if not pagination["hasMore"]:
+                return matches
+        raise FanvueAPIError("Media-link inventory page limit exceeded.")

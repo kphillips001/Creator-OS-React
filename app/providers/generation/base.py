@@ -23,6 +23,7 @@ from app.models.generation_engine import (
     new_generation_id,
 )
 from app.services.seedream_premium_render_locks import (
+    PREMIUM_RENDER_BODY_LOCK as CANONICAL_PREMIUM_RENDER_BODY_LOCK,
     enforce_explicit_render_lock,
     enforce_premium_render_body_lock,
 )
@@ -144,35 +145,9 @@ class WaveSpeedProviderBase(GenerationProvider):
     media_upload_endpoint = "https://api.wavespeed.ai/api/v3/media/upload/binary"
     provider_reference_host = "wavespeed_media"
     lifecycle = "ACTIVE"
-    PREMIUM_RENDER_BODY_LOCK = """
-FINAL REFERENCE BODY LOCK - NON-NEGOTIABLE:
-CANONICAL AVA FACE + BODY IDENTITY:
-Use the reference image as the identity, face, hair, skin-tone, body-size, body-shape, and bust-size source of truth only.
-Preserve the exact same woman, face, long dark loose hair, same natural sun-kissed skin tone as the reference image, body size, body weight, and recognizable silhouette.
-Hair must be worn down with a soft center part or natural side part, smooth flat natural top, and loose flowing dark hair over her shoulders or down her back.
-Keep the scalp area natural and low-profile, with no lifted tied hairstyle and no tall hair shape.
-Do not create a bun, hairbun, topknot, ponytail, updo, tied-up hair, piled hair, messy crown, lifted hair knot, or any tall hair shape.
-The top of her hair must remain smooth, flat, natural, and low-profile, with no raised tied silhouette.
-Do NOT copy the reference setting, location, background, water, boat, dock, railings, trees, cabin, rocks, room, furniture, props, lighting, outfit, pose, or camera angle unless the written prompt explicitly asks for those exact elements.
-The written prompt is the source of truth for generated scene, wardrobe, nudity state, shower/pool/bedroom/hotel/indoor/outdoor setting, pose, lighting, and background.
-If the prompt asks for shower, bathroom, bedroom, hotel, couch, pool, or any non-boat scene, do not include boat, lake, dock, marina, railing, cabin, natural-water background, or outdoor boat-deck elements from the reference image.
-If the written prompt asks for nude/topless/shower content, do not preserve clothing from the reference image.
-Preserve visibly large natural D-cup breasts with full volume, upper and lower fullness, rounded natural shape, bust projection, and natural cleavage when clothing or framing allows it.
-Do not reduce breast size, flatten the chest, hide bust volume, or make her appear smaller-busted.
-Preserve feminine hourglass body, same waist-to-hip proportions, hip width, thigh proportions, shoulder width, and bust-to-waist ratio.
-Preserve the reference skin tone exactly across face, chest, arms, waist, hips, and legs when visible; keep it natural, even, sun-kissed, and photorealistic.
-Use medium-close creator framing: close-medium, waist-up, head-to-hips, head-to-upper-thigh, upper-thigh, or intimate seated portrait framing.
-Keep her full face and full head inside frame with smooth natural hair top visible and clean headroom above hair.
-If the composition cannot fit face, smooth hair top, bust, waist, and hips at the requested crop distance, pull the camera back slightly.
-Reject wide bed shots, wide room shots, distant mattress compositions, distant full-body shots, scenery-dominant lake/pool/landscape shots, and any framing where environment dominates the creator.
-Unless the prompt explicitly asks for a wide shot, do not create a wide shot.
-Avoid cropped-off forehead, missing top of head, face pressed against the top edge, hair touching the border, tall hair shapes, and body cues cropped away.
-Do not use side/rear all-fours angles that hide or minimize the bust; if using side/rear body orientation, keep the chest, bust, face, and upper torso still visible and prominent.
-Preserve exact facial identity, facial structure, eyes, nose, lips, jawline, cheekbones, smile shape, and natural facial proportions.
-Keep the face photorealistic, natural, anatomically correct, and consistent with the selected expression variation.
-Allow subtle natural human asymmetry in expression while preserving facial geometry.
-Avoid goofy, silly, cartoonish, distorted, uncanny, melted, deformed, cross-eyed, or over-exaggerated facial expressions.
-""".strip()
+    # Compatibility alias. The provider no longer owns an independent creator
+    # identity definition; migrated rendering consumes the canonical policy.
+    PREMIUM_RENDER_BODY_LOCK = CANONICAL_PREMIUM_RENDER_BODY_LOCK
     CLOTHED_PREMIUM_WARDROBE_LOCK = """
 CLOTHED PREMIUM WARDROBE LOCK - NON-NEGOTIABLE:
 This is a clothed premium teaser request, not a nude or topless request.
@@ -763,7 +738,16 @@ Do not render a landing strip, stubble, trimmed pubic hair, shadow hair, peach f
             or "EXPLICIT EXPRESSION PROFILE" in rendered
         ):
             return ensure_canonical_facial_naturalism(rendered)
-        if str((request.metadata if request else {}).get("workflow_origin") or "") == "autonomous_inspiration":
+        workflow_origin = str(
+            (request.metadata if request else {}).get("workflow_origin") or ""
+        )
+        if workflow_origin in {
+            "autonomous_inspiration",
+            "manual_creative_concept",
+            "canonical_planner",
+            "manual_prompt",
+            "prompt_workshop_premium",
+        }:
             return ensure_canonical_facial_naturalism(
                 f"{rendered}\n\n{cls._autonomous_inspiration_expression_directive(identity)}"
             )
@@ -945,15 +929,33 @@ Do not render a landing strip, stubble, trimmed pubic hair, shadow hair, peach f
         path = Path(reference).expanduser()
         if not path.exists():
             raise GenerationProviderError(f"Reference image was not found: {reference}")
+        if self._reference_role(request) == "EDIT_SOURCE":
+            hosted_url = self._upload_reference_image(
+                path, request_id=request.request_id,
+            )
+            # Edit sources are operation inputs, not canonical assets. Keep the
+            # same hosted-media verification without writing them into the
+            # canonical asset cache under request.reference_asset_id.
+            self.hosted_references.verify(hosted_url, asset_id="EDIT_SOURCE",
+                                          request_id=request.request_id, reference_role="EDIT_SOURCE")
+            return hosted_url
         if request.reference_asset_id:
             return self.hosted_references.resolve(
                 asset_id=int(request.reference_asset_id), source_path=str(path),
-                host_name=self.provider_reference_host,
+                host_name=self.provider_reference_host, request_id=request.request_id,
                 uploader=lambda source: self._upload_reference_image(
                     source, asset_id=int(request.reference_asset_id), request_id=request.request_id,
                 ),
             )
         return self._upload_reference_image(path, request_id=request.request_id)
+
+    def _reference_role(self, request: GenerationRequest) -> str:
+        explicit = str(request.metadata.get("provider_reference_role") or "").strip().upper()
+        if explicit:
+            return explicit
+        if self._render_policy(request) == RenderPolicy.EDIT:
+            return "EDIT_SOURCE"
+        return "CANONICAL_IDENTITY"
 
     def _provider_reference_images(self, request: GenerationRequest) -> list[str]:
         continuity = str(request.metadata.get("photoshoot_continuity_reference_image_url") or "").strip()
@@ -1019,7 +1021,7 @@ Do not render a landing strip, stubble, trimmed pubic hair, shadow hair, peach f
             if index == 0 and not self._is_remote_url(reference) and request.reference_asset_id:
                 values.append(self.hosted_references.resolve(
                     asset_id=int(request.reference_asset_id), source_path=reference,
-                    host_name=self.provider_reference_host, uploader=lambda path: self._upload_reference_image(
+                    host_name=self.provider_reference_host, request_id=request.request_id, uploader=lambda path: self._upload_reference_image(
                         path, asset_id=int(request.reference_asset_id), request_id=request.request_id,
                     ),
                 ))

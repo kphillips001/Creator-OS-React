@@ -96,6 +96,11 @@ class RespondAttention:
         return SimpleNamespace(outcome="RESPOND", diagnostics=lambda: {})
 
 
+class NoopPostNudgeObservation:
+    def observe(self, *_args, **_kwargs):
+        return ()
+
+
 @dataclass(frozen=True)
 class QueueItem:
     inbound_sender_telegram_user_id: int
@@ -119,7 +124,8 @@ def test_due_queue_prefers_all_five_buckets_without_starvation(monkeypatch):
     repository = DueRepository(rows, keys)
     service = OrdinaryChatReplyService(repository=repository,
         attention_service=RespondAttention(), creator_profile_id=1,
-        fanvue_account_id=2)
+        fanvue_account_id=2,
+        post_nudge_nonconversion=NoopPostNudgeObservation())
     monkeypatch.setattr(service, "retry_payload", lambda item: item)
     result = service.due_availability_payloads(now=NOW)
     assert [item.inbound_sender_telegram_user_id for item in result] == [5, 4, 3, 2, 1]

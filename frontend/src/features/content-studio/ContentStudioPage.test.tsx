@@ -1345,6 +1345,116 @@ describe("ContentStudioPage", () => {
     expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes("/prompt-workshop/archive/batch-new/use"))).toBe(true);
   });
 
+  it("validates and generates a direct Manual Prompt through the existing workflow once", async () => {
+    render(<ContentStudioPage />);
+    const manual = within(await screen.findByRole("region", { name: "Manual Prompt" }));
+    const input = manual.getByLabelText("Manual Prompt");
+    const generate = manual.getByRole("button", { name: "🚀 Create Images from Prompt" });
+
+    expect(generate).toBeDisabled();
+    fireEvent.change(input, { target: { value: "   " } });
+    expect(generate).toBeDisabled();
+    fireEvent.change(input, { target: { value: "Ava smiling naturally by a bright window" } });
+    await waitFor(() => expect(generate).toBeEnabled());
+    fireEvent.click(generate);
+    fireEvent.click(generate);
+
+    await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(
+      ([url]) => String(url).endsWith("/generations"),
+    )).toBe(true));
+    const previewCalls = vi.mocked(fetch).mock.calls.filter(([url]) => String(url).endsWith("/prompt-preview"));
+    const generationCalls = vi.mocked(fetch).mock.calls.filter(([url]) => String(url).endsWith("/generations"));
+    expect(previewCalls).toHaveLength(1);
+    expect(generationCalls).toHaveLength(1);
+    expect(JSON.parse(String(previewCalls[0]![1]?.body))).toEqual(expect.objectContaining({
+      creativeMode: "premium_teaser", creativeTags: "Ava smiling naturally by a bright window",
+      lane: "social", origin: "manual_prompt", promptCount: 5,
+    }));
+    expect(JSON.parse(String(generationCalls[0]![1]?.body))).toEqual(expect.objectContaining({
+      origin: "manual_prompt", promptSource: "Ava smiling naturally by a bright window",
+      promptSourceLabel: "Manual Prompt", lane: "social",
+    }));
+  });
+
+  it("surfaces Manual Prompt preparation errors through the existing Creative Studio status", async () => {
+    const defaultFetch = vi.mocked(fetch);
+    vi.stubGlobal("fetch", vi.fn((url: string, options?: RequestInit) => {
+      if (String(url).endsWith("/prompt-preview")) {
+        return Promise.resolve({
+          headers: new Headers({ "content-type": "application/json" }),
+          json: () => Promise.resolve({ success: false, error: "Manual prompt could not be prepared." }),
+          ok: false,
+          status: 400,
+          text: () => Promise.resolve(JSON.stringify({ error: "Manual prompt could not be prepared." })),
+        } as Response);
+      }
+      return defaultFetch(url, options);
+    }));
+    render(<ContentStudioPage />);
+    const manual = within(await screen.findByRole("region", { name: "Manual Prompt" }));
+    fireEvent.change(manual.getByLabelText("Manual Prompt"), { target: { value: "valid manual prompt" } });
+    fireEvent.click(manual.getByRole("button", { name: "🚀 Create Images from Prompt" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Manual prompt could not be prepared.");
+    expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).endsWith("/generations"))).toBe(false);
+  });
+
+  it("generates accepted Premium Workshop output with workshop provenance", async () => {
+    render(<ContentStudioPage />);
+    const workshop = within(await screen.findByRole("region", { name: "Prompt Workshop" }));
+    fireEvent.change(workshop.getByLabelText("Prompt Workshop Brief"), { target: { value: "window portrait" } });
+    fireEvent.click(workshop.getByRole("button", { name: "Generate Prompts" }));
+    await workshop.findByLabelText("Prompt 1");
+    fireEvent.click(workshop.getByRole("button", { name: "Accept Selected" }));
+
+    const manual = within(screen.getByRole("region", { name: "Manual Prompt" }));
+    expect(await manual.findByText("Accepted from Prompt Workshop — Premium.")).toBeInTheDocument();
+    fireEvent.click(manual.getByRole("button", { name: "🚀 Create Images from Prompt" }));
+    const generationCall = await waitFor(() => {
+      const call = vi.mocked(fetch).mock.calls.find(([url]) => String(url).endsWith("/generations"));
+      expect(call).toBeDefined();
+      return call;
+    });
+    expect(JSON.parse(String(generationCall?.[1]?.body))).toEqual(expect.objectContaining({
+      origin: "prompt_workshop_premium", lane: "social", promptSource: "generated prompt one",
+      promptSourceLabel: "Prompt Workshop",
+    }));
+  });
+
+  it("generates accepted Explicit Workshop output through existing explicit semantics", async () => {
+    render(<ContentStudioPage />);
+    const workshop = within(await screen.findByRole("region", { name: "Prompt Workshop" }));
+    fireEvent.change(workshop.getByLabelText("Prompt Mode"), { target: { value: "explicit" } });
+    fireEvent.change(workshop.getByLabelText("Prompt Workshop Brief"), { target: { value: "explicit hotel scene" } });
+    fireEvent.click(workshop.getByRole("button", { name: "Generate Prompts" }));
+    const prompt = await workshop.findByLabelText("Prompt 1");
+    fireEvent.change(prompt, { target: { value: "explicit scene with flirty intimate eye contact" } });
+    fireEvent.click(workshop.getByRole("button", { name: "Accept Selected" }));
+
+    const manual = within(screen.getByRole("region", { name: "Manual Prompt" }));
+    expect(await manual.findByText(/Accepted from Prompt Workshop — Explicit/)).toBeInTheDocument();
+    fireEvent.click(manual.getByRole("button", { name: "🚀 Create Images from Prompt" }));
+    const previewCall = await waitFor(() => {
+      const call = vi.mocked(fetch).mock.calls.find(([url]) => String(url).endsWith("/prompt-preview"));
+      expect(call).toBeDefined();
+      return call;
+    });
+    const generationCall = await waitFor(() => {
+      const call = vi.mocked(fetch).mock.calls.find(([url]) => String(url).endsWith("/generations"));
+      expect(call).toBeDefined();
+      return call;
+    });
+    expect(JSON.parse(String(previewCall?.[1]?.body))).toEqual(expect.objectContaining({
+      creativeMode: "explicit", creativeTags: "explicit scene with flirty intimate eye contact",
+      lane: "explicit", origin: "prompt_workshop_explicit",
+      explicitInput: expect.objectContaining({ origin: "explicit_tags" }),
+    }));
+    expect(JSON.parse(String(generationCall?.[1]?.body))).toEqual(expect.objectContaining({
+      creativeMode: "explicit", lane: "explicit", origin: "prompt_workshop_explicit",
+      promptSource: "explicit scene with flirty intimate eye contact",
+      promptSourceLabel: "Prompt Workshop",
+    }));
+  });
+
   it.skip("uses Manual Prompt as the preview override and preserves valid preview edits", async () => {
     render(<ContentStudioPage />);
 

@@ -27,6 +27,26 @@ class SchemaManagerServiceTests(unittest.TestCase):
                 self.assertTrue(entry.service)
                 self.assertTrue(entry.migration)
 
+    def test_creator_content_tables_have_canonical_publishing_ownership(self):
+        expected = {
+            "creator_content_publications": ("20260919_144_creator_content_publications.sql", "CreatorContentPublicationRepository", "CreatorContentPublicationMemoryService", 33),
+            "creator_content_entry_attributions": ("20260919_145_creator_content_entry_attributions.sql", "CreatorContentEntryAttributionRepository", "CreatorContentEntryAttributionService", 12),
+            "creator_content_entry_events": ("20260919_145_creator_content_entry_attributions.sql", "CreatorContentEntryAttributionRepository", "CreatorContentEntryAttributionService", 10),
+        }
+        schema = self.service.discover_schema()
+        for table, (migration, repository, service, count) in expected.items():
+            with self.subTest(table=table):
+                metadata = self.service.TABLE_OWNERSHIP[table]
+                self.assertEqual(metadata["owner"], "Publishing")
+                self.assertEqual(metadata["migration"], migration)
+                self.assertEqual(metadata["repository"], repository)
+                self.assertEqual(metadata["service"], service)
+                self.assertEqual(metadata["legacy"], "current")
+                self.assertEqual(metadata["compatibility"], "CANONICAL")
+                self.assertEqual(metadata["dashboard"], ())
+                self.assertEqual(len(metadata["columns"]), count)
+                self.assertEqual(set(metadata["columns"]), schema[table])
+
     def test_repository_schema_creation_removed(self):
         self.assertEqual(self.service.detect_repository_schema_creation(), ())
 

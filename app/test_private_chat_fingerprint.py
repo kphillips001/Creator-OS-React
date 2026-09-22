@@ -55,7 +55,8 @@ def _intent():
         purchase_intent_id=uuid4(), telegram_user_id=123, telegram_chat_id=123,
         commercial_offering_id=uuid4(), commercial_publication_id=uuid4(),
         fanvue_account_id=7, expected_currency="USD", expected_price_minor=1499,
-        creator_profile_id=2,
+        creator_profile_id=2, status="PRESENTED",
+        expires_at=datetime.now(timezone.utc) + timedelta(days=3),
     )
 
 
@@ -148,6 +149,26 @@ def test_mapped_customer_redirects_to_canonical_without_fingerprint(monkeypatch)
         "delivery_url": "https://www.fanvue.com/canonical", "media_uuids": ("m",),
     })
     assert service.resolve("x" * 64) == "https://www.fanvue.com/canonical"
+
+
+def test_runtime_resource_uses_complete_purchase_intent_window():
+    now = datetime(2026, 9, 14, 17, tzinfo=timezone.utc)
+    intent = _intent()
+    intent.expires_at = now + timedelta(days=3)
+    service = PrivateChatUnlockGatewayService(
+        token_secret="s" * 32, runtime_ttl=timedelta(hours=24),
+    )
+    assert service._runtime_expiry(intent, now=now) == intent.expires_at
+
+
+def test_runtime_resource_expiry_is_normalized_to_utc():
+    now = datetime(2026, 9, 14, 17, tzinfo=timezone.utc)
+    intent = _intent()
+    intent.expires_at = datetime(2026, 9, 17, 12)
+    service = PrivateChatUnlockGatewayService(token_secret="s" * 32)
+    assert service._runtime_expiry(intent, now=now) == datetime(
+        2026, 9, 17, 12, tzinfo=timezone.utc,
+    )
 
 
 def test_migration_091_contains_session_and_concurrency_guards():

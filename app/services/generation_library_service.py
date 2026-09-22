@@ -370,7 +370,13 @@ class GenerationLibraryService:
         if filters.sort in {"provider", "status"}:
             records.sort(key=lambda record: getattr(record, filters.sort if filters.sort != "provider" else "provider_id"))
         else:
-            records.sort(key=lambda record: record.generation_date or record.created_at, reverse=reverse)
+            records.sort(
+                key=lambda record: (
+                    dict(record.generation_metadata or {}).get("library_entered_at")
+                    or record.generation_date or record.created_at
+                ),
+                reverse=reverse,
+            )
         staged = sorted(
             (record for record in records if record.is_staged),
             key=lambda record: (record.staged_at or "", record.image_id),
@@ -538,6 +544,76 @@ class GenerationLibraryService:
         )
         self._replace_record(updated)
         return updated, False
+
+    def restore_published_archive(
+        self, archive_record,
+    ) -> tuple[GeneratedImageRecord, bool]:
+        """Move one canonical published image back without erasing publication history."""
+        with self._version_restore_lock:
+            return self._restore_published_archive_locked(archive_record)
+
+    def _restore_published_archive_locked(
+        self, archive_record,
+    ) -> tuple[GeneratedImageRecord, bool]:
+        if not str(archive_record.archive_type).startswith("published_"):
+            raise ValueError("Only published archive images can return to Generation Library.")
+        snapshot = dict(archive_record.generation_record or {})
+        if not snapshot.get("image_id") or not snapshot.get("creator_profile_id"):
+            raise ValueError("Published media lacks canonical Generation Library lineage.")
+        image_id = str(snapshot["image_id"])
+        disposition = str((archive_record.metadata or {}).get("current_disposition") or "published")
+        try:
+            existing = self.get(image_id)
+        except KeyError:
+            existing = None
+        if disposition == "generation_library":
+            if existing is None:
+                raise RuntimeError("Published return history exists without its Generation Library record.")
+            return existing, True
+        if existing is not None:
+            raise ValueError("This image is already active in Generation Library.")
+
+        source_path = Path(str(archive_record.current_file_path)).expanduser()
+        if not source_path.is_file():
+            raise FileNotFoundError("Published image file is unavailable.")
+        original_path = source_path
+        restored_path = self.archive_service.move_to_generation_active(
+            self._record_from_dict({**snapshot, "output_reference": str(source_path)})
+        )
+        restored_at = utc_now()
+        restored = self._record_from_dict({
+            **snapshot,
+            "output_reference": str(restored_path),
+            "status": "active",
+            "review_state": "restored_from_published",
+            "selected": False,
+            "is_staged": False,
+            "staged_at": None,
+            "generation_metadata": {
+                **dict(snapshot.get("generation_metadata") or {}),
+                "library_entered_at": restored_at,
+                "library_entry_reason": "PUBLISHED_ARCHIVE_RESTORE",
+                "source_publication_archive_id": str(archive_record.archive_id),
+            },
+            "updated_at": restored_at,
+        })
+        try:
+            self._upsert_records((restored,))
+            self.archive_service.mark_published_returned_to_generation(
+                archive_record.archive_id, current_file_path=str(restored_path),
+            )
+        except Exception:
+            try:
+                self._remove_records((image_id,))
+                original_path.parent.mkdir(parents=True, exist_ok=True)
+                if Path(restored_path).is_file() and Path(restored_path).resolve() != original_path.resolve():
+                    shutil.move(str(restored_path), str(original_path))
+            except Exception:
+                logging.getLogger(__name__).exception(
+                    "Published archive return rollback failed for %s", image_id,
+                )
+            raise
+        return restored, False
 
     def bulk_select(self, filters: GenerationLibraryFilter) -> GenerationLibraryActionResult:
         result = self.browse(filters)
@@ -2017,6 +2093,22 @@ class GenerationLibraryService:
             return tuple(self._record_from_dict(item) for item in canonical.list_payloads())
         return tuple(self._record_from_dict(item) for item in self._read_json(self.records_path, []))
 
+    def overview_counts(self) -> dict[str, int]:
+        """Use the canonical status authority without loading full record payloads."""
+        canonical = self._canonical()
+        if canonical is not None:
+            self._ensure_canonical()
+            return canonical.overview_counts()
+        records = self.list_records()
+        return {
+            "active": sum(item.status == "active" for item in records),
+            "staged": sum(item.status == "staged_asset_library" for item in records),
+            "archived": sum(
+                item.status not in {"active", "staged_asset_library"}
+                for item in records
+            ),
+        }
+
     def _archived_output_references(self) -> set[str]:
         references = self._reviewed_edit_output_references()
         for record in self.archive_service.list_records():
@@ -2324,6 +2416,8 @@ class GenerationLibraryService:
             updated_at=data.get("updated_at"),
             is_staged=bool(data.get("is_staged", False)),
             staged_at=data.get("staged_at"),
+            content_classification=data.get("content_classification"),
+            classification_source=data.get("classification_source"),
         )
 
     def _write_records(self, records: list[GeneratedImageRecord]) -> None:

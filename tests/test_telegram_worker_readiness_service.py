@@ -25,11 +25,13 @@ class Processes:
     def __init__(self, *, matches=True, matching=None):
         self.owned = matches
         self.matches_list = [68032] if matching is None else matching
+        self.matching_calls = 0
 
     def matches(self, pid, definition):
         return self.owned and pid in self.matches_list and definition.module.endswith("telethon_runtime")
 
     def matching(self, definition):
+        self.matching_calls += 1
         return list(self.matches_list)
 
 
@@ -41,6 +43,13 @@ def heartbeat(*, status=WorkerHeartbeatStatus.IDLE, age=1, creator="1", account=
         "authorized": True,
         "database_healthy": True,
         "lifecycle_state": "CONNECTED",
+        "ordinary_reply_scheduler_alive": True,
+        "ordinary_reply_scheduler_healthy": True,
+        "ordinary_reply_scheduler_last_poll": NOW.isoformat(),
+        "ordinary_reply_scheduler_last_success": NOW.isoformat(),
+        "ordinary_reply_scheduler_last_result": {"availabilityDue": 0},
+        "startup_history_recovery_complete": True,
+        "startup_history_recovery_status": "COMPLETE",
     }
     values.update(metadata or {})
     return WorkerHeartbeat(
@@ -83,6 +92,66 @@ def test_production_shaped_singleton_is_ready(tmp_path):
     assert result["ready"] is True
     assert result["status"] == "idle"
     assert result["processId"] == 68032
+    assert result["ordinaryReplyScheduler"]["alive"] is True
+    assert result["ordinaryReplyScheduler"]["lastResult"] == {"availabilityDue": 0}
+
+
+def test_display_readiness_skips_full_enumeration_but_authority_keeps_it(tmp_path):
+    processes = Processes()
+    target = service(tmp_path, [heartbeat()], processes=processes)
+    assert target.read_display(creator_profile_id=1)["ready"] is True
+    assert processes.matching_calls == 0
+    assert target.read(creator_profile_id=1)["ready"] is True
+    assert processes.matching_calls == 1
+
+
+@pytest.mark.parametrize("scheduler_metadata", [
+    {"ordinary_reply_scheduler_alive": False},
+    {"ordinary_reply_scheduler_healthy": False,
+     "ordinary_reply_scheduler_last_failure": NOW.isoformat()},
+])
+def test_transport_connected_but_scheduler_unhealthy_is_not_ready(
+    tmp_path, scheduler_metadata,
+):
+    result = service(
+        tmp_path, [heartbeat(metadata=scheduler_metadata)]
+    ).read(creator_profile_id=1)
+    assert result["ready"] is False
+    assert result["code"] == "ordinary_reply_scheduler_unhealthy"
+
+
+def test_resume_execution_failure_is_visible_without_global_runtime_outage(tmp_path):
+    result = service(tmp_path, [heartbeat(metadata={
+        "ordinary_reply_resume_healthy": False,
+        "ordinary_reply_resume_last_failure": NOW.isoformat(),
+        "ordinary_reply_resume_last_error": "ValueError: injected",
+        "ordinary_reply_resume_consecutive_failures": 3,
+        "ordinary_reply_resume_retry_seconds": 4,
+        "ordinary_reply_resume_cooling_down": 1,
+    })]).read(creator_profile_id=1)
+
+    assert result["ready"] is True
+    execution = result["ordinaryReplyScheduler"]["resumeExecution"]
+    assert execution == {
+        "healthy": False,
+        "lastSuccess": None,
+        "lastFailure": NOW.isoformat(),
+        "lastError": "ValueError: injected",
+        "consecutiveFailures": 3,
+        "retrySeconds": 4,
+        "coolingDown": 1,
+    }
+
+
+def test_failed_startup_history_recovery_blocks_readiness(tmp_path):
+    result = service(tmp_path, [heartbeat(metadata={
+        "startup_history_recovery_complete": False,
+        "startup_history_recovery_status": "FAILED",
+        "startup_history_recovery_error": "TimeoutError",
+    })]).read(creator_profile_id=1)
+    assert result["ready"] is False
+    assert result["code"] == "startup_history_recovery_unhealthy"
+    assert result["recoveryStatus"] == "FAILED"
 
 
 @pytest.mark.parametrize(("change", "code"), [

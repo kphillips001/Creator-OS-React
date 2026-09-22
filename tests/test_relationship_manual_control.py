@@ -1,3 +1,4 @@
+from app.testing.telegram_transport_fixtures import ReachableTestSender, InvocationTestRepository
 from datetime import datetime, timezone
 from types import SimpleNamespace
 from uuid import uuid4
@@ -21,21 +22,21 @@ class Controls:
         return (not self.current.manual and (captured_version is None or captured_version == self.current.control_version), self.current)
 
 
-class Operations:
+class Operations(InvocationTestRepository):
     def __init__(self): self.row=None; self.claims=0
     def reserve(self, **values):
         if self.row is None:
             self.row={**values,"operation_id":uuid4(),"state":"PREPARED","outbound_telegram_message_id":None,"confirmed_at":None}
         elif self.row["message_text"] != values["message_text"]: raise ValueError("different text")
         return self.row
-    def claim(self, operation_id, *, expected_version): self.claims+=1; self.row["state"]="SENDING"; return self.row
-    def confirmed(self, operation_id, message_id):
+    def claim(self, operation_id, *, expected_version, route="TELEGRAM_BUSINESS"): self.claims+=1; self.row["state"]="SENDING"; return self.row
+    def confirmed(self, operation_id, message_id, **_):
         self.row.update(state="CONFIRMED",outbound_telegram_message_id=message_id,confirmed_at=datetime.now(timezone.utc)); return self.row
-    def failed(self, operation_id, error): self.row["state"]="FAILED"; return self.row
-    def ambiguous(self, operation_id, error): self.row["state"]="AMBIGUOUS"; return self.row
+    def failed(self, operation_id, error, **_): self.row["state"]="FAILED"; return self.row
+    def ambiguous(self, operation_id, error, **_): self.row["state"]="AMBIGUOUS"; return self.row
 
 
-class Transport:
+class Transport(ReachableTestSender):
     def __init__(self): self.calls=0
     def send_text(self, **values): self.calls+=1; assert values["button_label"] is None; return 77
 
@@ -66,7 +67,7 @@ def test_manual_send_reuses_transport_and_confirmed_retry_is_idempotent():
 def test_final_send_blocks_manual_and_stale_autonomous_work():
     sender=SimpleNamespace(send_text=lambda **_values: pytest.fail("must not send"))
     manual=TelegramDeliveryExecutor(global_safety_service=SimpleNamespace(check_global_safety=lambda:{"allowed":True}),relationship_control_service=Controls(control()),business_commercial_transport=sender)
-    context={**scope(),"transport":sender,"relationship_control_version":2}
+    context={"record_transport_evidence": lambda evidence:evidence, **scope(),"transport":sender,"relationship_control_version":2}
     result=manual.execute({"message_text":"reply","delivery_method":"text"},context=context)
     assert not result.executed and result.blocking_reason == "RELATIONSHIP_HUMAN_OPERATOR_ACTIVE"
     auto=TelegramDeliveryExecutor(global_safety_service=SimpleNamespace(check_global_safety=lambda:{"allowed":True}),relationship_control_service=Controls(control(TelegramRelationshipMode.AVA_AUTO,4)),business_commercial_transport=sender)
@@ -74,26 +75,27 @@ def test_final_send_blocks_manual_and_stale_autonomous_work():
     assert not stale.executed
 
 
-def test_private_unlock_uses_supplied_canonical_private_chat_transport():
-    class PrivateTransport:
+def test_private_unlock_uses_canonical_business_transport_not_private_chat_transport():
+    class RecordingTransport(ReachableTestSender):
         def __init__(self): self.calls=[]
         def send_text(self, **values): self.calls.append(values); return 88
-    private=PrivateTransport()
-    legacy=SimpleNamespace(send_text=lambda **_values: pytest.fail(
-        "legacy business sender must not own a Telethon private chat"))
+    private=SimpleNamespace(send_text=lambda **_values: pytest.fail(
+        "Telethon private transport must not own a paid unlock"))
+    business=RecordingTransport()
     executor=TelegramDeliveryExecutor(
         global_safety_service=SimpleNamespace(check_global_safety=lambda:{"allowed":True}),
         relationship_control_service=Controls(control(TelegramRelationshipMode.AVA_AUTO,3)),
         customer_effective_permissions_service=SimpleNamespace(read=lambda **_:{
             "effective":{"chatAllowed":True,"contentSellingAllowed":True}}),
-        business_commercial_transport=legacy,
+        business_commercial_transport=business,
     )
     result=executor.execute({"message_text":"offer","delivery_method":"text",
         "metadata":{"private_chat_unlock_button":{"label":"Unlock","url":"https://example.test/u/1"}}},
-        context={**scope(),"transport":private,"relationship_control_version":3})
+        context={"record_transport_evidence": lambda evidence:evidence, **scope(),"transport":private,"relationship_control_version":3,
+                 "origin":"HUMAN_OPERATOR"})
     assert result.executed is True
-    assert len(private.calls) == 1
-    assert private.calls[0]["button_url"] == "https://example.test/u/1"
+    assert len(business.calls) == 1
+    assert business.calls[0]["button_url"] == "https://example.test/u/1"
 
 
 def test_generated_commercial_send_rechecks_current_customer_permission():
@@ -107,6 +109,6 @@ def test_generated_commercial_send_rechecks_current_customer_permission():
     )
     result=executor.execute({"message_text":"offer","delivery_method":"text",
         "metadata":{"private_chat_unlock_button":{"label":"Unlock","url":"https://example.test/u/1"}}},
-        context={**scope(),"transport":private,"relationship_control_version":3})
+        context={"record_transport_evidence": lambda evidence:evidence, **scope(),"transport":private,"relationship_control_version":3})
     assert result.executed is False
     assert result.blocking_reason == "CUSTOMER_CONTENT_SELLING_DISABLED"

@@ -31,6 +31,8 @@ from app.services.generation_library_service import GenerationLibraryService
 from app.services.generation_result_ingestion_service import GenerationResultIngestionService
 from app.services.creative_intelligence_learning_service import CreativeIntelligenceLearningService
 from app.repositories.x_link_performance_repository import XLinkPerformanceRepository
+from app.services.x_thread_cta_queue_service import XThreadCtaQueueService
+from app.services.x_thread_cta_publisher import XThreadCtaPublisher
 
 
 logger = logging.getLogger(__name__)
@@ -51,12 +53,21 @@ class SocialPublishingService:
         telegram_provider: TelegramPublishingProvider | None = None,
         creative_intelligence: CreativeIntelligenceLearningService | None = None,
         x_link_attributions: XLinkPerformanceRepository | None = None,
+        x_cta_queue: XThreadCtaQueueService | None = None,
+        x_cta_publisher: XThreadCtaPublisher | None = None,
     ):
         self.storage_dir = Path(storage_dir or self.DEFAULT_STORAGE_DIR)
         self.x_provider = x_provider or XPublishingProvider()
         self.telegram_provider = telegram_provider or TelegramPublishingProvider()
         self.creative_intelligence = creative_intelligence or CreativeIntelligenceLearningService()
         self.x_link_attributions = x_link_attributions or XLinkPerformanceRepository()
+        self.x_cta_publisher = x_cta_publisher or XThreadCtaPublisher(
+            provider=self.x_provider, attributions=self.x_link_attributions
+        )
+        self.x_cta_queue = x_cta_queue or XThreadCtaQueueService(
+            attributions=self.x_link_attributions, provider=self.x_provider,
+            publisher=self.x_cta_publisher,
+        )
 
     @property
     def queue_path(self) -> Path:
@@ -351,11 +362,23 @@ class SocialPublishingService:
         x_thread_cta_enabled: bool = False,
         x_thread_cta_text: str = "",
         x_thread_cta_url: str = "",
+        x_thread_cta_timing: str = "DELAY_30_60",
         publish_operation_id: str | None = None,
         fanvue_account_id: int | None = None,
     ) -> SocialQueueItem:
         audit = dict(audit_metadata or {})
+        cta_timing = str(x_thread_cta_timing or "DELAY_30_60").strip().upper()
+        if cta_timing not in {"ASAP", "DELAY_30_60"}:
+            raise ValueError("X Thread CTA timing must be ASAP or DELAY_30_60.")
         item = self.get_queue_item(queue_item_id)
+        if item.platform == SocialPlatform.TELEGRAM.value and item.status == SocialPublishStatus.POSTED.value:
+            confirmed = next((candidate for candidate in self.list_publish_items()
+                if candidate.queue_item_id == item.queue_item_id
+                and candidate.platform == SocialPlatform.TELEGRAM.value
+                and candidate.status == SocialPublishStatus.POSTED.value
+                and (candidate.metadata or {}).get("provider_post_id")), None)
+            if confirmed is not None:
+                return item
         if item.platform == SocialPlatform.X.value:
             audit.setdefault("x_auto_replies_enabled", True)
             audit.setdefault("x_auto_callback_status", "pending")
@@ -364,6 +387,7 @@ class SocialPublishingService:
                 "x_thread_cta_requested": bool(x_thread_cta_enabled),
                 "x_thread_cta_text": str(x_thread_cta_text or "").strip(),
                 "x_thread_cta_url": str(x_thread_cta_url or "").strip(),
+                "x_thread_cta_timing": cta_timing,
                 "x_thread_cta_status": "pending" if x_thread_cta_enabled else "not_requested",
                 "fanvue_account_id": int(fanvue_account_id or 0),
                 "primary_caption": str(caption_text or "").strip(),
@@ -567,7 +591,11 @@ class SocialPublishingService:
                     exc,
                 )
             if x_thread_cta_enabled:
-                return self._publish_x_thread_cta(
+                handler = (
+                    self._publish_x_thread_cta_asap
+                    if cta_timing == "ASAP" else self._schedule_x_thread_cta
+                )
+                return handler(
                     item=item,
                     publish_item=self._publish_item_by_id(publish_item.publish_request_id),
                     account_name=account_name,
@@ -613,11 +641,16 @@ class SocialPublishingService:
             updated = replace(item, status=SocialPublishStatus.POSTED.value, updated_at=utc_now())
             self._replace_queue_item(updated)
             return updated
-        return self._publish_x_thread_cta(
+        handler = (
+            self._publish_x_thread_cta_asap
+            if metadata.get("x_thread_cta_timing", "DELAY_30_60") == "ASAP"
+            else self._schedule_x_thread_cta
+        )
+        return handler(
             item=item, publish_item=publish_item, account_name=account_name
         )
 
-    def _publish_x_thread_cta(
+    def _publish_x_thread_cta_asap(
         self, *, item: SocialQueueItem, publish_item: SocialPublishRequest,
         account_name: str | None,
     ) -> SocialQueueItem:
@@ -629,24 +662,66 @@ class SocialPublishingService:
             updated = replace(item, status=SocialPublishStatus.POSTED.value, updated_at=utc_now())
             self._replace_queue_item(updated)
             return updated
-        if metadata.get("x_thread_cta_status") == "publishing":
-            failed = replace(item, status=SocialPublishStatus.FAILED.value, updated_at=utc_now())
-            self._replace_queue_item(failed)
-            self._append_history(
-                failed,
-                status="reconciliation_required",
-                message="X Thread CTA outcome is ambiguous; automatic replay was blocked.",
-                metadata=metadata,
-            )
-            return failed
-        metadata["x_thread_cta_status"] = "publishing"
-        self._replace_publish_item(replace(publish_item, metadata=metadata))
         try:
             attribution = self.x_link_attributions.get_or_create_attribution(
-                attribution_token=(
-                    str(metadata.get("x_link_attribution_token") or "").strip()
-                    or secrets.token_urlsafe(24)
-                ),
+                attribution_token=str(metadata.get("x_link_attribution_token") or "").strip() or secrets.token_urlsafe(24),
+                creator_profile_id=item.creator_profile_id,
+                fanvue_account_id=int(metadata.get("fanvue_account_id") or 0),
+                publish_operation_id=str(metadata["publish_operation_id"]),
+                social_queue_item_id=item.queue_item_id,
+                generation_image_id=item.generated_image_id,
+                primary_x_post_id=primary_id,
+                x_account_name=str(account_name or metadata.get("account_name") or ""),
+                primary_caption=str(metadata.get("primary_caption") or ""),
+                primary_published_at=datetime.fromisoformat(str(metadata["primary_published_at"]).replace("Z", "+00:00")),
+            )
+            cta_url = f"{X_LINK_CTA_BASE_URL}?p={attribution['attribution_token']}"
+            delivery = self.x_cta_publisher.publish(
+                creator_profile_id=item.creator_profile_id,
+                fanvue_account_id=int(metadata.get("fanvue_account_id") or 0),
+                publish_operation_id=str(metadata["publish_operation_id"]),
+                x_account_name=str(account_name or metadata.get("account_name") or ""),
+                primary_x_post_id=primary_id,
+                x_link_attribution_id=str(attribution["x_link_attribution_id"]),
+                timing="ASAP", cta_text=str(metadata.get("x_thread_cta_text") or ""),
+                cta_url=cta_url,
+            )
+            metadata.update({
+                "x_link_attribution_id": str(attribution["x_link_attribution_id"]),
+                "x_thread_cta_url": cta_url,
+                "cta_x_post_id": str(delivery["resulting_x_reply_id"]),
+                "x_thread_cta_status": "posted",
+                "x_thread_cta_sent_at": str(delivery.get("sent_at") or ""),
+            })
+        except Exception as exc:
+            metadata.update({"x_thread_cta_status": "send_uncertain",
+                             "x_thread_cta_error": str(exc),
+                             "x_thread_cta_exception_type": exc.__class__.__name__})
+            self._replace_publish_item(replace(publish_item, status="partial", metadata=metadata))
+            failed = replace(item, status=SocialPublishStatus.FAILED.value, updated_at=utc_now())
+            self._replace_queue_item(failed)
+            self._append_history(failed, status="partial", message=str(exc), metadata=metadata)
+            return failed
+        self._replace_publish_item(replace(publish_item, status=SocialPublishStatus.POSTED.value, metadata=metadata))
+        updated = replace(item, status=SocialPublishStatus.POSTED.value, updated_at=utc_now())
+        self._replace_queue_item(updated)
+        return updated
+
+    def _schedule_x_thread_cta(
+        self, *, item: SocialQueueItem, publish_item: SocialPublishRequest,
+        account_name: str | None,
+    ) -> SocialQueueItem:
+        metadata = dict(publish_item.metadata or {})
+        primary_id = str(metadata.get("primary_x_post_id") or metadata.get("provider_post_id") or "").strip()
+        if not primary_id:
+            raise RuntimeError("X Thread CTA cannot publish before its primary post.")
+        if metadata.get("cta_x_post_id") or metadata.get("x_thread_cta_job_id"):
+            updated = replace(item, status=SocialPublishStatus.POSTED.value, updated_at=utc_now())
+            self._replace_queue_item(updated)
+            return updated
+        try:
+            job = self.x_cta_queue.schedule(
+                attribution_token=str(metadata.get("x_link_attribution_token") or "").strip() or secrets.token_urlsafe(24),
                 creator_profile_id=item.creator_profile_id,
                 fanvue_account_id=int(metadata.get("fanvue_account_id") or 0),
                 publish_operation_id=str(metadata["publish_operation_id"]),
@@ -658,19 +733,19 @@ class SocialPublishingService:
                 primary_published_at=datetime.fromisoformat(
                     str(metadata["primary_published_at"]).replace("Z", "+00:00")
                 ),
+                asset_reference=item.output_reference,
+                thumbnail_reference=item.output_reference,
+                caption_preview=str(metadata.get("primary_caption") or "")[:280],
+                cta_text=str(metadata.get("x_thread_cta_text") or ""),
             )
-            token = str(attribution["attribution_token"])
             metadata.update({
-                "x_link_attribution_id": str(attribution["x_link_attribution_id"]),
-                "x_link_attribution_token": token,
-                "x_thread_cta_url": f"{X_LINK_CTA_BASE_URL}?p={token}",
+                "x_link_attribution_id": str(job["x_link_attribution_id"]),
+                "x_thread_cta_url": str(job["cta_url"]),
+                "x_thread_cta_job_id": str(job["job_id"]),
+                "x_thread_cta_status": "scheduled",
+                "x_thread_cta_scheduled_at": job["scheduled_at"].isoformat(),
+                "x_thread_cta_delay_seconds": int(job["sampled_delay_seconds"]),
             })
-            self._replace_publish_item(replace(publish_item, metadata=metadata))
-            result = self.x_provider.publish_reply(
-                caption=self._x_thread_caption(metadata),
-                in_reply_to_tweet_id=primary_id,
-                account_name=account_name,
-            )
         except Exception as exc:
             metadata.update({
                 "x_thread_cta_status": "failed",
@@ -686,26 +761,9 @@ class SocialPublishingService:
                 failed, status="partial", message=str(exc), metadata=metadata
             )
             return failed
-        metadata.update({
-            "x_thread_cta_status": "posted",
-            "cta_x_post_id": result.provider_post_id,
-            "cta_reply_to_x_post_id": primary_id,
-            "cta_provider_output_url": result.provider_output_url,
-        })
-        metadata.pop("x_thread_cta_error", None)
-        metadata.pop("x_thread_cta_exception_type", None)
         self._replace_publish_item(replace(
             publish_item, status=SocialPublishStatus.POSTED.value, metadata=metadata
         ))
-        try:
-            self.x_link_attributions.attach_cta_post(
-                str(metadata["x_link_attribution_id"]), str(result.provider_post_id)
-            )
-        except Exception as exc:
-            logger.warning(
-                "X Link attribution CTA reconciliation pending | attribution_id=%s error=%s",
-                metadata["x_link_attribution_id"], exc,
-            )
         updated = replace(item, status=SocialPublishStatus.POSTED.value, updated_at=utc_now())
         self._replace_queue_item(updated)
         return updated

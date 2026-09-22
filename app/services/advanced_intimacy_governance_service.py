@@ -89,12 +89,15 @@ class AdvancedIntimacyGovernanceService:
             "intimacy_escalation_allowed": intimacy_escalation_allowed,
             "intimacy_governance_mode": governance_mode,
             "intimacy_escalation_ceiling": escalation_ceiling,
+            "offline_access_allowed": False,
+            "fantasy_allowed": True,
             "governance_reason": (
                 "Advanced intimacy governance evaluated runtime safety layers."
             ),
             "gpt_instruction": (
                 "Respect intimacy pacing, emotional safety, and relationship realism. "
                 "Do not escalate intimacy when recovery, burnout, dependency, "
-                "or stability systems require restraint."
+                "or stability systems require restraint. Sexual-conversation authority may "
+                "permit fantasy but never authorizes an actual future offline encounter."
             ),
         }

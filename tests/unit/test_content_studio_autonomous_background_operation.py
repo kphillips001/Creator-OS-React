@@ -8,6 +8,7 @@ from app.services.content_studio_autonomous_background_executor import (
     ContentStudioAutonomousBackgroundExecutor,
 )
 from app.services.background_operation_worker_service import BackgroundOperationWorkerService
+from app.services.content_studio_background_executor import ContentStudioBackgroundExecutor
 
 
 class Operations:
@@ -45,6 +46,7 @@ def test_inspire_endpoint_creates_durable_idempotent_operation(monkeypatch):
     assert response.status_code == 202
     assert captured["operation_type"] == "content_studio_autonomous_inspiration"
     assert captured["executor_key"] == "content_studio_autonomous_inspiration"
+    assert captured["cancellation_supported"] is True
     assert captured["idempotency_key"] == "content-studio-autonomous-inspiration:2:3"
     assert captured["metadata"]["request"] == {"provider": "seedream_5_0_pro"}
     assert "BackgroundTasks" not in inspect.signature(
@@ -141,3 +143,29 @@ def test_worker_registry_dispatches_autonomous_executor():
         worker.executors["content_studio_autonomous_inspiration"],
         ContentStudioAutonomousBackgroundExecutor,
     )
+
+
+def test_cancelled_operation_rejects_late_provider_progress():
+    operations = Operations()
+    operations.repository._one_unscoped = lambda operation_id: SimpleNamespace(status="CANCELLED")
+    observer = ContentStudioBackgroundExecutor.operation_observer(
+        operation(), operations, worker_id="worker-cancelled", total=6)
+
+    try:
+        observer({"status": "running", "processedCount": 1, "progress": 16.7})
+    except RuntimeError as error:
+        assert str(error) == "GENERATION_CANCELLED"
+    else:
+        raise AssertionError("Late provider progress was not fenced")
+    assert operations.progress_values == []
+
+
+def test_cancelled_operation_ignores_late_provider_success():
+    operations = Operations()
+    operations.repository._one_unscoped = lambda operation_id: SimpleNamespace(status="CANCELLED")
+    ContentStudioBackgroundExecutor.finish(
+        operation(), operations,
+        {"status": "succeeded", "outputReferences": ["late.png"]},
+    )
+    assert operations.succeeded == []
+    assert operations.failed == []

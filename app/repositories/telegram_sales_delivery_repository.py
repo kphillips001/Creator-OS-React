@@ -15,6 +15,18 @@ class TelegramSalesDeliveryRepository:
     def __init__(self, connection_factory=get_db_connection):
         self.connection_factory = connection_factory
 
+    def require_manual_offer(self, operation_id, intent, payload):
+        with self.connection_factory() as c:
+            row=c.execute("""SELECT 1 FROM telegram_manual_offer_operations m
+                JOIN purchase_intents p ON p.purchase_intent_id=m.purchase_intent_id
+                WHERE m.operation_id=%s AND m.state='SENDING' AND m.purchase_intent_id=%s
+                AND m.creator_profile_id=p.creator_profile_id AND m.fanvue_account_id=p.fanvue_account_id
+                AND m.telegram_user_id=p.telegram_user_id AND m.telegram_chat_id=p.telegram_chat_id
+                AND m.telegram_chat_id=%s AND m.commercial_offering_id=p.commercial_offering_id
+                AND m.telegram_identity_mapping_id IS NOT DISTINCT FROM p.telegram_identity_mapping_id""",
+                (operation_id,intent.purchase_intent_id,payload.telegram_chat_id)).fetchone()
+            if not row:raise ValueError('Persisted operator offer authority is required.')
+
     def get_or_create(self, **values):
         with self.connection_factory() as connection:
             with connection.cursor() as cursor:
@@ -22,15 +34,15 @@ class TelegramSalesDeliveryRepository:
                     """INSERT INTO public.telegram_sales_delivery_operations (
                        operation_id,correlation_id,creator_profile_id,fanvue_account_id,
                        conversation_thread_id,fanvue_user_id,telegram_chat_id,
-                       inbound_telegram_message_id,purchase_intent_id,
+                       inbound_telegram_message_id,manual_offer_operation_id,purchase_intent_id,
                        commercial_offering_id,commercial_publication_id,response_text,
                        delivery_payload,state)
-                       VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,'CREATED')
+                       VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,'CREATED')
                        ON CONFLICT (correlation_id) DO NOTHING RETURNING *""",
                     (uuid4(), values["correlation_id"], values["creator_profile_id"],
                      values["fanvue_account_id"], values["conversation_thread_id"],
                      values["fanvue_user_id"], values["telegram_chat_id"],
-                     values["inbound_telegram_message_id"], values["purchase_intent_id"],
+                     values["inbound_telegram_message_id"], values.get("manual_offer_operation_id"), values["purchase_intent_id"],
                      values["commercial_offering_id"], values["commercial_publication_id"],
                      values["response_text"], json.dumps(values["delivery_payload"])),
                 )
@@ -84,9 +96,11 @@ class TelegramSalesDeliveryRepository:
     def record_provider_evidence(self, operation_id: UUID, evidence):
         return self._one(
             """UPDATE public.telegram_sales_delivery_operations
-               SET delivery_payload=delivery_payload || %s::jsonb,updated_at=NOW()
-               WHERE operation_id=%s AND state='SENDING' RETURNING *""",
-            (json.dumps({"provider_delivery_evidence": dict(evidence)}), operation_id),
+               SET delivery_payload=jsonb_set(COALESCE(delivery_payload,'{}'::jsonb),
+                   '{provider_delivery_evidence}', COALESCE(delivery_payload->'provider_delivery_evidence','{}'::jsonb) || %s::jsonb),updated_at=NOW()
+               WHERE operation_id=%s AND state='SENDING'
+                 AND (NOT %s OR NOT COALESCE(delivery_payload->'provider_delivery_evidence','{}'::jsonb) ? 'transport_route') RETURNING *""",
+            (json.dumps(dict(evidence)), operation_id, 'transport_route' in evidence),
         )
 
     def mark_confirmed(self, operation_id: UUID):

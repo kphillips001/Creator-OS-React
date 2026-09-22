@@ -9,8 +9,8 @@ class MarketTierResourceDecision:
  allowed:bool; operational_status:str; reason:str|None; evidence:dict
 
 class MarketTierResourceGateService:
- def __init__(self,*,tiers=None,accounting=None,repository=None,sample=None):
-  self.tiers=tiers or RelationshipMarketTierRepository();self.accounting=accounting or MarketTierReplyAccountingService();self.repository=repository or MarketTierResourceGateRepository();self.sample=sample or (lambda:random.randint(5,10))
+ def __init__(self,*,tiers=None,accounting=None,repository=None,sample=None,active_sales=None,follow_through=None,value_attention=None):
+  self.tiers=tiers or RelationshipMarketTierRepository();self.accounting=accounting or MarketTierReplyAccountingService();self.repository=repository or MarketTierResourceGateRepository();self.sample=sample or (lambda:random.randint(5,10));self.active_sales=active_sales;self.follow_through=follow_through;self.value_attention=value_attention
  def evaluate(self,*,operation_id,commercial_decision,verified_buyer=False,high_value_prospect=False,**scope):
   row=self.tiers.active(**scope);tier=row.market_tier.value if row else 'UNCLASSIFIED'
   used=self.accounting.today(**scope);budget=None
@@ -21,11 +21,27 @@ class MarketTierResourceGateService:
    if assigned.get('created'):self.repository.event(**scope,operation_id=operation_id,idempotency_key=f"{scope['creator_profile_id']}:{scope['fanvue_account_id']}:{scope['telegram_user_id']}:{scope['telegram_chat_id']}:{local.date()}:MEDIUM_DAILY_BUDGET_ASSIGNED",event_type='MEDIUM_DAILY_BUDGET_ASSIGNED',evidence={'daily_reply_budget':budget,'business_date':str(local.date())})
   elif tier=='LOW':budget=2
   bypass=bool(commercial_decision.commercial_bypass_eligible)
-  evidence={'market_tier':tier,'replies_used_today':used['replies_used_today'],'daily_reply_budget':budget,'business_day_start':used['business_day_start'].isoformat(),'business_day_end':used['business_day_end'].isoformat(),'next_reset_at':used['next_reset_at'].isoformat(),'high_value_prospect':bool(high_value_prospect),'commercial_bypass_evaluated':True,'commercial_bypass_eligible':bypass,'verified_buyer_evaluated':True,'verified_buyer':bool(verified_buyer)}
-  limited=budget is not None and used['replies_used_today']>=budget and not bypass and not verified_buyer
-  event_type=('VERIFIED_BUYER_BYPASS' if verified_buyer and budget is not None else 'COMMERCIAL_BYPASS' if bypass and budget is not None else f'{tier}_EXHAUSTED' if limited else 'BUDGET_CONSULTED')
+  if self.active_sales is None:
+   from app.services.active_sales_opportunity_service import ActiveSalesOpportunityService
+   self.active_sales=ActiveSalesOpportunityService()
+  opportunity=self.active_sales.project(**scope)
+  if self.follow_through is None:
+   from app.repositories.active_offer_follow_through_repository import ActiveOfferFollowThroughRepository
+   self.follow_through=ActiveOfferFollowThroughRepository()
+  nonconversion=self.follow_through.relationship_nonconversion(**scope)
+  if self.value_attention is None:
+   from app.services.customer_value_attention_service import CustomerValueAttentionService
+   self.value_attention=CustomerValueAttentionService()
+  attention=self.value_attention.project(commerce_memory={'schemaVersion':'market-resource-gate','verifiedPurchaseCount':1 if verified_buyer else 0},behavior={'market_tier':tier,'confirmed_post_nudge_nonconversion_count':int(nonconversion.get('nonconversion_count') or 0),'fresh_direct_intent':bypass,'active_unresolved_opportunity':bool(opportunity['active'])})
+  post_nudge_backoff=bool(int(nonconversion.get('nonconversion_count') or 0)>0
+   and not bypass and not verified_buyer
+   and not bool(getattr(commercial_decision,'mandatory_response_obligation',False)))
+  sales_override=bool(opportunity['active'] and budget is not None and used['replies_used_today']>=budget and not verified_buyer and not post_nudge_backoff)
+  evidence={'market_tier':tier,'replies_used_today':used['replies_used_today'],'daily_reply_budget':budget,'business_day_start':used['business_day_start'].isoformat(),'business_day_end':used['business_day_end'].isoformat(),'next_reset_at':used['next_reset_at'].isoformat(),'high_value_prospect':bool(high_value_prospect),'commercial_bypass_evaluated':True,'commercial_bypass_eligible':bypass,'active_sales_opportunity':opportunity,'sales_opportunity_override':sales_override,'post_nudge_nonconversion':nonconversion,'post_nudge_backoff':post_nudge_backoff,'verified_buyer_evaluated':True,'verified_buyer':bool(verified_buyer),'prospect_nurture_budget_status':'EXHAUSTED' if budget is not None and used['replies_used_today']>=budget else 'AVAILABLE'}
+  limited=(budget is not None and used['replies_used_today']>=budget and not bypass and not sales_override and not verified_buyer)
+  event_type=('VERIFIED_BUYER_BYPASS' if verified_buyer and budget is not None else 'SALES_OPPORTUNITY_OVERRIDE' if sales_override else 'COMMERCIAL_BYPASS' if bypass and budget is not None else f'{tier}_EXHAUSTED' if limited else 'BUDGET_CONSULTED')
   self.repository.event(**scope,operation_id=operation_id,idempotency_key=f'{operation_id}:{event_type}',event_type=event_type,evidence=evidence)
-  if not limited:return MarketTierResourceDecision(True,'NONE',None,evidence)
+  if not limited:return MarketTierResourceDecision(True,'SALES_OVERRIDE' if sales_override else 'NONE',None,evidence)
   return MarketTierResourceDecision(False,f'{tier}_MARKET_LIMIT',f'{tier}_MARKET_DAILY_REPLY_BUDGET_EXHAUSTED',evidence)
  def reconsider_after_promotion(self,*,new_tier,high_value_prospect=False,verified_buyer=False,**scope):
   row=self.repository.latest_limited(**scope)

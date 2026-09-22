@@ -1,9 +1,12 @@
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from app.integrations.telegram.bot_api_sender import (
     TELEGRAM_TEXT_LIMIT,
     TelegramBotApiSender,
     TelegramOutboundSendError,
+    TelegramOutboundSendAmbiguousError,
 )
 
 
@@ -14,6 +17,8 @@ class FakeResponse:
         self.raises = raises
 
     def json(self):
+        if self.raises:
+            raise ValueError("unreadable response")
         return self.payload
 
     def raise_for_status(self):
@@ -35,6 +40,14 @@ class RecordingSession:
 
 
 class TelegramBotApiSenderTests(unittest.TestCase):
+    def _send_fixture_asset(self, sender):
+        with TemporaryDirectory() as directory:
+            asset_path = Path(directory) / "fixture.bin"
+            asset_path.write_bytes(b"fixture")
+            return sender.send_asset(
+                chat_id=123456789, asset_path=str(asset_path), message_text="hello",
+            )
+
     def test_sends_exact_plain_text_payload_and_logs_status(self):
         session = RecordingSession(
             FakeResponse({"ok": True, "result": {"message_id": 99}})
@@ -76,6 +89,17 @@ class TelegramBotApiSenderTests(unittest.TestCase):
 
         self.assertEqual(session.calls, [])
 
+    def test_ordinary_text_does_not_change_link_preview_behavior(self):
+        session = RecordingSession(
+            FakeResponse({"ok": True, "result": {"message_id": 100}})
+        )
+        sender = TelegramBotApiSender(bot_token="test-token", session=session)
+        sender.send_text(
+            chat_id=123456789,
+            message_text="ordinary https://creator.example/page",
+        )
+        self.assertNotIn("link_preview_options", session.calls[0][1]["json"])
+
     def test_rejects_empty_and_oversized_text_before_request(self):
         session = RecordingSession()
         sender = TelegramBotApiSender(
@@ -106,10 +130,42 @@ class TelegramBotApiSenderTests(unittest.TestCase):
             session=session,
         )
 
-        with self.assertRaises(TelegramOutboundSendError) as caught:
+        with self.assertRaises(TelegramOutboundSendAmbiguousError) as caught:
             sender.send_text(chat_id=123456789, message_text="hello")
 
         self.assertNotIn("super-secret-token", str(caught.exception))
+
+    def test_media_provider_rejection_preserves_bounded_diagnostics(self):
+        session = RecordingSession(FakeResponse({
+            "ok": False, "error_code": 400,
+            "description": "Bad Request: image dimensions are invalid",
+        }, status_code=400))
+        sender = TelegramBotApiSender(bot_token="test-token", session=session)
+
+        with self.assertRaises(TelegramOutboundSendError) as caught:
+            self._send_fixture_asset(sender)
+
+        message = str(caught.exception)
+        self.assertIn("HTTP 400", message)
+        self.assertIn("error_code 400", message)
+        self.assertIn("image dimensions are invalid", message)
+
+    def test_media_transport_failure_is_acceptance_ambiguous(self):
+        sender = TelegramBotApiSender(
+            bot_token="test-token", session=RecordingSession(raises=True),
+        )
+
+        with self.assertRaises(TelegramOutboundSendAmbiguousError):
+            self._send_fixture_asset(sender)
+
+    def test_unreadable_media_response_is_acceptance_ambiguous(self):
+        sender = TelegramBotApiSender(
+            bot_token="test-token",
+            session=RecordingSession(FakeResponse({}, status_code=502, raises=True)),
+        )
+
+        with self.assertRaises(TelegramOutboundSendAmbiguousError):
+            self._send_fixture_asset(sender)
 
 
 if __name__ == "__main__":

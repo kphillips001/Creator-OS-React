@@ -98,6 +98,9 @@ export const GenerationWorkflowSections = forwardRef<GenerationWorkflowHandle, G
   const [reservedCount, setReservedCount] = useState(request.promptCount);
   const [autonomousRun, setAutonomousRun] = useState(false);
   const [activeOrigin, setActiveOrigin] = useState<GenerationSubmission["origin"] | null>(null);
+  const [stopConfirmation, setStopConfirmation] = useState(false);
+  const [stopping, setStopping] = useState(false);
+  const [stopped, setStopped] = useState(false);
   const completionRef = useRef<((result: GenerationAttemptResult) => void) | null>(null);
   const activeBatchItemIdRef = useRef<string | null>(null);
   const reconnectAttemptedRef = useRef(false);
@@ -136,6 +139,26 @@ export const GenerationWorkflowSections = forwardRef<GenerationWorkflowHandle, G
     setReservedCount(request.promptCount);
     setAutonomousRun(false);
     setActiveOrigin(null);
+    setStopConfirmation(false);
+    setStopping(false);
+    setStopped(false);
+  }
+
+  async function emergencyStop() {
+    if (!runId || stopping) return;
+    setStopping(true);
+    try {
+      await backgroundOperations.cancel(runId);
+      setStopConfirmation(false);
+      setStopped(true);
+      setError("");
+      completionRef.current?.({ accepted: true, reason: "Generation stopped.", stage: "provider", status: "cancelled" });
+      completionRef.current = null;
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Unable to stop generation");
+    } finally {
+      setStopping(false);
+    }
   }
 
   useEffect(() => {
@@ -296,7 +319,13 @@ export const GenerationWorkflowSections = forwardRef<GenerationWorkflowHandle, G
     completionRef.current = null;
   }, [generation, onPlannerBatchItemChange, onRecreateRuntimeChange, recreateRuntime]);
 
-  const active = submitting || Boolean(runId && (!generation || !TERMINAL.has(generation.status)));
+  const active = !stopped && (submitting || Boolean(runId && (!generation || !TERMINAL.has(generation.status))));
+  const emergencyStopAction = active && runId && !runtimeStatusAction ? (
+    <button className="content-studio-stop-control__button" disabled={stopping}
+      onClick={() => setStopConfirmation(true)} type="button">
+      {stopping ? "Stopping..." : "🛑 Emergency Stop"}
+    </button>
+  ) : undefined;
   const inspirationStage = autonomousRun
     ? inspirationProgressStage(generation, submitting, runId)
     : 4;
@@ -330,7 +359,7 @@ export const GenerationWorkflowSections = forwardRef<GenerationWorkflowHandle, G
     return () => window.clearTimeout(timer);
   }, [generation, onStartNewGeneration, request.promptCount, showCompletion]);
   useEffect(() => {
-    if (!runId || !backgroundOperations.recent.some(
+    if (!runId || stopped || !backgroundOperations.recent.some(
       (operation) => operation.operationId === runId && operation.status === "CANCELLED")) return;
     setError("Generation cancelled.");
     const timer = window.setTimeout(() => {
@@ -346,7 +375,7 @@ export const GenerationWorkflowSections = forwardRef<GenerationWorkflowHandle, G
       onStartNewGeneration?.();
     }, TERMINAL_DISMISS_MILLISECONDS);
     return () => window.clearTimeout(timer);
-  }, [backgroundOperations.recent, onStartNewGeneration, request.promptCount, runId]);
+  }, [backgroundOperations.recent, onStartNewGeneration, request.promptCount, runId, stopped]);
   const aggregateProcessed = plannerBatchProgress
     ? plannerBatchProgress.completedIdeas + plannerBatchProgress.failedIdeas
     : 0;
@@ -387,6 +416,7 @@ export const GenerationWorkflowSections = forwardRef<GenerationWorkflowHandle, G
       {workflow === "autonomous" && error && (
         <p className="generation-live__error" role="alert">{error}</p>
       )}
+      {stopped && <div className="content-studio-stopped" role="status"><strong>Generation stopped.</strong><span>Completed images were kept. Remaining images will not be generated.</span><button onClick={() => { reset(); onStartNewGeneration?.(); }} type="button">Start New Generation</button></div>}
       {showInspirationProgress && (
         <InspirationProgressPanel activeStage={inspirationStage} />
       )}
@@ -404,7 +434,7 @@ export const GenerationWorkflowSections = forwardRef<GenerationWorkflowHandle, G
             ? aggregateProcessed / Math.max(1, plannerBatchProgress.totalIdeas) * 100
             : generation?.progress ?? 0}
           status={plannerBatchProgress ? aggregateStatus : singleImageMode && active ? "Generating Ava recreation..." : generation?.message || (active ? `Queued Image 1 of ${slotCount}` : "Ready")}
-          statusAction={runtimeStatusAction}
+          statusAction={runtimeStatusAction ?? emergencyStopAction}
           title="Live Generation"
           tone={plannerBatchProgress
             ? plannerBatchProgress.phase === "complete"
@@ -509,6 +539,7 @@ export const GenerationWorkflowSections = forwardRef<GenerationWorkflowHandle, G
           </section>
         )}
       </section>}
+      {stopConfirmation && <div className="content-studio-stop-dialog" role="presentation"><div aria-labelledby="emergency-stop-title" aria-modal="true" role="dialog"><h2 id="emergency-stop-title">Stop generation?</h2><p>Completed images will be kept. Remaining images will not be generated.</p><footer><button disabled={stopping} onClick={() => setStopConfirmation(false)} type="button">Keep Running</button><button className="content-studio-stop-control__button" disabled={stopping} onClick={() => void emergencyStop()} type="button">Emergency Stop</button></footer></div></div>}
     </>
   );
 });

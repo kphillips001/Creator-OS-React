@@ -122,6 +122,10 @@ class CustomerValueAttentionService:
         post_offer_sexual_count = self._int(
             behavior.get("post_offer_sexual_engagement_count")
         )
+        post_nudge_nonconversion_count = self._int(
+            behavior.get("confirmed_post_nudge_nonconversion_count")
+        )
+        market_tier = str(behavior.get("market_tier") or "UNCLASSIFIED").upper()
         hostility_level = str(behavior.get("hostility_level") or "NONE").upper()
         repeated_hostility = bool(behavior.get("repeated_hostility"))
         explicit_disengagement = bool(behavior.get("explicit_disengagement"))
@@ -324,6 +328,13 @@ class CustomerValueAttentionService:
         optional_reply_suppressed = bool(
             low_cost_active and nurture_used >= nurture_budget
         )
+        post_nudge_backoff = bool(
+            purchase_count == 0
+            and post_nudge_nonconversion_count > 0 and not direct
+        )
+        if post_nudge_backoff:
+            attention="LOW"; effort="COMPRESSED"
+            evidence.append("CONFIRMED_POST_NUDGE_NONCONVERSION")
         nurture_next_at = None
         parsed_last_nurture = self._datetime(last_nurture_response)
         if optional_reply_suppressed and parsed_last_nurture is not None:
@@ -455,6 +466,8 @@ class CustomerValueAttentionService:
         ) else "NORMAL"
         momentum = "HOT" if direct or active_session else "WARM" if meaningful else "COOLING" if backoff else "COLD"
 
+        if post_nudge_backoff:
+            relationship_investment="LOW"
         relationship_discovery = self._relationship_discovery(
             behavior=behavior,
             buyer_status=buyer_status,
@@ -528,10 +541,8 @@ class CustomerValueAttentionService:
             nurture_responses_used=nurture_used,
             nurture_next_optional_response_at=nurture_next_at,
             optional_ordinary_reply_suppressed=optional_reply_suppressed,
-            suppression_reason=(
-                "LOW_COST_NURTURE_DAILY_BUDGET_CONSUMED"
-                if optional_reply_suppressed else None
-            ),
+            suppression_reason=("LOW_COST_NURTURE_DAILY_BUDGET_CONSUMED"
+                                if optional_reply_suppressed else None),
             fresh_commercial_intent_detected=direct,
             nurture_bypassed_for_commercial_intent=nurture_bypass,
             nurture_exited_after_purchase=nurture_exited_after_purchase,

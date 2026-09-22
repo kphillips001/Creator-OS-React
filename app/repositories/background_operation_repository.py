@@ -145,14 +145,19 @@ class BackgroundOperationRepository:
                         percent: float, stage: str | None = None, message: str | None = None,
                         result_reference: str | None = None,
                         metadata: Mapping[str, Any] | None = None) -> BackgroundOperation:
-        row = self._required(
+        row_data = self._execute(
             """UPDATE public.background_operations SET progress_current=%s,progress_total=%s,
                progress_percent=%s,current_stage=COALESCE(%s,current_stage),stage_message=COALESCE(%s,stage_message),
                result_reference=COALESCE(%s,result_reference),metadata=metadata||%s::jsonb,updated_at=NOW()
-               WHERE operation_id=%s RETURNING *""",
+               WHERE operation_id=%s
+                 AND status IN ('QUEUED','RUNNING','WAITING_EXTERNAL','CANCEL_REQUESTED')
+               RETURNING *""",
             (max(0, int(current)), max(0, int(total)), max(0, min(100, float(percent))),
              stage, message, result_reference, json.dumps(dict(metadata or {})), operation_id),
         )
+        if row_data is None:
+            raise ValueError("Operation is terminal; progress was rejected.")
+        row = BackgroundOperation.from_row(row_data)
         self.append_event(operation_id, "PROGRESS", row.status, row.status, stage, message, metadata)
         return row
 
@@ -163,8 +168,12 @@ class BackgroundOperationRepository:
         prior = self._one_unscoped(operation_id)
         if prior is None:
             raise KeyError("Background Operation not found.")
+        if prior.terminal:
+            if prior.status == status:
+                return prior
+            raise ValueError(f"Terminal operation {prior.status} cannot transition to {status}.")
         terminal = status in {"SUCCEEDED", "PARTIAL", "FAILED", "CANCELLED"}
-        row = self._required(
+        row_data = self._execute(
             """UPDATE public.background_operations SET status=%s,current_stage=COALESCE(%s,current_stage),
                stage_message=COALESCE(%s,stage_message),result_reference=COALESCE(%s,result_reference),
                error_code=%s,error_message=%s,metadata=metadata||%s::jsonb,
@@ -174,6 +183,7 @@ class BackgroundOperationRepository:
             (status, stage, message, result_reference, error_code, error_message,
              json.dumps(dict(metadata or {})), terminal, terminal, operation_id),
         )
+        row = BackgroundOperation.from_row(row_data)
         self.append_event(operation_id, status, prior.status, status, stage, message, metadata)
         return row
 
@@ -230,17 +240,59 @@ class BackgroundOperationRepository:
             raise ValueError("This operation cannot be safely cancelled.")
         if operation.terminal:
             return operation
-        next_status = "CANCELLED" if operation.status == "QUEUED" else "CANCEL_REQUESTED"
-        row = self._required(
-            """UPDATE public.background_operations SET status=%s,cancellation_requested_at=NOW(),
-               completed_at=CASE WHEN %s='CANCELLED' THEN NOW() ELSE completed_at END,updated_at=NOW()
-               WHERE operation_id=%s AND creator_profile_id=%s RETURNING *""",
-            (next_status, next_status, operation_id, int(creator_profile_id)),
+        # Cancellation is a durable terminal fence. Provider calls may not be
+        # interruptible, so workers and late callbacks must be unable to
+        # resurrect or advance the parent after this commit.
+        next_status = "CANCELLED"
+        row_data = self._execute(
+            """UPDATE public.background_operations SET status='CANCELLED',
+               cancellation_requested_at=COALESCE(cancellation_requested_at,NOW()),
+               completed_at=COALESCE(completed_at,NOW()),current_stage='CANCELLED',
+               stage_message='Generation stopped by operator. Completed images were preserved.',
+               error_code='USER_CANCELLED',error_message='Generation stopped by operator.',
+               worker_id=NULL,lease_expires_at=NULL,
+               metadata=metadata||'{"cancellationSource":"OPERATOR_EMERGENCY_STOP"}'::jsonb,
+               updated_at=NOW()
+               WHERE operation_id=%s AND creator_profile_id=%s
+                 AND status IN ('QUEUED','RUNNING','WAITING_EXTERNAL','CANCEL_REQUESTED')
+               RETURNING *""",
+            (operation_id, int(creator_profile_id)),
         )
+        if row_data is None:
+            concurrent = self.get(operation_id, creator_profile_id=creator_profile_id)
+            if concurrent is not None and concurrent.terminal:
+                return concurrent
+            raise KeyError("Background Operation not found.")
+        row = BackgroundOperation.from_row(row_data)
         self.append_event(operation_id, next_status, operation.status, next_status,
-                          "CANCELLED" if next_status == "CANCELLED" else operation.current_stage,
-                          "Cancellation requested", {})
+                          "CANCELLED", "Generation stopped by operator.",
+                          {"source": "OPERATOR_EMERGENCY_STOP"})
         return row
+
+    def expire_stale_content_generations(self, *, no_progress_seconds: int = 1800,
+                                         max_age_seconds: int = 14400) -> tuple[BackgroundOperation, ...]:
+        """Fail stale Content Studio work atomically; progressing slow jobs stay alive."""
+        with self.connection_factory() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """UPDATE public.background_operations SET status='FAILED',current_stage='FAILED',
+                   stage_message='Generation stopped after exceeding its lifecycle deadline.',
+                   error_code=CASE WHEN created_at < NOW()-(%s*INTERVAL '1 second')
+                                   THEN 'BATCH_MAX_AGE_TIMEOUT' ELSE 'NO_PROGRESS_TIMEOUT' END,
+                   error_message='Generation exceeded its bounded lifecycle deadline.',
+                   completed_at=NOW(),worker_id=NULL,lease_expires_at=NULL,updated_at=NOW()
+                   WHERE operation_type IN ('content_studio_generation','content_studio_autonomous_inspiration')
+                     AND status IN ('QUEUED','RUNNING','WAITING_EXTERNAL','CANCEL_REQUESTED')
+                     AND (updated_at < NOW()-(%s*INTERVAL '1 second')
+                          OR created_at < NOW()-(%s*INTERVAL '1 second'))
+                   RETURNING *""",
+                (max_age_seconds, no_progress_seconds, max_age_seconds),
+            )
+            rows = cursor.fetchall()
+            for row in rows:
+                self._insert_event(cursor, row["operation_id"], "FAILED", None, "FAILED",
+                                   "FAILED", row["stage_message"],
+                                   {"errorCode": row["error_code"]})
+        return tuple(BackgroundOperation.from_row(row) for row in rows)
 
     def retry(self, operation_id: UUID | str, *, creator_profile_id: int) -> BackgroundOperation:
         operation = self.get(operation_id, creator_profile_id=creator_profile_id)

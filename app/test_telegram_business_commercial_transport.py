@@ -1,3 +1,4 @@
+from app.testing.telegram_transport_fixtures import ReachableTestSender
 import asyncio
 from datetime import datetime, timezone
 from types import SimpleNamespace
@@ -46,7 +47,7 @@ class Connections:
         return self.item if self.item and self.item.usable else None
 
 
-class Sender:
+class Sender(ReachableTestSender):
     def __init__(self): self.calls = []
     def send_text(self, **kwargs):
         self.calls.append(kwargs)
@@ -60,6 +61,18 @@ class Sender:
             sender_business_bot={"id": 8214690576},
             sender={"id": 6432023689},
         )
+    def send_asset(self, **kwargs):
+        self.calls.append(kwargs)
+        return SimpleNamespace(
+            id=702, final_text=kwargs["message_text"],
+            actionable_destination_attached=True,
+            provider_action_verified=True, provider_markup_included=True,
+            provider_markup_verified=True, provider_media_included=True,
+            attachment_mode="TELEGRAM_BUSINESS_MEDIA_INLINE_BUTTON",
+            business_connection_id=kwargs["business_connection_id"],
+            sender_business_bot={"id": 8214690576},
+            sender={"id": 6432023689},
+        )
 
 
 def transport(item=None, *, enabled=True):
@@ -67,6 +80,7 @@ def transport(item=None, *, enabled=True):
     return TelegramBusinessCommercialTransport(
         enabled=enabled, owner_user_id=6432023689, bot_id=8214690576,
         connection_service=Connections(item), sender=sender,
+        peer_observations=SimpleNamespace(evidence=lambda **_: {"is_enabled": True, "can_reply": True, "last_business_inbound_at": datetime.now(timezone.utc)}),
     ), sender
 
 
@@ -104,10 +118,24 @@ def test_business_transport_preserves_unicode_and_authoritative_values():
         "business_connection_id": "bc-1", "chat_id": 7857064998,
         "message_text": "Natural Ava offer", "button_label": "🔓 Unlock",
         "button_url": "https://creator.example/unlock/opaque",
+        "disable_link_preview": True,
         "expected_business_owner_user_id": 6432023689,
         "expected_business_bot_id": 8214690576,
     }]
     assert "https://" not in sender.calls[0]["message_text"]
+
+
+def test_business_transport_preserves_media_caption_and_inline_button():
+    candidate, sender = transport(connection())
+    receipt = candidate.send_asset(
+        chat_id=7857064998, asset_path="safe-teaser.png",
+        message_text="Natural Ava offer", button_label="🔓 Unlock",
+        button_url="https://creator.example/unlock/opaque",
+    )
+    assert receipt.attachment_mode == "TELEGRAM_BUSINESS_MEDIA_INLINE_BUTTON"
+    assert sender.calls[0]["asset_path"] == "safe-teaser.png"
+    assert sender.calls[0]["message_text"] == "Natural Ava offer"
+    assert sender.calls[0]["button_url"] == "https://creator.example/unlock/opaque"
 
 def test_business_transport_rejects_a_different_prepared_connection():
     candidate,sender=transport(connection(connection_id="bc-current"))
@@ -169,6 +197,56 @@ def test_bot_api_verifies_plain_business_text_without_reply_markup():
     assert receipt.actionable_destination_attached is False
 
 
+def test_business_bot_api_disables_preview_and_preserves_unlock_button():
+    provider_payload = provider_result()
+    label = provider_payload["result"]["reply_markup"]["inline_keyboard"][0][0]["text"]
+    http = Http(Response(provider_payload))
+    receipt = TelegramBotApiSender(bot_token="token", session=http).send_text(
+        business_connection_id="bc-1", chat_id=7857064998,
+        message_text="Natural Ava offer", button_label=label,
+        button_url="https://creator.example/unlock/opaque",
+        disable_link_preview=True,
+        expected_business_owner_user_id=6432023689,
+        expected_business_bot_id=8214690576,
+    )
+    request = http.calls[0][1]["json"]
+    assert request["link_preview_options"] == {"is_disabled": True}
+    assert request["reply_markup"]["inline_keyboard"][0][0]["url"] == (
+        "https://creator.example/unlock/opaque"
+    )
+    assert receipt.provider_action_verified is True
+
+
+def test_bot_api_send_photo_verifies_media_caption_and_inline_keyboard(tmp_path):
+    path = tmp_path / "safe-teaser.bin"
+    path.write_bytes(b"safe teaser")
+    payload = provider_result()
+    payload["result"].pop("text")
+    payload["result"].update({
+        "caption": "Natural Ava offer",
+        "photo": [{"file_id": "provider-photo"}],
+    })
+    http = Http(Response(payload))
+    normalizer = SimpleNamespace(is_supported_image=lambda _path: False)
+    receipt = TelegramBotApiSender(
+        bot_token="token", session=http, image_normalizer=normalizer,
+    ).send_asset(
+        business_connection_id="bc-1", chat_id=7857064998,
+        asset_path=str(path), message_text="Natural Ava offer",
+        button_label="🔓 Unlock",
+        button_url="https://creator.example/unlock/opaque",
+        expected_business_owner_user_id=6432023689,
+        expected_business_bot_id=8214690576,
+    )
+    request = http.calls[0][1]
+    assert request["data"]["caption"] == "Natural Ava offer"
+    assert "https://" not in request["data"]["caption"]
+    assert "https://creator.example/unlock/opaque" in request["data"]["reply_markup"]
+    assert receipt.provider_media_included is True
+    assert receipt.provider_markup_verified is True
+    assert receipt.attachment_mode == "TELEGRAM_BUSINESS_MEDIA_INLINE_BUTTON"
+
+
 def test_bot_api_preserves_sanitized_provider_rejection_diagnostics():
     http=Http(Response({"ok":False,"error_code":400,
                         "description":"Bad Request: chat not found"},400))
@@ -182,7 +260,7 @@ def test_bot_api_preserves_sanitized_provider_rejection_diagnostics():
 
 
 def test_peer_usage_missing_is_explicit_and_never_retried():
-    http = Http(Response({"ok": False, "description": "Bad Request: BUSINESS_PEER_USAGE_MISSING"}, 400))
+    http = Http(Response({"ok": False, "error_code": 400, "description": "Bad Request: BUSINESS_PEER_USAGE_MISSING"}, 400))
     sender = TelegramBotApiSender(bot_token="token", session=http)
     with pytest.raises(TelegramBusinessPeerUsageMissingError):
         sender.send_text(chat_id=7857064998, message_text="offer")
@@ -193,12 +271,14 @@ class Allow:
     def check_global_safety(self): return {"allowed": True}
 
 
-class OrdinarySender:
+class OrdinarySender(ReachableTestSender):
     def __init__(self): self.calls=[]
     async def send_text(self, **kwargs): self.calls.append(kwargs); return 99
 
 
-def test_executor_uses_business_only_for_unlock_and_telethon_for_ordinary():
+def test_executor_uses_business_only_for_unlock_and_telethon_for_ordinary(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path/"safe-teaser.png").write_bytes(b"neutral image fixture")
     business, business_sender = transport(connection())
     ordinary = OrdinarySender()
     executor = TelegramDeliveryExecutor(
@@ -206,20 +286,84 @@ def test_executor_uses_business_only_for_unlock_and_telethon_for_ordinary():
     )
     ordinary_result = asyncio.run(executor.execute_async(
         TelegramDeliveryPayload(message_text="hello", delivery_method="text"),
-        context={"chat_id": 7857064998, "transport": ordinary},
+        context={"record_transport_evidence": lambda evidence: evidence, "chat_id": 7857064998, "transport": ordinary},
     ))
     commercial_result = asyncio.run(executor.execute_async(
         TelegramDeliveryPayload(
-            message_text="Natural Ava offer", delivery_method="text",
+            message_text="Natural Ava offer", asset_path="safe-teaser.png",
+            delivery_method="private_ppv_media",
             metadata={"private_chat_unlock_button": {
                 "label": "🔓 Unlock", "url": "https://creator.example/unlock/opaque",
             }},
-        ), context={"chat_id": 7857064998, "transport": ordinary},
+        ), context={"record_transport_evidence": lambda evidence: evidence, "chat_id": 7857064998, "transport": ordinary},
     ))
     assert ordinary_result.metadata["telegram_message_id"] == 99
     assert len(ordinary.calls) == 1
     assert len(business_sender.calls) == 1
-    assert commercial_result.metadata["attachment_mode"] == "TELEGRAM_BUSINESS_INLINE_BUTTON"
+    assert commercial_result.metadata["attachment_mode"] == "TELEGRAM_BUSINESS_MEDIA_INLINE_BUTTON"
+
+
+def test_executor_routes_ppv_teaser_caption_and_button_as_one_business_media_send(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path/"safe-teaser.png").write_bytes(b"neutral image fixture")
+    business, sender = transport(connection())
+    executor = TelegramDeliveryExecutor(
+        global_safety_service=Allow(), business_commercial_transport=business,
+    )
+    result = asyncio.run(executor.execute_async(
+        TelegramDeliveryPayload(
+            message_text="Natural Ava offer", asset_path="safe-teaser.png",
+            delivery_method="private_ppv_media",
+            metadata={"private_chat_unlock_button": {
+                "label": "🔓 Unlock",
+                "url": "https://creator.example/unlock/opaque",
+            }},
+        ), context={"record_transport_evidence": lambda evidence: evidence, "chat_id": 7857064998, "transport": OrdinarySender()},
+    ))
+    assert len(sender.calls) == 1
+    assert sender.calls[0]["asset_path"] == "safe-teaser.png"
+    assert sender.calls[0]["button_url"] not in sender.calls[0]["message_text"]
+    assert result.metadata["provider_media_included"] is True
+    assert result.metadata["provider_markup_verified"] is True
+
+
+def test_executor_rejects_visible_ppv_url_before_provider_send():
+    business, sender = transport(connection())
+    executor = TelegramDeliveryExecutor(
+        global_safety_service=Allow(), business_commercial_transport=business,
+    )
+    with pytest.raises(Exception, match="commerce URL"):
+        asyncio.run(executor.execute_async(
+            TelegramDeliveryPayload(
+                message_text="Unlock: https://creator.example/unlock/opaque",
+                asset_path="safe-teaser.png", delivery_method="private_ppv_media",
+                metadata={"private_chat_unlock_button": {
+                    "label": "🔓 Unlock",
+                    "url": "https://creator.example/unlock/opaque",
+                }},
+            ), context={"record_transport_evidence": lambda evidence: evidence, "chat_id": 7857064998, "transport": OrdinarySender(),
+                        "raise_on_failure": True},
+        ))
+    assert sender.calls == []
+
+
+def test_executor_rejects_automated_text_only_ppv_before_provider_send():
+    business, sender = transport(connection())
+    executor = TelegramDeliveryExecutor(
+        global_safety_service=Allow(), business_commercial_transport=business,
+    )
+    result = asyncio.run(executor.execute_async(
+        TelegramDeliveryPayload(
+            message_text="Natural Ava offer", delivery_method="text",
+            metadata={"private_chat_unlock_button": {
+                "label": "🔓 Unlock",
+                "url": "https://creator.example/unlock/opaque",
+            }},
+        ), context={"record_transport_evidence": lambda evidence: evidence, "chat_id": 7857064998, "transport": OrdinarySender()},
+    ))
+    assert result.executed is False
+    assert result.metadata["failure_code"] == "PRIVATE_PPV_MEDIA_REQUIRED"
+    assert sender.calls == []
 
 
 def test_executor_rejects_local_destination_before_business_send():
@@ -230,11 +374,12 @@ def test_executor_rejects_local_destination_before_business_send():
     with pytest.raises(ValueError, match="CUSTOMER_FACING_DESTINATION_NOT_PUBLIC"):
         asyncio.run(executor.execute_async(
             TelegramDeliveryPayload(
-                message_text="offer", delivery_method="text",
+                message_text="offer", asset_path="safe-teaser.png",
+                delivery_method="private_ppv_media",
                 metadata={"private_chat_unlock_button": {
                     "label": "🔓 Unlock", "url": "http://127.0.0.1:8001/unlock/x",
                 }},
-            ), context={"chat_id": 7857064998, "transport": OrdinarySender(),
+            ), context={"record_transport_evidence": lambda evidence: evidence, "chat_id": 7857064998, "transport": OrdinarySender(),
                         "raise_on_failure": True},
         ))
     assert sender.calls == []
@@ -248,7 +393,7 @@ class Lifecycle:
 class GetSession:
     def __init__(self, updates): self.updates=updates; self.calls=[]
     def get(self, url, **kwargs):
-        self.calls.append((url,kwargs)); return Response({"ok":True,"result":self.updates})
+        self.calls.append((url,kwargs)); return Response({"ok":True,"result":{"url":""} if url.endswith("getWebhookInfo") else self.updates})
 
 
 def test_lifecycle_worker_observes_business_messages_without_conversation_routing():

@@ -3,6 +3,7 @@ from unittest.mock import patch
 
 from app.models.generation_library import GeneratedImageRecord
 from app.services.content_archive_service import ContentArchiveService
+from app.services.generation_library_service import GenerationLibraryService
 from app.services.posted_content_service import PostedContentService
 
 
@@ -133,4 +134,118 @@ def test_posted_content_routes_are_read_only_and_registered():
     }
     assert routes["/api/v1/posted-content"] == {"GET"}
     assert routes["/api/v1/posted-content/{content_id}/media"] == {"GET"}
-    assert all("POST" not in methods and "DELETE" not in methods for methods in routes.values())
+    assert routes["/api/v1/posted-content/{content_id}/move-to-generation-library"] == {"POST"}
+    assert all("DELETE" not in methods for methods in routes.values())
+
+
+def test_moves_published_image_back_with_history_classification_and_lineage(tmp_path):
+    archive = ContentArchiveService(storage_dir=tmp_path / "archive", content_root=tmp_path / "Content")
+    source = tmp_path / "published.png"
+    source.write_bytes(b"published image")
+    original = _record("return-1", source)
+    original = original.__class__(
+        **{**original.__dict__, "generation_recipe_id": "recipe-1",
+           "content_classification": "NSFW", "classification_source": "MANUAL"}
+    )
+    published = archive.archive_published(
+        original, platform="x", caption="Historical caption",
+        metadata={"provider_publication_id": "post-123", "publication_url": "https://example.test/post"},
+    )
+    library = GenerationLibraryService(storage_dir=tmp_path / "library", archive_service=archive)
+    service = PostedContentService(archive, generation_library=library)
+
+    restored_item, replay = service.move_to_generation_library(published.archive_id)
+
+    assert replay is False
+    restored = library.get("return-1")
+    assert restored.status == "active"
+    assert restored.review_state == "restored_from_published"
+    assert restored.generation_date == original.generation_date
+    assert restored.created_at == original.created_at
+    assert restored.generation_metadata["library_entry_reason"] == "PUBLISHED_ARCHIVE_RESTORE"
+    assert restored.generation_metadata["source_publication_archive_id"] == published.archive_id
+    assert restored.generation_metadata["library_entered_at"]
+    assert restored.content_classification == "NSFW"
+    assert restored.classification_source == "MANUAL"
+    assert restored.generation_recipe_id == "recipe-1"
+    assert Path(restored.output_reference).is_file()
+    assert not Path(published.current_file_path).exists()
+    history = next(item for item in archive.list_records() if item.archive_id == published.archive_id)
+    assert history.archive_type == "published_x"
+    assert history.caption == "Historical caption"
+    assert history.metadata["provider_publication_id"] == "post-123"
+    assert history.metadata["publication_url"] == "https://example.test/post"
+    assert history.metadata["current_disposition"] == "generation_library"
+    assert service.list_items() == ()
+    assert restored_item.generation_library_id == "return-1"
+
+    _, replay = service.move_to_generation_library(published.archive_id)
+    assert replay is True
+    assert len(library.list_records()) == 1
+
+
+def test_move_rejects_legacy_or_duplicate_without_changing_published_file(tmp_path):
+    archive = ContentArchiveService(storage_dir=tmp_path / "archive", content_root=tmp_path / "Content")
+    legacy = archive.content_paths()["posted_x_main"] / "legacy.png"
+    legacy.parent.mkdir(parents=True)
+    legacy.write_bytes(b"legacy")
+    service = PostedContentService(
+        archive,
+        generation_library=GenerationLibraryService(
+            storage_dir=tmp_path / "library", archive_service=archive
+        ),
+    )
+    item = service.list_items()[0]
+    assert item.move_eligible is False
+    try:
+        service.move_to_generation_library(item.content_id)
+        assert False, "legacy media must not be movable"
+    except KeyError:
+        pass
+    assert legacy.read_bytes() == b"legacy"
+
+
+def test_backend_failure_rolls_file_and_library_back(tmp_path):
+    archive = ContentArchiveService(storage_dir=tmp_path / "archive", content_root=tmp_path / "Content")
+    source = tmp_path / "failure.png"
+    source.write_bytes(b"failure bytes")
+    published = archive.archive_published(_record("failure-1", source), platform="telegram")
+    library = GenerationLibraryService(storage_dir=tmp_path / "library", archive_service=archive)
+    service = PostedContentService(archive, generation_library=library)
+
+    with patch.object(archive, "mark_published_returned_to_generation", side_effect=OSError("write failed")):
+        try:
+            service.move_to_generation_library(published.archive_id)
+            assert False, "move must fail"
+        except OSError:
+            pass
+
+    assert Path(published.current_file_path).read_bytes() == b"failure bytes"
+    try:
+        library.get("failure-1")
+        assert False, "failed move must not leave a Generation Library record"
+    except KeyError:
+        pass
+    assert len(service.list_items()) == 1
+
+
+def test_duplicate_generation_record_fails_closed_without_moving_publication(tmp_path):
+    archive = ContentArchiveService(storage_dir=tmp_path / "archive", content_root=tmp_path / "Content")
+    source = tmp_path / "duplicate.png"
+    source.write_bytes(b"duplicate bytes")
+    original = _record("duplicate-1", source)
+    published = archive.archive_published(original, platform="x")
+    library = GenerationLibraryService(storage_dir=tmp_path / "library", archive_service=archive)
+    library._append_records((original,))
+
+    try:
+        PostedContentService(archive, generation_library=library).move_to_generation_library(
+            published.archive_id
+        )
+        assert False, "duplicate active record must fail closed"
+    except ValueError as error:
+        assert "already active" in str(error)
+
+    assert Path(published.current_file_path).read_bytes() == b"duplicate bytes"
+    history = next(item for item in archive.list_records() if item.archive_id == published.archive_id)
+    assert "current_disposition" not in history.metadata

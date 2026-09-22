@@ -34,6 +34,17 @@ def candidate(**changes):
         "source_photoshoot_deliverable_id": None,
         "source_bundle_studio_bundle_id": None,
         "standalone_sale_destination": "CHAT",
+        "chat_teaser_id": uuid4(),
+        "chat_teaser_creator_profile_id": 2,
+        "chat_teaser_source_asset_id": 42,
+        "chat_teaser_derived_asset_id": 84,
+        "chat_teaser_derivative_path": __file__,
+        "chat_teaser_distribution_use": "CHAT",
+        "chat_teaser_status": "READY",
+        "chat_teaser_derived_creator_profile_id": 2,
+        "chat_teaser_derived_source_asset_id": "42",
+        "chat_teaser_derived_distribution_use": "CHAT",
+        "chat_teaser_derived_commercial_role": "SINGLE_IMAGE_CHAT_TEASER",
         "asset_ids": [42], "destinations": ["SINGLE_PPV"],
         "publication_id": uuid4(), "provider": "FANVUE",
         "external_product_id": "media-link-1",
@@ -100,6 +111,11 @@ class Ownership:
         )
 
 
+class ReadyPrivatePpv:
+    def evaluate(self, _candidate):
+        return SimpleNamespace(ready=True)
+
+
 def profile(telegram_user_id=22):
     return SimpleNamespace(
         creator_profile_id=2, fanvue_account_id=7,
@@ -109,10 +125,12 @@ def profile(telegram_user_id=22):
     )
 
 
-def select(repository, *, active=None, conversation_context=None, constraints=None):
+def select(repository, *, active=None, conversation_context=None, constraints=None,
+           readiness=None):
     return CommercialOfferingSelectorService(
         repository=repository, clock=lambda: NOW,
         ownership_intelligence=Ownership(repository),
+        private_ppv_readiness_service=(readiness or ReadyPrivatePpv()),
     ).select(
         creator_profile_id=2, telegram_user_id=22,
         customer_profile=profile(), commerce_signal=None,
@@ -122,6 +140,26 @@ def select(repository, *, active=None, conversation_context=None, constraints=No
         ),
         strategy_constraints=constraints,
     )
+
+
+def test_unready_private_ppv_is_excluded_before_any_commercial_state_exists():
+    class NotReadyPrivatePpv:
+        def evaluate(self, _candidate):
+            return SimpleNamespace(
+                ready=False, reason="CHAT_TEASER_FILE_MISSING"
+            )
+
+    repository = Repository((candidate(),))
+    result = select(repository, readiness=NotReadyPrivatePpv())
+
+    assert result.offering_id is None
+    assert result.selection_reason is OfferingSelectionReason.NO_ELIGIBLE_OFFERING
+    assert result.exclusion_reasons == (
+        "PRIVATE_PPV_PRESENTATION_NOT_READY",
+    )
+    assert not hasattr(repository, "create_purchase_intent")
+    assert not hasattr(repository, "issue_unlock_gateway")
+    assert not hasattr(repository, "deliver_to_telegram")
 
 
 def test_price_recovery_excludes_rejected_and_selects_materially_lower_offer():

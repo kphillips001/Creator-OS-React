@@ -12,6 +12,7 @@ from typing import Any, Mapping
 from urllib.parse import urlparse
 
 import requests
+from threading import RLock
 
 from app.config import settings
 from app.models.content_archive import ContentArchiveRecord
@@ -26,6 +27,7 @@ class ContentArchiveService:
     """Owns Content root paths and generated-image lifecycle history."""
 
     DEFAULT_STORAGE_DIR = Path("data") / "content_archive"
+    _records_lock = RLock()
 
     def __init__(
         self,
@@ -520,6 +522,32 @@ class ContentArchiveService:
         if archive_type:
             records = tuple(record for record in records if record.archive_type == archive_type)
         return records
+
+    def mark_published_returned_to_generation(
+        self, archive_id: str, *, current_file_path: str,
+    ) -> ContentArchiveRecord:
+        """Retain publication evidence while changing its current disposition."""
+        with self._records_lock:
+            records = list(self.list_records())
+            target = next((item for item in records if item.archive_id == str(archive_id)), None)
+            if target is None or not target.archive_type.startswith("published_"):
+                raise KeyError(f"Published archive record not found: {archive_id}")
+            returned_at = utc_now()
+            updated = replace(
+                target,
+                current_file_path=str(current_file_path),
+                metadata={
+                    **dict(target.metadata or {}),
+                    "current_disposition": "generation_library",
+                    "returned_to_generation_at": returned_at,
+                },
+                updated_at=returned_at,
+            )
+            self._write_records([
+                updated if item.archive_id == updated.archive_id else item
+                for item in records
+            ])
+            return updated
 
     def _generation_destination(self, archive_record: ContentArchiveRecord) -> Path:
         return self._generation_destination_for_workflow(archive_record.workflow)

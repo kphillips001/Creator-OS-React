@@ -24,6 +24,8 @@ import {
   ChartNoAxesCombined,
   ListFilter,
   SlidersHorizontal,
+  Clock3,
+  CircleDollarSign,
   type LucideIcon,
 } from "lucide-react";
 
@@ -142,11 +144,23 @@ export const navigationGroups: NavigationGroup[] = [
         description: "Ask read-only questions about Ava's business.",
       },
       {
+        label: "Queue",
+        path: "/business/queue",
+        icon: Clock3,
+        description: "Review scheduled and completed business publishing work.",
+      },
+      {
         label: "Archive",
         path: "/system/archive",
         icon: Archive,
         description:
           "Browse Creator_OS history and previously published content.",
+      },
+      {
+        label: "API Balances",
+        path: "/business/api-balances",
+        icon: CircleDollarSign,
+        description: "View authoritative balances and credits reported by connected API providers.",
       },
     ],
   },

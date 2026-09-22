@@ -10,4 +10,6 @@ export type PostedContentItem = {
   prompt: string;
   fileLocation: string;
   mediaUrl: string;
+  mediaType: string;
+  moveEligible: boolean;
 };

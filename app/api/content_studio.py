@@ -117,6 +117,7 @@ class GenerationSubmissionRequest(BaseModel):
     lane: str = "social"
     explicitInput: ExplicitGenerationInput | None = None
     diagnosticTraceId: str | None = None
+    canonicalIdentityContract: dict | None = None
 
 
 class AutonomousInspirationRequest(BaseModel):
@@ -737,10 +738,18 @@ def _execute_content_studio_generation(run_id: str, request: GenerationSubmissio
                 request.explicitInput.planning_metadata()
                 if request.explicitInput else None
             ),
+            canonical_identity_contract=request.canonicalIdentityContract,
             **({"diagnostic_trace_id": request.diagnosticTraceId}
                if request.diagnosticTraceId else {}),
         )
-        update(status="queued", jobId=job.job_id, message="Queued Image 1")
+        update(
+            status="queued", jobId=job.job_id, message="Queued Image 1",
+            **(
+                {"canonicalIdentityContract": job.request.canonical_identity.to_dict()}
+                if getattr(getattr(job, "request", None), "canonical_identity", None)
+                else {}
+            ),
+        )
 
         known_outputs: tuple[str, ...] = ()
 
@@ -1357,7 +1366,7 @@ async def submit_content_studio_generation(
             current_stage="QUEUED",
             stage_message="Generation queued",
             result_location="/studio/content",
-            cancellation_supported=False,
+            cancellation_supported=True,
             metadata={"request": request.model_dump(), "provider": request.provider,
                       "completedCount": 0, "failedCount": 0, "outputReferences": []},
         )
@@ -1410,7 +1419,7 @@ async def submit_autonomous_inspiration(
         progress_total=AutonomousInspirationEngine.IMAGE_COUNT,
         current_stage="PREPARING_INSPIRATION",
         stage_message="Preparing inspiration",
-        result_location="/studio/content", cancellation_supported=False,
+        result_location="/studio/content", cancellation_supported=True,
         metadata={
             "request": request.model_dump(exclude_none=True),
             "provider": request.provider,

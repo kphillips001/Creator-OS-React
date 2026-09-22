@@ -63,3 +63,7 @@ data/generation_library/reviewed_edit_outputs.json
 data/social_publishing/social_history.json
 data/social_publishing/social_publish_items.json
 data/social_publishing/social_queue.json
+
+
+# Temporary build / audit artifacts
+.tmp/

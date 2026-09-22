@@ -35,10 +35,22 @@ class ConversationalMemoryService:
 
     def learn(self, *, creator_profile_id, fanvue_account_id, telegram_user_id,
               telegram_chat_id, message_text, observed_at=None,
-              memory_priority="STANDARD"):
+              memory_priority="STANDARD", bootstrap_unmapped_prospect=True):
         existing = self.repository.get(creator_profile_id=creator_profile_id,
             fanvue_account_id=fanvue_account_id, telegram_user_id=telegram_user_id)
         if existing is None:
+            if not bootstrap_unmapped_prospect:
+                state = self._normalize_state({})
+                result = self.retrieve(
+                    state, message_text, now=observed_at or self._clock(),
+                    memory_priority=memory_priority,
+                )
+                result.setdefault("memoryDiagnostics", {}).update({
+                    "persistenceSource": "MAPPED_CUSTOMER_RELATIONSHIP",
+                    "prospectBootstrapSuppressed": True,
+                    "persistedThisTurn": 0,
+                })
+                return result
             existing = self.repository.observe(creator_profile_id=creator_profile_id,
                 fanvue_account_id=fanvue_account_id, telegram_user_id=telegram_user_id,
                 telegram_chat_id=telegram_chat_id)

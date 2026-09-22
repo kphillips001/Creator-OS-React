@@ -29,6 +29,7 @@ class AvaBotControlService:
                  config_loader: Callable = load_dashboard_config,
                  config_saver: Callable = save_behavior_config,
                  worker_readiness: Callable[[str | int], dict[str, Any]] | None = None,
+                 display_worker_readiness: Callable[[str | int], dict[str, Any]] | None = None,
                  transport_readiness: Callable[[], dict[str, Any]] | None = None) -> None:
         self.runtime = runtime_service or RuntimeControlService()
         self.commerce = commerce_mode_service or CommerceModeService(
@@ -37,6 +38,9 @@ class AvaBotControlService:
         self.config_loader = config_loader
         self.config_saver = config_saver
         self.worker_readiness = worker_readiness or self._default_worker_readiness
+        self.display_worker_readiness = (
+            display_worker_readiness or self._default_display_worker_readiness
+        )
         self.transport_readiness = transport_readiness or self._default_transport_readiness
         self.selling = GlobalSellingPermissionsService(
             config_loader=config_loader, config_saver=config_saver)
@@ -64,6 +68,31 @@ class AvaBotControlService:
                 "ppvOffersEnabled": bool((config.get("modules") or {}).get("ppv_offers_enabled", False)),
                 "role": "compatibility_prerequisites_not_effective_authorities",
             },
+        }
+
+    def read_display(self, *, creator_profile_id: str | int) -> dict[str, Any]:
+        """Return a non-authoritative badge projection without singleton enumeration."""
+        config, _ = self.config_loader()
+        desired = bool(config.get("global_automation_enabled", False))
+        diagnostics = self._prerequisites(
+            creator_profile_id, config=config,
+            worker_reader=self.display_worker_readiness,
+        )
+        failures = [item for item in diagnostics if not item["ready"]]
+        effective = "OFF" if not desired else "ATTENTION" if failures else "ON"
+        return {
+            "avaBot": {
+                "desired": "ON" if desired else "OFF",
+                "effective": effective,
+                "reason": (
+                    "Ava Bot is off." if not desired
+                    else failures[0]["operatorReason"] if failures else None
+                ),
+                "diagnostics": diagnostics,
+                "displayOnly": True,
+            },
+            **self.selling.read(),
+            "displayAuthority": "NON_AUTHORIZING_FRESH_RUNTIME_EVIDENCE",
         }
 
     def turn_on(self, *, creator_profile_id: str | int) -> dict[str, Any]:
@@ -156,10 +185,11 @@ class AvaBotControlService:
 
     def _prerequisites(self, creator_profile_id, *, config,
                        ignore_automation=False, ignore_runtime=False,
-                       ignore_commerce=False, ignore_compatibility=False):
+                       ignore_commerce=False, ignore_compatibility=False,
+                       worker_reader=None):
         runtime = self.runtime.get_state(creator_profile_id=creator_profile_id)
         controlled_enabled = self.controlled.configured_identity() is not None
-        worker = self.worker_readiness(creator_profile_id)
+        worker = (worker_reader or self.worker_readiness)(creator_profile_id)
         transport = self.transport_readiness()
         modules = config.get("modules") or {}
         values = [
@@ -193,6 +223,23 @@ class AvaBotControlService:
             return {
                 "ready": False,
                 "reason": "Worker readiness could not be verified.",
+            }
+
+    @staticmethod
+    def _default_display_worker_readiness(creator_profile_id):
+        from app.services.telegram_worker_readiness_service import TelegramWorkerReadinessService
+        try:
+            return TelegramWorkerReadinessService().read_display(
+                creator_profile_id=creator_profile_id,
+            )
+        except Exception as error:
+            logger.warning(
+                "event=ava_bot_display_readiness_unavailable error=%s",
+                type(error).__name__,
+            )
+            return {
+                "ready": False,
+                "reason": "Worker display status could not be verified.",
             }
 
     @staticmethod

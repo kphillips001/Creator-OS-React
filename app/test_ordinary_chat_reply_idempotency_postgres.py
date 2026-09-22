@@ -17,6 +17,11 @@ from app.repositories.telegram_sales_prospect_repository import TelegramSalesPro
 from app.services.ordinary_chat_reply_service import OrdinaryChatReplyService
 from app.services.telegram_delivery_executor import TelegramDeliveryExecutionResult
 from app.test_private_chat_settlement_postgres import connection_factory, fixture
+from app.repositories.relationships_repository import RelationshipsRepository
+from app.services.ordinary_chat_delivery_reconciliation_service import (
+    OrdinaryChatDeliveryReconciliationService,
+)
+from app.services.relationships_service import RelationshipsService
 
 
 pytestmark = pytest.mark.skipif(not __import__("os").getenv("TEST_DATABASE_URL"),
@@ -50,6 +55,7 @@ def service(worker=None):
     return OrdinaryChatReplyService(
         repository=OrdinaryChatReplyRepository(connection_factory=connection_factory),
         worker_id=worker,
+        generation_authorizer=lambda operation, diagnostics: None,
     )
 
 
@@ -97,7 +103,14 @@ def runtime(adapter, delivery, replies, *, saver=None, purchases=None):
 
 @pytest.fixture(autouse=True)
 def clean_operations():
-    with connection_factory() as c: c.execute("DELETE FROM ordinary_chat_reply_operations")
+    with connection_factory() as c:
+        c.execute("DELETE FROM market_tier_confirmed_reply_events")
+        c.execute("DELETE FROM operator_delivery_resolutions")
+        c.execute("DELETE FROM ordinary_reply_generation_attempts")
+        c.execute("UPDATE telegram_private_inbound_messages SET response_operation_id=NULL")
+        c.execute("DELETE FROM telegram_private_inbound_messages WHERE telegram_user_id=800001")
+        c.execute("DELETE FROM ordinary_generation_budgets")
+        c.execute("DELETE FROM ordinary_chat_reply_operations")
 
 
 def test_first_inbound_and_duplicate_create_one_operation_and_generation():
@@ -196,19 +209,22 @@ def test_definitely_not_sent_retries_same_generated_reply_once():
     assert adapter.calls==1 and first.calls==retry.calls==1
 
 
-def test_generation_exception_fallback_send_failure_is_bounded():
-    item=payload(); sends=0
+def test_generation_exception_is_bounded_without_customer_visible_fallback():
+    item=payload(); deliveries=[]
     for attempt in range(5):
         replies=service(f"generation-{attempt}")
+        delivery=Delivery([]); deliveries.append(delivery)
         asyncio.run(runtime(Adapter(result(item),error=RuntimeError("provider unavailable")),
-                            Delivery([]),replies).handle_payload(item))
+                            delivery,replies).handle_payload(item))
         with connection_factory() as c:
             c.execute("UPDATE ordinary_chat_reply_operations SET next_retry_at=NOW()-INTERVAL '1 second'")
-    with connection_factory() as c: row=c.execute("SELECT state,generation_attempt_count,send_attempt_count FROM ordinary_chat_reply_operations").fetchone()
-    assert row=={"state":"TERMINAL_FAILED","generation_attempt_count":1,"send_attempt_count":5}
+    with connection_factory() as c: row=c.execute("SELECT state,generation_attempt_count,send_attempt_count,response_payload,response_text FROM ordinary_chat_reply_operations").fetchone()
+    assert row=={"state":"TERMINAL_FAILED","generation_attempt_count":1,
+                 "send_attempt_count":0,"response_payload":None,"response_text":None}
+    assert sum(delivery.calls for delivery in deliveries) == 0
 
 
-def test_generated_exception_fallback_recovers_with_one_eventual_reply():
+def test_generation_exception_does_not_restart_full_pipeline():
     item=payload(); first=Delivery([])
     asyncio.run(runtime(Adapter(result(item),error=RuntimeError("temporary provider failure")),
                         first,service("generation-fail")).handle_payload(item))
@@ -217,34 +233,40 @@ def test_generated_exception_fallback_recovers_with_one_eventual_reply():
     recovered_adapter=Adapter(result(item)); delivery=Delivery([execution(9060)])
     asyncio.run(runtime(recovered_adapter,delivery,service("generation-recovered")).handle_payload(item))
     with connection_factory() as c: row=c.execute("SELECT state,generation_attempt_count,send_attempt_count FROM ordinary_chat_reply_operations").fetchone()
-    assert row=={"state":"SENT_CONFIRMED","generation_attempt_count":1,"send_attempt_count":2}
-    assert recovered_adapter.calls==0 and delivery.calls==1
+    assert row=={"state":"TERMINAL_FAILED","generation_attempt_count":1,"send_attempt_count":0}
+    assert first.calls==0 and recovered_adapter.calls==0 and delivery.calls==0
 
 
-def test_empty_unsent_generation_can_be_safely_requeued_once():
+def test_empty_unsent_generation_cannot_restart_full_pipeline():
     item=payload(); replies=service("empty-recovery"); operation,_=replies.begin(item)
     empty=replace(result(item), response_text="", delivery_payload={})
     stored=replies.generated(replies.claim_generation(operation),empty)
-    assert stored is not None and stored.state.value=="GENERATED"
+    assert stored is not None and stored.state.value=="TERMINAL_FAILED"
+    assert stored.response_payload is None and stored.response_text is None
+    assert stored.send_attempt_count == 0
     recovered=replies.requeue_empty_generation(
         stored, reason="generation_runtime_encoding_failure",
     )
-    # Empty unblocked output receives the Session 1 bounded fallback; the
-    # legacy recovery call remains a safe no-op.
+    # Empty output is an internal generation failure. It never becomes a
+    # customer-visible fallback and the legacy generated-row recovery is inert.
     assert recovered is None
+    with connection_factory() as c:
+        c.execute("UPDATE ordinary_chat_reply_operations SET next_retry_at=NOW()-INTERVAL '1 second'")
     delivery=Delivery([execution(9061)])
     asyncio.run(runtime(Adapter(result(item)),delivery,service("empty-retry")).handle_payload(item))
     with connection_factory() as c:
         row=c.execute("SELECT state,generation_attempt_count,send_attempt_count FROM ordinary_chat_reply_operations").fetchone()
-    assert row=={"state":"SENT_CONFIRMED","generation_attempt_count":1,"send_attempt_count":1}
+    assert row=={"state":"TERMINAL_FAILED","generation_attempt_count":1,"send_attempt_count":0}
 
 
-def test_empty_engine_exception_suppression_can_be_guardedly_retried_once():
+def test_empty_engine_exception_cannot_restart_full_pipeline():
     item=payload(); replies=service("engine-exception-recovery"); operation,_=replies.begin(item)
     blocked=replace(result(item), response_text="", delivery_payload={}, blocked=True,
                     error_code="decision_engine_exception")
     stored=replies.generated(replies.claim_generation(operation), blocked)
-    assert stored.state.value=="GENERATED"
+    assert stored.state.value=="TERMINAL_FAILED"
+    assert stored.response_payload is None and stored.response_text is None
+    assert stored.send_attempt_count == 0
     recovered=replies.requeue_suppressed_engine_exception(
         stored, reason="repaired_customer_value_durable_memory_boundary",
     )
@@ -253,11 +275,54 @@ def test_empty_engine_exception_suppression_can_be_guardedly_retried_once():
     assert replies.requeue_suppressed_engine_exception(
         stored, reason="duplicate_release",
     ) is None
+    with connection_factory() as c:
+        c.execute("UPDATE ordinary_chat_reply_operations SET next_retry_at=NOW()-INTERVAL '1 second'")
     delivery=Delivery([execution(9062)])
     asyncio.run(runtime(Adapter(result(item)),delivery,service("engine-exception-retry")).handle_payload(retry_payload))
     with connection_factory() as c:
         row=c.execute("SELECT state,generation_attempt_count,send_attempt_count FROM ordinary_chat_reply_operations").fetchone()
-    assert row=={"state":"SENT_CONFIRMED","generation_attempt_count":1,"send_attempt_count":1}
+    assert row=={"state":"TERMINAL_FAILED","generation_attempt_count":1,"send_attempt_count":0}
+
+
+def test_engine_failure_persists_only_bounded_semantic_and_progression_diagnostics():
+    item = payload()
+    replies = service("diagnostic-persistence")
+    operation, _ = replies.begin(item)
+    claimed = replies.claim_generation(operation)
+    blocked = replace(
+        result(item), response_text="", delivery_payload={}, blocked=True,
+        error_code="decision_engine_exception",
+        diagnostic_metadata={
+            "currentTurnSemanticClassification": {
+                "authority": "CurrentTurnSemanticClassificationService",
+                "status": "AVAILABLE",
+                "correlationId": f"telegram:{item.telegram_chat_id}:{item.message_id}",
+                "result": {"sexual_engagement": True, "confidence": 0.95},
+            },
+            "conversationProgressionFailure": {
+                "candidateDialogueFunction": "OBSERVATION",
+                "rewriteAttempted": True,
+                "finalBlockingReasons": [
+                    "SEQUENTIAL_LOW_NOVELTY_DIALOGUE_FUNCTION_LOOP"
+                ],
+            },
+            "providerPrivatePayload": {"secret": "must-not-persist"},
+        },
+    )
+
+    stored = replies.generated(claimed, blocked)
+
+    evidence = stored.delivery_payload["generationFailureDiagnostics"]
+    assert set(evidence) == {
+        "currentTurnSemanticClassification", "conversationProgressionFailure",
+    }
+    assert evidence["currentTurnSemanticClassification"]["result"][
+        "sexual_engagement"
+    ] is True
+    assert evidence["conversationProgressionFailure"]["rewriteAttempted"] is True
+    assert "providerPrivatePayload" not in str(stored.delivery_payload)
+    assert stored.generation_attempt_count == 1
+    assert stored.send_attempt_count == 0
 
 
 def test_blocked_empty_generation_is_terminal_suppressed_and_never_replayed():
@@ -311,6 +376,252 @@ def test_blocked_empty_generation_is_terminal_suppressed_and_never_replayed():
     assert first_delivery.calls == replay_delivery.calls == 0
     assert purchases.calls == 0
     assert service("restart").recover_startup() == []
+
+
+def _terminal_generated_recovery_fixture(*, newer=False, delivered=False):
+    values = fixture()
+    repository = OrdinaryChatReplyRepository(connection_factory=connection_factory)
+    inbound = TelegramInboundPayload(
+        telegram_user_id=values["telegram"], telegram_chat_id=values["telegram"],
+        message_text="current customer message", message_id=71001,
+        received_at=datetime.now(timezone.utc),
+    )
+    operation, _ = OrdinaryChatReplyService(repository=repository).begin(inbound)
+    with connection_factory() as connection:
+        connection.execute("""UPDATE ordinary_chat_reply_operations SET
+            state='TERMINAL_FAILED',response_payload='{"response_text":"ready"}'::jsonb,
+            response_text='ready',generation_attempt_count=1,send_attempt_count=5,
+            max_send_attempts=5,failed_at=NOW(),last_error='prior deterministic block'
+            WHERE operation_id=%s""", (operation.operation_id,))
+        if newer:
+            connection.execute("""INSERT INTO ordinary_chat_reply_operations(
+                operation_id,telegram_account_scope,telegram_chat_id,
+                inbound_telegram_message_id,inbound_sender_telegram_user_id,
+                correlation_id,state,inbound_message_text,inbound_received_at)
+                VALUES(%s,'AVA_TELETHON_PRIVATE',%s,71002,%s,%s,
+                       'PENDING_GENERATION','newer',NOW())""", (
+                uuid4(),values["telegram"],values["telegram"],str(uuid4())))
+        if delivered:
+            connection.execute("""INSERT INTO ordinary_chat_reply_operations(
+                operation_id,telegram_account_scope,telegram_chat_id,
+                inbound_telegram_message_id,inbound_sender_telegram_user_id,
+                correlation_id,state,response_payload,response_text,
+                outbound_telegram_message_id,sent_confirmed_at,inbound_received_at)
+                VALUES(%s,'AVA_TELETHON_PRIVATE',%s,71000,%s,%s,
+                       'SENT_CONFIRMED','{}'::jsonb,'already answered',99001,NOW(),NOW())""", (
+                uuid4(),values["telegram"],values["telegram"],str(uuid4())))
+    return values, repository, operation
+
+
+def test_terminal_generated_reply_can_be_authorized_once_without_regeneration():
+    values, repository, operation = _terminal_generated_recovery_fixture()
+
+    recovered = repository.recover_terminal_generated_for_delivery(
+        operation_id=operation.operation_id,
+        creator_profile_id=values["creator"], fanvue_account_id=values["account"],
+        telegram_user_id=values["telegram"], telegram_chat_id=values["telegram"],
+        inbound_message_id=71001, approved_by="operator",
+        idempotency_key="recovery-1",
+    )
+    duplicate = repository.recover_terminal_generated_for_delivery(
+        operation_id=operation.operation_id,
+        creator_profile_id=values["creator"], fanvue_account_id=values["account"],
+        telegram_user_id=values["telegram"], telegram_chat_id=values["telegram"],
+        inbound_message_id=71001, approved_by="operator",
+        idempotency_key="recovery-1",
+    )
+
+    assert recovered.state.value == "RETRYABLE"
+    assert recovered.response_text == "ready"
+    assert recovered.generation_attempt_count == 1
+    assert recovered.send_attempt_count == 0
+    assert recovered.max_send_attempts == 1
+    assert duplicate is None
+
+
+@pytest.mark.parametrize("newer,delivered", [(True, False), (False, True)])
+def test_terminal_generated_recovery_fails_closed_when_stale_or_already_answered(
+        newer, delivered):
+    values, repository, operation = _terminal_generated_recovery_fixture(
+        newer=newer, delivered=delivered)
+
+    assert repository.recover_terminal_generated_for_delivery(
+        operation_id=operation.operation_id,
+        creator_profile_id=values["creator"], fanvue_account_id=values["account"],
+        telegram_user_id=values["telegram"], telegram_chat_id=values["telegram"],
+        inbound_message_id=71001, approved_by="operator",
+        idempotency_key="recovery-blocked",
+    ) is None
+
+
+def test_deterministic_delivery_block_stops_after_one_claim_and_keeps_reason():
+    item = payload()
+    replies = service("deterministic-block")
+    blocked_delivery = Delivery([TelegramDeliveryExecutionResult(
+        status="blocked", executed=False, delivery_method="text",
+        blocking_reason="GLOBAL_AVA_BOT_ATTENTION",
+        metadata={"execution_state": "blocked"},
+    )])
+
+    asyncio.run(runtime(
+        Adapter(result(item)), blocked_delivery, replies,
+    ).handle_payload(item))
+
+    with connection_factory() as connection:
+        row = connection.execute("""SELECT state,send_attempt_count,next_retry_at,
+            last_error,delivery_payload FROM ordinary_chat_reply_operations""").fetchone()
+    assert row["state"] == "RETRYABLE"
+    assert row["send_attempt_count"] == 1
+    assert row["next_retry_at"] is None
+    assert row["last_error"] == (
+        "deterministic_delivery_block:GLOBAL_AVA_BOT_ATTENTION")
+    assert row["delivery_payload"]["deterministicDeliveryBlock"][
+        "transportAttempted"] is False
+
+
+def test_mapping_only_scheduling_and_uncertain_reconciliation_are_canonical():
+    values = fixture()
+    sent_at = datetime.now(timezone.utc)
+    operation_id = uuid4()
+    delivered_text = "Existing Telegram delivery"
+    with connection_factory() as connection:
+        connection.execute("""CREATE TABLE IF NOT EXISTS telegram_operator_message_operations(
+            operation_id UUID PRIMARY KEY,creator_profile_id BIGINT,
+            fanvue_account_id BIGINT,telegram_user_id BIGINT,telegram_chat_id BIGINT,
+            state TEXT,message_text TEXT,confirmed_at TIMESTAMPTZ,
+            outbound_telegram_message_id BIGINT)""")
+        connection.execute("""CREATE TABLE IF NOT EXISTS conversation_attention_acknowledgements(
+            acknowledgement_id UUID PRIMARY KEY,occurrence_id TEXT,
+            creator_profile_id BIGINT,fanvue_account_id BIGINT,
+            telegram_user_id BIGINT,telegram_chat_id BIGINT,
+            triggering_inbound_message_id BIGINT,acknowledged_at TIMESTAMPTZ,
+            acknowledged_by TEXT,revoked_at TIMESTAMPTZ)""")
+        connection.execute("""CREATE TABLE IF NOT EXISTS telegram_relationship_market_tiers(
+            market_tier_id UUID PRIMARY KEY,creator_profile_id BIGINT,
+            fanvue_account_id BIGINT,telegram_user_id BIGINT,telegram_chat_id BIGINT,
+            market_tier TEXT,removed_at TIMESTAMPTZ)""")
+        connection.execute(
+            "DELETE FROM telegram_sales_prospects WHERE telegram_user_id=%s",
+            (values["telegram"],),
+        )
+        connection.execute("""INSERT INTO telegram_identity_map(
+            telegram_user_id,telegram_chat_id,fanvue_account_id,
+            local_fanvue_user_id,external_fanvue_user_uuid,is_active,
+            verification_status,verification_method,verified_at,verified_by)
+            VALUES(%s,%s,%s,%s,%s,TRUE,'VERIFIED','TEST',NOW(),'TEST')""", (
+            values["telegram"], values["telegram"], values["account"],
+            values["user"], values["buyer_uuid"],
+        ))
+        connection.execute("""INSERT INTO ordinary_chat_reply_operations(
+            operation_id,telegram_account_scope,telegram_chat_id,
+            inbound_telegram_message_id,inbound_sender_telegram_user_id,
+            correlation_id,state,inbound_message_text,inbound_received_at,
+            next_retry_at,last_error)
+            VALUES(%s,'AVA_TELETHON_PRIVATE',%s,72001,%s,%s,'RETRYABLE',
+                   'hello',NOW(),NOW()+INTERVAL '10 minutes','availability_deferred')""", (
+            operation_id, values["telegram"], values["telegram"], str(uuid4()),
+        ))
+    repository = RelationshipsRepository(connection_factory=connection_factory)
+    inbox = repository.inbox_state(
+        creator_profile_id=values["creator"], fanvue_account_id=values["account"])
+    projected = RelationshipsService._operational_projection(inbox[values["telegram"]])
+    assert projected["operationalStatus"] == "REPLY_SCHEDULED"
+    assert len([key for key in inbox if key == values["telegram"]]) == 1
+
+    with connection_factory() as connection:
+        connection.execute("""UPDATE ordinary_chat_reply_operations SET
+            state='SEND_UNCERTAIN',response_payload=%s::jsonb,response_text='stale',
+            delivery_payload=%s::jsonb,generation_attempt_count=1,send_attempt_count=1,
+            next_retry_at=NULL,sending_at=%s-INTERVAL '2 seconds',uncertain_at=%s+INTERVAL '2 seconds',
+            last_error='worker_restarted_during_provider_send'
+            WHERE operation_id=%s""", (
+            __import__('json').dumps({"response_text": "stale", "delivery_payload": {
+                "message_text": delivered_text}}),
+            __import__('json').dumps({"message_text": delivered_text,
+                "provider_delivery_evidence": {"telegram_message_id": 99001}}),
+            sent_at, sent_at, operation_id,
+        ))
+    service = OrdinaryChatDeliveryReconciliationService(repository=
+        OrdinaryChatReplyRepository(connection_factory=connection_factory))
+    scope = dict(
+        operation_id=operation_id, creator_profile_id=values["creator"],
+        fanvue_account_id=values["account"], telegram_user_id=values["telegram"],
+        telegram_chat_id=values["telegram"], inbound_message_id=72001,
+        expected_text=delivered_text, idempotency_key="mapping-only-reconcile",
+    )
+    evidence = dict(telegram_message_id=99001, telegram_chat_id=values["telegram"],
+        telegram_sender_id=777, telegram_sent_at=sent_at,
+        customer_visible_text=delivered_text, outbound=True,
+        evidence_source="ISOLATED_TELEGRAM_HISTORY")
+    assert service.reconcile(external_evidence={**evidence,
+        "telegram_chat_id": values["telegram"] + 1},
+        authorized_sender_id=777, **scope) is None
+    assert service.reconcile(external_evidence={**evidence,
+        "telegram_sender_id": 778}, authorized_sender_id=777, **scope) is None
+    assert service.reconcile(external_evidence={**evidence,
+        "telegram_message_id": 99002}, authorized_sender_id=777, **scope) is None
+    assert service.reconcile(external_evidence=evidence, authorized_sender_id=777,
+        **{**scope, "fanvue_account_id": values["account"] + 1}) is None
+    first = service.reconcile(external_evidence=evidence, authorized_sender_id=777, **scope)
+    second = service.reconcile(external_evidence=evidence, authorized_sender_id=777, **scope)
+    assert first.state.value == second.state.value == "SENT_CONFIRMED"
+    assert first.outbound_telegram_message_id == 99001
+    assert first.response_text == delivered_text
+    assert first.uncertain_at is None and first.next_retry_at is None
+    assert service.reconcile(external_evidence={**evidence,
+        "customer_visible_text": "mismatch"}, authorized_sender_id=777, **scope) is None
+    messages = repository.messages(creator_profile_id=values["creator"],
+        fanvue_account_id=values["account"], telegram_user_id=values["telegram"])
+    assert any(item["direction"] == "AVA" and item["content"] == delivered_text
+               and item["telegram_message_id"] == 99001 for item in messages)
+    final_inbox = repository.inbox_state(creator_profile_id=values["creator"],
+        fanvue_account_id=values["account"])[values["telegram"]]
+    assert RelationshipsService._operational_projection(final_inbox)[
+        "operationalStatus"] == "NONE"
+    with connection_factory() as connection:
+        assert connection.execute("""SELECT count(*) n FROM telegram_sales_prospects
+            WHERE telegram_user_id=%s""", (values["telegram"],)).fetchone()["n"] == 0
+        marker = connection.execute("""SELECT delivery_payload#>>
+            '{optionalPersistence,activeOfferFollowThrough}' status
+            FROM ordinary_chat_reply_operations WHERE operation_id=%s""",
+            (operation_id,)).fetchone()["status"]
+        assert marker in {"UNAVAILABLE", "NOT_APPLICABLE", "RECORDED"}
+
+
+def test_missing_optional_follow_through_table_cannot_rollback_confirmation():
+    values = fixture()
+    operation_id = uuid4()
+    with connection_factory() as connection:
+        optional_present = connection.execute(
+            "SELECT to_regclass('public.active_offer_follow_through_events') present"
+        ).fetchone()["present"]
+        connection.execute("""INSERT INTO ordinary_chat_reply_operations(
+            operation_id,telegram_account_scope,telegram_chat_id,
+            inbound_telegram_message_id,inbound_sender_telegram_user_id,
+            correlation_id,state,response_payload,response_text,delivery_payload,
+            generation_attempt_count,send_attempt_count,claim_owner,claimed_at,
+            lease_expires_at,inbound_message_text,inbound_received_at,sending_at)
+            VALUES(%s,'AVA_TELETHON_PRIVATE',%s,73001,%s,%s,'SENDING',
+                   '{"response_text":"confirmed"}','confirmed',
+                   '{"message_text":"confirmed"}',1,1,'optional-test',NOW(),
+                   NOW()+INTERVAL '1 minute','hello',NOW(),NOW())""", (
+            operation_id, values["telegram"], values["telegram"], str(uuid4()),
+        ))
+    confirmed = OrdinaryChatReplyRepository(
+        connection_factory=connection_factory).confirm_sent(
+            operation_id, owner="optional-test", telegram_message_id=99101,
+        )
+    assert confirmed.state.value == "SENT_CONFIRMED"
+    assert confirmed.outbound_telegram_message_id == 99101
+    with connection_factory() as connection:
+        row = connection.execute("""SELECT state,outbound_telegram_message_id,
+            delivery_payload#>>'{optionalPersistence,activeOfferFollowThrough}' status
+            FROM ordinary_chat_reply_operations WHERE operation_id=%s""",
+            (operation_id,)).fetchone()
+    assert row["state"] == "SENT_CONFIRMED"
+    assert row["outbound_telegram_message_id"] == 99101
+    assert row["status"] == ("UNAVAILABLE" if optional_present is None
+                              else "NOT_APPLICABLE")
 
 
 def test_prospect_inbound_count_uses_durable_unique_inbound_operations():
@@ -432,24 +743,26 @@ def test_behavior_evidence_counts_semantic_nonpayment_and_browsing():
     assert evidence["idle_browsing_signal_count"] == 1
 
 
-def test_commercial_namespace_is_suppressed_without_collision():
+def test_commercial_payload_without_current_authority_is_not_delivered():
     item=payload(); generated=result(item)
     purchases=SimpleNamespace(create_before_delivery=lambda *_:SimpleNamespace(
             purchase_intent_id=uuid4()),
         confirm_delivery=lambda *_args,**_kwargs:None)
-    asyncio.run(runtime(Adapter(generated),Delivery([execution(9050)]),service("ordinary"),purchases=purchases).handle_payload(item))
+    delivery=Delivery([execution(9050)])
+    asyncio.run(runtime(Adapter(generated),delivery,service("ordinary"),purchases=purchases).handle_payload(item))
     with connection_factory() as c:
         row=c.execute("""SELECT state,correlation_id,response_payload,
             send_attempt_count FROM ordinary_chat_reply_operations""").fetchone()
         count=c.execute(
             "SELECT count(*) n FROM ordinary_chat_reply_operations"
         ).fetchone()["n"]
-    assert row["state"]=="SENT_CONFIRMED"
+    assert row["state"]=="RETRYABLE"
     assert row["correlation_id"].startswith("ordinary_reply:")
     assert row["response_payload"]["diagnostic_metadata"][
         "commercial_payload_composed"
     ] is True
-    assert row["send_attempt_count"] == 1 and count == 1
+    assert row["send_attempt_count"] == 0 and count == 1
+    assert delivery.calls == 0
 
 
 def test_stable_key_is_account_scope_chat_and_inbound_message():
@@ -522,8 +835,10 @@ def test_explicit_terminal_telegram_error_is_never_retryable():
 def test_startup_recovery_changes_only_inflight_sending():
     replies=service("startup")
     operations=[]
-    for _ in range(3):
-        item=payload(); operation,_=replies.begin(item)
+    for offset in range(3):
+        item=replace(payload(message_id=700000+offset),
+            telegram_user_id=800001+offset,telegram_chat_id=800001+offset)
+        operation,_=replies.begin(item)
         operations.append(replies.generated(replies.claim_generation(operation),result(item)))
     sending=replies.claim_send(operations[0])
     confirmed_claim=replies.claim_send(operations[1]); replies.confirmed(confirmed_claim,9070)

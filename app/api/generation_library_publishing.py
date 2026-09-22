@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from typing import Literal
 
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
@@ -47,6 +48,7 @@ class PublishRequest(BaseModel):
     xThreadCtaEnabled: bool = True
     xThreadCtaText: str = ""
     xThreadCtaUrl: str = "https://avablackthorne.com/me"
+    xThreadCtaTiming: Literal["ASAP", "DELAY_30_60"] = "DELAY_30_60"
     publishOperationId: str | None = None
 
 
@@ -127,6 +129,7 @@ def publish(generated_image_id: str, request: PublishRequest):
             x_thread_cta_enabled=request.xThreadCtaEnabled,
             x_thread_cta_text=request.xThreadCtaText,
             x_thread_cta_url=request.xThreadCtaUrl,
+            x_thread_cta_timing=request.xThreadCtaTiming,
             publish_operation_id=request.publishOperationId,
             fanvue_account_id=int(_current_account_id() or 0),
         )

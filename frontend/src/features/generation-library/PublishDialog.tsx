@@ -37,6 +37,7 @@ export function PublishDialog({ record, onClose, onPublished }: {
   const [xThreadCtaEnabled, setXThreadCtaEnabled] = useState(true);
   const [xThreadCtaText, setXThreadCtaText] = useState("");
   const [xThreadCtaUrl, setXThreadCtaUrl] = useState("https://avablackthorne.com/me");
+  const [xThreadCtaTiming, setXThreadCtaTiming] = useState<"ASAP" | "DELAY_30_60">("DELAY_30_60");
   const publishOperationId = useRef("");
   const [sameXCaption, setSameXCaption] = useState(true);
   const [xDrafts, setXDrafts] = useState<Record<string, XCaptionDraft>>({});
@@ -155,7 +156,7 @@ export function PublishDialog({ record, onClose, onPublished }: {
       destination, caption, captionResultId, selectedGeneratedCaption,
       ctaEnabled, selectedCtas: ctaEnabled ? (["VAULT", "CHAT", "TIP"] as TelegramCta[]).filter((value) => selectedCtas.includes(value)) : [],
       ...(destination === "x" ? {
-        xAutoRepliesEnabled, xThreadCtaEnabled, xThreadCtaText, xThreadCtaUrl,
+        xAutoRepliesEnabled, xThreadCtaEnabled, xThreadCtaText, xThreadCtaUrl, xThreadCtaTiming,
         publishOperationId: publishOperationId.current,
       } : {}),
       ...(destination === "x" ? { xTargets: selectedXAccounts.map((accountName) => {
@@ -228,6 +229,7 @@ export function PublishDialog({ record, onClose, onPublished }: {
               {(context.xAccounts || []).filter(({ accountName }) => accountName !== "AvaBlackthorneX").map((account) => <label key={account.accountName}><input checked={selectedXAccounts.includes(account.accountName)} disabled={busy} onChange={(event) => toggleXAccount(account.accountName, event.target.checked)} type="checkbox" /><span>{account.label}</span></label>)}
               <label><input checked={xAutoRepliesEnabled} disabled={busy} onChange={(event) => setXAutoRepliesEnabled(event.target.checked)} type="checkbox" /><span>Enable X-AUTO replies</span></label>
               <label><input checked={xThreadCtaEnabled} disabled={busy} onChange={(event) => setXThreadCtaEnabled(event.target.checked)} type="checkbox" /><span>Add Telegram CTA as thread</span></label>
+              {xThreadCtaEnabled && <fieldset className="publish-dialog__cta-timing"><legend>CTA timing</legend><label><input checked={xThreadCtaTiming === "ASAP"} disabled={busy} name="x-thread-cta-timing" onChange={() => setXThreadCtaTiming("ASAP")} type="radio" /><span>Post ASAP</span></label><label><input checked={xThreadCtaTiming === "DELAY_30_60"} disabled={busy} name="x-thread-cta-timing" onChange={() => setXThreadCtaTiming("DELAY_30_60")} type="radio" /><span>Delay 30–60 min</span></label></fieldset>}
             </div>}</section>
             {destination === "x" && xThreadCtaEnabled && <section className="publish-dialog__telegram-options"><label className="publish-dialog__editor"><span>CTA text</span><input disabled={busy} onChange={(event) => setXThreadCtaText(event.target.value)} type="text" value={xThreadCtaText} /></label><label className="publish-dialog__editor"><span>CTA URL</span><input disabled={busy} onChange={(event) => setXThreadCtaUrl(event.target.value)} type="url" value={xThreadCtaUrl} /></label></section>}
             {destination === "x" && selectedXAccounts.length === 2 && <section className="publish-dialog__telegram-options"><label><input checked={sameXCaption} disabled={busy} onChange={(event) => setSameXCaption(event.target.checked)} type="checkbox" /> Use same caption for both accounts</label></section>}

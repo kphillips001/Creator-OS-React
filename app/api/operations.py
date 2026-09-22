@@ -111,6 +111,11 @@ def operations_overview():
     return jsonable_encoder(_workspace_service().overview(account_id=_account_id()))
 
 
+@router.get("/schema-certification")
+def operations_schema_certification():
+    return jsonable_encoder(_workspace_service().schema_certification())
+
+
 @router.get("/runtime")
 def operations_runtime():
     return jsonable_encoder(_workspace_service().runtime(account_id=_account_id()))
@@ -154,6 +159,14 @@ def update_operations_module_switch(module: str, payload: ModuleSwitchUpdate):
 def read_global_controls():
     return jsonable_encoder(
         _global_controls_service().read(creator_profile_id=_account_id())
+    )
+
+
+@router.get("/global-controls/display-status")
+def read_global_controls_display_status():
+    """Non-authorizing projection for fast dashboard display only."""
+    return jsonable_encoder(
+        _global_controls_service().read_display(creator_profile_id=_account_id())
     )
 
 

@@ -1,3 +1,6 @@
+from contextlib import nullcontext
+from app.testing.telegram_transport_fixtures import ReachableTestSender
+from app.models.telegram_transport_contract import TelegramReachability
 from datetime import datetime,timedelta,timezone
 from types import SimpleNamespace
 from uuid import uuid4
@@ -25,16 +28,21 @@ class Fulfillment:
     def list_fulfillable(self,**_kwargs):return [row()],1,1
 class Operations:
     def __init__(self,intents=None,owned=None):self.intents=intents or [];self.owned=owned or set();self.item=None;self.attachments=[]
+    def by_key(self,**_kwargs):return self.item
     def customer_state(self,**_kwargs):return self.intents,self.owned
     def reserve(self,**values):
-        if self.item is None:self.item={**values['context'],'operation_id':uuid4(),'message_text':values['message_text'],'state':'PREPARED','confirmed_at':None,'outbound_telegram_message_id':None,'purchase_intent_id':None}
+        if self.item is None:self.item={**values['context'],'operation_id':uuid4(),'commercial_offering_id':values['offering']['offering_id'],'message_text':values['message_text'],'state':'PREPARED','confirmed_at':None,'outbound_telegram_message_id':None,'purchase_intent_id':None}
         return self.item
     def claim(self,*_args,**_kwargs):self.item['state']='SENDING';return self.item
     def attach(self,*args,**values):self.attachments.append(values);self.item.update(values);return self.item
     def finish(self,_id,state,**values):self.item.update(state=state,confirmed_at=NOW if state=='CONFIRMED' else None,outbound_telegram_message_id=values.get('message_id'));return self.item
 class Controls:
-    def __init__(self,manual=True,version=9):self.item=SimpleNamespace(manual=manual,control_version=version);self.repository=SimpleNamespace(touch_manual_activity=lambda value:value)
+    def __init__(self,manual=True,version=9):self.item=SimpleNamespace(manual=manual,control_version=version);self.repository=SimpleNamespace(touch_manual_activity=lambda value:value,manual_send_guard=lambda **_:nullcontext())
     def get(self,**_kwargs):return self.item
+def reachable(**kwargs):
+    return TelegramReachability('TELEGRAM_BUSINESS','business:1:bot:2',kwargs['chat_id'],
+        'BUSINESS_INBOUND',NOW,'bc-exact',sender_id=1)
+
 class Peers:
     def evidence(self,**_kwargs):return {'is_enabled':True,'can_reply':True,'last_business_inbound_at':NOW}
 class Selector:
@@ -43,8 +51,10 @@ class Selector:
 def service(**changes):
     values={'fulfillment':Fulfillment(),'operations':Operations(),'controls':Controls(),'peer_observations':Peers(),
         'selector':Selector(),'intents':SimpleNamespace(),'unlocks':SimpleNamespace(),'deliveries':SimpleNamespace(),
-        'transport':SimpleNamespace(),'clock':lambda:NOW,
+        'transport':SimpleNamespace(prepare_delivery=reachable),'clock':lambda:NOW,
         'chat_inventory':SimpleNamespace(build_inventory=lambda **_kwargs:SimpleNamespace(items=(SimpleNamespace(asset_id=42),))),
+        'eligibility':SimpleNamespace(require=lambda _: {'identityState':'PROSPECT'}),
+        'presentations':SimpleNamespace(readiness=SimpleNamespace(evaluate=lambda _:SimpleNamespace(ready=True)),validate_customer_text=lambda _:None,build=lambda **_:SimpleNamespace(apply_to=lambda payload:payload.update(asset_path='safe-teaser.jpg'))),
         'ownership':SimpleNamespace(answer=lambda _identity:SimpleNamespace(owned_offering_ids=()))}
     values.update(changes);return RelationshipManualOfferService(**values)
 
@@ -109,15 +119,20 @@ def test_send_reuses_purchase_intent_unlock_delivery_and_exact_business_connecti
     intents=SimpleNamespace(create_before_presentation=lambda **values:intent,mark_delivery_failed=lambda *_:None)
     delivery=SimpleNamespace(operation_id=uuid4(),state='CREATED');accepted=SimpleNamespace(operation_id=delivery.operation_id,state='TELEGRAM_ACCEPTED')
     calls=[]
-    deliveries=SimpleNamespace(prepare=lambda **kwargs:(delivery,True),claim=lambda value:value,
-        accepted=lambda value,message_id:accepted,record_provider_evidence=lambda *args:None,
-        confirm=lambda value:calls.append(('confirm',value)),failed=lambda *args:None)
+    deliveries=SimpleNamespace(prepare_operator_offer=lambda **kwargs:(delivery,True),claim=lambda value:value,
+        accepted=lambda value,message_id:accepted,record_provider_evidence=lambda *args:args[0],
+        confirm=lambda value:(calls.append(('confirm',value)) or SimpleNamespace(operation_id=value.operation_id,state='CONFIRMED')),failed=lambda *args:None)
     receipt=SimpleNamespace(id=77,provider_payload={'ok':True})
-    transport=SimpleNamespace(BUTTON_LABEL='Unlock',send_text=lambda **values:(calls.append(('send',values)) or receipt))
-    result=service(operations=operations,intents=intents,unlocks=SimpleNamespace(issue=lambda value:(object(),'https://example.test/u/token')),
+    transport=SimpleNamespace(prepare_delivery=reachable,BUTTON_LABEL='Unlock',send_asset=lambda **values:(calls.append(('send',values)) or receipt))
+    result=service(operations=operations,intents=intents,unlocks=SimpleNamespace(issue=lambda value:(object(),'https://unlock.example.test/u/AAAAAAAAAAAAAAAAAAAAAA')),
         deliveries=deliveries,transport=transport).send(context=context(),offering_id=OFFER_ID,expected_control_version=9,
             business_connection_id='bc-exact',idempotency_key='stable-key',message_text='A natural offer')
     assert result['state']=='CONFIRMED'
     assert calls[0][1]['expected_business_connection_id']=='bc-exact'
     assert operations.attachments[0]['purchase_intent_id']==intent.purchase_intent_id
     assert calls[-1][0]=='confirm'
+
+
+@pytest.fixture(autouse=True)
+def trusted_unlock_origin(monkeypatch):
+    monkeypatch.setenv("CREATOR_OS_PUBLIC_API_URL", "https://unlock.example.test")

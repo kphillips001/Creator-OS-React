@@ -13,7 +13,8 @@ class GenerationRequestDiagnosticService:
     """Persist ordered runtime stages for the two in-scope workflows only."""
 
     SUPPORTED_ORIGINS = {
-        "autonomous_inspiration", "manual_creative_concept", "recreate_with_ava",
+        "autonomous_inspiration", "manual_creative_concept", "manual_prompt",
+        "prompt_workshop_premium", "prompt_workshop_explicit", "recreate_with_ava",
     }
     REDACTED_KEYS = {
         "api_key", "apikey", "authorization", "cookie", "password",

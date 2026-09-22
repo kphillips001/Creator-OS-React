@@ -2,7 +2,10 @@ from pathlib import Path
 import pytest
 
 from app.repositories.purchase_intent_repository import PurchaseIntentRepository
-from app.testing.postgres_safety import require_isolated_test_database_url
+from app.testing.postgres_safety import (
+    require_isolated_test_database_url,
+    verify_isolated_test_connection,
+)
 
 
 def test_unlock_creation_never_writes_actual_charged_price():
@@ -46,3 +49,19 @@ def test_test_database_guard_rejects_production_and_non_test_names():
         "postgresql://operator:secret@localhost:5432/creator_os_test",
         production,
     ).endswith("/creator_os_test")
+
+
+def test_connected_database_guard_rejects_production_before_mutation():
+    class Connection:
+        def execute(self, _query):
+            return self
+
+        def fetchone(self):
+            return ("fanvue_chatbot", "127.0.0.1", "5432")
+
+    with pytest.raises(RuntimeError, match="connected database is fanvue_chatbot"):
+        verify_isolated_test_connection(
+            Connection(),
+            "postgresql://operator:secret@localhost:5432/creator_os_test",
+            "postgresql://operator:secret@localhost:5432/fanvue_chatbot",
+        )

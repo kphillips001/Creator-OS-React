@@ -39,7 +39,9 @@ describe("Business navigation", () => {
       ["Chat", "/business/relationships"],
       ["Controls", "/business/controls"],
       ["Ask Creator_OS", "/business/ask"],
+      ["Queue", "/business/queue"],
       ["Archive", "/system/archive"],
+      ["API Balances", "/business/api-balances"],
     ]);
     expect(business?.items.some((item) => item.label === "Relationships")).toBe(false);
     expect(navigationGroups.some((group) => group.label === "Advanced")).toBe(false);
@@ -165,7 +167,7 @@ describe("Developer Tools navigation", () => {
     expect(navigationGroups.at(-3)?.items).toHaveLength(1);
     expect(navigationGroups.at(-3)?.items[0]).toMatchObject({ label: "AI Training", path: "/training/ai-training" });
     expect(navigationGroups.at(-4)?.label).toBe("Tools");
-    expect(navigationGroups.find((group) => group.label === "Business")?.items.at(-1)?.label).toBe("Archive");
+    expect(navigationGroups.find((group) => group.label === "Business")?.items.at(-1)?.label).toBe("API Balances");
   });
 });
 

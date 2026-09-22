@@ -29,6 +29,24 @@ class GenerationRecipeCaptureService:
         capabilities = getattr(provider, "capabilities", None)
         provider_metadata = dict(getattr(capabilities, "metadata", {}) or {})
         settings = self._settings(sanitized)
+        identity = getattr(request, "canonical_identity", None)
+        if identity is not None:
+            identity_provenance = {
+                "creator_profile_id": identity.creator_profile_id,
+                "canonical_asset_id": identity.canonical_asset_id,
+                "canonical_content_sha256": identity.canonical_content_sha256,
+                "identity_version": identity.identity_version,
+                "identity_prompt_policy_id": identity.identity_prompt_policy_id,
+                "identity_prompt_policy_version": identity.identity_prompt_policy_version,
+                "reference_roles": [identity.reference_role],
+            }
+            settings = {**settings, "canonical_identity": identity_provenance}
+        creative_inspiration = metadata.get("creative_inspiration_provenance")
+        if isinstance(creative_inspiration, Mapping):
+            settings = {
+                **settings,
+                "creative_inspiration_provenance": copy.deepcopy(dict(creative_inspiration)),
+            }
         seed = final_payload.get("seed")
         recipe_id = uuid4()
         recipe = GenerationRecipe(
@@ -108,7 +126,9 @@ class GenerationRecipeCaptureService:
                 role="VIDEO_SOURCE"; source_type="GENERATION_SOURCE"; source_id=str(metadata.get("source_id") or "") or None
             elif index==1 and request.reference_asset_id:
                 role="CANONICAL_IDENTITY"; source_type="CANONICAL_ASSET"; asset_id=request.reference_asset_id
-            result.append(dict(position=index,role=role,source_type=source_type,source_id=source_id,asset_id=asset_id,generated_image_id=generated_image_id,media_type="video" if kind=="video" else "image",content_sha256=self._local_hash(value),provider_reference_kind=kind,diagnostic_metadata={"provider_host":urlsplit(str(value)).hostname if str(value).startswith(("http://","https://")) else None,"provider_url_sha256":self._hash_text(str(value))}))
+            identity = getattr(request, "canonical_identity", None)
+            identity_match = bool(identity is not None and index == 1 and role == "CANONICAL_IDENTITY")
+            result.append(dict(position=index,role=role,source_type=source_type,source_id=source_id,asset_id=asset_id,generated_image_id=generated_image_id,media_type="video" if kind=="video" else "image",content_sha256=identity.canonical_content_sha256 if identity_match else self._local_hash(value),provider_reference_kind=kind,diagnostic_metadata={"provider_host":urlsplit(str(value)).hostname if str(value).startswith(("http://","https://")) else None,"provider_url_sha256":self._hash_text(str(value)),**({"identity_version":identity.identity_version,"identity_prompt_policy_id":identity.identity_prompt_policy_id,"identity_prompt_policy_version":identity.identity_prompt_policy_version,"creator_profile_id":identity.creator_profile_id} if identity_match else {})}))
         return result
 
     def _sanitize_payload(self,payload,references):

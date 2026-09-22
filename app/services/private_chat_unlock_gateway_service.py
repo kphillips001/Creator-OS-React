@@ -44,7 +44,9 @@ def fingerprint_bootstrap_enabled() -> bool:
 
 
 class UnlockUnavailableError(RuntimeError):
-    pass
+    def __init__(self, message: str, *, reason_code: str = "UNAVAILABLE"):
+        super().__init__(message)
+        self.reason_code = reason_code
 
 
 class PrivateChatUnlockGatewayService:
@@ -57,9 +59,9 @@ class PrivateChatUnlockGatewayService:
         token_secret: str | None = None,
         controlled_autonomy_service=None, purchase_intent_lifecycle=None,
     ):
-        self.repository = repository or PrivateChatFingerprintRepository()
-        self.intents = intent_repository or PurchaseIntentRepository()
-        self.identities = identities or TelegramIdentityRepository()
+        self.repository = repository or PrivateChatFingerprintRepository(connection_factory=connection_factory)
+        self.intents = intent_repository or PurchaseIntentRepository(connection_factory=connection_factory)
+        self.identities = identities or TelegramIdentityRepository(connection_factory=connection_factory)
         self.client_factory = client_factory
         self.connection_factory = connection_factory
         self.clock = clock
@@ -73,7 +75,30 @@ class PrivateChatUnlockGatewayService:
         )
         self.purchase_intent_lifecycle = purchase_intent_lifecycle
 
+    def reserve_offer_price(self, intent):
+        """Allocate the existing fingerprint before presentation, without a click or provider call.
+
+        expected/configured price remains the base authority. The intent-linked
+        reservation is the final checkout authority; actual_charged stays unset
+        until authoritative payment evidence exists.
+        """
+        self._require_controlled_identity_when_enabled(intent)
+        if self.identities.get_verified_by_telegram_user_id(intent.telegram_user_id) is not None:
+            return intent, int(intent.expected_price_minor)
+        if not fingerprint_bootstrap_enabled():
+            raise UnlockUnavailableError('Private-chat fingerprint bootstrap is disabled.')
+        with self.repository.serialize_intent(intent.purchase_intent_id):
+            reservation = self.repository.reserve_price(intent=intent,
+                canonical_prices=self._canonical_prices(intent.fanvue_account_id,intent.expected_currency),
+                candidate_prices=tuple(self.prices.candidates(intent.expected_price_minor)))
+            if str(getattr(reservation.state,'value',reservation.state)) not in {'RESERVED','ACTIVE'}:
+                raise UnlockUnavailableError('Fingerprint reservation requires reconciliation.')
+            return intent, int(reservation.exact_price_minor)
+
     def issue(self, intent):
+        from app.services.canonical_evergreen_unlock import enabled
+        if enabled() and os.getenv('EVERGREEN_UNLOCK_PAUSED', 'false').lower() == 'true':
+            raise UnlockUnavailableError("Checkout temporarily unavailable.", reason_code='CHECKOUT_PAUSED')
         self._require_controlled_identity_when_enabled(intent)
         if len(self.token_secret.encode("utf-8")) < 32:
             raise UnlockUnavailableError(
@@ -92,6 +117,13 @@ class PrivateChatUnlockGatewayService:
             audit_metadata={"provenance": "PRIVATE_CHAT_FINGERPRINT_PURCHASE"},
         )
         grant, alias = self._ensure_public_alias(grant)
+        from app.services.canonical_evergreen_unlock import enabled, CanonicalUnlockAuthority, binding
+        if enabled():
+            authority = CanonicalUnlockAuthority(self, alias)
+            with self.connection_factory() as c:
+                row = c.execute("SELECT * FROM purchase_intents WHERE purchase_intent_id=%s", (intent.purchase_intent_id,)).fetchone()
+                checked = authority.authenticate(alias, binding(row), connection=c)
+                authority.lock_scope(checked, connection=c)
         return grant, f"{base}/u/{quote(alias, safe='')}"
 
     def _token_for(self, grant_id):
@@ -102,19 +134,50 @@ class PrivateChatUnlockGatewayService:
         return base64.urlsafe_b64encode(nonce + signature).rstrip(b"=").decode("ascii")
 
     def resolve(self, token: str) -> str:
+        from app.services.canonical_evergreen_unlock import enabled
+        if enabled():
+            if not token or UNLOCK_TOKEN_PATTERN.fullmatch(token) is None:
+                raise UnlockUnavailableError("Unlock unavailable.")
+            with self.connection_factory() as c:
+                row = c.execute("SELECT unlock_grant_id,public_alias_generation FROM telegram_unlock_grants WHERE token_hash=%s", (token_digest(token),)).fetchone()
+            if not row or row['public_alias_generation'] is None:
+                raise UnlockUnavailableError("Unlock unavailable.")
+            return self.resolve_alias(self._public_alias_for(row['unlock_grant_id'],row['public_alias_generation']))
         return self._validated_fanvue_destination(self._resolve_destination(token))
 
     def resolve_alias(self, alias: str) -> str:
+        from app.services.canonical_evergreen_unlock import enabled, resolve_alias
+        if enabled():
+            if os.getenv('EVERGREEN_UNLOCK_PAUSED', 'false').lower() == 'true':
+                raise UnlockUnavailableError("Checkout temporarily unavailable.", reason_code='CHECKOUT_PAUSED')
+            from app.models.evergreen_checkout import CheckoutUnavailable
+            if not fingerprint_bootstrap_enabled() or not PUBLIC_ALIAS_PATTERN.fullmatch(alias):
+                raise UnlockUnavailableError("Unlock unavailable.")
+            try:
+                return resolve_alias(self, alias)
+            except CheckoutUnavailable as error:
+                raise UnlockUnavailableError("Unlock unavailable.", reason_code=error.reason_code) from error
         if not fingerprint_bootstrap_enabled():
             raise UnlockUnavailableError("Private-chat fingerprint bootstrap is disabled.")
         if not alias or PUBLIC_ALIAS_PATTERN.fullmatch(alias) is None:
             raise UnlockUnavailableError("Unlock alias is invalid.")
         grant = self.repository.resolve_grant_by_alias(alias)
         if grant is None:
-            raise UnlockUnavailableError("Unlock alias is unavailable or revoked.")
-        return self._validated_fanvue_destination(
-            self._resolve_claimed_grant(grant)
-        )
+            raise UnlockUnavailableError(
+                "Unlock alias is unavailable or revoked.", reason_code="NOT_FOUND"
+            )
+        try:
+            destination = self._validated_fanvue_destination(
+                self._resolve_claimed_grant(grant)
+            )
+        except UnlockUnavailableError as error:
+            self._record_resolution(grant, "REJECTED", error.reason_code)
+            raise
+        except Exception:
+            self._record_resolution(grant, "FAILED", "PURCHASEINTENT_INVALID")
+            raise
+        self._record_resolution(grant, "RESOLVED", "OK")
+        return destination
 
     def _resolve_destination(self, token: str) -> str:
         if not fingerprint_bootstrap_enabled():
@@ -128,8 +191,33 @@ class PrivateChatUnlockGatewayService:
 
     def _resolve_claimed_grant(self, grant) -> str:
         intent = self.intents.get(grant.purchase_intent_id)
-        if intent is None or not self._bindings_match(grant, intent):
-            raise UnlockUnavailableError("Unlock grant integrity check failed.")
+        if intent is None:
+            raise UnlockUnavailableError(
+                "Purchase Intent is unavailable.",
+                reason_code="PURCHASEINTENT_INVALID",
+            )
+        if not self._bindings_match(grant, intent):
+            raise UnlockUnavailableError(
+                "Unlock grant integrity check failed.", reason_code="SCOPE_MISMATCH"
+            )
+        now = self.clock()
+        expires_at = getattr(intent, "expires_at", None)
+        if expires_at is not None:
+            normalized_expiry = (
+                expires_at.replace(tzinfo=timezone.utc)
+                if expires_at.tzinfo is None else expires_at.astimezone(timezone.utc)
+            )
+            if normalized_expiry <= now.astimezone(timezone.utc):
+                raise UnlockUnavailableError(
+                    "Unlock offer has expired.", reason_code="EXPIRED"
+                )
+        status = str(getattr(getattr(intent, "status", None), "value", None)
+                     or getattr(intent, "status", ""))
+        if status not in {"CREATED", "PRESENTED", "CLICKED", "PURCHASED"}:
+            raise UnlockUnavailableError(
+                "Purchase Intent is not active.",
+                reason_code="PURCHASEINTENT_INVALID",
+            )
         self._require_controlled_identity_when_enabled(intent)
         publication = self._eligible_publication(intent)
         self._record_valid_click(intent, clicked_at=grant.last_used_at)
@@ -141,6 +229,14 @@ class PrivateChatUnlockGatewayService:
 
         with self.repository.serialize_intent(intent.purchase_intent_id):
             now = self.clock()
+            runtime_expiry = self._runtime_expiry(intent, now=now)
+            align_expiry = getattr(
+                self.repository, "align_active_runtime_expiry", None,
+            )
+            if callable(align_expiry):
+                align_expiry(
+                    intent.purchase_intent_id, expires_at=runtime_expiry,
+                )
             active = self.repository.get_live_link(intent.purchase_intent_id, now=now)
             if active is not None and active.provider_url:
                 return active.provider_url
@@ -156,7 +252,7 @@ class PrivateChatUnlockGatewayService:
             )
             runtime = self.repository.prepare_runtime_link(
                 intent=intent, reservation=reservation,
-                expires_at=now + self.runtime_ttl,
+                expires_at=runtime_expiry,
             )
             claimed = self.repository.mark_creating(runtime.runtime_media_link_id)
             if claimed is None:
@@ -279,9 +375,31 @@ class PrivateChatUnlockGatewayService:
             self.purchase_intent_lifecycle = PurchaseIntentService(
                 repository=self.intents,
             )
+        recorder = getattr(
+            self.purchase_intent_lifecycle, "record_unlock_click", None,
+        )
+        if callable(recorder):
+            return recorder(intent.purchase_intent_id, clicked_at=clicked_at)
         return self.purchase_intent_lifecycle.record_click(
             intent.purchase_intent_id, clicked_at=clicked_at,
         )
+
+    def _record_resolution(self, grant, status: str, reason_code: str) -> None:
+        recorder = getattr(self.repository, "record_resolution_diagnostic", None)
+        if not callable(recorder):
+            return
+        try:
+            recorder(
+                grant_id=grant.unlock_grant_id,
+                status=status,
+                reason_code=reason_code,
+                at=self.clock(),
+            )
+        except Exception as error:
+            logger.warning(
+                "event=unlock_diagnostic_persistence_failed error_type=%s",
+                type(error).__name__,
+            )
 
     @staticmethod
     def _validated_fanvue_destination(destination: str | None) -> str:
@@ -379,3 +497,18 @@ class PrivateChatUnlockGatewayService:
                     (account_id, currency),
                 )
                 return {int(row["price_minor"]) for row in cursor.fetchall()}
+
+    def _runtime_expiry(self, intent, *, now: datetime) -> datetime:
+        """Keep the provider resource valid for the complete offer window."""
+        expires_at = getattr(intent, "expires_at", None)
+        if expires_at is None:
+            return now + self.runtime_ttl
+        normalized = (
+            expires_at.replace(tzinfo=timezone.utc)
+            if expires_at.tzinfo is None else expires_at.astimezone(timezone.utc)
+        )
+        if normalized <= now.astimezone(timezone.utc):
+            raise UnlockUnavailableError(
+                "Unlock offer has expired.", reason_code="EXPIRED"
+            )
+        return normalized

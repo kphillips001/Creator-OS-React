@@ -460,6 +460,7 @@ class GenerationLibraryPublishingServiceTests(unittest.TestCase):
     def test_x_thread_cta_flows_independently_from_x_auto(self):
         self.social.create_queue_item.return_value = SimpleNamespace(queue_item_id="queue-cta")
         self.social.publish_now.return_value = SimpleNamespace(status="posted")
+        self.social.list_publish_items.return_value = (SimpleNamespace(queue_item_id="queue-cta", metadata={"account_name":"AvaBlackthorne","x_thread_cta_job_id":"job-1","x_thread_cta_scheduled_at":"2026-09-14T12:40:00+00:00","x_thread_cta_delay_seconds":2400}),)
 
         self.service.publish(
             generated_image_id="generated-1", destination="x", caption="",

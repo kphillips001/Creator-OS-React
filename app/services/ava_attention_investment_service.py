@@ -18,7 +18,13 @@ class AvaAttentionDecision:
             "permanentCustomerLabel":False}
 
 class AvaAttentionInvestmentService:
-    QUESTION=re.compile(r"\?|\b(?:who|what|when|where|why|how|can|could|would|do|are|is)\b",re.I)
+    # An auxiliary verb inside ordinary prose (for example, "my plans are
+    # coming together") is not by itself a customer question.  Preserve an
+    # explicit question mark anywhere, plus canonical question-led phrasing.
+    QUESTION=re.compile(
+        r"\?|^\s*(?:who|what|when|where|why|how|can|could|would|do|are|is)\b",
+        re.I,
+    )
     COMMERCIAL=re.compile(r"\b(?:buy|price|purchase|unlock|offer|content|photo|video|set)\b",re.I)
     SUMMON=re.compile(r"\b(?:hello|are you there|where are you|where did you go|gone quiet|you.ve gone quiet)\b",re.I)
     AFFECTION=re.compile(r"\b(?:love you|babe|miss you)\b",re.I)

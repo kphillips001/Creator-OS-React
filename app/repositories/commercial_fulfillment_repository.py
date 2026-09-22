@@ -100,6 +100,20 @@ class CommercialFulfillmentRepository:
             offering.status AS offering_status,offering.created_at,
             offering.source_photoshoot_deliverable_id,
             offering.source_bundle_studio_bundle_id,
+            chat_teaser.teaser_id AS chat_teaser_id,
+            chat_teaser.creator_profile_id AS chat_teaser_creator_profile_id,
+            chat_teaser.source_asset_id AS chat_teaser_source_asset_id,
+            chat_teaser.derived_asset_id AS chat_teaser_derived_asset_id,
+            chat_teaser.derivative_path AS chat_teaser_derivative_path,
+            chat_teaser.distribution_use AS chat_teaser_distribution_use,
+            chat_teaser.status AS chat_teaser_status,
+            chat_teaser_asset.creator_profile_id AS chat_teaser_derived_creator_profile_id,
+            chat_teaser_asset.media_metadata->>'source_asset_id'
+                AS chat_teaser_derived_source_asset_id,
+            chat_teaser_asset.media_metadata->>'distribution_use'
+                AS chat_teaser_derived_distribution_use,
+            chat_teaser_asset.media_metadata->>'commercial_role'
+                AS chat_teaser_derived_commercial_role,
             CASE WHEN offering.offering_type='SINGLE_IMAGE'
                       AND offering.source_photoshoot_deliverable_id IS NULL
                       AND offering.source_bundle_studio_bundle_id IS NULL
@@ -222,6 +236,11 @@ class CommercialFulfillmentRepository:
           ON destination.asset_id=member.asset_id
         LEFT JOIN public.commercial_publications publication
           ON publication.commercial_offering_id=offering.offering_id
+        LEFT JOIN public.commercial_teasers chat_teaser
+          ON chat_teaser.source_asset_id=offering.hero_asset_id
+         AND chat_teaser.distribution_use='CHAT'
+        LEFT JOIN public.content_items chat_teaser_asset
+          ON chat_teaser_asset.id=chat_teaser.derived_asset_id
         LEFT JOIN public.photoshoot_commerce_deliverables source_deliverable
           ON source_deliverable.deliverable_id=
              offering.source_photoshoot_deliverable_id
@@ -240,7 +259,8 @@ class CommercialFulfillmentRepository:
                  bundle_teaser.source_asset_id,
                  bundle_teaser.teaser_asset_id,bundle_teaser_asset.id,
                  studio_teaser.source_asset_id,studio_teaser.teaser_asset_id,
-                 studio_teaser_asset.id
+                 studio_teaser_asset.id,chat_teaser.teaser_id,
+                 chat_teaser_asset.id
         {having}"""
 
     @staticmethod

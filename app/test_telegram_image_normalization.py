@@ -1,15 +1,9 @@
 from pathlib import Path
 from types import SimpleNamespace
-import sys
 import asyncio
 
 from PIL import Image
 import pytest
-
-sys.modules.setdefault("telethon", SimpleNamespace(
-    Button=SimpleNamespace(url=lambda *args, **kwargs: object()),
-    events=SimpleNamespace(NewMessage=lambda **_kwargs: object()),
-))
 
 from app.integrations.telegram.bot_api_sender import TelegramBotApiSender
 from app.integrations.telegram.telethon_transport import TelethonUserTransport
@@ -43,7 +37,7 @@ class Response:
     status_code = 200
     text = "ok"
     def json(self):
-        return {"ok": True, "result": {"message_id": 123}}
+        return {"ok": True, "result": {"message_id": 123, "photo": [{"file_id": "neutral"}], "caption": "Asset"}}
     def raise_for_status(self):
         return None
 
@@ -83,7 +77,7 @@ def test_asset_library_bot_api_uploads_actual_960x1280_artifact(tmp_path):
     message_id = TelegramBotApiSender(bot_token="token", session=session).send_asset(
         chat_id=123, asset_path=str(source), message_text="Asset",
     )
-    assert message_id == 123
+    assert message_id.id == 123
     assert session.upload_sizes == [(960, 1280)]
 
 

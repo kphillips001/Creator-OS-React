@@ -333,6 +333,95 @@ describe("EditStudioPage", () => {
     expect(statusCalls).toBe(2);
   });
 
+  it("recovers from one transient missing status without resubmitting generation", async () => {
+    let statusCalls = 0;
+    let generationPosts = 0;
+    vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
+      const url = String(input);
+      if (url.endsWith("/references")) return response([]);
+      if (url.endsWith("/generate")) {
+        generationPosts += 1;
+        return response({ success: true, message: "Edit generation started.", generation_job_id: "transient-job", generation_status: "queued" });
+      }
+      if (url.endsWith("/generation/transient-job")) {
+        statusCalls += 1;
+        if (statusCalls === 1) return response({ detail: "Edit generation job not found." }, 404);
+        return response({
+          generation_job_id: "transient-job", generation_status: "succeeded",
+          provider_id: "seedream_5_0_pro", candidate: candidateRecord, error: null,
+        });
+      }
+      return response({
+        creator_profile_exists: true, pending_source: generationRecord, candidate: null,
+        providers: [{ value: "seedream_5_0_pro", label: "Seedream 5.0 Pro" }],
+      });
+    });
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: /AI Edit/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Single Edit/ }));
+    fireEvent.change(screen.getByLabelText("Prompt"), { target: { value: "Refine portrait." } });
+    fireEvent.click(screen.getByRole("button", { name: "Generate Edit" }));
+
+    expect(await screen.findByText("Edit generation started.")).toBeInTheDocument();
+    expect(screen.queryByText("Edit Studio backend unavailable.")).not.toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Edited Candidate" }, { timeout: 3000 })).toBeInTheDocument();
+    expect(generationPosts).toBe(1);
+    expect(statusCalls).toBe(2);
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("bounds persistent missing-job polling and clears the stale start banner", async () => {
+    let statusCalls = 0;
+    let generationPosts = 0;
+    vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
+      const url = String(input);
+      if (url.endsWith("/references")) return response([]);
+      if (url.endsWith("/generate")) {
+        generationPosts += 1;
+        return response({ success: true, message: "Edit generation started.", generation_job_id: "missing-job", generation_status: "queued" });
+      }
+      if (url.endsWith("/generation/missing-job")) {
+        statusCalls += 1;
+        return response({ detail: "Edit generation job not found." }, 404);
+      }
+      return response({
+        creator_profile_exists: true, pending_source: generationRecord, candidate: null,
+        providers: [{ value: "seedream_5_0_pro", label: "Seedream 5.0 Pro" }],
+      });
+    });
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: /AI Edit/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Single Edit/ }));
+    fireEvent.change(screen.getByLabelText("Prompt"), { target: { value: "Refine portrait." } });
+    fireEvent.click(screen.getByRole("button", { name: "Generate Edit" }));
+
+    expect(await screen.findByRole("alert", {}, { timeout: 4500 })).toHaveTextContent("Generation status could not be found.");
+    expect(screen.queryByText("Edit generation started.")).not.toBeInTheDocument();
+    expect(screen.queryByText("Edit Studio backend unavailable.")).not.toBeInTheDocument();
+    expect(generationPosts).toBe(1);
+    expect(statusCalls).toBe(4);
+  });
+
+  it("uses backend-unavailable only for a genuine polling network failure", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
+      const url = String(input);
+      if (url.endsWith("/references")) return response([]);
+      if (url.endsWith("/generate")) return response({ success: true, message: "Edit generation started.", generation_job_id: "network-job", generation_status: "queued" });
+      if (url.endsWith("/generation/network-job")) return Promise.reject(new TypeError("Failed to fetch"));
+      return response({
+        creator_profile_exists: true, pending_source: generationRecord, candidate: null,
+        providers: [{ value: "seedream_5_0_pro", label: "Seedream 5.0 Pro" }],
+      });
+    });
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: /AI Edit/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Single Edit/ }));
+    fireEvent.change(screen.getByLabelText("Prompt"), { target: { value: "Refine portrait." } });
+    fireEvent.click(screen.getByRole("button", { name: "Generate Edit" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Edit Studio backend unavailable.");
+    expect(screen.queryByText("Edit generation started.")).not.toBeInTheDocument();
+  });
+
   it.each([
     ["Approve", "/edit-studio/approve", "Generation Library destination"],
     ["Discard", "/edit-studio/discard", "Choose Edit Type"],
@@ -380,12 +469,41 @@ describe("EditStudioPage", () => {
     fireEvent.change(prompt, { target: { value: "Keep this instruction." } });
     fireEvent.click(screen.getByRole("button", { name: "Generate Edit" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Provider rejected edit.");
+    expect(screen.queryByText("Started.")).not.toBeInTheDocument();
     expect(prompt).toHaveValue("Keep this instruction.");
     expect(screen.getByRole("button", { name: "Generate Edit" })).toBeEnabled();
   });
 
+  it("clears the start banner when a polled generation is cancelled", async () => {
+    let generationPosts = 0;
+    vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
+      const url = String(input);
+      if (url.endsWith("/references")) return response([]);
+      if (url.endsWith("/generate")) {
+        generationPosts += 1;
+        return response({ success: true, message: "Edit generation started.", generation_job_id: "cancelled-job", generation_status: "queued" });
+      }
+      if (url.endsWith("/generation/cancelled-job")) return response({
+        generation_job_id: "cancelled-job", generation_status: "cancelled", provider_id: "seedream_5_0_pro", candidate: null, error: null,
+      });
+      return response({
+        creator_profile_exists: true, pending_source: generationRecord, candidate: null,
+        providers: [{ value: "seedream_5_0_pro", label: "Seedream 5.0 Pro" }],
+      });
+    });
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: /AI Edit/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Single Edit/ }));
+    fireEvent.change(screen.getByLabelText("Prompt"), { target: { value: "Refine portrait." } });
+    fireEvent.click(screen.getByRole("button", { name: "Generate Edit" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Edit generation cancelled.");
+    expect(screen.queryByText("Edit generation started.")).not.toBeInTheDocument();
+    expect(generationPosts).toBe(1);
+  });
+
   it.each([
-    [404, "Edit Studio backend unavailable."],
+    [404, "Edit Studio request failed with HTTP 404"],
     [500, "Unable to load Edit Studio."],
   ])("maps HTTP %s to a safe page error and logs backend details", async (status, expected) => {
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);

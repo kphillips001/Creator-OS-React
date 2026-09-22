@@ -44,6 +44,21 @@ class TelegramWorkerReadinessService:
         self.definition = next(item for item in WORKERS if item.key == "telegram")
 
     def read(self, *, creator_profile_id: str | int) -> dict[str, Any]:
+        """Authoritative readiness, including full singleton process proof."""
+        return self._read(
+            creator_profile_id=creator_profile_id,
+            verify_singleton_process=True,
+        )
+
+    def read_display(self, *, creator_profile_id: str | int) -> dict[str, Any]:
+        """Fresh display projection; never an authority for a transition or send."""
+        return self._read(
+            creator_profile_id=creator_profile_id,
+            verify_singleton_process=False,
+        )
+
+    def _read(self, *, creator_profile_id: str | int,
+              verify_singleton_process: bool) -> dict[str, Any]:
         expected_account = self._positive_int(self.environment.get("AVA_FANVUE_ACCOUNT_ID"))
         if expected_account is None:
             return self._blocked("configuration_blocked")
@@ -98,9 +113,10 @@ class TelegramWorkerReadinessService:
             heartbeat.process_id, self.definition
         ):
             return self._blocked("process_ownership_unverified")
-        matching = self.processes.matching(self.definition)
-        if matching != [heartbeat.process_id]:
-            return self._blocked("no_singleton_process", process_count=len(matching))
+        if verify_singleton_process:
+            matching = self.processes.matching(self.definition)
+            if matching != [heartbeat.process_id]:
+                return self._blocked("no_singleton_process", process_count=len(matching))
         if launcher.get("pid") != heartbeat.process_id or launcher.get("instanceId") != heartbeat.worker_instance_id:
             return self._blocked("launcher_identity_mismatch")
         if metadata.get("authorized") is not True:
@@ -109,11 +125,30 @@ class TelegramWorkerReadinessService:
             return self._blocked("database_unhealthy")
         if metadata.get("lifecycle_state") != "CONNECTED":
             return self._blocked("disconnected")
+        if metadata.get("startup_history_recovery_complete") is not True:
+            return self._blocked(
+                "startup_history_recovery_unhealthy",
+                recoveryStatus=metadata.get("startup_history_recovery_status"),
+                recoveryError=metadata.get("startup_history_recovery_error"),
+            )
+        if (
+            metadata.get("ordinary_reply_scheduler_alive") is not True
+            or metadata.get("ordinary_reply_scheduler_healthy") is not True
+        ):
+            return self._blocked(
+                "ordinary_reply_scheduler_unhealthy",
+                schedulerAlive=metadata.get("ordinary_reply_scheduler_alive"),
+                schedulerLastPoll=metadata.get("ordinary_reply_scheduler_last_poll"),
+                schedulerLastSuccess=metadata.get("ordinary_reply_scheduler_last_success"),
+                schedulerLastFailure=metadata.get("ordinary_reply_scheduler_last_failure"),
+            )
         if heartbeat.last_error or launcher.get("error"):
             return self._blocked("runtime_error")
 
         return {
             "ready": True,
+            "healthScope": "GLOBAL_RUNTIME",
+            "recipientReachability": metadata.get("ordinary_reply_peer_reachability"),
             "reason": None,
             "status": classification.value,
             "processId": heartbeat.process_id,
@@ -127,6 +162,34 @@ class TelegramWorkerReadinessService:
             "authorized": True,
             "databaseHealthy": True,
             "launcherAction": launcher.get("lastLauncherAction"),
+            "ordinaryReplyScheduler": {
+                "alive": metadata.get("ordinary_reply_scheduler_alive"),
+                "lastPoll": metadata.get("ordinary_reply_scheduler_last_poll"),
+                "lastSuccess": metadata.get("ordinary_reply_scheduler_last_success"),
+                "lastFailure": metadata.get("ordinary_reply_scheduler_last_failure"),
+                "lastResult": metadata.get("ordinary_reply_scheduler_last_result"),
+                "resumeExecution": {
+                    "healthy": metadata.get("ordinary_reply_resume_healthy", True),
+                    "lastSuccess": metadata.get("ordinary_reply_resume_last_success"),
+                    "lastFailure": metadata.get("ordinary_reply_resume_last_failure"),
+                    "lastError": metadata.get("ordinary_reply_resume_last_error"),
+                    "consecutiveFailures": metadata.get(
+                        "ordinary_reply_resume_consecutive_failures", 0),
+                    "retrySeconds": metadata.get(
+                        "ordinary_reply_resume_retry_seconds"),
+                    "coolingDown": metadata.get(
+                        "ordinary_reply_resume_cooling_down", 0),
+                },
+            },
+            "startupHistoryRecovery": {
+                "complete": metadata.get("startup_history_recovery_complete"),
+                "status": metadata.get("startup_history_recovery_status"),
+                "lastSuccess": metadata.get("startup_history_recovery_last_success"),
+                "inspected": metadata.get("startup_history_recovery_inspected"),
+                "captured": metadata.get("startup_history_recovery_captured"),
+                "chats": metadata.get("startup_history_recovery_chats"),
+                "operations": metadata.get("startup_history_recovery_operations"),
+            },
         }
 
     def _launcher_state(self) -> dict[str, Any]:

@@ -16,7 +16,10 @@ from app.models.generation_engine import GenerationStatus
 from app.repositories.creator_profile_repository import get_active_creator_profile
 from app.services.edit_studio_context_service import EditStudioContextService
 from app.services.edit_studio_service import EditStudioService
-from app.services.generation_engine_service import GenerationEngineService
+from app.services.generation_engine_service import (
+    GenerationEngineService,
+    GenerationJobStoreError,
+)
 from app.services.generation_library_service import GenerationLibraryService
 from app.services.reference_library_service import ReferenceLibraryService
 from app.services.quick_edit_service import CropBox, QuickEditService
@@ -358,6 +361,11 @@ def edit_studio_generation_status(job_id: str):
     library = GenerationLibraryService()
     try:
         job = engine.get_job(job_id)
+    except GenerationJobStoreError as error:
+        raise HTTPException(
+            status_code=503,
+            detail="Generation status is temporarily unavailable.",
+        ) from error
     except KeyError as error:
         raise HTTPException(status_code=404, detail="Edit generation job not found.") from error
     if job.request.creator_profile_id != profile_id or job.request.metadata.get("source") != "edit_studio":

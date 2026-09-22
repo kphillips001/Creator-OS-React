@@ -64,6 +64,7 @@ def runtime(transport, *, ownership=None, heartbeat=None, initial=.01, maximum=.
             heartbeat_interval_seconds=.001):
     return TelethonRuntime(
         transport=transport, inbound_adapter=SimpleNamespace(execute=lambda _: None),
+        inbound_media_service=SimpleNamespace(cleanup_expired=lambda: 0),
         global_safety_service=SimpleNamespace(check_global_safety=lambda: {"allowed": False}),
         ownership_service=ownership or Ownership(), heartbeat_service=heartbeat or Heartbeat(),
         reconnect_initial_seconds=initial, reconnect_max_seconds=maximum,
@@ -180,6 +181,7 @@ def test_startup_readiness_orders_ownership_recovery_before_connection():
     transport = OrderedTransport([stop]); heartbeat = Heartbeat()
     value = holder["runtime"] = TelethonRuntime(
         transport=transport, inbound_adapter=SimpleNamespace(execute=lambda _: None),
+        inbound_media_service=SimpleNamespace(cleanup_expired=lambda: 0),
         ownership_service=OrderedOwnership(), ordinary_reply_service=Recovery(),
         heartbeat_service=heartbeat,
         global_safety_service=SimpleNamespace(check_global_safety=lambda: {"allowed": False}),

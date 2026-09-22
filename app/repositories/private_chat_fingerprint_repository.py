@@ -53,6 +53,23 @@ class PrivateChatFingerprintRepository:
                 row = cursor.fetchone()
         return self._grant(row) if row else None
 
+    def align_active_runtime_expiry(
+        self, purchase_intent_id: UUID, *, expires_at: datetime,
+    ) -> RuntimeMediaLink | None:
+        """Extend one active runtime resource to its owning intent window."""
+        with self.connection_factory() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """UPDATE public.fanvue_runtime_media_links
+                       SET expires_at=%s
+                       WHERE purchase_intent_id=%s AND state='ACTIVE'
+                         AND expires_at<%s
+                       RETURNING *""",
+                    (expires_at, purchase_intent_id, expires_at),
+                )
+                row = cursor.fetchone()
+        return self._runtime_link(row) if row else None
+
     def create_grant(
         self, *, grant_id: UUID, token: str, intent, audit_metadata=None,
     ) -> UnlockGrant:
@@ -115,6 +132,27 @@ class PrivateChatFingerprintRepository:
                 )
                 row = cursor.fetchone()
         return self._grant(row) if row else None
+
+    def record_resolution_diagnostic(
+        self, *, grant_id: UUID, status: str, reason_code: str,
+        at: datetime,
+    ) -> None:
+        """Persist only bounded operational resolution evidence, never tokens."""
+        payload = json.dumps({
+            "status": str(status),
+            "reason_code": str(reason_code),
+            "at": at.isoformat(),
+        })
+        with self.connection_factory() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """UPDATE public.telegram_unlock_grants
+                       SET audit_metadata=jsonb_set(
+                           audit_metadata,'{last_resolution}',%s::jsonb,true
+                       )
+                       WHERE unlock_grant_id=%s""",
+                    (payload, grant_id),
+                )
 
     def reserve_price(
         self, *, intent, canonical_prices, candidate_prices,

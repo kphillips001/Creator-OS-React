@@ -139,6 +139,11 @@ class FreeEngagementTeaserService:
         if claimed is None:
             current = self.repository.get(operation.operation_id)
             return FreeEngagementTeaserExecution(status=current.state.value, executed=False, operation=current)
+        invocation_started=False
+        def record(evidence):
+            nonlocal invocation_started
+            if "transport_route" in evidence:invocation_started=True
+            return self.repository.record_transport_evidence(claimed.operation_id,evidence)
         try:
             identity_reader = getattr(self.repository, "telegram_user_id_for_customer", None)
             telegram_user_id = identity_reader(
@@ -160,6 +165,8 @@ class FreeEngagementTeaserService:
                 },
             }, context={
                 "transport": transport,
+                "operation_id": str(claimed.operation_id),
+                "record_transport_evidence": record,
                 "telegram_chat_id": claimed.telegram_chat_id,
                 "telegram_user_id": telegram_user_id,
                 "creator_profile_id": claimed.creator_profile_id,
@@ -168,11 +175,15 @@ class FreeEngagementTeaserService:
                 "raise_on_failure": True,
             })
             message_id = result.metadata.get("telegram_message_id")
+            if invocation_started and (not result.executed or not isinstance(message_id,int) or isinstance(message_id,bool) or message_id<=0):
+                raise ConnectionError("Provider invocation lacks durable acknowledgement")
             if not result.executed or message_id is None:
                 reason = result.blocking_reason or result.status or "TELEGRAM_SEND_NOT_ACCEPTED"
                 failed = self.repository.failed(claimed.operation_id, reason)
                 return FreeEngagementTeaserExecution(status="FAILED", executed=False, operation=failed, reason=reason)
             accepted = self.repository.accepted(claimed.operation_id, message_id)
+            if accepted is None:
+                raise ConnectionError("Provider acceptance persistence failed")
             try:
                 confirmed = self._confirm(accepted)
             except Exception as error:
@@ -185,6 +196,9 @@ class FreeEngagementTeaserService:
             ambiguous = self.repository.ambiguous(claimed.operation_id, f"{type(error).__name__}: provider outcome unknown")
             return FreeEngagementTeaserExecution(status="AMBIGUOUS", executed=False, operation=ambiguous, reason="PROVIDER_OUTCOME_UNKNOWN")
         except Exception as error:
+            if invocation_started:
+                ambiguous=self.repository.ambiguous(claimed.operation_id,"PROVIDER_OUTCOME_UNKNOWN")
+                return FreeEngagementTeaserExecution(status="AMBIGUOUS",executed=False,operation=ambiguous,reason="PROVIDER_OUTCOME_UNKNOWN")
             failed = self.repository.failed(claimed.operation_id, f"{type(error).__name__}: {str(error)[:500]}")
             return FreeEngagementTeaserExecution(status="FAILED", executed=False, operation=failed, reason="DEFINITE_PROVIDER_FAILURE")
 

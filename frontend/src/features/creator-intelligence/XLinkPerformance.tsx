@@ -1,7 +1,7 @@
 import { RefreshCw } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
-import { loadXLinkPerformance } from "./api";
+import { cachedXLinkPerformance, loadXLinkPerformance } from "./api";
 import type { SnapshotPeriod, XLinkPerformance as XLinkReport, XLinkPerformanceItem } from "./types";
 
 const PERIODS: Array<[SnapshotPeriod, string]> = [
@@ -21,8 +21,8 @@ function TrackingValue({ item }: { item: XLinkPerformanceItem }) {
 
 export function XLinkPerformance() {
   const [period, setPeriod] = useState<SnapshotPeriod>("TODAY");
-  const [report, setReport] = useState<XLinkReport | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [report, setReport] = useState<XLinkReport | null>(() => cachedXLinkPerformance("TODAY"));
+  const [loading, setLoading] = useState(() => !cachedXLinkPerformance("TODAY"));
   const [error, setError] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
   useEffect(() => {

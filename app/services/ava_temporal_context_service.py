@@ -24,6 +24,31 @@ class AvaTemporalContextService:
         "tonight": "NIGHT",
         "later tonight": "NIGHT",
     }
+    _INBOUND_SALUTATION = re.compile(
+        r"^\s*(?:good\s+)?(?P<daypart>morning|afternoon|evening)\b", re.I,
+    )
+    _DURATION = re.compile(
+        r"\b(?:from\s+(?:morning|afternoon|evening|night)\s+to\s+"
+        r"(?:morning|afternoon|evening|night)|all\s+(?:morning|afternoon|"
+        r"evening|night|day)|(?:morning|afternoon|evening|night)\s+(?:through|"
+        r"until|till)\s+(?:morning|afternoon|evening|night))\b", re.I,
+    )
+    _FUTURE_PLANNING = re.compile(
+        r"\b(?:tomorrow|next\s+(?:morning|afternoon|evening|night)|later\s+"
+        r"(?:today|tonight|this\s+(?:morning|afternoon|evening)))\b", re.I,
+    )
+    _CUSTOMER_ELAPSED = re.compile(
+        r"\b(?:i|we|my|our)\b[^.!?]{0,80}\b(?:this\s+)?"
+        r"(?P<elapsed>morning|afternoon|evening|night)\b", re.I,
+    )
+    _RESPONSE_SALUTATION = re.compile(
+        r"^\s*(?:good\s+)?(?P<daypart>morning|afternoon|evening)"
+        r"(?=\b|[!,.\u2026])", re.I,
+    )
+    _RESPONSE_SIGNOFF = re.compile(
+        r"(?:^|[.!?]\s*)(?:good\s*night|night|sweet\s+dreams)"
+        r"(?=\b|[!,.\u2026])", re.I,
+    )
 
     def __init__(self, *, clock=lambda: datetime.now(timezone.utc)):
         self._clock = clock
@@ -60,16 +85,28 @@ class AvaTemporalContextService:
     def classify_customer_reference(cls, message: str, context: dict) -> dict:
         """Separate customer wording from the authoritative Ava clock."""
         value = str(message or "").replace("â€™", "'").replace("’", "'")
+        duration_match = cls._DURATION.search(value)
+        future_planning_match = cls._FUTURE_PLANNING.search(value)
+        elapsed_match = cls._CUSTOMER_ELAPSED.search(value)
+        salutation_match = cls._INBOUND_SALUTATION.match(value)
         ava_match = re.search(
             r"\b(?:your\s+(?P<owned>morning|afternoon|evening|night|day)|"
             r"you\s+(?:doing|up to).*?(?P<future>later\s+tonight|tonight|morning|"
             r"afternoon|evening|night))\b", value, re.I,
         )
-        greeting_match = re.match(
-            r"\s*good\s+(?P<greeting>morning|afternoon|evening|night)\b", value, re.I,
-        )
-        match = ava_match or greeting_match or cls._REFERENCE.search(value)
+        greeting_match = salutation_match
+        match = (duration_match or future_planning_match or elapsed_match
+                 or ava_match or greeting_match or cls._REFERENCE.search(value))
         canonical = cls._canonical_daypart(context.get("avaDaypart"))
+        temporal_function = (
+            "DURATION" if duration_match
+            else "FUTURE_PLANNING" if future_planning_match
+            else "CUSTOMER_ELAPSED_CONTEXT" if elapsed_match
+            else "SALUTATION" if greeting_match
+            else "AVA_CURRENT_TIME_REFERENCE" if ava_match
+            else "TEMPORAL_REFERENCE" if match
+            else "NONE"
+        )
         result = {
             "canonicalAvaTimezone": context.get("avaTimezone"),
             "canonicalAvaLocalTime": context.get("avaLocalTime"),
@@ -77,6 +114,7 @@ class AvaTemporalContextService:
             "customerTimezone": context.get("customerTimezone"),
             "customerTemporalReferenceDetected": bool(match),
             "customerTemporalReference": match.group(0).lower() if match else None,
+            "customerTemporalFunction": temporal_function,
             "customerTemporalReferenceTarget": "NONE",
             "customerAssumedAvaDaypart": None,
             "customerTemporalRelation": "NONE",
@@ -85,21 +123,35 @@ class AvaTemporalContextService:
         }
         if not match:
             return result
-        if ava_match:
+        if duration_match:
+            reference = duration_match.group(0).lower()
+        elif elapsed_match:
+            reference = str(elapsed_match.group("elapsed")).lower()
+        elif ava_match:
             reference = str(ava_match.group("owned") or ava_match.group("future")).lower()
+        elif future_planning_match:
+            reference = future_planning_match.group(0).lower()
         elif greeting_match:
-            reference = str(greeting_match.group("greeting")).lower()
+            reference = str(greeting_match.group("daypart")).lower()
         else:
             reference = match.group(0).lower()
         lowered = value.lower()
-        future = bool(re.search(r"\b(?:later\s+tonight|what are you doing .*tonight|"
+        future = bool(future_planning_match or re.search(r"\b(?:later\s+tonight|what are you doing .*tonight|"
                                 r"what will you .*tonight|will you .*tonight)\b", lowered))
         ava_directed = bool(ava_match or greeting_match)
         customer_directed = bool(
             re.search(r"\b(?:i|i'm|i am|my|we|we're|we are)\b", lowered)
             and not ava_directed
         )
-        if reference in {"day", "today"} and re.search(r"\byour\s+(?:day|today)\b", lowered):
+        if duration_match:
+            target = "GENERAL"
+        elif elapsed_match:
+            target = "CUSTOMER"
+        elif reference in {"day", "today"} and re.search(r"\byour\s+(?:day|today)\b", lowered):
+            target = "GENERAL"
+        elif ava_match:
+            target = "AVA"
+        elif future_planning_match:
             target = "GENERAL"
         elif ava_directed:
             target = "AVA"
@@ -111,7 +163,14 @@ class AvaTemporalContextService:
             target = "AMBIGUOUS"
         assumed = cls._ASSUMED_DAYPART.get(reference) if target == "AVA" else None
         relation = "FUTURE" if future else "CURRENT_OR_ELAPSED"
-        if target != "AVA" or assumed is None:
+        if duration_match:
+            relation = "DURATION"
+        elif elapsed_match:
+            relation = "ELAPSED"
+        if (duration_match or elapsed_match
+                or (future_planning_match and target != "AVA")):
+            compatibility = "NOT_APPLICABLE"
+        elif target != "AVA" or assumed is None:
             compatibility = "NOT_APPLICABLE" if target != "GENERAL" else "BROAD_COMPATIBLE"
         elif future:
             compatibility = "FUTURE_COMPATIBLE"
@@ -130,11 +189,35 @@ class AvaTemporalContextService:
         return result
 
     @classmethod
+    def is_inbound_salutation(cls, message: str) -> bool:
+        """Expose the canonical inbound SALUTATION function to obligation logic."""
+        value = str(message or "").replace("â€™", "'").replace("â€™", "'")
+        incidental_span = re.search(
+            r"^\s*(?:good\s+)?(?:morning|afternoon|evening)\s+to\s+"
+            r"(?:morning|afternoon|evening|night)\b",
+            value, re.I,
+        )
+        return bool(
+            cls._INBOUND_SALUTATION.match(value)
+            and not cls._DURATION.search(value)
+            and not incidental_span
+        )
+
+    @classmethod
     def evaluate_response(cls, message: str, response: str, context: dict) -> dict:
         turn = cls.classify_customer_reference(message, context)
         value = str(response or "").replace("â€™", "'").replace("’", "'").lower()
         claim = None
-        if re.search(r"\b(?:my|this)\s+morning\b|\bmorning\s+(?:for me|over here)\b", value):
+        response_function = "NONE"
+        salutation = cls._RESPONSE_SALUTATION.match(value)
+        signoff = cls._RESPONSE_SIGNOFF.search(value)
+        if salutation:
+            claim = str(salutation.group("daypart")).upper()
+            response_function = "SALUTATION"
+        elif signoff:
+            claim = "NIGHT"
+            response_function = "SIGNOFF"
+        elif re.search(r"\b(?:my|this)\s+morning\b|\bmorning\s+(?:for me|over here)\b", value):
             claim = "MORNING"
         elif re.search(r"\b(?:my|this)\s+afternoon\b|\b(?:still|it's|it is)\s+afternoon\b", value):
             claim = "AFTERNOON"
@@ -145,8 +228,12 @@ class AvaTemporalContextService:
             claim = "NIGHT"
         elif re.search(r"\bmy\s+day\b|\bday's\s+been\b", value):
             claim = "GENERAL_DAY"
+        if claim is not None and response_function == "NONE":
+            response_function = "CURRENT_TIME_CLAIM"
         canonical = turn["canonicalAvaDaypart"]
-        if claim is None:
+        if response_function == "SIGNOFF":
+            aligned, reason = True, "CONVERSATIONAL_SIGNOFF"
+        elif claim is None:
             aligned, reason = True, "TEMPORALLY_NEUTRAL"
         elif claim == "GENERAL_DAY":
             aligned = not turn["temporalMismatchDetected"]
@@ -183,6 +270,10 @@ class AvaTemporalContextService:
             aligned, reason = False, "FUTURE_EVENT_TREATED_AS_COMPLETED"
         return {**turn,
             "responseTemporalClaim": claim or "NONE",
+            "responseTemporalFunction": response_function,
+            "responseSalutationDaypart": (
+                claim if response_function == "SALUTATION" else None
+            ),
             "responseTemporalAlignmentSatisfied": aligned,
             "responseTemporalAlignmentReason": reason,
             "customerEventTemporalRelation": event_relation,

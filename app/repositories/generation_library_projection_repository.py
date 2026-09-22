@@ -126,7 +126,13 @@ class GenerationLibraryProjectionRepository:
             total = int(cursor.fetchone()["total"])
             # Eligibility is applied first.  Lineage is then resolved in one batched
             # query so search/filtering never pulls an ineligible sibling into view.
-            cursor.execute(f"SELECT *, {self.EFFECTIVE_CLASSIFICATION_SQL} AS content_classification, {self.CLASSIFICATION_SOURCE_SQL} AS classification_source FROM public.generation_library_read_projection WHERE {where}", tuple(params))
+            cursor.execute(f"""SELECT *, {self.EFFECTIVE_CLASSIFICATION_SQL} AS content_classification,
+                       {self.CLASSIFICATION_SOURCE_SQL} AS classification_source,
+                       (SELECT canonical.record_payload #>> '{{generation_metadata,library_entered_at}}'
+                          FROM public.generation_library_records canonical
+                         WHERE canonical.image_id=generation_library_read_projection.image_id)
+                         AS library_entered_at
+                    FROM public.generation_library_read_projection WHERE {where}""", tuple(params))
             rows = list(cursor.fetchall())
             cursor.execute("""SELECT rr.source_generated_image_id parent_image_id,
                        x.generated_image_id child_image_id,x.variation_index,
@@ -151,7 +157,7 @@ class GenerationLibraryProjectionRepository:
 
     @staticmethod
     def _staged_first_order(rows, edges, *, sort: str):
-        """Pin eligible staged records without changing normal lineage-family order."""
+        """Preserve staged pinning, except for explicit returns and newer creations."""
         def epoch(value):
             if isinstance(value, datetime):
                 return value.timestamp()
@@ -167,8 +173,19 @@ class GenerationLibraryProjectionRepository:
             key=lambda row: (-epoch(row.get("staged_at")), str(row["image_id"])),
         )
         normal = [row for row in rows if not bool(row.get("is_staged"))]
-        return [(f"staged:{row['image_id']}", [row]) for row in staged] + \
-            GenerationLibraryProjectionRepository._family_order(normal, edges, sort=sort)
+        restore_epochs = [epoch(row.get("library_entered_at")) for row in normal
+                          if row.get("library_entered_at")]
+        if not restore_epochs:
+            return [(f"staged:{row['image_id']}", [row]) for row in staged] + \
+                GenerationLibraryProjectionRepository._family_order(normal, edges, sort=sort)
+        first_restore = min(restore_epochs)
+        priority = [row for row in normal if row.get("library_entered_at") or
+                    epoch(row.get("generation_date") or row.get("created_at")) > first_restore]
+        priority_ids = {str(row["image_id"]) for row in priority}
+        remaining = [row for row in normal if str(row["image_id"]) not in priority_ids]
+        return GenerationLibraryProjectionRepository._family_order(priority, edges, sort=sort) + \
+            [(f"staged:{row['image_id']}", [row]) for row in staged] + \
+            GenerationLibraryProjectionRepository._family_order(remaining, edges, sort=sort)
 
     @staticmethod
     def _family_order(rows, edges, *, sort: str):
@@ -205,7 +222,7 @@ class GenerationLibraryProjectionRepository:
             families.setdefault(root_of(str(row["image_id"])), []).append(row)
 
         def timestamp(row):
-            return epoch(row.get("generation_date") or row.get("created_at"))
+            return epoch(row.get("library_entered_at") or row.get("generation_date") or row.get("created_at"))
 
         def lineage_key(row):
             image_id, chain, seen = str(row["image_id"]), [], set()
@@ -216,7 +233,10 @@ class GenerationLibraryProjectionRepository:
             return (len(chain), tuple(reversed(chain)), timestamp(row), image_id)
 
         for root, members in families.items():
-            members.sort(key=lambda row: ((0,) if str(row["image_id"]) == root else (1,)) + lineage_key(row))
+            members.sort(key=lambda row: (
+                (0,) if row.get("library_entered_at") else
+                (1,) if str(row["image_id"]) == root else (2,)
+            ) + lineage_key(row))
 
         if sort == "oldest":
             family_key = lambda item: (min(timestamp(row) for row in item[1]), item[0])

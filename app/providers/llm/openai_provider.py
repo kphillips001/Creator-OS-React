@@ -59,7 +59,10 @@ class OpenAIProvider(BaseLLMProvider):
 
         try:
             client = self.client or self._build_client()
-            response = client.chat.completions.create(
+            from app.services.ordinary_generation_context import current_generation
+            session = current_generation()
+            complete = (lambda **kwargs: session.analysis(client, provider='OPENAI', **kwargs)) if session else client.chat.completions.create
+            response = complete(
                 model=request.model_name or self.config.model_name,
                 messages=self._messages(request),
                 temperature=self.config.temperature,

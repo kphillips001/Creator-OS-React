@@ -618,6 +618,17 @@ def test_bot_facing_signal_api_is_read_only(monkeypatch):
 
 
 def test_telegram_intent_wraps_delivery_without_exposing_id():
+    class PresentationService:
+        def build(self, **values):
+            return type("Presentation", (), {
+                "teaser_asset_id": 44,
+                "apply_to": lambda self, payload: payload.update({
+                    "asset_path": "safe-teaser.png",
+                    "metadata": {"private_chat_unlock_button": {
+                        "label": "🔓 Unlock", "url": values["unlock_button_url"],
+                    }},
+                }),
+            })()
     class PurchaseIntents:
         def __init__(self):
             self.created = []
@@ -638,11 +649,12 @@ def test_telegram_intent_wraps_delivery_without_exposing_id():
     service = TelegramPurchaseIntentService(
         creator_profile_id=2, fanvue_account_id=7,
         identity_repository=Identities(), purchase_intent_service=intents,
-        unlock_gateway_service=type("Gateway", (), {
+            unlock_gateway_service=type("Gateway", (), {
             "issue": lambda _self, _intent: (
                 None, "https://creator.test/api/v1/commerce/unlock/token"
             )
-        })(),
+            })(),
+            private_ppv_presentation_service=PresentationService(),
         clock=lambda: NOW,
     )
     result = type("Result", (), {

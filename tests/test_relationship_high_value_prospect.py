@@ -32,13 +32,19 @@ def test_hvp_has_bounded_availability_effect_without_bypassing_sleep(state, norm
 
 
 class Repository:
-    def __init__(self): self.active_row=None;self.advances=[];self.removed=False
+    def __init__(self): self.active_row=None;self.advances=[];self.removed=False;self.version=0;self.history=[]
     def active(self,**_): return self.active_row
     def set_high_value(self,**scope):
-        self.active_row={**scope,"classification":"HIGH_VALUE_PROSPECT","version":1}
+        if self.active_row: return self.active_row,False
+        self.version += 1
+        self.active_row={**scope,"classification":"HIGH_VALUE_PROSPECT","version":self.version}
+        self.history.append(self.active_row)
         return self.active_row,True
     def advance_eligible(self,**values): self.advances.append(values);return {"operation_id":"op","next_retry_at":values["available_at"]}
-    def remove(self,**_): self.removed=True;prior=self.active_row;self.active_row=None;return prior
+    def remove(self,**values):
+        self.removed=True;prior=self.active_row;self.active_row=None
+        if prior: prior.update(removed_by=values["removed_by"],removed_at="now")
+        return prior
 
 
 class Effective:
@@ -72,3 +78,16 @@ def test_manual_or_global_denial_prevents_advancement_and_remove_never_delays():
     result=service.remove(removed_by="operator",**scope())
     assert result["scheduleAdvanced"] is False
     assert not repo.advances
+
+
+def test_remove_is_idempotent_audited_persistent_and_can_be_reassigned():
+    repo=Repository();service=RelationshipValueOverrideService(
+        repository=repo,availability=Availability(),effective_permissions=Effective(False))
+    service.set(classification="HIGH_VALUE_PROSPECT",changed_by="operator",**scope())
+    removed=service.remove(removed_by="operator",**scope())["override"]
+    assert removed["removed_by"] == "operator"
+    assert service.active(**scope()) is None
+    assert service.remove(removed_by="operator",**scope())["override"] is None
+    reassigned=service.set(classification="HIGH_VALUE_PROSPECT",changed_by="operator",**scope())["override"]
+    assert reassigned["version"] == 2
+    assert len(repo.history) == 2

@@ -1,3 +1,4 @@
+from app.services.ordinary_generation_context import analysis_completion
 import json
 from openai import OpenAI
 from app.config import settings
@@ -46,7 +47,7 @@ Memory:
 """
 
         try:
-            response = self.client.chat.completions.create(
+            response = analysis_completion(self.client, purpose="OBJECTION_CLASSIFICATION",
                 model="gpt-4.1-mini",
                 messages=[
                     {"role": "system", "content": "Return JSON only."},

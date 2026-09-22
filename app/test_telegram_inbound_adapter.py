@@ -227,6 +227,7 @@ class TelegramInboundAdapterTests(unittest.TestCase):
         dependencies = dict(
             identity_adapter=RecordingIdentityAdapter(), creator_profile_id=3,
             fanvue_account_id=2, purchase_intent_service=purchases,
+            customer_safety_service=SimpleNamespace(decide=lambda **kwargs: SimpleNamespace(allowed=True)),
             conversation_thread_resolver=lambda **_kwargs: thread,
             conversation_message_saver=save, conversation_history_loader=history,
         )

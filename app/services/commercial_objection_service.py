@@ -73,9 +73,54 @@ class CommercialObjectionService:
         r"anything hotter|something hotter|more teasing)\b", re.I)
     PRODUCT = re.compile(r"\b(?:different (?:one|product)|another one instead)\b", re.I)
 
+    CHECKOUT_FAILURE = re.compile(
+        r"\b(?:(?:link|checkout|payment link)\s+(?:(?:has|have|is|its|it's|was)\s+)?"
+        r"(?:expired|broken|dead|invalid|unavailable|not working|not opening|"
+        r"(?:doesn't|does not|won't|will not)\s+(?:work|open))|"
+        r"(?:expired|broken|dead|invalid|unavailable)\s+(?:checkout\s+)?link|"
+        r"(?:can't|cannot|can not)\s+open\s+(?:(?:the|this)\s+)?checkout|"
+        r"checkout\s+(?:is\s+)?(?:broken|unavailable)|payment\s+link\s+(?:problem|issue))\b",
+        re.I,
+    )
+    AMBIGUOUS_FAILURE = re.compile(r"\b(?:can't|cannot|can not)\s+open\s+it\b", re.I)
+    NON_COMMERCE_LINK = re.compile(
+        r"\b(?:meeting|zoom|recipe|article|password reset|job application|calendar|"
+        r"verification|invitation|invite)\s+link\b", re.I,
+    )
+
+    @classmethod
+    def technical_payment_problem(cls, message, context=None):
+        text = str(message or "").lower().replace("\u2019", "'")
+        # Deliberately bounded typo corrections, not fuzzy matching arbitrary
+        # words such as an expired passport, subscription or driving license.
+        text = re.sub(r"\b(?:lnk|l ink)\b", "link", text)
+        text = re.sub(r"\b(?:expierd|expried|exipred)\b", "expired", text)
+        text = re.sub(r"\bdoesnt\b", "doesn't", text)
+        text = re.sub(r"\bcant\b", "can't", text)
+        text = re.sub(r"\s+", " ", text)
+        direct = bool(cls.PAYMENT.search(text) or cls.CHECKOUT_FAILURE.search(text))
+        if direct and not cls.NON_COMMERCE_LINK.search(text):
+            return True
+        values = dict(context or {})
+        evidence = bool(values.get("active_purchase_intent_id")
+                        or values.get("latest_purchase_intent")
+                        or dict(values.get("sales_progression") or {}).get("offeringId"))
+        return bool(evidence and cls.AMBIGUOUS_FAILURE.search(text))
+
+    @staticmethod
+    def technical_acknowledgement():
+        return "Let me check into it."
+
     def evaluate(self, *, message: str, context: dict | None = None) -> CommercialObjection:
         text = str(message or "").strip()
         values = dict(context or {})
+        if self.technical_payment_problem(text, values):
+            return self._result(CommercialObjectionType.PAYMENT_TECHNICAL,
+                                strength="STRONG", current=True, selling=False,
+                                authoritative=True, alternative=False,
+                                evidence=("PAYMENT_OR_LINK_FAILURE_LANGUAGE",),
+                                constraints={"technicalAcknowledgementOnly": True,
+                                             "noDiagnosticInterrogation": True})
         from app.services.commercial_receptiveness_service import (
             CommercialReceptivenessService,
         )
@@ -103,11 +148,6 @@ class CommercialObjectionService:
             values.get("active_offer_continuation") or {}
         )
 
-        if self.PAYMENT.search(text):
-            return self._result(CommercialObjectionType.PAYMENT_TECHNICAL,
-                                strength="STRONG", current=True, selling=False,
-                                authoritative=True, alternative=False,
-                                evidence=("PAYMENT_OR_LINK_FAILURE_LANGUAGE",))
         if self.TRUST.search(text):
             return self._result(CommercialObjectionType.TRUST_OR_SUPPORT,
                                 strength="STRONG", current=False, selling=False,

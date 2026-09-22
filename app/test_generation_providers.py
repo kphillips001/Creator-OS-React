@@ -33,6 +33,7 @@ from app.providers.generation.provider_registry import ProviderRegistry, create_
 from app.providers.generation.seedream_provider import Seedream45Provider, Seedream50ProProvider
 from app.providers.generation.wan_provider import WanImageEditProvider
 from app.services.generation_engine_service import GenerationEngineService
+from app.services.hosted_asset_reference_service import HostedAssetReferenceError
 from app.services.generation_request_diagnostic_service import GenerationRequestDiagnosticService
 
 
@@ -251,6 +252,73 @@ class GenerationProviderTests(unittest.TestCase):
             self.autonomous_inspiration_request(prompt, operator_guidance="Still very warm weather")
         )
         self.assertEqual(guided, unguided)
+
+    @staticmethod
+    def ordinary_creative_studio_request(origin: str, prompt: str):
+        request = GenerationProviderTests.autonomous_inspiration_request(prompt)
+        return GenerationRequest(**{
+            **request.__dict__,
+            "image_count": 1,
+            "metadata": {**dict(request.metadata), "workflow_origin": origin},
+        })
+
+    def test_ordinary_creative_studio_origins_reuse_natural_expression_safeguards(self):
+        provider = Seedream50ProProvider(api_key="test-key", http_client=FakeHttpClient())
+        for origin in (
+            "manual_creative_concept", "canonical_planner", "manual_prompt",
+            "prompt_workshop_premium",
+        ):
+            with self.subTest(origin=origin):
+                rendered = provider._render_prompt_text(
+                    self.ordinary_creative_studio_request(
+                        origin, "Ava reads beside a softly lit apartment window.",
+                    )
+                )
+                self.assertIn("INSPIRE ME NATURAL EXPRESSION NUANCE:", rendered)
+                self.assertNotIn("EXPLICIT EXPRESSION VARIATION:", rendered)
+                self.assertIn("The scene wins.", rendered)
+                self.assertLess(
+                    rendered.index("INSPIRE ME NATURAL EXPRESSION NUANCE:"),
+                    rendered.index("CANONICAL AVA FACIAL NATURALISM - NON-NEGOTIABLE:"),
+                )
+
+    def test_ordinary_creative_studio_preserves_requested_expression(self):
+        provider = Seedream50ProProvider(api_key="test-key", http_client=FakeHttpClient())
+        expressions = (
+            "smiling", "laughing", "serious", "playful", "flirty", "subtle smirk",
+        )
+        for origin in (
+            "manual_creative_concept", "canonical_planner", "manual_prompt",
+            "prompt_workshop_premium",
+        ):
+            for expression in expressions:
+                prompt = f"Ava is {expression} naturally while leaning by a sunny window."
+                with self.subTest(origin=origin, expression=expression):
+                    rendered = provider._render_prompt_text(
+                        self.ordinary_creative_studio_request(origin, prompt)
+                    )
+                    self.assertIn(prompt, rendered)
+                    self.assertIn("The scene wins.", rendered)
+                    self.assertNotIn("EXPLICIT EXPRESSION VARIATION:", rendered)
+
+    def test_neutral_creative_studio_does_not_select_exaggerated_expression_profile(self):
+        provider = Seedream50ProProvider(api_key="test-key", http_client=FakeHttpClient())
+        exaggerated_profiles = (
+            "lower-lip bite", "tongue display", "bedroom-alert eyes",
+            "exaggerated parted lips",
+        )
+        for origin in (
+            "manual_creative_concept", "canonical_planner", "manual_prompt",
+            "prompt_workshop_premium",
+        ):
+            rendered = provider._render_prompt_text(
+                self.ordinary_creative_studio_request(
+                    origin, "Ava arranges flowers on a kitchen counter.",
+                )
+            )
+            natural_profile = rendered.split("Natural profile: ", 1)[1].split(".\n", 1)[0].lower()
+            for phrase in exaggerated_profiles:
+                self.assertNotIn(phrase, natural_profile)
 
     def test_inspire_stage_12_keeps_provider_reference_policy_and_six_image_contract(self):
         provider = Seedream50ProProvider(api_key="test-key", http_client=FakeHttpClient())
@@ -671,6 +739,104 @@ class GenerationProviderTests(unittest.TestCase):
         self.assertTrue(upload_source.closed)
         self.assertEqual(http.posts[1][0], provider.endpoint)
         self.assertEqual(http.posts[1][1]["json"]["images"], ["https://cdn.test/hosted-reference.png"])
+
+    def test_edit_source_override_is_verified_without_asset_93_cache_identity(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            edit_source = Path(temp_dir) / "edit-source.png"
+            edit_source.write_bytes(b"edit source bytes")
+            calls = []
+            hosted = SimpleNamespace(
+                resolve=lambda **values: calls.append(("resolve", values)) or "https://cdn.test/canonical.png",
+                verify=lambda url, *, asset_id: calls.append(("verify", {"url": url, "asset_id": asset_id})),
+            )
+            http = FakeUploadHttpClient()
+            provider = Seedream50ProProvider(
+                api_key="test-key", http_client=http,
+                hosted_reference_service=hosted,
+            )
+            request = GenerationRequest(
+                request_id="edit-request", creator_profile_id=2,
+                prompt_plan_id="edit-plan", prompt_text="Change the outfit color.",
+                reference_asset_id=93,
+                reference_asset_path="D:/Ava_CMS/vault/originals/images/93.png",
+                provider_id=provider.provider_id, generation_type="image_to_image",
+                media_type="image", image_count=1,
+                metadata={
+                    "render_policy": RenderPolicy.EDIT.value,
+                    "provider_reference_role": "EDIT_SOURCE",
+                    "reference_image_url": str(edit_source),
+                },
+            )
+
+            payload = provider.build_payload(request)
+
+        self.assertEqual(payload["images"], ["https://cdn.test/hosted-reference.png"])
+        self.assertEqual(len(payload["images"]), 1)
+        self.assertFalse(any(kind == "resolve" for kind, _ in calls))
+        self.assertEqual(calls, [("verify", {
+            "url": "https://cdn.test/hosted-reference.png", "asset_id": "EDIT_SOURCE",
+        })])
+
+    def test_canonical_reference_keeps_asset_93_cache_identity(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            canonical = Path(temp_dir) / "asset-93.png"
+            canonical.write_bytes(b"canonical bytes")
+            calls = []
+            hosted = SimpleNamespace(
+                resolve=lambda **values: calls.append(values) or "https://cdn.test/asset-93.png",
+            )
+            provider = Seedream50ProProvider(
+                api_key="test-key", http_client=FakeHttpClient(),
+                hosted_reference_service=hosted,
+            )
+            request = GenerationRequest(
+                request_id="content-request", creator_profile_id=2,
+                prompt_plan_id="content-plan", prompt_text="Canonical portrait.",
+                reference_asset_id=93, reference_asset_path=str(canonical),
+                provider_id=provider.provider_id, generation_type="image_to_image",
+                media_type="image", image_count=1,
+                metadata={"render_policy": RenderPolicy.CONTENT_STANDARD.value},
+            )
+
+            payload = provider.build_payload(request)
+
+        self.assertEqual(payload["images"], ["https://cdn.test/asset-93.png"])
+        self.assertEqual(calls[0]["asset_id"], 93)
+        self.assertEqual(Path(calls[0]["source_path"]), canonical)
+
+    def test_edit_source_verification_failure_prevents_generation_submit(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            edit_source = Path(temp_dir) / "edit-source.png"
+            edit_source.write_bytes(b"edit source bytes")
+            hosted = SimpleNamespace(
+                verify=lambda *_args, **_kwargs: (_ for _ in ()).throw(
+                    HostedAssetReferenceError("Hosted edit source verification failed.")
+                ),
+            )
+            http = FakeUploadHttpClient()
+            provider = Seedream50ProProvider(
+                api_key="test-key", http_client=http,
+                hosted_reference_service=hosted,
+            )
+            request = GenerationRequest(
+                request_id="edit-failure", creator_profile_id=2,
+                prompt_plan_id="edit-plan", prompt_text="Edit source.",
+                reference_asset_id=93,
+                reference_asset_path="D:/Ava_CMS/vault/originals/images/93.png",
+                provider_id=provider.provider_id, generation_type="image_to_image",
+                media_type="image", image_count=1,
+                metadata={
+                    "render_policy": RenderPolicy.EDIT.value,
+                    "provider_reference_role": "EDIT_SOURCE",
+                    "reference_image_url": str(edit_source),
+                },
+            )
+
+            result = provider.execute(request)
+
+        self.assertEqual([url for url, _ in http.posts], [provider.media_upload_endpoint])
+        self.assertEqual(result.status, GenerationStatus.FAILED.value)
+        self.assertIn("Hosted edit source verification failed", result.failure_reason)
 
     def test_prompt_count_fans_out_provider_calls_and_merges_outputs(self):
         http = FakeHttpClient(

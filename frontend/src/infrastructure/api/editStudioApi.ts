@@ -23,6 +23,23 @@ type EditStudioReferenceResponse = {
 
 type EditStudioActionResponse = { success: boolean; message: string };
 
+export type EditStudioApiErrorKind =
+  | "job_not_found"
+  | "status_temporarily_unavailable"
+  | "backend_unavailable"
+  | "request_failed";
+
+export class EditStudioApiError extends Error {
+  constructor(
+    message: string,
+    public readonly kind: EditStudioApiErrorKind,
+    public readonly status: number | null = null,
+  ) {
+    super(message);
+    this.name = "EditStudioApiError";
+  }
+}
+
 export type GenerateEditInput = {
   sourceImageId: string;
   originalSourceImageId: string;
@@ -41,15 +58,35 @@ export type EditGenerationStatus = {
 };
 
 async function readEditStudioJson<T>(path: string, signal?: AbortSignal): Promise<T> {
-  const response = await fetch(`${environment.apiBaseUrl}${path}`, { signal, cache: "no-store" });
+  let response: Response;
+  try {
+    response = await fetch(`${environment.apiBaseUrl}${path}`, { signal, cache: "no-store" });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") throw error;
+    throw new EditStudioApiError("Edit Studio backend unavailable.", "backend_unavailable");
+  }
   const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
   const body = await response.text();
   if (!response.ok) {
-    const message = response.status === 404
-      ? "Edit Studio backend unavailable."
-      : response.status >= 500
-        ? "Unable to load Edit Studio."
-        : `Edit Studio request failed with HTTP ${response.status}`;
+    const isJobStatus = path.startsWith("/edit-studio/generation/");
+    const kind: EditStudioApiErrorKind = response.status === 404 && isJobStatus
+      ? "job_not_found"
+      : response.status === 503 && isJobStatus
+        ? "status_temporarily_unavailable"
+        : response.status === 404
+          ? "request_failed"
+          : response.status === 503
+            ? "backend_unavailable"
+            : "request_failed";
+    const message = kind === "job_not_found"
+      ? "Generation status could not be found."
+      : kind === "status_temporarily_unavailable"
+        ? "Generation status is temporarily unavailable."
+        : kind === "backend_unavailable"
+          ? "Edit Studio backend unavailable."
+          : response.status >= 500
+            ? "Unable to load Edit Studio."
+            : `Edit Studio request failed with HTTP ${response.status}`;
     if (contentType.includes("application/json") && body) {
       try {
         const result = JSON.parse(body) as { error?: string; detail?: string };
@@ -62,7 +99,7 @@ async function readEditStudioJson<T>(path: string, signal?: AbortSignal): Promis
     } else {
       console.error("Edit Studio backend request failed", { path, status: response.status, body });
     }
-    throw new Error(message);
+    throw new EditStudioApiError(message, kind, response.status);
   }
   if (!contentType.includes("application/json")) {
     throw new Error("Edit Studio returned a non-JSON response");

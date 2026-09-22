@@ -17,7 +17,8 @@ import {
   type DeveloperAgentTask,
   type DeveloperExecution,
 } from "../developer-agent/DeveloperAgentExecutionContext";
-import { loadCreatorIntelligence } from "./api";
+import { cachedCreatorIntelligence, loadCreatorIntelligence } from "./api";
+import { overviewQuery, peekOverviewQuery } from "./overviewQueryCache";
 import { PerformanceSnapshot } from "./PerformanceSnapshot";
 import { XLinkPerformance } from "./XLinkPerformance";
 import type {
@@ -210,59 +211,64 @@ export function diagnosticResolved(
 
 export function CreatorIntelligencePage() {
   const location = useLocation();
-  const {
-    getExecution, recentExecutions, refreshExecutions, refreshNotifications,
-    recentResolutions, recheck,
-  } = useDeveloperAgentExecutions();
-  const [data, setData] = useState<CreatorIntelligence | null>(null);
-  const [controls, setControls] = useState<GlobalControls | null>(null);
+  const { getExecution, recentExecutions, recentResolutions } =
+    useDeveloperAgentExecutions();
+  const [data, setData] = useState<CreatorIntelligence | null>(cachedCreatorIntelligence);
+  const [controls, setControls] = useState<GlobalControls | null>(() =>
+    peekOverviewQuery<GlobalControls>("overview:controls", 15_000));
   const [selectedIssue, setSelectedIssue] = useState<DiagnosticIssue | null>(null);
   const [reopenedExecution, setReopenedExecution] = useState<DeveloperExecution | null>(null);
   const [reopenedResolution, setReopenedResolution] = useState<AutonomousResolution | null>(null);
   const [resolution, setResolution] = useState<{
     executionId: string; resolvedAt: string;
   } | null>(null);
-  const [error, setError] = useState("");
+  const [diagnosticsError, setDiagnosticsError] = useState("");
+  const [controlsError, setControlsError] = useState("");
+  const [diagnosticsRefreshing, setDiagnosticsRefreshing] = useState(false);
+  const [controlsRefreshing, setControlsRefreshing] = useState(false);
 
   const refreshDashboard = useCallback(async () => {
-    const [intelligence, operations] = await Promise.all([
-      loadCreatorIntelligence(),
-      controlsApi.global(),
-    ]);
+    setDiagnosticsRefreshing(true);
+    setDiagnosticsError("");
+    const intelligence = await loadCreatorIntelligence();
     setData(intelligence);
-    setControls(operations);
-    await Promise.all([
-      recheck(), refreshExecutions(), refreshNotifications(),
-    ]);
     return intelligence;
-  }, [recheck, refreshExecutions, refreshNotifications]);
+  }, []);
+
+  const refreshControls = useCallback(async () => {
+    setControlsRefreshing(true);
+    setControlsError("");
+    const current = await overviewQuery(
+      "overview:controls", () => controlsApi.display());
+    setControls(current);
+  }, []);
 
   useEffect(() => {
-    void refreshDashboard().catch((reason: unknown) => {
-      setError(reason instanceof Error ? reason.message : "Unable to load Creator Intelligence.");
-    });
+    void refreshDashboard()
+      .catch((reason: unknown) => setDiagnosticsError(
+        reason instanceof Error ? reason.message : "Unable to load Creator Intelligence."))
+      .finally(() => setDiagnosticsRefreshing(false));
   }, [refreshDashboard]);
+  useEffect(() => {
+    void refreshControls()
+      .catch((reason: unknown) => setControlsError(
+        reason instanceof Error ? reason.message : "Unable to load Ava status."))
+      .finally(() => setControlsRefreshing(false));
+  }, [refreshControls]);
   useEffect(() => {
     const executionId = (location.state as { developerExecutionId?: string } | null)?.developerExecutionId;
     if (executionId) void getExecution(executionId).then(setReopenedExecution);
   }, [getExecution, location.state]);
 
-  if (error) {
-    return <main className="intelligence-page"><div className="intelligence-state" role="alert"><AlertTriangle />{error}</div></main>;
-  }
-  if (!data) {
-    return <main className="intelligence-page"><div className="intelligence-state">Loading operational intelligence…</div></main>;
-  }
-
-  const opportunities = observedOpportunities(data);
+  const opportunities = data ? observedOpportunities(data) : [];
   const relationshipPulse: Array<[string, string | number]> = [
-    ["New conversations", data.today.activeConversations ?? "Untracked"],
-    ["Returning visitors", data.relationshipMode.returningVisitors],
-    ["High interest customers", data.relationshipMode.highInterestCustomers],
+    ["New conversations", data?.today.activeConversations ?? "Untracked"],
+    ["Returning visitors", data?.relationshipMode.returningVisitors ?? "Untracked"],
+    ["High interest customers", data?.relationshipMode.highInterestCustomers ?? "Untracked"],
     ["PRE_LAUNCH_INTEREST customers", "Untracked"],
-    ["Would Have Sold", data.relationshipMode.wouldHaveSoldToday],
+    ["Would Have Sold", data?.relationshipMode.wouldHaveSoldToday ?? "Untracked"],
     ["Average conversation length", "Untracked"],
-    ["Relationship trend", data.commerceLearning.trend || "Untracked"],
+    ["Relationship trend", data?.commerceLearning.trend || "Untracked"],
   ];
 
   return <main className="intelligence-page">
@@ -273,12 +279,22 @@ export function CreatorIntelligencePage() {
         <time>{localDate()}</time>
       </div>
       <div className="intelligence-hero__status">
-        <Status label="AVA BOT" value={controls?.avaBot.effective ?? "ATTENTION"} className={`mode-badge--${(controls?.avaBot.effective ?? "ATTENTION").toLowerCase()}`} />
+        <Status label="AVA BOT" value={controls?.avaBot.effective ?? (controlsError ? "UNAVAILABLE" : "LOADING")} className={`mode-badge--${(controls?.avaBot.effective ?? "attention").toLowerCase()}`} />
         <Link className="manage-controls-link" to="/business/controls">Manage Controls <ArrowRight size={14} /></Link>
+        {controlsRefreshing && controls && <small role="status">Refreshing status…</small>}
+        {controlsError && <small role="alert">{controlsError}</small>}
       </div>
     </header>
 
-    <CompactSystemStatus items={data.systemHealth} />
+    {data
+      ? <CompactSystemStatus items={data.systemHealth} />
+      : <section className="compact-system-status" aria-label="Operational diagnostics">
+          <strong>Operational diagnostics</strong>
+          {diagnosticsError
+            ? <div role="alert">{diagnosticsError} <button onClick={() => void refreshDashboard()} type="button">Retry</button></div>
+            : <p role="status">Loading operational diagnostics…</p>}
+        </section>}
+    {diagnosticsRefreshing && data && <p className="intelligence-refreshing" role="status">Refreshing operational diagnostics…</p>}
     <PerformanceSnapshot />
     <XLinkPerformance />
 
@@ -460,10 +476,16 @@ function CompactSystemStatus({ items }: { items: CreatorIntelligence["systemHeal
   const detail = critical
     ? `${critical} operational ${critical === 1 ? "service needs" : "services need"} attention.`
     : warnings ? `${warnings} operational ${warnings === 1 ? "warning" : "warnings"}.` : "Core operational checks are healthy.";
+  const schemaNeedsAttention = operational.some((item) =>
+    item.label.toLowerCase() === "schema certification" &&
+    (item.status === "Offline" || item.status === "Needs Attention"));
+  const operationsPath = schemaNeedsAttention
+    ? "/business/operations?tab=schema_certification"
+    : "/business/operations";
   return <section className="compact-system-status" aria-labelledby="compact-system-status-heading">
     <div><span>Operations</span><h2 id="compact-system-status-heading">System Status</h2><p>{detail}</p></div>
     <strong className={label === "Healthy" ? "is-healthy" : label === "Warning" ? "is-warning" : "needs-attention"}>{label}</strong>
-    <Link to="/business/operations">View Operations <ArrowRight size={14} /></Link>
+    <Link to={operationsPath}>View Operations <ArrowRight size={14} /></Link>
   </section>;
 }
 

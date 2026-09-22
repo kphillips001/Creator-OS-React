@@ -153,12 +153,114 @@ class PurchaseIntentRepository:
             raise ValueError("Purchase Intent is not eligible for click recording.")
         return result
 
+    def mark_clicked_from_unlock(
+        self, intent_id: UUID, *, at: datetime,
+    ) -> PurchaseIntent:
+        """Atomically record possession of a valid customer unlock grant.
+
+        A public unlock request is stronger evidence than an uncertain Telegram
+        acknowledgement: the customer could not possess the opaque grant unless
+        the presentation reached them.  This boundary intentionally applies only
+        to the canonical unlock gateway and never changes ordinary send state.
+        """
+        result = self._one(
+            """UPDATE public.purchase_intents SET
+                   status=CASE
+                       WHEN status IN ('CREATED','PRESENTED') THEN 'CLICKED'
+                       ELSE status
+                   END,
+                   presented_at=CASE
+                       WHEN status='CREATED' THEN COALESCE(presented_at,%s)
+                       ELSE presented_at
+                   END,
+                   clicked_at=CASE
+                       WHEN status IN ('CREATED','PRESENTED')
+                           THEN COALESCE(clicked_at,%s)
+                       ELSE clicked_at
+                   END,
+                   updated_at=CASE
+                       WHEN status IN ('CREATED','PRESENTED') THEN NOW()
+                       ELSE updated_at
+                   END
+               WHERE purchase_intent_id=%s
+                 AND status IN ('CREATED','PRESENTED','CLICKED','PURCHASED')
+               RETURNING *""",
+            (at, at, intent_id),
+        )
+        if result is None:
+            raise ValueError(
+                "Purchase Intent is not eligible for unlock click recording."
+            )
+        return result
+
     def mark_expired(self, intent_id: UUID) -> PurchaseIntent:
         return self.update(intent_id, status=PurchaseIntentStatus.EXPIRED)
 
     def mark_abandoned(self, intent_id: UUID, *, at: datetime) -> PurchaseIntent:
         return self.update(intent_id, status=PurchaseIntentStatus.ABANDONED,
                            abandoned_at=at)
+
+    def finalize_delivery_failed(
+        self, intent_id: UUID, *, at: datetime,
+    ) -> tuple[PurchaseIntent, bool]:
+        """Atomically finalize one failed delivery without weakening transitions.
+
+        ``ABANDONED`` is the existing durable terminal representation for an
+        offer that never reached the customer.  Replaying the same failure is
+        idempotent, but every other terminal state remains a conflict.  The
+        conditional UPDATE makes that distinction safe under concurrent
+        finalizers and prevents purchase/ownership evidence from regressing.
+        """
+        with self.connection_factory() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """UPDATE public.purchase_intents
+                       SET status='ABANDONED',
+                           abandoned_at=COALESCE(abandoned_at,%s),
+                           updated_at=NOW()
+                       WHERE purchase_intent_id=%s
+                         AND status IN ('CREATED','PRESENTED','CLICKED')
+                       RETURNING *""",
+                    (at, intent_id),
+                )
+                row = cursor.fetchone()
+                if row is not None:
+                    return self._intent(dict(row)), True
+                cursor.execute(
+                    """SELECT * FROM public.purchase_intents
+                       WHERE purchase_intent_id=%s""",
+                    (intent_id,),
+                )
+                row = cursor.fetchone()
+                if row is None:
+                    raise LookupError("Purchase Intent was not found.")
+                current = self._intent(dict(row))
+                if current.status is PurchaseIntentStatus.ABANDONED:
+                    return current, False
+                raise ValueError(
+                    "Purchase Intent delivery-failure finalization conflicts "
+                    f"with terminal state {current.status}."
+                )
+
+    def settle_evergreen_purchase(self, intent_id, *, at, transaction_id, payment_id, event_id):
+        from app.services.evergreen_purchase_attribution import family_target
+        with self.connection_factory() as c:
+            if not c.execute("SELECT to_regclass('public.evergreen_offer_authorities') AS name").fetchone()['name']:
+                return None
+            family = c.execute("SELECT * FROM evergreen_offer_authorities WHERE original_intent_id=%s", (intent_id,)).fetchone()
+            if not family:
+                return None
+            target = family_target(c, intent_id, create_receipt_intent=True)
+            row = c.execute("SELECT * FROM purchase_intents WHERE purchase_intent_id=%s FOR UPDATE", (target,)).fetchone()
+            if row['provider_transaction_order_id'] not in (None, transaction_id):
+                raise ValueError("Offer family already purchased by another transaction.")
+            result = c.execute("""UPDATE purchase_intents SET status='PURCHASED',
+                provider_transaction_order_id=%s,provider_payment_id=%s,provider_event_id=%s,
+                purchased_at=COALESCE(purchased_at,%s),actual_charged_price_minor=%s,
+                attribution_result='ATTRIBUTED',attribution_reason='EVERGREEN_CANONICAL_PURCHASE',updated_at=NOW()
+                WHERE purchase_intent_id=%s RETURNING *""",
+                (transaction_id,payment_id,event_id,at,family['final_price_minor'],target)).fetchone()
+            return self._intent(result)
 
     def mark_purchased(self, intent_id: UUID, *, at: datetime,
                        attribution_reason: str) -> PurchaseIntent:
@@ -415,6 +517,21 @@ class PurchaseIntentRepository:
             ),
         }
 
+    def list_confirmed_presentations_for_buyer(
+        self, *, creator_profile_id: int, fanvue_account_id: int,
+        telegram_user_id: int,
+    ) -> list[PurchaseIntent]:
+        """Return durable customer-visible presentations, newest first."""
+        with self.connection_factory() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """SELECT * FROM public.purchase_intents
+                   WHERE creator_profile_id=%s AND fanvue_account_id=%s
+                     AND telegram_user_id=%s AND presented_at IS NOT NULL
+                   ORDER BY presented_at DESC,purchase_intent_id DESC""",
+                (creator_profile_id, fanvue_account_id, telegram_user_id),
+            )
+            return [self._intent(dict(row)) for row in cursor.fetchall()]
+
     def get_unacknowledged_purchase(
         self, *, creator_profile_id: int, fanvue_account_id: int,
         telegram_user_id: int,
@@ -602,9 +719,20 @@ class PurchaseIntentRepository:
                     (list(intent_ids),),
                 )
                 rows = cursor.fetchall()
-        return {
-            UUID(str(row["purchase_intent_id"])): dict(row) for row in rows
-        }
+        contexts = {UUID(str(row["purchase_intent_id"])): dict(row) for row in rows}
+        with self.connection_factory() as c:
+            if c.execute("SELECT to_regclass('public.evergreen_offer_authorities') AS name").fetchone()['name']:
+                families=c.execute("""SELECT i.purchase_intent_id,i.provider_resource_id,o.provider_evidence
+                    FROM purchase_intents i JOIN evergreen_offer_authorities f ON f.original_intent_id=i.purchase_intent_id
+                    LEFT JOIN evergreen_provider_operations o ON o.original_intent_id=f.original_intent_id
+                    WHERE i.purchase_intent_id=ANY(%s)""",(list(intent_ids),)).fetchall()
+                for family in families:
+                    context=contexts.get(family['purchase_intent_id'])
+                    if context is not None:
+                        context['evergreen_family']=True
+                        context['evergreen_provider_resource_ids']=[family['provider_resource_id']]+[
+                            e['provider_resource_id'] for e in family['provider_evidence'] or []]
+        return contexts
 
     def expire_due(self, *, now: datetime) -> list[PurchaseIntent]:
         with self.connection_factory() as connection:

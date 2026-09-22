@@ -5,6 +5,12 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Mapping
 
+from app.models.canonical_creator_identity import (
+    CanonicalCreatorIdentityContract,
+    GenerationReferenceRole,
+    canonical_identity_version,
+)
+
 from app.models.asset import Asset
 from app.models.asset_library import AssetLibraryFilter, AssetLibraryItem
 from app.models.creator_intent import CreatorIntent
@@ -24,6 +30,7 @@ from app.services.asset_library_service import AssetLibraryService
 from app.repositories.content_repository import insert_content_item
 from app.services.reference_asset_protection import is_protected_reference_asset
 from app.services.runtime_media_resolver import RuntimeMediaResolver
+from app.services.hosted_asset_reference_service import HostedAssetReferenceService
 
 
 REFERENCE_METADATA_KEY = "reference_library"
@@ -38,6 +45,7 @@ class ReferenceLibraryService:
         asset_repository: AssetRepository | None = None,
         asset_library_service: AssetLibraryService | None = None,
         ai_import_workflow: AIImportWorkflowService | None = None,
+        hosted_reference_service: HostedAssetReferenceService | None = None,
     ):
         self.assets = asset_repository or AssetRepository()
         self.asset_library = asset_library_service or AssetLibraryService(
@@ -46,6 +54,7 @@ class ReferenceLibraryService:
         self.ai_import = ai_import_workflow or AIImportWorkflowService(
             asset_repository=self.assets,
         )
+        self.hosted_references = hosted_reference_service or HostedAssetReferenceService()
 
     def add_reference(
         self,
@@ -318,6 +327,57 @@ class ReferenceLibraryService:
             message="Active Reference selected.",
             asset_id=asset_id,
             reference=self.get_reference(asset_id),
+        )
+
+    def resolve_canonical_identity_contract(
+        self, *, creator_profile: Mapping[str, Any], provider_id: str,
+        identity_prompt_policy_id: str,
+        identity_prompt_policy_version: str,
+    ) -> CanonicalCreatorIdentityContract:
+        """Resolve and prove one canonical identity without mutating reference state."""
+        creator_profile_id = int((creator_profile or {}).get("id") or 0)
+        if not creator_profile_id:
+            raise ValueError("A creator profile is required to resolve canonical identity.")
+        reference = self.get_active_canonical_reference(creator_profile_id=creator_profile_id)
+        if reference is None:
+            raise ValueError("A proven active canonical identity reference is required.")
+        if int(reference.creator_profile_id) != creator_profile_id:
+            raise ValueError("The canonical identity reference belongs to a different creator.")
+        metadata = dict(reference.metadata or {})
+        if not (reference.is_active and metadata.get("canonical") is True and metadata.get("protected") is True):
+            raise ValueError("The creator identity reference is not active, canonical, and protected.")
+        local_path = str(reference.asset.original_path or "").strip()
+        path = Path(local_path)
+        if not path.is_file():
+            raise ValueError("The canonical identity reference file is unavailable.")
+        content_sha256 = self.hosted_references.checksum(path).upper()
+        expected_sha256 = str(metadata.get("canonical_sha256") or "").strip().upper()
+        if expected_sha256 and content_sha256 != expected_sha256:
+            raise ValueError("The canonical identity reference failed SHA-256 verification.")
+        provider_reference = local_path
+        if str(provider_id) == "seedream_5_0_pro":
+            provider_reference = self.hosted_references.cached_url(
+                asset_id=int(reference.asset_id), source_path=local_path,
+                host_name="wavespeed_media",
+            ) or local_path
+        version = canonical_identity_version(
+            creator_profile_id=creator_profile_id, canonical_asset_id=int(reference.asset_id),
+            canonical_content_sha256=content_sha256,
+            identity_prompt_policy_id=identity_prompt_policy_id,
+            identity_prompt_policy_version=identity_prompt_policy_version,
+        )
+        from app.models.generation_engine import utc_now
+        return CanonicalCreatorIdentityContract(
+            creator_profile_id=creator_profile_id,
+            creator_identity_key=f"creator_profile:{creator_profile_id}",
+            canonical_asset_id=int(reference.asset_id),
+            canonical_content_sha256=content_sha256,
+            canonical_local_path=local_path,
+            canonical_provider_reference=provider_reference,
+            identity_version=version, resolved_at=utc_now(),
+            reference_role=GenerationReferenceRole.CANONICAL_IDENTITY.value,
+            identity_prompt_policy_id=str(identity_prompt_policy_id),
+            identity_prompt_policy_version=str(identity_prompt_policy_version),
         )
 
     def set_favorite(

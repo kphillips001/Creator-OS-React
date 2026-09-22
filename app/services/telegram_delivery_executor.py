@@ -8,6 +8,7 @@ commerce delivery is allowed.
 from __future__ import annotations
 
 import inspect
+from app.services.telegram_transport_boundary import RoutedTelegramSender
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
@@ -28,6 +29,9 @@ class TelegramCommercialDestinationError(ValueError):
             else "INVALID_CUSTOMER_FACING_DESTINATION"
         )
 
+class TelegramCommercialPresentationError(ValueError):
+    code = "PRIVATE_PPV_MEDIA_REQUIRED"
+
 class TelegramRelationshipControlBlockedError(RuntimeError):
     code = "RELATIONSHIP_HUMAN_OPERATOR_ACTIVE"
 
@@ -36,7 +40,8 @@ class _RelationshipGuardedSender:
     def __getattr__(self,name): return getattr(self.sender,name)
     def _call(self,name,**values):
         method=getattr(self.sender,name)
-        if inspect.iscoroutinefunction(method):
+        underlying = getattr(self.sender, "sender", self.sender)
+        if inspect.iscoroutinefunction(method) or inspect.iscoroutinefunction(getattr(underlying, name, None)):
             async def guarded():
                 with self.service.autonomous_send_guard(**self.scope) as (allowed,control):
                     if not allowed: raise TelegramRelationshipControlBlockedError(
@@ -106,18 +111,31 @@ class TelegramDeliveryExecutor:
         *,
         context: Mapping[str, Any] | None = None,
     ) -> TelegramDeliveryExecutionResult:
+        if (context or {}).get("customer_delivery_disabled"):
+            return TelegramDeliveryExecutionResult(status="DISABLED",executed=False,
+                blocking_reason="COMPATIBILITY_PATH_HAS_NO_CANONICAL_LIFECYCLE")
         normalized = self._normalize_payload(payload)
         metadata = self._metadata(normalized, context)
         message_text = self._message_text(normalized, context)
-        sender = self._sender(context)
-        if self._private_unlock_button(normalized) and sender is None:
-            sender = self._business_commercial_transport
+        sender = (
+            self._business_commercial_transport
+            if self._private_unlock_button(normalized)
+            else self._sender(context)
+        )
+        if sender is not None:
+            sender = RoutedTelegramSender(sender, context=context, metadata=metadata)
         sender = self._guarded_sender(sender,context)
         chat_id = self._chat_id(context)
 
         permission_block = self._effective_permission_block(normalized, context)
         if permission_block is not None:
             return self._relationship_blocked_result(normalized, metadata, permission_block)
+
+        presentation_error = self._commercial_media_error(normalized, context)
+        if presentation_error is not None:
+            if self._raise_on_failure(context):
+                raise presentation_error
+            return self._failure_result(normalized, metadata, presentation_error)
 
         relationship_block = self._relationship_block(context)
         if relationship_block is not None:
@@ -157,18 +175,31 @@ class TelegramDeliveryExecutor:
         *,
         context: Mapping[str, Any] | None = None,
     ) -> TelegramDeliveryExecutionResult:
+        if (context or {}).get("customer_delivery_disabled"):
+            return TelegramDeliveryExecutionResult(status="DISABLED",executed=False,
+                blocking_reason="COMPATIBILITY_PATH_HAS_NO_CANONICAL_LIFECYCLE")
         normalized = self._normalize_payload(payload)
         metadata = self._metadata(normalized, context)
         message_text = self._message_text(normalized, context)
-        sender = self._sender(context)
-        if self._private_unlock_button(normalized) and sender is None:
-            sender = self._business_commercial_transport
+        sender = (
+            self._business_commercial_transport
+            if self._private_unlock_button(normalized)
+            else self._sender(context)
+        )
+        if sender is not None:
+            sender = RoutedTelegramSender(sender, context=context, metadata=metadata)
         sender = self._guarded_sender(sender,context)
         chat_id = self._chat_id(context)
 
         permission_block = self._effective_permission_block(normalized, context)
         if permission_block is not None:
             return self._relationship_blocked_result(normalized, metadata, permission_block)
+
+        presentation_error = self._commercial_media_error(normalized, context)
+        if presentation_error is not None:
+            if self._raise_on_failure(context):
+                raise presentation_error
+            return self._failure_result(normalized, metadata, presentation_error)
 
         relationship_block = self._relationship_block(context)
         if relationship_block is not None:
@@ -185,7 +216,7 @@ class TelegramDeliveryExecutor:
             return await self._execute_asset_async(
                 sender, chat_id=chat_id, asset_path=normalized.asset_path,
                 message_text=message_text, payload=normalized, metadata=metadata,
-                raise_on_failure=self._raise_on_failure(context),
+                raise_on_failure=self._raise_on_failure(context), context=context,
             )
         if message_text and sender is not None and chat_id is not None:
             safety = self._global_safety_service.check_global_safety()
@@ -215,6 +246,10 @@ class TelegramDeliveryExecutor:
         try:
             button = self._private_unlock_button(payload)
             self._validate_commercial_destination(metadata, button)
+            self._validate_commercial_text(message_text, button)
+            button = button or self._ordinary_action(payload)
+            if payload.metadata.get("suppress_link_preview") and not payload.asset_path:
+                button["disable_link_preview"] = True
             sent = sender.send_text(
                 chat_id=chat_id, message_text=message_text, **button,
             )
@@ -256,6 +291,10 @@ class TelegramDeliveryExecutor:
         try:
             button = self._private_unlock_button(payload)
             self._validate_commercial_destination(metadata, button)
+            self._validate_commercial_text(message_text, button)
+            button = button or self._ordinary_action(payload)
+            if payload.metadata.get("suppress_link_preview") and not payload.asset_path:
+                button["disable_link_preview"] = True
             result = sender.send_text(
                 chat_id=chat_id, message_text=message_text, **button,
             )
@@ -432,6 +471,16 @@ class TelegramDeliveryExecutor:
             )
 
     @staticmethod
+    def _validate_commercial_text(message_text, button):
+        if not button:
+            return
+        from app.services.private_ppv_presentation_service import (
+            PrivatePpvPresentationService,
+        )
+        PrivatePpvPresentationService.validate_customer_text(
+            message_text, configured_destination=button.get("button_url") or "")
+
+    @staticmethod
     def _private_unlock_button(payload):
         metadata = dict(payload.metadata or {})
         button = dict(metadata.get("private_chat_unlock_button") or {})
@@ -440,6 +489,33 @@ class TelegramDeliveryExecutor:
         if not label or not url:
             return {}
         return {"button_label": label, "button_url": url}
+
+    @staticmethod
+    def _ordinary_action(payload):
+        if any((payload.metadata or {}).get(key) for key in ("inline_actions", "callback_data")):
+            raise ValueError("Unsupported required Telegram action; no send is permitted.")
+        action = (payload.metadata or {}).get("url_action")
+        if action is None:
+            return {}
+        from app.models.telegram_transport_contract import TelegramRequirements
+        if not isinstance(action, Mapping):
+            raise ValueError("A URL action must be a structured object.")
+        label, url = action.get("label"), action.get("url")
+        if not label or not url:
+            raise ValueError("A URL action requires label and URL.")
+        TelegramRequirements.from_send(button_label=label, button_url=url)
+        return {"button_label": label, "button_url": url}
+
+    @classmethod
+    def _commercial_media_error(cls, payload, context):
+        if not cls._private_unlock_button(payload):
+            return None
+        if context and context.get("origin") == "HUMAN_OPERATOR":
+            return None
+        if not str(payload.asset_path or "").strip():
+            return TelegramCommercialPresentationError(
+                "Automated private PPV delivery requires a safe teaser media asset.")
+        return None
 
     def _execute_asset(
         self, sender: Any, *, chat_id: int, asset_path: str,
@@ -450,7 +526,14 @@ class TelegramDeliveryExecutor:
         if not callable(method):
             return self._deferred_result(payload, metadata)
         try:
-            sent = method(chat_id=chat_id, asset_path=asset_path, message_text=message_text)
+            button = self._private_unlock_button(payload)
+            self._validate_commercial_destination(metadata, button)
+            self._validate_commercial_text(message_text, button)
+            button = button or self._ordinary_action(payload)
+            if payload.metadata.get("suppress_link_preview") and not payload.asset_path:
+                button["disable_link_preview"] = True
+            sent = method(chat_id=chat_id, asset_path=asset_path,
+                          message_text=message_text, **button)
         except TelegramRelationshipControlBlockedError as error:
             return self._relationship_blocked_result(payload,metadata,error.code)
         except Exception as error:
@@ -462,13 +545,62 @@ class TelegramDeliveryExecutor:
     async def _execute_asset_async(
         self, sender: Any, *, chat_id: int, asset_path: str,
         message_text: str, payload: TelegramDeliveryPayload,
-        metadata: dict[str, Any], raise_on_failure: bool,
+        metadata: dict[str, Any], raise_on_failure: bool, context=None,
     ) -> TelegramDeliveryExecutionResult:
         method = getattr(sender, "send_asset", None)
         if not callable(method):
             return self._deferred_result(payload, metadata)
         try:
-            sent = method(chat_id=chat_id, asset_path=asset_path, message_text=message_text)
+            button = self._private_unlock_button(payload)
+            self._validate_commercial_destination(metadata, button)
+            self._validate_commercial_text(message_text, button)
+            if button and context is not None:
+                # Select a capable route before entering the shared durable
+                # invocation boundary. Never fail over after that invocation.
+                from app.models.telegram_transport_contract import TelegramRequirements, TelegramPreflightError
+                from app.models.telegram_unlock_action import TelegramUnlockAction
+                from app.models.telegram_offer_caption import telegram_offer_caption
+                message_text = telegram_offer_caption(message_text)
+                candidates = [(self._business_commercial_transport, False), (self._sender(context), True)]
+                selected = None
+                for candidate, private in candidates:
+                    if candidate is None:
+                        continue
+                    requirements = TelegramRequirements(photo=True, caption=True,
+                        url_action=not private, caption_text_url=private,
+                        sender_scope=context.get("required_sender_scope"))
+                    try:
+                        peer = candidate.prepare_delivery(chat_id=chat_id, requirements=requirements)
+                        if inspect.isawaitable(peer):
+                            peer = await peer
+                        peer.validate(requirements)
+                        if peer.peer_id != chat_id:
+                            raise TelegramPreflightError("Wrong offer peer.")
+                        selected = candidate
+                        break
+                    except Exception:
+                        continue
+                if selected is None:
+                    raise TelegramPreflightError("No reachable capable Unlock transport.")
+                if private:
+                    rendered = TelegramUnlockAction(button["button_url"]).render(
+                        message_text, transport="TELETHON", button_label=button["button_label"])
+                    message_text = rendered.pop("message_text")
+                    action = dict(semantic="UNLOCK", destination=button["button_url"],
+                        transport="TELETHON", rendering="CAPTION_TEXT_URL")
+                    button = rendered
+                else:
+                    action = dict(semantic="UNLOCK", destination=button["button_url"],
+                        transport=peer.transport, rendering="INLINE_URL_BUTTON")
+                metadata["unlock_action"] = action
+                sender = self._guarded_sender(RoutedTelegramSender(selected,
+                    context=context, metadata=metadata), context)
+                method = sender.send_asset
+            button = button or self._ordinary_action(payload)
+            if payload.metadata.get("suppress_link_preview") and not payload.asset_path:
+                button["disable_link_preview"] = True
+            sent = method(chat_id=chat_id, asset_path=asset_path,
+                          message_text=message_text, **button)
             if inspect.isawaitable(sent):
                 sent = await sent
         except TelegramRelationshipControlBlockedError as error:
@@ -485,6 +617,9 @@ class TelegramDeliveryExecutor:
         message_id = getattr(sent, "id", sent)
         if isinstance(message_id, int) and not isinstance(message_id, bool):
             metadata["telegram_message_id"] = message_id
+        TelegramDeliveryExecutor._apply_send_receipt(metadata, sent)
+        metadata["provider_media_included"] = bool(
+            getattr(sent, "provider_media_included", False))
         return TelegramDeliveryExecutionResult(
             status="success", executed=True, delivery_method=payload.delivery_method,
             blocking_reason=payload.blocking_reason, metadata=metadata,
@@ -510,6 +645,13 @@ class TelegramDeliveryExecutor:
         metadata: dict[str, Any],
         error: Exception,
     ) -> TelegramDeliveryExecutionResult:
+        certainty = getattr(error, "certainty", None)
+        if certainty in {"UNKNOWN", "ACCEPTED"}:
+            metadata.update(getattr(error, "provider_evidence", {}) or {})
+            metadata.update({"certainty": str(certainty.value if hasattr(certainty, "value") else certainty),
+                             "automatic_retry_allowed": False, "execution_state": "send_uncertain"})
+            return TelegramDeliveryExecutionResult(status="SEND_UNCERTAIN", executed=False,
+                delivery_method=payload.delivery_method, metadata=metadata)
         metadata.update(
             {
                 "execution_state": "failed",

@@ -124,7 +124,7 @@ def test_503_preserves_provider_context_without_replaying_ambiguous_post():
 def test_media_link_crud_and_exact_reconciliation():
     link = {"uuid": "link-1", "price": 900, "mediaUuids": ["b", "a"]}
     session = Session([
-        Response(200, {"data": [link]}),
+        Response(200, {"data": [link], "pagination": {"page": 1, "hasMore": False}}),
         Response(201, link),
         Response(204, None),
     ])

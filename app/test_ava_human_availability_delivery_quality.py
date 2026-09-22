@@ -52,6 +52,7 @@ class RecordingRepository:
         self.stored = None
         self.suppressed = None
         self.corrective = None
+        self.failed = None
 
     def store_generated(self, operation_id, **kwargs):
         self.stored = kwargs
@@ -72,12 +73,33 @@ class RecordingRepository:
             delivery_payload={"qualityCorrectiveRetry": {
                 "required": True, "attempt": 2,
                 "blockingReasons": list(kwargs["reasons"]),
+                "excludedExactResponses": [
+                    kwargs["response_payload"]["response_text"],
+                    *kwargs.get("recent_ava_responses", ()),
+                ],
             }},
         )
 
+    def fail_generation(self, operation_id, **kwargs):
+        self.failed = kwargs
+        return SimpleNamespace(state=SimpleNamespace(value="RETRYABLE"), **kwargs)
 
-def operation():
+    def fail_empty_generation(self, operation_id, **kwargs):
+        self.failed = kwargs
+        return SimpleNamespace(state=SimpleNamespace(value="RETRYABLE"), **kwargs)
+
+    def fail_generated_before_send(self, operation_id, **kwargs):
+        self.failed = kwargs
+        return SimpleNamespace(state=SimpleNamespace(value="TERMINAL_FAILED"), **kwargs)
+
+    def terminalize_deterministic_authorization_failure(self, operation_id, **kwargs):
+        self.failed = kwargs
+        return SimpleNamespace(state=SimpleNamespace(value="SUPPRESSED"), **kwargs)
+
+
+def operation(*, required=False):
     return SimpleNamespace(operation_id=uuid4(), inbound_message_text="",
+                           burst_member_obligations=["ANSWER_DIRECT_QUESTION"] if required else [],
                            delivery_payload={}, generation_attempt_count=1,
                            send_attempt_count=0,
                            outbound_telegram_message_id=None)
@@ -87,12 +109,13 @@ def operation():
     ("CUSTOMER_QUESTION_UNANSWERED",),
     ("TURN_OBLIGATIONS_UNSATISFIED",),
     ("CUSTOMER_QUESTION_UNANSWERED", "TURN_OBLIGATIONS_UNSATISFIED"),
+    ("FINAL_REPETITION_FAILURE",),
 ])
 def test_required_quality_failure_schedules_one_corrective_generation(reasons):
     repository = RecordingRepository()
     service = OrdinaryChatReplyService(repository=repository, worker_id="test")
     candidate = result(text="bad candidate", reasons=reasons)
-    scheduled = service.generated(operation(), candidate)
+    scheduled = service.generated(operation(required=True), candidate)
     assert scheduled.state.value == "RETRYABLE"
     assert repository.corrective["reasons"] == tuple(sorted(reasons))
     assert repository.suppressed is None
@@ -101,7 +124,7 @@ def test_required_quality_failure_schedules_one_corrective_generation(reasons):
 def test_second_required_quality_failure_is_terminal_without_third_attempt():
     repository = RecordingRepository()
     service = OrdinaryChatReplyService(repository=repository, worker_id="test")
-    item = operation()
+    item = operation(required=True)
     item.generation_attempt_count = 2
     terminal = service.generated(
         item, result(text="still bad", reasons=["CUSTOMER_QUESTION_UNANSWERED"]),
@@ -115,7 +138,6 @@ def test_second_required_quality_failure_is_terminal_without_third_attempt():
 
 @pytest.mark.parametrize("reason", [
     "MANUFACTURED_ENGAGEMENT_QUESTION",
-    "FINAL_REPETITION_FAILURE",
     "UNSUPPORTED_RECIPROCAL_RELATIONSHIP_CLAIM",
 ])
 def test_unrelated_quality_suppressions_do_not_receive_correction(reason):
@@ -129,6 +151,7 @@ def test_unrelated_quality_suppressions_do_not_receive_correction(reason):
 def test_retry_payload_carries_durable_corrective_context():
     service = OrdinaryChatReplyService(repository=RecordingRepository(), worker_id="test")
     item = SimpleNamespace(
+        operation_id=uuid4(),
         inbound_sender_telegram_user_id=1, telegram_chat_id=2,
         inbound_message_text="What do you mean?", inbound_telegram_message_id=3,
         inbound_received_at=datetime.now(timezone.utc),
@@ -140,6 +163,55 @@ def test_retry_payload_carries_durable_corrective_context():
     payload = service.retry_payload(item)
     assert payload.quality_correction_context["required"] is True
     assert payload.quality_correction_context["attempt"] == 2
+
+
+def test_repetition_correction_carries_rejected_and_recent_exact_exclusions():
+    repository = RecordingRepository()
+    service = OrdinaryChatReplyService(repository=repository, worker_id="test")
+    candidate = result(
+        text="then don't make it too easy for me",
+        reasons=["FINAL_REPETITION_FAILURE"],
+    )
+    candidate.diagnostic_metadata["recentAvaResponses"] = [
+        "then don't make it too easy for me", "A different recent answer",
+    ]
+    scheduled = service.generated(operation(required=True), candidate)
+    assert scheduled.state.value == "RETRYABLE"
+    assert repository.corrective["response_payload"]["response_text"] == (
+        "then don't make it too easy for me"
+    )
+    assert repository.corrective["recent_ava_responses"] == (
+        "then don't make it too easy for me", "A different recent answer",
+    )
+
+
+def test_second_repetition_failure_is_terminal_without_third_generation():
+    repository = RecordingRepository()
+    service = OrdinaryChatReplyService(repository=repository, worker_id="test")
+    item = operation(required=True)
+    item.generation_attempt_count = 2
+    terminal = service.generated(item, result(
+        text="same again", reasons=["FINAL_REPETITION_FAILURE"],
+    ))
+    assert terminal.state.value == "SUPPRESSED"
+    assert repository.corrective is None
+    assert repository.suppressed["reason"] == (
+        "quality_corrective_retry_exhausted:FINAL_REPETITION_FAILURE"
+    )
+
+
+def test_repetition_corrective_candidate_failing_other_gate_is_not_deliverable():
+    repository = RecordingRepository()
+    service = OrdinaryChatReplyService(repository=repository, worker_id="test")
+    item = operation()
+    item.generation_attempt_count = 2
+    terminal = service.generated(item, result(
+        text="fresh but unsafe",
+        reasons=["UNSUPPORTED_RECIPROCAL_RELATIONSHIP_CLAIM"],
+    ))
+    assert terminal.state.value == "SUPPRESSED"
+    assert repository.stored is None
+    assert repository.corrective is None
 
 
 def test_generated_repairs_unsupported_relationship_claim_before_storage():
@@ -155,21 +227,34 @@ def test_generated_repairs_unsupported_relationship_claim_before_storage():
     assert natural["repairReasons"] == ["UNSUPPORTED_RECIPROCAL_RELATIONSHIP_CLAIM"]
 
 
-def test_empty_generation_gets_bounded_sendable_fallback():
+def test_empty_generation_is_internal_failure_and_not_sendable():
     repository = RecordingRepository()
     service = OrdinaryChatReplyService(repository=repository, worker_id="test")
     service.generated(operation(), result(text=""))
-    assert repository.stored is not None
-    assert repository.stored["response_text"]
-    assert repository.stored["response_payload"]["diagnostic_metadata"]["generation_fallback"]["reason"] == "EMPTY_GENERATION"
+    assert repository.stored is None
+    assert repository.failed["reason"].startswith("EMPTY_GENERATION:")
 
 
-def test_decision_engine_exception_gets_bounded_sendable_fallback():
+def test_decision_engine_exception_is_internal_failure_and_not_sendable():
     repository = RecordingRepository()
     service = OrdinaryChatReplyService(repository=repository, worker_id="test")
     service.generated(operation(), result(text="", error="decision_engine_exception", blocked=True))
-    assert repository.stored is not None
-    assert repository.stored["response_payload"]["diagnostic_metadata"]["generation_fallback"]["reason"] == "DECISION_ENGINE_EXCEPTION"
+    assert repository.stored is None
+    assert repository.failed["reason"].startswith("DECISION_ENGINE_EXCEPTION:")
+
+
+def test_decision_engine_exception_persists_only_sanitized_error_type():
+    repository = RecordingRepository()
+    service = OrdinaryChatReplyService(repository=repository, worker_id="test")
+    value = result(text="", error="decision_engine_exception", blocked=True)
+    value.diagnostic_metadata["internal_generation_failure"] = {
+        "errorType": "TypeError<script>", "privateMessage": "secret",
+    }
+    service.generated(operation(), value)
+    assert repository.failed["reason"] == (
+        "DECISION_ENGINE_EXCEPTION:TypeErrorscript: Automatic reply could not be completed."
+    )
+    assert "secret" not in repository.failed["reason"]
 
 
 def test_anthony_critical_burst_bad_candidates_are_blocked_not_debted():
@@ -211,15 +296,77 @@ def test_four_chat_attention_priority_is_bounded_after_availability():
     ))
 
 
-def test_exception_fallback_is_sendable_and_bounded():
+def test_exception_result_is_structural_blocked_and_empty():
     repository = RecordingRepository()
     service = OrdinaryChatReplyService(repository=repository, worker_id="test")
     payload = SimpleNamespace(telegram_chat_id=1, telegram_user_id=2, message_id=3)
     op = SimpleNamespace(operation_id=uuid4(), correlation_id="corr")
     fallback = service.exception_fallback(op, payload, RuntimeError("private detail"))
-    assert fallback.blocked is False
-    assert fallback.response_text
-    assert "private detail" not in fallback.response_text
+    assert fallback.blocked is True
+    assert fallback.response_text == ""
+    assert fallback.error_code == "internal_generation_failure"
+    assert "private detail" not in str(fallback.diagnostic_metadata)
+
+
+@pytest.mark.parametrize("diagnostics", [
+    {"status": "engine_exception", "delivery_quality_gate": {"disposition": "ALLOWED"}},
+    {"generation_fallback": {"applied": True}, "delivery_quality_gate": {"disposition": "ALLOWED"}},
+    {"internal_generation_failure": {"customerVisible": False}, "delivery_quality_gate": {"disposition": "ALLOWED"}},
+])
+def test_final_delivery_authority_rejects_internal_failure_payloads(diagnostics):
+    repository = RecordingRepository()
+    service = OrdinaryChatReplyService(repository=repository, worker_id="test")
+    item = SimpleNamespace(
+        operation_id=uuid4(), response_text="system apology",
+        response_payload={"error_code": None, "diagnostic_metadata": diagnostics},
+        delivery_payload={"message_text": "system apology"},
+    )
+    assert service.authorize_customer_visible_delivery(item) is False
+    assert repository.failed["reason"] == "PERSISTED_INTERNAL_RESPONSE_NOT_DELIVERABLE"
+
+
+def test_final_delivery_authority_allows_quality_approved_customer_content():
+    service = OrdinaryChatReplyService(repository=RecordingRepository(), worker_id="test")
+    item = SimpleNamespace(
+        operation_id=uuid4(), response_text="A real valid answer",
+        response_payload={"error_code": None, "diagnostic_metadata": {
+            "delivery_quality_gate": {"disposition": "ALLOWED"},
+        }},
+        delivery_payload={"message_text": "A real valid answer"},
+    )
+    assert service.authorize_customer_visible_delivery(item) is True
+
+
+def test_payload_text_mismatch_is_deterministically_terminalized():
+    repository = RecordingRepository()
+    service = OrdinaryChatReplyService(repository=repository, worker_id="test")
+    item = SimpleNamespace(
+        operation_id=uuid4(), response_text="Fresh authoritative reply",
+        response_payload={"error_code": None, "diagnostic_metadata": {
+            "delivery_quality_gate": {"disposition": "ALLOWED"},
+        }},
+        delivery_payload={"message_text": "Stale persisted reply"},
+    )
+    assert service.authorize_customer_visible_delivery(item) is False
+    assert repository.failed["reason"] == "IMMUTABLE_DELIVERY_PAYLOAD_TEXT_MISMATCH"
+
+
+@pytest.mark.parametrize("state", ["GENERATED", "RETRYABLE"])
+def test_payload_mismatch_terminalization_is_state_independent_after_generation(state):
+    repository = RecordingRepository()
+    service = OrdinaryChatReplyService(repository=repository, worker_id="test")
+    item = SimpleNamespace(
+        operation_id=uuid4(), state=SimpleNamespace(value=state),
+        response_text="Authoritative", inbound_message_text="Yes",
+        response_payload={"error_code": None, "diagnostic_metadata": {
+            "delivery_quality_gate": {"disposition": "ALLOWED"},
+        }},
+        delivery_payload={"message_text": "Stale"},
+    )
+    assert service.authorize_customer_visible_delivery(item) is False
+    assert repository.failed == {
+        "reason": "IMMUTABLE_DELIVERY_PAYLOAD_TEXT_MISMATCH",
+    }
 
 
 def test_monitor_labels_hard_failure_as_blocked_before_delivery():

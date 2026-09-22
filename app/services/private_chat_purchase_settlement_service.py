@@ -27,6 +27,14 @@ class PrivateChatPurchaseSettlementService:
         buyer_uuid = UUID(str(buyer_uuid))
         with self.connection_factory() as connection:
             with connection.cursor() as cursor:
+                # Share the buyer lock with successor creation before acquiring
+                # reservation and intent rows (consistent lock ordering).
+                from app.services.evergreen_purchase_attribution import family_target
+                probe = connection.execute("""SELECT purchase_intent_id FROM fanvue_fingerprint_reservations
+                    WHERE fanvue_account_id=%s AND currency=%s AND exact_price_minor=%s""",
+                    (fanvue_account_id, currency, gross_minor)).fetchone()
+                if probe:
+                    family_target(connection, probe['purchase_intent_id'])
                 # Deterministic lock order: reservation/evidence, intent,
                 # observation/prospect, provider customer/mapping, Sessions.
                 cursor.execute("""SELECT reservation.*,runtime.runtime_media_link_id,
@@ -41,8 +49,9 @@ class PrivateChatPurchaseSettlementService:
                 if len(matches) != 1:
                     return None
                 match = matches[0]
+                target_id = family_target(connection, match["purchase_intent_id"], create_receipt_intent=True)
                 cursor.execute("SELECT * FROM public.purchase_intents WHERE purchase_intent_id=%s FOR UPDATE",
-                               (match["purchase_intent_id"],))
+                               (target_id,))
                 intent = cursor.fetchone()
                 if intent is None or int(intent["fanvue_account_id"]) != int(fanvue_account_id):
                     return None
@@ -123,7 +132,7 @@ class PrivateChatPurchaseSettlementService:
                       'purchaseSettlementTransactionId',%s::text,
                       'purchaseSettledAt',%s::text)
                     WHERE purchase_intent_id=%s AND state='ACTIVE'""",
-                    (transaction_id, purchased_at, intent["purchase_intent_id"]))
+                    (transaction_id, purchased_at, match["purchase_intent_id"]))
                 cursor.execute("""INSERT INTO public.provider_purchase_asset_ownership(
                     ownership_id,creator_profile_id,fanvue_account_id,
                     external_fanvue_user_uuid,provider_transaction_id,
@@ -186,7 +195,7 @@ class PrivateChatPurchaseSettlementService:
                  ON session.sales_session_id=link.sales_session_id
                WHERE link.purchase_intent_id=%s
                FOR UPDATE OF session""",
-            (intent["purchase_intent_id"],),
+            (UUID(str((intent.get("created_metadata") or {}).get("evergreen_original_intent_id") or intent["purchase_intent_id"])),),
         )
         session = cursor.fetchone()
         if session is None:
@@ -331,7 +340,7 @@ class PrivateChatPurchaseSettlementService:
 
     def _graduate_session(self, cursor, *, intent, mapping, buyer_uuid, gross_minor):
         cursor.execute("SELECT * FROM public.telegram_provisional_sales_sessions WHERE first_purchase_intent_id=%s FOR UPDATE",
-                       (intent["purchase_intent_id"],))
+                       (UUID(str((intent.get("created_metadata") or {}).get("evergreen_original_intent_id") or intent["purchase_intent_id"])),))
         provisional = cursor.fetchone()
         if provisional is None:
             return None
@@ -388,7 +397,8 @@ class PrivateChatPurchaseSettlementService:
         )
         cursor.execute("""INSERT INTO public.sales_session_purchase_intents
             (sales_session_id,purchase_intent_id,sequence_index) VALUES (%s,%s,1)
-            ON CONFLICT (purchase_intent_id) DO NOTHING""", (session_id, intent["purchase_intent_id"]))
+            ON CONFLICT (purchase_intent_id) DO NOTHING""", (session_id,
+                UUID(str((intent.get("created_metadata") or {}).get("evergreen_original_intent_id") or intent["purchase_intent_id"]))))
         cursor.execute("""UPDATE public.telegram_provisional_sales_sessions SET state='GRADUATED',
             mapped_sales_session_id=%s,actual_fingerprint_price_minor=%s,
             first_purchase_recorded_at=COALESCE(first_purchase_recorded_at,NOW()),

@@ -5,7 +5,7 @@ import threading
 import types
 import unittest
 from concurrent.futures import ThreadPoolExecutor
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 from pathlib import Path
 
 if "streamlit" not in sys.modules:
@@ -49,7 +49,10 @@ from app.providers.generation.base import (
     ProviderSubmission,
     WaveSpeedProviderBase,
 )
-from app.services.generation_engine_service import GenerationEngineService
+from app.services.generation_engine_service import (
+    GenerationEngineService,
+    GenerationJobStoreError,
+)
 
 
 def prompt_plan(creator_profile_id=7, reference_asset_id=55):
@@ -487,6 +490,126 @@ class GenerationEngineServiceTests(unittest.TestCase):
         self.assertNotIn("Seedream", engine_source)
         self.assertNotIn("Flux", engine_source)
         self.assertNotIn("WAN", engine_source)
+
+    def test_atomic_publication_keeps_previous_document_visible_until_replace(self):
+        service = self.make_service()
+        first = service.enqueue(GenerationRequest(
+            request_id="request-old", creator_profile_id=7, prompt_plan_id="plan",
+            prompt_text="old", reference_asset_id=None, reference_asset_path=None,
+            provider_id="fake", generation_type="image_to_image", media_type="image",
+        ))
+        previous = service.jobs_path.read_bytes()
+        write_started = threading.Event()
+        allow_write = threading.Event()
+        real_dump = json.dump
+
+        def delayed_dump(data, output, *args, **kwargs):
+            write_started.set()
+            self.assertTrue(allow_write.wait(timeout=3))
+            return real_dump(data, output, *args, **kwargs)
+
+        writer = threading.Thread(target=lambda: service._write_jobs([first]))
+        with patch("app.services.generation_engine_service.json.dump", side_effect=delayed_dump):
+            writer.start()
+            self.assertTrue(write_started.wait(timeout=2))
+            self.assertEqual(service.jobs_path.read_bytes(), previous)
+            self.assertEqual(service.get_job(first.job_id).job_id, first.job_id)
+            allow_write.set()
+            writer.join(timeout=3)
+        self.assertFalse(writer.is_alive())
+        self.assertEqual(service.get_job(first.job_id).job_id, first.job_id)
+
+    def test_publication_failure_preserves_previous_canonical_document(self):
+        service = self.make_service()
+        job = service.enqueue(GenerationRequest(
+            request_id="request", creator_profile_id=7, prompt_plan_id="plan",
+            prompt_text="prompt", reference_asset_id=None, reference_asset_path=None,
+            provider_id="fake", generation_type="image_to_image", media_type="image",
+        ))
+        previous = service.jobs_path.read_bytes()
+        with patch("app.services.generation_engine_service.os.replace", side_effect=OSError("injected")):
+            with self.assertRaises(OSError):
+                service._write_jobs([job])
+        self.assertEqual(service.jobs_path.read_bytes(), previous)
+        self.assertEqual(list(service.jobs_path.parent.glob(f".{service.jobs_path.name}.*.tmp")), [])
+
+    def test_atomic_publication_uses_unique_temporary_files(self):
+        service = self.make_service()
+        job = service.enqueue(GenerationRequest(
+            request_id="request", creator_profile_id=7, prompt_plan_id="plan",
+            prompt_text="prompt", reference_asset_id=None, reference_asset_path=None,
+            provider_id="fake", generation_type="image_to_image", media_type="image",
+        ))
+        sources = []
+        real_replace = __import__("os").replace
+        def observe_replace(source, destination):
+            sources.append(str(source))
+            return real_replace(source, destination)
+        with patch("app.services.generation_engine_service.os.replace", side_effect=observe_replace):
+            service._write_jobs([job])
+            service._write_jobs([job])
+        self.assertEqual(len(sources), 2)
+        self.assertEqual(len(set(sources)), 2)
+
+    def test_independent_writers_preserve_updates_to_different_jobs(self):
+        with tempfile.TemporaryDirectory() as storage_dir:
+            first_service = GenerationEngineService(
+                storage_dir=storage_dir, reference_library_service=FakeReferenceLibraryService(), providers={})
+            jobs = [first_service.enqueue(GenerationRequest(
+                request_id=f"request-{index}", creator_profile_id=7, prompt_plan_id="plan",
+                prompt_text=f"prompt-{index}", reference_asset_id=None, reference_asset_path=None,
+                provider_id="fake", generation_type="image_to_image", media_type="image",
+            )) for index in range(2)]
+            second_service = GenerationEngineService(
+                storage_dir=storage_dir, reference_library_service=FakeReferenceLibraryService(), providers={})
+            barrier = threading.Barrier(3)
+            errors = []
+            def update(service, job_id):
+                try:
+                    barrier.wait(timeout=2)
+                    service.start_job(job_id)
+                except Exception as error:
+                    errors.append(error)
+            threads = [
+                threading.Thread(target=update, args=(first_service, jobs[0].job_id)),
+                threading.Thread(target=update, args=(second_service, jobs[1].job_id)),
+            ]
+            [thread.start() for thread in threads]
+            barrier.wait(timeout=2)
+            [thread.join(timeout=5) for thread in threads]
+            self.assertEqual(errors, [])
+            states = {job.job_id: job.status for job in first_service.list_jobs()}
+            self.assertEqual(states[jobs[0].job_id], GenerationStatus.RUNNING.value)
+            self.assertEqual(states[jobs[1].job_id], GenerationStatus.RUNNING.value)
+
+    def test_existing_invalid_store_raises_instead_of_becoming_empty(self):
+        service = self.make_service()
+        service.jobs_path.parent.mkdir(parents=True, exist_ok=True)
+        service.jobs_path.write_text('{"incomplete":', encoding="utf-8")
+        with self.assertRaises(GenerationJobStoreError):
+            service.list_jobs()
+        with self.assertRaises(GenerationJobStoreError):
+            service.get_job("missing")
+
+    def test_absent_initial_store_is_legitimately_empty(self):
+        service = self.make_service()
+        self.assertFalse(service.jobs_path.exists())
+        self.assertEqual(service.list_jobs(), ())
+
+    def test_large_store_round_trip_remains_complete(self):
+        service = self.make_service()
+        jobs = []
+        for index in range(250):
+            request = GenerationRequest(
+                request_id=f"large-{index}", creator_profile_id=7,
+                prompt_plan_id="plan", prompt_text="x" * 2048,
+                reference_asset_id=None, reference_asset_path=None,
+                provider_id="fake", generation_type="image_to_image", media_type="image",
+            )
+            jobs.append(GenerationJob(job_id=f"job-{index}", request=request))
+        service._write_jobs(jobs)
+        self.assertEqual(len(service.list_jobs()), 250)
+        self.assertGreater(service.jobs_path.stat().st_size, 500_000)
 
 
 if __name__ == "__main__":

@@ -408,7 +408,7 @@ class CommerceSignalService:
         survivors = []
         for item in candidates:
             context = contexts.get(item.purchase_intent_id, {})
-            persistent = self._persistent_ppv(context)
+            persistent = self._persistent_ppv(context) or context.get('evergreen_family') is True
             canonical_resource_id = str(
                 context.get("external_product_id")
                 or item.provider_resource_id or ""
@@ -416,6 +416,7 @@ class CommerceSignalService:
             resource_matches = (
                 provider_resource_id is None
                 or canonical_resource_id == provider_resource_id
+                or provider_resource_id in context.get('evergreen_provider_resource_ids', ())
             )
             status_allowed = item.status.value in (
                 {"PRESENTED", "CLICKED", "EXPIRED", "ABANDONED", "SUPERSEDED", "ADMIN_CLOSED", "UNKNOWN"}
@@ -439,19 +440,24 @@ class CommerceSignalService:
         )
         if len(survivors) == 1:
             item = survivors[0]
-            self.intents.record_payment_reference(
-                item.purchase_intent_id,
-                transaction_order_id=transaction_id,
-                payment_id=payment_id, event_id=event_id,
-            )
-            purchased_intent = self.intent_repository.mark_purchased(
-                item.purchase_intent_id, at=payment_timestamp,
-                attribution_reason=(
-                    "Exact buyer, account, creator, price, product policy, "
-                    "currency, available Media Link evidence, and "
-                    "single-candidate match."
-                ),
-            )
+            family_settler = getattr(self.intent_repository, 'settle_evergreen_purchase', None)
+            purchased_intent = (family_settler(item.purchase_intent_id, at=payment_timestamp,
+                transaction_id=transaction_id, payment_id=payment_id, event_id=event_id)
+                if callable(family_settler) else None)
+            if purchased_intent is None:
+                self.intents.record_payment_reference(
+                    item.purchase_intent_id,
+                    transaction_order_id=transaction_id,
+                    payment_id=payment_id, event_id=event_id,
+                )
+                purchased_intent = self.intent_repository.mark_purchased(
+                    item.purchase_intent_id, at=payment_timestamp,
+                    attribution_reason=(
+                        "Exact buyer, account, creator, price, product policy, "
+                        "currency, available Media Link evidence, and "
+                        "single-candidate match."
+                    ),
+                )
             lifecycle_result = self.photoshoot_lifecycles.synchronize_attributed_purchase(
                 intent=purchased_intent,
                 customer_commerce_profile_id=customer_commerce_profile_id,
@@ -469,7 +475,7 @@ class CommerceSignalService:
             )
             return {
                 "state": "ATTRIBUTED", "candidateCount": 1,
-                "purchaseIntentId": item.purchase_intent_id,
+                "purchaseIntentId": purchased_intent.purchase_intent_id,
                 "lifecycleSynchronized": lifecycle_result is not None,
             }
         reason = (

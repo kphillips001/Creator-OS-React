@@ -27,10 +27,14 @@ class GenerationLibraryPublishingService:
         generation_library: GenerationLibraryService | None = None,
         caption_studio: CaptionStudioService | None = None,
         social_publishing: SocialPublishingService | None = None,
+        publication_memory=None,
+        content_entry_attribution=None,
     ) -> None:
         self.generation_library = generation_library or GenerationLibraryService()
         self.caption_studio = caption_studio or CaptionStudioService()
         self.social_publishing = social_publishing or SocialPublishingService()
+        self._publication_memory = publication_memory
+        self._content_entry_attribution = content_entry_attribution
 
     @staticmethod
     def validate_destination(destination: str) -> tuple[str, str | None]:
@@ -128,6 +132,7 @@ class GenerationLibraryPublishingService:
         x_thread_cta_enabled: bool = False,
         x_thread_cta_text: str = "",
         x_thread_cta_url: str = "https://avablackthorne.com/me",
+        x_thread_cta_timing: str = "DELAY_30_60",
         publish_operation_id: str | None = None,
         fanvue_account_id: int | None = None,
     ) -> dict[str, Any]:
@@ -142,6 +147,7 @@ class GenerationLibraryPublishingService:
                 x_thread_cta_enabled=x_thread_cta_enabled,
                 x_thread_cta_text=x_thread_cta_text,
                 x_thread_cta_url=x_thread_cta_url,
+                x_thread_cta_timing=x_thread_cta_timing,
                 publish_operation_id=publish_operation_id,
                 fanvue_account_id=fanvue_account_id,
             )
@@ -254,6 +260,41 @@ class GenerationLibraryPublishingService:
             )
             raise RuntimeError(message)
 
+        if (
+            platform == "telegram"
+            and (telegram_post_to or "main") == "main"
+            and (isinstance(self.social_publishing, SocialPublishingService) or self._publication_memory is not None)
+        ):
+            publish_item = next((candidate for candidate in self.social_publishing.list_publish_items()
+                if candidate.queue_item_id == item.queue_item_id
+                and candidate.platform == "telegram" and candidate.status == "posted"), None)
+            if publish_item is None:
+                raise RuntimeError("Confirmed Telegram publication identity is unavailable.")
+            if self._publication_memory is None:
+                from app.services.creator_content_publication_memory_service import CreatorContentPublicationMemoryService
+                self._publication_memory = CreatorContentPublicationMemoryService(caption_studio=self.caption_studio)
+            publication = self._publication_memory.record_confirmed_telegram_broadcast(
+                record=record, publish_item=publish_item, caption=selected_caption,
+                caption_result_id=(caption_id or caption_result_id),
+                cta_snapshot={"enabled": bool(cta_enabled), "label": str(cta_label or ""),
+                    "url": str(cta_url or ""), "selectedCtas": tuple(semantic_ctas or ())},
+            )
+            if "CHAT" in tuple(semantic_ctas or ()):
+                try:
+                    if self._content_entry_attribution is None:
+                        from app.services.creator_content_entry_attribution_service import CreatorContentEntryAttributionService
+                        self._content_entry_attribution = CreatorContentEntryAttributionService(
+                            telegram_provider=self.social_publishing.telegram_provider)
+                    self._content_entry_attribution.ensure_and_attach(
+                        publication=publication, publish_item=publish_item,
+                        chat_base_url=str(config.get("chat_url") or ""),
+                        cta_buttons=tuple(dict(button) for button in (semantic_buttons or ())),
+                    )
+                except Exception:
+                    # Optional Chat attribution debt must never invalidate a
+                    # confirmed publication or cause a Telegram replay.
+                    pass
+
         caption_was_edited = bool(
             selected_generated and selected_caption != selected_generated
         )
@@ -291,8 +332,16 @@ class GenerationLibraryPublishingService:
         if not archive_result.success:
             raise RuntimeError(archive_result.message)
         return {
-            "message": f"Published to {'X' if platform == 'x' else 'Telegram'}.",
+            "message": (
+                f"Published to X. Telegram CTA scheduled for "
+                f"{self._cta_schedule(item.queue_item_id, 'AvaBlackthorne').get('scheduledAt')} "
+                f"({int(self._cta_schedule(item.queue_item_id, 'AvaBlackthorne').get('delaySeconds') or 0) // 60} min). "
+                "View in Business → Queue."
+                if platform == "x" and x_thread_cta_enabled
+                else f"Published to {'X' if platform == 'x' else 'Telegram'}."
+            ),
             "queueItemId": item.queue_item_id,
+            **(self._cta_response(item.queue_item_id, ("AvaBlackthorne",), x_thread_cta_timing) if platform == "x" and x_thread_cta_enabled else {}),
         }
 
     def _publish_x_targets(
@@ -304,6 +353,7 @@ class GenerationLibraryPublishingService:
         x_thread_cta_enabled: bool = False,
         x_thread_cta_text: str = "",
         x_thread_cta_url: str = "https://avablackthorne.com/me",
+        x_thread_cta_timing: str = "DELAY_30_60",
         publish_operation_id: str | None = None,
         fanvue_account_id: int | None = None,
     ) -> dict[str, Any]:
@@ -366,6 +416,7 @@ class GenerationLibraryPublishingService:
                 x_thread_cta_enabled=bool(x_thread_cta_enabled),
                 x_thread_cta_text=str(x_thread_cta_text or ""),
                 x_thread_cta_url=str(x_thread_cta_url or ""),
+                x_thread_cta_timing=str(x_thread_cta_timing or "DELAY_30_60"),
                 publish_operation_id=(
                     f"{publish_operation_id}:{account_name}"
                     if publish_operation_id else None
@@ -425,7 +476,29 @@ class GenerationLibraryPublishingService:
             "message": message,
             "queueItemId": item.queue_item_id,
             "results": tuple(results),
+            **(self._cta_response(item.queue_item_id, tuple(account for account, *_ in successful), x_thread_cta_timing) if x_thread_cta_enabled else {}),
         }
+
+    def _cta_response(self, queue_item_id: str, accounts: tuple[str, ...], timing: str) -> dict[str, Any]:
+        if str(timing or "DELAY_30_60").upper() == "ASAP":
+            deliveries = []
+            for account_name in accounts:
+                for request in self.social_publishing.list_publish_items():
+                    metadata = dict(request.metadata or {})
+                    if request.queue_item_id == queue_item_id and metadata.get("account_name") == account_name and metadata.get("cta_x_post_id"):
+                        deliveries.append({"ctaPostId": metadata["cta_x_post_id"], "timing": "ASAP", "accountName": account_name})
+                        break
+                else:
+                    raise RuntimeError("ASAP X CTA delivery was not durably recorded.")
+            return {"xCtaDeliveries": tuple(deliveries)}
+        return {"xCtaJobs": tuple(self._cta_schedule(queue_item_id, account) for account in accounts)}
+
+    def _cta_schedule(self, queue_item_id: str, account_name: str) -> dict[str, Any]:
+        for request in self.social_publishing.list_publish_items():
+            metadata = dict(request.metadata or {})
+            if request.queue_item_id == queue_item_id and metadata.get("account_name") == account_name and metadata.get("x_thread_cta_job_id"):
+                return {"jobId": metadata["x_thread_cta_job_id"], "scheduledAt": metadata["x_thread_cta_scheduled_at"], "delaySeconds": metadata["x_thread_cta_delay_seconds"], "accountName": account_name}
+        raise RuntimeError("X CTA schedule was not durably recorded.")
 
     @staticmethod
     def _x_account_label(account_name: str) -> str:

@@ -52,7 +52,8 @@ class TelegramBusinessPeerObservationRepository:
             )
             return dict(cursor.fetchone())
 
-    def evidence(self, *, business_connection_id, telegram_peer_user_id):
+    def evidence(self, *, business_connection_id, telegram_peer_user_id,
+                 telegram_chat_id=None):
         with self.connection_factory() as connection, connection.cursor() as cursor:
             cursor.execute(
                 """SELECT connection.business_connection_id,connection.is_enabled,
@@ -62,12 +63,14 @@ class TelegramBusinessPeerObservationRepository:
                           COUNT(observation.observation_id) AS observation_count
                      FROM public.telegram_business_connections connection
                      LEFT JOIN public.telegram_business_peer_observations observation
-                       ON observation.business_connection_id=connection.business_connection_id
+                      ON observation.business_connection_id=connection.business_connection_id
                       AND observation.telegram_peer_user_id=%s
+                      AND (%s IS NULL OR observation.telegram_chat_id=%s)
                     WHERE connection.business_connection_id=%s
                     GROUP BY connection.business_connection_id,connection.is_enabled,
                              connection.can_reply""",
-                (telegram_peer_user_id,business_connection_id),
+                (telegram_peer_user_id,telegram_chat_id,telegram_chat_id,
+                 business_connection_id),
             )
             row = cursor.fetchone()
         return dict(row) if row else None

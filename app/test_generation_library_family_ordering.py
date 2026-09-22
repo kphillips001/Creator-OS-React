@@ -42,11 +42,13 @@ def test_unclassified_is_null_effective_classification():
     assert params[-7:] == ["%legacy%"] * 7
 
 
-def row(image_id, day, *, provider="seedream", status="active", staged_at=None):
+def row(image_id, day, *, provider="seedream", status="active", staged_at=None,
+        library_entered_at=None):
     return {"image_id": image_id, "generation_date": datetime(2026, 8, day, tzinfo=timezone.utc),
             "created_at": datetime(2026, 8, day, tzinfo=timezone.utc),
             "provider_id": provider, "status": status,
-            "is_staged": staged_at is not None, "staged_at": staged_at}
+            "is_staged": staged_at is not None, "staged_at": staged_at,
+            "library_entered_at": library_entered_at}
 
 
 def edge(parent, child, day, variation=1):
@@ -192,6 +194,50 @@ def test_staged_records_precede_normal_families_in_staged_timestamp_order():
     assert ids(ordered) == [["staged-new"], ["staged-old"], ["root", "child"], ["normal"]]
     pages = GenerationLibraryProjectionRepository._family_pages(ordered, page_size=2)
     assert [item["image_id"] for item in pages[0]] == ["staged-new", "staged-old"]
+
+
+def test_restored_library_entry_leads_its_family_and_newest_order_without_faking_generation_date():
+    restored_at = datetime(2026, 9, 16, tzinfo=timezone.utc)
+    rows = [
+        row("new-normal", 15), row("root", 1),
+        row("restored-child", 2, library_entered_at=restored_at),
+    ]
+    edges = [edge("root", "restored-child", 2)]
+
+    ordered = GenerationLibraryProjectionRepository._family_order(rows, edges, sort="newest")
+
+    assert ids(ordered) == [["restored-child", "root"], ["new-normal"]]
+    assert rows[2]["generation_date"] == datetime(2026, 8, 2, tzinfo=timezone.utc)
+
+
+def test_sequential_restores_then_later_generation_have_deterministic_recency():
+    rows = [
+        row("restore-a", 1, library_entered_at=datetime(2026, 9, 16, 10, tzinfo=timezone.utc)),
+        row("restore-b", 2, library_entered_at=datetime(2026, 9, 16, 11, tzinfo=timezone.utc)),
+    ]
+    assert ids(GenerationLibraryProjectionRepository._family_order(rows, [], sort="newest")) == [
+        ["restore-b"], ["restore-a"]]
+    rows.append(row("new-generation", 17))
+    rows[-1]["generation_date"] = datetime(2026, 9, 16, 12, tzinfo=timezone.utc)
+    assert ids(GenerationLibraryProjectionRepository._family_order(rows, [], sort="newest")) == [
+        ["new-generation"], ["restore-b"], ["restore-a"]]
+
+
+def test_restore_is_slot_one_without_destroying_staged_priority_for_older_normal_items():
+    rows = [
+        row("historical", 10),
+        row("staged", 12, staged_at=datetime(2026, 9, 1, tzinfo=timezone.utc)),
+        row("restored", 1, library_entered_at=datetime(2026, 9, 16, 11, tzinfo=timezone.utc)),
+    ]
+    ordered = GenerationLibraryProjectionRepository._staged_first_order(rows, [], sort="newest")
+    assert ids(ordered) == [["restored"], ["staged"], ["historical"]]
+
+    new_generation = row("new-generation", 17)
+    new_generation["generation_date"] = datetime(2026, 9, 16, 12, tzinfo=timezone.utc)
+    ordered = GenerationLibraryProjectionRepository._staged_first_order(
+        rows + [new_generation], [], sort="newest"
+    )
+    assert ids(ordered) == [["new-generation"], ["restored"], ["staged"], ["historical"]]
 
 
 def test_visibility_uses_current_disposition_not_historical_intake_membership():

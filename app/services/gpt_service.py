@@ -1,3 +1,4 @@
+from app.services.conversation_momentum_strategy import ConversationMomentumStrategy as Momentum
 import logging
 import os
 import json
@@ -34,6 +35,10 @@ from app.services.runtime_offer_escalation_coupling_service import (
     RuntimeOfferEscalationCouplingService,
 )
 from app.services.conversational_memory_service import ConversationalMemoryService
+from app.services.autobiographical_question_authority import AutobiographicalQuestionAuthority
+from app.services.conversation_progression_quality_service import (
+    ConversationProgressionQualityService, DialogueFunction,
+)
 
 class GPTService:
     _CONTINUITY_ANCHOR_STOPWORDS = {
@@ -191,24 +196,272 @@ class GPTService:
         "COMMERCIAL_INTENT": r"\b(?:buy|purchase|price|cost|unlock|pay|offer|show me)\b",
     }
 
-    @staticmethod
-    def _has_direct_question(message: str) -> bool:
+    @classmethod
+    def _semantic_question(cls, message: str) -> dict:
         value = str(message or "").strip()
-        if "?" not in value:
-            return False
+        normalized = value.replace("’", "'").replace("â€™", "'")
+        # Phone-text greetings commonly omit punctuation before the actual
+        # question ("Hi Ava how are you doing"). Remove only a bounded
+        # salutation/direct address before applying the question grammar.
+        question_surface = re.sub(
+            r"^\s*(?:hey|hi|hello|hiya|yo|good\s+(?:morning|afternoon|evening))"
+            r"(?:\s+(?:ava|cutie|beautiful|gorgeous|sexy|sunshine|pretty\s+girl))?"
+            r"(?:\s*[,!.?-]\s*|\s+)",
+            "", normalized, count=1, flags=re.I,
+        )
+        clause_start = r"(?:^|[.!?\n]+)\s*"
+        semantic = re.search(
+            clause_start + r"(?:"
+            r"how\s+(?:are|is|was|were|do|does|did|would|could|can)\b|"
+            r"how(?:'s| is)\b|"
+            r"what\s+(?:do|does|did|are|is|was|were|would|could|can|will|have|has)\b|"
+            r"where\s+(?:do|does|did|are|is|was|were|would|could|can|will|have|has)\b|"
+            r"when\s+(?:do|does|did|are|is|was|were|would|could|can|will|have|has)\b|"
+            r"why\s+(?:do|does|did|are|is|was|were|would|could|can|will|have|has)\b|"
+            r"(?:do|does|did|are|is|was|were|have|has|can|could|would|will)\s+(?:you|ava)\b"
+            r")",
+            question_surface, re.I,
+        )
+        if not semantic:
+            semantic = re.search(
+                r"^\s*(?:good\s+)?(?:morning|afternoon|evening)\b"
+                r"(?:\s+(?:ava|cutie|beautiful|gorgeous|sexy|sunshine|"
+                r"pretty\s+girl))?\s+"
+                r"(?:did|do|does|are|have|has|can|could|would|will)\s+you\b",
+                normalized, re.I,
+            )
+        personal = cls._personal_addressee_resolution(normalized)
+        if semantic:
+            return {
+                "detected": True,
+                "type": "DIRECT_PERSONAL_QUESTION" if personal["resolved"]
+                        else "DIRECT_QUESTION",
+                "personalAddresseeResolution": personal,
+            }
+        if "?" not in normalized:
+            return {"detected": False, "type": None,
+                    "personalAddresseeResolution": personal}
         # A punctuation-marked discourse prompt before a declarative demand is
         # not itself an information-seeking question (for example, "well? ...").
         remainder = re.sub(
             r"^\s*(?:well|so|huh|hm+|okay|alright|really)\s*\?\s*",
-            "", value, flags=re.I,
+            "", normalized, flags=re.I,
         )
-        return "?" in remainder or remainder == value
+        detected = "?" in remainder or remainder == normalized
+        return {"detected": detected,
+                "type": "DIRECT_PERSONAL_QUESTION"
+                        if detected and personal["resolved"] else
+                        "DIRECT_QUESTION" if detected else None,
+                "personalAddresseeResolution": personal}
+
+    @classmethod
+    def _responsive_reciprocity(
+        cls, *, user_message: str, response: str, direct_answer: bool,
+        semantic_slot: str | None, recent_responses=(),
+    ) -> dict:
+        """Authorize one current-turn-matched reciprocal social question."""
+        candidate = str(response or "").replace("’", "'")
+        if not direct_answer or candidate.count("?") != 1:
+            return {"allowed": False, "reason": "NOT_ONE_ANSWERED_RECIPROCAL"}
+        question = candidate.rsplit("?", 1)[0].split(".")[-1].strip()
+        generic_reciprocal = bool(re.fullmatch(
+            r"(?:and\s+)?(?:how|what)\s+about\s+you", question, re.I,
+        ))
+        slot_patterns = {
+            "CURRENT_WELLBEING": r"\b(?:how (?:are|have) you|how(?:'s| is| was) your (?:day|weekend)|how was yours|how about you|you doing (?:okay|alright|well|good))\b",
+            "RECENT_ACTIVITY": r"\b(?:how was your (?:day|weekend)|what did you (?:do|get up to)|what about you)\b",
+            "CURRENT_ACTIVITY": r"\b(?:what are you (?:doing|up to)|how about you|what about you)\b",
+            "FUTURE_ACTIVITY": r"\b(?:what are your (?:weekend )?plans|what are you (?:doing|up to)(?: today| tonight| this weekend)?|how about you|what about you)\b",
+            "SCHEDULE_AVAILABILITY": r"\b(?:what are your (?:weekend )?plans|what are you (?:doing|up to)|how about you|what about you)\b",
+        }
+        matched = generic_reciprocal or bool(
+            semantic_slot in slot_patterns
+            and re.search(slot_patterns[semantic_slot], question, re.I)
+        )
+        repeated = any(
+            re.search(r"\b(?:how|what)\s+about\s+you\b", str(item), re.I)
+            or (semantic_slot in slot_patterns
+                and re.search(slot_patterns[semantic_slot], str(item), re.I))
+            for item in (recent_responses or ())[-3:]
+        )
+        return {
+            "allowed": bool(matched and not repeated),
+            "reason": (
+                "CURRENT_TURN_MATCHED_RECIPROCITY" if matched and not repeated
+                else "RECIPROCITY_ALREADY_USED" if repeated
+                else "UNRELATED_FOLLOWUP_QUESTION"
+            ),
+            "semanticSlot": semantic_slot,
+            "repeated": repeated,
+        }
+
+    @classmethod
+    def _genuine_contextual_curiosity(
+        cls, *, user_message: str, response: str, pressure: dict,
+        recent_responses=(), relationship_discovery: dict | None = None,
+    ) -> dict:
+        """Authorize one low-pressure question about a volunteered active topic."""
+        candidate = str(response or "").strip()
+        inbound = str(user_message or "").strip()
+        discovery = dict(relationship_discovery or pressure.get(
+            "relationshipDiscovery"
+        ) or {})
+        topics = [
+            name for name, pattern in cls._FOREGROUND_TOPIC_PATTERNS.items()
+            if name not in {"POSITIVE_ENGAGEMENT", "COMMERCIAL_INTENT"}
+            and re.search(pattern, inbound, re.I)
+        ]
+        question_topics = [
+            name for name in topics
+            if re.search(cls._FOREGROUND_TOPIC_PATTERNS[name], candidate, re.I)
+        ]
+        question_count = candidate.count("?")
+        volunteered_detail = bool(re.search(
+            r"\b(?:i(?:'m| am)\s+(?:heading|going|traveling|travelling|camping|"
+            r"hiking|visiting)|i(?:'ve| have)\s+(?:booked|planned|started)|"
+            r"my\s+(?:trip|camping trip|hike|concert|project)|"
+            r"we(?:'re| are)\s+(?:heading|going|camping|hiking|visiting))\b",
+            inbound, re.I,
+        ))
+        closing = bool(re.fullmatch(
+            r"\s*(?:ok(?:ay)?|cool|nice|great|sounds good|got it|thanks?|"
+            r"thank you|lol|haha|yep|yeah|goodnight|night)[.! ]*",
+            inbound, re.I,
+        ))
+        high_pressure = bool(
+            pressure.get("questionStreak", 0) >= 2
+            or pressure.get("recentQuestionCount", 0) >= 3
+        )
+        repeated = any(
+            any(re.search(cls._FOREGROUND_TOPIC_PATTERNS[topic], str(prior), re.I)
+                for topic in question_topics)
+            and "?" in str(prior)
+            for prior in (recent_responses or ())[-3:]
+        )
+        known_answer = bool(
+            discovery.get("allowed") is False
+            and str(discovery.get("suppressionReason") or "") in {
+                "DOMAIN_ALREADY_KNOWN", "RECENTLY_ASKED",
+                "QUESTION_PRESSURE", "NO_DISCOVERY_GAP",
+            }
+        )
+        relevant = bool(topics and question_topics)
+        allowed = bool(
+            question_count == 1 and ((relevant and volunteered_detail) or Momentum.contextual_question(
+                inbound, candidate, pressure=pressure, recent=recent_responses))
+            and not closing and not high_pressure
+            and not repeated and not known_answer
+        )
+        reason = (
+            "CURRENT_TURN_CONTEXTUAL_CURIOSITY" if allowed
+            else "NOT_ONE_MEANINGFUL_QUESTION" if question_count != 1
+            else "CUSTOMER_CLOSING_ACKNOWLEDGEMENT" if closing
+            else "RECENT_QUESTION_PRESSURE" if high_pressure
+            else "RECENT_EQUIVALENT_QUESTION" if repeated
+            else "KNOWN_OR_NO_DISCOVERY_GAP" if known_answer
+            else "NO_SUBSTANTIVE_VOLUNTEERED_DETAIL" if not volunteered_detail
+            else "FORCED_TOPIC_PIVOT"
+        )
+        return {
+            "allowed": allowed,
+            "reason": reason,
+            "semanticTopic": question_topics[0] if question_topics else None,
+            "currentTurnTopics": topics,
+            "relevant": relevant,
+            "volunteeredDetail": volunteered_detail,
+            "repeated": repeated,
+            "recentQuestionPressure": {
+                "recentQuestionCount": pressure.get("recentQuestionCount", 0),
+                "questionStreak": pressure.get("questionStreak", 0),
+            },
+            "knownAnswerRisk": known_answer,
+        }
+
+    @classmethod
+    def _has_direct_question(cls, message: str) -> bool:
+        return bool(cls._semantic_question(message)["detected"])
+
+    @staticmethod
+    def _personal_addressee_resolution(message: str) -> dict:
+        value = str(message or "").replace("’", "'").replace("â€™", "'")
+        affectionate = (
+            r"(?:cutie|beautiful|gorgeous|sexy|sunshine|pretty\s+girl)"
+        )
+        match = re.search(
+            rf"(?:^|[.!?\n]+)\s*how(?:'s|\s+is)\s+"
+            rf"(?P<term>{affectionate})\s+(?:doing|feeling)\b",
+            value, re.I,
+        )
+        explicit = re.search(
+            r"(?:^|[.!?\n]+)\s*how\s+are\s+you\b|"
+            r"^\s*(?:good\s+)?(?:morning|afternoon|evening)\b"
+            r"(?:\s+(?:ava|cutie|beautiful|gorgeous|sexy|sunshine|"
+            r"pretty\s+girl))?\s+(?:did|do|does|are|have|has|can|could|"
+            r"would|will)\s+you\b",
+            value, re.I,
+        )
+        resolved = bool(match or explicit)
+        return {
+            "resolved": resolved,
+            "target": "AVA" if resolved else None,
+            "reference": match.group("term").lower() if match else "you" if explicit else None,
+            "reason": "AFFECTIONATE_DIRECT_ADDRESS" if match else
+                      "EXPLICIT_SECOND_PERSON_ADDRESS" if explicit else
+                      "NO_BOUNDED_AVA_REFERENCE",
+        }
+
+    @classmethod
+    def _semantic_greeting(cls, message: str) -> dict:
+        from app.services.ava_temporal_context_service import AvaTemporalContextService
+        detected = AvaTemporalContextService.is_inbound_salutation(message)
+        if not detected:
+            detected = bool(re.search(
+                r"^\s*(?:hey|hi|hello|yo|hiya)\b", str(message or ""), re.I,
+            ))
+        return {"detected": detected,
+                "function": "SALUTATION" if detected else None}
+
+    @staticmethod
+    def _response_acknowledges_greeting(response: str) -> bool:
+        return bool(re.search(
+            r"^\s*(?:aww\s+)?(?:hey|hi|hello|(?:good\s+)?morning|"
+            r"(?:good\s+)?afternoon|(?:good\s+)?evening)\b|"
+            r"^\s*aww\b|"
+            r"\b(?:nice|good|glad)\s+to\s+(?:hear from|see|talk to)\s+you\b",
+            str(response or ""), re.I,
+        ))
+
+    @staticmethod
+    def _compliment_semantics(message: str) -> dict:
+        value = str(message or "").replace("’", "'").replace("â€™", "'")
+        patterns = (
+            r"^\s*(?:good\s+)?(?:morning|afternoon|evening)\s+"
+            r"(?:beautiful|gorgeous|cutie|sexy|sunshine|pretty\s+girl)\b",
+            r"\byou(?:'re| are)\s+looking\s+"
+            r"(?:cute|sweet|beautiful|pretty|hot|gorgeous|amazing)\b",
+            r"\byou(?:'re| are| seem| look| look(?:ing)?)?\s+(?:so\s+|really\s+|naturally\s+)*"
+            r"(?:cute|sweet|beautiful|pretty|hot|gorgeous|amazing)\b",
+            r"\b(?:hope\s+)?your\s+day\s+is\s+(?:as|a)\s+"
+            r"(?:beautiful|pretty|gorgeous|amazing)\s+as\s+you\b",
+            r"\bnothing\s+is\s+as\s+(?:pretty|beautiful|gorgeous)\s+as\s+you\b",
+            r"\bthat\s+smile\s+of\s+yours\s+is\s+"
+            r"(?:gorgeous|beautiful|pretty|amazing)\b",
+            r"\bcutie\s+looks?\s+(?:good|great|gorgeous|beautiful|amazing)\b",
+            r"\b(?:i\s+)?love your (?:profile|page|look|photos?|pictures?)\b",
+            r"\b(?:that|this|your) (?:photo|picture|shot) (?:is|looks?) "
+            r"(?:amazing|beautiful|gorgeous)\b",
+        )
+        detected = any(re.search(pattern, value, re.I) for pattern in patterns)
+        return {"detected": detected, "target": "AVA" if detected else None}
 
     @classmethod
     def _foreground_topics(cls, message: str) -> list[str]:
         text = str(message or "")
         topics = [name for name, pattern in cls._FOREGROUND_TOPIC_PATTERNS.items()
                   if re.search(pattern, text, re.I)]
+        from app.services.foreground_relevance_contract import ForegroundRelevanceContract
+        if 'WORK_BUSYNESS' not in topics and ForegroundRelevanceContract.work_disclosure(text):
+            topics.append('WORK_BUSYNESS')
         if cls._has_direct_question(text):
             topics.insert(0, "DIRECT_QUESTION")
         # Later clauses normally carry the user's foregrounded turn contribution.
@@ -253,6 +506,10 @@ class GPTService:
         if not foreground_topics:
             return True, []
         primary = next((topic for topic in foreground_topics if topic != "DIRECT_QUESTION"), None)
+        if primary == 'WORK_BUSYNESS':
+            from app.services.foreground_relevance_contract import ForegroundRelevanceContract
+            covered, evidence = ForegroundRelevanceContract.work_coverage(user_message, response)
+            return covered, ['WORK_BUSYNESS', *evidence] if covered else []
         evidence = [topic for topic in foreground_topics
                     if topic == "DIRECT_QUESTION" or re.search(
                         cls._FOREGROUND_TOPIC_PATTERNS.get(topic, r"(?!)"), response, re.I)]
@@ -302,9 +559,24 @@ class GPTService:
         obligations = []
         if new_relationship:
             obligations.append("WELCOME_NEW_RELATIONSHIP")
-        if re.search(r"^\s*(?:hey|hi|hello|yo|hiya)\b", value, re.I):
+        if cls._semantic_greeting(value)["detected"]:
             obligations.append("RESPOND_TO_GREETING")
+        if cls._signoff_semantics(value)["detected"]:
+            obligations.append("ACKNOWLEDGE_SIGNOFF")
+        compliment = bool(re.search(
+            r"\b(?:you(?:'re| are| seem| look)?\s+(?:so\s+|really\s+|naturally\s+)*"
+            r"(?:cute|sweet|beautiful|pretty|hot|gorgeous)|"
+            r"(?:i\s+)?love your (?:profile|page|look|photos?|pictures?)|"
+            r"(?:that|this|your) (?:photo|picture|shot) (?:is|looks?) "
+            r"(?:amazing|beautiful|gorgeous))\b",
+            value.replace("’", "'"), re.I,
+        ))
         if re.search(r"\b(?:you(?:(?:'re|’re| are| seem| look))?\s+(?:really\s+)?(?:cute|sweet|beautiful|pretty|hot|gorgeous)|love your (?:profile|page|look))\b", value, re.I):
+            obligations.append("ACKNOWLEDGE_COMPLIMENT")
+        elif compliment:
+            obligations.append("ACKNOWLEDGE_COMPLIMENT")
+        compliment = cls._compliment_semantics(value)["detected"]
+        if compliment and "ACKNOWLEDGE_COMPLIMENT" not in obligations:
             obligations.append("ACKNOWLEDGE_COMPLIMENT")
         if cls._has_direct_question(value):
             obligations.append("ANSWER_DIRECT_QUESTION")
@@ -312,7 +584,11 @@ class GPTService:
                 obligations[-1] = "ANSWER_DIRECT_PERSONAL_QUESTION"
             if re.search(r"\byou into\b", value, re.I):
                 obligations[-1] = "ANSWER_DIRECT_PERSONAL_QUESTION"
-            if cls._direct_personal_question_slot(value):
+            personal_slot = cls._direct_personal_question_slot(value)
+            if personal_slot and personal_slot not in {
+                AutobiographicalQuestionAuthority.NAME_ORIGIN,
+                AutobiographicalQuestionAuthority.CHILDHOOD_MEMORY,
+            }:
                 obligations[-1] = "ANSWER_DIRECT_PERSONAL_QUESTION"
         affect = cls._customer_affect(value)
         if affect["emotionalDisclosureDetected"]:
@@ -332,7 +608,8 @@ class GPTService:
         ):
             obligations.append("HONOR_RELEVANT_MEMORY_CALLBACK")
         disclosure = ConversationalMemoryService.classify_customer_self_disclosure(value)
-        if disclosure["detected"] and disclosure["significance"] != "LOW":
+        if (disclosure["detected"] and disclosure["significance"] != "LOW"
+                and not compliment):
             obligations.append("ACKNOWLEDGE_CUSTOMER_SELF_DISCLOSURE")
         commercial_boundary = cls._commercial_boundary(value)
         if (not commercial_boundary["detected"] and re.search(
@@ -342,6 +619,45 @@ class GPTService:
         if commercial_boundary["detected"]:
             obligations.append("ACKNOWLEDGE_COMMERCIAL_BOUNDARY")
         return list(dict.fromkeys(obligations))
+
+    @classmethod
+    def authoritative_turn_obligations(
+        cls, user_message: str, *, new_relationship: bool = False, visual_context=None,
+    ) -> tuple[str, ...]:
+        """Expose the existing turn-obligation authority to pre-generation policy."""
+        from app.services.customer_visual_evidence_policy import CustomerVisualEvidencePolicy
+        obligations = cls._turn_obligations(user_message, new_relationship=new_relationship)
+        if CustomerVisualEvidencePolicy.self_photo_established(visual_context):
+            obligations.append('ACKNOWLEDGE_SELF_PHOTO')
+        return tuple(dict.fromkeys(obligations))
+
+    @staticmethod
+    def _signoff_semantics(value: str) -> dict:
+        """Classify a conversational closing independently of literal clock time."""
+        text = str(value or "").replace("â€™", "'").strip()
+        evidence = []
+        patterns = (
+            ("GOOD_NIGHT", r"\bgood\s*night\b|\bgoodnight\b|(?:^|\n)\s*night(?:y)?\b"),
+            ("SLEEP_WISH", r"\bsweet dreams\b|\bsleep well\b|\brest well\b"),
+            ("TOMORROW_CLOSING", r"\b(?:see|talk to|talk|catch)\s+(?:ya|you\s+)?tomorrow\b"),
+            ("GOODBYE", r"\b(?:bye|goodbye|see ya|see you later)\b"),
+        )
+        for label, pattern in patterns:
+            if re.search(pattern, text, re.I):
+                evidence.append(label)
+        return {"detected": bool(evidence),
+                "function": "SIGNOFF" if evidence else None,
+                "evidence": evidence}
+
+    @staticmethod
+    def _response_acknowledges_signoff(response: str) -> bool:
+        candidate = str(response or "").replace("â€™", "'").strip()
+        return bool(candidate and re.search(
+            r"\b(?:good\s*night|night(?:y)?|sweet dreams|sleep well|rest well|"
+            r"talk tomorrow|see (?:ya|you) tomorrow|catch (?:ya|you) tomorrow|"
+            r"until tomorrow|bye|goodbye|sleep tight|dream (?:about|of))\b",
+            candidate, re.I,
+        ))
 
     @staticmethod
     def _commercial_boundary(user_message: str) -> dict:
@@ -449,7 +765,7 @@ class GPTService:
         ):
             evidence.append("PLAYFUL_DISTRACTION_FLIRT")
         sexual = bool(re.search(
-            r"\b(?:horny|naked|nudes?|sex|sexy|sexual|fuck|cum|pussy|dick|tits?|ass|"
+            r"\b(?:horny|hard[ -]?on|erection|naked|nudes?|sex|sexy|sexual|fuck|cum|pussy|dick|tits?|ass|"
             r"naughty|dirty|turned on)\b",
             value, re.I,
         ))
@@ -555,7 +871,9 @@ class GPTService:
         return bool(re.search(
             r"\b(?:teas(?:e|ing)|curious|mischief|trouble yet|haven't seen|"
             r"have not seen|careful|what i'm hiding|what i am hiding|"
-            r"little surprise|keep you guessing)\b",
+            r"little surprise|keep you guessing|prove (?:it|that)|"
+            r"make you work for|don['’]?t make it (?:too )?easy|"
+            r"earn (?:it|that)|keep up|we['’]?ll see)\b",
             value, re.I,
         ))
 
@@ -871,6 +1189,17 @@ class GPTService:
     @staticmethod
     def _direct_personal_question_slot(user_message: str) -> str | None:
         """Return the requested semantic dimension inside DAY_OR_ACTIVITY."""
+        if re.search(
+            r"\b(?:did|have)\s+you\s+(?:get|have)\s+(?:all\s+)?(?:your\s+)?"
+            r"(?:beauty\s+)?sleep\b|\bdid\s+you\s+sleep\b",
+            str(user_message or ""), re.I,
+        ):
+            return "REST_SLEEP"
+        if GPTService._personal_addressee_resolution(user_message)["resolved"]:
+            return "CURRENT_WELLBEING"
+        autobiographical = AutobiographicalQuestionAuthority.referent(user_message)
+        if autobiographical:
+            return autobiographical
         recent_value = str(user_message or "").replace("\u2019", "'")
         if re.search(
             r"\bwhat\s+have\s+you\s+been\s+(?:doing|up\s+to)\b|"
@@ -886,29 +1215,46 @@ class GPTService:
             return "SCHEDULE_AVAILABILITY"
         if re.search(
             r"\b(?:later|tonight|tomorrow|after(?:ward|wards)?|this evening)\b|"
-            r"\bwhat(?:'s| is)\s+(?:your\s+)?plans?\b", value, re.I,
+            r"\bwhat(?:'s| is)\s+(?:your\s+)?plans?\b|"
+            r"\b(?:do|have)\s+you\s+have\s+(?:any\s+)?(?:fun\s+)?plans?\b|"
+            r"\bplans?\s+for\s+(?:the\s+)?weekend\b", value, re.I,
         ):
             return "FUTURE_ACTIVITY"
         if re.search(
             r"\b(?:right now|currently|at the moment)\b|"
-            r"\bwhat are you doing\s*(?:now)?\s*\?", value, re.I,
+            r"\bwhat are you doing\s*(?:now|today)?\s*\?", value, re.I,
         ):
             return "CURRENT_ACTIVITY"
         if re.search(
-            r"\b(?:how are you|how(?:'s| is) your (?:day|night|morning|evening)|"
+            r"\b(?:how are you|how(?:'s| is| was) your (?:day|weekend|night|morning|evening)|"
             r"how(?:'s| is) it going)\b", value, re.I,
         ):
             return "CURRENT_WELLBEING"
+        if re.search(
+            r"\b(?:what|which)\s+would\s+be\s+your\s+(?:dream|ideal|perfect)\s+date\b|"
+            r"\bwhat(?:'s| is)\s+your\s+(?:idea|kind)\s+of\s+(?:a\s+)?"
+            r"(?:dream|ideal|perfect)\s+date\b",
+            value, re.I,
+        ):
+            return "DATE_PREFERENCE"
         return None
 
     @staticmethod
     def _direct_personal_question_fallback(slot: str | None) -> str:
+        autobiographical = AutobiographicalQuestionAuthority.safe_unknown_fallback(slot)
+        if autobiographical:
+            return autobiographical
         return {
             "RECENT_ACTIVITY": "I've been keeping things pretty low-key lately",
             "FUTURE_ACTIVITY": "probably keeping it pretty low-key later",
             "SCHEDULE_AVAILABILITY": "I should be pretty free later",
             "CURRENT_ACTIVITY": "just taking it easy right now",
             "CURRENT_WELLBEING": "doing pretty good so far",
+            "REST_SLEEP": "yeah, I slept pretty well last night",
+            "DATE_PREFERENCE": (
+                "my dream date is a sunset by the water, good conversation, "
+                "and nowhere we need to rush off to"
+            ),
         }.get(slot, "doing pretty good so far")
 
     @staticmethod
@@ -1065,7 +1411,38 @@ class GPTService:
 
     @staticmethod
     def _direct_personal_answer_satisfies(slot: str | None, response: str) -> bool:
+        if slot in {
+            AutobiographicalQuestionAuthority.NAME_ORIGIN,
+            AutobiographicalQuestionAuthority.CHILDHOOD_MEMORY,
+        }:
+            if AutobiographicalQuestionAuthority.truthful_unknown_answer(slot, response):
+                return True
+            value = str(response or "").replace("\u2019", "'")
+            patterns = {
+                AutobiographicalQuestionAuthority.NAME_ORIGIN: (
+                    r"\b(?:my\s+name|named\s+ava|name\s+(?:came|comes)\s+from|"
+                    r"chosen\s+(?:because|for)|means?\s+.+\s+to\s+me)\b"
+                ),
+                AutobiographicalQuestionAuthority.CHILDHOOD_MEMORY: (
+                    r"\b(?:my\s+(?:favorite|favourite)\s+childhood\s+memory|"
+                    r"i\s+remember\s+when)\b"
+                ),
+            }
+            return bool(re.search(patterns[slot], value, re.I))
         if not slot:
+            return True
+        raw_value = str(response or "").replace("’", "'")
+        if slot == "CURRENT_ACTIVITY" and re.search(
+            r"\bi(?:'m| am)\s+(?:just\s+)?(?:taking it (?:pretty\s+)?easy|working|"
+            r"relaxing|chilling|getting ready|hanging out)\b",
+            raw_value, re.I,
+        ):
+            return True
+        if slot == "CURRENT_WELLBEING" and re.search(
+            r"\b(?:i(?:'m| am)\s+)?(?:doing\s+)?(?:pretty|really)\s+"
+            r"(?:good|great|fine|okay|well)(?:\s+(?:overall|today|so far))?\b",
+            raw_value, re.I,
+        ):
             return True
         value = str(response or "").replace("â€™", "'").replace("’", "'")
         patterns = {
@@ -1076,6 +1453,7 @@ class GPTService:
             ),
             "FUTURE_ACTIVITY": (
                 r"\b(?:later|tonight|tomorrow|this evening|after(?:ward|wards)?)\b|"
+                r"\bi(?:'m| am)\s+keeping\s+it\s+(?:pretty\s+)?low-key\b|"
                 r"\b(?:probably|might|will|gonna|planning to|plan to)\s+"
                 r"(?:stay|keep|take|relax|chill|work|head|go|be)\b|"
                 r"\bnot much planned\b"
@@ -1086,11 +1464,11 @@ class GPTService:
             ),
             "CURRENT_ACTIVITY": (
                 r"\b(?:right now|currently|at the moment)\b|"
-                r"\bjust\s+(?:chilling|relaxing|working|cooking|getting ready|"
+                r"\b(?:just\s+|i(?:'m| am)\s+)?(?:chilling|relaxing|working|cooking|getting ready|"
                 r"taking it easy|hanging out)\b"
             ),
             "CURRENT_WELLBEING": (
-                r"\b(?:doing|feeling)\s+(?:pretty\s+)?(?:good|great|fine|okay|well)\b|"
+                r"\b(?:doing|feeling)\s+(?:(?:pretty|really)\s+)?(?:good|great|fine|okay|well)\b|"
                 r"\b(?:I'm|I am)\s+(?:good|great|fine|okay|not bad)\b|\bnot bad\b|"
                 r"\bmy\s+(?:day|night|morning|evening)(?:'s| is| has)?\s+"
                 r"(?:been\s+)?(?:pretty\s+)?(?:good|great|fine|okay|well|chill|slow)\b|"
@@ -1098,6 +1476,17 @@ class GPTService:
                 r"(?:good|great|fine|okay|well)\b|"
                 r"\bpretty\s+(?:good|great|fine|okay|well|chill|slow)\s+"
                 r"(?:so far|over here)\b"
+            ),
+            "REST_SLEEP": (
+                r"\b(?:i\s+)?slept\s+(?:pretty\s+)?(?:well|good|great|okay)\b|"
+                r"\b(?:i\s+)?(?:got|had)\s+(?:plenty|enough|a lot)\s+of\s+sleep\b|"
+                r"\b(?:well|good),?\s+rested\b"
+            ),
+            "DATE_PREFERENCE": (
+                r"\b(?:my\s+(?:dream|ideal|perfect)\s+date|my\s+kind\s+of\s+date|"
+                r"i(?:'d| would)\s+(?:pick|choose|love|prefer)|"
+                r"(?:sunset|dinner|coffee|beach|water|porch|mountain|walk|conversation|"
+                r"laughter|slow\s+evening|quiet\s+evening|night\s+out))\b"
             ),
         }
         return bool(re.search(patterns[slot], value, re.I))
@@ -1149,17 +1538,32 @@ class GPTService:
             and discovery_domain in discovery_domain_patterns
             and re.search(discovery_domain_patterns[discovery_domain], text, re.I)
         )
+        from app.services.question_obligation_contract import QuestionObligationContract
+        question_contract = QuestionObligationContract.for_message(user_message, pressure.get("questionObligation"))
         customer_asked = cls._has_direct_question(user_message)
         question_domains = {
+            "AUTOBIOGRAPHICAL_NAME_ORIGIN": (
+                r"\b(?:name|named)\b.{0,48}\b(?:come\s+from|story|mean|chosen|get)\b|"
+                r"\b(?:why\s+are\s+you\s+named|how\s+did\s+you\s+get\s+your\s+name)\b"
+            ),
+            "AUTOBIOGRAPHICAL_CHILDHOOD_MEMORY": r"\b(?:favorite|favourite)\s+childhood\s+memor(?:y|ies)\b",
             "OUTDOORS": r"\b(?:outdoors?|outside|hiking|camping|trail|nature)\b",
             "MUSIC": r"\b(?:music|band|song|artist|concert)\b",
             "PETS": r"\b(?:pet|dog|cat|puppy|golden retriever)\b",
-            "LOCATION": r"\b(?:live|from|city|chicago|where)\b",
+            "LOCATION": r"(?!)",  # Resolved by the shared contextual question contract below.
             "DAY_OR_ACTIVITY": r"\b(?:day|doing|up to|plans?|tonight|afternoon|evening)\b",
         }
         question_domain = next((name for name, pattern in question_domains.items()
                                 if re.search(pattern, str(user_message or ""), re.I)), None)
+        from app.services.foreground_relevance_contract import ForegroundRelevanceContract
+        if ForegroundRelevanceContract.location_question(user_message):
+            question_domain = 'LOCATION'
         personal_question_slot = cls._direct_personal_question_slot(user_message)
+        if personal_question_slot in {
+            AutobiographicalQuestionAuthority.NAME_ORIGIN,
+            AutobiographicalQuestionAuthority.CHILDHOOD_MEMORY,
+        }:
+            question_domain = personal_question_slot
         session_position = dict(pressure.get("sessionPositionQuestion") or {})
         next_session_step = dict(pressure.get("nextSessionStepQuestion") or {})
         if session_position.get("required") is True:
@@ -1167,11 +1571,13 @@ class GPTService:
         elif next_session_step.get("required") is True:
             personal_question_slot = "NEXT_SESSION_STEP"
         answer_domain_patterns = {
+            "AUTOBIOGRAPHICAL_NAME_ORIGIN": r"\b(?:name|named|story\s+behind\s+it|how\s+i\s+got\s+it)\b",
+            "AUTOBIOGRAPHICAL_CHILDHOOD_MEMORY": r"\b(?:childhood|memory|remember)\b",
             "OUTDOORS": r"\b(?:outdoors?|outside|hiking|camping|trail|nature|woods|mountains?)\b",
             "MUSIC": r"\b(?:music|band|song|artist|concert|listen)\b",
             "PETS": r"\b(?:pet|dog|cat|puppy|animal|golden retriever)\b",
             "LOCATION": r"\b(?:live|from|city|here|there|new york|chicago)\b",
-            "DAY_OR_ACTIVITY": r"\b(?:day|doing|going|well|good|great|fine|working|moving|slow|relax|chill|busy|plans?|tonight|afternoon|evening)\b",
+            "DAY_OR_ACTIVITY": r"\b(?:day|today|doing|going|well|good|great|fine|working|moving|taking it easy|slow|relax|chill|busy|plans?|tonight|afternoon|evening)\b",
         }
         affect = cls._customer_affect(user_message)
         approach = cls._new_prospect_approach(user_message)
@@ -1246,8 +1652,17 @@ class GPTService:
             slot_satisfied = cls._direct_personal_answer_satisfies(
                 personal_question_slot, answer_text,
             )
+            autobiography = dict(pressure.get("autobiographicalQuestion") or {})
+            if (autobiography.get("referent") == personal_question_slot
+                    and autobiography.get("canonicalFactAvailable") is True
+                    and AutobiographicalQuestionAuthority.truthful_unknown_answer(
+                        personal_question_slot, answer_text,
+                    )):
+                slot_satisfied = False
             direct_answer = bool(customer_asked and slot_satisfied)
             domain_relevant_answer = bool(domain_relevant_answer or slot_satisfied)
+        if customer_asked:
+            direct_answer = QuestionObligationContract.accepts(question_contract, text, existing_answer=direct_answer)
         emotional_context = bool(re.search(
             r"\b(?:afraid|anxious|devastated|hurt|nervous|overwhelmed|sad|scared|"
             r"surgery|terrified|upset|worried)\b", str(user_message or ""), re.I,
@@ -1303,9 +1718,14 @@ class GPTService:
                          r"little things that make life|perfect way to recharge)\b", text, re.I)
         ))
         low_stakes = not emotional_context and not support_context
-        ordinary_word_preference = 24 if customer_asked else 18
+        momentum_plan = pressure.get("momentumPlan") or Momentum.plan(user_message, evidence={
+            "affect": affect, "flirt": social_flirt,
+            "disclosure": customer_disclosure.get("detected"),
+            "compliment": cls._compliment_semantics(user_message).get("detected"),
+        }, recent=recent_responses or ())
+        ordinary_word_preference = momentum_plan["ordinaryWordPreference"]
         length_risk = bool(ordinary and low_stakes and (
-            len(words) > ordinary_word_preference or len(text) > 130
+            len(words) > ordinary_word_preference or len(text) > 240
             or len(sentences) > 2
         ))
         polished_language_risk = bool(ordinary and low_stakes and (
@@ -1437,7 +1857,12 @@ class GPTService:
             if (normalize(text).split()[:2]
                     and normalize(text).split()[:2] == prior_normalized.split()[:2]):
                 repeated_phrase = True
-        repetition_risk = bool(ordinary and (repeated_phrase or repetition_score >= .72))
+        novelty = ConversationProgressionQualityService.novelty_assessment(
+            text, recent_responses or (),
+        )
+        repetition_risk = bool(ordinary and (
+            repeated_phrase or repetition_score >= .72 or not novelty.self_novel
+        ))
         question_pressure_risk = bool(
             ordinary and question and (
                 pressure.get("questionStreak", 0) >= 2
@@ -1447,21 +1872,46 @@ class GPTService:
         )
         pure_question = bool(question and len(sentences) == 1 and not direct_answer
                              and not self_disclosure and not memory_callback)
+        reciprocity = cls._responsive_reciprocity(
+            user_message=user_message, response=text,
+            direct_answer=direct_answer,
+            semantic_slot=personal_question_slot,
+            recent_responses=recent_responses or (),
+        )
+        contextual_curiosity = cls._genuine_contextual_curiosity(
+            user_message=user_message, response=text, pressure=pressure,
+            recent_responses=recent_responses or (),
+            relationship_discovery=discovery,
+        )
+        reciprocity_blocked = bool(
+            customer_asked and direct_answer and question
+            and reciprocity["allowed"] is not True
+            and reciprocity["reason"] in {
+                "RECIPROCITY_ALREADY_USED", "NOT_ONE_ANSWERED_RECIPROCAL",
+            }
+        )
         unauthorized_relationship_question = bool(
             ordinary and question
+            and reciprocity["allowed"] is not True
+            and contextual_curiosity["allowed"] is not True
             and not authorized_discovery_question
             and not emotional_context
             and not support_context
             and not clarification
             and not memory_callback
-            and not (customer_asked and direct_answer)
+            and (not (customer_asked and direct_answer) or reciprocity_blocked)
         )
+        if customer_asked and question_contract["clarificationRequired"] and direct_answer:
+            clarification = True
         manufactured_question = bool(
             ordinary and question and (
                 (customer_asked and not direct_answer)
                 or pure_question
                 or unauthorized_relationship_question
+                or reciprocity_blocked
             )
+            and reciprocity["allowed"] is not True
+            and contextual_curiosity["allowed"] is not True
             and not emotional_context
             and not support_context
             and not clarification
@@ -1503,8 +1953,18 @@ class GPTService:
                     else (not warmth_expected or warmth_satisfied)
                 )):
             satisfied.append("WELCOME_NEW_RELATIONSHIP")
-        if "RESPOND_TO_GREETING" in obligations and text and not generic_acknowledgement:
+        implicit_greeting_response = bool(
+            re.match(r"\s*(?:hey|hi|hello)\b", user_message, re.I)
+            and cls._response_satisfies_proactive_tease(text)
+        )
+        if ("RESPOND_TO_GREETING" in obligations
+                and (cls._response_acknowledges_greeting(text)
+                     or implicit_greeting_response)
+                and not generic_acknowledgement):
             satisfied.append("RESPOND_TO_GREETING")
+        if ("ACKNOWLEDGE_SIGNOFF" in obligations
+                and cls._response_acknowledges_signoff(text)):
+            satisfied.append("ACKNOWLEDGE_SIGNOFF")
         for obligation in ("ANSWER_DIRECT_QUESTION", "ANSWER_DIRECT_PERSONAL_QUESTION"):
             if obligation in obligations and direct_answer:
                 satisfied.append(obligation)
@@ -1524,15 +1984,30 @@ class GPTService:
             )
         )
         sexual_response_expected = bool(social_flirt["sexual"])
+        sexual_function = ConversationProgressionQualityService.classify(
+            text, customer_message=user_message,
+        )
+        semantic_sexual_acknowledgement = bool(
+            sexual_function in {
+                DialogueFunction.PLAYFUL_CHALLENGE,
+                DialogueFunction.SELF_DISCLOSURE,
+            }
+            or re.search(
+                r"\b(?:i (?:like|can appreciate) (?:that |the )?(?:confidence|energy)|"
+                r"you (?:know how to|got) (?:get|have) my attention|"
+                r"message received|i felt that)\b",
+                text, re.I,
+            )
+        )
         sexual_response_satisfied = bool(
             sexual_response_expected
             and not generic_acknowledgement
-            and re.search(
+            and (semantic_sexual_acknowledgement or re.search(
                 r"\b(?:careful|bold|confident|tempt|teas|trouble|behave|naughty|"
                 r"dangerous|blush|turned on|hot|sexy|want|like that|well then|okayyy)\b|"
                 r"[ðŸ˜‰ðŸ˜ðŸ˜‚ðŸ˜Š]",
                 text, re.I,
-            )
+            ))
         )
         compliment_reciprocated = bool(
             "ACKNOWLEDGE_COMPLIMENT" in obligations
@@ -1665,19 +2140,43 @@ class GPTService:
             question_reason, question_value = "CONTINUITY_FOLLOWUP", "HIGH"
         elif emotional_context:
             question_reason, question_value = "EMOTIONAL_FOLLOWUP", "HIGH"
-        elif customer_asked and direct_answer:
+        elif reciprocity["allowed"] is True:
             question_reason, question_value = "DIRECT_RECIPROCAL_CURIOSITY", "MEDIUM"
+        elif contextual_curiosity["allowed"] is True:
+            question_reason, question_value = "GENUINE_CONTEXTUAL_CURIOSITY", "MEDIUM"
         else:
             question_reason, question_value = "RELATIONSHIP_DEPTH", "MEDIUM"
+        momentum = Momentum.assess(user_message, text, plan=momentum_plan,
+            recent=recent_responses or (), question_reason=question_reason,
+            manufactured=manufactured_question, contribution=contribution,
+            memory_callback=memory_callback, known_context=pressure.get("momentumKnownContext"))
+        if ordinary:
+            reasons.extend(momentum["blockingReasons"])
+        semantic_question = cls._semantic_question(user_message)
+        semantic_greeting = cls._semantic_greeting(user_message)
+        compliment_semantics = cls._compliment_semantics(user_message)
         return {
+            "conversationMomentum": momentum,
             "mode": "PHONE_TEXTING" if ordinary else "PROTECTED_RESPONSE",
             "ordinaryChat": ordinary,
             "questionAsked": question,
             "customerAskedQuestion": customer_asked,
             "customerQuestionDetected": customer_asked,
+            "questionObligation": question_contract,
             "customerQuestionAnswered": (direct_answer if customer_asked else None),
             "customerQuestionDomain": question_domain,
             "customerQuestionSemanticSlot": personal_question_slot,
+            "semanticGreetingDetected": semantic_greeting["detected"],
+            "semanticQuestionDetected": semantic_question["detected"],
+            "semanticQuestionType": semantic_question["type"],
+            "personalAddresseeResolution": semantic_question[
+                "personalAddresseeResolution"
+            ],
+            "complimentDetected": compliment_semantics["detected"],
+            "complimentTarget": compliment_semantics["target"],
+            "autobiographicalQuestion": dict(
+                pressure.get("autobiographicalQuestion") or {}
+            ),
             "customerQuestionDomainRelevant": (
                 domain_relevant_answer if customer_asked and question_domain else None
             ),
@@ -1691,6 +2190,19 @@ class GPTService:
             "unauthorizedRelationshipQuestion": unauthorized_relationship_question,
             "relationshipDiscoveryDomain": discovery_domain or None,
             "manufacturedQuestionRisk": manufactured_question,
+            "responsiveReciprocity": reciprocity,
+            "genuineContextualCuriosity": contextual_curiosity,
+            "questionClassification": (
+                "NO_QUESTION" if not question else
+                "RESPONSIVE_RECIPROCITY" if reciprocity["allowed"] is True else
+                "GENUINE_CONTEXTUAL_CURIOSITY"
+                if contextual_curiosity["allowed"] is True else
+                "COMMERCIAL_QUESTION"
+                if question_reason in {
+                    "COMMERCIAL_DISCOVERY", "PROTECTED_TRANSACTIONAL_QUESTION",
+                } else "MANUFACTURED_ENGAGEMENT"
+                if manufactured_question else question_reason
+            ),
             "contributionType": contribution,
             "recentQuestionCount": pressure.get("recentQuestionCount", 0),
             "recentQuestionWindow": pressure.get("recentQuestionWindow", 0),
@@ -1713,6 +2225,12 @@ class GPTService:
             "overlyPolishedLanguageRisk": polished_language_risk,
             "recentPhraseRepetitionRisk": repetition_risk,
             "recentPhraseSimilarity": repetition_score,
+            "semanticTemplateFamily": novelty.semantic_family,
+            "recentSemanticFamilyCounts": novelty.recent_family_counts,
+            "recentlyExhaustedFamilies": list(novelty.exhausted_families),
+            "exactRecentResponseReuse": novelty.exact_reuse,
+            "semanticFamilyExhausted": novelty.family_exhausted,
+            "selfNoveltySatisfied": novelty.self_novel,
             "selfDisclosureUsed": self_disclosure,
             "meaningfulContribution": contribution != "NONE",
             "customerAffect": affect["affect"],
@@ -1928,6 +2446,14 @@ class GPTService:
             persona_runtime_service = AvaPersonaRuntimeService()
         self.persona_runtime_service = persona_runtime_service
 
+    @staticmethod
+    def _response_completion(client, *, provider="OPENAI", **kwargs):
+        from app.services.ordinary_generation_context import current_generation
+        session = current_generation()
+        if session is not None:
+            return session.complete(client, provider=provider, **kwargs)
+        return client.chat.completions.create(**kwargs)
+
     def load_persona_prompt(self, persona_name: str) -> str:
         persona_file = f"app/personas/{persona_name.lower()}.txt"
         try:
@@ -1964,7 +2490,7 @@ Recent conversation: {json.dumps(recent_conversation, default=str)}
 Rules: 1-2 short sentences, natural Ava voice, encourage conversation. No links, prices,
 payment, unlock, PPV, offer, purchase, promises, invented visual facts, or Session claims.
 This is free relationship media and must not sound commercial. Return only the caption."""
-        completion = self.openai_client.chat.completions.create(
+        completion = self._response_completion(self.openai_client,
             model=os.getenv("OPENAI_CHAT_MODEL", "gpt-4.1-mini"),
             messages=[{"role": "system", "content": "You generate grounded noncommercial captions only."},
                       {"role": "user", "content": prompt}],
@@ -2030,7 +2556,7 @@ Contract:
   purpose-specific phrasing is available.
 - {'This is a repetition-repair attempt; materially vary the conversational prose while preserving the exact commercial action.' if repetition_repair else 'Prefer natural contextual wording over a universal canned sentence.'}
 - Use only the selected offering facts. Return only customer-facing copy."""
-        completion = self.openai_client.chat.completions.create(
+        completion = self._response_completion(self.openai_client,
             model=os.getenv("OPENAI_CHAT_MODEL", "gpt-4.1-mini"),
             messages=[
                 {
@@ -2077,7 +2603,7 @@ Contract:
 - Do not present, repeat, or hint at another paid offer, price, link, or unlock.
 - Natural wording is preferred; commerce terms such as purchase, transaction, and verified are unnecessary.
 Return only customer-facing copy."""
-        completion = self.openai_client.chat.completions.create(
+        completion = self._response_completion(self.openai_client,
             model=os.getenv("OPENAI_CHAT_MODEL", "gpt-4.1-mini"),
             messages=[
                 {"role": "system", "content": "Preserve verified-purchase truth in the final response."},
@@ -2408,7 +2934,11 @@ BEHAVIOR CONTRACT:
                 preview["grokSucceeded"] = True
             return result
         except Exception as error:
-            if selected_provider != "GROK":
+            from app.services.ordinary_generation_context import current_generation
+            from app.repositories.ordinary_generation_budget_repository import GenerationBudgetClosed
+            if isinstance(error, GenerationBudgetClosed):
+                raise
+            if selected_provider != "GROK" and current_generation() is None:
                 logger.exception(
                     "[GPT FINAL COMPLETION ERROR] exception_type=%s "
                     "exception_message=%s",
@@ -2416,8 +2946,8 @@ BEHAVIOR CONTRACT:
                 )
                 raise
             logger.warning(
-                "[GROK FALLBACK] exception_type=%s; using one OPENAI fallback",
-                type(error).__name__,
+                "[BOUNDED PROVIDER RECOVERY] provider=%s exception_type=%s; one OPENAI request",
+                selected_provider, type(error).__name__,
             )
             if preview is not None:
                 preview.update({
@@ -2426,7 +2956,7 @@ BEHAVIOR CONTRACT:
                     "providerFallbackAttempted": True,
                     "providerFallbackProvider": "OPENAI",
                     "providerFallbackOutcome": "ATTEMPTING",
-                    "fallbackReason": "GROK_UNAVAILABLE",
+                    "fallbackReason": "GROK_UNAVAILABLE" if selected_provider == "GROK" else "OPENAI_REQUEST_RECOVERY",
                 })
             try:
                 result = fallback_complete()
@@ -2662,7 +3192,26 @@ BEHAVIOR CONTRACT:
         )
         inbound = str(user_message or "").strip()
         candidate = str(response or "").strip()
+        from app.services.foreground_relevance_contract import ForegroundRelevanceContract
+        if ForegroundRelevanceContract.location_question(inbound):
+            return {"required": True,
+                    "satisfied": ForegroundRelevanceContract.location_answer(candidate),
+                    "intent": "DIRECT_LOCATION_QUESTION"}
         foreground_topics = cls._foreground_topics(inbound)
+        signoff = cls._signoff_semantics(inbound)
+        if signoff["detected"]:
+            satisfied = cls._response_acknowledges_signoff(candidate)
+            return {
+                "required": True, "satisfied": satisfied,
+                "intent": "ACKNOWLEDGE_SIGNOFF",
+                "currentTopicDomain": "SIGNOFF",
+                "currentTurnConversationalFunction": "SIGNOFF",
+                "currentTurnRelevanceReason": (
+                    "CURRENT_SIGNOFF_ACKNOWLEDGED"
+                    if satisfied else "CURRENT_SIGNOFF_IGNORED"
+                ),
+                "signoffEvidence": list(signoff["evidence"]),
+            }
         if "POSITIVE_ENGAGEMENT" in foreground_topics:
             # Interest in the present exchange is not a disclosure about the
             # customer's work, schedule, location, or history.  Reject drafts
@@ -2697,6 +3246,32 @@ BEHAVIOR CONTRACT:
                 "currentTopicDomain": "POSITIVE_ENGAGEMENT",
                 "unsupportedContextDomains": unsupported,
                 "customerDisclosureDetected": False,
+            }
+        occupation_question = bool(re.search(
+            r"\b(?:what else do you do|anything (?:else|other than)|what do you do)\b"
+            r".{0,30}\b(?:work|job|profession|professionally|content)\b|"
+            r"\b(?:work|job|professionally)\b.{0,30}\b(?:what else|do you do)\b",
+            inbound, re.I,
+        ))
+        if occupation_question:
+            grounded = bool(re.search(
+                r"\b(?:i\s+(?:also\s+)?(?:work|do)|my (?:job|work)|"
+                r"marketing|events?|hospitality|tourism|profession|career|"
+                r"content is|mostly content|don['â€™]?t have another|"
+                r"that['â€™]?s primarily what i do|not something i have established)\b",
+                candidate, re.I,
+            ))
+            stale_topic = bool(re.search(
+                r"\b(?:your|you)\b.{0,24}\b(?:pool|beach|semi-retired|retired)\b|"
+                r"\bwork by the pool\b",
+                candidate, re.I,
+            ))
+            return {
+                "required": True,
+                "satisfied": bool(grounded and not stale_topic),
+                "intent": "AUTOBIOGRAPHICAL_OCCUPATION_WORK",
+                "currentTopicDomain": "OCCUPATION_WORK",
+                "staleTopicAnswerDetected": stale_topic,
             }
         purchase_grounding = cls._purchase_unlock_foreground_grounding(
             inbound, candidate, commerce_decision,
@@ -2759,10 +3334,8 @@ BEHAVIOR CONTRACT:
             return {"required": True, "satisfied": grounding["satisfied"],
                     "intent": "COMMERCIAL_OFFER_COMPARISON",
                     "inventoryGrounding": grounding}
-        price_question = bool(re.search(
-            r"\b(?:how much|what(?:'s| is) the price|price)\b",
-            inbound, re.I,
-        ))
+        from app.services.foreground_relevance_contract import ForegroundRelevanceContract
+        price_question = ForegroundRelevanceContract.pricing_question(inbound)
         if price_question:
             satisfied = bool(re.search(
                 r"(?:\$\s*\d|\b(?:price|offer|unlock|attached|costs?)\b)",
@@ -2810,7 +3383,8 @@ BEHAVIOR CONTRACT:
         if tease_request:
             satisfied = bool(re.search(
                 r"\b(?:tease|teasing|flirt|play|trouble|bold|tempt|careful|"
-                r"dangerous|behave|mood)\b",
+                r"dangerous|behave|mood)\b|"
+                r"\bdon['’]?t make it (?:too )?easy(?: for me)?\b",
                 candidate, re.I,
             ))
             return {
@@ -3435,6 +4009,8 @@ BEHAVIOR CONTRACT:
         """Last bounded fallback for required current-turn relevance."""
         inbound = str(user_message or "").strip()
         compressed = str(effort_mode or "").upper() in {"COMPRESSED", "MINIMAL"}
+        if GPTService._signoff_semantics(inbound)["detected"]:
+            return "night, you 😊 talk tomorrow"
         boundary = GPTService._commercial_boundary(inbound)
         if boundary["type"] == "CURRENT_NO_BUY_BOUNDARY":
             return "that's totally fine—no pressure"
@@ -3478,7 +4054,8 @@ BEHAVIOR CONTRACT:
             message=inbound,
         ).objection_type is CommercialObjectionType.BUDGET_LIMIT:
             return "I hear you—I’ll keep your budget in mind if I have something that fits"
-        if re.search(r"\b(?:how much|what(?:'s| is) the price|price)\b", inbound, re.I):
+        from app.services.foreground_relevance_contract import ForegroundRelevanceContract
+        if ForegroundRelevanceContract.pricing_question(inbound):
             return "the current offer has the price attached"
         if GPTService._commercial_comparison_question(inbound):
             decision = str((commerce_decision or {}).get("decision") or "").upper()
@@ -3508,7 +4085,9 @@ BEHAVIOR CONTRACT:
             r"\b(?:tease|teasing|flirt|flirty|talk dirty|something dirtier)\b",
             inbound, re.I,
         ):
-            return "careful, I can still tease you a little"
+            # Contribute a bounded playful challenge instead of mechanically
+            # mirroring "you're teasing me" as "I can tease you".
+            return "then don't make it too easy for me"
         if re.search(r"\b(?:always|usually)\s+(?:this\s+)?chatty\b", inbound, re.I):
             return "only when I'm in the mood"
         if re.search(r"\b(?:keep me entertained|entertain me)\b", inbound, re.I):
@@ -3535,17 +4114,8 @@ BEHAVIOR CONTRACT:
         commerce_decision: dict | None = None,
     ) -> dict:
         inbound = str(user_message or "").replace("’", "'")
-        direct = bool(re.search(
-            r"\b(?:got|have|is there|are there|do you have)\b.{0,40}"
-            r"\b(?:anything|something|more|new|else|stuff|content)\b|"
-            r"\b(?:anything|something)\s+i\s+haven't\s+"
-            r"(?:seen|bought|unlocked)\b|\bis\s+there\s+anything\s+else\b",
-            inbound, re.I,
-        )) and not bool(re.search(
-            r"\b(?:show|send|drop|share|link|how much|price|cost|range|"
-            r"smaller|cheaper|lower-priced|similar)\b",
-            inbound, re.I,
-        ))
+        from app.services.commercial_receptiveness_service import CommercialReceptivenessService
+        direct = CommercialReceptivenessService.inventory_existence_question(inbound)
         if not direct:
             return {
                 "required": False, "satisfied": True,
@@ -3621,6 +4191,28 @@ BEHAVIOR CONTRACT:
             commerce_decision=commerce_decision,
         )
         required = set(obligations or ())
+        direct_personal = "ANSWER_DIRECT_PERSONAL_QUESTION" in required
+        if direct_personal:
+            answer = cls._direct_personal_question_fallback(
+                cls._direct_personal_question_slot(user_message)
+            )
+        if "RESPOND_TO_GREETING" in required:
+            greeting = cls._semantic_greeting(user_message)
+            from app.services.ava_temporal_context_service import AvaTemporalContextService
+            temporal = AvaTemporalContextService.classify_customer_reference(
+                user_message, {},
+            )
+            daypart = str(temporal.get("customerTemporalReference") or "").lower()
+            prefix = daypart if daypart in {"morning", "afternoon", "evening"} else "hey"
+            answer = f"{prefix} 😊 {answer}" if answer else f"{prefix} 😊"
+        if "ACKNOWLEDGE_COMPLIMENT" in required:
+            answer = f"{answer}—and you're sweet for saying that" if answer else "aww, you're sweet"
+        if required.intersection({
+            "ANSWER_DIRECT_QUESTION", "ANSWER_DIRECT_PERSONAL_QUESTION",
+        }) and str(answer or "").strip().lower() in {
+            "fair enough", "gotcha", "okay", "makes sense", "yeah", "i hear you",
+        }:
+            return ""
         if "ACKNOWLEDGE_EMOTIONAL_DISCLOSURE" in required:
             topics = cls._foreground_topics(user_message)
             topic = next((item for item in topics if item in {
@@ -3638,6 +4230,45 @@ BEHAVIOR CONTRACT:
         if not answer:
             return ""
         return f"hey, good to hear from you 😊 — {answer}"
+
+    @classmethod
+    def _function_first_flirt_fallback(
+        cls, user_message: str, *, recent_responses=(), require_tease: bool = False,
+        welcome: bool = False, candidates=(), pressure=None,
+    ) -> dict:
+        """Preserve existing response content; never rescue banter with stock lines."""
+        personal_slot = cls._direct_personal_question_slot(user_message)
+        if personal_slot:
+            response = cls._direct_personal_question_fallback(personal_slot)
+            if welcome:
+                response = "hey, " + response
+            novelty = ConversationProgressionQualityService.novelty_assessment(
+                response, recent_responses,
+            )
+            if (novelty.self_novel
+                    and not ConversationProgressionQualityService.mirroring_with_generic_affect(
+                        user_message, response,
+                    )):
+                return {
+                    "response": response,
+                    "function": "DIRECT_PERSONAL_ANSWER",
+                    "neutral": False,
+                    "novelty": novelty.diagnostics(),
+                }
+        # No generated wording here: reuse an existing candidate only. Every caller
+        # still applies its canonical final composition/security boundaries.
+        for response in candidates:
+            if not str(response).strip():
+                continue
+            style = cls._style_analysis(response, user_message, pressure=pressure or {},
+                ordinary=True, memory_callback=False, recent_responses=recent_responses)
+            if (style["turnObligationsSatisfied"] and not style["styleRewriteReasons"]
+                    and (not require_tease or cls._response_satisfies_proactive_tease(response))):
+                novelty = ConversationProgressionQualityService.novelty_assessment(response, recent_responses)
+                return {"response": response, "function": "PRESERVED_PROVIDER_CONTRIBUTION",
+                        "neutral": False, "novelty": novelty.diagnostics()}
+        return {"response": "", "function": "NO_VALID_SAVED_CANDIDATE",
+                "neutral": True, "novelty": {}}
 
     @staticmethod
     def _minimal_attention_fallback(response: str) -> str:
@@ -3662,12 +4293,37 @@ BEHAVIOR CONTRACT:
         offer_copy: str = "",
         chat_history: list = None,
     ) -> str:
+        from app.services.commercial_objection_service import CommercialObjectionService
+        support_context = (user_memory.get("commerce_decision")
+                           or dict(user_memory.get("runtime_injection") or {}).get("commerce_decision")
+                           or {})
+        if CommercialObjectionService.technical_payment_problem(user_message, support_context):
+            # Deterministic acknowledgement only: no diagnosis, provider action,
+            # marketing copy, or claim that a repair has already happened.
+            return CommercialObjectionService.technical_acknowledgement()
         if chat_history is None:
             chat_history = []
         runtime_injection = dict(user_memory.get("runtime_injection") or {})
         quality_correction = dict(
             runtime_injection.get("quality_correction_context") or {}
         )
+        recovery_constraint = dict(
+            quality_correction.get("recoveryExecutionConstraint") or {}
+        )
+        coherence = dict(quality_correction.get("conversationCoherence") or {})
+        active_bridge = dict(
+            quality_correction.get("activePresentationBridge") or {}
+        )
+        post_ppv_continuation = dict(
+            quality_correction.get("postPpvNonconversionConversation") or {}
+        )
+        conversation_burst = dict(
+            quality_correction.get("conversationBurst") or {}
+        )
+        original_user_message = user_message
+        if (coherence.get("clarificationResolved") is True
+                and coherence.get("resolvedCustomerMeaning")):
+            user_message = str(coherence["resolvedCustomerMeaning"])
         quality_correction_instruction = ""
         if quality_correction.get("required") is True:
             reasons = ", ".join(
@@ -3683,6 +4339,131 @@ CORRECTIVE RESPONSE REQUIREMENT
 - Preserve Ava's persona, style, safety, relationship, and sales constraints.
 - Do not mention drafts, retries, quality gates, internal systems, or errors.
 - Stay concise and natural; do not add filler merely to satisfy this requirement.
+- Never reproduce any response in this exact-response exclusion list:
+  {json.dumps(quality_correction.get('excludedExactResponses') or [])}.
+- Treat the exclusion list as a hard constraint while still answering the
+  current customer turn. Do not evade it with whitespace or punctuation-only
+  changes; produce a genuinely fresh semantic alternative.
+- Original obligations: {json.dumps(quality_correction.get('turnObligations') or [])}.
+- Semantic referent: {quality_correction.get('semanticReferent') or 'UNSPECIFIED'}.
+- Previous failure: {quality_correction.get('previousCandidateFailure') or 'NONCOMPLIANT_RESPONSE'}.
+- Commercial authorization: {json.dumps(quality_correction.get('commercialAuthorization') or {})}.
+- Do not introduce or repeat a commercial offer unless that authorization
+  independently permits it for this current turn.
+- If unknownBiographyInstructionRequired is true, use the governed unknown-
+  autobiography authority below rather than inventing a personal fact.
+"""
+            offline_correction = dict(
+                quality_correction.get("offlineAccessCorrection") or {}
+            )
+            if offline_correction.get("required") is True:
+                quality_correction_instruction += """
+- The previous draft specifically created a misleading expectation of offline
+  access. Preserve warmth and any clearly hypothetical fantasy, but remove every
+  suggestion that a real meeting, date, visit, trip, or physical/sexual encounter
+  will become available.
+- If the customer directly requested offline access, answer naturally with a
+  contextual variation of: "Let's keep things online for now 😊".
+- "For now" is tone only. Do not append maybe later, someday, eventually, or any
+  other future eligibility.
+"""
+            commercial_correction = dict(
+                quality_correction.get("commercialAuthorityCorrection") or {}
+            )
+            if commercial_correction.get("required") is True:
+                quality_correction_instruction += """
+- The previous draft attempted commercial media without current-turn authority.
+- Generate ordinary conversational MESSAGE_TEXT only while satisfying the
+  customer's durable current-turn obligations.
+- Do not offer, tease, price, link, or mention paid media, PPV, unlocks,
+  payments, prepared content, purchase calls-to-action, or alternative offers.
+- Do not invent buying intent, heat, or commercial escalation from historical
+  context. The current-turn pre-generation commercial decision is authoritative.
+"""
+        recovery_constraint_instruction = ""
+        if recovery_constraint.get("constraint") == "CONVERSATION_ONLY_TEXT":
+            recovery_constraint_instruction = """
+OPERATOR-AUTHORIZED RECOVERY EXECUTION CONSTRAINT — HARD UPPER BOUND
+- This exact historical corrective operation is CONVERSATION_ONLY_TEXT.
+- Continue Ava's normal persona and natural conversation, including ordinary
+  noncommercial flirting when otherwise appropriate.
+- Do not present, suggest, price, replace, or link any offer or paid content.
+- Do not select media, assets, teasers, PPV, unlock calls-to-action, alternative
+  offers, or any commercial transaction progression.
+- Produce conversational MESSAGE_TEXT only. This authority overrides any
+  inferred commercial opportunity for this operation.
+"""
+        coherence_instruction = ""
+        if coherence.get("clarificationResolved") is True:
+            coherence_instruction = f"""
+RESOLVED CURRENT CUSTOMER MEANING
+- The customer's latest message clarifies the immediately preceding unresolved turn.
+- Answer this resolved meaning as the highest-priority current turn: {user_message}
+- Required obligation: ANSWER_DIRECT_QUESTION.
+- Persona domain: {coherence.get('resolvedPersonaDomain') or 'UNSPECIFIED'}.
+- Do not answer an older conversational topic instead.
+- Use only canonical persona facts supplied below. If none answer the question,
+  respond with narrow truthful uncertainty and do not invent biography.
+"""
+        burst_instruction = ""
+        if conversation_burst:
+            burst_instruction = f"""
+DURABLE CONVERSATION BURST CONTINUITY
+- The recent customer messages in chat history and the current message form one
+  response opportunity; respond to their combined conversational meaning.
+- Preserve every authoritative obligation in this union:
+  {json.dumps(conversation_burst.get('obligations') or [])}.
+- A short reaction or emoji does not erase an earlier substantive question.
+- Do not mention burst processing, internal systems, or message grouping.
+"""
+        active_bridge_instruction = ""
+        if active_bridge.get("activePresentationBridge") is True:
+            active_bridge_instruction = f"""
+ACTIVE PRESENTATION CONVERSATIONAL BRIDGE
+- An existing paid presentation remains active; do not present, repeat, replace,
+  price, or mention it unless the customer expresses fresh commercial intent.
+- Required conversational function: {active_bridge.get('bridgeConversationalFunction') or 'NORMAL_CONVERSATION'}.
+- For ordinary conversation, answer normally without injecting sales or supporters.
+- For an appearance compliment, a brief warm/lightly flirty acknowledgment is allowed.
+- For sexual escalation, respond briefly and playfully without explicit participation,
+  mirroring the proposition, describing sexual acts, or inviting further explicit detail.
+- Do not use a supporters boundary: opportunities are not exhausted.
+- Keep the reply natural phone text and move the conversation forward or gently redirect.
+"""
+        post_ppv_continuation_instruction = ""
+        if post_ppv_continuation.get("nonconversionScope") == "PRESENTATION_SPECIFIC":
+            post_ppv_continuation_instruction = """
+POST-PPV RELATIONSHIP CONTINUATION
+- A prior paid presentation did not convert. That history applies to commercial
+  pacing and offer selection, not to Ava's ordinary conversational warmth.
+- Paid media and premium explicit participation remain gated by their separate
+  authorities. Do not offer, unlock, or deliver them without current authority.
+- For a sexual or flirty current turn, a warm, playful, non-explicit
+  acknowledgement is allowed. Do not intensify explicit participation or invite
+  endless escalation; redirect naturally when useful while preserving rapport.
+- For a benign current turn, answer that turn normally. Do not import a stale
+  sexual or commercial boundary.
+- Never narrate internal entitlement, moderation, supporter, nonbuyer, or sales
+  policy. Do not tell the customer that the conversation must be nonsexual.
+- Remain attentive to fresh commercial intent, but do not force another offer.
+"""
+        recent_creator_activity = dict(
+            runtime_injection.get("recent_creator_activity") or {}
+        )
+        recent_creator_activity_instruction = ""
+        if recent_creator_activity.get("candidates"):
+            recent_creator_activity_instruction = f"""
+RECENT CREATOR TELEGRAM BROADCAST ACTIVITY
+{json.dumps(recent_creator_activity, indent=2, ensure_ascii=False)}
+- These are at most three posts published during the preceding 12 hours.
+- They are contextual candidates only. They do not prove that this customer saw,
+  entered through, or is referring to any particular post.
+- Use a candidate only when the current wording, timing, and conversation reasonably
+  support that interpretation. If several posts plausibly match, stay natural and
+  do not claim certainty about which one the customer means.
+- If the message is unrelated, ignore this activity completely and respond normally.
+- A missing mediaDescription means no usable persisted visual description exists;
+  do not invent image details or imply that another analysis was performed.
 """
         canonical_attention = dict(
             user_memory.get("customer_value_attention")
@@ -3703,7 +4484,9 @@ CORRECTIVE RESPONSE REQUIREMENT
                 canonical_attention.get("effortMode") or "BALANCED"
             ).lower()
         recent_responses = [str(item.get("content") or "") for item in chat_history
-                            if item.get("role") == "assistant"][-4:]
+                            if item.get("role") == "assistant"][
+                                -ConversationProgressionQualityService.NOVELTY_WINDOW:
+                            ]
 
         creator_profile = user_memory.get("creator_profile", {}) or {}
         conversation_facts = dict(
@@ -3715,7 +4498,9 @@ CORRECTIVE RESPONSE REQUIREMENT
         # cannot alter the certified Sales Brain conversation input.
         if not recent_responses:
             recent_responses = [str(item) for item in
-                                (conversation_facts.get("recentAvaResponses") or [])][-4:]
+                                (conversation_facts.get("recentAvaResponses") or [])][
+                                    -ConversationProgressionQualityService.NOVELTY_WINDOW:
+                                ]
         # Question pressure must use the same outbound history that style and
         # repetition evaluation consume. Scenario Lab deliberately supplies
         # this history outside Sales Brain's alternating conversation input.
@@ -3723,10 +4508,35 @@ CORRECTIVE RESPONSE REQUIREMENT
             {"role": "assistant", "content": item}
             for item in recent_responses
         ])
+        from app.services.question_obligation_contract import QuestionObligationContract
+        question_pressure["questionObligation"] = QuestionObligationContract.resolve(user_message, chat_history or ())
+        fallback_selection_function = "NOT_USED"
         relationship_discovery = dict(
             canonical_attention.get("relationshipDiscovery") or {}
         )
         question_pressure["relationshipDiscovery"] = relationship_discovery
+        active_topics = [
+            name for name, pattern in self._FOREGROUND_TOPIC_PATTERNS.items()
+            if name not in {"POSITIVE_ENGAGEMENT", "COMMERCIAL_INTENT"}
+            and re.search(pattern, str(user_message or ""), re.I)
+        ]
+        question_pressure["conversationMomentum"] = {
+            "responsiveReciprocityEligible": bool(
+                self._has_direct_question(user_message)
+                and self._direct_personal_question_slot(user_message)
+                in {
+                    "CURRENT_WELLBEING", "RECENT_ACTIVITY", "CURRENT_ACTIVITY",
+                    "FUTURE_ACTIVITY", "SCHEDULE_AVAILABILITY",
+                }
+            ),
+            "contextualCuriosityCandidateTopics": active_topics,
+            "questionPressureLow": bool(
+                question_pressure.get("questionStreak", 0) < 2
+                and question_pressure.get("recentQuestionCount", 0) < 3
+            ),
+            "questionsRemainOptional": True,
+            "oneQuestionMaximum": True,
+        }
         memory_diagnostics = conversation_facts.get("memoryDiagnostics")
         if not isinstance(memory_diagnostics, dict):
             memory_diagnostics = {}
@@ -3867,6 +4677,23 @@ OWNERSHIP RULES:
         runtime_persona = (user_memory.get("runtime_injection") or {}).get(
             "ava_persona_runtime_projection"
         )
+        offline_access = dict(
+            (user_memory.get("runtime_injection") or {}).get("offline_access_authority") or {}
+        )
+        from app.services.ava_offline_access_policy import (
+            AvaOfflineAccessPolicy, OfflineAccessAuthority, OfflineContextType,
+        )
+        try:
+            offline_context_type = OfflineContextType(
+                offline_access.get("offlineContextType") or "NO_OFFLINE_CONTEXT"
+            )
+        except ValueError:
+            offline_context_type = OfflineContextType.NO_OFFLINE_CONTEXT
+        offline_access_instruction = OfflineAccessAuthority(
+            context_type=offline_context_type,
+            boundary_required=bool(offline_access.get("boundaryRequired")),
+            evidence=tuple(offline_access.get("evidence") or ()),
+        ).prompt_block()
         customer_disclosure = ConversationalMemoryService.classify_customer_self_disclosure(
             user_message
         )
@@ -3876,6 +4703,34 @@ OWNERSHIP RULES:
             if runtime_persona is not None
             else self._build_persona_prompt_from_profile(creator_profile)
         )
+        autobiographical_question = AutobiographicalQuestionAuthority.projection(
+            user_message, runtime_persona or creator_profile,
+        )
+        question_pressure["autobiographicalQuestion"] = {
+            key: value for key, value in autobiographical_question.items()
+            if key != "canonicalFact"
+        }
+        autobiographical_instruction = ""
+        if autobiographical_question["autobiographical"]:
+            if autobiographical_question["canonicalFactAvailable"]:
+                autobiographical_instruction = f"""
+AUTOBIOGRAPHICAL QUESTION AUTHORITY
+- Semantic referent: {autobiographical_question['referent']}.
+- Answer directly using only this canonical fact:
+  {autobiographical_question['canonicalFact']}
+- Do not replace the known fact with an uncertainty fallback.
+"""
+            else:
+                autobiographical_instruction = f"""
+AUTOBIOGRAPHICAL QUESTION AUTHORITY
+- Semantic referent: {autobiographical_question['referent']}.
+- No canonical fact exists for this requested personal detail.
+- Do not invent a family, childhood, naming, location, or personal story.
+- Directly and naturally say Ava does not have or does not really know a
+  specific story/answer for that detail. This truthful bounded uncertainty
+  satisfies the direct question; it is not a refusal.
+- Do not dodge, ask the customer to try again, or promise a later answer.
+"""
         creator_profile_id = int(creator_profile.get("id") or 0)
         global_operator_training = ""
         customer_operator_training = ""
@@ -4147,6 +5002,9 @@ VERIFIED BUYER RELATIONSHIP CONTEXT
         turn_obligations = self._turn_obligations(
             user_message, new_relationship=new_relationship,
         )
+        turn_obligations = list(dict.fromkeys(
+            turn_obligations + list(conversation_burst.get("obligations") or ())
+        ))
         if session_position_question["required"]:
             turn_obligations = [
                 item for item in turn_obligations
@@ -5081,20 +5939,53 @@ Rebuild comfort and engagement before any monetization resumes.
                 "SLEEP_PENDING_SIGNOFF", "OVERRIDE_HOT_COMMERCIAL",
             }
         )
+        from app.services.peak_engagement_conversation_service import (
+            PeakEngagementConversationDirective,
+        )
+        peak_engagement_conversation = (
+            PeakEngagementConversationDirective.from_phase1(
+                quality_correction.get("peakEngagement"),
+                ordinary_generation=ordinary_phone_texting,
+                protected_commercial_semantics=protected_commercial_semantics,
+                effort_mode=str(effort_mode),
+                sleep_state=sleep_context.get("state"),
+            )
+        )
+        peak_engagement_instruction = peak_engagement_conversation.prompt_block()
+        peak_engagement_diagnostics = peak_engagement_conversation.diagnostics()
+        question_pressure["conversationMomentum"]["peakEngagement"] = {
+            "active": peak_engagement_conversation.active,
+            "treatment": peak_engagement_conversation.treatment,
+            "questionsRemainOptional": True,
+            "oneQuestionMaximum": True,
+            "nonQuestionContinuationPreferredAfterRecentQuestion": True,
+        }
+        question_pressure["momentumPlan"] = Momentum.plan(user_message, evidence={
+            "affect": self._customer_affect(user_message),
+            "flirt": self._social_flirtation(user_message),
+            "compliment": self._compliment_semantics(user_message).get("detected"),
+            "classifier": user_memory.get("gpt_classifier_result") or {},
+            "heat": (commerce_decision.get("diagnostics") or {}).get("customerHeatSignalStrength")
+                or (commerce_decision.get("customerHeatSignal") or {}).get("strength")
+                or (user_memory.get("customer_heat_signal") or {}).get("strength"),
+            "effortMode": str(effort_mode).upper(),
+            "backoff": str(commerce_decision.get("decision") or "").upper() == "BACK_OFF",
+            "meaningful": bool(set(turn_obligations or ()) & {"ACKNOWLEDGE_EMOTIONAL_DISCLOSURE", "ACKNOWLEDGE_CUSTOMER_SELF_DISCLOSURE"}),
+        }, recent=recent_responses)
+        question_pressure["momentumKnownContext"] = json.dumps({
+            "history": chat_history, "memory": continuity_guidance,
+        }, ensure_ascii=False, default=str)
         phone_texting_instruction = ""
         if ordinary_phone_texting:
             phone_texting_instruction = f"""
+{Momentum.prompt(question_pressure["momentumPlan"])}
 CANONICAL ORDINARY TELEGRAM PHONE-TEXTING CONTRACT
 - The final user-role message is the CURRENT CUSTOMER MESSAGE. Respond to its
   meaning first; earlier transcript, memory, and diagnostics are supporting context.
 - Ava is privately texting from her phone, not writing desktop assistant copy.
-- ONE COMPLETE BEAT BY DEFAULT: once the current turn's required response is
-  naturally complete, stop. Add a sentence or clause only when it performs a
-  distinct useful function (answer, grounded detail, personal perspective,
-  clarification, emotional nuance, authorized discovery/progression, or continuity).
-  This is not a sentence limit. Do not add another beat for warmth, emphasis,
-  engagement, elaboration, reinforcement, or to make the reply feel complete.
-- In low-stakes banter, roughly 5-15 words is a strong preference, not a hard cap.
+- Prefer 1-2 natural sentences, each adding understanding, personality or relevant
+  conversational value. Preserve warmth, humor and contribution; stop when complete.
+  Brevity is not a reason to erase an engaging, specific response.
 - When the customer mentions several things, select one salient thread. Do not
   summarize or acknowledge every fact merely because it is available.
 - Prefer the subject the customer foregrounds in the current message over an
@@ -5106,9 +5997,13 @@ CANONICAL ORDINARY TELEGRAM PHONE-TEXTING CONTRACT
 - Answer what the customer actually asked. Add one small reaction, useful detail,
   callback, tease, or bounded low-stakes glimpse of Ava's immediate moment when it
   helps. Do not merely paraphrase the customer's statement to prove understanding.
-- Questions are optional. Never add one just to maintain engagement, create a hook,
-  invite a response, or advance every turn. Earlier generic instructions to invite
-  responses do not override this contract.
+- Questions are optional and never a quota. Do not add one merely to force another
+  message. When conversationMomentum marks responsive reciprocity eligible, a single
+  semantically matched reciprocal question is often a good natural choice after the
+  direct answer, though an answer-only reply remains valid. When the customer volunteers
+  an interesting current detail and pressure is low, one genuinely relevant question
+  about that same active topic may add relationship value. A playful observation,
+  callback, reaction, or non-question invitation can provide momentum instead.
 - Choose in this order: answer the customer's direct question; use a relevant callback;
   contribute a reaction, self-disclosure, tease, or observation; ask only when the
   answer has genuine emotional, continuity, clarification, support, relationship, or
@@ -5117,6 +6012,10 @@ CANONICAL ORDINARY TELEGRAM PHONE-TEXTING CONTRACT
 - Recent Ava question pressure: {json.dumps(question_pressure)}. When recent replies
   repeatedly contain questions, strongly prefer a statement, reaction, direct answer,
   self-disclosure, or callback unless a new question has concrete value.
+- Natural momentum must never delay or replace an authorized commercial action. If
+  Sales Brain authorizes PRESENT_OFFER, execute that action rather than asking for more
+  free detail. Reduced-investment and TW authority also override ordinary curiosity;
+  never use curiosity to solicit deeper free sexual escalation.
 - Canonical relationship discovery: {json.dumps(relationship_discovery, ensure_ascii=False)}.
   When allowed=true, one simple real-life question in suggestedDomain may be valuable.
   It remains optional and the domain is guidance, not mandatory wording. When
@@ -5137,6 +6036,8 @@ CANONICAL ORDINARY TELEGRAM PHONE-TEXTING CONTRACT
 
 TURN OBLIGATIONS FOR THIS MESSAGE
 {json.dumps(turn_obligations)}
+RESOLVED QUESTION CONTRACT
+{json.dumps(question_pressure.get("questionObligation"), default=str)}
 - Shortness may reduce words; it may not remove a core obligation.
 - When WELCOME_NEW_RELATIONSHIP is present, make the first meaningful reply feel
   receptive and intensity-aware without using canned introductory boilerplate.
@@ -5190,6 +6091,17 @@ AVA CONVERSATIONAL AVAILABILITY
   Commerce decision and do not insert a bedtime goodbye.
 
 {quality_correction_instruction}
+{recovery_constraint_instruction}
+{burst_instruction}
+{coherence_instruction}
+{active_bridge_instruction}
+{post_ppv_continuation_instruction}
+
+{peak_engagement_instruction}
+
+{recent_creator_activity_instruction}
+
+{autobiographical_instruction}
 
 RELEVANT CONVERSATIONAL MEMORY
 {json.dumps(conversation_facts, indent=2, ensure_ascii=False) if conversation_facts else "NONE"}
@@ -5253,6 +6165,8 @@ IMPORTANT:
 - Premium escalation rules apply only when premium authority is explicitly present.
 
 {persona_prompt}
+
+{offline_access_instruction}
 
 {mode_override}
 
@@ -5582,10 +6496,23 @@ No selling.
                 "[3D.19.14 PROVIDER EXECUTION] OPENAI"
             )
 
+        from app.services.ordinary_generation_context import current_generation
+        ordinary_session = current_generation()
+        if ordinary_session is not None and ordinary_session.completion is None:
+            from app.services.ordinary_chat_reply_service import durable_plain_data
+            ordinary_session.snapshot(durable_plain_data({
+                "version": "ORDINARY_CONTEXT_V1", "messages": messages,
+                "provider": selected_provider, "model": model,
+                "pressure": question_pressure, "newRelationship": new_relationship,
+                "recentResponses": recent_responses,
+                "userMemory": user_memory, "userMessage": user_message,
+                "questionObligation": question_pressure.get("questionObligation"),
+            }))
         generation_candidates: list[str] = []
 
         def complete(prompt_messages):
-            result = client.chat.completions.create(
+            result = self._response_completion(client, provider=(
+                "OPENAI" if client is self.openai_client else selected_provider),
                 model=model,
                 messages=prompt_messages,
                 temperature=0.9,
@@ -5594,7 +6521,7 @@ No selling.
             candidate_text = str(
                 result.choices[0].message.content or ""
             ).strip()
-            if candidate_text:
+            if candidate_text and (ordinary_session is None or candidate_text not in generation_candidates):
                 generation_candidates.append(candidate_text)
             return result
 
@@ -5605,7 +6532,8 @@ No selling.
         def fallback_complete():
             nonlocal client, model
             client, model = fallback_client, fallback_model
-            return complete(self._openai_grok_fallback_messages(messages))
+            return complete(self._openai_grok_fallback_messages(messages)
+                            if selected_provider == "GROK" else messages)
 
         # One bounded fallback stays inside this generation call and therefore
         # inside the same durable ordinary-reply operation. It does not retry
@@ -5755,8 +6683,9 @@ Triggers: {json.dumps(initial_style_reasons)}
   longer merely to sound natural. Add another beat only for a distinct required or
   useful function. No polished paraphrase, generic aphorism, filler, or mechanical
   engagement question.
-- Compress low-stakes banter toward one compact beat. Select one salient customer
-  thread instead of acknowledging every detail.
+- Keep low-stakes banter concise, usually 1-2 sentences. Preserve its specific
+  reaction, personality and contribution; do not replace it with generic acknowledgement.
+  Select one salient customer thread instead of acknowledging every detail.
 - Do not repeat a conspicuous phrase or opening from Ava's recent replies.
 - A question is allowed only when it adds concrete value.
 - If the customer asked Ava a direct question, answer it before considering any
@@ -5820,8 +6749,9 @@ Triggers: {json.dumps(initial_style_reasons)}
 FINAL PHONE-TEXT COMPRESSION REPAIR
 The prior rewrite still has these defects: {json.dumps(sorted(retryable_candidate_defects))}
 Rewrite as one compact natural statement/reaction/contribution. Do not ask a
-question unless the customer directly asked one and a reciprocal question has
-concrete value.
+question unless it is either a semantically matched reciprocal after a direct
+answer or one relevant low-pressure question about the customer's volunteered
+active topic. Never pivot topics or manufacture engagement.
 Keep every genuinely required answer, emotional, safety, temporal, and commercial
 obligation. Prefer the current message's salient topic. Return only the reply.
 """})
@@ -5986,7 +6916,14 @@ inventory, or claim the customer wants to buy. Return only the reply.
                     response = candidate
                     proactive_satisfied = True
             if not proactive_satisfied:
-                response = "careful, you haven't seen trouble yet"
+                selected_fallback = self._function_first_flirt_fallback(
+                    candidates=generation_candidates, pressure=question_pressure,
+                    user_message=user_message, recent_responses=recent_responses,
+                    require_tease=True,
+                    welcome=new_relationship,
+                )
+                response = selected_fallback["response"]
+                fallback_selection_function = selected_fallback["function"]
                 proactive_satisfied = True
             style = self._style_analysis(
                 response, user_message, pressure=question_pressure,
@@ -6352,7 +7289,16 @@ semantics. Return only the customer-facing reply.
             else:
                 missing = set(style.get("unsatisfiedTurnObligations") or ())
                 if proactive_tease:
-                    response = "aww thank you, that's sweet of you... careful, you haven't seen trouble yet"
+                    selected_fallback = self._function_first_flirt_fallback(
+                    candidates=generation_candidates, pressure=question_pressure,
+                        user_message=user_message, recent_responses=recent_responses,
+                        require_tease=True,
+                        welcome=new_relationship,
+                    )
+                    response = (
+                        "aww thank you... " + selected_fallback["response"]
+                    )
+                    fallback_selection_function = selected_fallback["function"]
                 elif {"ACKNOWLEDGE_COMPLIMENT", "ACKNOWLEDGE_FLIRTATION"} & missing:
                     response = "aww thank you, that's sweet of you"
                 elif "ACKNOWLEDGE_CUSTOMER_SELF_DISCLOSURE" in missing:
@@ -6402,6 +7348,27 @@ semantics. Return only the customer-facing reply.
                 new_relationship=new_relationship,
                 recent_responses=recent_responses,
             )
+            # Coherence resolution may provide a cleaner working paraphrase,
+            # but it has no authority to erase functions present in the
+            # authoritative inbound. Re-derive and enforce those obligations
+            # for every candidate entering this common late-stage gate.
+            if original_user_message != user_message:
+                original_style = self._style_analysis(
+                    candidate, original_user_message, pressure=question_pressure,
+                    ordinary=ordinary_phone_texting,
+                    memory_callback=bool(memory_evidence["used"]),
+                    new_relationship=new_relationship,
+                    recent_responses=recent_responses,
+                )
+                for key in (
+                    "turnObligations", "turnObligationsSatisfied",
+                    "satisfiedTurnObligations", "unsatisfiedTurnObligations",
+                    "semanticGreetingDetected", "semanticQuestionDetected",
+                    "semanticQuestionType", "personalAddresseeResolution",
+                    "complimentDetected", "complimentTarget",
+                    "customerQuestionAnswered", "customerQuestionSemanticSlot",
+                ):
+                    candidate_style[key] = original_style[key]
             violations = []
             feedback_response = self._feedback_response_semantics(candidate)
             feedback_preserved = self._feedback_sentiment_preserved(
@@ -6627,6 +7594,10 @@ semantics. Return only the customer-facing reply.
             )
             if not temporal.get("responseTemporalAlignmentSatisfied"):
                 violations.append("TEMPORAL_GROUNDING")
+            if ConversationProgressionQualityService.mirroring_with_generic_affect(
+                user_message, candidate,
+            ):
+                violations.append("CUSTOMER_PROPOSITION_MIRRORING")
             attention = self._attention_effort_violations(
                 candidate, effort_mode=effort_mode, style=candidate_style,
                 user_message=user_message,
@@ -6671,9 +7642,13 @@ The candidate failed these final-response requirements:
 {json.dumps(final_composition_violations)}
 Rewrite once as one concise, natural Ava private text.
 Required foreground obligations: {json.dumps(style.get('turnObligations') or [])}
+Inbound temporal-function classification: {json.dumps(temporal_language, ensure_ascii=False)}
 {('Include one natural callback grounded in: ' + json.dumps(continuity_guidance.get('strongestMemory'), ensure_ascii=False)) if expected else 'Memory is optional; do not force it.'}
 Authoritative Sales Brain action: {('TEASE — preserve playful curiosity/tension without price, an offer, or purchase language.' if proactive_tease else 'Preserve the current non-tease strategy.')}
 Preserve safety, canonical temporal truth, attention effort, and direct answers.
+Do not restate the customer's primary proposition inside generic emotional or
+evaluative wrapping. Add a genuine reaction, stance, supported callback, useful
+question, or other modest contribution while preserving required obligations.
 Active structured commercial context (knowledge only; it authorizes no new action):
 {json.dumps({key: commerce_decision.get(key) for key in ('active_purchase_intent_id', 'active_offering_id', 'current_offer_status', 'customer_current_offer_status', 'commercial_objection', 'objection_recovery', 'recommended_product_context')}, ensure_ascii=False, default=str)}
 Ground relative product/price answers in that context. Do not invent plural inventory.
@@ -6707,10 +7682,13 @@ Return only the customer-facing reply.
                 or "ACKNOWLEDGE_FLIRTATION" in
                 (style.get("turnObligations") or ())
             ):
-                # This existing bounded tease wording is safe, non-graphic, and
-                # satisfies either foreground flirt contract. Never fall through
-                # to a generic acknowledgement when that energy is authoritative.
-                response = "careful, you haven't seen trouble yet"
+                selected_fallback = self._function_first_flirt_fallback(
+                    candidates=generation_candidates, pressure=question_pressure,
+                    user_message=user_message, recent_responses=recent_responses,
+                    welcome=new_relationship,
+                )
+                response = selected_fallback["response"]
+                fallback_selection_function = selected_fallback["function"]
                 fallback_violations, _, fallback_style = final_composition(response)
                 style = fallback_style
                 combined_obligation_repair_outcome = (
@@ -6718,9 +7696,20 @@ Return only the customer-facing reply.
                     if not fallback_violations else "FALLBACK_NONCOMPLIANT"
                 )
             elif expected or proactive_tease:
-                response = self._required_composition_fallback(
-                    continuity_guidance, proactive_tease=proactive_tease,
-                ) if expected else "careful, you haven't seen trouble yet"
+                if expected:
+                    response = self._required_composition_fallback(
+                        continuity_guidance, proactive_tease=proactive_tease,
+                    )
+                    fallback_selection_function = "SUPPORTED_CALLBACK"
+                else:
+                    selected_fallback = self._function_first_flirt_fallback(
+                    candidates=generation_candidates, pressure=question_pressure,
+                        user_message=user_message, recent_responses=recent_responses,
+                        require_tease=True,
+                        welcome=new_relationship,
+                    )
+                    response = selected_fallback["response"]
+                    fallback_selection_function = selected_fallback["function"]
                 fallback_violations, _, fallback_style = final_composition(response)
                 style = fallback_style
                 combined_obligation_repair_outcome = (
@@ -6796,7 +7785,8 @@ Return only the customer-facing reply.
                     "EMOTIONAL_ALIGNMENT_MISMATCH", "TEMPORAL_MISGROUNDING",
                 }.intersection(candidate_style.get("styleRewriteReasons") or ())
                 negative_contact = self._negative_contact_safety_reasons(candidate_text)
-                if not violations and not hard_style and not negative_contact:
+                if (not violations and not hard_style and not negative_contact
+                        and not candidate_style.get("conversationMomentum", {}).get("blockingReasons")):
                     eligible.append((
                         -len(candidate_style.get("satisfiedTurnObligations") or ()),
                         len(candidate_style.get("styleRewriteReasons") or ()),
@@ -6805,7 +7795,8 @@ Return only the customer-facing reply.
                         candidate_text,
                         candidate_style,
                     ))
-            if final_violations and eligible:
+            if eligible and (final_violations or style.get("conversationMomentum", {}).get("blockingReasons") or (response not in generation_candidates
+                    and initial_style_reasons and any("LENGTH" in r for r in initial_style_reasons))):
                 selected = min(eligible)
                 response = selected[4]
                 style = selected[5]
@@ -6912,22 +7903,30 @@ Return only the customer-facing reply.
         # provider draft with bounded sexual/tease wording; this final pass keeps
         # those higher-priority obligations while preventing that fallback from
         # mechanically winning again inside the recent-response window.
-        repetition_repair_attempted = False
-        repetition_repair_outcome = "NOT_REQUIRED"
+        repetition_repair_attempted = bool(
+            "RECENT_PHRASE_REPETITION" in initial_style_reasons
+        )
+        repetition_repair_outcome = (
+            "COMPLIANT_ALTERNATE_SELECTED"
+            if repetition_repair_attempted
+            and not style.get("recentPhraseRepetitionRisk")
+            else "NOT_REQUIRED"
+        )
         final_response_repetition_satisfied = not bool(
             style.get("recentPhraseRepetitionRisk")
         )
         if style.get("recentPhraseRepetitionRisk"):
             repetition_repair_attempted = True
-            contextual_fallbacks = (
-                "mm, keep talking like that... you still haven't seen my dangerous side",
-                "you really do bring out my trouble side... maybe I'll keep you guessing",
-                "bold of you... I might tease you with my naughty side",
+            selected_fallback = self._function_first_flirt_fallback(
+                    candidates=generation_candidates, pressure=question_pressure,
+                user_message=user_message, recent_responses=recent_responses,
+                require_tease=proactive_tease,
+                welcome=new_relationship,
             )
             alternatives = [
                 candidate for candidate in generation_candidates
                 if candidate.strip() != response.strip()
-            ] + list(contextual_fallbacks)
+            ] + [selected_fallback["response"]]
             for alternate in alternatives:
                 alternate_violations, _, alternate_style = final_composition(
                     alternate
@@ -6945,6 +7944,11 @@ Return only the customer-facing reply.
                     )
                     final_response_repetition_satisfied = True
                     repetition_repair_outcome = "COMPLIANT_ALTERNATE_SELECTED"
+                    fallback_selection_function = (
+                        selected_fallback["function"]
+                        if alternate == selected_fallback["response"]
+                        else "PROVIDER_CANDIDATE_ALTERNATE"
+                    )
                     break
             else:
                 repetition_repair_outcome = "NO_COMPLIANT_ALTERNATE"
@@ -7032,6 +8036,184 @@ Return only the customer-facing reply.
                 temporal_validation = self.temporal_context_service.evaluate_response(
                     user_message, response, temporal_context,
                 )
+
+        # Conversation progression is a final ordinary-chat delivery quality
+        # gate.  It runs after question/style/obligation rewrites because those
+        # stages can turn a locally valid draft into the third functionally
+        # empty acknowledgement in a row.  It has no authority to change Sales
+        # Brain, intimacy, safety, or commercial eligibility.
+        recent_customer_messages = [
+            str(item.get("content") or "")
+            for item in (chat_history or [])
+            if str(item.get("role") or "").lower() in {"user", "customer"}
+        ][-3:]
+        progression_rewrite_attempted = False
+        progression_rewrite_outcome = "NOT_REQUIRED"
+        progression = ConversationProgressionQualityService.assess(
+            customer_message=user_message,
+            candidate=response,
+            recent_ava_responses=recent_responses,
+            recent_customer_messages=recent_customer_messages,
+            commercial_progression_authorized=protected_commercial_semantics,
+            safety_redirect=bool(continuity_guidance.get("safetyOverride")),
+        )
+        if ordinary_phone_texting and not progression.accepted:
+            progression_rewrite_attempted = True
+            progression_messages = list(messages)
+            progression_messages.append({"role": "assistant", "content": response})
+            progression_messages.append({
+                "role": "system",
+                "content": f"""
+FINAL CONVERSATION-PROGRESSION REPAIR
+The draft is locally relevant but repeats a low-novelty conversational function.
+Reason: {progression.rejection_reason}
+Recent Ava dialogue functions: {json.dumps(progression.recent_dialogue_functions)}
+Rewrite it as ONE concise private-chat beat that adds exactly one modest useful
+contribution: a current callback, playful reframe/challenge, concrete observation,
+bounded self-disclosure, new detail, authorized tease, or genuinely useful question.
+- A question is optional and must not be manufactured for engagement.
+- Do not use a generic aphorism or merely restate the customer's foreground words.
+- Preserve every existing direct-answer, safety, intimacy, memory, temporal, and
+  commercial constraint. Do not escalate sexual intensity.
+- Commercial progression is {'authorized' if protected_commercial_semantics else 'NOT authorized'}.
+- Stay short. Return only the replacement reply.
+""",
+            })
+            try:
+                progression_candidate = complete(
+                    progression_messages
+                ).choices[0].message.content.strip()
+            except Exception:
+                self.logger.exception("[GPT CONVERSATION PROGRESSION REWRITE ERROR]")
+                progression_rewrite_outcome = "PROVIDER_ERROR"
+            else:
+                candidate_progression = (
+                    ConversationProgressionQualityService.assess(
+                        customer_message=user_message,
+                        candidate=progression_candidate,
+                        recent_ava_responses=recent_responses,
+                        recent_customer_messages=recent_customer_messages,
+                        commercial_progression_authorized=protected_commercial_semantics,
+                        safety_redirect=bool(
+                            continuity_guidance.get("safetyOverride")
+                        ),
+                    )
+                )
+                candidate_violations, _, candidate_style = final_composition(
+                    progression_candidate
+                )
+                if candidate_progression.accepted and not candidate_violations:
+                    response = progression_candidate
+                    progression = candidate_progression
+                    style = candidate_style
+                    temporal_validation = (
+                        self.temporal_context_service.evaluate_response(
+                            user_message, response, temporal_context,
+                        )
+                    )
+                    progression_rewrite_outcome = "SUCCEEDED"
+                else:
+                    progression_rewrite_outcome = "NONCOMPLIANT_REWRITE"
+
+            if not progression.accepted:
+                progression_fallback = next((saved for saved in generation_candidates
+                    if not final_composition(saved)[0]
+                    and ConversationProgressionQualityService.assess(
+                        customer_message=user_message, candidate=saved,
+                        recent_ava_responses=recent_responses,
+                        recent_customer_messages=recent_customer_messages,
+                        commercial_progression_authorized=False).accepted), "")
+                fallback_violations, _, fallback_style = final_composition(
+                    progression_fallback
+                )
+                fallback_progression = (
+                    ConversationProgressionQualityService.assess(
+                        customer_message=user_message,
+                        candidate=progression_fallback,
+                        recent_ava_responses=recent_responses,
+                        recent_customer_messages=recent_customer_messages,
+                        commercial_progression_authorized=False,
+                    )
+                )
+                if not fallback_violations and fallback_progression.accepted:
+                    response = progression_fallback
+                    progression = fallback_progression
+                    style = fallback_style
+                    temporal_validation = (
+                        self.temporal_context_service.evaluate_response(
+                            user_message, response, temporal_context,
+                        )
+                    )
+                    progression_rewrite_outcome = "BOUNDED_FALLBACK"
+                else:
+                    from app.services.conversation_progression_quality_service import (
+                        ConversationProgressionFailure,
+                    )
+                    raise ConversationProgressionFailure(
+                        "Final response failed bounded conversation progression: "
+                        + str(progression.rejection_reason),
+                        {
+                            "authority": "ConversationProgressionQualityService",
+                            "rejectedCandidateText": str(response),
+                            "candidateDialogueFunction": (
+                                progression.candidate_contribution_function
+                            ),
+                            "recentDialogueFunctions": list(
+                                progression.recent_dialogue_functions
+                            ),
+                            "rewriteAttempted": progression_rewrite_attempted,
+                            "rewriteResult": progression_rewrite_outcome,
+                            "finalBlockingReasons": list(dict.fromkeys(filter(None, (
+                                progression.rejection_reason,
+                                *fallback_violations,
+                                fallback_progression.rejection_reason,
+                            )))),
+                        },
+                    )
+
+        # A late correctness/progression rewrite may not erase the binding
+        # sexual-energy acknowledgement. Recover once with a function-first,
+        # self-novel candidate and re-run every final composition boundary.
+        if (style.get("sexualResponseExpected")
+                and not style.get("sexualResponseSatisfied")):
+            selected_fallback = self._function_first_flirt_fallback(
+                    candidates=generation_candidates, pressure=question_pressure,
+                user_message=user_message, recent_responses=recent_responses,
+                require_tease=proactive_tease,
+                welcome=new_relationship,
+            )
+            sexual_fallback = selected_fallback["response"]
+            fallback_violations, _, fallback_style = final_composition(
+                sexual_fallback
+            )
+            fallback_progression = ConversationProgressionQualityService.assess(
+                customer_message=user_message,
+                candidate=sexual_fallback,
+                recent_ava_responses=recent_responses,
+                recent_customer_messages=recent_customer_messages,
+                commercial_progression_authorized=False,
+            )
+            if not fallback_violations and fallback_progression.accepted:
+                response = sexual_fallback
+                style = fallback_style
+                progression = fallback_progression
+                temporal_validation = self.temporal_context_service.evaluate_response(
+                    user_message, response, temporal_context,
+                )
+                fallback_selection_function = selected_fallback["function"]
+                combined_obligation_repair_outcome = (
+                    "BINDING_FUNCTION_FIRST_SEXUAL_ACKNOWLEDGEMENT"
+                )
+            else:
+                raise RuntimeError(
+                    "Final response failed bounded sexual-energy recovery: "
+                    + str(fallback_violations)
+                )
+
+        proactive_satisfied = (
+            self._response_satisfies_proactive_tease(response)
+            if proactive_tease else proactive_satisfied
+        )
 
         if used:
             final_memory_omission_reason = None
@@ -7127,6 +8309,61 @@ Return only the customer-facing reply.
         style.update(temporal_validation)
 
         style.update({
+            "recentDialogueFunctionSequence": list(
+                progression.recent_dialogue_functions
+            ),
+            "progressionPressureActive": (
+                progression.progression_pressure_active
+            ),
+            "customerHookDetected": progression.customer_hook_detected,
+            "callbackContinuityDetected": (
+                progression.callback_continuity_detected
+            ),
+            "progressionTopicResetDetected": progression.topic_reset_detected,
+            "candidateContributionFunction": (
+                progression.candidate_contribution_function
+            ),
+            "candidateConversationalFunction": (
+                progression.candidate_contribution_function
+            ),
+            "candidateContributive": progression.candidate_contributive,
+            "antiMirroringDetected": (
+                progression.mirroring_with_generic_affect
+            ),
+            "antiMirroringResult": (
+                "REJECTED_MIRRORING_WITH_GENERIC_AFFECT"
+                if progression.mirroring_with_generic_affect
+                else "PASS"
+            ),
+            "progressionRejectionReason": progression.rejection_reason,
+            "progressionRewriteAttempted": progression_rewrite_attempted,
+            "progressionRewriteOutcome": progression_rewrite_outcome,
+            "finalProgressionResult": (
+                "PASS" if progression.accepted else "FAIL"
+            ),
+            "finalCandidateTransformationSource": (
+                "PROGRESSION_REWRITE"
+                if progression_rewrite_outcome == "SUCCEEDED"
+                else "PROGRESSION_BOUNDED_FALLBACK"
+                if progression_rewrite_outcome == "BOUNDED_FALLBACK"
+                else "REPETITION_ALTERNATE"
+                if repetition_repair_outcome == "COMPLIANT_ALTERNATE_SELECTED"
+                else "COMBINED_OBLIGATION_REPAIR"
+                if combined_obligation_repair_outcome == "SUCCEEDED"
+                else "FINAL_VALIDATION_REWRITE"
+                if final_validation_outcome.startswith("SUCCEEDED")
+                else "STYLE_REWRITE"
+                if style_rewrite_outcome == "SUCCEEDED"
+                else "PROVIDER_CANDIDATE"
+                if response in generation_candidates
+                else "VALIDATED_LATE_STAGE_CANDIDATE"
+            ),
+            "fallbackSelectionFunction": fallback_selection_function,
+            "selfNoveltyResult": (
+                "PASS" if style.get("selfNoveltySatisfied", True)
+                else "EXACT_REUSE" if style.get("exactRecentResponseReuse")
+                else "SEMANTIC_FAMILY_EXHAUSTED"
+            ),
             "styleRewriteAttempted": style_rewrite_attempted,
             "styleRewriteReason": (
                 initial_style_reasons[0] if initial_style_reasons else None
@@ -7234,6 +8471,37 @@ Return only the customer-facing reply.
             "foregroundSemanticIntent": final_semantic_relevance["intent"],
             "foregroundSemanticRelevanceRequired": final_semantic_relevance["required"],
             "foregroundSemanticRelevanceSatisfied": final_semantic_relevance["satisfied"],
+            "currentTurnConversationalFunction": (
+                final_semantic_relevance.get("currentTurnConversationalFunction")
+                or final_semantic_relevance.get("intent")
+            ),
+            "currentTurnRelevanceRequired": final_semantic_relevance["required"],
+            "currentTurnRelevanceSatisfied": final_semantic_relevance["satisfied"],
+            "currentTurnRelevanceReason": final_semantic_relevance.get(
+                "currentTurnRelevanceReason",
+                "CURRENT_FOREGROUND_SATISFIED"
+                if final_semantic_relevance["satisfied"]
+                else "CURRENT_FOREGROUND_NOT_SATISFIED",
+            ),
+            "originalInboundObligations": self._turn_obligations(
+                original_user_message, new_relationship=new_relationship,
+            ),
+            "finalRecomputedObligations": self._turn_obligations(
+                original_user_message, new_relationship=new_relationship,
+            ),
+            "finalUnsatisfiedObligations": list(
+                style.get("unsatisfiedTurnObligations") or ()
+            ),
+            "finalObligationRecomputationResult": (
+                "PASS" if not style.get("unsatisfiedTurnObligations") else "FAIL"
+            ),
+            "fallbackRejectedForDirectQuestion": bool(
+                combined_obligation_repair_outcome
+                == "UNRESOLVED_OPTIONAL_RESPONSE_WITHHELD"
+                and set(style.get("turnObligations") or ()).intersection({
+                    "ANSWER_DIRECT_QUESTION", "ANSWER_DIRECT_PERSONAL_QUESTION",
+                })
+            ),
             "sessionPositionGrounding": final_semantic_relevance.get(
                 "sessionPositionGrounding"
             ),
@@ -7412,7 +8680,35 @@ Return only the customer-facing reply.
                 "recentSubsetPositiveFeedbackSatisfied",
             )
         })
+        final_momentum = Momentum.assess(user_message, response,
+            plan=question_pressure["momentumPlan"], recent=recent_responses,
+            question_reason=style.get("questionReason"),
+            manufactured=bool(style.get("manufacturedQuestionRisk")),
+            contribution=style.get("contributionType", "NONE"), memory_callback=used,
+            known_context=question_pressure.get("momentumKnownContext"))
+        final_momentum.update(fallbackUsed=bool(response not in generation_candidates),
+            styleIntervention=bool(initial_style_reasons),
+            candidateReplaced=bool(generation_candidates and response != generation_candidates[0]))
+        style["conversationMomentum"] = final_momentum
+        style["styleRewriteReasons"] = list(dict.fromkeys([
+            *(style.get("styleRewriteReasons") or ()),
+            *(final_momentum["blockingReasons"] if ordinary_phone_texting else ())]))
         memory_diagnostics["conversationStyle"] = style
+        memory_diagnostics["peakEngagementConversation"] = (
+            peak_engagement_diagnostics
+        )
+        if coherence:
+            coherence_diagnostics = dict(coherence)
+            coherence_diagnostics["originalCustomerMessage"] = original_user_message
+            coherence_diagnostics["semanticRelevanceSatisfied"] = bool(
+                style.get("customerQuestionAnswered") is True
+                and style.get("turnObligationsSatisfied") is True
+            )
+            coherence_diagnostics["semanticRelevanceFailureReason"] = (
+                None if coherence_diagnostics["semanticRelevanceSatisfied"]
+                else "RESOLVED_DIRECT_QUESTION_UNANSWERED"
+            )
+            memory_diagnostics["conversationCoherence"] = coherence_diagnostics
 
         memory_diagnostics["generationCompliance"] = {
             "guidanceSupplied": bool(continuity_guidance),

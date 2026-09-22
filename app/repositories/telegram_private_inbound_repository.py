@@ -35,6 +35,18 @@ class TelegramPrivateInboundRepository:
             connection.commit()
         return self._model(row), created
 
+    def consume_control(self, *, account_scope, chat_id, message_id):
+        """Retain transport evidence while excluding control traffic from response work."""
+        with self.connection_factory() as connection, connection.cursor() as cursor:
+            cursor.execute("""UPDATE telegram_private_inbound_messages
+                SET reconciliation_state='NO_RESPONSE_REQUIRED',reconciled_at=NOW(),updated_at=NOW()
+                WHERE telegram_account_scope=%s AND telegram_chat_id=%s
+                  AND telegram_message_id=%s
+                  AND reconciliation_state IN ('CAPTURED','LIVE_HANDLED')
+                RETURNING inbound_id""", (account_scope, chat_id, message_id))
+            row = cursor.fetchone()
+            connection.commit()
+        return row is not None
     def pending_for_chat(self, *, account_scope, chat_id):
         with self.connection_factory() as connection, connection.cursor() as cursor:
             cursor.execute("""SELECT * FROM telegram_private_inbound_messages
@@ -42,12 +54,27 @@ class TelegramPrivateInboundRepository:
                 ORDER BY received_at,telegram_message_id""", (account_scope, chat_id))
             return [self._model(row) for row in cursor.fetchall()]
 
-    def correlate(self, *, account_scope, chat_id, message_id, mapped_customer_id=None, prospect_id=None):
+    def latest_boundary(self, *, account_scope):
+        """Return the newest durable inbound boundary for bounded history overlap."""
+        with self.connection_factory() as connection, connection.cursor() as cursor:
+            cursor.execute("""SELECT telegram_message_id,received_at
+                FROM telegram_private_inbound_messages
+                WHERE telegram_account_scope=%s
+                ORDER BY received_at DESC,telegram_message_id DESC LIMIT 1""",
+                (account_scope,))
+            row = cursor.fetchone()
+        return dict(row) if row else None
+
+    def correlate(self, *, account_scope, chat_id, message_id, mapped_customer_id=None,
+                  prospect_id=None, response_operation_id=None):
         with self.connection_factory() as connection, connection.cursor() as cursor:
             cursor.execute("""UPDATE telegram_private_inbound_messages SET
-                mapped_customer_id=COALESCE(mapped_customer_id,%s),prospect_id=COALESCE(prospect_id,%s),updated_at=NOW()
+                mapped_customer_id=COALESCE(mapped_customer_id,%s),
+                prospect_id=COALESCE(prospect_id,%s),
+                response_operation_id=COALESCE(response_operation_id,%s),updated_at=NOW()
                 WHERE telegram_account_scope=%s AND telegram_chat_id=%s AND telegram_message_id=%s""",
-                (mapped_customer_id, prospect_id, account_scope, chat_id, message_id))
+                (mapped_customer_id, prospect_id, response_operation_id,
+                 account_scope, chat_id, message_id))
             connection.commit()
 
     def reconcile(self, *, account_scope, chat_id, authoritative_message_id=None, outcome,

@@ -52,6 +52,7 @@ class CommercialOfferingSelectorService:
         self, repository=None, clock=lambda: datetime.now(timezone.utc),
         recommendation_engine=None, ownership_intelligence=None,
         photoshoot_lifecycle_service=None, progression_repository=None,
+        private_ppv_readiness_service=None,
     ):
         self.repository = (
             repository or CommercialOfferingSelectorRepository()
@@ -63,6 +64,12 @@ class CommercialOfferingSelectorService:
         self.ownership_intelligence = (
             ownership_intelligence or OwnershipIntelligenceService()
         )
+        if private_ppv_readiness_service is None:
+            from app.services.private_ppv_readiness_service import (
+                PrivatePpvReadinessService,
+            )
+            private_ppv_readiness_service = PrivatePpvReadinessService()
+        self.private_ppv_readiness = private_ppv_readiness_service
         self.photoshoot_lifecycles = photoshoot_lifecycle_service
         self.progression_repository = progression_repository
 
@@ -549,6 +556,16 @@ class CommercialOfferingSelectorService:
             and candidate.get("standalone_sale_destination") != "CHAT"
         ):
             reasons.append("STANDALONE_DESTINATION_NOT_CHAT")
+        if (
+            offering_type == "SINGLE_IMAGE"
+            and candidate.get("source_photoshoot_deliverable_id") is None
+            and candidate.get("source_bundle_studio_bundle_id") is None
+            and candidate.get("standalone_sale_destination") == "CHAT"
+            and not self.private_ppv_readiness.evaluate(candidate).ready
+        ):
+            reasons.append(
+                OfferingExclusionReason.PRIVATE_PPV_PRESENTATION_NOT_READY.value
+            )
         bundle_channel = str(
             candidate.get("photoshoot_bundle_sales_channel") or "CHAT"
         )

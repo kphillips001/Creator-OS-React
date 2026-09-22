@@ -30,6 +30,86 @@ def test_explicit_sexual_receptiveness_is_not_buying_intent():
     assert result["commercialCuriosity"] is False
 
 
+def test_joseph_contextual_short_followup_is_sexual_only_with_hot_context():
+    history = (
+        {"role": "customer", "content": "my fingers will play with your clit"},
+        {"role": "assistant", "content": "You're definitely teasing me now."},
+    )
+    result = classify("How many fingers do you like", history=history)
+    assert result["sexualOrProvocative"] is True
+    assert result["contextualSexualEvidenceApplied"] is True
+    assert result["buyingIntent"] is False
+
+
+def test_joseph_love_it_continuation_uses_immediate_concrete_referent():
+    result = classify("I know you will love it 😀", history=(
+        {"role": "customer", "content": "kiss and lick your inner thighs up to your sexy legs"},
+        {"role": "assistant", "content": "That is a very tempting thought."},
+    ))
+    assert result["sexualOrProvocative"] is True
+    assert result["contextualSexualEvidenceApplied"] is True
+    assert result["buyingIntent"] is False
+
+
+def test_explicit_continuation_after_contextual_turn_is_independently_hot():
+    result = classify(
+        "To pleasure a beautiful sexy woman would be my pleasure",
+        history=(
+            {"role": "customer", "content": "I know you will love it"},
+            {"role": "assistant", "content": "You sound confident."},
+        ),
+    )
+    assert result["sexualOrProvocative"] is True
+    assert result["contextualSexualEvidenceApplied"] is False
+
+
+def test_explicit_anatomy_and_actions_are_global_sexual_tone_evidence():
+    for message in (
+        "I will put lube on my cock then slowly thrust",
+        "my fingers play with your clit",
+        "my lips will cover your nipple",
+    ):
+        assert classify(message)["sexualOrProvocative"] is True
+
+
+def test_ambiguous_quantity_and_finger_phrases_fail_closed_without_sexual_context():
+    assert classify("How many do you like?")["sexualOrProvocative"] is False
+    assert classify("How many songs do you like?")["sexualOrProvocative"] is False
+    assert classify("How many chicken fingers do you like?")["sexualOrProvocative"] is False
+    assert classify(
+        "My hand hurts. How many fingers should I move?"
+    )["sexualOrProvocative"] is False
+    assert classify("How many fingers do you like?")["sexualOrProvocative"] is False
+    assert classify("I know you will love it 😀")["sexualOrProvocative"] is False
+
+
+def test_nonsexual_current_turn_stays_cold_after_historical_hot_context():
+    result = classify("What music do you like?", history=(
+        {"role": "customer", "content": "I am horny tonight"},
+        {"role": "assistant", "content": "You're trouble."},
+    ))
+    assert result["sexualOrProvocative"] is False
+    assert result["contextualSexualEvidenceApplied"] is False
+
+
+def test_topic_change_and_bounded_turn_decay_break_contextual_hot_continuity():
+    changed = classify("I know you will love it", history=(
+        {"role": "customer", "content": "I am horny tonight"},
+        {"role": "assistant", "content": "You're trouble."},
+        {"role": "customer", "content": "What music do you like?"},
+        {"role": "assistant", "content": "Mostly country."},
+    ))
+    assert changed["sexualOrProvocative"] is False
+    decayed = classify("I know you will love it", history=(
+        {"role": "customer", "content": "I am horny tonight"},
+        {"role": "assistant", "content": "Maybe."},
+        {"role": "assistant", "content": "Anyway."},
+        {"role": "customer", "content": "Good morning"},
+        {"role": "assistant", "content": "Morning."},
+    ))
+    assert decayed["sexualOrProvocative"] is False
+
+
 def test_same_provocation_uses_relationship_context():
     phrase = "god you're such a wild one 😏"
     playful = classify(phrase, history=(

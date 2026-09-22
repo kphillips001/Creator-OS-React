@@ -1,4 +1,4 @@
-"""Read-only Posted Content endpoints."""
+"""Posted Content read surface and bounded library-disposition action."""
 
 from __future__ import annotations
 
@@ -28,6 +28,8 @@ class PostedContentResponse(BaseModel):
     prompt: str
     file_location: str
     media_url: str
+    media_type: str
+    move_eligible: bool
 
 
 class PostedContentListResponse(BaseModel):
@@ -55,3 +57,22 @@ def posted_content_media(content_id: str):
         media_type=mimetypes.guess_type(path.name)[0] or "application/octet-stream",
         headers={"Cache-Control": "private, max-age=3600"},
     )
+
+
+@router.post("/{content_id}/move-to-generation-library")
+def move_posted_content_to_generation_library(content_id: str):
+    try:
+        item, already_moved = PostedContentService().move_to_generation_library(content_id)
+    except KeyError as error:
+        raise HTTPException(status_code=404, detail="Posted content not found.") from error
+    except (ValueError, FileNotFoundError) as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    except RuntimeError as error:
+        raise HTTPException(status_code=500, detail=str(error)) from error
+    return {
+        "success": True,
+        "already_moved": already_moved,
+        "generation_library_id": item.generation_library_id,
+        "message": "Image is already in Generation Library." if already_moved
+        else "Image moved to Generation Library. Publication history was preserved.",
+    }

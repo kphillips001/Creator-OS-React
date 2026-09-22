@@ -159,10 +159,10 @@ class CreatorIntelligenceService:
                 "overallReadiness": "UNAVAILABLE",
                 "reason": f"Developer Agent readiness unavailable: {exc}",
             }
-        records = self.generation_library.list_records()
-        active = sum(record.status == "active" for record in records)
-        staged = sum(record.status == "staged_asset_library" for record in records)
-        archived = sum(record.status not in {"active", "staged_asset_library"} for record in records)
+        library_counts = self.generation_library.overview_counts()
+        active = int(library_counts.get("active") or 0)
+        staged = int(library_counts.get("staged") or 0)
+        archived = int(library_counts.get("archived") or 0)
         offers = int(facts.get("offers_today") or 0)
         purchases = int(facts.get("purchases_today") or 0)
         conversion = round((purchases / offers) * 100, 1) if offers else 0.0

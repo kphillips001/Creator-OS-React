@@ -173,6 +173,45 @@ def test_response_temporal_validation_rejects_false_claim_and_accepts_neutral_an
     assert neutral["temporalMismatchDetected"] is True
 
 
+@pytest.mark.parametrize(("message", "function", "target", "relation"), (
+    ("Good morning beautiful", "SALUTATION", "AVA", "CURRENT_OR_ELAPSED"),
+    ("Morning 😘", "SALUTATION", "AVA", "CURRENT_OR_ELAPSED"),
+    ("I worked this morning", "CUSTOMER_ELAPSED_CONTEXT", "CUSTOMER", "ELAPSED"),
+    ("I could stay with you from morning to night", "DURATION", "GENERAL", "DURATION"),
+    ("Hi sexy, I could pleasure you from morning to night", "DURATION", "GENERAL", "DURATION"),
+    ("Tomorrow morning would be fun", "FUTURE_PLANNING", "GENERAL", "FUTURE"),
+))
+def test_temporal_function_classification(message, function, target, relation):
+    context = _context(datetime(2026, 8, 29, 13, 0, tzinfo=timezone.utc))
+    result = AvaTemporalContextService.classify_customer_reference(message, context)
+    assert result["customerTemporalFunction"] == function
+    assert result["customerTemporalReferenceTarget"] == target
+    assert result["customerTemporalRelation"] == relation
+
+
+def test_response_salutation_is_bound_to_ava_daypart_but_signoff_is_functional():
+    morning = _context(datetime(2026, 8, 29, 13, 0, tzinfo=timezone.utc))
+    evening = _context(datetime(2026, 8, 30, 0, 0, tzinfo=timezone.utc))
+    allowed = AvaTemporalContextService.evaluate_response(
+        "Good morning beautiful", "Good morning, handsome", morning,
+    )
+    rejected = AvaTemporalContextService.evaluate_response(
+        "Hi sexy, I could pleasure you from morning to night",
+        "Good morning, sexy", evening,
+    )
+    signoff = AvaTemporalContextService.evaluate_response(
+        "Have a good night", "Good night, sleep well", evening,
+    )
+    assert allowed["responseTemporalFunction"] == "SALUTATION"
+    assert allowed["responseTemporalAlignmentSatisfied"] is True
+    assert rejected["customerTemporalFunction"] == "DURATION"
+    assert rejected["responseTemporalFunction"] == "SALUTATION"
+    assert rejected["responseTemporalAlignmentSatisfied"] is False
+    assert signoff["responseTemporalFunction"] == "SIGNOFF"
+    assert signoff["responseTemporalAlignmentSatisfied"] is True
+    assert signoff["responseTemporalAlignmentReason"] == "CONVERSATIONAL_SIGNOFF"
+
+
 def test_future_routine_appointment_rejects_invented_recovery():
     context = _context(datetime(2026, 8, 29, 17, 23, tzinfo=timezone.utc))
     result = AvaTemporalContextService.evaluate_response(

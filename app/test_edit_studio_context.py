@@ -2,11 +2,14 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
 
+import pytest
+
 from app.models.generation_engine import GenerationType
 from app.models.generation_library import GeneratedImageRecord
 from app.api.edit_studio import EditStudioReferenceInput
 from app.services.edit_studio_context_service import EditStudioContextService
 from app.services.edit_studio_service import EditStudioService
+from app.services.generation_engine_service import GenerationJobStoreError
 
 
 def _provider(provider_id, label, *, enabled=True, supports_images=True, edit=True):
@@ -276,6 +279,56 @@ def test_background_generation_reuses_engine_sync_and_candidate_services(monkeyp
         "candidate-1",
         pending_source_image_id="source-1",
     )
+
+
+def test_generation_status_distinguishes_missing_job(monkeypatch):
+    from fastapi import HTTPException
+    from app.api import edit_studio as api
+
+    engine = Mock()
+    engine.get_job.side_effect = KeyError("missing")
+    monkeypatch.setattr(api, "_creator_profile", lambda: {"id": 7})
+    monkeypatch.setattr(api, "GenerationEngineService", lambda: engine)
+    with pytest.raises(HTTPException) as raised:
+        api.edit_studio_generation_status("missing-job")
+    assert raised.value.status_code == 404
+    assert raised.value.detail == "Edit generation job not found."
+
+
+def test_generation_status_surfaces_store_unavailability_as_503(monkeypatch):
+    from fastapi import HTTPException
+    from app.api import edit_studio as api
+
+    engine = Mock()
+    engine.get_job.side_effect = GenerationJobStoreError("invalid json")
+    monkeypatch.setattr(api, "_creator_profile", lambda: {"id": 7})
+    monkeypatch.setattr(api, "GenerationEngineService", lambda: engine)
+    with pytest.raises(HTTPException) as raised:
+        api.edit_studio_generation_status("known-job")
+    assert raised.value.status_code == 503
+    assert raised.value.detail == "Generation status is temporarily unavailable."
+
+
+def test_generation_status_success_remains_compatible(monkeypatch):
+    from app.api import edit_studio as api
+
+    job = SimpleNamespace(
+        job_id="job-1", status="running", failure=None,
+        request=SimpleNamespace(
+            creator_profile_id=7, provider_id="fake",
+            metadata={"source": "edit_studio", "source_image_ids": ["source-1"]},
+        ),
+    )
+    engine = Mock(); engine.get_job.return_value = job
+    library = Mock(); library.list_records.return_value = ()
+    monkeypatch.setattr(api, "_creator_profile", lambda: {"id": 7})
+    monkeypatch.setattr(api, "GenerationEngineService", lambda: engine)
+    monkeypatch.setattr(api, "GenerationLibraryService", lambda: library)
+    result = api.edit_studio_generation_status("job-1")
+    assert result == {
+        "generation_job_id": "job-1", "generation_status": "running",
+        "provider_id": "fake", "candidate": None, "error": None,
+    }
 
 
 def test_return_to_library_discards_all_linked_candidates_and_clears_pending(monkeypatch):

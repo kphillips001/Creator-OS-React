@@ -8,6 +8,7 @@ Publishing state, or customer persistence.
 
 from __future__ import annotations
 
+import inspect
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, Protocol
 
@@ -48,6 +49,7 @@ class DecisionEngineCompatible(Protocol):
         user_id: str,
         message: str,
         chat_history: list[Any] | None = None,
+        runtime_injection: dict[str, Any] | None = None,
     ) -> DecisionEngineResult | dict[str, Any] | None:
         ...
 
@@ -111,6 +113,7 @@ class TelegramCommerceService:
         user_id: str,
         message: str,
         chat_history: list[Any] | None = None,
+        runtime_injection: dict[str, Any] | None = None,
     ) -> dict[str, Any] | None:
         """Compatibility adapter for ConversationGateway."""
 
@@ -118,6 +121,7 @@ class TelegramCommerceService:
             engine_user_id=user_id,
             message_text=message,
             chat_history=chat_history,
+            runtime_injection=runtime_injection,
         )
         if result.decision_engine_result is None:
             return None
@@ -134,6 +138,7 @@ class TelegramCommerceService:
         message_text: str,
         chat_history: list[Any] | None = None,
         correlation_id: str | None = None,
+        runtime_injection: dict[str, Any] | None = None,
     ) -> TelegramCommerceResult:
         """Run one Telegram commerce turn through the existing intelligence."""
 
@@ -160,14 +165,20 @@ class TelegramCommerceService:
                 customer_intelligence_snapshot
             )
         )
-        raw_engine_result = self.decision_engine.process_message(
-            engine_user_id,
-            message_text,
-            chat_history=self._chat_history_with_customer_context(
+        engine_process = self.decision_engine.process_message
+        engine_kwargs = {
+            "chat_history": self._chat_history_with_customer_context(
                 chat_history,
                 decision_customer_context,
                 previous_commerce_memory,
-            ),
+            )
+        }
+        if "runtime_injection" in inspect.signature(engine_process).parameters:
+            engine_kwargs["runtime_injection"] = runtime_injection
+        raw_engine_result = engine_process(
+            engine_user_id,
+            message_text,
+            **engine_kwargs,
         )
         engine_result = DecisionEngineResult.from_value(raw_engine_result)
 
@@ -209,6 +220,7 @@ class TelegramCommerceService:
                 if delivery_decision.paid_media_link
                 else {},
                 runtime_context={
+                    "customer_delivery_disabled": True,
                     "correlation_id": correlation_id,
                     "engine_user_id": engine_user_id,
                     "delivery_id": prepared_delivery.get("delivery_id"),

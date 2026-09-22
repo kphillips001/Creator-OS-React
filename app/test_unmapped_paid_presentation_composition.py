@@ -1,3 +1,4 @@
+import pytest
 from types import SimpleNamespace
 from uuid import uuid4
 
@@ -8,6 +9,23 @@ from app.services.telegram_purchase_intent_service import (
 from app.services.telegram_sales_delivery_service import (
     TelegramSalesDeliveryService,
 )
+
+
+class _PresentationService:
+    def build(self, **values):
+        class Presentation:
+            teaser_asset_id = 9001
+            def apply_to(self, payload):
+                payload.update({
+                    "asset_path": "safe-chat-teaser.png",
+                    "media_link": values["unlock_button_url"],
+                    "delivery_url": values["unlock_button_url"],
+                    "delivery_method": "private_ppv_media",
+                })
+                payload.setdefault("metadata", {})["private_chat_unlock_button"] = {
+                    "label": "🔓 Unlock", "url": values["unlock_button_url"],
+                }
+        return Presentation()
 
 
 def _offering():
@@ -55,7 +73,9 @@ def test_unmapped_authoritative_delivery_is_unlock_pending_and_price_neutral():
     )
 
 
-def test_unmapped_purchase_intent_keeps_base_internal_and_prepares_unlock(monkeypatch):
+@pytest.mark.parametrize('evergreen',[False,True])
+def test_unmapped_purchase_intent_keeps_base_internal_and_prepares_unlock(monkeypatch,evergreen):
+    monkeypatch.setenv('EVERGREEN_UNLOCK_ENABLED',str(evergreen).lower())
     monkeypatch.setenv(
         "PRIVATE_CHAT_FINGERPRINT_IDENTITY_BOOTSTRAP_ENABLED", "true",
     )
@@ -78,6 +98,9 @@ def test_unmapped_purchase_intent_keeps_base_internal_and_prepares_unlock(monkey
     issued = []
 
     class Gateway:
+        def reserve_offer_price(self, received):
+            assert received is intent
+            return received,301
         def issue(self, received):
             issued.append(received.purchase_intent_id)
             return None, "https://creator.example/api/v1/commerce/unlock/token"
@@ -91,6 +114,7 @@ def test_unmapped_purchase_intent_keeps_base_internal_and_prepares_unlock(monkey
         ),
         purchase_intent_service=Intents(),
         unlock_gateway_service=Gateway(),
+        private_ppv_presentation_service=_PresentationService(),
         sales_session_service=SimpleNamespace(),
     )
     result = SimpleNamespace(
@@ -121,6 +145,10 @@ def test_unmapped_purchase_intent_keeps_base_internal_and_prepares_unlock(monkey
     assert service.create_before_delivery(result, payload) is intent
     assert created_values[0]["expected_price_minor"] == 300
     assert issued == [intent.purchase_intent_id]
+    if evergreen:
+        assert result.delivery_payload['metadata']['price_minor']==301
+        assert result.delivery_payload['message_text']=='I saved a private one. Ready?'
+        assert '3.01' not in result.delivery_payload['message_text']
     assert result.delivery_payload["media_link"].startswith(
         "https://creator.example/api/v1/commerce/unlock/"
     )
@@ -180,6 +208,7 @@ def test_purchase_intent_same_correlation_is_reused_exactly_once(monkeypatch):
                 None, "https://creator.example/api/v1/commerce/unlock/token"
             ),
         ),
+        private_ppv_presentation_service=_PresentationService(),
         sales_session_service=SimpleNamespace(),
     )
     payload = SimpleNamespace(

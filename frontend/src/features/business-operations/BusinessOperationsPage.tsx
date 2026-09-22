@@ -2,13 +2,13 @@ import { useEffect, useState } from "react";
 import { AlertTriangle, X } from "lucide-react";
 import { Link } from "react-router-dom";
 import { operationsApi } from "./api";
-import type { ModuleSwitch, OperationsFailure, OperationsFailures, OperationsModuleSwitches, OperationsOverview, OperationsPublishing, OperationsQueues, OperationsRuntime, OperationsWorkers, PurchaseRecoveryDetail, PurchaseRecoveryQueue, TelegramIdentityReadiness } from "./types";
+import type { ModuleSwitch, OperationsFailure, OperationsFailures, OperationsModuleSwitches, OperationsOverview, OperationsPublishing, OperationsQueues, OperationsRuntime, OperationsSchemaCertification, OperationsWorkers, PurchaseRecoveryDetail, PurchaseRecoveryQueue, TelegramIdentityReadiness } from "./types";
 import "./business-operations.css";
 import "./purchase-recovery.css";
 import "./module-switches.css";
 
-type Tab = "overview" | "runtime" | "module_switches" | "workers" | "queues" | "publishing" | "failures" | "purchase_recovery" | "telegram_identity_readiness";
-type Data = OperationsOverview | OperationsRuntime | OperationsModuleSwitches | OperationsWorkers | OperationsQueues | OperationsPublishing | OperationsFailures | PurchaseRecoveryQueue | TelegramIdentityReadiness;
+type Tab = "overview" | "schema_certification" | "runtime" | "module_switches" | "workers" | "queues" | "publishing" | "failures" | "purchase_recovery" | "telegram_identity_readiness";
+type Data = OperationsOverview | OperationsSchemaCertification | OperationsRuntime | OperationsModuleSwitches | OperationsWorkers | OperationsQueues | OperationsPublishing | OperationsFailures | PurchaseRecoveryQueue | TelegramIdentityReadiness;
 const NON_LAUNCH_MODULES = new Set([
   "telegram_outreach",
   "delayed_messages",
@@ -17,7 +17,7 @@ const NON_LAUNCH_MODULES = new Set([
   "purchase_reactions",
   "automated_reactions",
 ]);
-const tabs: Array<[Tab, string]> = [["overview", "Overview"], ["runtime", "Runtime"], ["module_switches", "Module Switches"], ["workers", "Workers"], ["queues", "Queues"], ["publishing", "Publishing"], ["failures", "Failures"], ["purchase_recovery", "Purchase Recovery"], ["telegram_identity_readiness", "Identity Readiness"]];
+const tabs: Array<[Tab, string]> = [["overview", "Overview"], ["schema_certification", "Schema Certification"], ["runtime", "Runtime"], ["module_switches", "Module Switches"], ["workers", "Workers"], ["queues", "Queues"], ["publishing", "Publishing"], ["failures", "Failures"], ["purchase_recovery", "Purchase Recovery"], ["telegram_identity_readiness", "Identity Readiness"]];
 const title = (value: unknown) => { const text = String(value ?? "Untracked"); return text.includes(" ") ? text : text.replaceAll("_", " ").replace(/\b\w/g, (character) => character.toUpperCase()); };
 const when = (value: unknown) => value ? new Date(String(value)).toLocaleString() : "Untracked";
 const state = (value: boolean) => value ? "Enabled" : "Disabled";
@@ -32,6 +32,7 @@ export function BusinessOperationsPage() {
     <nav aria-label="Operations workspace sections" className="operations-tabs">{tabs.map(([value, label]) => <button aria-selected={tab === value} className={tab === value ? "is-active" : ""} key={value} onClick={() => { setSelected(null); setData(null); setTab(value); }} role="tab">{label}</button>)}</nav>
     {error && <div className="operations-state operations-state--error" role="alert"><AlertTriangle size={18} />{error}</div>}{loading && <div className="operations-state">Loading persisted operational evidence…</div>}
     {!loading && data && tab === "overview" && <Overview data={data as OperationsOverview} />}
+    {!loading && data && tab === "schema_certification" && <SchemaCertification data={data as OperationsSchemaCertification} />}
     {!loading && data && tab === "runtime" && <Runtime data={data as OperationsRuntime} />}
     {!loading && data && tab === "module_switches" && <ModuleSwitches data={data as OperationsModuleSwitches} changed={setData} />}
     {!loading && data && tab === "workers" && <Workers data={data as OperationsWorkers} />}
@@ -45,6 +46,7 @@ export function BusinessOperationsPage() {
 }
 
 function Overview({ data }: { data: OperationsOverview }) { return <div className="operations-panel"><Metrics values={[["Overall Health", title(data.overallHealth)], ["Health Score", data.healthScore], ["Database", title(data.database.status)], ["Autonomous Sales & Messaging", data.autonomousExecution], ["Global Sends", state(data.globalSends)], ["Healthy Workers", data.workerCounts.healthy ?? 0], ["Stale Workers", data.workerCounts.stale ?? 0], ["Failed Workers", data.workerCounts.failed ?? 0], ["Untracked Capabilities", data.workerCounts.untracked ?? 0], ["Queued", data.queueTotals.pending ?? 0], ["Failures", data.failureCount], ["Publishing Attention", data.publishingAttention]]} />{data.warnings.map((warning) => <Warning key={warning}>{warning}</Warning>)}<section className="operations-card"><h2>Provider Warnings</h2>{data.providerWarnings.length ? data.providerWarnings.map((warning) => <p key={warning.name}><strong>{warning.name}</strong> · {warning.summary}</p>) : <p>No persisted provider configuration warnings.</p>}</section></div>; }
+function SchemaCertification({ data }: { data: OperationsSchemaCertification }) { const diagnostic = data.diagnostic; return <div className="operations-panel">{data.warnings.map((warning) => <Warning key={warning}>{warning}</Warning>)}<Metrics values={[["Certification", data.status], ["Diagnostic Status", diagnostic.status], ["Classification", diagnostic.classification], ["Pending Migrations", data.missingMigrations.length], ["Drift Findings", data.drift.length]]} /><section className="operations-card"><h2>{diagnostic.label}</h2><p><strong>{diagnostic.summary}</strong></p><Definition data={{ rootCause: diagnostic.root_cause, recommendedAction: diagnostic.recommended_action, lastUpdated: diagnostic.last_updated }} /></section><section className="operations-card"><h2>Certification Evidence</h2><pre>{JSON.stringify({ missingMigrations: data.missingMigrations, drift: data.drift, evidence: diagnostic.evidence }, null, 2)}</pre></section></div>; }
 function Runtime({ data }: { data: OperationsRuntime }) { return <div className="operations-panel"><div className="operations-warning"><span><strong>Internal Runtime Diagnostics</strong><br />Runtime Mode is retained for compatibility, diagnostics, and future OBSERVE capability. Autonomous execution is controlled by Autonomous Sales & Messaging.</span></div><Metrics values={[["Internal Mode", title(data.snapshot.currentMode)], ["Runtime Provider", title(data.snapshot.currentRuntimeProvider)], ["Global Automation", state(data.globalAutomation)], ["Global Sends", state(data.globalSends)], ["Manual Pause", state(data.manualPause)], ["Effective Global Safety", data.effectiveGlobalSafety.allowed ? "Allowed" : "Blocked"]]} />{data.warnings.map((warning) => <Warning key={warning}>{warning}</Warning>)}<div className="operations-grid"><section className="operations-card"><h2>Runtime Snapshot</h2><Definition data={data.snapshot} /></section><section className="operations-card"><h2>Effective Send Guards</h2>{data.guards.map((guard) => <div className="operations-guard" key={guard.module}><strong>{guard.module}</strong><span className={guard.allowed ? "is-good" : "needs-attention"}>{guard.allowed ? "Allowed" : "Blocked"}</span><small>{guard.reason ? title(guard.reason) : "No block recorded"}</small></div>)}</section><section className="operations-card"><h2>Configuration Warnings</h2>{data.configurationWarnings.length ? data.configurationWarnings.map((warning) => <p key={warning.name}>{warning.name}: {warning.summary}</p>) : <p>No configuration warnings.</p>}</section></div></div>; }
 function ModuleSwitches({ data, changed }: { data: OperationsModuleSwitches; changed: (data: Data) => void }) {
   const [saving, setSaving] = useState(""); const [message, setMessage] = useState(""); const [saveError, setSaveError] = useState("");

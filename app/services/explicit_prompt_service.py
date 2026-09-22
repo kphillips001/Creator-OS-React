@@ -11,8 +11,12 @@ from app.services.explicit_expression_profile import (
     ExplicitExpressionProfileService,
 )
 from app.services.wavespeed_grok_service import generate_prompts_with_grok
+from app.services.canonical_creator_identity_policy import canonical_creator_identity_policy
 
 LOGGER = logging.getLogger("creator_os.canonical_planner")
+
+
+CANONICAL_AVA_IDENTITY_POLICY = canonical_creator_identity_policy(2)
 
 load_dotenv()
 
@@ -228,63 +232,36 @@ def strip_unsolicited_fluids(text: str) -> str:
         lines.append(cleaned)
     return "\n".join(lines).strip()
 
-IDENTITY_LOCK_RULES = """
+IDENTITY_LOCK_RULES = f"""
 REFERENCE IDENTITY LOCK
-Use the reference image for identity, face, hair, skin tone, body shape, and bust-size continuity only.
-Every generated prompt must preserve the reference woman exactly:
-- same face
-- same facial structure
-- same hair color
-- same long dark hair worn down
-- same smooth flat natural hair top
-- same loose flowing hair over her shoulders or down her back
-- same natural sun-kissed skin tone as the reference image
-- same body
-- same body proportions
-- same bust size
-- full natural D-cup breast proportions
-- full natural D-cup breast volume
-- same feminine hourglass body
-- same waist-to-hip proportions
-- same overall identity from the reference image
-Do not change her hair color.
-Do not put her hair in a bun, topknot, ponytail, updo, piled style, lifted tied hairstyle, messy crown, or any tall hair shape.
+{CANONICAL_AVA_IDENTITY_POLICY.reference_authority}
+Every generated prompt must preserve the canonical creator exactly:
+{CANONICAL_AVA_IDENTITY_POLICY.appearance_continuity}
+{CANONICAL_AVA_IDENTITY_POLICY.bust_continuity}
+{CANONICAL_AVA_IDENTITY_POLICY.body_continuity}
+{CANONICAL_AVA_IDENTITY_POLICY.skin_continuity}
+{CANONICAL_AVA_IDENTITY_POLICY.facial_continuity}
+{CANONICAL_AVA_IDENTITY_POLICY.hair_continuity}
 Do not copy or inherit the reference image's setting, background, boat, dock, railing, lake, natural water, trees, cabin, furniture, outfit, pose, lighting, camera angle, or props unless the user's Explicit Tags or Optional Setting explicitly request those exact elements.
 The user's Explicit Tags, Enhanced Explicit Tags, and Optional Setting / Direction are the only source of truth for setting, wardrobe, nudity state, pose, activity, lighting, and background.
 If the user asks for shower, bathroom, bedroom, hotel, couch, pool, city, beach, or any non-boat scene, do not include boat, lake, dock, marina, railing, or outdoor natural-water elements from the reference image.
 """
 
-HAIR_CONTINUITY_RULES = """
+HAIR_CONTINUITY_RULES = f"""
 EXPLICIT HAIR CONTINUITY LOCK
-Explicit prompts must preserve the same Premium Studio hair identity:
-- long dark hair worn down naturally
-- soft center part or natural side part
-- smooth flat natural top
-- loose flowing hair over her shoulders, around her face, or down her back
-- full forehead, hairline, crown, and smooth hair top visible with clean breathing room above the hair
-
-Avoid every tied-up or tall-hair variant:
-- no bun
-- no hairbun
-- no topknot
-- no ponytail
-- no updo
-- no piled hair
-- no lifted tied hair
-- no messy crown
-- no large hair clump above the scalp
+Explicit prompts consume the canonical creator hair identity:
+{CANONICAL_AVA_IDENTITY_POLICY.hair_continuity}
+Keep the full forehead, hairline, crown, and smooth hair top visible with clean breathing room above the hair.
 
 If wet hair is requested, keep it worn down as loose wet hair, not tied up.
 """
 
-BODY_AND_FRAMING_LOCK_RULES = """
+BODY_AND_FRAMING_LOCK_RULES = f"""
 BODY, SKIN TONE, AND FRAMING CONTINUITY LOCK
 Every generated prompt must explicitly preserve:
-- same natural sun-kissed skin tone as the reference image
-- same full natural D-cup bust
-- same feminine hourglass body
-- same waist-to-hip proportions
-- same visible body size and recognizable body structure from the reference image
+{CANONICAL_AVA_IDENTITY_POLICY.bust_continuity}
+{CANONICAL_AVA_IDENTITY_POLICY.body_continuity}
+{CANONICAL_AVA_IDENTITY_POLICY.skin_continuity}
 
 Bust visibility rules:
 - preserve visibly full natural D-cup breast volume, not a petite or minimized bust

@@ -21,6 +21,7 @@ class TelegramPurchaseIntentService:
         identity_repository=None, purchase_intent_service=None,
         sales_session_service=None,
         unlock_gateway_service=None,
+        private_ppv_presentation_service=None,
         provisional_session_service=None,
         deferred_continuation_service=None,
         clock=lambda: datetime.now(timezone.utc),
@@ -34,6 +35,7 @@ class TelegramPurchaseIntentService:
             sales_session_service = SalesSessionService()
         self.sales_sessions = sales_session_service
         self.unlock_gateway = unlock_gateway_service
+        self.private_ppv_presentations = private_ppv_presentation_service
         self.provisional_sessions = provisional_session_service
         if deferred_continuation_service is None:
             from app.services.unmapped_telegram_prospect_service import UnmappedTelegramProspectService
@@ -161,6 +163,19 @@ class TelegramPurchaseIntentService:
             if intent is None:
                 raise
             intent_reused = True
+        from app.services.canonical_evergreen_unlock import enabled as evergreen_enabled
+        if evergreen_enabled():
+            if self.unlock_gateway is None:
+                from app.services.private_chat_unlock_gateway_service import PrivateChatUnlockGatewayService
+                self.unlock_gateway = PrivateChatUnlockGatewayService()
+            intent, final_price = self.unlock_gateway.reserve_offer_price(intent)
+            # Pricing remains durable authority, independent of visible copy.
+            result.delivery_payload.setdefault("metadata",{}).update(price_minor=final_price,
+                configured_base_price_minor=intent.expected_price_minor,currency=intent.expected_currency)
+        from app.models.telegram_offer_caption import telegram_offer_caption
+        result.delivery_payload["message_text"] = telegram_offer_caption(
+            result.delivery_payload.get("message_text") or getattr(result, "response_text", ""))
+        gateway_url = None
         if bootstrap_enabled:
             if self.unlock_gateway is None:
                 from app.services.private_chat_unlock_gateway_service import PrivateChatUnlockGatewayService
@@ -172,6 +187,48 @@ class TelegramPurchaseIntentService:
                 "private_chat_unlock_button"
             ] = {"label": "🔓 Unlock", "url": gateway_url}
             result.diagnostic_metadata["delivery_url"] = gateway_url
+        # Mapping affects attribution, not presentation. Every private paid
+        # offer is finalized through one gateway-backed media contract.
+        if gateway_url is None:
+            if self.unlock_gateway is None:
+                from app.services.private_chat_unlock_gateway_service import PrivateChatUnlockGatewayService
+                self.unlock_gateway = PrivateChatUnlockGatewayService()
+            _, gateway_url = self.unlock_gateway.issue(intent)
+        product_context = dict(diagnostics.get("recommended_product_context") or {})
+        commercial_intelligence = dict(diagnostics.get("commercial_intelligence") or {})
+        is_standalone = not diagnostics.get("bundle_sales_context") and not (
+            diagnostics.get("recommended_photoshoot_experience")
+            or str(product_context.get("sellingMode") or "").upper() == "SESSION"
+            or commercial_intelligence.get("strategy") == "SESSION_SELLING"
+        )
+        if is_standalone:
+            if self.private_ppv_presentations is None:
+                from app.services.private_ppv_presentation_service import PrivatePpvPresentationService
+                self.private_ppv_presentations = PrivatePpvPresentationService()
+            presentation = self.private_ppv_presentations.build(
+                creator_profile_id=self.creator_profile_id,
+                offering_id=diagnostics["offering_id"],
+                publication_id=diagnostics["publication_id"],
+                purchase_intent_id=intent.purchase_intent_id,
+                delivery_identity=(f"mapping:{identity.id}" if identity is not None else
+                                   f"telegram:{payload.telegram_user_id}:{getattr(payload, 'telegram_chat_id', payload.telegram_user_id)}"),
+                attribution_identity=(str(identity.external_fanvue_user_uuid)
+                                      if identity is not None else
+                                      f"provisional:{payload.telegram_user_id}"),
+                message_text=(result.delivery_payload.get("message_text")
+                              or getattr(result, "response_text", "")),
+                unlock_button_url=gateway_url,
+            )
+            presentation.apply_to(result.delivery_payload)
+            result.diagnostic_metadata.update({
+                "private_ppv_presentation_validated": True,
+                "safe_teaser_asset_id": presentation.teaser_asset_id,
+            })
+        else:
+            result.delivery_payload.setdefault("metadata", {})[
+                "private_chat_unlock_button"
+            ] = {"label": "🔓 Unlock", "url": gateway_url}
+        result.diagnostic_metadata["delivery_url"] = gateway_url
         if identity is None and bootstrap_enabled:
             result.diagnostic_metadata["telegram_identity_eligibility"] = "UNMAPPED_BOOTSTRAP"
             experience = dict(diagnostics.get("recommended_photoshoot_experience") or {})
@@ -276,7 +333,10 @@ class TelegramPurchaseIntentService:
     def abandon_delivery(self, intent):
         if intent is None:
             return None
-        abandoned = self.intents.mark_abandoned(intent.purchase_intent_id)
+        # A transport failure is not evidence that the customer declined.
+        # This boundary is deliberately idempotent for replay of the same
+        # failed delivery while preserving strict conflicting-terminal checks.
+        abandoned = self.intents.mark_delivery_failed(intent.purchase_intent_id)
         self._advance_linked_session(
             abandoned, target="CONTINUING",
             reason="Session offer abandoned; return to coordinated continuation.",

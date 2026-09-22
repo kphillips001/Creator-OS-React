@@ -1,10 +1,15 @@
 """Shared provider-neutral facial rendering foundation for canonical Ava."""
 
+from app.services.canonical_creator_identity_policy import canonical_creator_identity_policy
+
+
+CANONICAL_AVA_IDENTITY_POLICY = canonical_creator_identity_policy(2)
+
 CANONICAL_FACIAL_NATURALISM_SECTION = "CANONICAL AVA FACIAL NATURALISM"
 
 CANONICAL_FACIAL_NATURALISM = f"""
 {CANONICAL_FACIAL_NATURALISM_SECTION} - NON-NEGOTIABLE:
-Preserve Ava's exact facial identity, facial anatomy, proportions, and recognizable features from the canonical reference image.
+{CANONICAL_AVA_IDENTITY_POLICY.facial_naturalism_continuity}
 Render her expression like a real creator camera-roll photo: candid, emotionally alive, slightly asymmetrical, with natural facial muscle tension and believable human expression.
 Preserve realistic skin and facial texture, natural pores, and photographic detail without smoothing or reshaping her face.
 Expression intent may change her mood, gaze, and emotional performance, but must not redefine her facial geometry or canonical identity.

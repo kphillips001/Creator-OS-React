@@ -29,6 +29,23 @@ class GenerationLibraryRecordRepository:
             cursor.execute("SELECT record_payload FROM generation_library_records ORDER BY created_at,image_id")
             return tuple(dict(row["record_payload"]) for row in cursor.fetchall())
 
+    def overview_counts(self) -> dict[str, int]:
+        """Return the three display counts without transferring record JSON."""
+        with self.connection_factory() as connection, connection.cursor() as cursor:
+            cursor.execute("""SELECT
+                COUNT(*) FILTER (WHERE status='active')::int AS active,
+                COUNT(*) FILTER (WHERE status='staged_asset_library')::int AS staged,
+                COUNT(*) FILTER (
+                    WHERE status NOT IN ('active','staged_asset_library')
+                )::int AS archived
+                FROM generation_library_records""")
+            row = cursor.fetchone()
+        return {
+            "active": int(row["active"] or 0),
+            "staged": int(row["staged"] or 0),
+            "archived": int(row["archived"] or 0),
+        }
+
     def get_payload(self, image_id: str):
         with self.connection_factory() as connection, connection.cursor() as cursor:
             cursor.execute("SELECT record_payload FROM generation_library_records WHERE image_id=%s", (str(image_id),))

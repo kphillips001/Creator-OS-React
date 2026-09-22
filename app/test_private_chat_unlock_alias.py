@@ -1,5 +1,6 @@
 import hashlib
 import re
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from uuid import uuid4
@@ -60,9 +61,11 @@ def test_alias_format_entropy_and_hashed_persistence():
 
 
 def test_alias_is_stable_for_durable_retry():
-    item = grant(); repository = AliasRepository(item); gateway = service(repository)
-    first = gateway._ensure_public_alias(item)[1]
-    second = gateway._ensure_public_alias(item)[1]
+    item = grant(); repository = AliasRepository(item)
+    first = service(repository)._ensure_public_alias(item)[1]
+    # A new service instance models API/worker restart while the database row
+    # remains authoritative.
+    second = service(repository)._ensure_public_alias(item)[1]
     assert first == second
 
 
@@ -118,6 +121,52 @@ def test_active_alias_enters_the_same_authoritative_gateway(monkeypatch):
     assert result.startswith("https://www.fanvue.com/")
     assert item.use_count == 1
     assert claimed == [item]
+
+
+def test_alias_resolution_persists_bounded_success_diagnostic(monkeypatch):
+    item = grant(); item.state = "ACTIVE"
+    diagnostics = []
+    repository = SimpleNamespace(
+        resolve_grant_by_alias=lambda _: item,
+        record_resolution_diagnostic=lambda **values: diagnostics.append(values),
+    )
+    gateway = service(repository)
+    gateway._resolve_claimed_grant = lambda _: (
+        "https://www.fanvue.com/avablackthorne/media/example"
+    )
+    monkeypatch.setenv("PRIVATE_CHAT_FINGERPRINT_IDENTITY_BOOTSTRAP_ENABLED", "true")
+    gateway.resolve_alias("a" * 22)
+    assert diagnostics[0]["grant_id"] == item.unlock_grant_id
+    assert diagnostics[0]["status"] == "RESOLVED"
+    assert diagnostics[0]["reason_code"] == "OK"
+
+
+def test_expired_intent_is_rejected_before_click_or_provider_work():
+    now = datetime(2026, 9, 14, tzinfo=timezone.utc)
+    ids = {
+        "telegram_user_id": 5, "telegram_chat_id": 5,
+        "commercial_offering_id": uuid4(), "commercial_publication_id": uuid4(),
+        "fanvue_account_id": 7,
+    }
+    item = grant(**ids); item.currency = "USD"
+    intent = SimpleNamespace(
+        purchase_intent_id=item.purchase_intent_id,
+        expected_currency="USD", status="PRESENTED",
+        expires_at=now - timedelta(seconds=1), **ids,
+    )
+    gateway = PrivateChatUnlockGatewayService(
+        repository=SimpleNamespace(),
+        intent_repository=SimpleNamespace(get=lambda _: intent),
+        clock=lambda: now,
+        purchase_intent_lifecycle=SimpleNamespace(
+            record_unlock_click=lambda *_args, **_kwargs: pytest.fail(
+                "expired grant must not record a click"
+            )
+        ),
+    )
+    with pytest.raises(UnlockUnavailableError) as caught:
+        gateway._resolve_claimed_grant(item)
+    assert caught.value.reason_code == "EXPIRED"
 
 
 def test_alias_lookup_claims_only_an_active_grant_and_tracks_normal_use():

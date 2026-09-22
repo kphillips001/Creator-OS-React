@@ -81,7 +81,8 @@ def test_authoritative_entry_points_and_defaults_are_safe(tmp_path):
                                    "fanvue_commercial_publications": "app.workers.fanvue_commercial_publications",
                                        "commerce_reconciliation": "app.workers.commerce_reconciliation",
                                            "background_operations": "app.workers.background_operations",
-                                           "x_competitor_refresh": "app.workers.x_competitor_refresh"}
+                                               "x_competitor_refresh": "app.workers.x_competitor_refresh",
+                                               "x_thread_cta": "app.workers.x_thread_cta"}
     assert "app.outreach_worker" not in modules.values()
     value.start_enabled()
     assert processes.started == []
@@ -136,6 +137,28 @@ def test_healthy_live_heartbeat_blocks_duplicate_but_stale_history_does_not(tmp_
     processes.running.clear(); heartbeats.rows[0] = heartbeat(definition, 77, clock.now() - timedelta(minutes=10))
     result = value.start_worker(definition)
     assert result["lastLauncherAction"] == "started"
+
+
+def test_supervision_reconciles_stale_launcher_identity_to_live_heartbeat(tmp_path):
+    definition = WORKERS[0]
+    environment = {definition.environment_switch: "true"}
+    environment.update({name: "configured" for name in definition.required_environment})
+    value, processes, heartbeats, clock = service(tmp_path, environment)
+    processes.running.add(62548)
+    processes.matches_by_module[definition.module] = 62548
+    live = heartbeat(definition, 62548, clock.now())
+    heartbeats.auto_register = False
+    heartbeats.rows = [live]
+    value._record(
+        definition, "started", launcher_enabled=True, pid=79364,
+        instance_id="telegram-old-instance",
+    )
+
+    result = value.supervise_telegram_once(definition)
+
+    assert result["lastLauncherAction"] == "healthy"
+    assert result["pid"] == 62548
+    assert result["instanceId"] == live.worker_instance_id
 
 
 def test_configuration_block_prevents_telegram_start(tmp_path):
@@ -248,6 +271,18 @@ def test_supervision_boundary_contains_no_queue_or_send_mutation():
         assert forbidden not in source
 
 
+def test_state_publication_uses_collision_free_atomic_temporary_files(tmp_path):
+    value, _, _, _ = service(tmp_path)
+    definition = WORKERS[0]
+
+    value._record(
+        definition, "disabled", launcher_enabled=False, pid=None,
+    )
+
+    assert value._load_state()[definition.key]["lastLauncherAction"] == "disabled"
+    assert not list((tmp_path / "logs" / "runtime").glob("*.tmp"))
+
+
 def test_pid_ownership_validation_does_not_spawn_nested_powershell():
     import inspect
     from app.services.worker_launcher_supervision_service import ProcessAdapter
@@ -334,12 +369,21 @@ def test_reload_stops_all_enabled_workers_before_any_replacement(tmp_path):
     assert result["oldPids"] == {"telegram": 51, "commerce_reconciliation": 52}
 
 
-def test_local_launcher_enables_uvicorn_reload_only_behind_development_switch():
+def test_launcher_defaults_production_uvicorn_to_no_reload_with_explicit_dev_opt_in():
     launcher = (Path(__file__).resolve().parents[1] / "tools" / "launcher" /
                 "launch_creator_os.ps1").read_text(encoding="utf-8")
     assert 'CREATOR_OS_DEV_AUTO_RELOAD' in launcher
+    assert 'SetEnvironmentVariable($DevAutoReloadSwitch, "false", "Process")' in launcher
     assert '$DevAutoReloadEnabled' in launcher
     assert '"--reload", "--reload-dir"' in launcher
+    assert '[ValidateSet("Full", "BackendOnly")]' in launcher
+    assert 'if ($ServiceScope -eq "BackendOnly")' in launcher
+    backend_only = launcher.split('if ($ServiceScope -eq "BackendOnly")', 1)[1].split(
+        'Set-LauncherStep -Name "desktop-shortcut"', 1
+    )[0]
+    assert 'Stop-CreatorService' in backend_only
+    assert 'Start-CreatorService' in backend_only
+    assert 'Invoke-WorkerSupervisor' not in backend_only
 
 
 def test_local_launcher_preserves_guarded_session5_certification_environment():

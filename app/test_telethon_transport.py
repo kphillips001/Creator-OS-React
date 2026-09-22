@@ -1,12 +1,20 @@
 import unittest
 import asyncio
+from datetime import datetime, timezone
+from types import SimpleNamespace
 
 from telethon.tl import functions, types
 
 from app.integrations.telegram.telethon_transport import (
+    TelethonCommercialCapabilityError,
     TelethonTransportError,
     TelethonUserTransport,
 )
+
+
+async def _async_items(*items):
+    for item in items:
+        yield item
 
 
 class FakeSender:
@@ -54,6 +62,7 @@ class FakeTelethonClient:
         self.actions = []
         self.requests = []
         self.resolved = []
+        self.send_options = []
 
     async def connect(self):
         self.connected = True
@@ -69,6 +78,7 @@ class FakeTelethonClient:
 
     async def send_message(self, chat_id, message_text, **kwargs):
         self.sent.append((chat_id, message_text))
+        self.send_options.append(dict(kwargs))
         return type("Message", (), {"id": len(self.sent), "raw_text": message_text})()
 
     async def get_messages(self, chat_id, ids):
@@ -113,6 +123,28 @@ class TelethonUserTransportTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(payload.message_id, 42)
         self.assertEqual(payload.message_text, "hello")
         self.assertEqual(payload.chat_history, [])
+
+    async def test_bounded_history_reuses_live_eligibility_and_skips_old_dialogs(self):
+        cutoff = datetime(2026, 9, 17, 1, 0, tzinfo=timezone.utc)
+        current = FakeEvent(message_id=6412)
+        current.date = datetime(2026, 9, 17, 1, 20, tzinfo=timezone.utc)
+        outgoing = FakeEvent(message_id=6413, outgoing=True)
+        outgoing.date = datetime(2026, 9, 17, 1, 21, tzinfo=timezone.utc)
+        client = FakeTelethonClient()
+        client.iter_dialogs = lambda **_: _async_items(
+            SimpleNamespace(entity=FakeSender(), date=current.date),
+            SimpleNamespace(entity=FakeSender(sender_id=8),
+                            date=datetime(2026, 9, 16, tzinfo=timezone.utc)),
+        )
+        calls = []
+        def messages(entity, **_):
+            calls.append(entity.id)
+            return _async_items(outgoing, current)
+        client.iter_messages = messages
+        result = await TelethonUserTransport(client=client).bounded_private_inbound_history(
+            since=cutoff, dialog_limit=10, per_dialog_limit=10)
+        self.assertEqual([item.message_id for item in result], [6412])
+        self.assertEqual(calls, [123456789])
 
     async def test_media_only_photo_and_captioned_document_are_normalized(self):
         photo=type("Photo",(),{"id":77,"sizes":[type("Size",(),{"w":640,"h":480})()]})()
@@ -165,24 +197,34 @@ class TelethonUserTransportTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(received[0].message_text, "hello")
         self.assertEqual(client.sent, [(123456789, "hello")])
 
-    async def test_user_session_commercial_send_uses_provider_verified_visible_url(self):
+    async def test_user_session_commercial_send_fails_closed_without_exposing_url(self):
         client = FakeTelethonClient()
         transport = TelethonUserTransport(client=client)
 
-        receipt = await transport.send_text(
-            chat_id=123456789,
-            message_text="Here it is - unlock this private one.",
-            button_label="Unlock",
-            button_url="https://creator.example/unlock/opaque",
-        )
+        with self.assertRaises(TelethonCommercialCapabilityError):
+            await transport.send_text(
+                chat_id=123456789,
+                message_text="Here it is - unlock this private one.",
+                button_label="Unlock",
+                button_url="https://creator.example/unlock/opaque",
+            )
+        self.assertEqual(client.sent, [])
+        self.assertEqual(client.send_options, [])
 
-        self.assertEqual(receipt.id, 1)
-        self.assertEqual(receipt.attachment_mode, "VISIBLE_URL")
-        self.assertTrue(receipt.actionable_destination_attached)
-        self.assertTrue(receipt.provider_action_verified)
-        self.assertFalse(receipt.provider_markup_included)
-        self.assertFalse(receipt.provider_markup_verified)
-        self.assertIn("Unlock: https://creator.example/unlock/opaque", receipt.final_text)
+    async def test_accepted_commercial_send_with_unverifiable_action_stays_ambiguous(self):
+        class MissingProviderEcho(FakeTelethonClient):
+            async def get_messages(self, chat_id, ids):
+                return type("Message", (), {
+                    "id": ids, "raw_text": "Offer without destination", "buttons": [],
+                })()
+
+        transport = TelethonUserTransport(client=MissingProviderEcho())
+        with self.assertRaises(TelethonCommercialCapabilityError):
+            await transport.send_text(
+                chat_id=123456789, message_text="Offer",
+                button_label="Unlock",
+                button_url="https://creator.example/unlock/opaque",
+            )
 
     async def test_native_typing_overlaps_existing_operation_and_stops_before_send(self):
         client = FakeTelethonClient()

@@ -31,11 +31,8 @@ class Operations:
 
 
 class Library:
-    def list_records(self):
-        return (
-            SimpleNamespace(status="active"),
-            SimpleNamespace(status="staged_asset_library"),
-        )
+    def overview_counts(self):
+        return {"active": 1, "staged": 1, "archived": 0}
 
 
 def test_dashboard_is_evidence_based_and_recommends_inventory_packaging():
@@ -43,7 +40,7 @@ def test_dashboard_is_evidence_based_and_recommends_inventory_packaging():
         repository=Repository(), operations=Operations(),
         generation_library=Library(),
         schema_manager=SimpleNamespace(certify=lambda: SimpleNamespace(
-            status="PASS", missing_migrations=(),
+            status="PASS", missing_migrations=(), drift=(), tables=(), evidence={},
         )),
         now=lambda: datetime(2026, 7, 25, 12, tzinfo=timezone.utc),
     )

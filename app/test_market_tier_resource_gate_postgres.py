@@ -18,12 +18,12 @@ def test_medium_budget_concurrent_stable_restart_and_new_day():
  @contextmanager
  def factory():
   with connect(url,row_factory=dict_row) as c:yield c
- with connect(url,autocommit=True) as c:
-  c.execute('DROP TABLE IF EXISTS market_tier_resource_policy_events');c.execute('DROP TABLE IF EXISTS market_tier_daily_budgets');c.execute('DELETE FROM schema_migrations WHERE migration_name=%s',(NAME,))
+ creator=account=None
  try:
-  SchemaManagerService(connection_factory=factory).reconcile_one(NAME)
+  assert SchemaManagerService(connection_factory=factory).reconcile_one(NAME).status=='PASS'
   with connect(url,row_factory=dict_row) as c:
-   creator=c.execute('SELECT id FROM creator_profiles ORDER BY id LIMIT 1').fetchone()['id'];account=c.execute('SELECT id FROM fanvue_accounts ORDER BY id LIMIT 1').fetchone()['id']
+   account=c.execute("INSERT INTO fanvue_accounts(account_name) VALUES('isolated market fixture') RETURNING id").fetchone()['id']
+   creator=c.execute("INSERT INTO creator_profiles(fanvue_account_id,persona_name,display_name,age,gender,location) VALUES(%s,'Fixture','Fixture',25,'test','test') RETURNING id",(account,)).fetchone()['id']
   scope=dict(creator_profile_id=creator,fanvue_account_id=account,telegram_user_id=987001,telegram_chat_id=987001)
   def assign(value):return MarketTierResourceGateRepository(factory).medium_budget(**scope,business_date=date(2026,9,13),business_day_start=datetime(2026,9,13,5,tzinfo=timezone.utc),business_day_end=datetime(2026,9,14,5,tzinfo=timezone.utc),sampled_budget=value)['daily_reply_budget']
   with ThreadPoolExecutor(max_workers=6) as pool:values=list(pool.map(assign,range(5,11)))
@@ -33,4 +33,10 @@ def test_medium_budget_concurrent_stable_restart_and_new_day():
   assert tomorrow['daily_reply_budget']==10
  finally:
   with connect(url,autocommit=True) as c:
-   c.execute(ROLLBACK.read_text());c.execute('DELETE FROM schema_migrations WHERE migration_name=%s',(NAME,))
+   if creator is not None:
+    c.execute('DELETE FROM market_tier_daily_budgets WHERE creator_profile_id=%s AND fanvue_account_id=%s',(creator,account))
+    c.execute('DELETE FROM creator_profiles WHERE id=%s',(creator,))
+   if account is not None:c.execute('DELETE FROM fanvue_accounts WHERE id=%s',(account,))
+  # This concurrency test owns rows, not global schema/history. Subsequent
+  # governance tests must see the same valid canonical migration graph.
+  assert SchemaManagerService(connection_factory=factory).reconcile_one(NAME).status=='PASS'

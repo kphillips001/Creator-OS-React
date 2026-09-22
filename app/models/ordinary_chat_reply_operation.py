@@ -51,3 +51,17 @@ class OrdinaryChatReplyOperation:
     failed_at: datetime | None
     created_at: datetime
     updated_at: datetime
+    scheduled_delivery_at: datetime | None = None
+    preparation_eligible_at: datetime | None = None
+    operation_kind: str = "PRIMARY"
+    causal_operation_id: UUID | None = None
+    recovery_parent_operation_id: UUID | None = None
+    recovery_attention_occurrence_id: str | None = None
+    recovery_resolution_plan_id: UUID | None = None
+    recovery_idempotency_key: str | None = None
+    conversation_burst_id: UUID | None = None
+    burst_role: str | None = None
+    burst_survivor_operation_id: UUID | None = None
+    burst_freshness_telegram_message_id: int | None = None
+    burst_member_obligations: list[str] | None = None
+    burst_obligations: list[str] | None = None

@@ -44,6 +44,8 @@ describe("PublishDialog", () => {
     expect(screen.getByLabelText("Add Telegram CTA as thread")).toBeChecked();
     expect(screen.getByLabelText("CTA text")).toHaveValue("");
     expect(screen.getByLabelText("CTA URL")).toHaveValue("https://avablackthorne.com/me");
+    expect(screen.getByLabelText("Delay 30–60 min")).toBeChecked();
+    expect(screen.getByLabelText("Post ASAP")).not.toBeChecked();
     expect(screen.getByLabelText("Telegram Broadcast")).toBeInTheDocument();
     expect(screen.getByLabelText("Instagram")).toBeInTheDocument();
     expect(screen.queryByText("Telegram Chat")).not.toBeInTheDocument();
@@ -225,7 +227,22 @@ describe("PublishDialog", () => {
       xThreadCtaEnabled: true,
       xThreadCtaText: "",
       xThreadCtaUrl: "https://avablackthorne.com/me",
+      xThreadCtaTiming: "DELAY_30_60",
     });
+    fetch.mockRestore();
+  });
+
+  it("submits ASAP as an explicit CTA timing mode", async () => {
+    const fetch = vi.spyOn(globalThis, "fetch");
+    fetch.mockImplementationOnce(() => jsonResponse({ success: true, generatedImageId: "generated-1", defaultDestination: "x", destinations: [{ value: "x", label: "X", available: true }], xAccounts: [{ accountName: "AvaBlackthorne", label: "@avablackthorne" }] }));
+    fetch.mockImplementationOnce(() => jsonResponse({ success: true, message: "Published" }));
+    render(<PublishDialog record={record} onClose={vi.fn()} onPublished={vi.fn()} />);
+    fireEvent.click(await screen.findByLabelText("Post ASAP"));
+    fireEvent.change(screen.getByLabelText("Enter Your Own Caption"), { target: { value: "Caption" } });
+    fireEvent.click(screen.getByRole("button", { name: "Publish to X" }));
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+    const payload = JSON.parse(String((fetch.mock.calls[1]![1] as RequestInit).body));
+    expect(payload.xThreadCtaTiming).toBe("ASAP");
     fetch.mockRestore();
   });
 

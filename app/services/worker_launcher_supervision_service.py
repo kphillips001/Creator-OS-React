@@ -9,6 +9,7 @@ import subprocess
 import sys
 import time
 import psutil
+from uuid import uuid4
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -96,6 +97,9 @@ WORKERS = (
                            "CREATOR_OS_LAUNCH_X_COMPETITOR_REFRESH",
                            "app.workers.x_competitor_refresh", "X Competitor Refresh",
                            30, 30, "x_competitor_refresh.log"),
+    WorkerLaunchDefinition("x_thread_cta", "X Thread CTA", "CREATOR_OS_LAUNCH_X_THREAD_CTA",
+                           "app.workers.x_thread_cta", "X Thread CTA", 30, 30,
+                           "x_thread_cta.log"),
 )
 
 
@@ -434,10 +438,7 @@ class WorkerLauncherSupervisionService:
         record["supervisorPid"] = pid
         record["supervisorUpdatedAt"] = self.now().isoformat()
         state[definition.key] = record
-        self.runtime_logs.mkdir(parents=True, exist_ok=True)
-        temporary = self.state_path.with_suffix(".tmp")
-        temporary.write_text(json.dumps(state, indent=2), encoding="utf-8")
-        temporary.replace(self.state_path)
+        self._write_state(state)
 
     def start_worker(self, definition: WorkerLaunchDefinition) -> dict[str, Any]:
         if not _enabled(self.environment.get(definition.environment_switch)):
@@ -556,11 +557,23 @@ class WorkerLauncherSupervisionService:
         else:
             record["stableSince"] = previous.get("stableSince")
         state[definition.key] = record
-        self.runtime_logs.mkdir(parents=True, exist_ok=True)
-        temporary = self.state_path.with_suffix(".tmp")
-        temporary.write_text(json.dumps(state, indent=2), encoding="utf-8")
-        temporary.replace(self.state_path)
+        self._write_state(state)
         return record
+
+    def _write_state(self, state: Mapping[str, Any]) -> None:
+        """Atomically publish state without sharing a temporary writer path."""
+        self.runtime_logs.mkdir(parents=True, exist_ok=True)
+        temporary = self.state_path.with_name(
+            f".{self.state_path.name}.{os.getpid()}.{uuid4().hex}.tmp"
+        )
+        try:
+            temporary.write_text(json.dumps(state, indent=2), encoding="utf-8")
+            temporary.replace(self.state_path)
+        finally:
+            try:
+                temporary.unlink(missing_ok=True)
+            except OSError:
+                pass
 
     def _load_state(self) -> dict[str, Any]:
         try: return json.loads(self.state_path.read_text(encoding="utf-8"))

@@ -13,7 +13,9 @@ def item(value): return {"id":value,"x_user_id":f"x-{value}","username":value}
 
 class DueRepository:
     def __init__(self, due=()): self.due=list(due);self.calls=[]
-    def list_due_competitor_refreshes(self, **kwargs):self.calls.append(kwargs);return self.due[:kwargs["limit"]]
+    def list_due_competitor_refreshes(self, **kwargs):
+        self.calls.append(kwargs);excluded=set(kwargs.get("exclude_competitor_ids",()))
+        return [entry for entry in self.due if str(entry["id"]) not in excluded][:kwargs["limit"]]
 
 
 class CombinedService:
@@ -36,6 +38,34 @@ def test_scheduler_processes_a_bounded_number_of_due_competitors():
     assert result["considered"]==2 and service.calls==[("one","WEEKLY"),("two","WEEKLY")]
     assert repository.calls[0]["due_before"]==NOW-timedelta(days=7)
     assert repository.calls[0]["retry_before"]==NOW-timedelta(hours=6)
+
+
+def test_weekly_cycle_drains_due_accounts_in_sequential_bounded_batches():
+    class DrainingRepository(DueRepository):
+        def list_due_competitor_refreshes(self, **kwargs):
+            return super().list_due_competitor_refreshes(**kwargs)
+    repository=DrainingRepository([item("one"),item("two"),item("three")]);service=CombinedService();pauses=[]
+    result=XCompetitorRefreshSchedulerService(repository=repository,refresh_service=service,clock=lambda:NOW).run_weekly_cycle(
+        limit=2,between_batches=pauses.append)
+    assert result["considered"]==3 and result["batches"]==2
+    assert service.calls==[("one","WEEKLY"),("two","WEEKLY"),("three","WEEKLY")]
+    assert pauses==[XCompetitorRefreshPolicy.BATCH_PAUSE_SECONDS]
+
+
+def test_one_competitor_failure_does_not_abort_weekly_batch():
+    class FailingService(CombinedService):
+        def refresh_competitor(self, competitor, *, sync_type):
+            if competitor["id"]=="one":raise RuntimeError("provider unavailable")
+            return super().refresh_competitor(competitor,sync_type=sync_type)
+    repository=DueRepository([item("one"),item("two")]);service=FailingService()
+    result=XCompetitorRefreshSchedulerService(repository=repository,refresh_service=service,clock=lambda:NOW).run_once(limit=10)
+    assert [entry["status"] for entry in result["results"]]==["FAILED","REFRESHED"]
+    assert service.calls==[("two","WEEKLY")]
+
+
+def test_automatic_cycle_cadence_is_weekly_not_hourly():
+    assert XCompetitorRefreshPolicy.INTERVAL==timedelta(days=7)
+    assert int(XCompetitorRefreshPolicy.INTERVAL.total_seconds())==604800
 
 
 class RefreshRepository:

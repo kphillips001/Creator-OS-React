@@ -13,8 +13,8 @@ import {
 type PromptWorkshopSectionProps = {
   disabled: boolean;
   onSelectPromptSource: () => void;
-  onStoreBatch: (prompts: string[], source: string) => void;
-  onUsePrompt: (prompt: string) => void;
+  onStoreBatch: (prompts: string[], source: string, lane: PromptWorkshopLane) => void;
+  onUsePrompt: (prompt: string, lane: PromptWorkshopLane) => void;
   promptCount: number;
 };
 
@@ -43,7 +43,7 @@ export function PromptWorkshopSection({
       const handoff = JSON.parse(serialized) as PromptWorkshopArchiveHandoff;
       const prompt = handoff.batch.prompts[handoff.promptNumber - 1] ?? "";
       if (handoff.action === "use" && prompt) {
-        onUsePrompt(prompt);
+        onUsePrompt(prompt, handoff.batch.lane);
         onSelectPromptSource();
         setMessage("Archived prompt selected.");
         return;
@@ -52,7 +52,7 @@ export function PromptWorkshopSection({
         setBatchId(handoff.batch.batchId);
         setPrompts([...handoff.batch.prompts]);
         setSelectedNumber(1);
-        onStoreBatch(handoff.batch.prompts, "Prompt Workshop Archive");
+        onStoreBatch(handoff.batch.prompts, "Prompt Workshop Archive", handoff.batch.lane);
         setMessage("Archived prompt batch loaded.");
       }
     } catch {
@@ -86,22 +86,22 @@ export function PromptWorkshopSection({
     setPrompts([...batch.prompts]);
     setSelectedNumber(1);
     setCopiedPrompt("");
-    onStoreBatch(batch.prompts, "Prompt Workshop");
+    onStoreBatch(batch.prompts, "Prompt Workshop", lane);
     setMessage("Prompt Workshop prompts created.");
   });
 
   const acceptSelected = () => run(async () => {
     if (!selectedPrompt) return;
     if (batchId) await markPromptWorkshopPromptUsed(batchId, safeSelectedNumber);
-    onUsePrompt(selectedPrompt);
+    onUsePrompt(selectedPrompt, lane);
     onSelectPromptSource();
-    setMessage("Selected prompt accepted.");
+    setMessage("Selected prompt accepted. Use Create Images from Prompt below to generate it.");
   });
 
   const acceptAll = () => {
-    onStoreBatch(cleanPrompts, "Prompt Workshop");
+    onStoreBatch(cleanPrompts, "Prompt Workshop", lane);
     onSelectPromptSource();
-    setMessage("Prompt batch accepted.");
+    setMessage("Prompt batch accepted. The first prompt is ready in Manual Prompt below.");
   };
 
   const copyPrompt = async () => {

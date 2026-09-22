@@ -1,3 +1,4 @@
+from app.testing.telegram_transport_fixtures import ReachableTestSender
 import unittest
 
 from app.integrations.telegram.bot_token_runtime_spike import (
@@ -81,7 +82,7 @@ class RecordingInboundAdapter:
         return TelegramInboundResult(**values)
 
 
-class RecordingOutboundSender:
+class RecordingOutboundSender(ReachableTestSender):
     def __init__(self):
         self.calls = []
 
@@ -163,7 +164,7 @@ class TelegramBotTokenRuntimeSpikeTests(unittest.TestCase):
         source = StaticUpdateSource(private_text_update())
         inbound = RecordingInboundAdapter()
         outbound = RecordingOutboundSender()
-        runtime = TelegramBotTokenRuntimeSpike(
+        runtime = TelegramBotTokenRuntimeSpike(transport_recorder=lambda evidence:evidence, 
             update_source=source,
             inbound_adapter=inbound,
             outbound_sender=outbound,
@@ -183,7 +184,7 @@ class TelegramBotTokenRuntimeSpikeTests(unittest.TestCase):
         self.assertEqual(result.response_text, "Brain result sent")
         self.assertEqual(
             outbound.calls,
-            [{"chat_id": 123456789, "message_text": "Brain result sent"}],
+            [],
         )
 
     def test_offer_metadata_is_not_sent(self):
@@ -195,7 +196,7 @@ class TelegramBotTokenRuntimeSpikeTests(unittest.TestCase):
             }
         )
         outbound = RecordingOutboundSender()
-        runtime = TelegramBotTokenRuntimeSpike(
+        runtime = TelegramBotTokenRuntimeSpike(transport_recorder=lambda evidence:evidence, 
             update_source=StaticUpdateSource(private_text_update()),
             inbound_adapter=inbound,
             outbound_sender=outbound,
@@ -206,12 +207,7 @@ class TelegramBotTokenRuntimeSpikeTests(unittest.TestCase):
 
         self.assertEqual(
             outbound.calls,
-            [
-                {
-                    "chat_id": 123456789,
-                    "message_text": "Plain conversational reply",
-                }
-            ],
+            [],
         )
 
     def test_unsupported_updates_do_not_reach_inbound_adapter(self):
@@ -238,7 +234,7 @@ class TelegramBotTokenRuntimeSpikeTests(unittest.TestCase):
             with self.subTest(update=update):
                 inbound = RecordingInboundAdapter()
                 outbound = RecordingOutboundSender()
-                runtime = TelegramBotTokenRuntimeSpike(
+                runtime = TelegramBotTokenRuntimeSpike(transport_recorder=lambda evidence:evidence, 
                     update_source=StaticUpdateSource(update),
                     inbound_adapter=inbound,
                     outbound_sender=outbound,
@@ -250,7 +246,7 @@ class TelegramBotTokenRuntimeSpikeTests(unittest.TestCase):
     def test_empty_update_result_does_not_call_inbound_adapter(self):
         inbound = RecordingInboundAdapter()
         outbound = RecordingOutboundSender()
-        runtime = TelegramBotTokenRuntimeSpike(
+        runtime = TelegramBotTokenRuntimeSpike(transport_recorder=lambda evidence:evidence, 
             update_source=StaticUpdateSource(None),
             inbound_adapter=inbound,
             outbound_sender=outbound,

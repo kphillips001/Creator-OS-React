@@ -200,6 +200,16 @@ class FreeEngagementTeaserRepository:
             SET state='SENDING',sending_at=NOW(),updated_at=NOW()
             WHERE operation_id=%s AND state='CREATED' RETURNING *""", (operation_id,))
 
+    def record_transport_evidence(self, operation_id, evidence):
+        route='transport_route' in evidence
+        return self._update("""UPDATE public.telegram_engagement_teaser_delivery_operations
+            SET decision_evidence=jsonb_set(COALESCE(decision_evidence,'{}'::jsonb),
+                '{provider_delivery_evidence}',COALESCE(decision_evidence->'provider_delivery_evidence','{}'::jsonb)||%s::jsonb),
+                updated_at=NOW()
+            WHERE operation_id=%s AND state='SENDING'
+              AND (NOT %s OR NOT COALESCE(decision_evidence->'provider_delivery_evidence','{}'::jsonb) ? 'transport_route')
+            RETURNING *""",(json.dumps(dict(evidence)),operation_id,route))
+
     def accepted(self, operation_id, telegram_message_id):
         return self._update("""UPDATE public.telegram_engagement_teaser_delivery_operations
             SET state='TELEGRAM_ACCEPTED',outbound_telegram_message_id=%s,

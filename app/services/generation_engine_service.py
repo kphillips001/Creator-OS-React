@@ -7,13 +7,18 @@ Provider adapters remain swappable and are not called by Content Studio.
 from __future__ import annotations
 
 import json
+import os
+import tempfile
 import threading
+import time
+from contextlib import contextmanager
 from dataclasses import asdict, replace
 from pathlib import Path
 from time import perf_counter
 from typing import Any, Callable, Mapping
 
 from app.models.creative_director import PromptPlan
+from app.models.canonical_creator_identity import CanonicalCreatorIdentityContract
 from app.models.generation_engine import (
     GenerationFailure,
     GenerationJob,
@@ -37,12 +42,24 @@ from app.models.render_policy import (
 )
 
 
+class GenerationJobStoreError(RuntimeError):
+    """The durable Generation Engine job store could not be read or published."""
+
+
+class GenerationJobStoreLockTimeout(GenerationJobStoreError):
+    """Another process held the Generation Engine mutation lock too long."""
+
+
 class GenerationEngineService:
     """Owns provider-neutral generation execution state and queue behavior."""
 
     DEFAULT_STORAGE_DIR = Path("data") / "generation_engine"
     _dispatch_locks_guard = threading.Lock()
     _dispatch_locks: dict[str, threading.Lock] = {}
+    STORE_READ_ATTEMPTS = 3
+    STORE_READ_RETRY_SECONDS = 0.025
+    STORE_LOCK_TIMEOUT_SECONDS = 30.0
+    STORE_LOCK_RETRY_SECONDS = 0.025
 
     def __init__(
         self,
@@ -77,6 +94,7 @@ class GenerationEngineService:
         media_type: str = GenerationMediaType.IMAGE.value,
         image_count: int = 1,
         metadata: Mapping[str, Any] | None = None,
+        canonical_identity: CanonicalCreatorIdentityContract | None = None,
     ) -> GenerationRequest:
         creator_profile_id = int((creator_profile or {}).get("id") or prompt_plan.creator_profile_id)
         request_metadata = dict(metadata or {})
@@ -85,21 +103,25 @@ class GenerationEngineService:
         frozen_identity_required = bool(request_metadata.get("require_frozen_photoshoot_identity"))
         if frozen_identity_required and (not frozen_identity_path or not frozen_identity_asset_id):
             raise ValueError("The frozen canonical identity reference is unavailable for this Photoshoot.")
-        active_reference = None if frozen_identity_required else self.reference_library.get_active_canonical_reference(
+        if canonical_identity is not None and canonical_identity.creator_profile_id != creator_profile_id:
+            raise ValueError("The frozen canonical identity belongs to a different creator.")
+        active_reference = None if (frozen_identity_required or canonical_identity is not None) else self.reference_library.get_active_canonical_reference(
             creator_profile_id=creator_profile_id,
         )
         reference_asset_id = (
-            frozen_identity_asset_id if frozen_identity_required else active_reference.asset_id
+            frozen_identity_asset_id if frozen_identity_required else canonical_identity.canonical_asset_id
+            if canonical_identity is not None else active_reference.asset_id
             if active_reference
             else prompt_plan.reference_asset_id
         )
         reference_asset_path = (
-            frozen_identity_path if frozen_identity_required else active_reference.asset.original_path
+            frozen_identity_path if frozen_identity_required else canonical_identity.canonical_local_path
+            if canonical_identity is not None else active_reference.asset.original_path
             if active_reference
             else prompt_plan.reference_asset_path
         )
         reference_metadata = dict(active_reference.metadata or {}) if active_reference else {}
-        provider_reference_url = None
+        provider_reference_url = canonical_identity.canonical_provider_reference if canonical_identity is not None else None
         if (
             active_reference and reference_asset_id
             and reference_asset_path and str(provider_id) == "seedream_5_0_pro"
@@ -138,6 +160,7 @@ class GenerationEngineService:
             generation_type=self._normalize_generation_type(generation_type),
             media_type=self._normalize_media_type(media_type),
             image_count=max(1, int(image_count or 1)),
+            canonical_identity=canonical_identity,
             metadata={
                 "owner": "Generation Engine",
                 "provider_neutral": True,
@@ -150,7 +173,7 @@ class GenerationEngineService:
                 "reference_preview_path": active_reference.asset.preview_path if active_reference else None,
                 **(
                     {"canonical_reference_image_url": provider_reference_url or reference_asset_path}
-                    if active_reference and (provider_reference_url or reference_asset_path)
+                    if (active_reference or canonical_identity) and (provider_reference_url or reference_asset_path)
                     else {}
                 ),
                 **({"reference_image_url": provider_reference_url} if provider_reference_url else {}),
@@ -189,9 +212,7 @@ class GenerationEngineService:
             request=request,
             max_retries=max(0, int(max_retries or 0)),
         )
-        jobs = list(self.list_jobs())
-        jobs.append(job)
-        self._write_jobs(jobs)
+        self._mutate_jobs(lambda jobs: [*jobs, job])
         return job
 
     def queue_prompt_plan(
@@ -204,6 +225,7 @@ class GenerationEngineService:
         media_type: str = GenerationMediaType.IMAGE.value,
         image_count: int = 1,
         metadata: Mapping[str, Any] | None = None,
+        canonical_identity: CanonicalCreatorIdentityContract | None = None,
         max_retries: int = 0,
     ) -> GenerationJob:
         request = self.create_request(
@@ -214,112 +236,84 @@ class GenerationEngineService:
             media_type=media_type,
             image_count=image_count,
             metadata=metadata,
+            canonical_identity=canonical_identity,
         )
         return self.enqueue(request, max_retries=max_retries)
 
     def start_job(self, job_id: str) -> GenerationJob:
-        job = self.get_job(job_id)
-        if job.status in {
+        return self._mutate_job(job_id, lambda job: job if job.status in {
             GenerationStatus.SUCCEEDED.value,
             GenerationStatus.CANCELLED.value,
-        }:
-            return job
-        updated = replace(
+        } else replace(
             job,
             status=GenerationStatus.RUNNING.value,
             started_at=job.started_at or utc_now(),
             updated_at=utc_now(),
             progress=GenerationProgress(current=0, total=job.request.image_count, percent=0, message="Running"),
-        )
-        self._replace_job(updated)
-        return updated
+        ))
 
     def complete_job(
         self,
         job_id: str,
         result: GenerationResult | None = None,
     ) -> GenerationJob:
-        job = self.get_job(job_id)
         completed_at = utc_now()
-        result = result or GenerationResult(
-            result_id=new_generation_id("generation_result"),
-            request_id=job.request.request_id,
-            job_id=job.job_id,
-            provider_id=job.request.provider_id,
-            status=GenerationStatus.SUCCEEDED.value,
-            generation_metadata={"provider_neutral_result": True},
-        )
-        updated = replace(
-            job,
-            status=GenerationStatus.SUCCEEDED.value,
-            completed_at=completed_at,
-            updated_at=completed_at,
-            result=result,
-            failure=None,
-            progress=GenerationProgress(
-                current=job.request.image_count,
-                total=job.request.image_count,
-                percent=100.0,
-                message="Succeeded",
-            ),
-        )
-        self._replace_job(updated)
-        return updated
+        def complete(job):
+            if job.status == GenerationStatus.CANCELLED.value:
+                return job
+            completed_result = result or GenerationResult(
+                result_id=new_generation_id("generation_result"),
+                request_id=job.request.request_id,
+                job_id=job.job_id,
+                provider_id=job.request.provider_id,
+                status=GenerationStatus.SUCCEEDED.value,
+                generation_metadata={"provider_neutral_result": True},
+            )
+            return replace(
+                job, status=GenerationStatus.SUCCEEDED.value,
+                completed_at=completed_at, updated_at=completed_at,
+                result=completed_result, failure=None,
+                progress=GenerationProgress(
+                    current=job.request.image_count, total=job.request.image_count,
+                    percent=100.0, message="Succeeded"),
+            )
+        return self._mutate_job(job_id, complete)
 
     def fail_job(self, job_id: str, failure: GenerationFailure) -> GenerationJob:
-        job = self.get_job(job_id)
-        can_retry = failure.retryable and job.retry_count < job.max_retries
-        status = GenerationStatus.RETRY.value if can_retry else GenerationStatus.FAILED.value
-        updated = replace(
-            job,
-            status=status,
-            retry_count=job.retry_count + 1 if can_retry else job.retry_count,
-            completed_at=None if can_retry else utc_now(),
-            updated_at=utc_now(),
-            failure=failure,
-            progress=replace(job.progress, message="Retry queued" if can_retry else "Failed"),
-        )
-        self._replace_job(updated)
-        return updated
+        def fail(job):
+            if job.status == GenerationStatus.CANCELLED.value:
+                return job
+            can_retry = failure.retryable and job.retry_count < job.max_retries
+            return replace(
+                job,
+                status=(GenerationStatus.RETRY.value if can_retry else GenerationStatus.FAILED.value),
+                retry_count=job.retry_count + 1 if can_retry else job.retry_count,
+                completed_at=None if can_retry else utc_now(), updated_at=utc_now(),
+                failure=failure,
+                progress=replace(job.progress, message="Retry queued" if can_retry else "Failed"),
+            )
+        return self._mutate_job(job_id, fail)
 
     def cancel_job(self, job_id: str) -> GenerationJob:
         with self._dispatch_lock(job_id):
-            job = self.get_job(job_id)
-            if job.status == GenerationStatus.SUCCEEDED.value:
-                return job
-            updated = replace(
-                job,
-                status=GenerationStatus.CANCELLED.value,
-                completed_at=utc_now(),
-                updated_at=utc_now(),
+            return self._mutate_job(job_id, lambda job: job if job.status == GenerationStatus.SUCCEEDED.value else replace(
+                job, status=GenerationStatus.CANCELLED.value,
+                completed_at=utc_now(), updated_at=utc_now(),
                 progress=replace(job.progress, message="Cancelled"),
-            )
-            self._replace_job(updated)
-            return updated
+            ))
 
     def retry_job(self, job_id: str) -> GenerationJob:
         with self._dispatch_lock(job_id):
-            job = self.get_job(job_id)
-            if job.status in {
+            return self._mutate_job(job_id, lambda job: job if job.status in {
                 GenerationStatus.SUCCEEDED.value,
                 GenerationStatus.CANCELLED.value,
-            }:
-                return job
-            updated = replace(
-                job,
-                status=GenerationStatus.RETRY.value,
-                completed_at=None,
-                updated_at=utc_now(),
-                failure=None,
+            } else replace(
+                job, status=GenerationStatus.RETRY.value, completed_at=None,
+                updated_at=utc_now(), failure=None,
                 progress=GenerationProgress(
-                    current=0,
-                    total=job.request.image_count,
-                    percent=0,
-                    message="Retry queued",
-                ),
-            )
-            self._replace_job(updated)
-            return updated
+                    current=0, total=job.request.image_count,
+                    percent=0, message="Retry queued"),
+            ))
 
     def dispatch_job(
         self,
@@ -456,7 +450,7 @@ class GenerationEngineService:
         creator_profile_id: int | None = None,
         status: str | None = None,
     ) -> tuple[GenerationJob, ...]:
-        jobs = tuple(self._job_from_dict(item) for item in self._read_json(self.jobs_path, []))
+        jobs = self._list_jobs_unlocked()
         filtered = []
         for job in jobs:
             if creator_profile_id is not None and job.request.creator_profile_id != int(creator_profile_id):
@@ -467,20 +461,81 @@ class GenerationEngineService:
         return tuple(filtered)
 
     def _replace_job(self, updated: GenerationJob) -> None:
-        jobs = []
-        replaced = False
-        for job in self.list_jobs():
-            if job.job_id == updated.job_id:
-                jobs.append(updated)
-                replaced = True
-            else:
-                jobs.append(job)
-        if not replaced:
-            jobs.append(updated)
-        self._write_jobs(jobs)
+        self._mutate_jobs(lambda jobs: [
+            updated if job.job_id == updated.job_id else job for job in jobs
+        ] if any(job.job_id == updated.job_id for job in jobs) else [*jobs, updated])
 
     def _write_jobs(self, jobs: list[GenerationJob]) -> None:
-        self._write_json(self.jobs_path, [asdict(job) for job in jobs])
+        with self._job_store_lock():
+            self._write_jobs_unlocked(jobs)
+
+    def _write_jobs_unlocked(self, jobs) -> None:
+        self._write_json_atomic(self.jobs_path, [asdict(job) for job in jobs])
+
+    def _mutate_jobs(self, mutation):
+        with self._job_store_lock():
+            jobs = list(self._list_jobs_unlocked())
+            updated = list(mutation(jobs))
+            self._write_jobs_unlocked(updated)
+            return updated
+
+    def _mutate_job(self, job_id: str, mutation) -> GenerationJob:
+        selected = None
+        def update(jobs):
+            nonlocal selected
+            if not any(job.job_id == job_id for job in jobs):
+                raise KeyError(f"Generation Job not found: {job_id}")
+            result = []
+            for job in jobs:
+                if job.job_id == job_id:
+                    selected = mutation(job)
+                    result.append(selected)
+                else:
+                    result.append(job)
+            return result
+        self._mutate_jobs(update)
+        return selected
+
+    def _list_jobs_unlocked(self) -> tuple[GenerationJob, ...]:
+        return tuple(self._job_from_dict(item) for item in self._read_json(self.jobs_path, []))
+
+    @contextmanager
+    def _job_store_lock(self):
+        """Bounded OS-level lock covering the complete read/modify/publish transaction."""
+        path = self.jobs_path.resolve()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        lock_path = path.with_name(f".{path.name}.lock")
+        deadline = time.monotonic() + self.STORE_LOCK_TIMEOUT_SECONDS
+        with open(lock_path, "a+b") as lock_file:
+            lock_file.seek(0, os.SEEK_END)
+            if lock_file.tell() == 0:
+                lock_file.write(b"0"); lock_file.flush()
+            acquired = False
+            while not acquired:
+                lock_file.seek(0)
+                try:
+                    if os.name == "nt":
+                        import msvcrt
+                        msvcrt.locking(lock_file.fileno(), msvcrt.LK_NBLCK, 1)
+                    else:
+                        import fcntl
+                        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    acquired = True
+                except (OSError, BlockingIOError):
+                    if time.monotonic() >= deadline:
+                        raise GenerationJobStoreLockTimeout(
+                            f"Timed out acquiring Generation Job store lock: {lock_path}")
+                    time.sleep(self.STORE_LOCK_RETRY_SECONDS)
+            try:
+                yield
+            finally:
+                lock_file.seek(0)
+                if os.name == "nt":
+                    import msvcrt
+                    msvcrt.locking(lock_file.fileno(), msvcrt.LK_UNLCK, 1)
+                else:
+                    import fcntl
+                    fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
 
     @staticmethod
     def _normalize_generation_type(value: Any) -> str:
@@ -535,6 +590,10 @@ class GenerationEngineService:
                 media_type=cls._normalize_media_type(request_data.get("media_type")),
                 image_count=max(1, int(request_data.get("image_count") or 1)),
                 prompt_state=cls._normalize_prompt_state(request_data.get("prompt_state")),
+                canonical_identity=CanonicalCreatorIdentityContract.from_dict(
+                    request_data.get("canonical_identity")
+                    or (request_data.get("metadata") or {}).get("canonical_identity_contract")
+                ),
                 metadata=request_data.get("metadata") or {},
                 created_at=request_data.get("created_at") or "",
             ),
@@ -587,18 +646,43 @@ class GenerationEngineService:
             failed_at=data.get("failed_at") or "",
         )
 
-    @staticmethod
-    def _read_json(path: Path, default):
-        try:
-            if not path.exists():
-                return default
-            with open(path, "r", encoding="utf-8") as file:
-                return json.load(file)
-        except (OSError, json.JSONDecodeError):
+    @classmethod
+    def _read_json(cls, path: Path, default):
+        if not path.exists():
             return default
+        last_error = None
+        for attempt in range(cls.STORE_READ_ATTEMPTS):
+            try:
+                with open(path, "r", encoding="utf-8") as file:
+                    return json.load(file)
+            except (OSError, json.JSONDecodeError) as error:
+                last_error = error
+                if attempt + 1 < cls.STORE_READ_ATTEMPTS:
+                    time.sleep(cls.STORE_READ_RETRY_SECONDS)
+        raise GenerationJobStoreError(
+            f"Generation Job store is unreadable: {path}: "
+            f"{type(last_error).__name__}: {last_error}"
+        ) from last_error
 
     @staticmethod
-    def _write_json(path: Path, data) -> None:
+    def _write_json_atomic(path: Path, data) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
-        with open(path, "w", encoding="utf-8") as file:
-            json.dump(data, file, indent=2, default=str)
+        temporary_path = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="w", encoding="utf-8", dir=path.parent,
+                prefix=f".{path.name}.{os.getpid()}.", suffix=".tmp",
+                delete=False,
+            ) as output:
+                temporary_path = Path(output.name)
+                json.dump(data, output, indent=2, default=str)
+                output.flush()
+                os.fsync(output.fileno())
+            os.replace(temporary_path, path)
+            temporary_path = None
+        finally:
+            if temporary_path is not None:
+                try:
+                    temporary_path.unlink(missing_ok=True)
+                except OSError:
+                    pass

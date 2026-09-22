@@ -4,6 +4,7 @@ import { MemoryRouter, useLocation } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { PerformanceSnapshot } from "./PerformanceSnapshot";
+import { clearOverviewQueryCache } from "./overviewQueryCache";
 
 function LocationProbe() { const location = useLocation(); return <output data-testid="location">{location.pathname}{location.search}</output>; }
 const render = (ui: ReactElement) => renderLibrary(<MemoryRouter>{ui}<LocationProbe /></MemoryRouter>);
@@ -29,7 +30,7 @@ const businessItem = {
   navigation:{customerKey:"customer:2:2:44",conversationKey:null},developerDetails:{record_id:"private-id"},
 };
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => { vi.restoreAllMocks(); clearOverviewQueryCache(); });
 
 describe("Performance Snapshot", () => {
   it("loads Today by default, formats money and zero, and distinguishes unavailable", async () => {

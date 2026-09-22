@@ -76,6 +76,7 @@ const json = (method: "PATCH" | "POST", body?: unknown): RequestInit => ({
 });
 
 export const controlsApi = {
+  display: () => request<GlobalControls>("/api/v1/operations/global-controls/display-status"),
   relationshipFacts: (customerId: number) => request<unknown[]>(`/api/v1/operations/relationship-facts?customer_id=${customerId}`),
   contextPreview: (customerId: number, message: string) => request<Record<string, any>>(`/api/v1/operations/relationship-context-preview?customer_id=${customerId}&message=${encodeURIComponent(message)}`),
   customerSnapshot: (key:{customerId?:number;telegramUserId?:number|string}) => request<CustomerSnapshot>(`/api/v1/operations/customer-snapshot?${key.customerId!=null?`customer_id=${key.customerId}`:`telegram_user_id=${key.telegramUserId}`}`),

@@ -3,6 +3,7 @@
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
+from app.models.telegram_media_turn_input import TelegramMediaTurnInput
 
 
 @dataclass(frozen=True)
@@ -39,6 +40,8 @@ class TelegramInboundPayload:
     attachments: tuple[TelegramInboundAttachment, ...] = ()
     current_turn_visual_context: dict[str, Any] = field(default_factory=dict)
     quality_correction_context: dict[str, Any] = field(default_factory=dict)
+    ordinary_reply_operation_id: str | None = None
+    media_turn_input: TelegramMediaTurnInput | None = None
 
 
 @dataclass(frozen=True)
@@ -58,3 +61,10 @@ class TelegramInboundResult:
     delivery_requires_payment: bool | None = None
     delivery_payload: dict[str, Any] = field(default_factory=dict)
     diagnostic_metadata: dict[str, Any] = field(default_factory=dict)
+
+
+def canonical_text_delivery_type(value):
+    """One ordinary text spelling; only the legacy TEXT alias is compatible."""
+    if isinstance(value, str) and value.strip().upper() in {'TEXT', 'MESSAGE_TEXT'}:
+        return 'MESSAGE_TEXT'
+    return value

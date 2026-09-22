@@ -64,12 +64,21 @@ class ContentStudioBackgroundExecutor:
     @staticmethod
     def operation_observer(operation, operations, *, worker_id: str, total: int):
         def observe(state: dict[str, Any]) -> None:
+            lookup = getattr(operations.repository, "_one_unscoped", None)
+            current_operation = lookup(operation.operation_id) if lookup else operation
+            if current_operation is None or getattr(current_operation, "status", None) == "CANCELLED":
+                raise RuntimeError("GENERATION_CANCELLED")
             status = str(state.get("status") or "running").lower()
             current = int(state.get("processedCount") or state.get("completedCount") or 0)
             metadata = {
                 key: value for key, value in state.items()
                 if key not in {"status", "message", "progress"}
             }
+            if state.get("canonicalIdentityContract"):
+                metadata["request"] = {
+                    **dict(operation.metadata.get("request") or {}),
+                    "canonicalIdentityContract": dict(state["canonicalIdentityContract"]),
+                }
             stage = {
                 "planning": "PLANNING",
                 "queued": "PROVIDER_QUEUED",
@@ -90,6 +99,10 @@ class ContentStudioBackgroundExecutor:
 
     @staticmethod
     def finish(operation, operations, result) -> None:
+        lookup = getattr(operations.repository, "_one_unscoped", None)
+        current = lookup(operation.operation_id) if lookup else operation
+        if current is None or getattr(current, "status", None) == "CANCELLED":
+            return
         metadata = {key: value for key, value in result.items() if key != "status"}
         status = str(result.get("status") or "failed").lower()
         if status == "succeeded":

@@ -228,6 +228,31 @@ def test_one_failed_ppv_is_not_strong_time_waster_evidence():
     assert "MULTIPLE_OFFERS_NO_CONVERSION" not in result.time_waster_evidence
     assert "REPEATED_POST_OFFER_SEXUAL_CONSUMPTION_NO_CONVERSION" not in result.time_waster_evidence
 
+def test_medium_zero_purchase_post_nudge_nonconversion_reduces_free_attention():
+    result=CustomerValueAttentionService().project(commerce_memory={"schemaVersion":"v1","verifiedPurchaseCount":0},behavior={"market_tier":"MEDIUM","confirmed_post_nudge_nonconversion_count":1,"active_unresolved_opportunity":True})
+    assert result.relationship_investment=="LOW"
+    assert result.optional_ordinary_reply_suppressed is False
+    assert result.time_waster_risk != "HIGH"
+    assert "CONFIRMED_POST_NUDGE_NONCONVERSION" in result.time_waster_evidence
+
+def test_fresh_intent_and_verified_buyer_are_protected_from_post_nudge_backoff():
+    service=CustomerValueAttentionService()
+    fresh=service.project(commerce_memory={"schemaVersion":"v1","verifiedPurchaseCount":0},behavior={"market_tier":"MEDIUM","confirmed_post_nudge_nonconversion_count":1,"fresh_direct_intent":True})
+    buyer=service.project(commerce_memory={"schemaVersion":"v1","verifiedPurchaseCount":1},behavior={"market_tier":"MEDIUM","confirmed_post_nudge_nonconversion_count":1})
+    assert not fresh.optional_ordinary_reply_suppressed
+    assert not buyer.optional_ordinary_reply_suppressed
+
+
+@pytest.mark.parametrize("tier", ("HIGH", "MEDIUM", "LOW", "UNCLASSIFIED"))
+def test_zero_purchase_post_nudge_backoff_is_global_across_market_tiers(tier):
+    result=CustomerValueAttentionService().project(
+        commerce_memory={"schemaVersion":"v1","verifiedPurchaseCount":0},
+        behavior={"market_tier":tier,
+                  "confirmed_post_nudge_nonconversion_count":1})
+    assert result.optional_ordinary_reply_suppressed is False
+    assert result.relationship_investment == "LOW"
+    assert result.suppression_reason is None
+
 
 def test_presented_active_offer_is_not_failed_without_terminal_evidence():
     result = project({"purchaseCount": 0}, {

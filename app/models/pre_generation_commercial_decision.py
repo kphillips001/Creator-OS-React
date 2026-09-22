@@ -14,6 +14,10 @@ class PreGenerationCommercialDecision:
     classifier_rejected_buying_intent: bool
     deterministic_commercial_evidence: bool
     commercial_bypass_eligible: bool
+    active_offer_nudge_candidate: bool = False
+    active_offer_reservation_authorized: bool = False
+    active_offer_reservation_reason: str | None = None
+    mandatory_response_obligation: bool = False
     authority: str = "COMMERCIAL_RECEPTIVENESS_SERVICE"
 
     def diagnostics(self):

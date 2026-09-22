@@ -1,3 +1,4 @@
+from app.services.ordinary_generation_context import analysis_completion
 import json
 
 from openai import OpenAI
@@ -409,7 +410,7 @@ SAFE CONTEXT:
             return dict(self.DEFAULT_RESULT)
 
         def _call_gpt():
-            completion = self.client.chat.completions.create(
+            completion = analysis_completion(self.client, purpose="DEPENDENCY_CLASSIFICATION",
                 model=self.model,
                 messages=[
                     {

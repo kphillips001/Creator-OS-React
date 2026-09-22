@@ -63,5 +63,21 @@ def test_contract_contains_future_gate_inputs_without_budget_fields():
     assert set(values)=={"fresh_direct_intent","current_commercial_interest",
         "commercial_interest_type","referent_present","grounded_purchase_acceptance",
         "temporal_deferred","no_buy_boundary","classifier_rejected_buying_intent",
-        "deterministic_commercial_evidence","commercial_bypass_eligible","authority"}
+        "deterministic_commercial_evidence","commercial_bypass_eligible","authority",
+        "active_offer_nudge_candidate","active_offer_reservation_authorized",
+        "active_offer_reservation_reason","mandatory_response_obligation"}
     assert not any("budget" in key or "tier" in key for key in values)
+
+
+def test_declarative_auxiliary_verb_does_not_create_mandatory_obligation():
+    result = project("My weekend plans are starting to come together")
+    assert result.mandatory_response_obligation is False
+
+
+@pytest.mark.parametrize("text", [
+    "Are you having a good day",
+    "What have you been doing this afternoon?",
+    "I had a long day; how was yours?",
+])
+def test_genuine_direct_question_remains_a_mandatory_obligation(text):
+    assert project(text).mandatory_response_obligation is True

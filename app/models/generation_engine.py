@@ -8,6 +8,8 @@ from enum import Enum
 from typing import Any, Mapping
 from uuid import uuid4
 
+from app.models.canonical_creator_identity import CanonicalCreatorIdentityContract
+
 
 def utc_now() -> str:
     return datetime.utcnow().isoformat()
@@ -85,6 +87,7 @@ class GenerationRequest:
     media_type: str
     image_count: int = 1
     prompt_state: str = ProviderPromptState.PLANNED.value
+    canonical_identity: CanonicalCreatorIdentityContract | None = None
     metadata: Mapping[str, Any] = field(default_factory=dict)
     created_at: str = field(default_factory=utc_now)
 

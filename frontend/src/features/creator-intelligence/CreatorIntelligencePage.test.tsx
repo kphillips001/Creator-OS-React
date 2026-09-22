@@ -1,4 +1,4 @@
-import type { ReactElement } from "react";
+import { StrictMode, type ReactElement } from "react";
 import { act, fireEvent, render as renderLibrary, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -10,6 +10,7 @@ import {
   localGreeting,
 } from "./CreatorIntelligencePage";
 import { DeveloperAgentExecutionProvider } from "../developer-agent/DeveloperAgentExecutionContext";
+import { clearOverviewQueryCache } from "./overviewQueryCache";
 
 function render(ui: ReactElement) {
   return renderLibrary(<DeveloperAgentExecutionProvider>{ui}</DeveloperAgentExecutionProvider>);
@@ -102,6 +103,7 @@ function mockRequests(
   avaState: "ON" | "OFF" | "STARTING" | "ATTENTION" = "OFF",
   developerReady = true,
   dispatchOverride?: Promise<Response>,
+  intelligenceBody = intelligence,
 ) {
   return vi.spyOn(globalThis, "fetch").mockImplementation((input, init) => {
     const url = String(input);
@@ -187,7 +189,7 @@ function mockRequests(
     }
     return url.includes("/operations/global-controls")
       ? json(controls(avaState))
-      : json(intelligence);
+      : json(intelligenceBody);
   });
 }
 
@@ -195,9 +197,90 @@ afterEach(() => {
   vi.useRealTimers();
   vi.restoreAllMocks();
   window.localStorage.clear();
+  clearOverviewQueryCache();
 });
 
 describe("Creator Intelligence operational homepage", () => {
+  it("renders the shell and snapshot before diagnostics and controls resolve", async () => {
+    let resolveIntelligence: (value: Response) => void = () => undefined;
+    let resolveControls: (value: Response) => void = () => undefined;
+    const intelligenceRequest = new Promise<Response>((resolve) => { resolveIntelligence = resolve; });
+    const controlsRequest = new Promise<Response>((resolve) => { resolveControls = resolve; });
+    vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
+      const url = String(input);
+      if (url.endsWith("/creator-intelligence")) return intelligenceRequest;
+      if (url.includes("global-controls/display-status")) return controlsRequest;
+      if (url.includes("snapshot?")) return json(snapshot);
+      if (url.includes("sales-status")) return json({ activeSalesSessions: 1, activePurchaseIntents: 2, commercialFailures: 0, asOf: "CURRENT" });
+      if (url.includes("x-link-performance")) return json({ period: snapshot.period, items: [], historicalBoundary: "boundary" });
+      return json({ items: [] });
+    });
+    render(<MemoryRouter><CreatorIntelligencePage /></MemoryRouter>);
+    expect(screen.getByRole("heading", { name: /Good (Morning|Afternoon|Evening), Kevin\./ })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Performance Snapshot" })).toBeInTheDocument();
+    expect((await screen.findAllByText("$9.99")).length).toBeGreaterThan(0);
+    expect(screen.getByText("LOADING")).toBeInTheDocument();
+    expect(screen.getByText("Loading operational diagnostics…")).toBeInTheDocument();
+    await act(async () => {
+      resolveControls(await json(controls("ON")));
+      resolveIntelligence(await json(intelligence));
+    });
+    expect(await screen.findByText("ON")).toBeInTheDocument();
+  });
+
+  it("deduplicates expensive Overview requests during StrictMode replay", async () => {
+    const fetchMock = mockRequests("ON");
+    render(<StrictMode><MemoryRouter><CreatorIntelligencePage /></MemoryRouter></StrictMode>);
+    expect((await screen.findAllByText("$9.99")).length).toBeGreaterThan(0);
+    expect(fetchMock.mock.calls.filter(([input]) =>
+      String(input).endsWith("/api/v1/creator-intelligence"))).toHaveLength(1);
+    for (const fragment of [
+      "/operations/global-controls/display-status",
+      "/creator-intelligence/snapshot?period=TODAY",
+    ]) expect(fetchMock.mock.calls.filter(([input]) =>
+      String(input).includes(fragment))).toHaveLength(1);
+  });
+
+  it("keeps successful sections visible when diagnostics fail", async () => {
+    const fetchMock = mockRequests("ON");
+    fetchMock.mockImplementation((input, _init) => {
+      const url = String(input);
+      if (url.endsWith("/creator-intelligence")) {
+        return json({ detail: "Diagnostics unavailable." }).then(async (response) =>
+          new Response(await response.text(), { status: 503, headers: { "Content-Type": "application/json" } }));
+      }
+      if (url.includes("snapshot?")) return json(snapshot);
+      if (url.includes("sales-status")) return json({ activeSalesSessions: 1, activePurchaseIntents: 2, commercialFailures: 0, asOf: "CURRENT" });
+      if (url.includes("x-link-performance")) return json({ period: snapshot.period, items: [], historicalBoundary: "boundary" });
+      if (url.includes("global-controls/display-status")) return json(controls("ON"));
+      return json({ items: [] });
+    });
+    render(<MemoryRouter><CreatorIntelligencePage /></MemoryRouter>);
+    expect((await screen.findAllByText("$9.99")).length).toBeGreaterThan(0);
+    expect(await screen.findByRole("alert")).toHaveTextContent("Diagnostics unavailable.");
+    expect(screen.getByRole("heading", { name: "Performance Snapshot" })).toBeInTheDocument();
+  });
+
+  it("shows recent Overview data immediately while return navigation revalidates", async () => {
+    const fetchMock = mockRequests("ON");
+    const first = render(<MemoryRouter><CreatorIntelligencePage /></MemoryRouter>);
+    await screen.findByRole("heading", { name: "System Status" });
+    first.unmount();
+
+    let release: (response: Response) => void = () => undefined;
+    const refresh = new Promise<Response>((resolve) => { release = resolve; });
+    const original = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation((input, init) =>
+      String(input).endsWith("/api/v1/creator-intelligence")
+        ? refresh
+        : original(input, init));
+
+    render(<MemoryRouter><CreatorIntelligencePage /></MemoryRouter>);
+    expect(screen.getByRole("heading", { name: "System Status" })).toBeInTheDocument();
+    expect(screen.getByText("Refreshing operational diagnostics…")).toBeInTheDocument();
+    await act(async () => release(await json(intelligence)));
+  });
+
   it.each([
     [new Date(2026, 0, 1, 5), "☀️ Good Morning, Kevin."],
     [new Date(2026, 0, 1, 11, 59), "☀️ Good Morning, Kevin."],
@@ -263,6 +346,27 @@ describe("Creator Intelligence operational homepage", () => {
     expect(screen.queryByRole("heading", { name: /Ava Coach/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Opportunities" })).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Needs Attention" })).not.toBeInTheDocument();
+  });
+
+  it("routes an actionable schema diagnostic to visible Operations evidence", async () => {
+    mockRequests("OFF", true, undefined, {
+      ...intelligence,
+      systemHealth: [...intelligence.systemHealth, {
+        label: "Schema Certification", status: "Needs Attention",
+        summary: "One migration is pending.",
+        classification: "PENDING_MIGRATION",
+        root_cause: "One migration is pending.",
+        evidence: [{ kind: "pending_migrations", value: "migration.sql" }],
+        confidence: 1, automatic_resolution: false,
+        resolution_reason: "A reviewed migration is required.",
+        recommended_action: "Open Operations.",
+        affected_components: ["Schema Certification"],
+      }],
+    });
+    render(<MemoryRouter><CreatorIntelligencePage /></MemoryRouter>);
+    expect(await screen.findByRole("link", { name: /View Operations/ })).toHaveAttribute(
+      "href", "/business/operations?tab=schema_certification",
+    );
   });
 
   it.skip("keeps all required quick actions including Reference Library", async () => {

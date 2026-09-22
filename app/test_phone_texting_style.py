@@ -1,10 +1,14 @@
 from copy import deepcopy
+import re
 from types import SimpleNamespace
 
 import pytest
 
 from app.services.conversational_memory_service import ConversationalMemoryService
 from app.services.gpt_service import GPTService
+from app.services.conversation_progression_quality_service import (
+    ConversationProgressionQualityService,
+)
 from app.services.customer_content_presentation_validator import (
     CustomerContentPresentationValidator,
 )
@@ -2261,6 +2265,137 @@ def test_noncompliant_combined_repair_uses_integrated_memory_tease_fallback():
     assert "?" not in result
 
 
+@pytest.mark.parametrize("combined_candidate", (
+    "Good morning, sexy. Your words definitely spark a fire.",
+    "Pleasuring me from morning to night sounds like a day I wouldn't want to end.",
+))
+def test_combined_obligation_repair_rejects_false_salutation_or_mirroring(
+    combined_candidate,
+):
+    service, _ = service_with(
+        "That does sound like quite the day... maybe one full of unforgettable moments.",
+        combined_candidate,
+    )
+    memory = memory_none()
+    context = user_memory(memory)
+    context["runtime_injection"]["time_context"] = {
+        "runtimeUtc": "2026-09-17T00:08:27+00:00",
+        "avaTimezone": "America/New_York",
+        "avaLocalTime": "2026-09-16T20:08:27-04:00",
+        "avaDayOfWeek": "Wednesday",
+        "avaDaypart": "evening",
+        "customerTimezone": None,
+        "customerLocalTime": None,
+        "customerDayOfWeek": None,
+        "customerDaypart": None,
+    }
+    result = service.generate_response(
+        "default", "casual",
+        "Hi sexy it would be fun to pleasure you from morning to night",
+        context, False, chat_history=[],
+    )
+    style = memory["memoryDiagnostics"]["conversationStyle"]
+
+    assert result != combined_candidate
+    assert not result.lower().startswith(("good morning", "morning"))
+    assert style["customerTemporalFunction"] == "DURATION"
+    assert style["responseTemporalAlignmentSatisfied"] is True
+    assert style["antiMirroringResult"] == "PASS"
+    assert style["finalProgressionResult"] == "PASS"
+    assert style["finalCandidateTransformationSource"]
+
+
+def test_function_first_flirt_fallback_is_novel_concise_and_nonmirroring():
+    customer = "I want to pleasure you from morning to night"
+    selected = GPTService._function_first_flirt_fallback(
+        customer,
+        recent_responses=["careful, you haven't seen trouble yet"],
+    )
+    response = selected["response"]
+    assert selected["function"] == "PLAYFUL_CHALLENGE"
+    assert len(response.split()) <= 10
+    assert "?" not in response
+    assert not re.search(r"\b(?:trouble|dangerous|naughty|curious|keep talking)\b", response, re.I)
+    assert not ConversationProgressionQualityService.mirroring_with_generic_affect(
+        customer, response,
+    )
+
+
+def test_function_first_fallback_uses_neutral_ack_when_expressive_choices_reused():
+    recent = [
+        "I like that confidence",
+        "okayyy... I felt that",
+        "then don't make it too easy for me",
+    ]
+    selected = GPTService._function_first_flirt_fallback(
+        "that would be fun", recent_responses=recent,
+    )
+    assert selected["function"] == "NEUTRAL_CONCISE_ACKNOWLEDGEMENT"
+    assert selected["neutral"] is True
+    assert "?" not in selected["response"]
+
+
+def test_neutral_fallback_does_not_repeat_inside_novelty_window():
+    recent = [
+        "then don't make it too easy for me",
+        "I like that confidence",
+        "okayyy... I felt that",
+        "well then... message received",
+    ]
+    selected = GPTService._function_first_flirt_fallback(
+        "another confident message", recent_responses=recent,
+    )
+    assert selected["function"] == "NEUTRAL_CONCISE_ACKNOWLEDGEMENT"
+    assert selected["response"] == "okayyy... loud and clear"
+    assert selected["novelty"]["exact_reuse"] is False
+
+
+def test_sexual_energy_obligation_accepts_semantic_personal_stance_without_tropes():
+    response = "I can appreciate that confidence"
+    style = GPTService._style_analysis(
+        response,
+        "I want to see you naked and kiss your sexy ass",
+        pressure={}, ordinary=True, memory_callback=False,
+        new_relationship=False, recent_responses=[],
+    )
+    assert "ACKNOWLEDGE_SEXUAL_ENERGY" in style["turnObligations"]
+    assert "ACKNOWLEDGE_SEXUAL_ENERGY" in style["satisfiedTurnObligations"]
+    assert style["turnObligationsSatisfied"] is True
+    assert not re.search(r"\b(?:trouble|dangerous|naughty|curious)\b", response, re.I)
+
+
+def test_style_analysis_applies_family_novelty_to_provider_candidate():
+    style = GPTService._style_analysis(
+        "I'm curious what you'd do next",
+        "I have another idea",
+        pressure={}, ordinary=True, memory_callback=False,
+        new_relationship=False,
+        recent_responses=[
+            "that makes me curious",
+            "I'm curious how far you'd take it",
+        ],
+    )
+    assert style["semanticTemplateFamily"] == "GENERIC_CURIOSITY"
+    assert style["semanticFamilyExhausted"] is True
+    assert style["selfNoveltySatisfied"] is False
+    assert style["recentPhraseRepetitionRisk"] is True
+
+
+def test_joseph_duplicate_patterns_are_rejected_by_family_and_exact_reuse():
+    recent = [
+        "careful, you haven't seen trouble yet",
+        "mm, keep talking like that... you still haven't seen my dangerous side",
+    ]
+    family = ConversationProgressionQualityService.novelty_assessment(
+        "you really do bring out my naughty side", recent,
+    )
+    exact = ConversationProgressionQualityService.novelty_assessment(
+        recent[1], recent,
+    )
+    assert family.family_exhausted and not family.self_novel
+    assert exact.exact_reuse and not exact.self_novel
+
+
 def test_style_rewrite_failure_preserves_original_safe_draft():
     draft = "Sometimes the best plans are no plans at all. What are you doing later?"
     service, completions = service_with(draft, TimeoutError("isolated style failure"))
@@ -2275,13 +2410,13 @@ def test_style_rewrite_failure_preserves_original_safe_draft():
     assert style["styleRewriteOutcome"] == "PROVIDER_ERROR_ORIGINAL_PRESERVED"
 
 
-@pytest.mark.parametrize(("customer", "generic", "semantic_marker"), (
-    ("Do you have any exclusive photos?", "pretty chill over here honestly", "private"),
-    ("Can you flirt with me a little?", "lol okay, I can see that", "tease"),
-    ("Can you send me the link?", "pretty chill over here honestly", "link"),
+@pytest.mark.parametrize(("customer", "generic"), (
+    ("Do you have any exclusive photos?", "pretty chill over here honestly"),
+    ("Can you flirt with me a little?", "lol okay, I can see that"),
+    ("Can you send me the link?", "pretty chill over here honestly"),
 ))
 def test_foreground_semantic_gate_rejects_generic_optional_replies(
-    customer, generic, semantic_marker,
+    customer, generic,
 ):
     relevance = GPTService._foreground_semantic_relevance(customer, generic)
     assert relevance["required"] is True
@@ -2289,7 +2424,34 @@ def test_foreground_semantic_gate_rejects_generic_optional_replies(
     fallback = GPTService._foreground_semantic_fallback(
         customer, effort_mode="balanced",
     )
-    assert semantic_marker in fallback.lower()
+    fallback_relevance = GPTService._foreground_semantic_relevance(
+        customer, fallback,
+    )
+    assert fallback_relevance["intent"] == relevance["intent"]
+    assert fallback_relevance["satisfied"] is True
+
+
+def test_flirt_request_generic_draft_survives_final_semantic_enforcement():
+    customer = "Can you flirt with me a little?"
+    service, _ = service_with(*(["lol okay, I can see that"] * 8))
+    memory = memory_none()
+
+    response = service.generate_response(
+        "default", "casual", customer, user_memory(memory), False,
+        chat_history=[
+            {"role": "user", "content": "hey"},
+            {"role": "assistant", "content": "hey, how's it going?"},
+        ],
+    )
+
+    assert response == "then don't make it too easy for me"
+    relevance = GPTService._foreground_semantic_relevance(customer, response)
+    assert relevance["intent"] == "TEASE_OR_FLIRT_REQUEST"
+    assert relevance["satisfied"] is True
+    style = memory["memoryDiagnostics"]["conversationStyle"]
+    assert style["foregroundSemanticRelevanceSatisfied"] is True
+    assert style["turnObligationsSatisfied"] is True
+    assert style["unsatisfiedTurnObligations"] == []
 
 
 def test_foreground_semantic_gate_keeps_natural_acknowledgement_for_decline():

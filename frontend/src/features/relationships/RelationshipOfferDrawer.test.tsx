@@ -29,5 +29,47 @@ describe("Relationship Content / Offer picker",()=>{
   const sends=fetchMock.mock.calls.filter(([input])=>String(input).endsWith("/offers"));expect(sends).toHaveLength(1);
   expect(JSON.parse(String(sends[0]![1]!.body))).toMatchObject({offeringId:"offer-1",businessConnectionId:"bc-1",expectedControlVersion:4,text:"Picked for you"});
  });
- it("does not enable an offer without an exact Business connection",async()=>{vi.spyOn(globalThis,"fetch").mockImplementation(()=>response({items:[card],view:"RECOMMENDED",hidePurchased:true,businessConnectionId:null}));render(<RelationshipOfferDrawer personKey="key" control={control} onClose={()=>{}} onSent={()=>{}}/>);expect(await screen.findByText("Telegram Business connection evidence is unavailable.")).toBeInTheDocument();expect(screen.getByRole("button",{name:/Midnight Set/})).toBeDisabled();});
+ it("delegates route capability checks to canonical preparation without requiring Business",async()=>{
+  const fetchMock=vi.spyOn(globalThis,"fetch").mockImplementation(input=>String(input).includes("offer-inventory")
+   ?response({items:[card],view:"RECOMMENDED",hidePurchased:true,businessConnectionId:null})
+   :response({offering:card,businessConnectionId:null,controlVersion:4,defaultMessage:"Neutral offer"}));
+  render(<RelationshipOfferDrawer personKey="key" control={control} onClose={()=>{}} onSent={()=>{}}/>);
+  const button=await screen.findByRole("button",{name:/Midnight Set/});expect(button).toBeEnabled();fireEvent.click(button);
+  await screen.findByRole("heading",{name:"Review offer"});
+  const prepare=fetchMock.mock.calls.find(([input])=>String(input).endsWith("/offers/prepare"));
+  expect(JSON.parse(String(prepare?.[1]?.body))).toMatchObject({businessConnectionId:null,expectedControlVersion:4});
+ });
+});
+
+it("shows prospect ownership uncertainty and the actual delivery blocker",async()=>{
+ vi.spyOn(globalThis,"fetch").mockImplementation(()=>response({items:[{...card,eligible:false,eligibilityReason:"No reachable transport supports the offer URL action",ownershipEvidence:"FANVUE_HISTORY_UNKNOWN"}],view:"RECOMMENDED",hidePurchased:true,businessConnectionId:null}));
+ render(<RelationshipOfferDrawer personKey="prospect" control={control} onClose={()=>{}} onSent={()=>{}}/>);
+ expect(await screen.findByText("No reachable transport supports the offer URL action")).toBeInTheDocument();
+ expect(screen.getByText("Purchase history unavailable before account verification.")).toBeInTheDocument();
+ expect(screen.getByRole("button",{name:/Midnight Set/})).toBeDisabled();
+ expect(screen.queryByText("Verified customer conversation context is required.")).not.toBeInTheDocument();
+});
+
+
+it.each(["CONFIRMED","AMBIGUOUS","FAILED"])("keeps queued offers pending until %s evidence",async terminal=>{
+ let release:((value:Response)=>void)|undefined;
+ const fetchMock=vi.spyOn(globalThis,"fetch").mockImplementation(input=>{
+  const url=String(input);
+  if(url.includes("offer-inventory"))return response({items:[card],businessConnectionId:null});
+  if(url.endsWith("/offers/prepare"))return response({offering:card,businessConnectionId:null,controlVersion:4,defaultMessage:"A photo"});
+  if(url.endsWith("/offers"))return response({state:"PREPARED",operationId:"operation-one"});
+  return new Promise<Response>(resolve=>{release=resolve});
+ });
+ const sent=vi.fn();render(<RelationshipOfferDrawer personKey="prospect" control={control} onClose={()=>{}} onSent={sent}/>);
+ fireEvent.click(await screen.findByRole("button",{name:/Midnight Set/}));
+ fireEvent.click(await screen.findByRole("button",{name:"Send offer"}));
+ expect(await screen.findByText(/Offer queued/)).toBeInTheDocument();
+ expect(sent).not.toHaveBeenCalled();
+ expect(screen.getByLabelText("Offer message")).toBeDisabled();
+ await waitFor(()=>expect(release).toBeDefined());
+ release!(new Response(JSON.stringify({state:terminal,operationId:"operation-one",telegramMessageId:terminal==="CONFIRMED"?9:null,priceMinor:2499,currency:"USD",error:terminal==="FAILED"?"Peer unavailable before send":null}),{headers:{"Content-Type":"application/json"}}));
+ if(terminal==="CONFIRMED")await waitFor(()=>expect(sent).toHaveBeenCalledTimes(1));
+ else {expect(await screen.findByRole("alert")).toHaveTextContent(terminal==="AMBIGUOUS"?"Do not resend":"Peer unavailable");expect(sent).not.toHaveBeenCalled();}
+ expect(fetchMock.mock.calls.filter(([input])=>String(input).endsWith("/offers"))).toHaveLength(1);
+ expect(await screen.findByText("Final checkout price: $24.99")).toBeInTheDocument();
 });

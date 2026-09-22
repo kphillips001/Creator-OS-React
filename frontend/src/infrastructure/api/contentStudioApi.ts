@@ -212,7 +212,7 @@ export async function createPromptPreview(
   lane: "social" | "explicit" = "social",
   explicitInput?: ExplicitGenerationInput,
   diagnostic?: {
-    origin: "canonical_planner" | "manual_creative_concept" | "recreate_with_ava";
+    origin: "canonical_planner" | "manual_creative_concept" | "manual_prompt" | "prompt_workshop_premium" | "prompt_workshop_explicit" | "recreate_with_ava";
     diagnosticTraceId: string;
   },
 ): Promise<PromptPreview> {

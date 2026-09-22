@@ -27,6 +27,19 @@ class FakeDecisionEngine:
         return self.result
 
 
+class RuntimeAwareFakeDecisionEngine(FakeDecisionEngine):
+    def process_message(
+        self, user_id, message, chat_history=None, runtime_injection=None,
+    ):
+        self.calls.append({
+            "user_id": user_id,
+            "message": message,
+            "chat_history": chat_history,
+            "runtime_injection": runtime_injection,
+        })
+        return self.result
+
+
 class FakeMemoryService:
     def __init__(self):
         self.calls = []
@@ -333,6 +346,22 @@ class TelegramCommerceServiceTests(unittest.TestCase):
             "TelegramCommerceService",
         )
 
+    def test_process_message_forwards_gateway_runtime_injection(self):
+        decision_engine = RuntimeAwareFakeDecisionEngine(engine_result())
+        service = self.build_service(decision_engine)
+        injection = {
+            "precomputed_classifier_result": {"sexual_engagement": True},
+            "current_turn_semantic_classification": {"status": "AVAILABLE"},
+        }
+
+        service.process_message(
+            "7:-123456789", "hello", runtime_injection=injection,
+        )
+
+        self.assertEqual(
+            decision_engine.calls[0]["runtime_injection"], injection,
+        )
+
     def test_execute_delegates_runtime_execution_to_delivery_executor(self):
         delivery_executor = FakeDeliveryExecutor()
         service = self.build_service(
@@ -372,6 +401,7 @@ class TelegramCommerceServiceTests(unittest.TestCase):
         self.assertEqual(
             delivery_executor.calls[0]["context"],
             {
+                "customer_delivery_disabled": True,
                 "correlation_id": "telegram:1:2",
                 "engine_user_id": "7:-123456789",
                 "delivery_id": None,

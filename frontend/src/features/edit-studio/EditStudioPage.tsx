@@ -13,6 +13,7 @@ import {
   returnEditStudioToLibrary,
   uploadEditStudioReference,
   useAsPhotoshootTeaser,
+  EditStudioApiError,
 } from "../../infrastructure/api/editStudioApi";
 import { LibraryImage } from "../generation-library/LibraryImage";
 import type { GenerationRecord } from "../generation-library/types";
@@ -73,9 +74,13 @@ export function EditStudioPage() {
     if (!generationJobId) return undefined;
     const controller = new AbortController();
     let timer: number | undefined;
+    let transientStatusFailures = 0;
+    const maxTransientStatusFailures = 3;
     const poll = async () => {
       try {
         const status = await getEditGenerationStatus(generationJobId, controller.signal);
+        transientStatusFailures = 0;
+        setActionError("");
         if (status.candidate) {
           setCandidate(status.candidate);
           setGenerationJobId("");
@@ -84,13 +89,23 @@ export function EditStudioPage() {
         }
         if (["failed", "cancelled"].includes(status.generationStatus)) {
           setGenerationJobId("");
+          setActionMessage("");
           setActionError(status.error || `Edit generation ${status.generationStatus}.`);
           return;
         }
         timer = window.setTimeout(poll, 750);
       } catch (pollError) {
         if ((pollError as { name?: string }).name === "AbortError") return;
+        const transient = pollError instanceof EditStudioApiError && [
+          "job_not_found", "status_temporarily_unavailable",
+        ].includes(pollError.kind);
+        if (transient && transientStatusFailures < maxTransientStatusFailures) {
+          transientStatusFailures += 1;
+          timer = window.setTimeout(poll, 750);
+          return;
+        }
         setGenerationJobId("");
+        setActionMessage("");
         setActionError(pollError instanceof Error ? pollError.message : "Unable to check edit generation.");
       }
     };

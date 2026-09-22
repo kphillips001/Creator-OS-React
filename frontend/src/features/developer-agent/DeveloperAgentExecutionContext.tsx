@@ -132,16 +132,33 @@ type ExecutionContextValue = {
 };
 
 const Context = createContext<ExecutionContextValue | null>(null);
+const developerReadsInFlight = new Map<string, Promise<unknown>>();
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await developerFetch(`/api/v1/developer-agent${path}`, {
-    cache: "no-store",
-    ...init,
-    headers: { "Content-Type": "application/json", ...init?.headers },
-  });
-  const body = await response.json() as T & { detail?: string };
-  if (!response.ok) throw new Error(body.detail || "Developer Agent request failed.");
-  return body;
+  const method = init?.method ?? "GET";
+  if (method === "GET") {
+    const existing = developerReadsInFlight.get(path);
+    if (existing) return existing as Promise<T>;
+  }
+  const pending = (async () => {
+    const response = await developerFetch(`/api/v1/developer-agent${path}`, {
+      cache: "no-store",
+      ...init,
+      headers: { "Content-Type": "application/json", ...init?.headers },
+    });
+    const body = await response.json() as T & { detail?: string };
+    if (!response.ok) throw new Error(body.detail || "Developer Agent request failed.");
+    return body;
+  })();
+  if (method === "GET") {
+    developerReadsInFlight.set(path, pending);
+    pending.finally(() => {
+      if (developerReadsInFlight.get(path) === pending) {
+        developerReadsInFlight.delete(path);
+      }
+    }).catch(() => undefined);
+  }
+  return pending;
 }
 
 export function DeveloperAgentExecutionProvider({ children }: { children: React.ReactNode }) {

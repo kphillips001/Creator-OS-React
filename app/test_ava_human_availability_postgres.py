@@ -100,16 +100,23 @@ def test_final_clearance_twenty_message_burst_compresses_before_generation(durab
         "cool", "😘", "always",
     ]
     operations = []
-    available_at = now + timedelta(seconds=45)
+    available_at = now + timedelta(minutes=5, seconds=10)
     for message_id, text in enumerate(texts, start=2000):
         operation, created = service.begin(inbound(812000, message_id, text, now))
         assert created is True
         operations.append(service.defer_for_availability(
             operation, decision(available_at, "BUSY")))
 
+    # Preparation eligibility is computed from database NOW() for every
+    # durable defer. Creating twenty rows can take longer than the historical
+    # fixed three-second margin, so derive the canonical quiet-window boundary
+    # from the persisted newest member rather than Python fixture wall time.
+    persisted = [repository.get(item.operation_id) for item in operations]
+    expected_due_time = max(item.next_retry_at for item in persisted)
     assert service.due_availability_payloads(
-        now=available_at - timedelta(seconds=1)) == []
-    due = service.due_availability_payloads(now=available_at + timedelta(seconds=1))
+        now=expected_due_time - timedelta(microseconds=1)) == []
+    due = service.due_availability_payloads(
+        now=expected_due_time + timedelta(microseconds=1))
     assert len(due) == 1
     assert due[0].message_text == "Can you remember me from before?"
     assert len(due[0].chat_history) == 19
@@ -125,11 +132,12 @@ def test_final_clearance_twenty_message_burst_compresses_before_generation(durab
     assert claimed.generation_attempt_count == 1
     generated = service.generated(
         claimed, generated_result(due[0], "Yes—I remember what you've shared."))
-    assert generated.state.value == "GENERATED"
-    assert service.claim_send(generated).state.value == "SENDING"
+    assert generated.state.value == "RETRYABLE"
+    assert generated.next_retry_at == available_at
+    assert service.claim_send(generated) is None
     final_rows = [repository.get(item.operation_id) for item in operations]
     assert sum(row.generation_attempt_count for row in final_rows) == 1
-    assert sum(row.send_attempt_count for row in final_rows) == 1
+    assert sum(row.send_attempt_count for row in final_rows) == 0
 
 
 def test_commercial_referent_survives_trailing_emoji_without_purchase_intent(durable):
@@ -169,7 +177,8 @@ def test_restart_boundaries_remain_exactly_once_and_fail_closed(durable):
     assert sending.state.value == "SENDING"
     assert restarted_b.claim_send(sending) is None
     recovered = restarted_b.recover_startup()
-    assert [item.state.value for item in recovered] == ["SEND_UNCERTAIN"]
+    recovered_current = [item for item in recovered if item.operation_id == stored.operation_id]
+    assert [item.state.value for item in recovered_current] == ["SEND_UNCERTAIN"]
     assert restarted_b.claim_send(repository.get(stored.operation_id)) is None
 
     confirmed_op, _ = service.begin(inbound(810003, 301, "Another question?", now))
@@ -186,16 +195,15 @@ def test_two_chats_have_independent_due_authority(durable):
     now = datetime.now(timezone.utc)
     slow, _ = service.begin(inbound(810004, 400, "slow chat", now))
     fast, _ = service.begin(inbound(810005, 500, "fast question?", now))
-    service.defer_for_availability(slow, decision(now + timedelta(minutes=3)))
-    service.defer_for_availability(fast, decision(now + timedelta(seconds=20)))
-    due = service.due_availability_payloads(now=now + timedelta(seconds=21))
+    service.defer_for_availability(slow, decision(now + timedelta(minutes=10)))
+    service.defer_for_availability(fast, decision(now + timedelta(minutes=6)))
+    due = service.due_availability_payloads(now=now + timedelta(minutes=1, seconds=1))
     assert [(item.telegram_chat_id, item.message_id) for item in due] == [(810005, 500)]
     assert repository.get(slow.operation_id).state.value == "RETRYABLE"
 
 
 @pytest.mark.parametrize("reason", [
-    "MANUFACTURED_ENGAGEMENT_QUESTION", "FINAL_REPETITION_FAILURE",
-    "FINAL_TURN_OBLIGATION_FAILURE",
+    "MANUFACTURED_ENGAGEMENT_QUESTION",
 ])
 def test_hard_quality_failure_is_terminally_suppressed_before_send(durable, reason):
     service, repository, _ = durable
@@ -210,6 +218,106 @@ def test_hard_quality_failure_is_terminally_suppressed_before_send(durable, reas
     assert service.claim_send(suppressed) is None
     service.recover_startup()
     assert repository.get(suppressed.operation_id).state.value == "SUPPRESSED"
+
+
+def test_final_turn_obligation_failure_gets_one_correction_then_terminal(durable):
+    service, repository, _ = durable
+    now = datetime.now(timezone.utc)
+    payload = inbound(810006, 601, "question?", now)
+    operation, _ = service.begin(payload)
+    first = service.claim_generation(operation)
+    rejected = generated_result(payload, "bad candidate")
+    rejected.diagnostic_metadata["conversationQualityReasons"] = [
+        "FINAL_TURN_OBLIGATION_FAILURE"
+    ]
+    correction = service.generated(first, rejected)
+    assert correction.state.value == "RETRYABLE"
+    assert correction.generation_attempt_count == 1
+    assert correction.send_attempt_count == 0
+    assert correction.response_payload is None
+    assert service.claim_send(correction) is None
+
+    due = service.due_availability_payloads(
+        now=correction.next_retry_at + timedelta(seconds=1),
+    )
+    assert len(due) == 1
+    second = service.claim_generation(repository.get(operation.operation_id))
+    assert second.generation_attempt_count == 2
+    repeated = generated_result(payload, "still bad")
+    repeated.diagnostic_metadata["conversationQualityReasons"] = [
+        "FINAL_TURN_OBLIGATION_FAILURE"
+    ]
+    terminal = service.generated(second, repeated)
+    assert terminal.state.value == "SUPPRESSED"
+    assert terminal.last_error.startswith("quality_corrective_retry_exhausted:")
+    assert terminal.send_attempt_count == 0
+    assert service.claim_generation(terminal) is None
+    assert service.claim_send(terminal) is None
+
+
+def test_repetition_failure_persists_exclusions_and_allows_one_fresh_attempt(durable):
+    service, repository, _ = durable
+    now = datetime.now(timezone.utc)
+    rejected_text = "then don't make it too easy for me"
+    for message_id, historical_text in (
+        (2598, rejected_text), (2599, "A different recent answer"),
+    ):
+        historical_payload = inbound(810026, message_id, "earlier turn", now)
+        historical, _ = service.begin(historical_payload)
+        historical = service.generated(
+            service.claim_generation(historical),
+            generated_result(historical_payload, historical_text),
+        )
+        service.confirmed(service.claim_send(historical), 990000 + message_id)
+    payload = inbound(810026, 2600, "How's my tease today", now)
+    operation, _ = service.begin(payload)
+    first = service.claim_generation(operation)
+    rejected = generated_result(payload, rejected_text)
+    rejected.diagnostic_metadata["conversationQualityReasons"] = [
+        "FINAL_REPETITION_FAILURE"
+    ]
+    scheduled = service.generated(first, rejected)
+
+    assert scheduled.state.value == "RETRYABLE"
+    assert scheduled.generation_attempt_count == 1
+    assert scheduled.max_generation_attempts == 2
+    assert scheduled.send_attempt_count == 0
+    correction = scheduled.delivery_payload["qualityCorrectiveRetry"]
+    assert correction["attempt"] == 2
+    assert correction["previousCandidateText"] == rejected_text
+    assert correction["excludedExactResponses"] == [
+        rejected_text, "A different recent answer",
+    ]
+    assert correction["exclusionAuthority"] == "FINAL_RESPONSE_EXACT_NOVELTY"
+    attempts = repository.generation_attempts(operation.operation_id)
+    assert [(item["attempt_number"], item["candidate_text"]) for item in attempts] == [
+        (1, rejected_text),
+    ]
+    assert attempts[0]["quality_reasons"] == ["FINAL_REPETITION_FAILURE"]
+    assert attempts[0]["quality_disposition"] == "BLOCKED_BEFORE_DELIVERY"
+
+    with connection_factory() as connection:
+        connection.execute(
+            "UPDATE ordinary_chat_reply_operations SET next_retry_at=NOW() "
+            "WHERE operation_id=%s", (operation.operation_id,),
+        )
+    retry_payload = service.retry_payload(repository.get(operation.operation_id))
+    assert retry_payload.quality_correction_context["excludedExactResponses"] == [
+        rejected_text, "A different recent answer",
+    ]
+    second = service.claim_generation(repository.get(operation.operation_id))
+    assert second.generation_attempt_count == 2
+    fresh = service.generated(second, generated_result(
+        payload, "You definitely know how to keep me curious today.",
+    ))
+    assert fresh.state.value == "GENERATED"
+    assert fresh.generation_attempt_count == 2
+    assert fresh.send_attempt_count == 0
+    assert service.claim_generation(fresh) is None
+    attempts = repository.generation_attempts(operation.operation_id)
+    assert [item["attempt_number"] for item in attempts] == [1, 2]
+    assert attempts[1]["quality_disposition"] == "ALLOWED_BEFORE_DELIVERY"
+    assert attempts[1]["sent_confirmed"] is False
 
 
 @pytest.mark.parametrize("reasons", [
@@ -251,7 +359,10 @@ def test_required_quality_failure_gets_one_durable_corrective_attempt(durable, r
     assert service.claim_generation(terminal) is None
 
 
-def test_newer_inbound_supersedes_quality_correction_atomically(durable):
+@pytest.mark.parametrize("reason", [
+    "CUSTOMER_QUESTION_UNANSWERED", "FINAL_REPETITION_FAILURE",
+])
+def test_newer_inbound_supersedes_quality_correction_atomically(durable, reason):
     service, repository, _ = durable
     now = datetime.now(timezone.utc)
     old_payload = inbound(810017, 1700, "What do you mean?", now)
@@ -261,9 +372,7 @@ def test_newer_inbound_supersedes_quality_correction_atomically(durable):
         810017, 1701, "Actually, tell me something else", now + timedelta(seconds=1),
     ))
     bad = generated_result(old_payload, "bad")
-    bad.diagnostic_metadata["conversationQualityReasons"] = [
-        "CUSTOMER_QUESTION_UNANSWERED"
-    ]
+    bad.diagnostic_metadata["conversationQualityReasons"] = [reason]
     superseded = service.generated(claimed, bad)
     assert superseded.state.value == "SUPPRESSED"
     assert superseded.last_error == "quality_correction_superseded_by_newer_inbound"
@@ -327,10 +436,30 @@ def test_fallbacks_do_not_create_retryable_debt(durable):
         operation, _ = service.begin(inbound(810007 + index, index, text, now))
         claimed = service.claim_generation(operation)
         empty = generated_result(inbound(810007 + index, index, text, now), "")
-        stored = service.generated(claimed, empty)
-        assert stored.state.value == "GENERATED"
-        assert stored.response_text
-        assert stored.state.value != "RETRYABLE"
+        retryable = service.generated(claimed, empty)
+        assert retryable.state.value == "RETRYABLE"
+        assert retryable.generation_attempt_count == 1
+        assert retryable.send_attempt_count == 0
+        assert not retryable.response_text
+        assert service.claim_send(retryable) is None
+
+        exhausted = retryable
+        while exhausted.state.value == "RETRYABLE":
+            next_claim = service.claim_generation(
+                repository.get(operation.operation_id)
+            )
+            assert next_claim is not None
+            assert next_claim.send_attempt_count == 0
+            fresh_empty = generated_result(
+                inbound(810007 + index, index, text, now), ""
+            )
+            exhausted = service.generated(next_claim, fresh_empty)
+        assert exhausted.state.value == "TERMINAL_FAILED"
+        assert exhausted.generation_attempt_count == exhausted.max_generation_attempts
+        assert exhausted.send_attempt_count == 0
+        assert not exhausted.response_text
+        assert service.claim_generation(exhausted) is None
+        assert service.claim_send(exhausted) is None
 
 
 def test_busy_availability_is_not_accelerated_by_priority(durable):
@@ -349,11 +478,13 @@ def test_busy_availability_is_not_accelerated_by_priority(durable):
         operations.append(service.defer_for_availability(operation, decision(scheduled, "BUSY")))
 
     persisted = [repository.get(item.operation_id) for item in operations]
+    assert all(item.scheduled_delivery_at == original_check for item in persisted)
     assert all(item.next_retry_at == persisted[0].next_retry_at for item in persisted)
-    assert persisted[0].next_retry_at >= original_check - timedelta(seconds=1)
+    assert persisted[0].next_retry_at == original_check - timedelta(minutes=5)
     assert service.due_availability_payloads(now=now + timedelta(minutes=2)) == []
 
-    due = service.due_availability_payloads(now=original_check + timedelta(seconds=1))
+    due = service.due_availability_payloads(
+        now=original_check - timedelta(minutes=5) + timedelta(seconds=1))
     assert len(due) == 1
     assert due[0].message_id == 802
     assert "price" in due[0].message_text

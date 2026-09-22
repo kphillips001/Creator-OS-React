@@ -22,6 +22,12 @@ class TelegramPrivateInboundBacklogService:
             fanvue_account_id=fanvue_account_id, mapped_customer_id=mapped_customer_id,
             prospect_id=prospect_id, ingestion_provenance=provenance, automation_state=automation_state)
 
+    def consume_control(self, payload, *, account_scope):
+        return self.repository.consume_control(account_scope=account_scope,
+            chat_id=payload.telegram_chat_id, message_id=payload.message_id)
+    def latest_boundary(self, *, account_scope):
+        return self.repository.latest_boundary(account_scope=account_scope)
+
     def plan_chat(self, messages, *, verified_buyer=False):
         ordered = sorted(messages, key=lambda item: (item.received_at, item.telegram_message_id))
         decision = self.attention.evaluate([item.customer_text for item in ordered], verified_buyer=verified_buyer)
@@ -34,14 +40,20 @@ class TelegramPrivateInboundBacklogService:
         authoritative = (meaningful_questions or commercial or meaningful or ordered)[-1]
         return {"outcome": "RESPOND", "authoritative": authoritative, "attention": decision}
 
-    def correlate(self, payload, *, account_scope, mapped_customer_id=None, prospect_id=None):
+    def correlate(self, payload, *, account_scope, mapped_customer_id=None,
+                  prospect_id=None, response_operation_id=None):
         self.repository.correlate(account_scope=account_scope, chat_id=payload.telegram_chat_id,
-            message_id=payload.message_id, mapped_customer_id=mapped_customer_id, prospect_id=prospect_id)
+            message_id=payload.message_id, mapped_customer_id=mapped_customer_id,
+            prospect_id=prospect_id, response_operation_id=response_operation_id)
 
-    def reconcile_chat(self, *, account_scope, chat_id, verified_buyer=False):
+    def reconcile_chat(self, *, account_scope, chat_id, verified_buyer=False,
+                       response_allowed=True):
         messages = self.repository.pending_for_chat(account_scope=account_scope, chat_id=chat_id)
         if not messages: return {"outcome": "ALREADY_RECONCILED", "messages": 0, "authoritative": None}
-        plan = self.plan_chat(messages, verified_buyer=verified_buyer); reconciliation_id = uuid4()
+        plan = (self.plan_chat(messages, verified_buyer=verified_buyer)
+                if response_allowed else {"outcome": "NO_RESPONSE_REQUIRED",
+                    "authoritative": None, "attention": None})
+        reconciliation_id = uuid4()
         authoritative = plan["authoritative"]
         result = self.repository.reconcile(account_scope=account_scope, chat_id=chat_id,
             authoritative_message_id=(authoritative.telegram_message_id if authoritative else None),

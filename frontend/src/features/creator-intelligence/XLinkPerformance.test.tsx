@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { XLinkPerformance } from "./XLinkPerformance";
+import { clearOverviewQueryCache } from "./overviewQueryCache";
 
 const report = {
   period: { key: "TODAY", timezone: "America/New_York", start: "2026-09-08T04:00:00Z", end: "2026-09-09T04:00:00Z", generatedAt: "2026-09-08T12:00:00Z", interval: "[start,end)" },
@@ -15,7 +16,7 @@ const report = {
 };
 const response = (body: unknown, status = 200) => Promise.resolve(new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } }));
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => { vi.restoreAllMocks(); clearOverviewQueryCache(); });
 
 describe("X Link Performance", () => {
   it("loads independently and distinguishes tracked clicks from unavailable tracking", async () => {

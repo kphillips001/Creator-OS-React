@@ -8,6 +8,7 @@ class XCompetitorRefreshPolicy:
     INTERVAL = timedelta(days=7)
     FAILURE_BACKOFF = timedelta(hours=6)
     DEFAULT_BATCH_SIZE = 10
+    BATCH_PAUSE_SECONDS = 60
 
     @classmethod
     def next_at(cls, last_success: datetime | None) -> datetime | None:

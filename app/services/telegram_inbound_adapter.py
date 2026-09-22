@@ -60,6 +60,7 @@ class TelegramInboundAdapter:
         abuse_policy_service=None,
         relationship_control_service=None,
         private_inbound_backlog_service=None,
+        content_entry_attribution_service=None,
     ) -> None:
         if identity_adapter is None:
             raise ValueError("identity_adapter is required")
@@ -91,61 +92,100 @@ class TelegramInboundAdapter:
         self._abuse_policy = abuse_policy_service
         self._relationship_controls = relationship_control_service
         self._private_inbound_backlog = private_inbound_backlog_service
+        self._content_entry_attribution = content_entry_attribution_service
 
+    def observe_identity_and_relationship(self, payload: TelegramInboundPayload):
+        """Establish Chat visibility without running memory, generation, or sales."""
+        self._validate_payload(payload)
+        try:
+            identity = self._identity_adapter.adapt(TelegramMvpIdentityInput(
+                telegram_user_id=payload.telegram_user_id,
+                telegram_chat_id=payload.telegram_chat_id))
+        except InvalidTelegramMvpIdentityError as error:
+            raise InvalidTelegramInboundError(str(error)) from error
+        correlation_id = payload.correlation_id or self._generate_correlation_id(
+            payload.telegram_chat_id, payload.message_id)
+        canonical_identity = None
+        if self._telegram_identities is not None:
+            self._telegram_identities.observe(
+                telegram_user_id=payload.telegram_user_id,
+                telegram_chat_id=payload.telegram_chat_id,
+                username=payload.telegram_username,
+                display_name=payload.telegram_display_name)
+            try:
+                canonical_identity = self._telegram_identities.resolve_telegram_identity(
+                    payload.telegram_user_id)
+            except TelegramIdentityError:
+                canonical_identity = None
+        else:
+            identity_repository = getattr(self._purchase_intents, "identities", None)
+            if identity_repository is not None:
+                reader = (getattr(identity_repository, "get_verified_by_telegram_user_id", None)
+                          or identity_repository.get_by_telegram_user_id)
+                canonical_identity = reader(payload.telegram_user_id)
+        telegram_prospect = None
+        if (canonical_identity is None and self._creator_profile_id
+                and self._fanvue_account_id):
+            if self._unmapped_prospects is None:
+                from app.services.unmapped_telegram_prospect_service import UnmappedTelegramProspectService
+                self._unmapped_prospects = UnmappedTelegramProspectService()
+            telegram_prospect = self._unmapped_prospects.observe(
+                creator_profile_id=int(self._creator_profile_id),
+                fanvue_account_id=int(self._fanvue_account_id),
+                telegram_user_id=int(payload.telegram_user_id),
+                telegram_chat_id=int(payload.telegram_chat_id))
+        if self._private_inbound_backlog is not None:
+            self._private_inbound_backlog.correlate(
+                payload, account_scope="AVA_TELETHON_PRIVATE",
+                mapped_customer_id=(getattr(canonical_identity, "local_fanvue_user_id", None)
+                    if canonical_identity is not None else None),
+                prospect_id=getattr(telegram_prospect, "prospect_id", None))
+        return identity, canonical_identity, telegram_prospect, correlation_id
+
+    def observe_content_entry_control(self, payload: TelegramInboundPayload, *,
+                                      observed_identity=None):
+        """Consume attribution commands before any ordinary-response lifecycle."""
+        identity, canonical_identity, _prospect, correlation_id = (
+            observed_identity or self.observe_identity_and_relationship(payload))
+        if self._content_entry_attribution is None:
+            from app.services.creator_content_entry_attribution_service import CreatorContentEntryAttributionService
+            self._content_entry_attribution = CreatorContentEntryAttributionService()
+        observation = self._content_entry_attribution.observe_message(
+            creator_profile_id=int(self._creator_profile_id or 0),
+            message_text=payload.message_text,
+            telegram_user_id=int(payload.telegram_user_id),
+            telegram_chat_id=int(payload.telegram_chat_id),
+            inbound_telegram_message_id=int(payload.message_id),
+        )
+        if observation.get("disposition") == "NONE":
+            return None
+        return TelegramInboundResult(
+            correlation_id=correlation_id, telegram_chat_id=payload.telegram_chat_id,
+            telegram_user_id=payload.telegram_user_id, message_id=payload.message_id,
+            engine_user_id=(getattr(canonical_identity, "engine_user_id", None)
+                or identity.engine_user_id), response_text="", offer_authorized=False,
+            offer_link=None, blocked=True,
+            error_code=str(observation.get("disposition") or "ATTRIBUTION_REJECTED"),
+            delivery_requires_payment=False, delivery_payload={},
+            diagnostic_metadata={"creatorContentEntryAttribution": observation,
+                "controlTraffic": True, "ordinaryConversation": False,
+                "ai_generation_count": 0, "commercial_execution_count": 0,
+                "automatic_send_count": 0, "customerHeatSignalCreated": False,
+                "ordinaryReplyOperationCreated": False},
+        )
     def execute(
         self,
         payload: TelegramInboundPayload,
         *,
         observe_only: bool = False,
     ) -> TelegramInboundResult:
-        self._validate_payload(payload)
-
-        try:
-            identity = self._identity_adapter.adapt(
-                TelegramMvpIdentityInput(
-                    telegram_user_id=payload.telegram_user_id,
-                    telegram_chat_id=payload.telegram_chat_id,
-                )
-            )
-        except InvalidTelegramMvpIdentityError as error:
-            raise InvalidTelegramInboundError(str(error)) from error
-
-        correlation_id = (
-            payload.correlation_id
-            if payload.correlation_id is not None
-            else self._generate_correlation_id(
-                payload.telegram_chat_id,
-                payload.message_id,
-            )
-        )
-
-        canonical_identity = None
+        observed_identity = self.observe_identity_and_relationship(payload)
+        control_result = self.observe_content_entry_control(payload, observed_identity=observed_identity)
+        if control_result is not None:
+            return control_result
+        identity, canonical_identity, telegram_prospect, correlation_id = observed_identity
         canonical_thread = None
-        durable_inbound_observed = False
-        if self._telegram_identities is not None:
-            self._telegram_identities.observe(
-                telegram_user_id=payload.telegram_user_id,
-                telegram_chat_id=payload.telegram_chat_id,
-                username=payload.telegram_username,
-                display_name=payload.telegram_display_name,
-            )
-            try:
-                canonical_identity = self._telegram_identities.resolve_telegram_identity(
-                    payload.telegram_user_id
-                )
-            except TelegramIdentityError:
-                canonical_identity = None
-        else:
-            identity_repository = getattr(self._purchase_intents, "identities", None)
-            if identity_repository is not None:
-                verified_reader = getattr(
-                    identity_repository, "get_verified_by_telegram_user_id", None
-                )
-                canonical_identity = (
-                    verified_reader(payload.telegram_user_id)
-                    if verified_reader is not None else
-                    identity_repository.get_by_telegram_user_id(payload.telegram_user_id)
-                )
+        durable_inbound_observed = telegram_prospect is not None
         conversational_memory = {}
         if (payload.message_text and self._conversational_memory is not None and self._creator_profile_id
                 and self._fanvue_account_id):
@@ -168,6 +208,7 @@ class TelegramInboundAdapter:
                 telegram_chat_id=int(payload.telegram_chat_id),
                 message_text=payload.message_text,
                 memory_priority=memory_priority,
+                bootstrap_unmapped_prospect=canonical_identity is None,
             )
             conversational_memory.setdefault("memoryDiagnostics", {})[
                 "identitySource"
@@ -195,10 +236,9 @@ class TelegramInboundAdapter:
                     payload.message_text
                 )
             )
-        telegram_prospect = None
         if (
             self._creator_profile_id and self._fanvue_account_id
-            and (canonical_identity is None or explicit_ack_continuation)
+            and explicit_ack_continuation
         ):
             if self._unmapped_prospects is None:
                 from app.services.unmapped_telegram_prospect_service import UnmappedTelegramProspectService
@@ -246,14 +286,6 @@ class TelegramInboundAdapter:
             conversational_memory["supporterAttentionBoundary"] = dict(
                 relationship.get("supporterAttentionBoundary") or {}
             )
-        if self._private_inbound_backlog is not None:
-            self._private_inbound_backlog.correlate(
-                payload, account_scope="AVA_TELETHON_PRIVATE",
-                mapped_customer_id=(getattr(canonical_identity, "local_fanvue_user_id", None)
-                    if canonical_identity is not None else None),
-                prospect_id=getattr(telegram_prospect, "prospect_id", None),
-            )
-
         if (self._abuse_policy is not None and self._creator_profile_id
                 and self._fanvue_account_id):
             authority = self._abuse_policy.existing_authority(
@@ -562,10 +594,17 @@ class TelegramInboundAdapter:
             })
         offer_authorized = gateway_output.offer_authorized
         offer_link = gateway_output.offer_link
-        delivery_type = gateway_output.delivery_type
+        from app.models.telegram_inbound import canonical_text_delivery_type
+        delivery_type = (canonical_text_delivery_type(gateway_output.delivery_type)
+                         if not gateway_output.offer_authorized and not gateway_output.delivery_requires_payment
+                         else gateway_output.delivery_type)
         delivery_mode = gateway_output.delivery_mode
         delivery_requires_payment = gateway_output.delivery_requires_payment
         delivery_payload = dict(gateway_output.delivery_payload)
+        if delivery_type == 'MESSAGE_TEXT':
+            for type_key in ('type', 'delivery_type'):
+                if type_key in delivery_payload:
+                    delivery_payload[type_key] = canonical_text_delivery_type(delivery_payload[type_key])
         if self._telegram_identities is not None and canonical_identity is None and (
             offer_authorized or offer_link or delivery_requires_payment
         ):
@@ -654,7 +693,9 @@ class TelegramInboundAdapter:
             )
         if (
             not isinstance(payload.message_text, str)
-            or (not payload.message_text.strip() and not payload.attachments)
+            or (not payload.message_text.strip() and not payload.attachments
+                and not (payload.media_turn_input is not None
+                         and payload.media_turn_input.matches(payload)))
         ):
             raise InvalidTelegramInboundError(
                 "message_text must be a non-empty string."

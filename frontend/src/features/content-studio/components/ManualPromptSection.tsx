@@ -1,10 +1,16 @@
 type ManualPromptSectionProps = {
   disabled: boolean;
+  generating: boolean;
+  generationDisabled: boolean;
   onChange: (value: string) => void;
+  onGenerate: () => void;
+  sourceDescription: string;
   value: string;
 };
 
-export function ManualPromptSection({ disabled, onChange, value }: ManualPromptSectionProps) {
+export function ManualPromptSection({
+  disabled, generating, generationDisabled, onChange, onGenerate, sourceDescription, value,
+}: ManualPromptSectionProps) {
   return (
     <section
       aria-disabled={disabled || undefined}
@@ -22,6 +28,14 @@ export function ManualPromptSection({ disabled, onChange, value }: ManualPromptS
           value={value}
         />
       </label>
+      <p className="manual-prompt__source">{sourceDescription}</p>
+      <button
+        disabled={disabled || generationDisabled || generating || !value.trim()}
+        onClick={onGenerate}
+        type="button"
+      >
+        {generating ? "Creating Images..." : "🚀 Create Images from Prompt"}
+      </button>
     </section>
   );
 }

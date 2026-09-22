@@ -73,6 +73,14 @@ class FakeHeartbeat:
     def record_shutdown(self): return None
 
 
+class RecordingHeartbeat(FakeHeartbeat):
+    def __init__(self):
+        self.metadata = []
+
+    def heartbeat(self, **kwargs):
+        self.metadata.append(dict(kwargs.get("metadata") or {}))
+
+
 class AllowMediaScope:
     def decide(self, **_):
         return SimpleNamespace(allowed=True, reason="TEST", mode="TEST")
@@ -88,6 +96,147 @@ class BlockMediaScope:
 
 
 class TelethonRuntimeTests(unittest.IsolatedAsyncioTestCase):
+    def test_ordinary_delivery_authorization_precedes_typing_and_send_claim(self):
+        source = inspect.getsource(TelethonRuntime._handle_authorized_payload)
+        authorization = source.index("authorize_customer_visible_delivery")
+        typing = source.index("await self._wait_with_typing", authorization)
+        claim = source.index("self._ordinary_replies.claim_send", authorization)
+        self.assertLess(authorization, typing)
+        self.assertLess(typing, claim)
+
+    async def test_availability_scheduler_recovers_after_iteration_exception(self):
+        heartbeat = RecordingHeartbeat()
+        runtime = TelethonRuntime(
+            transport=FakeTransport(), inbound_adapter=SimpleNamespace(),
+            heartbeat_service=heartbeat,
+            availability_failure_backoff_initial_seconds=0.01,
+            availability_failure_backoff_max_seconds=0.02,
+        )
+        runtime._transport_connected = True
+        runtime._availability_iteration = AsyncMock(side_effect=[
+            RuntimeError("repository unavailable"),
+            {"transportConnected": True, "availabilityDue": 1},
+            asyncio.CancelledError(),
+        ])
+        with patch("app.integrations.telegram.telethon_runtime.asyncio.sleep", new=AsyncMock()):
+            with self.assertRaises(asyncio.CancelledError):
+                await runtime._availability_loop()
+
+        self.assertEqual(runtime._availability_iteration.await_count, 3)
+        self.assertFalse(runtime._transport.disconnected)
+        self.assertTrue(any(
+            item.get("ordinary_reply_scheduler_healthy") is False
+            and item.get("ordinary_reply_scheduler_last_failure")
+            for item in heartbeat.metadata
+        ))
+        success = next(
+            item for item in heartbeat.metadata
+            if item.get("ordinary_reply_scheduler_last_success")
+        )
+        self.assertTrue(success["ordinary_reply_scheduler_healthy"])
+        self.assertEqual(success["ordinary_reply_scheduler_last_result"]["availabilityDue"], 1)
+
+    async def test_availability_scheduler_repeated_failures_use_capped_backoff(self):
+        runtime = TelethonRuntime(
+            transport=FakeTransport(), inbound_adapter=SimpleNamespace(),
+            heartbeat_service=RecordingHeartbeat(),
+            availability_failure_backoff_initial_seconds=0.1,
+            availability_failure_backoff_max_seconds=0.2,
+        )
+        runtime._availability_iteration = AsyncMock(side_effect=[
+            RuntimeError("one"), RuntimeError("two"), RuntimeError("three"),
+            asyncio.CancelledError(),
+        ])
+        sleeper = AsyncMock()
+        with patch("app.integrations.telegram.telethon_runtime.asyncio.sleep", new=sleeper):
+            with self.assertRaises(asyncio.CancelledError):
+                await runtime._availability_loop()
+
+        self.assertEqual([call.args[0] for call in sleeper.await_args_list], [0.1, 0.2, 0.2])
+
+    async def test_availability_scheduler_dead_task_requests_runtime_restart(self):
+        runtime = TelethonRuntime(
+            transport=FakeTransport(), inbound_adapter=SimpleNamespace(),
+            heartbeat_service=FakeHeartbeat(),
+        )
+        task = asyncio.create_task(asyncio.sleep(0, result=None))
+        await task
+        runtime._availability_task_completed(task)
+        self.assertTrue(runtime._shutdown.is_set())
+        self.assertIsInstance(runtime._fatal_background_error, TelethonRuntimeError)
+
+    def test_commercial_verification_rejects_provider_verified_visible_url(self):
+        complete, reason = TelethonRuntime._commercial_presentation_verification(
+            {"paid_presentation_validated": True},
+            {
+                "telegram_message_id": 9901,
+                "customer_facing_destination_valid": True,
+                "actionable_destination_attached": True,
+                "provider_action_verified": True,
+                "provider_markup_included": False,
+                "provider_markup_verified": False,
+                "attachment_mode": "VISIBLE_URL",
+            },
+        )
+        self.assertFalse(complete)
+        self.assertEqual(reason, "ATTACHMENT_MODE_UNVERIFIED")
+
+    def test_commercial_verification_requires_inline_markup_for_business_mode(self):
+        complete, reason = TelethonRuntime._commercial_presentation_verification(
+            {"paid_presentation_validated": True},
+            {
+                "telegram_message_id": 9902,
+                "customer_facing_destination_valid": True,
+                "actionable_destination_attached": True,
+                "provider_action_verified": True,
+                "provider_markup_included": True,
+                "provider_markup_verified": False,
+                "attachment_mode": "TELEGRAM_BUSINESS_INLINE_BUTTON",
+            },
+        )
+        self.assertFalse(complete)
+        self.assertEqual(reason, "MARKUP_MISMATCH")
+
+    def test_commercial_verification_rejects_missing_message_id_and_unknown_mode(self):
+        common = {
+            "customer_facing_destination_valid": True,
+            "actionable_destination_attached": True,
+            "provider_action_verified": True,
+        }
+        complete, reason = TelethonRuntime._commercial_presentation_verification(
+            {"paid_presentation_validated": True}, common,
+        )
+        self.assertFalse(complete)
+        self.assertEqual(reason, "TELEGRAM_MESSAGE_ID_NOT_CAPTURED")
+        complete, reason = TelethonRuntime._commercial_presentation_verification(
+            {"paid_presentation_validated": True},
+            {**common, "telegram_message_id": 9903, "attachment_mode": "UNKNOWN"},
+        )
+        self.assertFalse(complete)
+        self.assertEqual(reason, "ATTACHMENT_MODE_UNVERIFIED")
+
+    async def test_relationship_observation_precedes_any_availability_response_path(self):
+        order=[]
+        class Adapter:
+            _creator_profile_id=22;_fanvue_account_id=8;_relationship_controls=None
+            def observe_identity_and_relationship(self,payload): order.append(("relationship",payload.message_id))
+        class Backlog:
+            def capture(self,payload,**_): order.append(("archive",payload.message_id))
+        class Safety:
+            behavior_config={"global_automation_enabled":True}
+            def refresh(self): return None
+            def check_global_safety(self): return {"allowed":True}
+        runtime=TelethonRuntime(transport=FakeTransport(),inbound_adapter=Adapter(),
+            heartbeat_service=FakeHeartbeat(),private_inbound_backlog_service=Backlog(),
+            global_safety_service=Safety())
+        async def availability_path(payload):
+            order.append(("availability",payload.message_id));return None
+        runtime.handle_payload=availability_path
+        await runtime._handle_payload_observed(TelegramInboundPayload(
+            telegram_user_id=91,telegram_chat_id=91,message_text="hello",message_id=7,
+            telegram_display_name="🌊✨"))
+        self.assertEqual(order,[('archive',7),('relationship',7),('availability',7)])
+
     async def test_availability_loop_releases_due_generated_send_retry(self):
         payload=TelegramInboundPayload(telegram_user_id=1,telegram_chat_id=2,
             message_text="retry",message_id=3)
@@ -427,6 +576,7 @@ class TelethonRuntimeTests(unittest.IsolatedAsyncioTestCase):
                         "provider_action_verified": True,
                         "provider_markup_included": True,
                         "provider_markup_verified": True,
+                        "attachment_mode": "TELEGRAM_BUSINESS_INLINE_BUTTON",
                         "customer_facing_destination_valid": True,
                     },
                 )
@@ -628,6 +778,37 @@ class TelethonRuntimeTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsInstance(memory.func, ast.Name)
         self.assertEqual(memory.func.id, "ConversationalMemoryService")
 
+    def test_production_builder_wires_operator_repository_to_runtime_only(self):
+        source = inspect.getsource(build_default_runtime_from_environment)
+        tree = ast.parse(source)
+        calls = {
+            node.func.id: node
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+            and node.func.id in {"TelegramInboundAdapter", "TelethonRuntime"}
+        }
+        adapter_keywords = {
+            keyword.arg: keyword.value
+            for keyword in calls["TelegramInboundAdapter"].keywords
+        }
+        runtime_keywords = {
+            keyword.arg: keyword.value
+            for keyword in calls["TelethonRuntime"].keywords
+        }
+
+        self.assertNotIn("operator_message_repository", adapter_keywords)
+        repository = runtime_keywords.get("operator_message_repository")
+        self.assertIsInstance(repository, ast.Name)
+        self.assertEqual(repository.id, "operator_messages")
+        self.assertIn(
+            "operator_message_repository",
+            inspect.signature(TelethonRuntime.__init__).parameters,
+        )
+        self.assertNotIn(
+            "operator_message_repository",
+            inspect.signature(TelegramInboundAdapter.__init__).parameters,
+        )
+
     def test_builder_loads_repository_env_before_validation(self):
         loaded_paths = []
 
@@ -706,9 +887,9 @@ class TelethonRuntimeTests(unittest.IsolatedAsyncioTestCase):
             engine.calls,
             [("7:-123456789", "hello", [])],
         )
-        self.assertEqual(result.response_text, "hello")
-        self.assertFalse(result.offer_authorized)
-        self.assertEqual(transport.sent, [(123456789, "hello")])
+        # This legacy fixture has no durable send operation: fail closed.
+        self.assertIsNone(result)
+        self.assertEqual(transport.sent, [])
 
     async def test_disabled_replies_observe_inbound_without_gateway_or_send(self):
         runtime, transport, engine = self.build_runtime()
@@ -816,7 +997,8 @@ class TelethonRuntimeTests(unittest.IsolatedAsyncioTestCase):
             )
         )
 
-        self.assertEqual(transport.sent, [(123456789, "plain response")])
+        # No operation/route recorder was supplied by this compatibility fixture.
+        self.assertEqual(transport.sent, [])
 
     async def test_run_connects_and_disconnects_transport(self):
         runtime, transport, _ = self.build_runtime()

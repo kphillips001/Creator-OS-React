@@ -205,6 +205,7 @@ class EditStudioTests(unittest.TestCase):
         self.assertEqual(edit_item.edit_mode, "single_image")
         self.assertEqual(job.job_id, "generation_job_edit_1")
         self.assertEqual(engine.calls[0]["metadata"]["source"], "edit_studio")
+        self.assertEqual(engine.calls[0]["metadata"]["provider_reference_role"], "EDIT_SOURCE")
         self.assertEqual(engine.calls[0]["metadata"]["edit_request_id"], edit_item.edit_request_id)
         self.assertEqual(engine.calls[0]["prompt_plan"].prompt_metadata["source_image_ids"], ("generated_image_1",))
         self.assertEqual(len(edit_studio.history(creator_profile_id=7)), 1)

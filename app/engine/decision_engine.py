@@ -1115,6 +1115,23 @@ class DecisionEngine:
             "deferredCommercialInterest": deferred_commercial,
         }
 
+    def _classify_current_turn_once(
+            self, *, message: str, user_memory: dict,
+            runtime_injection: dict | None = None) -> dict:
+        """Reuse gateway classification; call the provider only as a fallback."""
+        precomputed_classifier = dict(runtime_injection or {}).get(
+            "precomputed_classifier_result"
+        )
+        if isinstance(precomputed_classifier, dict):
+            self.logger.info(
+                "[19E GPT CLASSIFIER] reused gateway current-turn classification"
+            )
+            return dict(precomputed_classifier)
+        return self.gpt_intent_classifier.classify_message(
+            message=message,
+            memory=user_memory,
+        )
+
     def process_message(
             self, 
             user_id: str, 
@@ -1314,9 +1331,10 @@ class DecisionEngine:
         # 19E — GPT CLASSIFIER RESULT FOR THIS MESSAGE
         # --------------------------------------------------
 
-        gpt_classifier_result = self.gpt_intent_classifier.classify_message(
+        gpt_classifier_result = self._classify_current_turn_once(
             message=message,
-            memory=user_memory,
+            user_memory=user_memory,
+            runtime_injection=runtime_injection,
         )
 
         self.logger.info(f"[19E GPT CLASSIFIER] {gpt_classifier_result}")

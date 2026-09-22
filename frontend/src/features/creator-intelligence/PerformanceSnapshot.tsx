@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { ArrowRight, RefreshCw, X } from "lucide-react";
 import { Link } from "react-router-dom";
 
-import { loadCurrentSalesStatus, loadPerformanceSnapshot, loadSnapshotDrillDown } from "./api";
+import { cachedPerformanceSnapshot, cachedSalesStatus, loadCurrentSalesStatus, loadPerformanceSnapshot, loadSnapshotDrillDown } from "./api";
 import type { CurrentSalesStatus, PerformanceSnapshot as Snapshot, SnapshotDrillDown, SnapshotDrillDownItem, SnapshotMetricValue, SnapshotPeriod } from "./types";
 
 const PERIODS: Array<[SnapshotPeriod, string]> = [
@@ -41,14 +41,15 @@ function MetricGroup({ title, metrics, open }: { title: string; metrics: Metric[
 
 export function PerformanceSnapshot() {
   const [period, setPeriod] = useState<SnapshotPeriod>("TODAY");
-  const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [snapshot, setSnapshot] = useState<Snapshot | null>(() => cachedPerformanceSnapshot("TODAY"));
+  const [loading, setLoading] = useState(() => !cachedPerformanceSnapshot("TODAY"));
   const [error, setError] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
   const [selected, setSelected] = useState<Metric | null>(null);
   const [details, setDetails] = useState<SnapshotDrillDown | null>(null);
   const [detailsError, setDetailsError] = useState("");
-  const [salesStatus, setSalesStatus] = useState<CurrentSalesStatus | null>(null);
+  const [salesStatus, setSalesStatus] = useState<CurrentSalesStatus | null>(cachedSalesStatus);
+  const [salesError, setSalesError] = useState("");
 
   useEffect(() => {
     const controller = new AbortController();
@@ -60,7 +61,7 @@ export function PerformanceSnapshot() {
     return () => controller.abort();
   }, [period, refreshKey]);
 
-  useEffect(() => { const controller = new AbortController(); void loadCurrentSalesStatus(controller.signal).then(setSalesStatus).catch(() => setSalesStatus(null)); return () => controller.abort(); }, [refreshKey]);
+  useEffect(() => { const controller = new AbortController(); setSalesError(""); void loadCurrentSalesStatus(controller.signal).then(setSalesStatus).catch((reason: unknown) => { if (!controller.signal.aborted) setSalesError(reason instanceof Error ? reason.message : "Unable to load current sales status."); }); return () => controller.abort(); }, [refreshKey]);
 
   const open = (metric: Metric) => {
     setSelected(metric); setDetails(null); setDetailsError("");
@@ -108,6 +109,7 @@ export function PerformanceSnapshot() {
     {error && <div className="snapshot-state snapshot-state--error" role="alert"><span>{error}</span><button onClick={() => setRefreshKey((value) => value + 1)} type="button">Retry</button></div>}
     {snapshot && <div className={loading ? "snapshot-groups is-refreshing" : "snapshot-groups"}>{groups.map(([name, metrics]) => <MetricGroup key={name} metrics={metrics} open={open} title={name} />)}</div>}
     {salesStatus && <section className="snapshot-current-sales" aria-label="Current sales state"><h3>Current Sales State</h3><div><Link to="/business/relationships?filter=active-sessions"><span>Active Sales Sessions</span><strong>{salesStatus.activeSalesSessions}</strong></Link><Link to="/business/relationships?filter=active-intents"><span>Active Offers</span><strong>{salesStatus.activePurchaseIntents}</strong></Link><Link to="/business/operations?tab=failures"><span>Commercial Failures</span><strong>{salesStatus.commercialFailures}</strong></Link></div></section>}
+    {salesError && <div className="snapshot-state snapshot-state--error" role="status"><span>{salesError}</span><button onClick={() => setRefreshKey((value) => value + 1)} type="button">Retry sales status</button></div>}
     <nav className="snapshot-customer-links" aria-label="Customer directories"><Link to="/business/customers">Customers</Link><Link to="/business/customers?filter=buyers">Buyers</Link><Link to="/business/customers?filter=subscribers">Active Subscribers</Link><Link to="/business/sales?tab=offers">Offer Activity</Link></nav>
     {selected && <DrillDownDrawer close={() => setSelected(null)} details={details} error={detailsError} metric={selected} />}
   </section>;

@@ -22,6 +22,10 @@ class AvaAvailabilityDecision:
     transition_at: datetime | None = None
     high_value_prospect: bool = False
     market_tier: str = "UNCLASSIFIED"
+    verified_buyer: bool = False
+    availability_treatment: str = "STANDARD"
+    away_deferral_applied: bool = False
+    peak_engagement: dict | None = None
 
     @property
     def category(self): return self.state.value
@@ -33,13 +37,21 @@ class AvaAvailabilityDecision:
             "sessionStartedAt": self.session_started_at.isoformat() if self.session_started_at else None,
             "transitionAt": self.transition_at.isoformat() if self.transition_at else None,
             "persistentSession": True,
-            "messagePriorityAffectsAvailability": self.high_value_prospect,
+            "messagePriorityAffectsAvailability": (
+                self.high_value_prospect
+                or self.availability_treatment == "BUYER_OVERRIDE"
+            ),
             "operatorClassification": "HIGH_VALUE_PROSPECT" if self.high_value_prospect else None,
             "marketTier": self.market_tier,
             "effectiveProspectInvestment": self._investment(),
+            "buyerStatus": "VERIFIED_BUYER" if self.verified_buyer else "NONBUYER",
+            "availabilityTreatment": self.availability_treatment,
+            "awayDeferralApplied": self.away_deferral_applied,
+            "peakEngagement": dict(self.peak_engagement or {}),
             "typingSeparate": True, "timezone": "America/New_York"}
 
     def _investment(self):
+        if self.verified_buyer: return "BUYER_AUTHORITY"
         if self.market_tier == "HIGH" and self.high_value_prospect: return "MAXIMUM"
         if self.market_tier == "HIGH" or self.high_value_prospect: return "HIGH"
         return "STANDARD"
@@ -147,14 +159,24 @@ class AvaHumanAvailabilityService:
 
     def calculate(self, *, inbound_text: str = "", received_at=None,
                   high_value_prospect: bool = False,
-                  market_tier: str | None = None):
+                  market_tier: str | None = None,
+                  verified_buyer: bool = False,
+                  peak_engagement_context: dict | None = None):
         now = self._now(); session = self.current_session(at=now)
         tier = str(market_tier or "UNCLASSIFIED")
         if tier not in {"HIGH", "MEDIUM", "LOW", "UNCLASSIFIED"}:
             raise ValueError("Unsupported Market Tier scheduling profile.")
         quiet = max(8.0, float(os.getenv("AVA_AVAILABILITY_QUIET_PERIOD_SECONDS", "8")))
+        buyer_away_override = (
+            bool(verified_buyer) and session.state == AvaAvailabilityState.AWAY
+        )
         if session.state == AvaAvailabilityState.SLEEPING:
             available_at = session.transition_at
+        elif buyer_away_override:
+            # A verified buyer is available for reactive conversation now. The
+            # durable quiet window and downstream humanized typing delay remain
+            # authoritative; only the long-lived AWAY session hold is removed.
+            available_at = now
         elif session.state in {AvaAvailabilityState.BUSY, AvaAvailabilityState.AWAY}:
             remaining = max(quiet, (session.transition_at - now).total_seconds())
             multiplier = (.25 if tier == "HIGH" and high_value_prospect else
@@ -168,6 +190,21 @@ class AvaHumanAvailabilityService:
                       .75 if tier == "HIGH" else
                       .5 if high_value_prospect else 1.0)
             available_at = min(now + timedelta(seconds=max(delay, quiet)), session.transition_at)
+        peak_diagnostics = {}
+        if peak_engagement_context is not None:
+            from app.services.peak_engagement_policy import PeakEngagementPolicy
+            peak=PeakEngagementPolicy().evaluate(now=now,availability_state=session.state.value,
+                verified_buyer=bool(verified_buyer),**dict(peak_engagement_context))
+            peak_diagnostics=peak.diagnostics()
+            if peak.pacing_eligible:
+                base_delay=max(0.0,(available_at-now).total_seconds())
+                available_at=now+timedelta(seconds=max(quiet,base_delay*peak.multiplier))
         delay = max(0.0, (available_at - now).total_seconds())
-        return AvaAvailabilityDecision(session.state, delay, quiet, available_at, str(session.session_id),
-            session.started_at, session.transition_at, high_value_prospect, tier)
+        return AvaAvailabilityDecision(
+            session.state, delay, quiet, available_at, str(session.session_id),
+            session.started_at, session.transition_at, high_value_prospect, tier,
+            bool(verified_buyer),
+            "BUYER_OVERRIDE" if buyer_away_override else "STANDARD",
+            session.state == AvaAvailabilityState.AWAY and not buyer_away_override,
+            peak_diagnostics,
+        )

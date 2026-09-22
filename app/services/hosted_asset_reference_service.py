@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import json
+import re
 import os
 import time
 from datetime import datetime, timedelta, timezone
@@ -63,7 +65,7 @@ class HostedAssetReferenceService:
             delays.append(2 ** (len(delays) + 1))
         return tuple(delays[:count - 1])
 
-    def resolve(self, *, asset_id: int, source_path: str, host_name: str, uploader) -> str:
+    def resolve(self, *, asset_id: int, source_path: str, host_name: str, uploader, request_id: str | None = None) -> str:
         path = Path(source_path)
         if not path.is_file():
             raise HostedAssetReferenceError(f"Canonical reference file was not found: {path}")
@@ -84,7 +86,7 @@ class HostedAssetReferenceService:
             return current.hosted_url
         if current:
             try:
-                self.verify(current.hosted_url, asset_id=asset_id)
+                self.verify(current.hosted_url, asset_id=asset_id, request_id=request_id)
                 self.repository.touch_verified(current.reference_id)
                 return current.hosted_url
             except HostedAssetReferenceError as exc:
@@ -93,7 +95,7 @@ class HostedAssetReferenceService:
                 )
         try:
             hosted_url = uploader(path)
-            self.verify(hosted_url, asset_id=asset_id)
+            self.verify(hosted_url, asset_id=asset_id, request_id=request_id)
             self.repository.save_ready(
                 asset_id=asset_id, host_name=host_name, hosted_url=hosted_url,
                 source_checksum=checksum, source_path=str(path),
@@ -122,12 +124,21 @@ class HostedAssetReferenceService:
         self.repository.touch_used(current.reference_id)
         return current.hosted_url
 
-    def verify(self, hosted_url: str, *, asset_id: int) -> None:
+    def verify(self, hosted_url: str, *, asset_id: int | str,
+               request_id: str | None = None, reference_role: str | None = None) -> None:
+        role = reference_role or ("EDIT_SOURCE" if asset_id == "EDIT_SOURCE" else "CANONICAL_IDENTITY")
+        role = role if role in {"EDIT_SOURCE", "CANONICAL_IDENTITY", "CONTINUITY"} else "REFERENCE"
+        label = {"EDIT_SOURCE": "edit source", "CANONICAL_IDENTITY": "canonical reference",
+                 "CONTINUITY": "continuity reference"}.get(role, "reference")
         if not hosted_url or urlparse(hosted_url).scheme != "https":
-            raise HostedAssetReferenceError("Hosted canonical reference did not return a valid HTTPS URL.")
+            raise HostedAssetReferenceError(f"Hosted {label} did not return a valid HTTPS URL.")
         attempts = len(self.retry_delays) + 1
         for attempt in range(1, attempts + 1):
             started = time.perf_counter()
+            response = None
+            error = None
+            retryable = False
+            success = False
             try:
                 response = self.http_client.get(
                     hosted_url, headers={"Range": "bytes=0-0", "User-Agent": "Creator-OS"},
@@ -138,30 +149,67 @@ class HostedAssetReferenceService:
                     content_type = str(getattr(response, "headers", {}).get("Content-Type") or "").lower()
                     content_length = str(getattr(response, "headers", {}).get("Content-Length") or "").strip()
                     if content_type and not content_type.startswith("image/"):
-                        raise HostedAssetReferenceError(
-                            f"Hosted canonical reference returned non-image content ({content_type})."
-                        )
+                        raise HostedAssetReferenceError(f"Hosted {label} returned non-image content.")
                     if content_length.isdigit() and int(content_length) <= 0:
-                        raise HostedAssetReferenceError("Hosted canonical reference returned an empty image payload.")
-                    self._log("canonical_reference_verify", urlparse(hosted_url).netloc, asset_id,
-                              attempt, time.perf_counter() - started, "success", status=status)
-                    return
-                if not self._retryable_status(status):
-                    raise HostedAssetReferenceError(f"Hosted canonical reference verification returned HTTP {status}.")
-                error = RuntimeError(f"HTTP {status}")
-            except HostedAssetReferenceError:
-                raise
+                        raise HostedAssetReferenceError(f"Hosted {label} returned an empty image payload.")
+                    success = True
+                elif not self._retryable_status(status):
+                    raise HostedAssetReferenceError(f"Hosted {label} verification returned HTTP {status}.")
+                else:
+                    retryable = True
+                    error = RuntimeError(f"HTTP {status}")
+            except HostedAssetReferenceError as exc:
+                error = exc
             except Exception as exc:
                 error = exc
-                if not self._retryable_exception(exc):
-                    raise HostedAssetReferenceError("Hosted canonical reference verification failed.") from exc
-            retry = attempt < attempts
-            self._log("canonical_reference_verify", urlparse(hosted_url).netloc, asset_id,
-                      attempt, time.perf_counter() - started, "retry" if retry else "failed",
-                      error=error, retry=retry)
-            if not retry:
-                raise HostedAssetReferenceError("Hosted canonical reference could not be verified after 3 attempts.") from error
+                retryable = self._retryable_exception(exc)
+            finally:
+                self._verification_evidence(hosted_url, response, request_id, role, attempt,
+                    time.perf_counter() - started, error, retryable, success, attempt < attempts)
+                if response is not None and callable(getattr(response, "close", None)):
+                    response.close()
+            if success:
+                return
+            if not retryable:
+                failure = error if isinstance(error, HostedAssetReferenceError) else HostedAssetReferenceError(
+                    f"Hosted {label} verification failed.")
+                raise failure from None
+            if attempt == attempts:
+                raise HostedAssetReferenceError(
+                    f"Hosted {label} could not be verified after {attempts} attempts.") from None
             self.sleep(self.retry_delays[attempt - 1])
+
+    @staticmethod
+    def _verification_evidence(url, response, request_id, role, attempt, elapsed,
+                               error, retryable, success, more_attempts):
+        # Never record URL paths, queries, exception text, cookies or arbitrary headers.
+        parsed = urlparse(url)
+        headers = getattr(response, "headers", {}) or {}
+        mime = str(headers.get("Content-Type") or "").split(";", 1)[0].lower().strip()
+        if not re.fullmatch(r"[a-z0-9.+-]+/[a-z0-9.+-]+", mime):
+            mime = "unknown"
+        length = str(headers.get("Content-Length") or "")
+        content_range = str(headers.get("Content-Range") or "")
+        correlation = str(request_id or "")
+        if not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", correlation):
+            correlation = hashlib.sha256(correlation.encode()).hexdigest() if correlation else None
+        category = ("tls" if isinstance(error, requests.exceptions.SSLError) else
+                    "timeout" if isinstance(error, (requests.Timeout, TimeoutError)) else
+                    "connection" if isinstance(error, (requests.ConnectionError, ConnectionResetError)) else
+                    "http" if response is not None and int(response.status_code) not in {200, 206} else
+                    "validation" if error else None)
+        evidence = dict(request_id=correlation, reference_role=role, hostname=parsed.hostname,
+            object_digest=hashlib.sha256(parsed.path.encode()).hexdigest(), attempt=attempt,
+            method="GET", range_used=True, http_status=getattr(response, "status_code", None),
+            content_type=mime, content_length=int(length) if length.isdigit() else None,
+            content_range=content_range if re.fullmatch(r"bytes (?:[0-9]+-[0-9]+|\*)/[0-9*]+", content_range) else None,
+            redirect_count=len(getattr(response, "history", []) or []),
+            final_host=urlparse(getattr(response, "url", None) or url).hostname,
+            elapsed_ms=round(elapsed * 1000, 2), exception_class=type(error).__name__ if error else None,
+            category=category, classification="success" if success else "retryable" if retryable else "permanent",
+            retry=bool(retryable and more_attempts))
+        # Warning is retained by the production server even when INFO transport logs are disabled.
+        LOGGER.warning("hosted_reference_verification %s", json.dumps(evidence, sort_keys=True))
 
     def _recently_verified(self, value: datetime | None) -> bool:
         if value is None:

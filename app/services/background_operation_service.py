@@ -83,6 +83,19 @@ class BackgroundOperationService:
         return self.repository.transition(
             operation_id, "CANCELLED", stage="CANCELLED", message=message)
 
+    def request_generation_cancellation(self, operation_id, *, creator_profile_id):
+        operation = self.repository.request_cancellation(
+            operation_id, creator_profile_id=creator_profile_id)
+        if operation.result_reference:
+            from app.services.generation_engine_service import GenerationEngineService
+            try:
+                GenerationEngineService().cancel_job(operation.result_reference)
+            except (KeyError, ValueError):
+                # The durable operation fence remains authoritative even when
+                # the local provider-job record is unavailable.
+                pass
+        return operation
+
     @staticmethod
     def _camel(value: str) -> str:
         head, *tail = value.split("_")

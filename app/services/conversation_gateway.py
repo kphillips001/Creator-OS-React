@@ -3,6 +3,7 @@
 import logging
 import inspect
 import re
+from functools import partial
 from difflib import SequenceMatcher
 from dataclasses import replace
 from collections.abc import Mapping, Sequence
@@ -178,6 +179,9 @@ class ConversationGateway:
         customer_effective_permissions_service: Any | None = None,
         relationship_fact_service: Any | None = None,
         visual_decision_engine: Any | None = None,
+        recent_creator_activity_service: Any | None = None,
+        current_turn_semantic_classifier: Any | None = None,
+        creator_content_reference_resolver: Any | None = None,
     ) -> None:
         if decision_engine is None:
             raise ValueError("decision_engine is required")
@@ -237,6 +241,20 @@ class ConversationGateway:
             relationship_fact_service = CanonicalRelationshipFactService()
         self._relationship_facts = relationship_fact_service
         self._visual_decision_engine = visual_decision_engine
+        if recent_creator_activity_service is None:
+            from app.services.recent_creator_activity_context_service import (
+                RecentCreatorActivityContextService,
+            )
+            recent_creator_activity_service = RecentCreatorActivityContextService()
+        self._recent_creator_activity = recent_creator_activity_service
+        self._current_turn_semantic_classifier = (
+            current_turn_semantic_classifier
+            or getattr(decision_engine, "classify_current_turn", None)
+        )
+        if creator_content_reference_resolver is None:
+            from app.services.creator_content_reference_resolver import CreatorContentReferenceResolver
+            creator_content_reference_resolver = CreatorContentReferenceResolver()
+        self._creator_content_reference_resolver = creator_content_reference_resolver
         if photoshoot_conversation_context_builder is None:
             from app.services.photoshoot_session_conversation_context_builder import (
                 PhotoshootSessionConversationContextBuilder,
@@ -337,12 +355,77 @@ class ConversationGateway:
                     },
                 },
             )
+        reference_context = {}
+        try:
+            reference_resolution = self._creator_content_reference_resolver.resolve(
+                creator_profile_id=self._brain_context(gateway_input).creator_profile_id,
+                inbound=gateway_input.message_text,
+                current_timestamp=None,
+                recent_conversation=tuple(gateway_input.chat_history or ())[-8:],
+                telegram_provenance=dict(gateway_input.current_turn_visual_context or {}),
+                telegram_user_id=self._brain_context(gateway_input).telegram_user_id,
+                telegram_chat_id=self._brain_context(gateway_input).telegram_chat_id,
+            )
+            reference_diagnostics = reference_resolution.diagnostics()
+            if reference_resolution.disposition == "RESOLVED":
+                reference_context = dict(reference_resolution.context)
+        except Exception as error:
+            logger.warning("event=creator_content_reference_unavailable error_type=%s correlation_id=%s",
+                           type(error).__name__, gateway_input.correlation_id)
+            reference_diagnostics = {
+                "referenceIntentDetected": False, "disposition": "NONE",
+                "resolutionMethod": "UNAVAILABLE", "confidence": 0.0,
+                "candidatePublicationIds": (), "supportingEvidence": ("RESOLVER_UNAVAILABLE",),
+                "entryAttributionAvailable": False, "entryPublicationId": None,
+                "entryObservedAt": None, "entryProvenanceMethod": None,
+                "currentReferencedPublicationId": None,
+                "ctaProvenanceParticipated": False,
+                "explicitReferenceOverrodeCTA": False,
+                "replyProvenanceOverrodeCTA": False,
+                "contentContextVersion": "creator_content_reference_v2",
+            }
+        reference_diagnostics.update({
+            "suppliedToSemanticClassifier": bool(reference_context),
+            "suppliedToSemanticClassification": bool(reference_context),
+            "suppliedToSalesBrain": bool(reference_context),
+            "suppliedToGeneration": bool(reference_context),
+        })
+
+        from app.services.current_turn_semantic_classification_service import (
+            CurrentTurnSemanticClassificationService,
+        )
+        classifier = self._current_turn_semantic_classifier
+        if callable(classifier):
+            classifier = partial(
+                classifier,
+                user_id=gateway_input.engine_user_id,
+            )
+        semantic_diagnostics, semantic_result = (
+            CurrentTurnSemanticClassificationService().classify(
+                message=gateway_input.message_text,
+                correlation_id=gateway_input.correlation_id,
+                classifier=classifier,
+                creator_content_context=reference_context,
+            )
+        )
         customer_sales_decision = self._evaluate_customer_sales_brain(
             gateway_input, sales_session=sales_session,
+            classifier_result=semantic_result,
+            creator_content_context=reference_context,
+        )
+        customer_sales_decision = self._apply_current_turn_commercial_authority(
+            customer_sales_decision, gateway_input=gateway_input,
+        )
+        customer_sales_decision = self._apply_recovery_execution_constraint(
+            customer_sales_decision, gateway_input=gateway_input,
         )
         customer_sales_decision = self._apply_global_selling_ceiling(
             customer_sales_decision, sales_session=sales_session,
             gateway_input=gateway_input,
+        )
+        customer_sales_decision = self._apply_direct_question_precedence(
+            customer_sales_decision, gateway_input=gateway_input,
+            sales_session=sales_session,
         )
         if customer_sales_decision is not None:
             metadata = dict(customer_sales_decision.decision_metadata or {})
@@ -386,6 +469,7 @@ class ConversationGateway:
             diagnostics = self._customer_sales_diagnostics(
                 customer_sales_decision
             )
+            diagnostics["creatorContentReference"] = dict(reference_diagnostics)
             diagnostics.update({
                 "status": "suppressed",
                 "outbound_decision": "NO_RESPONSE",
@@ -455,6 +539,23 @@ class ConversationGateway:
                 gateway_input.correlation_id,
             )
         engine_runtime_injection = dict(commerce_runtime_injection)
+        engine_runtime_injection["current_turn_semantic_classification"] = dict(
+            semantic_diagnostics
+        )
+        engine_runtime_injection["creator_content_reference"] = dict(reference_diagnostics)
+        if reference_context:
+            engine_runtime_injection["resolved_creator_content_context"] = dict(reference_context)
+        if semantic_result is not None:
+            engine_runtime_injection["precomputed_classifier_result"] = dict(
+                semantic_result
+            )
+        from app.services.ava_offline_access_policy import AvaOfflineAccessPolicy
+        offline_authority = AvaOfflineAccessPolicy().classify(
+            gateway_input.message_text,
+            recent_history=gateway_input.chat_history,
+            visual_context=gateway_input.current_turn_visual_context,
+        )
+        engine_runtime_injection["offline_access_authority"] = offline_authority.diagnostics()
         if gateway_input.current_turn_visual_context:
             engine_runtime_injection["current_turn_visual_context"] = dict(
                 gateway_input.current_turn_visual_context
@@ -494,6 +595,19 @@ class ConversationGateway:
             engine_runtime_injection["conversational_memory"] = dict(
                 brain_context.conversational_memory
             )
+        if brain_context.creator_profile_id is not None:
+            try:
+                recent_activity = self._recent_creator_activity.build(
+                    creator_profile_id=int(brain_context.creator_profile_id),
+                )
+                if recent_activity.get("candidates"):
+                    engine_runtime_injection["recent_creator_activity"] = recent_activity
+            except Exception as error:
+                logger.warning(
+                    "event=recent_creator_activity_unavailable error_type=%s "
+                    "correlation_id=%s",
+                    type(error).__name__, gateway_input.correlation_id,
+                )
         from app.services.ava_temporal_context_service import AvaTemporalContextService
         engine_runtime_injection["time_context"] = AvaTemporalContextService().build(
             customer_timezone=brain_context.conversational_memory.get("timezone"),
@@ -597,6 +711,13 @@ class ConversationGateway:
                 status="engine_exception",
                 extra_diagnostics={
                     "exception_type": type(error).__name__,
+                    "currentTurnSemanticClassification": semantic_diagnostics,
+                    **({
+                        "conversationProgressionFailure": dict(
+                            getattr(error, "diagnostics")
+                        )
+                    } if isinstance(getattr(error, "diagnostics", None), Mapping)
+                       else {}),
                 },
             )
 
@@ -700,6 +821,12 @@ class ConversationGateway:
                 error_code = "decision_engine_blocked"
 
         diagnostics = self._diagnostics(engine_result)
+        from app.services.commercial_momentum_contract import CommercialMomentumContract
+        diagnostics["commercialOpportunityLifecycle"] = CommercialMomentumContract.observation(
+            customer_sales_decision, offer_authorized=offer_authorized, blocked=blocked)
+        diagnostics["currentTurnSemanticClassification"] = semantic_diagnostics
+        diagnostics["creatorContentReference"] = dict(reference_diagnostics)
+        diagnostics["offlineAccessAuthority"] = offline_authority.diagnostics()
         if "current_turn_visual_context" in diagnostics:
             from app.services.customer_visual_evidence_policy import (
                 CustomerVisualEvidencePolicy,
@@ -1548,6 +1675,8 @@ class ConversationGateway:
                 blocked = True
                 error_code = "quality_blocked_before_delivery"
 
+        diagnostics["commercialOpportunityLifecycle"] = CommercialMomentumContract.observation(
+            customer_sales_decision, offer_authorized=offer_authorized, blocked=blocked)
         self._record_live_turn(
             has_offer=offer_authorized,
             has_delivery=bool(delivery_payload),
@@ -1895,6 +2024,256 @@ class ConversationGateway:
             reason_summary=(
                 "Conversation continues; the global operator permission blocks "
                 "a new commercial presentation."
+            ),
+            recommended_offering_id=None,
+            recommended_publication_id=None,
+            recommended_delivery_url=None,
+            recommended_offering_title=None,
+            recommended_offering_short_description=None,
+            recommended_offering_price_minor=None,
+            recommended_offering_currency=None,
+            sell_allowed=False,
+            nudge_allowed=False,
+            upsell_allowed=False,
+            cross_sell_allowed=False,
+            decision_metadata=immutable_mapping(metadata),
+        )
+
+    @staticmethod
+    def _current_turn_commercial_authority(gateway_input) -> dict[str, Any]:
+        context = dict(
+            getattr(gateway_input, "quality_correction_context", {}) or {}
+        )
+        return dict(context.get("preGenerationCommercialDecision") or {})
+
+    @classmethod
+    def _apply_current_turn_commercial_authority(
+        cls, decision, *, gateway_input=None,
+    ):
+        """Make the durable current-turn projection authoritative downstream."""
+        if decision is None:
+            return None
+        authority = cls._current_turn_commercial_authority(gateway_input)
+        if not authority:
+            return decision
+        from app.services.commercial_momentum_contract import CommercialMomentumContract
+        current_hot_presentation = CommercialMomentumContract.preserves_hot_presentation(
+            decision, gateway_input, authority)
+        if current_hot_presentation:
+            return replace(decision, decision_metadata=immutable_mapping({
+                **dict(decision.decision_metadata),
+                "currentTurnCommercialAuthority": dict(authority),
+                "commercialAuthorityConsistency": {
+                    "authority": "CUSTOMER_SALES_BRAIN_CURRENT_HOT_OPPORTUNITY",
+                    "requestedDecision": decision.decision.value,
+                    "effectiveDecision": decision.decision.value,
+                    "commercialProgressionAllowed": True,
+                    "reason": "CURRENT_CANONICAL_HOT_PRESENTATION_PRESERVED",
+                },
+            }))
+        authorized = bool(
+            authority.get("commercial_bypass_eligible") is True
+            or authority.get("active_offer_reservation_authorized") is True
+        )
+        commercial_actions = {
+            CustomerSalesDecisionType.TEASE,
+            CustomerSalesDecisionType.BUILD_INTEREST,
+            CustomerSalesDecisionType.PRESENT_OFFER,
+            CustomerSalesDecisionType.PRESENT_ALTERNATIVE_OFFER,
+            CustomerSalesDecisionType.NUDGE_ACTIVE_OFFER,
+            CustomerSalesDecisionType.UPSELL,
+            CustomerSalesDecisionType.CROSS_SELL,
+            CustomerSalesDecisionType.PROPOSE_SESSION,
+        }
+        if authorized or decision.decision not in commercial_actions:
+            return decision
+        metadata = dict(decision.decision_metadata or {})
+        metadata["currentTurnCommercialAuthority"] = dict(authority)
+        metadata["commercialAuthorityConsistency"] = {
+            "authority": "PRE_GENERATION_COMMERCIAL_DECISION",
+            "requestedDecision": decision.decision.value,
+            "effectiveDecision": (
+                CustomerSalesDecisionType.CONTINUE_CONVERSATION.value
+            ),
+            "commercialProgressionAllowed": False,
+            "historicalSignalsPreservedAsContext": True,
+            "reason": "NO_CURRENT_DETERMINISTIC_COMMERCIAL_AUTHORITY",
+        }
+        return replace(
+            decision,
+            decision=CustomerSalesDecisionType.CONTINUE_CONVERSATION,
+            reason_code=CustomerSalesReasonCode.CONVERSATION_ONLY,
+            reason_summary=(
+                "The current turn has no deterministic commercial authority; "
+                "continue the ordinary conversation."
+            ),
+            active_purchase_intent_id=None,
+            active_offering_id=None,
+            active_offer_status=None,
+            recommended_offering_id=None,
+            recommended_publication_id=None,
+            recommended_delivery_url=None,
+            recommended_offering_title=None,
+            recommended_offering_short_description=None,
+            recommended_offering_price_minor=None,
+            recommended_offering_currency=None,
+            recommended_photoshoot_experience=None,
+            recommended_product_context=None,
+            next_sales_action=None,
+            bundle_sales_context=None,
+            sell_allowed=False,
+            nudge_allowed=False,
+            upsell_allowed=False,
+            cross_sell_allowed=False,
+            decision_metadata=immutable_mapping(metadata),
+        )
+
+    @staticmethod
+    def _recovery_execution_constraint(gateway_input) -> dict[str, Any]:
+        context = dict(getattr(gateway_input, "quality_correction_context", {}) or {})
+        constraint = dict(context.get("recoveryExecutionConstraint") or {})
+        return constraint if constraint.get("constraint") == "CONVERSATION_ONLY_TEXT" else {}
+
+    @classmethod
+    def _apply_recovery_execution_constraint(cls, decision, *, gateway_input=None):
+        """Apply the exact-operation recovery ceiling before commerce composition."""
+        constraint = cls._recovery_execution_constraint(gateway_input)
+        if decision is None or not constraint:
+            return decision
+        metadata = dict(decision.decision_metadata or {})
+        metadata["recoveryExecutionConstraint"] = dict(constraint)
+        metadata["suppressedCommercialCandidate"] = decision.decision.value
+        metadata["commercialProgressionAllowed"] = False
+        return replace(
+            decision,
+            decision=CustomerSalesDecisionType.CONTINUE_CONVERSATION,
+            reason_code=CustomerSalesReasonCode.CONVERSATION_ONLY,
+            reason_summary=(
+                "The exact historical corrective is operator-constrained to "
+                "noncommercial text conversation."
+            ),
+            active_purchase_intent_id=None,
+            active_offering_id=None,
+            active_offer_status=None,
+            recommended_offering_id=None,
+            recommended_publication_id=None,
+            recommended_delivery_url=None,
+            recommended_offering_title=None,
+            recommended_offering_short_description=None,
+            recommended_offering_price_minor=None,
+            recommended_offering_currency=None,
+            recommended_photoshoot_experience=None,
+            recommended_product_context=None,
+            next_sales_action=None,
+            bundle_sales_context=None,
+            sell_allowed=False,
+            nudge_allowed=False,
+            upsell_allowed=False,
+            cross_sell_allowed=False,
+            decision_metadata=immutable_mapping(metadata),
+        )
+
+    @staticmethod
+    def _apply_direct_question_precedence(
+        decision, *, gateway_input, sales_session=None,
+    ):
+        """Prevent unsupported selling from displacing current turn obligations."""
+        if decision is None or gateway_input is None:
+            return decision
+        from app.services.gpt_service import GPTService
+        obligations = GPTService.authoritative_turn_obligations(
+            gateway_input.message_text,
+        )
+        burst = dict(
+            getattr(gateway_input, "quality_correction_context", {}) or {}
+        ).get("conversationBurst") or {}
+        obligations = tuple(dict.fromkeys(
+            tuple(obligations) + tuple(burst.get("obligations") or ())
+        ))
+        direct = tuple(item for item in obligations if item.startswith(
+            "ANSWER_DIRECT_"
+        ))
+        if not direct:
+            return decision
+        commercial_actions = {
+            CustomerSalesDecisionType.PRESENT_OFFER,
+            CustomerSalesDecisionType.PRESENT_ALTERNATIVE_OFFER,
+            CustomerSalesDecisionType.UPSELL,
+            CustomerSalesDecisionType.CROSS_SELL,
+            CustomerSalesDecisionType.PROPOSE_SESSION,
+        }
+        if decision.decision not in commercial_actions:
+            return decision
+        metadata = dict(decision.decision_metadata or {})
+        receptiveness = dict(metadata.get("commercialReceptiveness") or {})
+        interest = str(
+            receptiveness.get("commercialInterestType")
+            or receptiveness.get("commercial_interest_type") or "NONE"
+        ).upper()
+        current_interest = bool(
+            receptiveness.get("currentCommercialInterest") is True
+            or receptiveness.get("current_commercial_interest") is True
+        )
+        fresh_intent = bool(
+            receptiveness.get("freshDirectIntentDetected") is True
+            or receptiveness.get("fresh_direct_intent") is True
+        )
+        explicit_reasons = {
+            CustomerSalesReasonCode.DIRECT_PURCHASE_INTENT,
+            CustomerSalesReasonCode.PRICE_REQUEST,
+            CustomerSalesReasonCode.SESSION_NEXT_UNLOCK_REQUEST,
+            CustomerSalesReasonCode.CUSTOMER_INITIATED_ACTIVE_OFFER_CONTINUATION,
+            CustomerSalesReasonCode.PRESENT_AFTER_POSITIVE_TEASE_RESPONSE,
+        }
+        from app.services.conversational_sales_progression_service import (
+            ConversationalSalesProgressionService,
+        )
+        current_direct_intent = (
+            ConversationalSalesProgressionService().has_direct_purchase_intent(
+                gateway_input.message_text
+            )
+        )
+        from app.services.commercial_receptiveness_service import (
+            CommercialReceptivenessService,
+        )
+        post_purchase_continuation = bool(
+            decision.active_offer_conversion_state == "PURCHASED"
+            and CommercialReceptivenessService.explicit_continuation_detected(
+                gateway_input.message_text
+            )
+        )
+        commercial_evidence = bool(
+            (current_interest and fresh_intent and interest != "NONE")
+            or current_direct_intent
+            or post_purchase_continuation
+            or decision.active_purchase_intent_id is not None
+            or sales_session is not None
+            or decision.reason_code in explicit_reasons
+        )
+        precedence = {
+            "authority": "CANONICAL_TURN_OBLIGATIONS_AND_COMMERCIAL_RECEPTIVENESS",
+            "directObligationPresent": True,
+            "turnObligations": list(obligations),
+            "commercialEvidencePresent": commercial_evidence,
+            "commercialInterestType": interest,
+            "currentDirectCommercialIntent": current_direct_intent,
+            "postPurchaseContinuation": post_purchase_continuation,
+            "originalCommercialAction": decision.decision.value,
+            "commercialActionAllowed": commercial_evidence,
+            "commercialActionBlockedByObligationPrecedence": not commercial_evidence,
+        }
+        metadata["directQuestionPrecedence"] = precedence
+        if commercial_evidence:
+            return replace(
+                decision, decision_metadata=immutable_mapping(metadata),
+            )
+        return replace(
+            decision,
+            decision=CustomerSalesDecisionType.CONTINUE_CONVERSATION,
+            reason_code=CustomerSalesReasonCode.CURRENT_TURN_NOT_READY,
+            reason_summary=(
+                "Current direct-question obligations take precedence because "
+                "no independent current commercial evidence authorizes an offer."
             ),
             recommended_offering_id=None,
             recommended_publication_id=None,
@@ -2344,6 +2723,7 @@ class ConversationGateway:
 
     def _evaluate_customer_sales_brain(
         self, gateway_input: ConversationGatewayInput, *, sales_session=None,
+        classifier_result=None, creator_content_context=None,
     ) -> CustomerSalesDecision | None:
         service = self._customer_sales_brain_service
         if service is None:
@@ -2389,7 +2769,17 @@ class ConversationGateway:
             "canonical_relationship_context": dict(
                 context.conversational_memory.get("canonical_relationship_context") or {}
             ),
+            "recent_transcript": tuple(gateway_input.chat_history or ())[-8:],
         }
+        decision_context["commercial_turn_id"] = gateway_input.correlation_id
+        if classifier_result is not None:
+            decision_context["classifier_result"] = dict(classifier_result)
+        if creator_content_context:
+            decision_context["resolved_creator_content_context"] = dict(creator_content_context)
+        recovery_constraint = self._recovery_execution_constraint(gateway_input)
+        if recovery_constraint:
+            decision_context["recovery_execution_constraint"] = recovery_constraint
+            decision_context["commercial_action_authorized"] = False
         assistant_turns = tuple(
             str(item.get("content") or "")
             for item in tuple(gateway_input.chat_history or ())[-8:]
@@ -2851,6 +3241,36 @@ class ConversationGateway:
     ) -> dict[str, Any]:
         if decision is None:
             return {}
+        recovery_constraint = dict(
+            dict(decision.decision_metadata or {}).get(
+                "recoveryExecutionConstraint"
+            ) or {}
+        )
+        if recovery_constraint.get("constraint") == "CONVERSATION_ONLY_TEXT":
+            return {
+                "commerce_decision": {
+                    "decision": CustomerSalesDecisionType.CONTINUE_CONVERSATION.value,
+                    "reason_code": CustomerSalesReasonCode.CONVERSATION_ONLY.value,
+                    "buyer_stage": decision.buyer_stage.value,
+                    "active_purchase_intent_id": None,
+                    "active_offering_id": None,
+                    "current_offer_status": None,
+                    "conversion_state": decision.active_offer_conversion_state,
+                    "commerce_execution_policy": (
+                        CommerceExecutionPolicy.DISABLED_FOR_TURN.value
+                    ),
+                    "recovery_execution_constraint": recovery_constraint,
+                    "commercial_progression_allowed": False,
+                    "purchase_intent_allowed": False,
+                    "media_allowed": False,
+                    "delivery_type_required": "MESSAGE_TEXT",
+                },
+                "commerce_execution_policy": (
+                    CommerceExecutionPolicy.DISABLED_FOR_TURN.value
+                ),
+                "authoritative_selection_missing": False,
+                "recovery_execution_constraint": recovery_constraint,
+            }
         policy = derive_commerce_execution_policy(decision)
         selection_missing = (
             policy is CommerceExecutionPolicy.PRESENTATION_ALLOWED
@@ -2961,6 +3381,11 @@ class ConversationGateway:
         )
         if proactive:
             context["proactive_progression"] = proactive
+        proactive_hot = dict(
+            decision_metadata.get("proactiveHotOpportunity") or {}
+        )
+        if proactive_hot:
+            context["proactive_hot_opportunity"] = proactive_hot
         pre_session_teaser = dict(
             decision_metadata.get("preSessionFreeTeaser") or {}
         )
@@ -3229,6 +3654,11 @@ class ConversationGateway:
         active_buying_window = dict(decision.decision_metadata or {}).get(
             "activeBuyingWindow"
         )
+        direct_question_precedence = dict(
+            dict(decision.decision_metadata or {}).get(
+                "directQuestionPrecedence"
+            ) or {}
+        )
         deferred_continuation = dict(decision.decision_metadata or {}).get(
             "deferredContinuation"
         )
@@ -3261,6 +3691,7 @@ class ConversationGateway:
                 dict(receptiveness)
                 if isinstance(receptiveness, Mapping) else None
             ),
+            "direct_question_precedence": direct_question_precedence or None,
             "purchase_cooldown": (
                 dict(cooldown) if isinstance(cooldown, Mapping) else None
             ),

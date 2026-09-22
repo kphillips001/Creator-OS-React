@@ -5,8 +5,16 @@ import re
 from typing import Callable
 
 from app.models.creative_director import PromptPlan
+from app.models.canonical_creator_identity import (
+    CanonicalCreatorIdentityContract,
+    GenerationReferenceRole,
+)
 from app.models.generation_engine import GenerationMediaType, GenerationResult, GenerationStatus, GenerationType
 from app.models.render_policy import content_render_policy
+from app.services.canonical_creator_identity_policy import (
+    CANONICAL_IDENTITY_POLICY_ID,
+    CANONICAL_IDENTITY_POLICY_VERSION,
+)
 
 
 def plan_with_prompt_batch(plan: PromptPlan, prompts: tuple[str, ...]) -> PromptPlan:
@@ -40,6 +48,8 @@ def recreate_source_expression_is_authoritative(
 
 
 class ContentStudioGenerationService:
+    IDENTITY_PROMPT_POLICY_ID = CANONICAL_IDENTITY_POLICY_ID
+    IDENTITY_PROMPT_POLICY_VERSION = CANONICAL_IDENTITY_POLICY_VERSION
     def __init__(self, *, creative_director, generation_engine, generation_library, reference_service):
         self.creative_director = creative_director
         self.generation_engine = generation_engine
@@ -53,7 +63,21 @@ class ContentStudioGenerationService:
         planner_lineage: dict | None = None,
         explicit_input: dict | None = None,
         diagnostic_trace_id: str | None = None,
+        canonical_identity_contract: dict | CanonicalCreatorIdentityContract | None = None,
     ):
+        supplied_identity = (
+            canonical_identity_contract
+            if isinstance(canonical_identity_contract, CanonicalCreatorIdentityContract)
+            else CanonicalCreatorIdentityContract.from_dict(canonical_identity_contract)
+        )
+        canonical_identity = supplied_identity or (
+            self.reference_service.resolve_canonical_identity_contract(
+                creator_profile=creator_profile,
+                provider_id=provider_id,
+                identity_prompt_policy_id=self.IDENTITY_PROMPT_POLICY_ID,
+                identity_prompt_policy_version=self.IDENTITY_PROMPT_POLICY_VERSION,
+            )
+        )
         lineage = dict(planner_lineage or {})
         input_contract = dict(explicit_input or {})
         recreate_expression_authoritative = recreate_source_expression_is_authoritative(
@@ -61,6 +85,10 @@ class ContentStudioGenerationService:
             creative_tags=creative_tags,
         )
         metadata = {
+            **(
+                {"canonical_identity_contract": canonical_identity.to_dict()}
+                if canonical_identity else {}
+            ),
             **({"workflow_origin": origin} if origin else {}),
             **(
                 {"recreate_source_expression_authoritative": recreate_expression_authoritative}
@@ -68,6 +96,16 @@ class ContentStudioGenerationService:
             ),
             **({"planner_lineage": lineage} if lineage else {}),
             **({"explicit_input": input_contract} if input_contract else {}),
+            **(
+                {
+                    "creative_inspiration_provenance": {
+                        "reference_role": GenerationReferenceRole.CREATIVE_INSPIRATION.value,
+                        "transport": "ANALYSIS_ONLY",
+                        "identity_transfer_prohibited": True,
+                    }
+                }
+                if origin == "recreate_with_ava" else {}
+            ),
         }
         from app.services.generation_request_diagnostic_service import GenerationRequestDiagnosticService
         diagnostic = GenerationRequestDiagnosticService()
@@ -89,6 +127,7 @@ class ContentStudioGenerationService:
                 creative_mode=creative_mode,
                 prompts=prompt_batch,
                 metadata=metadata,
+                canonical_identity=canonical_identity,
             )
         else:
             plan = self.creative_director.create_prompt_plan(
@@ -97,6 +136,7 @@ class ContentStudioGenerationService:
                 creative_mode=creative_mode,
                 prompt_count=prompt_count,
                 metadata=metadata,
+                canonical_identity=canonical_identity,
             )
             plan = plan_with_prompt_batch(plan, prompt_batch)
             if origin == "autonomous_inspiration":
@@ -136,7 +176,19 @@ class ContentStudioGenerationService:
             generation_type=GenerationType.IMAGE_TO_IMAGE.value,
             media_type=GenerationMediaType.IMAGE.value,
             image_count=prompt_count,
+            canonical_identity=canonical_identity,
             metadata={
+                **(
+                    {
+                        "canonical_identity_contract": canonical_identity.to_dict(),
+                        "canonical_content_sha256": canonical_identity.canonical_content_sha256,
+                        "identity_version": canonical_identity.identity_version,
+                        "identity_prompt_policy_id": canonical_identity.identity_prompt_policy_id,
+                        "identity_prompt_policy_version": canonical_identity.identity_prompt_policy_version,
+                        "reference_roles": (canonical_identity.reference_role,),
+                    }
+                    if canonical_identity else {}
+                ),
                 "source": "premium_studio",
                 "workflow_type": "premium",
                 "creative_mode": creative_mode,
@@ -151,6 +203,16 @@ class ContentStudioGenerationService:
                 ),
                 **({"planner_lineage": lineage} if lineage else {}),
                 **({"explicit_input": input_contract} if input_contract else {}),
+                **(
+                    {
+                        "creative_inspiration_provenance": {
+                            "reference_role": GenerationReferenceRole.CREATIVE_INSPIRATION.value,
+                            "transport": "ANALYSIS_ONLY",
+                            "identity_transfer_prohibited": True,
+                        }
+                    }
+                    if origin == "recreate_with_ava" else {}
+                ),
                 **({"diagnostic_trace_id": diagnostic_trace_id} if diagnostic_trace_id else {}),
             },
         )

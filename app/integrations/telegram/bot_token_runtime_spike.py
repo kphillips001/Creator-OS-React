@@ -121,12 +121,21 @@ class MemoryInitializingDecisionEngine:
         user_id: str,
         message: str,
         chat_history=None,
+        runtime_injection=None,
     ):
         self._decision_engine.memory.get_or_create_user_memory(user_id)
         return self._decision_engine.process_message(
             user_id,
             message,
             chat_history=chat_history,
+            runtime_injection=runtime_injection,
+        )
+
+    def classify_current_turn(self, *, user_id: str, message: str):
+        memory = self._decision_engine.memory.get_or_create_user_memory(user_id)
+        return self._decision_engine.gpt_intent_classifier.classify_message(
+            message=message,
+            memory=memory,
         )
 
 
@@ -141,7 +150,9 @@ class TelegramBotTokenRuntimeSpike:
         outbound_sender: PlainTextSender,
         delivery_executor: TelegramDeliveryExecutor | None = None,
         logger: logging.Logger | None = None,
+        transport_recorder=None,
     ) -> None:
+        self._transport_recorder = transport_recorder
         self._update_source = update_source
         self._inbound_adapter = inbound_adapter
         self._outbound_sender = outbound_sender
@@ -161,6 +172,9 @@ class TelegramBotTokenRuntimeSpike:
             self._logger.info("Telegram update ignored: unsupported update.")
             return None
 
+        observe = getattr(self._outbound_sender, "observe_inbound", None)
+        if callable(observe):
+            observe(payload.telegram_chat_id)
         result = self._inbound_adapter.execute(payload)
         self._logger.info(
             "Telegram inbound normalized: correlation_id=%s user_id=%s "
@@ -177,30 +191,9 @@ class TelegramBotTokenRuntimeSpike:
             len(result.response_text),
         )
 
-        if result.response_text:
-            execution = self._delivery_executor.execute(
-                result.delivery_payload,
-                context={
-                    "chat_id": payload.telegram_chat_id,
-                    "correlation_id": result.correlation_id,
-                    "engine_user_id": result.engine_user_id,
-                    "creator_profile_id": result.diagnostic_metadata.get("creator_profile_id"),
-                    "fanvue_account_id": result.diagnostic_metadata.get("fanvue_account_id"),
-                    "fanvue_user_id": result.diagnostic_metadata.get("fanvue_user_id"),
-                    "fallback_message_text": result.response_text,
-                    "raise_on_failure": True,
-                    "text_sender": self._outbound_sender,
-                },
-            )
-            if not execution.executed:
-                self._logger.warning(
-                    "Telegram response not sent: delivery execution status=%s.",
-                    execution.status,
-                )
-        else:
-            self._logger.warning(
-                "Telegram response not sent: normalized response was empty."
-            )
+        # Experimental adapter has no durable operation/terminal-state owner.
+        # Keep it explicitly non-delivering; production uses the canonical runtime.
+        self._logger.warning("BOT_SPIKE_DELIVERY_DISABLED: no canonical lifecycle owner.")
         return result
 
     @staticmethod

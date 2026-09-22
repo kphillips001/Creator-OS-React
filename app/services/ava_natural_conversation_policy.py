@@ -105,6 +105,27 @@ class AvaNaturalConversationPolicy:
         function = self.function(text)
         relationship_authorized = self._relationship_authorized(diagnostics)
 
+        from app.services.ava_offline_access_policy import (
+            AvaOfflineAccessPolicy, OfflineAccessAuthority, OfflineContextType,
+        )
+        offline_data = dict(diagnostics.get("offlineAccessAuthority")
+                            or diagnostics.get("offline_access_authority") or {})
+        try:
+            offline_type = OfflineContextType(
+                offline_data.get("offlineContextType") or "NO_OFFLINE_CONTEXT")
+        except ValueError:
+            offline_type = OfflineContextType.NO_OFFLINE_CONTEXT
+        offline_authority = OfflineAccessAuthority(
+            offline_type, bool(offline_data.get("boundaryRequired")),
+            tuple(offline_data.get("evidence") or ()),
+        )
+        offline_policy = AvaOfflineAccessPolicy()
+        offline_reasons = offline_policy.candidate_violation_reasons(
+            text, authority=offline_authority, customer_text=customer_text,
+        )
+        if offline_reasons:
+            reasons.extend(offline_reasons)
+
         if self.RECIPROCAL_CLAIM.search(text) and not relationship_authorized:
             reasons.append("UNSUPPORTED_RECIPROCAL_RELATIONSHIP_CLAIM")
             text = self._warm_fallback(customer_text)

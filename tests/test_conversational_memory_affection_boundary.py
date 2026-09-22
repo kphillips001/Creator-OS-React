@@ -68,3 +68,23 @@ def test_validation_diagnostics_report_bounded_affection_reason():
     assert valid == []
     assert rejected == [{"category": "interest", "key": "everything_about_you",
                          "reason": "RELATIONSHIP_DIRECTED_AFFECTION"}]
+from app.services.conversational_memory_service import ConversationalMemoryService
+
+
+def test_mapped_customer_memory_does_not_bootstrap_unmapped_prospect():
+    class Repository:
+        def get(self, **_):
+            return None
+
+        def observe(self, **_):
+            raise AssertionError("mapped customer must not create a prospect")
+
+    result = ConversationalMemoryService(repository=Repository()).learn(
+        creator_profile_id=2, fanvue_account_id=2,
+        telegram_user_id=9, telegram_chat_id=9, message_text="hello",
+        bootstrap_unmapped_prospect=False,
+    )
+
+    assert result["memoryDiagnostics"]["prospectBootstrapSuppressed"] is True
+    assert result["memoryDiagnostics"]["persistenceSource"] == (
+        "MAPPED_CUSTOMER_RELATIONSHIP")

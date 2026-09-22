@@ -27,6 +27,26 @@ class ContextualCustomerToneService:
         r"(?:😏|😉|🔥)|\b(?:naughty|dirty|horny|turned on|"
         r"turning me on|sex(?:y|ual)?|bad girl|such a)\b", re.I,
     )
+    # Concrete adult anatomy/actions are authoritative tone evidence even when
+    # generic terms such as "sexy" or "horny" are absent. This is tone-only;
+    # it does not imply buying intent or authorize an offer.
+    EXPLICIT_SEXUAL = re.compile(
+        r"\b(?:cock|dick|pussy|puss|clit(?:oris)?|nipple|areola|anal|"
+        r"penetrat(?:e|ing|ion)|thrust(?:s|ing)?|orgasm|cum(?:ming)?|"
+        r"(?:touch|feel|kiss)\s+(?:you|your body)|"
+        r"suck(?:ing)?\s+(?:your|my|his|her)\s+(?:cock|dick|nipples?)|"
+        r"finger(?:s|ing)?\s+(?:you|me|her|him)|go(?:es|ing)?\s+in\s+and\s+up)\b",
+        re.I,
+    )
+    CONTEXTUAL_SEXUAL_FOLLOWUP = re.compile(
+        r"\bhow\s+many\s+fingers?\s+do\s+you\s+like\b", re.I,
+    )
+    CONTEXTUAL_SEXUAL_CONTINUATION = re.compile(
+        r"\b(?:i\s+know\s+you(?:\s+will|'ll)\s+love\s+it|"
+        r"you(?:\s+will|'ll)\s+love\s+(?:it|that)|"
+        r"i\s+know\s+you(?:\s+will|'ll)\s+like\s+(?:it|that))\b",
+        re.I,
+    )
     FRUSTRATION = re.compile(
         r"\b(?:ridiculous|seriously|come on|this is bullshit|what the hell|"
         r"too much|more than .*expected)\b", re.I,
@@ -115,7 +135,33 @@ class ContextualCustomerToneService:
         negative = bool(
             strong_negative or dismissive
         )
-        provocative = bool(self.PROVOCATIVE.search(text))
+        bounded_context = recent[-4:]
+        prior_sexual_context = any(bool(
+            self.PROVOCATIVE.search(str(item.get("content") or ""))
+            or self.EXPLICIT_SEXUAL.search(str(item.get("content") or ""))
+        ) for item in bounded_context if str(item.get("role") or "").lower() in {
+            "user", "customer", "assistant", "ava"
+        })
+        latest_customer_context = next((str(item.get("content") or "")
+            for item in reversed(bounded_context)
+            if str(item.get("role") or "").lower() in {"user", "customer"}), "")
+        latest_customer_is_concretely_sexual = bool(
+            self.PROVOCATIVE.search(latest_customer_context)
+            or self.EXPLICIT_SEXUAL.search(latest_customer_context)
+        )
+        contextual_sexual_followup = bool(
+            prior_sexual_context
+            and latest_customer_is_concretely_sexual
+            and (
+                self.CONTEXTUAL_SEXUAL_FOLLOWUP.search(text)
+                or self.CONTEXTUAL_SEXUAL_CONTINUATION.search(text)
+            )
+        )
+        provocative = bool(
+            self.PROVOCATIVE.search(text)
+            or self.EXPLICIT_SEXUAL.search(text)
+            or contextual_sexual_followup
+        )
         prior_hostile_turns = sum(bool(
             self.NEGATIVE_DIRECTIVE.search(str(item.get("content") or ""))
             or self.DISENGAGEMENT.search(str(item.get("content") or ""))
@@ -210,6 +256,7 @@ class ContextualCustomerToneService:
             "insultingOrDegrading": degrading,
             "dismissiveOrContemptuous": dismissive,
             "sexualOrProvocative": provocative,
+            "contextualSexualEvidenceApplied": contextual_sexual_followup,
             "playfulOrBanter": playful,
             "frustration": bool(self.FRUSTRATION.search(text)),
             "repeatedHostility": repeated,
